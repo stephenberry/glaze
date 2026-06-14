@@ -266,6 +266,66 @@ uint16_t close_code_from_frame(const websocket_frame& frame)
 }
 
 suite websocket_close_frame_tests = [] {
+   "coalesced_close_response_is_processed"_test = [] {
+      constexpr uint16_t port = 18088;
+      std::atomic<bool> server_ready{false};
+      std::atomic<bool> server_closed{false};
+      std::atomic<int> message_count{0};
+
+      auto ws_server = std::make_shared<websocket_server>();
+      ws_server->on_message([&](auto conn, std::string_view, ws_opcode) {
+         ++message_count;
+         conn->close(ws_close_code::normal);
+      });
+      ws_server->on_close([&](auto, ws_close_code, std::string_view) { server_closed = true; });
+
+      http_server server;
+      server.websocket("/ws", ws_server);
+
+      std::thread server_thread([&]() {
+         server.bind(port);
+         server_ready = true;
+         server.start();
+      });
+
+      expect(wait_for_condition([&] { return server_ready.load(); })) << "Server should start";
+      std::this_thread::sleep_for(std::chrono::milliseconds(100));
+
+      asio::io_context io_context;
+      asio::ip::tcp::socket socket(io_context);
+      auto handshake_response = connect_raw_websocket(io_context, socket, port);
+      expect(handshake_response.response.find("101 Switching Protocols") != std::string::npos)
+         << "Handshake should succeed";
+
+      const std::vector<uint8_t> message_payload{'c', 'l', 'o', 's', 'e'};
+      auto message_frame = make_masked_client_frame(0x01, message_payload);
+      const std::vector<uint8_t> close_payload{0x03, 0xE8};
+      auto close_frame = make_masked_client_frame(0x08, close_payload);
+      message_frame.insert(message_frame.end(), close_frame.begin(), close_frame.end());
+
+      asio::write(socket, asio::buffer(message_frame));
+
+      expect(wait_for_condition([&] { return message_count.load() == 1; })) << "Text message should be delivered";
+      expect(wait_for_condition([&] { return server_closed.load(); }))
+         << "Coalesced close response should complete the server's close handshake";
+
+      // The client must still receive the server's close frame echoing the normal close code.
+      socket.non_blocking(true);
+      std::vector<uint8_t> pending = std::move(handshake_response.leftover);
+      auto server_close_frame = poll_for_frame(socket, pending, std::chrono::milliseconds(1000));
+      expect(server_close_frame.has_value()) << "Server should send a close frame to the client";
+      expect(server_close_frame && server_close_frame->opcode == 0x08) << "Server frame should be a close frame";
+      if (server_close_frame) {
+         expect(close_code_from_frame(*server_close_frame) == 1000) << "Server close code should be 1000 (normal)";
+      }
+
+      socket.close();
+      server.stop();
+      server_thread.join();
+
+      std::this_thread::sleep_for(std::chrono::milliseconds(500));
+   };
+
    "close_frame_is_sent"_test = [] {
       std::atomic<bool> close_frame_received{false};
       std::atomic<bool> on_close_called{false};

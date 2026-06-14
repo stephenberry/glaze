@@ -846,6 +846,19 @@ namespace glz
             header.data[1] = data[offset + 1];
             size_t header_size = 2;
 
+            // After sending a Close frame, only the peer's Close response is relevant, so
+            // discard any other coalesced frames (RFC 6455 Section 7.1.1 permits dropping
+            // data once a Close has been initiated).
+            //
+            // Note: this discards the rest of the buffer on the first non-Close frame, so a
+            // peer's Close response that is coalesced *behind* another frame in the same read
+            // (e.g. [data][ping][close]) is dropped here rather than completing the handshake
+            // via handle_frame(). That case falls back to on_read()'s error path when the peer
+            // tears down the TCP connection, which still invokes do_close() and fires on_close.
+            if (is_closing_.load() && header.opcode() != ws_opcode::close) {
+               return length;
+            }
+
             // Check reserved bits
             if ((header.data[0] & 0x70) != 0) {
                close(ws_close_code::protocol_error, "Reserved bits set");
@@ -919,19 +932,20 @@ namespace glz
                clear_incomplete_text_frame();
             }
 
-            handle_frame(header.opcode(), payload_ptr, payload_size, header.fin(), text_payload_consumed);
+            const bool continue_processing =
+               handle_frame(header.opcode(), payload_ptr, payload_size, header.fin(), text_payload_consumed);
 
             offset += header_size + static_cast<size_t>(payload_length);
 
-            // Stop processing later frames from the same buffer that failed or closed the connection
-            if (is_closing_.load() || closed_.load()) {
+            // A locally initiated close may have its peer response later in this same buffer.
+            if (!continue_processing || closed_.load()) {
                return length;
             }
          }
          return offset;
       }
 
-      inline void handle_frame(ws_opcode opcode, const uint8_t* payload, std::size_t length, bool fin,
+      inline bool handle_frame(ws_opcode opcode, const uint8_t* payload, std::size_t length, bool fin,
                                bool text_payload_consumed = false)
       {
          // RFC 6455 Section 5.5: "All control frames ... MUST NOT be fragmented."
@@ -939,13 +953,13 @@ namespace glz
          // https://datatracker.ietf.org/doc/html/rfc6455#section-5.5
          if (!fin && ws_util::is_control_frame(opcode)) [[unlikely]] {
             fail_connection(ws_close_code::protocol_error, "Fragmented control frame");
-            return;
+            return false;
          }
 
          // RFC 6455 Section 5.5: "All control frames MUST have a payload length of 125 bytes or less."
          if (length > 125 && ws_util::is_control_frame(opcode)) [[unlikely]] {
             fail_connection(ws_close_code::protocol_error, "Invalid control frame payload length");
-            return;
+            return false;
          }
 
          switch (opcode) {
@@ -953,12 +967,12 @@ namespace glz
          case ws_opcode::binary:
             if (is_reading_frame_) {
                close(ws_close_code::protocol_error, "Unexpected data frame");
-               return;
+               return false;
             }
 
             if (length > max_message_size_) {
                close(ws_close_code::message_too_big, "Message too big");
-               return;
+               return false;
             }
 
             if (fin) {
@@ -968,13 +982,13 @@ namespace glz
                      // Finish the UTF-8 stream without scanning the same bytes again
                      if (!utf8_validator_.complete()) {
                         fail_connection(ws_close_code::invalid_payload, "Invalid UTF-8");
-                        return;
+                        return false;
                      }
                      utf8_validator_.reset();
                   }
                   else if (!glz::validate_utf8(payload, length)) {
                      fail_connection(ws_close_code::invalid_payload, "Invalid UTF-8");
-                     return;
+                     return false;
                   }
                }
 
@@ -991,7 +1005,7 @@ namespace glz
                   utf8_validator_.reset();
                   if (!utf8_validator_.consume(payload, length)) {
                      fail_connection(ws_close_code::invalid_payload, "Invalid UTF-8");
-                     return;
+                     return false;
                   }
                }
 
@@ -1004,12 +1018,12 @@ namespace glz
          case ws_opcode::continuation:
             if (!is_reading_frame_) {
                close(ws_close_code::protocol_error, "Unexpected continuation frame");
-               return;
+               return false;
             }
 
             if (message_buffer_.size() + length > max_message_size_) {
                close(ws_close_code::message_too_big, "Message too big");
-               return;
+               return false;
             }
 
             if (current_opcode_ == ws_opcode::text) {
@@ -1017,12 +1031,12 @@ namespace glz
                   // Finish the UTF-8 stream only at the end of the fragmented message
                   if (fin && !utf8_validator_.complete()) {
                      fail_connection(ws_close_code::invalid_payload, "Invalid UTF-8");
-                     return;
+                     return false;
                   }
                }
                else if (!utf8_validator_.consume(payload, length) || (fin && !utf8_validator_.complete())) {
                   fail_connection(ws_close_code::invalid_payload, "Invalid UTF-8");
-                  return;
+                  return false;
                }
             }
 
@@ -1057,7 +1071,7 @@ namespace glz
             // the body MUST be a 2-byte unsigned integer ..."
             if (length == 1) {
                fail_connection(ws_close_code::protocol_error, "Invalid close payload length");
-               return;
+               return false;
             }
 
             if (length >= 2) {
@@ -1074,14 +1088,14 @@ namespace glz
             // 3. Section 10.7: "Incoming data MUST always be validated by both clients and servers".
             if (!ws_util::is_valid_close_code(code_value)) {
                fail_connection(ws_close_code::protocol_error, "Invalid close code");
-               return;
+               return false;
             }
 
             // RFC 6455 Section 5.5.1: "Following the 2-byte integer, the body MAY contain
             // UTF-8-encoded data with value /reason/"
             if (!reason.empty() && !glz::validate_utf8(reason.c_str(), reason.size())) {
                fail_connection(ws_close_code::invalid_payload, "Invalid close reason");
-               return;
+               return false;
             }
 
             // Store close code and reason for callback
@@ -1103,7 +1117,8 @@ namespace glz
                // control frame, that endpoint SHOULD Close the WebSocket Connection"
                do_close();
             }
-         } break;
+            return false;
+         }
 
          case ws_opcode::ping:
             send_pong(std::string_view(reinterpret_cast<const char*>(payload), length));
@@ -1115,8 +1130,10 @@ namespace glz
 
          default:
             close(ws_close_code::protocol_error, "Unknown opcode");
-            break;
+            return false;
          }
+
+         return true;
       }
 
       inline void send_frame(ws_opcode opcode, std::string_view payload, bool fin = true, bool close_after = false)
