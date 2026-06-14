@@ -12,8 +12,15 @@
 #include "bencher/diagnostics.hpp"
 #include "glaze/util/parse.hpp"
 
-// Copied from
+//
+// The utf8_checker class below is copied/adapted from Boost.Beast:
 // https://github.com/boostorg/beast/blob/develop/include/boost/beast/websocket/detail/utf8_checker.hpp
+//
+// Copyright (c) 2016-2019 Vinnie Falco (vinnie dot falco at gmail dot com)
+//
+// Distributed under the Boost Software License, Version 1.0.
+// See LICENSE-BOOST-1.0.txt in this repository or https://www.boost.org/LICENSE_1_0.txt
+//
 class utf8_checker
 {
    std::size_t need_ = 0; // chars we need to finish the code point
