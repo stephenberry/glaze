@@ -8,9 +8,11 @@
 #include <atomic>
 #include <chrono>
 #include <condition_variable>
+#include <cstdint>
 #include <memory>
 #include <mutex>
 #include <optional>
+#include <string>
 #include <string_view>
 #include <thread>
 #include <vector>
@@ -191,7 +193,139 @@ void send_close_frame(asio::ip::tcp::socket& socket, uint16_t code = 1000)
    asio::write(socket, asio::buffer(frame));
 }
 
+handshake_result connect_raw_websocket(asio::io_context& io_context, asio::ip::tcp::socket& socket, uint16_t port)
+{
+   asio::ip::tcp::resolver resolver(io_context);
+   auto endpoints = resolver.resolve("127.0.0.1", std::to_string(port));
+   asio::connect(socket, endpoints);
+
+   std::string handshake =
+      "GET /ws HTTP/1.1\r\n"
+      "Host: localhost:" +
+      std::to_string(port) +
+      "\r\n"
+      "Upgrade: websocket\r\n"
+      "Connection: Upgrade\r\n"
+      "Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\n"
+      "Sec-WebSocket-Version: 13\r\n\r\n";
+
+   asio::write(socket, asio::buffer(handshake));
+   return read_handshake_response(socket);
+}
+
+std::size_t masked_client_frame_header_size(std::size_t payload_length)
+{
+   if (payload_length < 126) {
+      return 6;
+   }
+   if (payload_length <= 0xFFFF) {
+      return 8;
+   }
+   return 14;
+}
+
+std::vector<uint8_t> make_masked_client_frame(uint8_t opcode, const std::vector<uint8_t>& payload, bool fin = true)
+{
+   std::vector<uint8_t> frame;
+   frame.reserve(masked_client_frame_header_size(payload.size()) + payload.size());
+
+   frame.push_back(static_cast<uint8_t>((fin ? 0x80 : 0x00) | (opcode & 0x0F)));
+
+   if (payload.size() < 126) {
+      frame.push_back(static_cast<uint8_t>(0x80 | payload.size()));
+   }
+   else if (payload.size() <= 0xFFFF) {
+      frame.push_back(0xFE);
+      frame.push_back(static_cast<uint8_t>(payload.size() >> 8));
+      frame.push_back(static_cast<uint8_t>(payload.size() & 0xFF));
+   }
+   else {
+      frame.push_back(0xFF);
+      const auto payload_length = static_cast<uint64_t>(payload.size());
+      for (int i = 7; i >= 0; --i) {
+         frame.push_back(static_cast<uint8_t>(payload_length >> (8 * i)));
+      }
+   }
+
+   const std::array<uint8_t, 4> mask_key{0x12, 0x34, 0x56, 0x78};
+   frame.insert(frame.end(), mask_key.begin(), mask_key.end());
+
+   for (std::size_t i = 0; i < payload.size(); ++i) {
+      frame.push_back(static_cast<uint8_t>(payload[i] ^ mask_key[i % mask_key.size()]));
+   }
+
+   return frame;
+}
+
+uint16_t close_code_from_frame(const websocket_frame& frame)
+{
+   if (frame.payload.size() < 2) {
+      return 0;
+   }
+   return static_cast<uint16_t>((static_cast<uint16_t>(frame.payload[0]) << 8) | frame.payload[1]);
+}
+
 suite websocket_close_frame_tests = [] {
+   "coalesced_close_response_is_processed"_test = [] {
+      constexpr uint16_t port = 18088;
+      std::atomic<bool> server_ready{false};
+      std::atomic<bool> server_closed{false};
+      std::atomic<int> message_count{0};
+
+      auto ws_server = std::make_shared<websocket_server>();
+      ws_server->on_message([&](auto conn, std::string_view, ws_opcode) {
+         ++message_count;
+         conn->close(ws_close_code::normal);
+      });
+      ws_server->on_close([&](auto, ws_close_code, std::string_view) { server_closed = true; });
+
+      http_server server;
+      server.websocket("/ws", ws_server);
+
+      std::thread server_thread([&]() {
+         server.bind(port);
+         server_ready = true;
+         server.start();
+      });
+
+      expect(wait_for_condition([&] { return server_ready.load(); })) << "Server should start";
+      std::this_thread::sleep_for(std::chrono::milliseconds(100));
+
+      asio::io_context io_context;
+      asio::ip::tcp::socket socket(io_context);
+      auto handshake_response = connect_raw_websocket(io_context, socket, port);
+      expect(handshake_response.response.find("101 Switching Protocols") != std::string::npos)
+         << "Handshake should succeed";
+
+      const std::vector<uint8_t> message_payload{'c', 'l', 'o', 's', 'e'};
+      auto message_frame = make_masked_client_frame(0x01, message_payload);
+      const std::vector<uint8_t> close_payload{0x03, 0xE8};
+      auto close_frame = make_masked_client_frame(0x08, close_payload);
+      message_frame.insert(message_frame.end(), close_frame.begin(), close_frame.end());
+
+      asio::write(socket, asio::buffer(message_frame));
+
+      expect(wait_for_condition([&] { return message_count.load() == 1; })) << "Text message should be delivered";
+      expect(wait_for_condition([&] { return server_closed.load(); }))
+         << "Coalesced close response should complete the server's close handshake";
+
+      // The client must still receive the server's close frame echoing the normal close code.
+      socket.non_blocking(true);
+      std::vector<uint8_t> pending = std::move(handshake_response.leftover);
+      auto server_close_frame = poll_for_frame(socket, pending, std::chrono::milliseconds(1000));
+      expect(server_close_frame.has_value()) << "Server should send a close frame to the client";
+      expect(server_close_frame && server_close_frame->opcode == 0x08) << "Server frame should be a close frame";
+      if (server_close_frame) {
+         expect(close_code_from_frame(*server_close_frame) == 1000) << "Server close code should be 1000 (normal)";
+      }
+
+      socket.close();
+      server.stop();
+      server_thread.join();
+
+      std::this_thread::sleep_for(std::chrono::milliseconds(500));
+   };
+
    "close_frame_is_sent"_test = [] {
       std::atomic<bool> close_frame_received{false};
       std::atomic<bool> on_close_called{false};
@@ -573,6 +707,139 @@ suite websocket_error_handling_tests = [] {
 
       expect(close_frame_count == 1) << "Should only receive one close frame despite multiple close() calls";
       expect(on_close_call_count.load() == 1) << "on_close should only be called once";
+   };
+};
+
+suite websocket_utf8_fail_fast_tests = [] {
+   "invalid_utf8_in_incomplete_text_frame_fails_fast"_test = [] {
+      constexpr uint16_t port = 18086;
+      std::atomic<bool> server_ready{false};
+      std::atomic<bool> server_closed{false};
+      std::atomic<int> message_count{0};
+      std::atomic<uint16_t> server_close_code{0};
+
+      auto ws_server = std::make_shared<websocket_server>();
+      ws_server->on_message([&](auto, std::string_view, ws_opcode) { ++message_count; });
+      ws_server->on_close([&](auto, ws_close_code code, std::string_view) {
+         server_close_code = static_cast<uint16_t>(code);
+         server_closed = true;
+      });
+
+      http_server server;
+      server.websocket("/ws", ws_server);
+
+      std::thread server_thread([&]() {
+         server.bind(port);
+         server_ready = true;
+         server.start();
+      });
+
+      expect(wait_for_condition([&] { return server_ready.load(); })) << "Server should start";
+      std::this_thread::sleep_for(std::chrono::milliseconds(100));
+
+      asio::io_context io_context;
+      asio::ip::tcp::socket socket(io_context);
+      auto handshake_response = connect_raw_websocket(io_context, socket, port);
+      expect(handshake_response.response.find("101 Switching Protocols") != std::string::npos)
+         << "Handshake should succeed";
+
+      std::vector<uint8_t> payload(32768, static_cast<uint8_t>('a'));
+      payload[0] = 0xFF;
+      auto frame = make_masked_client_frame(0x01, payload);
+      const auto header_size = masked_client_frame_header_size(payload.size());
+
+      asio::write(socket, asio::buffer(frame.data(), header_size + 1));
+
+      socket.non_blocking(true);
+      std::vector<uint8_t> pending = std::move(handshake_response.leftover);
+      auto close_frame = poll_for_frame(socket, pending, std::chrono::milliseconds(1000));
+
+      expect(close_frame.has_value()) << "Server should fail fast before the full text frame arrives";
+      expect(close_frame && close_frame->opcode == 0x08) << "Server should send a close frame";
+      if (close_frame) {
+         expect(close_code_from_frame(*close_frame) == 1007) << "Invalid UTF-8 should close with 1007";
+      }
+
+      expect(message_count.load() == 0) << "Invalid text payload must not be delivered";
+      expect(wait_for_condition([&] { return server_closed.load(); })) << "Server on_close should be called";
+      expect(server_close_code.load() == 1007) << "Server on_close should report 1007";
+
+      socket.close();
+      server.stop();
+      server_thread.join();
+
+      std::this_thread::sleep_for(std::chrono::milliseconds(500));
+   };
+
+   "split_masked_text_frame_preserves_utf8_payload"_test = [] {
+      constexpr uint16_t port = 18087;
+      std::atomic<bool> server_ready{false};
+      std::atomic<int> message_count{0};
+      std::mutex received_mutex;
+      std::string received_message;
+
+      auto ws_server = std::make_shared<websocket_server>();
+      ws_server->on_message([&](auto, std::string_view message, ws_opcode opcode) {
+         if (opcode == ws_opcode::text) {
+            std::lock_guard<std::mutex> lock(received_mutex);
+            received_message.assign(message);
+            ++message_count;
+         }
+      });
+      ws_server->on_close([](auto, ws_close_code, std::string_view) {});
+
+      http_server server;
+      server.websocket("/ws", ws_server);
+
+      std::thread server_thread([&]() {
+         server.bind(port);
+         server_ready = true;
+         server.start();
+      });
+
+      expect(wait_for_condition([&] { return server_ready.load(); })) << "Server should start";
+      std::this_thread::sleep_for(std::chrono::milliseconds(100));
+
+      asio::io_context io_context;
+      asio::ip::tcp::socket socket(io_context);
+      auto handshake_response = connect_raw_websocket(io_context, socket, port);
+      expect(handshake_response.response.find("101 Switching Protocols") != std::string::npos)
+         << "Handshake should succeed";
+
+      std::vector<uint8_t> payload;
+      const std::string prefix = "txt: ";
+      payload.insert(payload.end(), prefix.begin(), prefix.end());
+      const std::array<uint8_t, 4> split_code_point{0xF0, 0x9F, 0x92, 0xA9};
+      payload.insert(payload.end(), split_code_point.begin(), split_code_point.end());
+      const std::string suffix = " after split ";
+      payload.insert(payload.end(), suffix.begin(), suffix.end());
+      payload.insert(payload.end(), 64, static_cast<uint8_t>('x'));
+
+      const std::string expected(payload.begin(), payload.end());
+      auto frame = make_masked_client_frame(0x01, payload);
+      const auto header_size = masked_client_frame_header_size(payload.size());
+      const auto first_payload_bytes = prefix.size() + 2;
+
+      asio::write(socket, asio::buffer(frame.data(), header_size + first_payload_bytes));
+      std::this_thread::sleep_for(std::chrono::milliseconds(50));
+      asio::write(socket,
+                  asio::buffer(frame.data() + header_size + first_payload_bytes,
+                               frame.size() - header_size - first_payload_bytes));
+
+      expect(wait_for_condition([&] { return message_count.load() == 1; })) << "Split text frame should be delivered";
+
+      {
+         std::lock_guard<std::mutex> lock(received_mutex);
+         expect(received_message == expected) << "Split masked text frame payload should be preserved";
+      }
+
+      send_close_frame(socket, 1000);
+      socket.close();
+
+      server.stop();
+      server_thread.join();
+
+      std::this_thread::sleep_for(std::chrono::milliseconds(500));
    };
 };
 

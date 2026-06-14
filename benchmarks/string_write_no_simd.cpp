@@ -1,4 +1,7 @@
+// Silence possible warnings about macro redefinition
+#ifndef GLZ_DISABLE_SIMD
 #define GLZ_DISABLE_SIMD
+#endif
 #include "string_write_no_simd.hpp"
 
 #include "glaze/json.hpp"
