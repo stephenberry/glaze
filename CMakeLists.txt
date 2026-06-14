@@ -108,3 +108,8 @@ if(glaze_ENABLE_REFLECTION26)
   target_compile_definitions(glaze_glaze INTERFACE GLZ_REFLECTION26=1)
 endif(glaze_ENABLE_REFLECTION26)
 
+option(glaze_OPTIMIZE_SIZE "Optimize for size by not including itoa tables worth 40kb at the expense of throughput" OFF)
+
+if(glaze_OPTIMIZE_SIZE)
+  target_compile_definitions(glaze_glaze INTERFACE GLZ_OPTIMIZE_SIZE=1)
+endif(glaze_OPTIMIZE_SIZE)

@@ -30,7 +30,9 @@
 #include "glaze/core/opts.hpp"
 #include "glaze/util/dump.hpp"
 #include "glaze/util/itoa.hpp"
+#ifndef GLZ_OPTIMIZE_SIZE
 #include "glaze/util/itoa_40kb.hpp"
+#endif
 #include "glaze/util/simple_float.hpp"
 #include "glaze/util/zmij.hpp"
 
@@ -351,8 +353,12 @@ namespace glz
                ix += size_t(end - start);
             }
             else {
+#ifndef GLZ_OPTIMIZE_SIZE
                // Normal mode: use to_chars_40kb (40KB digit_quads table)
                const auto end = glz::to_chars_40kb(start, value);
+#else
+               const auto end = glz::to_chars(start, value);
+#endif
                ix += size_t(end - start);
             }
          }
@@ -366,8 +372,12 @@ namespace glz
                ix += size_t(end - start);
             }
             else {
+#ifndef GLZ_OPTIMIZE_SIZE
                // Normal mode: use to_chars_40kb
                const auto end = glz::to_chars_40kb(start, static_cast<X>(value));
+#else
+               const auto end = glz::to_chars(start, static_cast<X>(value));
+#endif
                ix += size_t(end - start);
             }
          }
