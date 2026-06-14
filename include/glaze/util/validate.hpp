@@ -108,14 +108,14 @@ namespace glz
 
          if (info.context.empty()) {
             dump("index ", b, ix);
-            write_chars::op<opts{}>(info.index, ctx, b, ix);
+            write_chars::op<opts_size{}>(info.index, ctx, b, ix);
             dump(": ", b, ix);
             dump_maybe_empty(error, b, ix);
          }
          else {
-            write_chars::op<opts{}>(info.line, ctx, b, ix);
+            write_chars::op<opts_size{}>(info.line, ctx, b, ix);
             dump(':', b, ix);
-            write_chars::op<opts{}>(info.column, ctx, b, ix);
+            write_chars::op<opts_size{}>(info.column, ctx, b, ix);
             dump(": ", b, ix);
             dump_maybe_empty(error, b, ix);
             dump('\n', b, ix);
