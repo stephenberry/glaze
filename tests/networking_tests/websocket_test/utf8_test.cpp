@@ -134,4 +134,178 @@ suite utf8_validation_tests = [] {
    };
 };
 
+suite utf8_stream_validation_tests = [] {
+   "utf8_stream_split_sequences"_test = [] {
+      glz::utf8_stream_validator validator;
+
+      const char part1[] = "\xF0\x9F";
+      expect(validator.consume(part1, 2));
+      expect(!validator.complete());
+
+      const char part2[] = "\x92\xA9";
+      expect(validator.consume(part2, 2));
+      expect(validator.complete());
+
+      validator.reset();
+      const char euro_part1[] = "\xE2\x82";
+      const char euro_part2[] =
+         "\xAC"
+         " hello";
+      expect(validator.consume(euro_part1, 2));
+      expect(!validator.complete());
+      expect(validator.consume(euro_part2, 7));
+      expect(validator.complete());
+   };
+
+   "utf8_stream_invalid_across_chunks"_test = [] {
+      glz::utf8_stream_validator validator;
+
+      const char lead[] = "\xC2";
+      expect(validator.consume(lead, 1));
+      expect(!validator.complete());
+      expect(!validator.consume(" ", 1));
+
+      validator.reset();
+      const char overlong_part1[] = "\xF0";
+      const char overlong_part2[] = "\x8F\xBF\xBF";
+      expect(validator.consume(overlong_part1, 1));
+      expect(!validator.consume(overlong_part2, 3));
+
+      validator.reset();
+      const char truncated[] = "\xE2\x82";
+      expect(validator.consume(truncated, 2));
+      expect(!validator.complete());
+   };
+
+   "utf8_stream_valid_boundaries_and_all_splits"_test = [] {
+      auto expect_valid_for_all_splits = [](const char* bytes, size_t size) {
+         for (size_t split = 0; split <= size; ++split) {
+            glz::utf8_stream_validator validator;
+
+            expect(validator.consume(bytes, split));
+
+            if (split > 0 && split < size) {
+               expect(!validator.complete());
+            }
+
+            expect(validator.consume(bytes + split, size - split));
+            expect(validator.complete());
+         }
+      };
+
+      expect_valid_for_all_splits("\x7F", 1);
+      expect_valid_for_all_splits("\xC2\x80", 2);
+      expect_valid_for_all_splits("\xDF\xBF", 2);
+      expect_valid_for_all_splits("\xE0\xA0\x80", 3);
+      expect_valid_for_all_splits("\xED\x9F\xBF", 3);
+      expect_valid_for_all_splits("\xEE\x80\x80", 3);
+      expect_valid_for_all_splits("\xEF\xBF\xBF", 3);
+      expect_valid_for_all_splits("\xF0\x90\x80\x80", 4);
+      expect_valid_for_all_splits("\xF4\x8F\xBF\xBF", 4);
+   };
+
+   "utf8_stream_invalid_boundaries"_test = [] {
+      auto expect_invalid = [](const char* bytes, size_t size) {
+         glz::utf8_stream_validator validator;
+         expect(!validator.consume(bytes, size));
+      };
+
+      expect_invalid("\x80", 1);
+      expect_invalid("\xBF", 1);
+
+      expect_invalid("\xC0\x80", 2);
+      expect_invalid("\xC1\xBF", 2);
+
+      expect_invalid("\xE0\x80\x80", 3);
+      expect_invalid("\xE0\x9F\xBF", 3);
+
+      expect_invalid("\xED\xA0\x80", 3);
+      expect_invalid("\xED\xBF\xBF", 3);
+
+      expect_invalid("\xF0\x80\x80\x80", 4);
+      expect_invalid("\xF0\x8F\xBF\xBF", 4);
+
+      expect_invalid("\xF4\x90\x80\x80", 4);
+      expect_invalid("\xF4\xBF\xBF\xBF", 4);
+
+      expect_invalid("\xF5\x80\x80\x80", 4);
+      expect_invalid("\xFE", 1);
+      expect_invalid("\xFF", 1);
+   };
+
+   "utf8_stream_invalid_continuation_positions"_test = [] {
+      auto expect_invalid = [](const char* bytes, size_t size) {
+         glz::utf8_stream_validator validator;
+         expect(!validator.consume(bytes, size));
+      };
+
+      expect_invalid("\xC2\x20", 2);
+
+      expect_invalid("\xE2\x20\x80", 3);
+      expect_invalid("\xE2\x82\x20", 3);
+
+      expect_invalid("\xF0\x90\x20\x80", 4);
+      expect_invalid("\xF0\x90\x80\x20", 4);
+   };
+
+   "utf8_stream_invalid_boundary_rules_across_chunks"_test = [] {
+      auto expect_invalid_across_chunks = [](const char* first, size_t first_size, const char* second,
+                                             size_t second_size) {
+         glz::utf8_stream_validator validator;
+
+         expect(validator.consume(first, first_size));
+         expect(!validator.complete());
+         expect(!validator.consume(second, second_size));
+      };
+
+      expect_invalid_across_chunks("\xC2", 1, "\x20", 1);
+
+      expect_invalid_across_chunks("\xE0", 1, "\x9F\x80", 2);
+      expect_invalid_across_chunks("\xED", 1, "\xA0\x80", 2);
+
+      expect_invalid_across_chunks("\xF0", 1, "\x8F\xBF\xBF", 3);
+      expect_invalid_across_chunks("\xF4", 1, "\x90\x80\x80", 3);
+
+      expect_invalid_across_chunks("\xE2\x82", 2, "\x20", 1);
+      expect_invalid_across_chunks("\xF0\x90\x80", 3, "\x20", 1);
+   };
+
+   "utf8_stream_truncated_sequences"_test = [] {
+      auto expect_incomplete = [](const char* bytes, size_t size) {
+         glz::utf8_stream_validator validator;
+
+         expect(validator.consume(bytes, size));
+         expect(!validator.complete());
+      };
+
+      expect_incomplete("\xC2", 1);
+
+      expect_incomplete("\xE0", 1);
+      expect_incomplete("\xE0\xA0", 2);
+
+      expect_incomplete("\xF0", 1);
+      expect_incomplete("\xF0\x90", 2);
+      expect_incomplete("\xF0\x90\x80", 3);
+   };
+
+   "utf8_stream_empty_ascii_and_reset"_test = [] {
+      glz::utf8_stream_validator validator;
+
+      expect(validator.consume("", 0));
+      expect(validator.complete());
+
+      expect(validator.consume("hello", 5));
+      expect(validator.complete());
+
+      expect(validator.consume("\xE2", 1));
+      expect(!validator.complete());
+
+      validator.reset();
+      expect(validator.complete());
+
+      expect(validator.consume("ok", 2));
+      expect(validator.complete());
+   };
+};
+
 int main() {}

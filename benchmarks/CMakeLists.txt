@@ -4,7 +4,12 @@ project(glaze_benchmarks)
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+if (PROJECT_IS_TOP_LEVEL)
+  set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+endif()
+
 include(FetchContent)
+include(CheckIncludeFileCXX)
 
 # Fetch bencher
 FetchContent_Declare(
@@ -59,6 +64,17 @@ target_link_libraries(skip_ws_benchmark PRIVATE
   bencher::bencher
 )
 target_compile_options(skip_ws_benchmark PRIVATE
+  $<$<CXX_COMPILER_ID:GNU,Clang,AppleClang>:-O3 -march=native>
+  $<$<CXX_COMPILER_ID:MSVC>:/O2>
+)
+
+# UTF-8 validation benchmark (stateless whole-buffer validator vs streaming validator)
+add_executable(utf8_benchmark utf8_benchmark.cpp)
+target_link_libraries(utf8_benchmark PRIVATE
+  glaze
+  bencher::bencher
+)
+target_compile_options(utf8_benchmark PRIVATE
   $<$<CXX_COMPILER_ID:GNU,Clang,AppleClang>:-O3 -march=native>
   $<$<CXX_COMPILER_ID:MSVC>:/O2>
 )
@@ -119,14 +135,17 @@ target_compile_options(generic_benchmark PRIVATE
 )
 
 # Ordered map memory comparison
-add_executable(ordered_map_memory ordered_map_memory.cpp)
-target_link_libraries(ordered_map_memory PRIVATE
-  glaze
-)
-target_compile_options(ordered_map_memory PRIVATE
-  $<$<CXX_COMPILER_ID:GNU,Clang,AppleClang>:-O3 -march=native>
-  $<$<CXX_COMPILER_ID:MSVC>:/O2>
-)
+check_include_file_cxx("malloc/malloc.h" GLZ_HAS_MALLOC_MALLOC_H)
+if (GLZ_HAS_MALLOC_MALLOC_H)
+  add_executable(ordered_map_memory ordered_map_memory.cpp)
+  target_link_libraries(ordered_map_memory PRIVATE
+    glaze
+  )
+  target_compile_options(ordered_map_memory PRIVATE
+    $<$<CXX_COMPILER_ID:GNU,Clang,AppleClang>:-O3 -march=native>
+    $<$<CXX_COMPILER_ID:MSVC>:/O2>
+  )
+endif()
 
 # HTTP server benchmark: Glaze vs Boost.Beast
 add_subdirectory(http_benchmark)

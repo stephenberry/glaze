@@ -739,6 +739,98 @@ namespace glz
          }
       }
 
+      // Tracks one text frame whose payload arrives across multiple reads
+      struct incomplete_text_frame_state
+      {
+         bool active{};
+         ws_opcode opcode{ws_opcode::continuation};
+         bool fin{};
+         bool masked{};
+         std::size_t header_size{};
+         std::size_t expected_payload_size{};
+         std::size_t consumed_payload_size{};
+         std::array<uint8_t, 4> mask_key{};
+      };
+
+      // Only text message payloads need UTF-8 checks before the full frame is buffered
+      inline bool has_text_message_payload(ws_opcode opcode) const
+      {
+         return (opcode == ws_opcode::text && !is_reading_frame_) ||
+                (opcode == ws_opcode::continuation && is_reading_frame_ && current_opcode_ == ws_opcode::text);
+      }
+
+      // Clear tracking after the incomplete frame is consumed
+      inline void clear_incomplete_text_frame() { incomplete_text_frame_ = {}; }
+
+      // Save metadata for a new incomplete frame, or verify the frame already being tracked
+      inline bool prepare_incomplete_text_frame(ws_opcode opcode, bool fin, bool masked, std::size_t header_size,
+                                                std::size_t expected_payload_size,
+                                                const std::array<uint8_t, 4>& mask_key)
+      {
+         if (!incomplete_text_frame_.active) {
+            incomplete_text_frame_.active = true;
+            incomplete_text_frame_.opcode = opcode;
+            incomplete_text_frame_.fin = fin;
+            incomplete_text_frame_.masked = masked;
+            incomplete_text_frame_.header_size = header_size;
+            incomplete_text_frame_.expected_payload_size = expected_payload_size;
+            incomplete_text_frame_.consumed_payload_size = 0;
+            incomplete_text_frame_.mask_key = mask_key;
+
+            // A text frame starts a new UTF-8 message stream
+            if (opcode == ws_opcode::text) {
+               utf8_validator_.reset();
+            }
+
+            return true;
+         }
+
+         // Re-parsed frame metadata have to match the saved state before more bytes are consumed
+         if (incomplete_text_frame_.opcode != opcode || incomplete_text_frame_.fin != fin ||
+             incomplete_text_frame_.masked != masked || incomplete_text_frame_.header_size != header_size ||
+             incomplete_text_frame_.expected_payload_size != expected_payload_size ||
+             incomplete_text_frame_.mask_key != mask_key) {
+            fail_connection(ws_close_code::protocol_error, "Invalid incomplete frame state");
+            return false;
+         }
+
+         return true;
+      }
+
+      // Consume only new payload bytes that arrived since the previous read
+      inline bool consume_incomplete_text_payload(ws_opcode opcode, bool fin, bool masked, std::size_t header_size,
+                                                  std::size_t expected_payload_size,
+                                                  const std::array<uint8_t, 4>& mask_key, uint8_t* payload,
+                                                  std::size_t available_payload_size)
+      {
+         if (!prepare_incomplete_text_frame(opcode, fin, masked, header_size, expected_payload_size, mask_key)) {
+            return false;
+         }
+
+         // A read can contain the complete header and no payload bytes
+         if (available_payload_size <= incomplete_text_frame_.consumed_payload_size) {
+            return true;
+         }
+
+         const auto consumed_payload_size = incomplete_text_frame_.consumed_payload_size;
+         const auto new_payload_size = available_payload_size - consumed_payload_size;
+
+         // Unmask only new bytes because previous bytes are already unmasked in-place
+         if (masked) {
+            for (std::size_t i = consumed_payload_size; i < available_payload_size; ++i) {
+               payload[i] ^= mask_key[i % 4];
+            }
+         }
+
+         if (!utf8_validator_.consume(payload + consumed_payload_size, new_payload_size)) {
+            fail_connection(ws_close_code::invalid_payload, "Invalid UTF-8");
+            return false;
+         }
+
+         incomplete_text_frame_.consumed_payload_size = available_payload_size;
+         return true;
+      }
+
       inline size_t process_frames(uint8_t* data, std::size_t length)
       {
          std::size_t offset = 0;
@@ -753,6 +845,19 @@ namespace glz
             header.data[0] = data[offset];
             header.data[1] = data[offset + 1];
             size_t header_size = 2;
+
+            // After sending a Close frame, only the peer's Close response is relevant, so
+            // discard any other coalesced frames (RFC 6455 Section 7.1.1 permits dropping
+            // data once a Close has been initiated).
+            //
+            // Note: this discards the rest of the buffer on the first non-Close frame, so a
+            // peer's Close response that is coalesced *behind* another frame in the same read
+            // (e.g. [data][ping][close]) is dropped here rather than completing the handshake
+            // via handle_frame(). That case falls back to on_read()'s error path when the peer
+            // tears down the TCP connection, which still invokes do_close() and fires on_close.
+            if (is_closing_.load() && header.opcode() != ws_opcode::close) {
+               return length;
+            }
 
             // Check reserved bits
             if ((header.data[0] & 0x70) != 0) {
@@ -790,43 +895,71 @@ namespace glz
                header_size += 4;
             }
 
-            // Check if we have the complete payload
-            if (length - offset < header_size + payload_length) {
+            // A WebSocket frame can be split across multiple reads
+            uint8_t* payload_ptr = data + offset + header_size;
+            const auto payload_size = static_cast<size_t>(payload_length);
+            const auto available_frame_size = length - offset;
+            const auto available_payload_size =
+               available_frame_size > header_size ? (std::min)(payload_size, available_frame_size - header_size) : 0;
+            const bool payload_is_complete = available_payload_size == payload_size;
+            const bool has_text_payload = has_text_message_payload(header.opcode());
+            bool text_payload_consumed = false;
+
+            // Check received text bytes before waiting for the rest of the frame
+            if (has_text_payload && (!payload_is_complete || incomplete_text_frame_.active)) {
+               if (!consume_incomplete_text_payload(header.opcode(), header.fin(), header.mask(), header_size,
+                                                    payload_size, mask_key, payload_ptr, available_payload_size)) {
+                  return length;
+               }
+               text_payload_consumed = payload_is_complete;
+            }
+
+            if (!payload_is_complete) {
+               // Keep the incomplete frame in frame_buffer_ for the next read
                break;
             }
 
-            // Get pointer to payload in frame buffer and unmask in-place
-            uint8_t* payload_ptr = data + offset + header_size;
-            const auto payload_size = static_cast<size_t>(payload_length);
-
-            if (header.mask() && payload_size > 0) {
+            // Unmask here only when the stream validator has not already unmasked this payload
+            if (header.mask() && payload_size > 0 && !text_payload_consumed) {
                for (std::size_t i = 0; i < payload_size; ++i) {
                   payload_ptr[i] ^= mask_key[i % 4];
                }
             }
 
-            // Handle the frame
-            handle_frame(header.opcode(), payload_ptr, payload_size, header.fin());
+            if (text_payload_consumed) {
+               // The complete payload was already passed to utf8_validator_
+               // Clear only the per-frame state; handle_frame() owns the UTF-8 stream state
+               clear_incomplete_text_frame();
+            }
+
+            const bool continue_processing =
+               handle_frame(header.opcode(), payload_ptr, payload_size, header.fin(), text_payload_consumed);
 
             offset += header_size + static_cast<size_t>(payload_length);
+
+            // A locally initiated close may have its peer response later in this same buffer.
+            if (!continue_processing || closed_.load()) {
+               return length;
+            }
          }
          return offset;
       }
 
-      inline void handle_frame(ws_opcode opcode, const uint8_t* payload, std::size_t length, bool fin)
+      inline bool handle_frame(ws_opcode opcode, const uint8_t* payload, std::size_t length, bool fin,
+                               bool text_payload_consumed = false)
       {
          // RFC 6455 Section 5.5: "All control frames ... MUST NOT be fragmented."
          // A fragmented control frame (FIN == 0) is a protocol error and the connection must fail.
          // https://datatracker.ietf.org/doc/html/rfc6455#section-5.5
          if (!fin && ws_util::is_control_frame(opcode)) [[unlikely]] {
             fail_connection(ws_close_code::protocol_error, "Fragmented control frame");
-            return;
+            return false;
          }
 
          // RFC 6455 Section 5.5: "All control frames MUST have a payload length of 125 bytes or less."
          if (length > 125 && ws_util::is_control_frame(opcode)) [[unlikely]] {
             fail_connection(ws_close_code::protocol_error, "Invalid control frame payload length");
-            return;
+            return false;
          }
 
          switch (opcode) {
@@ -834,20 +967,34 @@ namespace glz
          case ws_opcode::binary:
             if (is_reading_frame_) {
                close(ws_close_code::protocol_error, "Unexpected data frame");
-               return;
+               return false;
             }
 
             if (length > max_message_size_) {
                close(ws_close_code::message_too_big, "Message too big");
-               return;
+               return false;
             }
 
             if (fin) {
                // Complete single-frame message - deliver directly (zero-copy)
                if (opcode == ws_opcode::text) {
-                  if (!glz::validate_utf8(payload, length)) {
-                     close(ws_close_code::invalid_payload, "Invalid UTF-8");
-                     return;
+                  if (text_payload_consumed) {
+                     // Finish the UTF-8 stream without scanning the same bytes again
+                     if (!utf8_validator_.complete()) {
+                        fail_connection(ws_close_code::invalid_payload, "Invalid UTF-8");
+                        return false;
+                     }
+                     utf8_validator_.reset();
+                  }
+                  else {
+                     // Validate the complete payload with the faster streaming validator.
+                     // A local instance keeps utf8_validator_ reserved for multi-read and
+                     // fragmented text streams, so there is no shared state to reset here.
+                     utf8_stream_validator validator;
+                     if (!validator.consume(payload, length) || !validator.complete()) {
+                        fail_connection(ws_close_code::invalid_payload, "Invalid UTF-8");
+                        return false;
+                     }
                   }
                }
 
@@ -860,6 +1007,14 @@ namespace glz
             }
             else {
                // Fragmented message - must buffer for reassembly
+               if (opcode == ws_opcode::text && !text_payload_consumed) {
+                  utf8_validator_.reset();
+                  if (!utf8_validator_.consume(payload, length)) {
+                     fail_connection(ws_close_code::invalid_payload, "Invalid UTF-8");
+                     return false;
+                  }
+               }
+
                current_opcode_ = opcode;
                message_buffer_.assign(payload, payload + length);
                is_reading_frame_ = true;
@@ -869,26 +1024,32 @@ namespace glz
          case ws_opcode::continuation:
             if (!is_reading_frame_) {
                close(ws_close_code::protocol_error, "Unexpected continuation frame");
-               return;
+               return false;
             }
 
             if (message_buffer_.size() + length > max_message_size_) {
                close(ws_close_code::message_too_big, "Message too big");
-               return;
+               return false;
+            }
+
+            if (current_opcode_ == ws_opcode::text) {
+               if (text_payload_consumed) {
+                  // Finish the UTF-8 stream only at the end of the fragmented message
+                  if (fin && !utf8_validator_.complete()) {
+                     fail_connection(ws_close_code::invalid_payload, "Invalid UTF-8");
+                     return false;
+                  }
+               }
+               else if (!utf8_validator_.consume(payload, length) || (fin && !utf8_validator_.complete())) {
+                  fail_connection(ws_close_code::invalid_payload, "Invalid UTF-8");
+                  return false;
+               }
             }
 
             message_buffer_.insert(message_buffer_.end(), payload, payload + length);
 
             if (fin) {
                is_reading_frame_ = false;
-
-               // Validate UTF-8 for text frames
-               if (current_opcode_ == ws_opcode::text) {
-                  if (!glz::validate_utf8(message_buffer_.data(), message_buffer_.size())) {
-                     close(ws_close_code::invalid_payload, "Invalid UTF-8");
-                     return;
-                  }
-               }
 
                std::string_view message_view(reinterpret_cast<const char*>(message_buffer_.data()),
                                              message_buffer_.size());
@@ -899,6 +1060,7 @@ namespace glz
                }
                message_buffer_.clear();
                current_opcode_ = ws_opcode::continuation;
+               utf8_validator_.reset();
             }
             break;
 
@@ -915,7 +1077,7 @@ namespace glz
             // the body MUST be a 2-byte unsigned integer ..."
             if (length == 1) {
                fail_connection(ws_close_code::protocol_error, "Invalid close payload length");
-               return;
+               return false;
             }
 
             if (length >= 2) {
@@ -932,14 +1094,14 @@ namespace glz
             // 3. Section 10.7: "Incoming data MUST always be validated by both clients and servers".
             if (!ws_util::is_valid_close_code(code_value)) {
                fail_connection(ws_close_code::protocol_error, "Invalid close code");
-               return;
+               return false;
             }
 
             // RFC 6455 Section 5.5.1: "Following the 2-byte integer, the body MAY contain
             // UTF-8-encoded data with value /reason/"
             if (!reason.empty() && !glz::validate_utf8(reason.c_str(), reason.size())) {
                fail_connection(ws_close_code::invalid_payload, "Invalid close reason");
-               return;
+               return false;
             }
 
             // Store close code and reason for callback
@@ -961,7 +1123,8 @@ namespace glz
                // control frame, that endpoint SHOULD Close the WebSocket Connection"
                do_close();
             }
-         } break;
+            return false;
+         }
 
          case ws_opcode::ping:
             send_pong(std::string_view(reinterpret_cast<const char*>(payload), length));
@@ -973,8 +1136,10 @@ namespace glz
 
          default:
             close(ws_close_code::protocol_error, "Unknown opcode");
-            break;
+            return false;
          }
+
+         return true;
       }
 
       inline void send_frame(ws_opcode opcode, std::string_view payload, bool fin = true, bool close_after = false)
@@ -1298,6 +1463,8 @@ namespace glz
       std::array<uint8_t, 16384> read_buffer_;
       std::vector<uint8_t> frame_buffer_;
       std::vector<uint8_t> message_buffer_;
+      utf8_stream_validator utf8_validator_;
+      incomplete_text_frame_state incomplete_text_frame_;
       ws_opcode current_opcode_{ws_opcode::continuation};
       bool is_reading_frame_{false};
       std::atomic<bool> is_closing_{false};
