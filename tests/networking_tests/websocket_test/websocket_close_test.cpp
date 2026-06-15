@@ -822,9 +822,8 @@ suite websocket_utf8_fail_fast_tests = [] {
 
       asio::write(socket, asio::buffer(frame.data(), header_size + first_payload_bytes));
       std::this_thread::sleep_for(std::chrono::milliseconds(50));
-      asio::write(socket,
-                  asio::buffer(frame.data() + header_size + first_payload_bytes,
-                               frame.size() - header_size - first_payload_bytes));
+      asio::write(socket, asio::buffer(frame.data() + header_size + first_payload_bytes,
+                                       frame.size() - header_size - first_payload_bytes));
 
       expect(wait_for_condition([&] { return message_count.load() == 1; })) << "Split text frame should be delivered";
 
