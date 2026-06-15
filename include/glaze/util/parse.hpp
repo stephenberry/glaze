@@ -1448,15 +1448,12 @@ namespace glz
 
       GLZ_ALWAYS_INLINE static size_t first_non_ascii_offset(const uint64_t high_bits) noexcept
       {
-         // REVIEW: Not sure whether this needed or not, does Glaze support middle-endian?
-         static_assert(std::endian::native == std::endian::little || std::endian::native == std::endian::big);
-
-         // Find the first non-ASCII byte inside the 8-byte word
-         if constexpr (std::endian::native == std::endian::little) {
-            return static_cast<size_t>(std::countr_zero(high_bits) >> 3);
+         // Offset of the first non-ASCII byte within the 8-byte word
+         if constexpr (std::endian::native == std::endian::big) {
+            return static_cast<size_t>(std::countl_zero(high_bits) >> 3);
          }
          else {
-            return static_cast<size_t>(std::countl_zero(high_bits) >> 3);
+            return static_cast<size_t>(std::countr_zero(high_bits) >> 3);
          }
       }
 
