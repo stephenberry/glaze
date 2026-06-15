@@ -15,8 +15,11 @@
 #include "glaze/simd/simd.hpp"
 #include "glaze/util/inline.hpp"
 
-// The 128-bit x86 path needs SSSE3 (pshufb/palignr), which the x86_64 baseline (SSE2) lacks.
-#if defined(GLZ_USE_NEON) || defined(GLZ_USE_AVX2) || (defined(GLZ_USE_SSE2) && defined(__SSSE3__))
+// The NEON kernel uses AArch64-only intrinsics (vqtbl1q_u8, vmaxvq_u8); 32-bit ARM (AArch32/armv7)
+// defines __ARM_NEON but lacks them, so it falls back to the scalar validator. The 128-bit x86 path
+// needs SSSE3 (pshufb/palignr), which the x86_64 baseline (SSE2) lacks.
+#if (defined(GLZ_USE_NEON) && (defined(__aarch64__) || defined(_M_ARM64))) || defined(GLZ_USE_AVX2) || \
+   (defined(GLZ_USE_SSE2) && defined(__SSSE3__))
 #define GLZ_HAS_SIMD_UTF8 1
 #endif
 
