@@ -18,15 +18,15 @@ namespace glz
       GLZ_ALWAYS_INLINE size_t get8s(auto&& ctx, It0&& it, It1&& end) noexcept
       {
          if (check_invalid_offset(ctx, it, end, 1)) return 0;
-         return std::size_t(*it++);
+         return std::size_t(static_cast<uint8_t>(*it++));
       }
 
       template <class It0, class It1>
       GLZ_ALWAYS_INLINE size_t get16be(auto&& ctx, It0&& it, It1&& end) noexcept
       {
          if (check_invalid_offset(ctx, it, end, 2)) return 0;
-         const std::size_t b1 = (*it++) << 8;
-         return b1 | *it++;
+         const std::size_t b1 = std::size_t(static_cast<uint8_t>(*it++)) << 8;
+         return b1 | static_cast<uint8_t>(*it++);
       }
 
       template <auto Opts, typename I>
