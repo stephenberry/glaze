@@ -103,111 +103,112 @@ jobs:
         find_package(asio CONFIG REQUIRED)
 
         file(GLOB_RECURSE glaze_public_headers CONFIGURE_DEPENDS "${GLAZE_SOURCE_DIR}/include/glaze/*.hpp")
+        file(GLOB_RECURSE glaze_windows_lean_header_compatibility_headers CONFIGURE_DEPENDS "${GLAZE_SOURCE_DIR}/include/glaze/net/*.hpp")
+        list(APPEND glaze_windows_lean_header_compatibility_headers "${GLAZE_SOURCE_DIR}/include/glaze/ext/glaze_asio.hpp")
+        set(glaze_windows_header_compatibility_headers "${glaze_public_headers}")
+        list(REMOVE_ITEM glaze_windows_header_compatibility_headers ${glaze_windows_lean_header_compatibility_headers})
         list(SORT glaze_public_headers)
+        list(SORT glaze_windows_header_compatibility_headers)
+        list(SORT glaze_windows_lean_header_compatibility_headers)
         list(LENGTH glaze_public_headers glaze_public_header_count)
+        list(LENGTH glaze_windows_header_compatibility_headers glaze_windows_header_compatibility_header_count)
+        list(LENGTH glaze_windows_lean_header_compatibility_headers glaze_windows_lean_header_compatibility_header_count)
 
         if(glaze_public_header_count EQUAL 0)
           message(FATAL_ERROR "No Glaze public headers were found")
         endif()
 
         message(STATUS "Found ${glaze_public_header_count} Glaze public headers")
+        message(STATUS "Using unsanitized Windows.h for ${glaze_windows_header_compatibility_header_count} Glaze public headers")
+        message(STATUS "Using WIN32_LEAN_AND_MEAN Windows.h for ${glaze_windows_lean_header_compatibility_header_count} Glaze public headers")
+
+        function(append_windows_macro_checks content_var error_context check_delete check_small)
+          set(macro_names min max ERROR near far)
+
+          if(check_delete)
+            set(macro_names min max ERROR DELETE near far)
+          endif()
+
+          foreach(macro_name IN LISTS macro_names)
+            string(APPEND ${content_var}
+              "#ifndef ${macro_name}\n"
+              "#error ${macro_name} macro ${error_context}\n"
+              "#endif\n"
+            )
+          endforeach()
+
+          if(check_small)
+            string(APPEND ${content_var}
+              "#ifdef GLAZE_WINDOWS_HEADER_HAS_SMALL\n"
+              "#ifndef small\n"
+              "#error small macro ${error_context}\n"
+              "#endif\n"
+              "#endif\n"
+            )
+          endif()
+
+          set(${content_var} "${${content_var}}" PARENT_SCOPE)
+        endfunction()
+
+        function(append_windows_prelude content_var use_win32_lean_and_mean)
+          set(win32_lean_and_mean_line "#undef WIN32_LEAN_AND_MEAN\n")
+
+          if(use_win32_lean_and_mean)
+            set(win32_lean_and_mean_line "#define WIN32_LEAN_AND_MEAN\n")
+          endif()
+
+          string(APPEND ${content_var}
+            "#ifdef _WINDOWS_\n"
+            "#error Windows.h must not be included before this compatibility source\n"
+            "#endif\n"
+            "#undef NOMINMAX\n"
+            "${win32_lean_and_mean_line}"
+            "#undef NOGDI\n"
+            "#include <Windows.h>\n"
+          )
+
+          append_windows_macro_checks(${content_var} "is expected after including Windows.h" TRUE FALSE)
+
+          string(APPEND ${content_var}
+            "#ifdef small\n"
+            "#define GLAZE_WINDOWS_HEADER_HAS_SMALL 1\n"
+            "#endif\n"
+          )
+
+          set(${content_var} "${${content_var}}" PARENT_SCOPE)
+        endfunction()
+
+        function(write_compatibility_source source_path use_win32_lean_and_mean headers_var)
+          set(source_content "")
+          append_windows_prelude(source_content ${use_win32_lean_and_mean})
+
+          foreach(external_header IN LISTS ARGN)
+            string(APPEND source_content "#include <${external_header}>\n")
+          endforeach()
+
+          if(ARGN)
+            append_windows_macro_checks(source_content "was not preserved after including external integration headers" FALSE TRUE)
+          endif()
+
+          foreach(header_path IN LISTS ${headers_var})
+            file(RELATIVE_PATH header_relative_path "${GLAZE_SOURCE_DIR}/include" "${header_path}")
+            string(REPLACE "\\" "/" header_include_path "${header_relative_path}")
+            string(APPEND source_content "#include <${header_include_path}>\n")
+            append_windows_macro_checks(source_content "was not preserved after including ${header_include_path}" FALSE TRUE)
+          endforeach()
+
+          file(WRITE "${source_path}" "${source_content}")
+        endfunction()
 
         file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/generated")
 
         set(source_path "${CMAKE_CURRENT_BINARY_DIR}/generated/glaze_windows_header_compatibility.cpp")
+        set(lean_source_path "${CMAKE_CURRENT_BINARY_DIR}/generated/glaze_windows_lean_header_compatibility.cpp")
 
-        string(CONCAT source_content
-          "#ifdef _WINDOWS_\n"
-          "#error Windows.h must not be included before this compatibility source\n"
-          "#endif\n"
-          "#undef NOMINMAX\n"
-          "#undef WIN32_LEAN_AND_MEAN\n"
-          "#undef NOGDI\n"
-          "#include <Windows.h>\n"
-          "#if defined(_WIN32)\n"
-          "#include <BaseTsd.h>\n"
-          "#if !defined(_SSIZE_T_DEFINED)\n"
-          "using ssize_t = SSIZE_T;\n"
-          "#define _SSIZE_T_DEFINED\n"
-          "#endif\n"
-          "#endif\n"
-          "#ifndef min\n"
-          "#error min macro is expected after including Windows.h\n"
-          "#endif\n"
-          "#ifndef max\n"
-          "#error max macro is expected after including Windows.h\n"
-          "#endif\n"
-          "#ifndef ERROR\n"
-          "#error ERROR macro is expected after including Windows.h\n"
-          "#endif\n"
-          "#ifndef DELETE\n"
-          "#error DELETE macro is expected after including Windows.h\n"
-          "#endif\n"
-          "#ifndef near\n"
-          "#error near macro is expected after including Windows.h\n"
-          "#endif\n"
-          "#ifndef far\n"
-          "#error far macro is expected after including Windows.h\n"
-          "#endif\n"
-          "#ifdef small\n"
-          "#define GLAZE_WINDOWS_HEADER_HAS_SMALL 1\n"
-          "#endif\n"
-          "#include <Eigen/Dense>\n"
-          "#include <asio.hpp>\n"
-          "#ifndef min\n"
-          "#error min macro was not preserved after including external integration headers\n"
-          "#endif\n"
-          "#ifndef max\n"
-          "#error max macro was not preserved after including external integration headers\n"
-          "#endif\n"
-          "#ifndef ERROR\n"
-          "#error ERROR macro was not preserved after including external integration headers\n"
-          "#endif\n"
-          "#ifndef near\n"
-          "#error near macro was not preserved after including external integration headers\n"
-          "#endif\n"
-          "#ifndef far\n"
-          "#error far macro was not preserved after including external integration headers\n"
-          "#endif\n"
-          "#ifdef GLAZE_WINDOWS_HEADER_HAS_SMALL\n"
-          "#ifndef small\n"
-          "#error small macro was not preserved after including external integration headers\n"
-          "#endif\n"
-          "#endif\n"
-        )
+        write_compatibility_source("${source_path}" FALSE glaze_windows_header_compatibility_headers Eigen/Dense)
+        write_compatibility_source("${lean_source_path}" TRUE glaze_windows_lean_header_compatibility_headers asio.hpp)
 
-        foreach(header_path IN LISTS glaze_public_headers)
-          file(RELATIVE_PATH header_relative_path "${GLAZE_SOURCE_DIR}/include" "${header_path}")
-          string(REPLACE "\\" "/" header_include_path "${header_relative_path}")
-
-          string(APPEND source_content
-            "#include <${header_include_path}>\n"
-            "#ifndef min\n"
-            "#error min macro was not preserved after including ${header_include_path}\n"
-            "#endif\n"
-            "#ifndef max\n"
-            "#error max macro was not preserved after including ${header_include_path}\n"
-            "#endif\n"
-            "#ifndef ERROR\n"
-            "#error ERROR macro was not preserved after including ${header_include_path}\n"
-            "#endif\n"
-            "#ifndef near\n"
-            "#error near macro was not preserved after including ${header_include_path}\n"
-            "#endif\n"
-            "#ifndef far\n"
-            "#error far macro was not preserved after including ${header_include_path}\n"
-            "#endif\n"
-            "#ifdef GLAZE_WINDOWS_HEADER_HAS_SMALL\n"
-            "#ifndef small\n"
-            "#error small macro was not preserved after including ${header_include_path}\n"
-            "#endif\n"
-            "#endif\n"
-          )
-        endforeach()
-
-        file(WRITE "${source_path}" "${source_content}")
-
-        add_library(glaze_windows_header_compatibility OBJECT "${source_path}")
+        add_library(glaze_windows_header_compatibility OBJECT "${source_path}" "${lean_source_path}")
         target_compile_features(glaze_windows_header_compatibility PRIVATE cxx_std_23)
         target_compile_definitions(glaze_windows_header_compatibility PRIVATE GLZ_ENABLE_EETF ASIO_STANDALONE)
         target_include_directories(glaze_windows_header_compatibility PRIVATE "${ERLANG_EI_INCLUDE_DIR}")
