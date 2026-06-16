@@ -34,10 +34,15 @@ on:
 jobs:
   build:
     runs-on: windows-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
 
     steps:
     - uses: actions/checkout@v6
+
+    - uses: erlef/setup-beam@v1.24.0
+      with:
+        otp-version: '28.5.0.2'
+        version-type: strict
 
     - name: Create CMake project
       run: |
@@ -51,16 +56,40 @@ jobs:
         project(glaze_windows_header_compatibility LANGUAGES CXX)
 
         set(GLAZE_SOURCE_DIR "" CACHE PATH "Glaze source directory")
+        set(ERLANG_OTP_DIR "" CACHE PATH "Erlang/OTP installation directory")
 
         if(NOT GLAZE_SOURCE_DIR)
           message(FATAL_ERROR "GLAZE_SOURCE_DIR is required")
         endif()
 
+        if(NOT ERLANG_OTP_DIR)
+          message(FATAL_ERROR "ERLANG_OTP_DIR is required")
+        endif()
+
         get_filename_component(GLAZE_SOURCE_DIR "${GLAZE_SOURCE_DIR}" ABSOLUTE)
+        get_filename_component(ERLANG_OTP_DIR "${ERLANG_OTP_DIR}" ABSOLUTE)
 
         if(NOT EXISTS "${GLAZE_SOURCE_DIR}/CMakeLists.txt")
           message(FATAL_ERROR "GLAZE_SOURCE_DIR must point to the Glaze source tree")
         endif()
+
+        set(erlang_ei_candidate_include_dirs
+          "${ERLANG_OTP_DIR}/usr/include"
+          "${ERLANG_OTP_DIR}/lib/erl_interface/include"
+        )
+
+        foreach(candidate_include_dir IN LISTS erlang_ei_candidate_include_dirs)
+          if(EXISTS "${candidate_include_dir}/ei.h")
+            set(ERLANG_EI_INCLUDE_DIR "${candidate_include_dir}")
+            break()
+          endif()
+        endforeach()
+
+        if(NOT ERLANG_EI_INCLUDE_DIR)
+          message(FATAL_ERROR "ei.h was not found under ${ERLANG_OTP_DIR}")
+        endif()
+
+        message(STATUS "Using Erlang ei include directory: ${ERLANG_EI_INCLUDE_DIR}")
 
         add_subdirectory("${GLAZE_SOURCE_DIR}" "${CMAKE_CURRENT_BINARY_DIR}/glaze")
 
@@ -142,6 +171,8 @@ jobs:
 
         add_library(glaze_windows_header_compatibility OBJECT "${source_path}")
         target_compile_features(glaze_windows_header_compatibility PRIVATE cxx_std_23)
+        target_compile_definitions(glaze_windows_header_compatibility PRIVATE GLZ_ENABLE_EETF)
+        target_include_directories(glaze_windows_header_compatibility PRIVATE "${ERLANG_EI_INCLUDE_DIR}")
 
         # From Microsoft documentation - /Zs (Syntax Check Only):
         # When using this option, no output files are created, and error messages are written to standard output.
@@ -160,7 +191,7 @@ jobs:
         Set-Content -Path (Join-Path $compatibilitySourceDir "CMakeLists.txt") -Value $cmakeLists -Encoding UTF8
 
     - name: Configure CMake
-      run: cmake -S ${{github.workspace}}/build/windows-header-compatibility/source -B ${{github.workspace}}/build/windows-header-compatibility/build -DGLAZE_SOURCE_DIR=${{github.workspace}} -DCMAKE_CXX_STANDARD=23
+      run: cmake -S ${{github.workspace}}/build/windows-header-compatibility/source -B ${{github.workspace}}/build/windows-header-compatibility/build -DGLAZE_SOURCE_DIR=${{github.workspace}} -DERLANG_OTP_DIR="$env:INSTALL_DIR_FOR_OTP" -DCMAKE_CXX_STANDARD=23
 
     - name: Build
       run: cmake --build build/windows-header-compatibility/build --config Debug --target glaze_windows_header_compatibility --parallel
