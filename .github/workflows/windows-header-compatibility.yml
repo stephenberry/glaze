@@ -228,11 +228,6 @@ jobs:
         target_include_directories(glaze_windows_header_compatibility PRIVATE "${ERLANG_EI_INCLUDE_DIR}")
         target_link_libraries(glaze_windows_header_compatibility PRIVATE Eigen3::Eigen asio::asio)
 
-        # From Microsoft documentation - /Zs (Syntax Check Only):
-        # When using this option, no output files are created, and error messages are written to standard output.
-        # The /Zs option provides a quick way to find and correct syntax errors before you compile and link a source file.
-        target_compile_options(glaze_windows_header_compatibility PRIVATE /Zs)
-
         if(TARGET glaze::glaze)
           target_link_libraries(glaze_windows_header_compatibility PRIVATE glaze::glaze)
         elseif(TARGET glaze)
