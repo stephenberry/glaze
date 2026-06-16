@@ -638,6 +638,15 @@ namespace glz
             }
          }
       }
+      else if constexpr (not Opts.null_terminated) {
+         // Minified input has no whitespace to skip, but a non-null-terminated buffer can still
+         // be exhausted at this point. The non-minified branch above performs the same check; a
+         // null-terminated buffer relies on the trailing sentinel and keeps this a pure no-op.
+         if (it == end) [[unlikely]] {
+            ctx.error = error_code::end_reached;
+            return true;
+         }
+      }
 
       return false;
    }
