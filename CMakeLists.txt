@@ -108,3 +108,14 @@ if(glaze_ENABLE_REFLECTION26)
   target_compile_definitions(glaze_glaze INTERFACE GLZ_REFLECTION26=1)
 endif(glaze_ENABLE_REFLECTION26)
 
+# Make `size` the build-wide default optimization level. Every call site that does not
+# specify a level then drops the 40KB integer table, ~16KB float pow-10 tables, and
+# per-struct hash tables, without having to pass glz::opts_size{} everywhere. Per-call
+# options still win (an explicit optimization_level::normal keeps the fast tables).
+option(glaze_DEFAULT_OPTIMIZATION_SIZE
+  "Default all (de)serialization to the size-optimized level (drops 40KB int / ~16KB float / per-struct hash tables)" OFF)
+
+if(glaze_DEFAULT_OPTIMIZATION_SIZE)
+  target_compile_definitions(glaze_glaze INTERFACE GLZ_DEFAULT_OPTIMIZATION_SIZE)
+endif(glaze_DEFAULT_OPTIMIZATION_SIZE)
+

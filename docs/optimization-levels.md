@@ -60,6 +60,32 @@ glz::read<glz::opts_size{}>(obj, buffer);
 - ~15.8KB from dropping zmij's pow-10 tables (`OptSize=true`)
 - Variable savings from hash table elimination
 
+## Build-wide Default (Embedded)
+
+Passing `glz::opts_size{}` at every call site works, but a single forgotten call left on the default options (for example `glz::write_json(obj, buffer)` or a transitive `glz::format_error`) silently relinks the large tables. For flash-constrained targets you usually want `size` to be the default *everywhere* instead of opt-in per call.
+
+Enable the CMake option:
+
+```cmake
+set(glaze_DEFAULT_OPTIMIZATION_SIZE ON)
+# or: cmake -Dglaze_DEFAULT_OPTIMIZATION_SIZE=ON ...
+```
+
+This injects `GLZ_DEFAULT_OPTIMIZATION_SIZE` as an `INTERFACE` compile definition, which flips the default optimization level for any options type that does not specify one (such as a plain `glz::opts{}`). Integers, floats, and per-struct hash-table elimination all switch together, reusing the same machinery as `opts_size`.
+
+Without CMake, define the macro directly before including Glaze (it must be defined uniformly across the whole build):
+
+```cpp
+#define GLZ_DEFAULT_OPTIMIZATION_SIZE
+#include "glaze/glaze.hpp"
+```
+
+Key properties:
+
+- **Per-call options still win.** An explicit `optimization_level::normal` keeps the fast tables even in a size-default build, so you can opt specific hot paths back into speed. Because the only way back to the large tables is an explicit, greppable `normal`, accidental inclusion is eliminated.
+- **The guarantee is verifiable.** With the size default and no explicit `normal`, nothing ODR-uses `glz::to_chars_40kb`, so the 40 KB `digit_quads` table is never emitted, even without `-Wl,--gc-sections`. You can confirm with `nm -C <binary> | grep digit_quads` (expect no output).
+- **Advanced override.** Define `GLZ_DEFAULT_OPTIMIZATION_LEVEL` directly to any `glz::optimization_level` value if you need finer control than the boolean.
+
 ## Custom Options Struct
 
 You can create a custom options struct with the optimization level:
