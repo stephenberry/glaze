@@ -2266,6 +2266,32 @@ suite early_end = [] {
       }
    };
 
+   "early_end !null terminated minified"_test = [] {
+      static constexpr glz::opts options{.null_terminated = false, .minified = true};
+
+      Thing obj{};
+      glz::generic json{};
+      glz::skip skip_me{};
+      std::string_view buffer_data =
+         R"({"thing":{"a":3.14,"b":"stuff"},"thing2array":[{"a":3.14,"b":"stuff","c":999.342494903,"d":1e-12,"e":203082348402.1,"f":89.089,"g":12380.00000013,"h":1000000.000001}],"vec3":[3.14,2.7,6.5],"list":[6,7,8,2],"deque":[9,6.7,3.1],"vector":[[9,6.7,3.1],[3.14,2.7,6.5]],"i":8,"d":2,"b":false,"c":"W","vb":[true,false,false,true,true,true,true],"sptr":{"a":3.14,"b":"stuff"},"optional":null,"array":["as\"df\\ghjkl","pie","42","foo"],"map":{"a":4,"b":12,"f":7},"mapi":{"2":9.63,"5":3.14,"7":7.42},"thing_ptr":{"a":3.14,"b":"stuff"}})";
+      std::vector<char> temp{buffer_data.begin(), buffer_data.end()};
+      std::string_view buffer{temp.data(), temp.data() + temp.size()};
+      while (buffer.size() > 0) {
+         temp.pop_back();
+         buffer = {temp.data(), temp.data() + temp.size()};
+         // In minified mode skip_ws is a no-op, so the readers must still bound every read here.
+         auto ec = glz::read<options>(obj, buffer);
+         expect(ec);
+         expect(ec.count <= buffer.size());
+         ec = glz::read<options>(json, buffer);
+         expect(ec);
+         expect(ec.count <= buffer.size());
+         ec = glz::read<options>(skip_me, buffer);
+         expect(ec);
+         expect(ec.count <= buffer.size());
+      }
+   };
+
    trace.end("early_end");
 };
 
