@@ -165,6 +165,11 @@ jobs:
             "${win32_lean_and_mean_line}"
             "#undef NOGDI\n"
             "#include <Windows.h>\n"
+            "#include <BaseTsd.h>\n"
+            "#if !defined(_SSIZE_T_DEFINED)\n"
+            "using ssize_t = SSIZE_T;\n"
+            "#define _SSIZE_T_DEFINED\n"
+            "#endif\n"
           )
 
           append_windows_macro_checks(${content_var} "is expected after including Windows.h" TRUE FALSE)
