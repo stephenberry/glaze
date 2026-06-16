@@ -46,6 +46,10 @@ jobs:
         otp-version: '28.5.0.2'
         version-type: strict
 
+    - name: Install vcpkg dependencies
+      run: |
+        & "$env:VCPKG_INSTALLATION_ROOT\vcpkg.exe" install asio eigen3 --triplet x64-windows
+
     - name: Create CMake project
       run: |
         $projectRoot = "${{github.workspace}}"
@@ -95,6 +99,9 @@ jobs:
 
         add_subdirectory("${GLAZE_SOURCE_DIR}" "${CMAKE_CURRENT_BINARY_DIR}/glaze")
 
+        find_package(Eigen3 CONFIG REQUIRED)
+        find_package(asio CONFIG REQUIRED)
+
         file(GLOB_RECURSE glaze_public_headers CONFIGURE_DEPENDS "${GLAZE_SOURCE_DIR}/include/glaze/*.hpp")
         list(SORT glaze_public_headers)
         list(LENGTH glaze_public_headers glaze_public_header_count)
@@ -117,6 +124,13 @@ jobs:
           "#undef WIN32_LEAN_AND_MEAN\n"
           "#undef NOGDI\n"
           "#include <Windows.h>\n"
+          "#if defined(_WIN32)\n"
+          "#include <BaseTsd.h>\n"
+          "#if !defined(_SSIZE_T_DEFINED)\n"
+          "using ssize_t = SSIZE_T;\n"
+          "#define _SSIZE_T_DEFINED\n"
+          "#endif\n"
+          "#endif\n"
           "#ifndef min\n"
           "#error min macro is expected after including Windows.h\n"
           "#endif\n"
@@ -137,6 +151,28 @@ jobs:
           "#endif\n"
           "#ifdef small\n"
           "#define GLAZE_WINDOWS_HEADER_HAS_SMALL 1\n"
+          "#endif\n"
+          "#include <Eigen/Dense>\n"
+          "#include <asio.hpp>\n"
+          "#ifndef min\n"
+          "#error min macro was not preserved after including external integration headers\n"
+          "#endif\n"
+          "#ifndef max\n"
+          "#error max macro was not preserved after including external integration headers\n"
+          "#endif\n"
+          "#ifndef ERROR\n"
+          "#error ERROR macro was not preserved after including external integration headers\n"
+          "#endif\n"
+          "#ifndef near\n"
+          "#error near macro was not preserved after including external integration headers\n"
+          "#endif\n"
+          "#ifndef far\n"
+          "#error far macro was not preserved after including external integration headers\n"
+          "#endif\n"
+          "#ifdef GLAZE_WINDOWS_HEADER_HAS_SMALL\n"
+          "#ifndef small\n"
+          "#error small macro was not preserved after including external integration headers\n"
+          "#endif\n"
           "#endif\n"
         )
 
@@ -173,8 +209,9 @@ jobs:
 
         add_library(glaze_windows_header_compatibility OBJECT "${source_path}")
         target_compile_features(glaze_windows_header_compatibility PRIVATE cxx_std_23)
-        target_compile_definitions(glaze_windows_header_compatibility PRIVATE GLZ_ENABLE_EETF)
+        target_compile_definitions(glaze_windows_header_compatibility PRIVATE GLZ_ENABLE_EETF ASIO_STANDALONE)
         target_include_directories(glaze_windows_header_compatibility PRIVATE "${ERLANG_EI_INCLUDE_DIR}")
+        target_link_libraries(glaze_windows_header_compatibility PRIVATE Eigen3::Eigen asio::asio)
 
         # From Microsoft documentation - /Zs (Syntax Check Only):
         # When using this option, no output files are created, and error messages are written to standard output.
@@ -193,7 +230,9 @@ jobs:
         Set-Content -Path (Join-Path $compatibilitySourceDir "CMakeLists.txt") -Value $cmakeLists -Encoding UTF8
 
     - name: Configure CMake
-      run: cmake -S ${{github.workspace}}/build/windows-header-compatibility/source -B ${{github.workspace}}/build/windows-header-compatibility/build -DGLAZE_SOURCE_DIR=${{github.workspace}} -DERLANG_OTP_DIR="$env:INSTALL_DIR_FOR_OTP" -DCMAKE_CXX_STANDARD=23
+      run: |
+        $vcpkgToolchain = Join-Path $env:VCPKG_INSTALLATION_ROOT "scripts/buildsystems/vcpkg.cmake"
+        cmake -S ${{github.workspace}}/build/windows-header-compatibility/source -B ${{github.workspace}}/build/windows-header-compatibility/build -DGLAZE_SOURCE_DIR=${{github.workspace}} -DERLANG_OTP_DIR="$env:INSTALL_DIR_FOR_OTP" -DCMAKE_CXX_STANDARD=23 -DCMAKE_TOOLCHAIN_FILE="$vcpkgToolchain" -DVCPKG_TARGET_TRIPLET=x64-windows -A x64
 
     - name: Build
       run: cmake --build build/windows-header-compatibility/build --config Debug --target glaze_windows_header_compatibility --parallel
