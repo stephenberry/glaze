@@ -53,7 +53,9 @@ namespace
    // default is size. This keeps `normal` honest and greppable.
    struct force_normal_opts : opts
    {
-      optimization_level optimization_level = optimization_level::normal;
+      // Type fully qualified (matches glz::opts_size) so GCC's -Wchanges-meaning does not
+      // fire on a member named the same as its unqualified type.
+      glz::optimization_level optimization_level = glz::optimization_level::normal;
    };
    static_assert(not is_size_optimized(force_normal_opts{}));
    static_assert(check_optimization_level(force_normal_opts{}) == optimization_level::normal);
@@ -62,7 +64,7 @@ namespace
    struct force_hash_opts : opts
    {
       bool linear_search = false;
-      optimization_level optimization_level = optimization_level::size;
+      glz::optimization_level optimization_level = glz::optimization_level::size;
    };
    static_assert(not check_linear_search(force_hash_opts{}));
 }

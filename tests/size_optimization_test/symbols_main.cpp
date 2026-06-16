@@ -32,8 +32,8 @@ int main(int argc, char**)
    std::string err{};
    int value{};
    const std::string_view bad = "not-a-number";
-   if (glz::read_json(value, bad)) {
-      err = glz::format_error(glz::read_json(value, bad), bad);
+   if (auto ec = glz::read_json(value, bad)) {
+      err = glz::format_error(ec, bad);
    }
 
    // Reference all outputs so none of the above is dead-code-eliminated wholesale.
