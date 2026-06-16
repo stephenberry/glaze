@@ -52,7 +52,7 @@ namespace glz
             return;
          }
 
-         if (check_invalid_offset(ctx, tit, end, 1)) return;
+         if (check_invalid_offset(ctx, tit, end, 1 + size)) return;
          const int sign = *tit++;
          if (sign) {
             term_to_json_number<Opts>(std::int64_t{}, ctx, it, end, out, ix);

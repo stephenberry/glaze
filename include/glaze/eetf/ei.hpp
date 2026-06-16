@@ -15,7 +15,7 @@ namespace glz
    template <class Ctx, class It0, class It1>
    [[nodiscard]] GLZ_ALWAYS_INLINE bool check_invalid_offset(Ctx&& ctx, It0&& it, It1&& end, size_t off) noexcept
    {
-      if ((it + off) > end) [[unlikely]] {
+      if (it > end || static_cast<size_t>(end - it) < off) [[unlikely]] {
          ctx.error = error_code::unexpected_end;
          return true;
       }

@@ -427,6 +427,37 @@ suite eetf_to_json_tests = [] {
       expect(json == R"([99,"spiders"])") << json;
    };
 
+   "eetf_to_json small big integer"_test = [] {
+      const std::array<std::uint8_t, 5> buffer{static_cast<std::uint8_t>(glz::eetf_magic_version),
+                                               static_cast<std::uint8_t>(ERL_SMALL_BIG_EXT), 1, 0, 42};
+
+      std::string json{};
+      expect(!glz::eetf_to_json(buffer, json));
+      expect(json == "42") << json;
+   };
+
+   "eetf_to_json truncated small big integer"_test = [] {
+      auto expect_unexpected_end = [](const auto& buffer) {
+         std::string json{};
+         const auto ec = glz::eetf_to_json(buffer, json);
+         expect(ec.ec == glz::error_code::unexpected_end);
+      };
+
+      const std::array<std::uint8_t, 2> missing_size{static_cast<std::uint8_t>(glz::eetf_magic_version),
+                                                     static_cast<std::uint8_t>(ERL_SMALL_BIG_EXT)};
+      const std::array<std::uint8_t, 3> missing_sign{static_cast<std::uint8_t>(glz::eetf_magic_version),
+                                                     static_cast<std::uint8_t>(ERL_SMALL_BIG_EXT), 1};
+      const std::array<std::uint8_t, 4> missing_digits{static_cast<std::uint8_t>(glz::eetf_magic_version),
+                                                       static_cast<std::uint8_t>(ERL_SMALL_BIG_EXT), 8, 0};
+      const std::array<std::uint8_t, 6> partial_digits{static_cast<std::uint8_t>(glz::eetf_magic_version),
+                                                       static_cast<std::uint8_t>(ERL_SMALL_BIG_EXT), 3, 0, 1, 2};
+
+      expect_unexpected_end(missing_size);
+      expect_unexpected_end(missing_sign);
+      expect_unexpected_end(missing_digits);
+      expect_unexpected_end(partial_digits);
+   };
+
    "eetf_to_json no header"_test = [] {
       constexpr int items = 3;
       std::vector<simple> v;
