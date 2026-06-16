@@ -13,9 +13,8 @@
 #endif
 
 #if defined(_WIN32) && defined(_WINSOCKAPI_) && !defined(_WINSOCK2API_)
-static_assert(false,
-              "glaze/ext/glaze_asio.hpp cannot be included after Windows.h has included Winsock.h."
-              "Define WIN32_LEAN_AND_MEAN before including Windows.h to prevent Windows.h from including Winsock.h.");
+#error glaze/ext/glaze_asio.hpp cannot be included after Windows.h has included Winsock.h. \
+       Define WIN32_LEAN_AND_MEAN before including Windows.h to prevent Windows.h from including Winsock.h.
 #endif
 
 // Two distinct, intentionally similar macros govern the Asio backend. Do not confuse them:
