@@ -1699,6 +1699,85 @@ suite chunked_raw_socket_tests = [] {
       expect(!result.has_value()) << "Malformed chunk size should return an error";
    };
 
+   // A malicious server can send a chunk-size line near SIZE_MAX. chunk_size + 2 then wraps
+   // in the chunk-body reader, the buffered-size check passes with a tiny length, and the
+   // streaming reader would hand on_data a string_view of chunk_size bytes over a few-byte
+   // buffer. The client must reject the chunk instead of delivering an out-of-bounds view.
+   "raw_oversized_chunk_size_rejected"_test = [&] {
+      uint16_t port = 0;
+      std::string raw =
+         "HTTP/1.1 200 OK\r\n"
+         "Transfer-Encoding: chunked\r\n"
+         "Content-Type: text/plain\r\n"
+         "\r\n"
+         "ffffffffffffffff\r\n" // 2^64 - 1
+         "AAAA\r\n"
+         "0\r\n"
+         "\r\n";
+
+      auto server_thread = start_raw_server(port, raw);
+
+      glz::http_client client;
+      std::atomic<size_t> max_view{0};
+      std::atomic<bool> error_fired{false};
+      std::promise<void> done;
+      auto done_future = done.get_future();
+      std::atomic<bool> done_set{false};
+      auto finish = [&] {
+         if (!done_set.exchange(true)) done.set_value();
+      };
+
+      auto conn = client.stream_request_v2({
+         .url = "http://127.0.0.1:" + std::to_string(port) + "/test",
+         .body = {},
+         .headers = {},
+         .on_connect = {},
+         .on_disconnect = [&] { finish(); },
+         .on_data =
+            [&](std::string_view data) {
+               // Record only the claimed size; reading the bytes of an oversized view is
+               // the out-of-bounds access being guarded against.
+               size_t prev = max_view.load();
+               while (data.size() > prev && !max_view.compare_exchange_weak(prev, data.size())) {
+               }
+            },
+         .on_error = [&](std::error_code) { error_fired = true; },
+      });
+
+      done_future.wait_for(std::chrono::seconds(5));
+      server_thread.join();
+
+      // The whole crafted response is well under 1 KiB, so no legitimate chunk view can
+      // exceed that. Before the fix the reader reports a view of 2^64 - 1 bytes.
+      expect(max_view.load() <= 1024u) << "client delivered an oversized chunk view: " << max_view.load();
+      expect(error_fired.load()) << "malformed chunk size should surface an error";
+   };
+
+   // Same overflow on the synchronous path: perform_sync_request_attempt computes chunk_size + 2,
+   // which wraps for a size near SIZE_MAX, so response_body.append would read chunk_size bytes off
+   // a few-byte buffer. The sync request must fail instead of performing the out-of-bounds read.
+   "raw_oversized_chunk_size_sync_rejected"_test = [&] {
+      uint16_t port = 0;
+      std::string raw =
+         "HTTP/1.1 200 OK\r\n"
+         "Transfer-Encoding: chunked\r\n"
+         "Content-Type: text/plain\r\n"
+         "\r\n"
+         "ffffffffffffffff\r\n" // 2^64 - 1
+         "AAAA\r\n"
+         "0\r\n"
+         "\r\n";
+
+      auto server_thread = start_raw_server(port, raw);
+
+      glz::http_client client;
+      auto result = client.get("http://127.0.0.1:" + std::to_string(port) + "/test");
+
+      server_thread.join();
+
+      expect(!result.has_value()) << "oversized chunk size should be rejected, not out-of-bounds read";
+   };
+
    "raw_empty_chunk_size_line"_test = [&] {
       uint16_t port = 0;
       // Empty chunk size line (just CRLF where hex is expected)
