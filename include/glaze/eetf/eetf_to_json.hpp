@@ -46,11 +46,13 @@ namespace glz
          auto tit = it;
          ++tit; // skip type
          const auto size = get8s(ctx, tit, end);
+         if (bool(ctx.error)) return;
          if (size > 8u) {
             ctx.error = error_code::no_matching_variant_type;
             return;
          }
 
+         if (check_invalid_offset(ctx, tit, end, 1 + size)) return;
          const int sign = *tit++;
          if (sign) {
             term_to_json_number<Opts>(std::int64_t{}, ctx, it, end, out, ix);

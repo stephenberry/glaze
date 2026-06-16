@@ -15,7 +15,10 @@ namespace glz
    template <class Ctx, class It0, class It1>
    [[nodiscard]] GLZ_ALWAYS_INLINE bool check_invalid_offset(Ctx&& ctx, It0&& it, It1&& end, size_t off) noexcept
    {
-      if ((it + off) > end) [[unlikely]] {
+      // Callers maintain it <= end (every advance is bounds-checked or followed by invalid_end),
+      // so end - it is non-negative. Computing the remaining size as a subtraction avoids the
+      // out-of-bounds pointer arithmetic that (it + off) > end would incur for a large off.
+      if (static_cast<size_t>(end - it) < off) [[unlikely]] {
          ctx.error = error_code::unexpected_end;
          return true;
       }
