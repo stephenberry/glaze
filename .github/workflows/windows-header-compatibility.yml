@@ -1,8 +1,9 @@
-# This workflow verifies that every public Glaze header can be compiled after
-# including <Windows.h> in an unsanitized Windows project
+# This workflow verifies that Glaze headers can be compiled after including
+# <Windows.h> in an unsanitized Windows project.
 #
 # NOMINMAX and WIN32_LEAN_AND_MEAN are manually disabled before including <Windows.h>
-# Workflow generates one translation unit per public header file inside include/glaze.
+# The workflow generates a single aggregate translation unit that recursively
+# includes every .hpp file inside include/glaze.
 # This will catch collisions with Windows macros such as 'min', 'max', 'ERROR',
 # 'near', 'far', and 'small', and will also prevent fixes that silently mutate
 # the user's macro environment by undefining those macros.
@@ -75,71 +76,71 @@ jobs:
 
         file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/generated")
 
-        set(glaze_windows_header_compatibility_sources)
+        set(source_path "${CMAKE_CURRENT_BINARY_DIR}/generated/glaze_windows_header_compatibility.cpp")
+
+        string(CONCAT source_content
+          "#ifdef _WINDOWS_\n"
+          "#error Windows.h must not be included before this compatibility source\n"
+          "#endif\n"
+          "#undef NOMINMAX\n"
+          "#undef WIN32_LEAN_AND_MEAN\n"
+          "#undef NOGDI\n"
+          "#include <Windows.h>\n"
+          "#ifndef min\n"
+          "#error min macro is expected after including Windows.h\n"
+          "#endif\n"
+          "#ifndef max\n"
+          "#error max macro is expected after including Windows.h\n"
+          "#endif\n"
+          "#ifndef ERROR\n"
+          "#error ERROR macro is expected after including Windows.h\n"
+          "#endif\n"
+          "#ifndef DELETE\n"
+          "#error DELETE macro is expected after including Windows.h\n"
+          "#endif\n"
+          "#ifndef near\n"
+          "#error near macro is expected after including Windows.h\n"
+          "#endif\n"
+          "#ifndef far\n"
+          "#error far macro is expected after including Windows.h\n"
+          "#endif\n"
+          "#ifdef small\n"
+          "#define GLAZE_WINDOWS_HEADER_HAS_SMALL 1\n"
+          "#endif\n"
+        )
 
         foreach(header_path IN LISTS glaze_public_headers)
           file(RELATIVE_PATH header_relative_path "${GLAZE_SOURCE_DIR}/include" "${header_path}")
           string(REPLACE "\\" "/" header_include_path "${header_relative_path}")
-          string(MAKE_C_IDENTIFIER "${header_include_path}" source_identifier)
-          set(source_path "${CMAKE_CURRENT_BINARY_DIR}/generated/${source_identifier}.cpp")
 
-          string(CONCAT source_content
-            "#ifdef _WINDOWS_\n"
-            "#error Windows.h must not be included before this compatibility source\n"
-            "#endif\n"
-            "#undef NOMINMAX\n"
-            "#undef WIN32_LEAN_AND_MEAN\n"
-            "#undef NOGDI\n"
-            "#include <Windows.h>\n"
-            "#ifndef min\n"
-            "#error min macro is expected after including Windows.h\n"
-            "#endif\n"
-            "#ifndef max\n"
-            "#error max macro is expected after including Windows.h\n"
-            "#endif\n"
-            "#ifndef ERROR\n"
-            "#error ERROR macro is expected after including Windows.h\n"
-            "#endif\n"
-            "#ifndef DELETE\n"
-            "#error DELETE macro is expected after including Windows.h\n"
-            "#endif\n"
-            "#ifndef near\n"
-            "#error near macro is expected after including Windows.h\n"
-            "#endif\n"
-            "#ifndef far\n"
-            "#error far macro is expected after including Windows.h\n"
-            "#endif\n"
-            "#ifdef small\n"
-            "#define GLAZE_WINDOWS_HEADER_HAS_SMALL 1\n"
-            "#endif\n"
+          string(APPEND source_content
             "#include <${header_include_path}>\n"
             "#ifndef min\n"
-            "#error min macro was not preserved\n"
+            "#error min macro was not preserved after including ${header_include_path}\n"
             "#endif\n"
             "#ifndef max\n"
-            "#error max macro was not preserved\n"
+            "#error max macro was not preserved after including ${header_include_path}\n"
             "#endif\n"
             "#ifndef ERROR\n"
-            "#error ERROR macro was not preserved\n"
+            "#error ERROR macro was not preserved after including ${header_include_path}\n"
             "#endif\n"
             "#ifndef near\n"
-            "#error near macro was not preserved\n"
+            "#error near macro was not preserved after including ${header_include_path}\n"
             "#endif\n"
             "#ifndef far\n"
-            "#error far macro was not preserved\n"
+            "#error far macro was not preserved after including ${header_include_path}\n"
             "#endif\n"
             "#ifdef GLAZE_WINDOWS_HEADER_HAS_SMALL\n"
             "#ifndef small\n"
-            "#error small macro was not preserved\n"
+            "#error small macro was not preserved after including ${header_include_path}\n"
             "#endif\n"
             "#endif\n"
           )
-
-          file(WRITE "${source_path}" "${source_content}")
-          list(APPEND glaze_windows_header_compatibility_sources "${source_path}")
         endforeach()
 
-        add_library(glaze_windows_header_compatibility OBJECT ${glaze_windows_header_compatibility_sources})
+        file(WRITE "${source_path}" "${source_content}")
+
+        add_library(glaze_windows_header_compatibility OBJECT "${source_path}")
         target_compile_features(glaze_windows_header_compatibility PRIVATE cxx_std_23)
 
         # From Microsoft documentation - /Zs (Syntax Check Only):
