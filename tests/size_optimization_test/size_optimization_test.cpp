@@ -22,9 +22,9 @@ namespace
    using glz::check_optimization_level;
    using glz::default_optimization_level;
    using glz::is_size_optimized;
+   using glz::optimization_level;
    using glz::opts;
    using glz::opts_size;
-   using glz::optimization_level;
 
    // The exported default constant must agree with the configured build mode.
 #ifdef GLZ_DEFAULT_OPTIMIZATION_SIZE
