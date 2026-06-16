@@ -12,6 +12,7 @@
 #include <future>
 #include <glaze/glaze.hpp>
 #include <iostream>
+#include <limits>
 #include <memory>
 #include <mutex>
 #include <optional>
@@ -1707,6 +1708,15 @@ namespace glz
                            http_data_handler on_data, http_error_handler on_error,
                            http_disconnect_handler on_disconnect)
       {
+         // A chunk size with no room for the trailing CRLF wraps chunk_size + 2 below, passes the
+         // buffered-size check with a tiny length, and hands on_data a view of chunk_size bytes
+         // over a few-byte buffer. Reject it as a malformed chunk.
+         if (chunk_size > (std::numeric_limits<size_t>::max)() - 2) [[unlikely]] {
+            on_error(std::make_error_code(std::errc::protocol_error));
+            if (on_disconnect) on_disconnect();
+            return;
+         }
+
          // We need to read 'chunk_size' bytes of data, plus 2 bytes for the trailing CRLF.
          size_t total_to_read = chunk_size + 2;
 
@@ -2090,6 +2100,14 @@ namespace glz
                   if (max_response_body_size_ > 0 && response_body.size() + chunk_size > max_response_body_size_) {
                      detail::close_socket(socket_var, connection_pool->graceful_ssl_shutdown());
                      r.outcome = std::unexpected(make_error_code(http_client_error::response_too_large));
+                     return r;
+                  }
+
+                  // A chunk size that leaves no room for the trailing CRLF wraps chunk_size + 2
+                  // below and appends with a bogus length, so reject it as malformed.
+                  if (chunk_size > (std::numeric_limits<size_t>::max)() - 2) {
+                     detail::close_socket(socket_var, connection_pool->graceful_ssl_shutdown());
+                     r.outcome = std::unexpected(std::make_error_code(std::errc::protocol_error));
                      return r;
                   }
 
@@ -2519,6 +2537,14 @@ namespace glz
          if (max_response_body_size_ > 0 && body->size() + chunk_size > max_response_body_size_) {
             detail::close_socket(*socket_var, connection_pool->graceful_ssl_shutdown());
             handler(std::unexpected(make_error_code(http_client_error::response_too_large)));
+            return;
+         }
+
+         // A chunk size that leaves no room for the trailing CRLF wraps chunk_size + 2 below
+         // and appends with a bogus length, so reject it as malformed.
+         if (chunk_size > (std::numeric_limits<size_t>::max)() - 2) {
+            detail::close_socket(*socket_var, connection_pool->graceful_ssl_shutdown());
+            handler(std::unexpected(std::make_error_code(std::errc::protocol_error)));
             return;
          }
 
