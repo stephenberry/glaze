@@ -446,8 +446,8 @@ suite eetf_to_json_tests = [] {
       const std::array<std::uint8_t, 3> missing_sign{uint8_t(glz::eetf_magic_version), uint8_t(ERL_SMALL_BIG_EXT), 1};
       const std::array<std::uint8_t, 4> missing_digits{uint8_t(glz::eetf_magic_version), uint8_t(ERL_SMALL_BIG_EXT), 8,
                                                        0};
-      const std::array<std::uint8_t, 6> partial_digits{uint8_t(glz::eetf_magic_version), uint8_t(ERL_SMALL_BIG_EXT), 3,
-                                                       0, 1, 2};
+      const std::array<std::uint8_t, 6> partial_digits{
+         uint8_t(glz::eetf_magic_version), uint8_t(ERL_SMALL_BIG_EXT), 3, 0, 1, 2};
 
       expect_unexpected_end(missing_size);
       expect_unexpected_end(missing_sign);
