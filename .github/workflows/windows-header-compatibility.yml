@@ -1,0 +1,165 @@
+# This workflow verifies that every public Glaze header can be compiled after
+# including <Windows.h> in an unsanitized Windows project
+#
+# NOMINMAX and WIN32_LEAN_AND_MEAN are manually disabled before including <Windows.h>
+# Workflow generates one translation unit per public header file inside include/glaze.
+# This will catch collisions with Windows macros such as 'min', 'max', 'ERROR',
+# 'near', 'far', and 'small', and will also prevent fixes that silently mutate
+# the user's macro environment by undefining those macros.
+# DELETE is a special case for 'net' which undefs it, so this macro is not checked.
+
+name: windows-header-compatibility
+
+on:
+  push:
+    branches:
+      - main
+      - feature/*
+    paths:
+      - 'include/**'
+      - 'cmake/**'
+      - 'CMakeLists.txt'
+      - '.github/workflows/windows-header-compatibility.yml'
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'include/**'
+      - 'cmake/**'
+      - 'CMakeLists.txt'
+      - '.github/workflows/windows-header-compatibility.yml'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-2025-vs2026
+    timeout-minutes: 30
+
+    steps:
+    - uses: actions/checkout@v6
+
+    - name: Create CMake project
+      run: |
+        $projectRoot = "${{github.workspace}}"
+        $compatibilitySourceDir = Join-Path $projectRoot "build/windows-header-compatibility/source"
+        New-Item -ItemType Directory -Force -Path $compatibilitySourceDir | Out-Null
+
+        $cmakeLists = @'
+        cmake_minimum_required(VERSION 3.21)
+
+        project(glaze_windows_header_compatibility LANGUAGES CXX)
+
+        set(GLAZE_SOURCE_DIR "" CACHE PATH "Glaze source directory")
+
+        if(NOT GLAZE_SOURCE_DIR)
+          message(FATAL_ERROR "GLAZE_SOURCE_DIR is required")
+        endif()
+
+        get_filename_component(GLAZE_SOURCE_DIR "${GLAZE_SOURCE_DIR}" ABSOLUTE)
+
+        if(NOT EXISTS "${GLAZE_SOURCE_DIR}/CMakeLists.txt")
+          message(FATAL_ERROR "GLAZE_SOURCE_DIR must point to the Glaze source tree")
+        endif()
+
+        add_subdirectory("${GLAZE_SOURCE_DIR}" "${CMAKE_CURRENT_BINARY_DIR}/glaze")
+
+        file(GLOB_RECURSE glaze_public_headers CONFIGURE_DEPENDS "${GLAZE_SOURCE_DIR}/include/glaze/*.hpp")
+        list(SORT glaze_public_headers)
+        list(LENGTH glaze_public_headers glaze_public_header_count)
+
+        if(glaze_public_header_count EQUAL 0)
+          message(FATAL_ERROR "No Glaze public headers were found")
+        endif()
+
+        message(STATUS "Found ${glaze_public_header_count} Glaze public headers")
+
+        file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/generated")
+
+        set(glaze_windows_header_compatibility_sources)
+
+        foreach(header_path IN LISTS glaze_public_headers)
+          file(RELATIVE_PATH header_relative_path "${GLAZE_SOURCE_DIR}/include" "${header_path}")
+          string(REPLACE "\\" "/" header_include_path "${header_relative_path}")
+          string(MAKE_C_IDENTIFIER "${header_include_path}" source_identifier)
+          set(source_path "${CMAKE_CURRENT_BINARY_DIR}/generated/${source_identifier}.cpp")
+
+          string(CONCAT source_content
+            "#ifdef _WINDOWS_\n"
+            "#error Windows.h must not be included before this compatibility source\n"
+            "#endif\n"
+            "#undef NOMINMAX\n"
+            "#undef WIN32_LEAN_AND_MEAN\n"
+            "#undef NOGDI\n"
+            "#include <Windows.h>\n"
+            "#ifndef min\n"
+            "#error min macro is expected after including Windows.h\n"
+            "#endif\n"
+            "#ifndef max\n"
+            "#error max macro is expected after including Windows.h\n"
+            "#endif\n"
+            "#ifndef ERROR\n"
+            "#error ERROR macro is expected after including Windows.h\n"
+            "#endif\n"
+            "#ifndef DELETE\n"
+            "#error DELETE macro is expected after including Windows.h\n"
+            "#endif\n"
+            "#ifndef near\n"
+            "#error near macro is expected after including Windows.h\n"
+            "#endif\n"
+            "#ifndef far\n"
+            "#error far macro is expected after including Windows.h\n"
+            "#endif\n"
+            "#ifdef small\n"
+            "#define GLAZE_WINDOWS_HEADER_HAS_SMALL 1\n"
+            "#endif\n"
+            "#include <${header_include_path}>\n"
+            "#ifndef min\n"
+            "#error min macro was not preserved\n"
+            "#endif\n"
+            "#ifndef max\n"
+            "#error max macro was not preserved\n"
+            "#endif\n"
+            "#ifndef ERROR\n"
+            "#error ERROR macro was not preserved\n"
+            "#endif\n"
+            "#ifndef near\n"
+            "#error near macro was not preserved\n"
+            "#endif\n"
+            "#ifndef far\n"
+            "#error far macro was not preserved\n"
+            "#endif\n"
+            "#ifdef GLAZE_WINDOWS_HEADER_HAS_SMALL\n"
+            "#ifndef small\n"
+            "#error small macro was not preserved\n"
+            "#endif\n"
+            "#endif\n"
+          )
+
+          file(WRITE "${source_path}" "${source_content}")
+          list(APPEND glaze_windows_header_compatibility_sources "${source_path}")
+        endforeach()
+
+        add_library(glaze_windows_header_compatibility OBJECT ${glaze_windows_header_compatibility_sources})
+        target_compile_features(glaze_windows_header_compatibility PRIVATE cxx_std_23)
+
+        # From Microsoft documentation - /Zs (Syntax Check Only):
+        # When using this option, no output files are created, and error messages are written to standard output.
+        # The /Zs option provides a quick way to find and correct syntax errors before you compile and link a source file.
+        target_compile_options(glaze_windows_header_compatibility PRIVATE /Zs)
+
+        if(TARGET glaze::glaze)
+          target_link_libraries(glaze_windows_header_compatibility PRIVATE glaze::glaze)
+        elseif(TARGET glaze)
+          target_link_libraries(glaze_windows_header_compatibility PRIVATE glaze)
+        else()
+          target_include_directories(glaze_windows_header_compatibility PRIVATE "${GLAZE_SOURCE_DIR}/include")
+        endif()
+        '@
+
+        Set-Content -Path (Join-Path $compatibilitySourceDir "CMakeLists.txt") -Value $cmakeLists -Encoding UTF8
+
+    - name: Configure CMake
+      run: cmake -S ${{github.workspace}}/build/windows-header-compatibility/source -B ${{github.workspace}}/build/windows-header-compatibility/build -DGLAZE_SOURCE_DIR=${{github.workspace}} -DCMAKE_CXX_STANDARD=23
+
+    - name: Build
+      run: cmake --build build/windows-header-compatibility/build --config Debug --target glaze_windows_header_compatibility --parallel
