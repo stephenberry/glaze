@@ -103,13 +103,22 @@ jobs:
         find_package(asio CONFIG REQUIRED)
 
         file(GLOB_RECURSE glaze_public_headers CONFIGURE_DEPENDS "${GLAZE_SOURCE_DIR}/include/glaze/*.hpp")
-        file(GLOB_RECURSE glaze_windows_lean_header_compatibility_headers CONFIGURE_DEPENDS "${GLAZE_SOURCE_DIR}/include/glaze/net/*.hpp")
-        list(APPEND glaze_windows_lean_header_compatibility_headers "${GLAZE_SOURCE_DIR}/include/glaze/ext/glaze_asio.hpp")
+        file(GLOB_RECURSE glaze_windows_lean_header_compatibility_headers CONFIGURE_DEPENDS
+          "${GLAZE_SOURCE_DIR}/include/glaze/net/*.hpp"
+          "${GLAZE_SOURCE_DIR}/include/glaze/rpc/*.hpp"
+        )
+        list(APPEND glaze_windows_lean_header_compatibility_headers
+          "${GLAZE_SOURCE_DIR}/include/glaze/ext/glaze_asio.hpp"
+          "${GLAZE_SOURCE_DIR}/include/glaze/file/hostname_include.hpp"
+        )
         set(glaze_windows_header_compatibility_headers "${glaze_public_headers}")
         list(REMOVE_ITEM glaze_windows_header_compatibility_headers ${glaze_windows_lean_header_compatibility_headers})
         list(SORT glaze_public_headers)
         list(SORT glaze_windows_header_compatibility_headers)
         list(SORT glaze_windows_lean_header_compatibility_headers)
+        set(glaze_rpc_registry_header "${GLAZE_SOURCE_DIR}/include/glaze/rpc/registry.hpp")
+        list(REMOVE_ITEM glaze_windows_lean_header_compatibility_headers "${glaze_rpc_registry_header}")
+        list(PREPEND glaze_windows_lean_header_compatibility_headers "${glaze_rpc_registry_header}")
         list(LENGTH glaze_public_headers glaze_public_header_count)
         list(LENGTH glaze_windows_header_compatibility_headers glaze_windows_header_compatibility_header_count)
         list(LENGTH glaze_windows_lean_header_compatibility_headers glaze_windows_lean_header_compatibility_header_count)
