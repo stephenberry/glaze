@@ -154,7 +154,16 @@ namespace glz
          }
          const size_t num_start = ix + 2;
          size_t tmp_ix = num_start;
-         write_chars::op<opts{.format = JSON}>(d, ctx, b, tmp_ix);
+         // Force JSON text formatting for the float payload, but preserve the caller's
+         // optimization level so a size-optimized BEVE write does not link the ~16 KB
+         // float pow-10 tables. Base `opts` has no optimization_level member, so the
+         // size level is carried via `opts_size` (which also defaults to JSON format).
+         if constexpr (is_size_optimized(Opts)) {
+            write_chars::op<opts_size{}>(d, ctx, b, tmp_ix);
+         }
+         else {
+            write_chars::op<opts{.format = JSON}>(d, ctx, b, tmp_ix);
+         }
          if (bool(ctx.error)) [[unlikely]] {
             return;
          }

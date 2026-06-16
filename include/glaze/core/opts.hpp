@@ -716,12 +716,14 @@ namespace glz
       if constexpr (requires { Opts.linear_search; }) {
          return Opts.linear_search;
       }
-      else {
+      else if constexpr (requires { Opts.optimization_level; }) {
          // In size mode, default to linear search (no hash tables)
-         if constexpr (requires { Opts.optimization_level; }) {
-            return Opts.optimization_level == optimization_level::size;
-         }
-         return false;
+         return Opts.optimization_level == optimization_level::size;
+      }
+      else {
+         // No explicit optimization_level member: fall back to the build-wide
+         // default so GLZ_DEFAULT_OPTIMIZATION_SIZE also drops per-struct hash tables.
+         return default_optimization_level == optimization_level::size;
       }
    }
 
@@ -771,7 +773,9 @@ namespace glz
          return Opts.optimization_level;
       }
       else {
-         return optimization_level::normal;
+         // No explicit optimization_level member: use the build-wide default
+         // (normal unless GLZ_DEFAULT_OPTIMIZATION_SIZE / GLZ_DEFAULT_OPTIMIZATION_LEVEL is set).
+         return default_optimization_level;
       }
    }
 
