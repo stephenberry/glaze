@@ -428,8 +428,7 @@ suite eetf_to_json_tests = [] {
    };
 
    "eetf_to_json small big integer"_test = [] {
-      const std::array<std::uint8_t, 5> buffer{static_cast<std::uint8_t>(glz::eetf_magic_version),
-                                               static_cast<std::uint8_t>(ERL_SMALL_BIG_EXT), 1, 0, 42};
+      const std::array<std::uint8_t, 5> buffer{uint8_t(glz::eetf_magic_version), uint8_t(ERL_SMALL_BIG_EXT), 1, 0, 42};
 
       std::string json{};
       expect(!glz::eetf_to_json(buffer, json));
@@ -443,14 +442,12 @@ suite eetf_to_json_tests = [] {
          expect(ec.ec == glz::error_code::unexpected_end);
       };
 
-      const std::array<std::uint8_t, 2> missing_size{static_cast<std::uint8_t>(glz::eetf_magic_version),
-                                                     static_cast<std::uint8_t>(ERL_SMALL_BIG_EXT)};
-      const std::array<std::uint8_t, 3> missing_sign{static_cast<std::uint8_t>(glz::eetf_magic_version),
-                                                     static_cast<std::uint8_t>(ERL_SMALL_BIG_EXT), 1};
-      const std::array<std::uint8_t, 4> missing_digits{static_cast<std::uint8_t>(glz::eetf_magic_version),
-                                                       static_cast<std::uint8_t>(ERL_SMALL_BIG_EXT), 8, 0};
-      const std::array<std::uint8_t, 6> partial_digits{static_cast<std::uint8_t>(glz::eetf_magic_version),
-                                                       static_cast<std::uint8_t>(ERL_SMALL_BIG_EXT), 3, 0, 1, 2};
+      const std::array<std::uint8_t, 2> missing_size{uint8_t(glz::eetf_magic_version), uint8_t(ERL_SMALL_BIG_EXT)};
+      const std::array<std::uint8_t, 3> missing_sign{uint8_t(glz::eetf_magic_version), uint8_t(ERL_SMALL_BIG_EXT), 1};
+      const std::array<std::uint8_t, 4> missing_digits{uint8_t(glz::eetf_magic_version), uint8_t(ERL_SMALL_BIG_EXT), 8,
+                                                       0};
+      const std::array<std::uint8_t, 6> partial_digits{uint8_t(glz::eetf_magic_version), uint8_t(ERL_SMALL_BIG_EXT), 3,
+                                                       0, 1, 2};
 
       expect_unexpected_end(missing_size);
       expect_unexpected_end(missing_sign);
