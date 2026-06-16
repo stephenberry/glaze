@@ -1753,6 +1753,31 @@ suite chunked_raw_socket_tests = [] {
       expect(error_fired.load()) << "malformed chunk size should surface an error";
    };
 
+   // Same overflow on the synchronous path: perform_sync_request_attempt computes chunk_size + 2,
+   // which wraps for a size near SIZE_MAX, so response_body.append would read chunk_size bytes off
+   // a few-byte buffer. The sync request must fail instead of performing the out-of-bounds read.
+   "raw_oversized_chunk_size_sync_rejected"_test = [&] {
+      uint16_t port = 0;
+      std::string raw =
+         "HTTP/1.1 200 OK\r\n"
+         "Transfer-Encoding: chunked\r\n"
+         "Content-Type: text/plain\r\n"
+         "\r\n"
+         "ffffffffffffffff\r\n" // 2^64 - 1
+         "AAAA\r\n"
+         "0\r\n"
+         "\r\n";
+
+      auto server_thread = start_raw_server(port, raw);
+
+      glz::http_client client;
+      auto result = client.get("http://127.0.0.1:" + std::to_string(port) + "/test");
+
+      server_thread.join();
+
+      expect(!result.has_value()) << "oversized chunk size should be rejected, not out-of-bounds read";
+   };
+
    "raw_empty_chunk_size_line"_test = [&] {
       uint16_t port = 0;
       // Empty chunk size line (just CRLF where hex is expected)
