@@ -297,7 +297,8 @@ suite non_null_terminated_slice_bounds = [] {
       const std::string_view complete = "[10,20,30,40,50]";
       buf.assign(complete.begin(), complete.end());
       std::vector<int> slice{};
-      const auto ec = glz::read_jmespath<"[1:3]", options>(slice, std::string_view{buf.data(), buf.data() + buf.size()});
+      const auto ec =
+         glz::read_jmespath<"[1:3]", options>(slice, std::string_view{buf.data(), buf.data() + buf.size()});
       expect(not ec);
       expect(slice == (std::vector<int>{20, 30}));
    };
@@ -315,7 +316,8 @@ suite non_null_terminated_slice_bounds = [] {
       const std::string_view complete = "[7,8,9]";
       buf.assign(complete.begin(), complete.end());
       std::tuple<int, int> target{};
-      const auto ec = glz::read_jmespath<"[0:2]", options>(target, std::string_view{buf.data(), buf.data() + buf.size()});
+      const auto ec =
+         glz::read_jmespath<"[0:2]", options>(target, std::string_view{buf.data(), buf.data() + buf.size()});
       expect(not ec);
       expect(std::get<0>(target) == 7);
       expect(std::get<1>(target) == 8);
