@@ -2312,6 +2312,38 @@ suite early_end = [] {
       }
    };
 
+   "early_end !null terminated number skip"_test = [] {
+      // get_view_json reaches the validating value skip (parse_value), which routes numbers
+      // through skip_number_with_validation. On a non-null-terminated buffer that ends right
+      // after a number's digits there is no sentinel, so the continuation peeks must stop at
+      // end rather than read past it. Truncate after each byte and confirm every pointer read
+      // stays in bounds (ASAN container annotations catch an over-read here).
+      static constexpr glz::opts options{.null_terminated = false};
+
+      std::string_view buffer_data = R"({"a":0,"b":123,"c":-5,"d":3.14,"e":1e10,"f":2E-3,"g":0.5e+2,"h":-0})";
+      std::vector<char> temp{buffer_data.begin(), buffer_data.end()};
+      std::string_view buffer{temp.data(), temp.data() + temp.size()};
+
+      while (buffer.size() > 0) {
+         temp.pop_back();
+         buffer = {temp.data(), temp.data() + temp.size()};
+         // Each pointer targets a numeric leaf; truncation eventually ends the buffer mid- or
+         // post-number. None of these may read past end regardless of whether they succeed.
+         (void)glz::get_view_json<"/a", options>(buffer);
+         (void)glz::get_view_json<"/d", options>(buffer);
+         (void)glz::get_view_json<"/e", options>(buffer);
+         (void)glz::get_view_json<"/g", options>(buffer);
+         (void)glz::get_view_json<"/h", options>(buffer);
+      }
+
+      // The complete buffer still resolves numeric leaves to their exact spans.
+      std::string_view full = buffer_data;
+      const auto as_sv = [](auto&& span) { return std::string_view{span.data(), span.size()}; };
+      expect(as_sv(glz::get_view_json<"/b", options>(full).value()) == "123");
+      expect(as_sv(glz::get_view_json<"/e", options>(full).value()) == "1e10");
+      expect(as_sv(glz::get_view_json<"/g", options>(full).value()) == "0.5e+2");
+   };
+
    trace.end("early_end");
 };
 

@@ -1246,13 +1246,27 @@ namespace glz
       return {};
    }
 
+   // null_terminated == false means the buffer has no trailing sentinel, so each peek that
+   // follows an advance past a digit run is guarded against end. A number whose last digit sits
+   // at end is complete, so those guards return without error; only a dangling sign/exponent is
+   // a syntax error.
+   template <bool null_terminated = true>
    GLZ_ALWAYS_INLINE void skip_number_with_validation(is_context auto&& ctx, auto&& it, auto end) noexcept
    {
       it += *it == '-';
       const auto sig_start_it = it;
       auto frac_start_it = end;
+      if constexpr (not null_terminated) {
+         if (it == end) {
+            ctx.error = error_code::unexpected_end;
+            return;
+         }
+      }
       if (*it == '0') {
          ++it;
+         if constexpr (not null_terminated) {
+            if (it == end) return;
+         }
          if (*it != '.') {
             return;
          }
@@ -1263,6 +1277,9 @@ namespace glz
       if (it == sig_start_it) {
          ctx.error = error_code::syntax_error;
          return;
+      }
+      if constexpr (not null_terminated) {
+         if (it == end) return;
       }
       if ((*it | ('E' ^ 'e')) == 'e') {
          ++it;
@@ -1277,9 +1294,18 @@ namespace glz
          ctx.error = error_code::syntax_error;
          return;
       }
+      if constexpr (not null_terminated) {
+         if (it == end) return;
+      }
       if ((*it | ('E' ^ 'e')) != 'e') return;
       ++it;
    exp_start:
+      if constexpr (not null_terminated) {
+         if (it == end) {
+            ctx.error = error_code::syntax_error;
+            return;
+         }
+      }
       it += *it == '+' || *it == '-';
       const auto exp_start_it = it;
       it = std::find_if_not(it, end, is_digit);
@@ -1293,26 +1319,37 @@ namespace glz
    struct skip_number_opts
    {
       bool validate;
+      bool null_terminated;
 
-      // Convert from any opts-like type (consteval because check_validate_skipped is consteval)
+      // Convert from any opts-like type (consteval because check_* functions are consteval)
       template <typename T>
-      consteval skip_number_opts(const T& opts) noexcept : validate{check_validate_skipped(opts)}
+      consteval skip_number_opts(const T& opts) noexcept
+         : validate{check_validate_skipped(opts)}, null_terminated{check_null_terminated(opts)}
       {}
 
       // Direct construction
-      explicit consteval skip_number_opts(bool validate_) noexcept : validate{validate_} {}
+      consteval skip_number_opts(bool validate_, bool null_terminated_) noexcept
+         : validate{validate_}, null_terminated{null_terminated_}
+      {}
    };
 
    template <skip_number_opts Opts>
    GLZ_ALWAYS_INLINE void skip_number(is_context auto&& ctx, auto&& it, auto end) noexcept
    {
       if constexpr (not Opts.validate) {
-         while (numeric_table[uint8_t(*it)]) {
-            ++it;
+         if constexpr (Opts.null_terminated) {
+            while (numeric_table[uint8_t(*it)]) {
+               ++it;
+            }
+         }
+         else {
+            while (it < end && numeric_table[uint8_t(*it)]) {
+               ++it;
+            }
          }
       }
       else {
-         skip_number_with_validation(ctx, it, end);
+         skip_number_with_validation<Opts.null_terminated>(ctx, it, end);
       }
    }
 
