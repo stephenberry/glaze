@@ -401,7 +401,8 @@ namespace glz
                         resp.set_error(result.ec, detail::build_length_error(expected, hdr.length));
                      }
                      else {
-                        resp.set_error(result.ec, detail::build_length_overflow_error(hdr.query_length, hdr.body_length));
+                        resp.set_error(result.ec,
+                                       detail::build_length_overflow_error(hdr.query_length, hdr.body_length));
                      }
                   }
                }
