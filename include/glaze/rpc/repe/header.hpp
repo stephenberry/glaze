@@ -43,6 +43,25 @@ namespace glz::repe
 
    static_assert(sizeof(header) == 48);
 
+   // Computes the expected total message length (header + query + body) from an
+   // attacker-controllable header without overflowing. query_length and body_length
+   // are 64-bit fields supplied on the wire, so a naive sum can wrap and defeat the
+   // subsequent buffer-size validation, producing out-of-bounds query/body views.
+   // Returns false if the lengths would overflow, in which case the header is malformed.
+   [[nodiscard]] inline bool checked_message_length(const header& hdr, uint64_t& expected) noexcept
+   {
+      constexpr uint64_t header_size = sizeof(header);
+      if (hdr.query_length > (std::numeric_limits<uint64_t>::max)() - header_size) {
+         return false;
+      }
+      const uint64_t header_and_query = header_size + hdr.query_length;
+      if (hdr.body_length > (std::numeric_limits<uint64_t>::max)() - header_and_query) {
+         return false;
+      }
+      expected = header_and_query + hdr.body_length;
+      return true;
+   }
+
    // query and body are heap allocated and we want to be able to reuse memory
    struct message final
    {

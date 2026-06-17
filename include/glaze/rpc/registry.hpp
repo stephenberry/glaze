@@ -296,8 +296,9 @@ namespace glz
          }
 
          // Length validation - REPE spec requires length = 48 + query_length + body_length
-         const uint64_t expected_length = sizeof(repe::header) + in.header.query_length + in.header.body_length;
-         if (in.header.length != expected_length) {
+         // (overflow-safe: query_length/body_length are attacker-controlled 64-bit fields)
+         uint64_t expected_length{};
+         if (!repe::checked_message_length(in.header, expected_length) || in.header.length != expected_length) {
             out.header.ec = error_code::invalid_header;
             out.header.id = in.header.id; // Echo back the original ID
             write_error(detail::build_length_error(expected_length, in.header.length));

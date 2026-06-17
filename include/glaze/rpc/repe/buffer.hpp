@@ -164,9 +164,12 @@ namespace glz::repe
          return error_code::version_mismatch;
       }
 
-      // Validate sizes
-      const size_t expected_size = sizeof(header) + msg.header.query_length + msg.header.body_length;
-      if (size < expected_size) {
+      // Validate sizes (overflow-safe: query_length/body_length are attacker-controlled)
+      uint64_t expected_size{};
+      if (!checked_message_length(msg.header, expected_size)) {
+         return error_code::invalid_header;
+      }
+      if (uint64_t(size) < expected_size) {
          return error_code::invalid_body;
       }
 
@@ -233,7 +236,10 @@ namespace glz::repe
          return {};
       }
 
-      if (size < sizeof(header) + hdr.query_length) {
+      // size >= sizeof(header) is guaranteed above, so the subtraction cannot underflow.
+      // Comparing against the remaining bytes avoids the additive overflow that an
+      // attacker-controlled 64-bit query_length could otherwise use to bypass this check.
+      if (hdr.query_length > size - sizeof(header)) {
          return {};
       }
 
