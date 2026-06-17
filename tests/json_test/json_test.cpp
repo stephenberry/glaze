@@ -2315,6 +2315,111 @@ suite early_end = [] {
    trace.end("early_end");
 };
 
+// Bounds hardening for value scanners that do not route through skip_ws. On a non-null-terminated
+// buffer there is no trailing '\0' sentinel, so each scanner below must respect end explicitly.
+// Built under ASAN in CI, these cases catch reads past an exact-size buffer.
+suite non_null_terminated_scanner_bounds = [] {
+   "nnt skip_number (raw_json) stays in bounds"_test = [] {
+      static constexpr glz::opts options{.null_terminated = false};
+      // Bare numbers that end exactly at the buffer end must parse without reading past it.
+      for (const std::string_view num : {"12345", "0", "3.14", "1e-12", "2.5E+9"}) {
+         std::vector<char> buf{num.begin(), num.end()};
+         const std::string_view view{buf.data(), buf.data() + buf.size()};
+         glz::raw_json value{};
+         const auto ec = glz::read<options>(value, view);
+         expect(not ec) << glz::format_error(ec, view);
+         expect(value.str == num);
+      }
+   };
+
+   "nnt number_of_array_elements stays in bounds"_test = [] {
+      static constexpr glz::opts options{.null_terminated = false};
+      // std::forward_list routes through the element pre-scan; truncated arrays must error rather
+      // than read past the end.
+      for (const std::string_view s : {"[1,2,3,4,5", "[1,2,", "[1", "["}) {
+         std::vector<char> buf{s.begin(), s.end()};
+         const std::string_view view{buf.data(), buf.data() + buf.size()};
+         std::forward_list<int> value{};
+         const auto ec = glz::read<options>(value, view);
+         expect(ec);
+         expect(ec.count <= view.size());
+      }
+      // A complete array still parses.
+      const std::string_view complete = "[1,2,3,4,5]";
+      std::vector<char> buf{complete.begin(), complete.end()};
+      const std::string_view view{buf.data(), buf.data() + buf.size()};
+      std::forward_list<int> value{};
+      const auto ec = glz::read<options>(value, view);
+      expect(not ec) << glz::format_error(ec, view);
+      expect(value == (std::forward_list<int>{1, 2, 3, 4, 5}));
+   };
+
+   "nnt validated number skip stays in bounds"_test = [] {
+      static constexpr glz::opts options{.null_terminated = false};
+      // The JSON-pointer path validates the located number; incomplete numbers must be rejected
+      // without scanning past the end, and complete numbers must still resolve.
+      const auto resolves = [](std::string_view s) {
+         std::vector<char> buf{s.begin(), s.end()};
+         return glz::get_view_json<"/x", options>(std::string_view{buf.data(), buf.data() + buf.size()}).has_value();
+      };
+      expect(not resolves(R"({"x":-)"));
+      expect(not resolves(R"({"x":1e)"));
+      expect(not resolves(R"({"x":1.)"));
+      expect(not resolves(R"({"x":1.5e)"));
+      expect(not resolves(R"({"x":1.5e+)"));
+      expect(resolves(R"({"x":0)"));
+      expect(resolves(R"({"x":12345)"));
+      expect(resolves(R"({"x":12345})"));
+   };
+
+   "nnt validated string skip stays in bounds"_test = [] {
+      static constexpr glz::opts options{.null_terminated = false};
+      // The validating skip path (here via a JSON pointer) must not scan past the end of an
+      // unterminated string value or a string truncated mid-escape.
+      const auto resolves = [](std::string_view s) {
+         std::vector<char> buf{s.begin(), s.end()};
+         return glz::get_view_json<"/x", options>(std::string_view{buf.data(), buf.data() + buf.size()}).has_value();
+      };
+      expect(not resolves(R"({"x":"abcdef)")); // no closing quote
+      expect(not resolves(R"({"x":"ab\)")); // trailing backslash at the end
+      expect(not resolves(R"({"x":"ab\u12)")); // truncated unicode escape
+      expect(resolves(R"({"x":"abc"})")); // complete string resolves
+   };
+
+   "nnt ndjson newline scan stays in bounds"_test = [] {
+      // Under null_terminated = false the record values use the end-bounded number parser and the
+      // inter-record newline scan is bounded too, so records with or without a trailing newline
+      // (and with '\r\n' line endings) stay inside the buffer.
+      static constexpr glz::opts options{.format = glz::NDJSON, .null_terminated = false};
+      const auto read_vec = [](std::string_view s) {
+         std::vector<char> buf{s.begin(), s.end()};
+         std::vector<int> value{};
+         const auto ec = glz::read<options>(value, std::string_view{buf.data(), buf.data() + buf.size()});
+         return std::pair{ec, value};
+      };
+      {
+         auto [ec, v] = read_vec("1");
+         expect(not ec);
+         expect(v == std::vector<int>{1});
+      }
+      {
+         auto [ec, v] = read_vec("1\n2\n");
+         expect(not ec);
+         expect(v == std::vector<int>{1, 2});
+      }
+      {
+         auto [ec, v] = read_vec("1\n2");
+         expect(not ec);
+         expect(v == std::vector<int>{1, 2});
+      }
+      {
+         auto [ec, v] = read_vec("1\r\n2\r\n");
+         expect(not ec);
+         expect(v == std::vector<int>{1, 2});
+      }
+   };
+};
+
 suite minified_custom_object = [] {
    using namespace ut;
 

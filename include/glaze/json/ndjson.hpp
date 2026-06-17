@@ -56,18 +56,38 @@ namespace glz
          auto value_it = value.begin();
 
          auto read_new_lines = [&] {
-            while (*it == '\r') {
-               ++it;
-               if (*it == '\n') {
+            // A null-terminated buffer stops on the trailing '\0' sentinel. A non-null-terminated
+            // buffer has no sentinel, so bound the scan on it != end while consuming the line
+            // breaks between records.
+            if constexpr (Opts.null_terminated) {
+               while (*it == '\r') {
+                  ++it;
+                  if (*it == '\n') {
+                     ++it;
+                  }
+                  else {
+                     ctx.error = error_code::syntax_error; // Expected '\n' after '\r'
+                     return;
+                  }
+               }
+               while (*it == '\n') {
                   ++it;
                }
-               else {
-                  ctx.error = error_code::syntax_error; // Expected '\n' after '\r'
-                  return;
-               }
             }
-            while (*it == '\n') {
-               ++it;
+            else {
+               while (it != end && *it == '\r') {
+                  ++it;
+                  if (it != end && *it == '\n') {
+                     ++it;
+                  }
+                  else {
+                     ctx.error = error_code::syntax_error; // Expected '\n' after '\r'
+                     return;
+                  }
+               }
+               while (it != end && *it == '\n') {
+                  ++it;
+               }
             }
          };
 
@@ -126,18 +146,38 @@ namespace glz
          }();
 
          auto read_new_lines = [&] {
-            while (*it == '\r') {
-               ++it;
-               if (*it == '\n') {
+            // A null-terminated buffer stops on the trailing '\0' sentinel. A non-null-terminated
+            // buffer has no sentinel, so bound the scan on it != end while consuming the line
+            // breaks between records.
+            if constexpr (Opts.null_terminated) {
+               while (*it == '\r') {
+                  ++it;
+                  if (*it == '\n') {
+                     ++it;
+                  }
+                  else {
+                     ctx.error = error_code::syntax_error; // Expected '\n' after '\r'
+                     return;
+                  }
+               }
+               while (*it == '\n') {
                   ++it;
                }
-               else {
-                  ctx.error = error_code::syntax_error; // Expected '\n' after '\r'
-                  return;
-               }
             }
-            while (*it == '\n') {
-               ++it;
+            else {
+               while (it != end && *it == '\r') {
+                  ++it;
+                  if (it != end && *it == '\n') {
+                     ++it;
+                  }
+                  else {
+                     ctx.error = error_code::syntax_error; // Expected '\n' after '\r'
+                     return;
+                  }
+               }
+               while (it != end && *it == '\n') {
+                  ++it;
+               }
             }
          };
 

@@ -450,9 +450,22 @@ namespace glz
             return;
          }
 
+         // A non-null-terminated buffer has no '\0' sentinel, so guard each structural *it read
+         // against the end of input. Compiles out entirely when null_terminated.
+         const auto at_end = [&]() -> bool {
+            if constexpr (not Opts.null_terminated) {
+               if (it == end) [[unlikely]] {
+                  ctx.error = error_code::unexpected_end;
+                  return true;
+               }
+            }
+            return false;
+         };
+
          const int32_t start_idx = decomposed_key.start.value_or(0);
          const int32_t end_idx = decomposed_key.end.value_or((std::numeric_limits<int32_t>::max)());
 
+         if (at_end()) return;
          if (*it == ']') {
             ++it;
             return;
@@ -476,6 +489,7 @@ namespace glz
 
             // Skip until target_idx
             while (current_index < target_idx) {
+               if (at_end()) return;
                if (*it == ']') {
                   // Array ended before we reached target
                   ctx.error = error_code::array_element_not_found;
@@ -483,6 +497,7 @@ namespace glz
                }
                skip_value<JSON>::op<Opts>(ctx, it, end);
                if (bool(ctx.error)) return;
+               if (at_end()) return;
                if (*it == ',') {
                   ++it;
                   skip_ws<Opts>(ctx, it, end);
@@ -494,6 +509,7 @@ namespace glz
             }
 
             // Now current_index == target_idx
+            if (at_end()) return;
             if (*it == ']') {
                ctx.error = error_code::array_element_not_found;
                return;
@@ -507,6 +523,7 @@ namespace glz
             }
             if (bool(ctx.error)) return;
 
+            if (at_end()) return;
             if (*it == ',') {
                ++it;
                skip_ws<Opts>(ctx, it, end);
@@ -517,9 +534,12 @@ namespace glz
          if (bool(ctx.error)) return;
 
          // Consume remainder of array
-         while (*it != ']') {
+         while (true) {
+            if (at_end()) return;
+            if (*it == ']') break;
             skip_value<JSON>::op<Opts>(ctx, it, end);
             if (bool(ctx.error)) return;
+            if (at_end()) return;
             if (*it == ',') {
                ++it;
                skip_ws<Opts>(ctx, it, end);
@@ -537,6 +557,18 @@ namespace glz
             return;
          }
 
+         // A non-null-terminated buffer has no '\0' sentinel, so guard each structural *it read
+         // against the end of input. Compiles out entirely when null_terminated.
+         const auto at_end = [&]() -> bool {
+            if constexpr (not Opts.null_terminated) {
+               if (it == end) [[unlikely]] {
+                  ctx.error = error_code::unexpected_end;
+                  return true;
+               }
+            }
+            return false;
+         };
+
          // Determine slice parameters
          int32_t step_idx = decomposed_key.step.value_or(1);
          bool has_negative_index = (decomposed_key.start.value_or(0) < 0) || (decomposed_key.end.value_or(0) < 0);
@@ -546,6 +578,7 @@ namespace glz
             // Original fallback behavior:
             // Read entire array into value first
             value.clear();
+            if (at_end()) return;
             if (*it == ']') {
                // empty array
                ++it; // consume ']'
@@ -559,6 +592,7 @@ namespace glz
                   if (skip_ws<Opts>(ctx, it, end)) {
                      return;
                   }
+                  if (at_end()) return;
                   if (*it == ']') {
                      ++it;
                      break;
@@ -623,6 +657,7 @@ namespace glz
          const int32_t end_idx = decomposed_key.end.value_or((std::numeric_limits<int32_t>::max)());
 
          // If empty array
+         if (at_end()) return;
          if (*it == ']') {
             ++it; // consume ']'
             return;
@@ -634,6 +669,7 @@ namespace glz
             if (skip_ws<Opts>(ctx, it, end)) {
                return;
             }
+            if (at_end()) return;
 
             // Decide whether we read or skip this element
             if (current_index < start_idx) {
@@ -658,6 +694,7 @@ namespace glz
             if (skip_ws<Opts>(ctx, it, end)) {
                return;
             }
+            if (at_end()) return;
             if (*it == ']') {
                ++it; // finished reading array
                break;

@@ -754,18 +754,26 @@ namespace glz
       bool padded;
       bool opening_handled;
       bool validate_skipped;
+      bool null_terminated;
 
       // Convert from any opts-like type (consteval because check_* functions are consteval)
       template <typename T>
       consteval skip_string_opts(const T& opts) noexcept
          : padded{check_is_padded(opts)},
            opening_handled{check_opening_handled(opts)},
-           validate_skipped{check_validate_skipped(opts)}
+           validate_skipped{check_validate_skipped(opts)},
+           null_terminated{check_null_terminated(opts)}
       {}
 
-      // Direct construction - all values required
-      consteval skip_string_opts(bool padded_, bool opening_handled_, bool validate_skipped_) noexcept
-         : padded{padded_}, opening_handled{opening_handled_}, validate_skipped{validate_skipped_}
+      // Direct construction - null_terminated defaults to true for the structural (non-validating)
+      // skip_until_closed call sites, which route through the end-bounded skip_string_view path
+      // and so are independent of this flag.
+      consteval skip_string_opts(bool padded_, bool opening_handled_, bool validate_skipped_,
+                                 bool null_terminated_ = true) noexcept
+         : padded{padded_},
+           opening_handled{opening_handled_},
+           validate_skipped{validate_skipped_},
+           null_terminated{null_terminated_}
       {}
    };
 
@@ -872,6 +880,15 @@ namespace glz
 
       if constexpr (Opts.validate_skipped) {
          while (true) {
+            // A null-terminated buffer terminates on the trailing '\0' (caught by the control
+            // character check below); a non-null-terminated buffer has no sentinel, so bound the
+            // scan before each dereference.
+            if constexpr (not Opts.null_terminated) {
+               if (it == end) [[unlikely]] {
+                  ctx.error = error_code::unexpected_end;
+                  return;
+               }
+            }
             if ((*it & 0b11100000) == 0) [[unlikely]] {
                ctx.error = error_code::syntax_error;
                return;
@@ -884,6 +901,12 @@ namespace glz
             }
             case '\\': {
                ++it;
+               if constexpr (not Opts.null_terminated) {
+                  if (it == end) [[unlikely]] {
+                     ctx.error = error_code::unexpected_end;
+                     return;
+                  }
+               }
                if (char_unescape_table[uint8_t(*it)]) {
                   ++it;
                   continue;
@@ -1248,12 +1271,17 @@ namespace glz
 
    GLZ_ALWAYS_INLINE void skip_number_with_validation(is_context auto&& ctx, auto&& it, auto end) noexcept
    {
-      it += *it == '-';
+      // Every standalone *it read below is guarded by it != end so the scan stays inside the
+      // buffer for non-null-terminated input (the std::find_if_not calls are already bounded by
+      // end). A null-terminated buffer is unaffected: it reaches end only once the number is
+      // fully consumed, where these guards short-circuit exactly as the trailing '\0' sentinel
+      // would have.
+      it += (it != end) && (*it == '-');
       const auto sig_start_it = it;
       auto frac_start_it = end;
-      if (*it == '0') {
+      if (it != end && *it == '0') {
          ++it;
-         if (*it != '.') {
+         if (it == end || *it != '.') {
             return;
          }
          ++it;
@@ -1264,11 +1292,11 @@ namespace glz
          ctx.error = error_code::syntax_error;
          return;
       }
-      if ((*it | ('E' ^ 'e')) == 'e') {
+      if (it != end && (*it | ('E' ^ 'e')) == 'e') {
          ++it;
          goto exp_start;
       }
-      if (*it != '.') return;
+      if (it == end || *it != '.') return;
       ++it;
    frac_start:
       frac_start_it = it;
@@ -1277,10 +1305,10 @@ namespace glz
          ctx.error = error_code::syntax_error;
          return;
       }
-      if ((*it | ('E' ^ 'e')) != 'e') return;
+      if (it == end || (*it | ('E' ^ 'e')) != 'e') return;
       ++it;
    exp_start:
-      it += *it == '+' || *it == '-';
+      it += (it != end) && (*it == '+' || *it == '-');
       const auto exp_start_it = it;
       it = std::find_if_not(it, end, is_digit);
       if (it == exp_start_it) {
@@ -1293,22 +1321,34 @@ namespace glz
    struct skip_number_opts
    {
       bool validate;
+      bool null_terminated;
 
-      // Convert from any opts-like type (consteval because check_validate_skipped is consteval)
+      // Convert from any opts-like type (consteval because check_* functions are consteval)
       template <typename T>
-      consteval skip_number_opts(const T& opts) noexcept : validate{check_validate_skipped(opts)}
+      consteval skip_number_opts(const T& opts) noexcept
+         : validate{check_validate_skipped(opts)}, null_terminated{check_null_terminated(opts)}
       {}
 
       // Direct construction
-      explicit consteval skip_number_opts(bool validate_) noexcept : validate{validate_} {}
+      explicit consteval skip_number_opts(bool validate_, bool null_terminated_ = true) noexcept
+         : validate{validate_}, null_terminated{null_terminated_}
+      {}
    };
 
    template <skip_number_opts Opts>
    GLZ_ALWAYS_INLINE void skip_number(is_context auto&& ctx, auto&& it, auto end) noexcept
    {
       if constexpr (not Opts.validate) {
-         while (numeric_table[uint8_t(*it)]) {
-            ++it;
+         if constexpr (Opts.null_terminated) {
+            // Relies on the trailing '\0' sentinel (numeric_table['\0'] == false) to terminate.
+            while (numeric_table[uint8_t(*it)]) {
+               ++it;
+            }
+         }
+         else {
+            while (it < end && numeric_table[uint8_t(*it)]) {
+               ++it;
+            }
          }
       }
       else {

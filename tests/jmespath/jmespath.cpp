@@ -268,4 +268,58 @@ suite tuple_slice_tests = [] {
    };
 };
 
+// Read every truncation prefix of `complete`, each over its own exact-size heap buffer (so ASAN
+// flags any read past the end), with null_terminated = false. Every proper prefix of a complete
+// array is malformed, so each must error rather than over-read.
+template <class T, glz::string_literal Path>
+void fuzz_slice_prefixes(std::string_view complete)
+{
+   static constexpr glz::opts options{.null_terminated = false};
+   for (size_t n = 1; n < complete.size(); ++n) {
+      std::vector<char> buf{complete.begin(), complete.begin() + n};
+      T value{};
+      const auto ec = glz::read_jmespath<Path, options>(value, std::string_view{buf.data(), buf.data() + n});
+      expect(bool(ec)) << "expected truncation error at prefix length " << n;
+   }
+}
+
+// Bounds hardening for the JMESPath array-slice handlers (handle_slice). On a non-null-terminated
+// buffer there is no trailing '\0' sentinel, so the structural ']' / ',' scans must respect end
+// explicitly. Built under ASAN in CI, these cases catch reads past an exact-size buffer.
+suite non_null_terminated_slice_bounds = [] {
+   static constexpr glz::opts options{.null_terminated = false};
+
+   "nnt vector slice (partial-read) stays in bounds"_test = [] {
+      fuzz_slice_prefixes<std::vector<int>, "[0:2]">("[10,20,30,40,50]");
+      fuzz_slice_prefixes<std::vector<int>, "[1:3]">("[ 10 , 20 , 30 , 40 ]");
+
+      std::vector<char> buf{};
+      const std::string_view complete = "[10,20,30,40,50]";
+      buf.assign(complete.begin(), complete.end());
+      std::vector<int> slice{};
+      const auto ec = glz::read_jmespath<"[1:3]", options>(slice, std::string_view{buf.data(), buf.data() + buf.size()});
+      expect(not ec);
+      expect(slice == (std::vector<int>{20, 30}));
+   };
+
+   "nnt vector slice (read-all fallback) stays in bounds"_test = [] {
+      // A negative step routes through the read-entire-array fallback.
+      fuzz_slice_prefixes<std::vector<int>, "[::-1]">("[1,2,3,4,5]");
+   };
+
+   "nnt tuple slice stays in bounds"_test = [] {
+      fuzz_slice_prefixes<std::tuple<int, int>, "[0:2]">("[1,2,3,4,5]");
+      fuzz_slice_prefixes<std::tuple<int, int, int>, "[0:3]">("[1,2,3,4,5]");
+
+      std::vector<char> buf{};
+      const std::string_view complete = "[7,8,9]";
+      buf.assign(complete.begin(), complete.end());
+      std::tuple<int, int> target{};
+      const auto ec = glz::read_jmespath<"[0:2]", options>(target, std::string_view{buf.data(), buf.data() + buf.size()});
+      expect(not ec);
+      expect(std::get<0>(target) == 7);
+      expect(std::get<1>(target) == 8);
+   };
+};
+
 int main() { return 0; }
