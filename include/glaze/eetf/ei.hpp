@@ -166,13 +166,21 @@ namespace glz
 
       if (check_invalid_offset(ctx, it, end, sz)) return;
 
-      value.resize(sz);
+      // ei_decode_atom/ei_decode_string write the token followed by a terminating NUL, but
+      // ei_get_type reports sz as the token length without that NUL. Sizing the buffer to sz
+      // would let the trailing NUL be written one byte past the end (heap overflow on
+      // attacker-controlled atoms/strings), so reserve sz + 1 and trim the NUL afterwards.
+      value.resize(static_cast<std::size_t>(sz) + 1);
       if (eetf::is_atom(type)) {
          detail::decode_impl(std::bind(ei_decode_atom, _1, _2, value.data()), ctx, it, end);
       }
       else {
          detail::decode_impl(std::bind(ei_decode_string, _1, _2, value.data()), ctx, it, end);
       }
+      if (bool(ctx.error)) [[unlikely]] {
+         return;
+      }
+      value.resize(static_cast<std::size_t>(sz));
    }
 
    template <class... Args>
