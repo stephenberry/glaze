@@ -135,6 +135,35 @@ suite p2996_enums = [] {
       expect(not glz::read<reflect_enums_opts{}>(d2, dir_json));
       expect(d2 == Direction::East);
    };
+
+   // The reflective enum-by-name reader scans the quoted key directly (not via skip_ws), so on a
+   // non-null-terminated buffer (no trailing '\0' sentinel) it must respect end. Each input below
+   // is read over an exact-size buffer. A key missing its closing quote must error rather than
+   // scan past the end: with the unbounded scan, "North" (no closing quote) would read past the
+   // buffer and wrongly succeed, so expecting an error here pins the bounded behavior. Under the
+   // ASAN CI configuration this additionally catches the over-read itself.
+   "reflect_enums non-null-terminated bounds"_test = [] {
+      static constexpr auto options = [] {
+         reflect_enums_opts o{};
+         o.null_terminated = false;
+         return o;
+      }();
+
+      for (const std::string_view s : {"\"North", "\"Sou", "\""}) {
+         std::vector<char> buf{s.begin(), s.end()};
+         Direction d{};
+         const auto ec = glz::read<options>(d, std::string_view{buf.data(), buf.data() + buf.size()});
+         expect(bool(ec)) << "unterminated reflective enum key should error";
+      }
+
+      // A complete value still reads correctly over an exact-size buffer.
+      const std::string_view complete = "\"West\"";
+      std::vector<char> buf{complete.begin(), complete.end()};
+      Direction d{};
+      const auto ec = glz::read<options>(d, std::string_view{buf.data(), buf.data() + buf.size()});
+      expect(not ec);
+      expect(d == Direction::West);
+   };
 };
 
 // C-style array in struct tests (issue #1839)

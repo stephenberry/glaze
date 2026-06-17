@@ -2087,8 +2087,14 @@ namespace glz
 
             // Extract the string key
             const auto start = it;
-            while (*it != '"' && it != end) {
+            while (it != end && *it != '"') {
                ++it;
+            }
+            if constexpr (not Opts.null_terminated) {
+               if (it == end) [[unlikely]] {
+                  ctx.error = error_code::unexpected_end;
+                  return;
+               }
             }
             const sv key{start, static_cast<size_t>(it - start)};
             ++it; // skip closing quote
