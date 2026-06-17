@@ -2666,16 +2666,38 @@ namespace glz
    };
 
    template <uint32_t Format, class T, auto HashInfo, hash_type Type>
-   struct decode_hash_with_size;
+   struct decode_hash_with_size_impl;
+
+   // Single entry point for the in-place key-hash readers (BSON, MessagePack, CBOR, CSV, TOML, plus
+   // the compile-time-key callers). Every reader below dereferences key bytes only at offsets that
+   // are guaranteed below min_length (front_hash_bytes <= min_length, unique_index < min_length, and
+   // the mod4 family reads offset 0 where min_length >= 1) or reads at most n bytes. A key whose
+   // length is outside [min_length, max_length] therefore cannot match any reflected key and must
+   // not be hashed, so rejecting it here bounds every reader's key access in one place. This is why
+   // the individual readers carry no per-read bounds checks; the sole exception is unique_per_length,
+   // whose length-indexed table yields 255 for absent lengths and so keeps its own end check.
+   template <uint32_t Format, class T, auto HashInfo, hash_type Type>
+   struct decode_hash_with_size
+   {
+      static constexpr auto N = reflect<T>::size;
+
+      GLZ_ALWAYS_INLINE static constexpr size_t op(auto&& it, auto&& end, const size_t n) noexcept
+      {
+         if (n < HashInfo.min_length || n > HashInfo.max_length) [[unlikely]] {
+            return N;
+         }
+         return decode_hash_with_size_impl<Format, T, HashInfo, Type>::op(it, end, n);
+      }
+   };
 
    template <uint32_t Format, class T, auto HashInfo>
-   struct decode_hash_with_size<Format, T, HashInfo, hash_type::single_element>
+   struct decode_hash_with_size_impl<Format, T, HashInfo, hash_type::single_element>
    {
       GLZ_ALWAYS_INLINE static constexpr size_t op(auto&&, auto&&, const size_t) noexcept { return 0; }
    };
 
    template <uint32_t Format, class T, auto HashInfo>
-   struct decode_hash_with_size<Format, T, HashInfo, hash_type::mod4>
+   struct decode_hash_with_size_impl<Format, T, HashInfo, hash_type::mod4>
    {
       GLZ_ALWAYS_INLINE static constexpr size_t op(auto&& it, auto&&, const size_t) noexcept
       {
@@ -2684,7 +2706,7 @@ namespace glz
    };
 
    template <uint32_t Format, class T, auto HashInfo>
-   struct decode_hash_with_size<Format, T, HashInfo, hash_type::xor_mod4>
+   struct decode_hash_with_size_impl<Format, T, HashInfo, hash_type::xor_mod4>
    {
       static constexpr auto first_key_char = reflect<T>::keys[0][0];
 
@@ -2695,7 +2717,7 @@ namespace glz
    };
 
    template <uint32_t Format, class T, auto HashInfo>
-   struct decode_hash_with_size<Format, T, HashInfo, hash_type::minus_mod4>
+   struct decode_hash_with_size_impl<Format, T, HashInfo, hash_type::minus_mod4>
    {
       static constexpr auto first_key_char = reflect<T>::keys[0][0];
 
@@ -2706,35 +2728,27 @@ namespace glz
    };
 
    template <uint32_t Format, class T, auto HashInfo>
-   struct decode_hash_with_size<Format, T, HashInfo, hash_type::unique_index>
+   struct decode_hash_with_size_impl<Format, T, HashInfo, hash_type::unique_index>
    {
       static constexpr auto N = reflect<T>::size;
       static constexpr auto bsize = bucket_size(hash_type::unique_index, N);
       static constexpr auto uindex = HashInfo.unique_index;
 
-      GLZ_ALWAYS_INLINE static constexpr size_t op(auto&& it, auto&& end, const size_t n) noexcept
+      GLZ_ALWAYS_INLINE static constexpr size_t op(auto&& it, auto&&, const size_t n) noexcept
       {
+         // unique_index < min_length <= n, so it[unique_index] is within the key (the wrapper has
+         // already rejected lengths outside [min_length, max_length]).
          if constexpr (HashInfo.sized_hash) {
-            if (n == 0 || n > HashInfo.max_length) {
-               return N; // error
-            }
-
             const auto h = bitmix(uint16_t(it[HashInfo.unique_index]) | (uint16_t(n) << 8), HashInfo.seed);
             return HashInfo.table[h % bsize];
          }
          else {
             if constexpr (N == 2) {
-               if ((it + uindex) >= end) [[unlikely]] {
-                  return N; // error
-               }
                // Avoids using a hash table
                constexpr auto first_key_char = reflect<T>::keys[0][uindex];
                return size_t(bool(it[uindex] ^ first_key_char));
             }
             else {
-               if ((it + uindex) >= end) [[unlikely]] {
-                  return N; // error
-               }
                return HashInfo.table[uint8_t(it[uindex])];
             }
          }
@@ -2742,18 +2756,13 @@ namespace glz
    };
 
    template <uint32_t Format, class T, auto HashInfo>
-   struct decode_hash_with_size<Format, T, HashInfo, hash_type::three_element_unique_index>
+   struct decode_hash_with_size_impl<Format, T, HashInfo, hash_type::three_element_unique_index>
    {
-      static constexpr auto N = reflect<T>::size;
       static constexpr auto uindex = HashInfo.unique_index;
 
-      GLZ_ALWAYS_INLINE static constexpr size_t op(auto&& it, auto&& end, const size_t) noexcept
+      GLZ_ALWAYS_INLINE static constexpr size_t op(auto&& it, auto&&, const size_t) noexcept
       {
-         if constexpr (uindex > 0) {
-            if ((it + uindex) >= end) [[unlikely]] {
-               return N; // error
-            }
-         }
+         // uindex < min_length <= n (the wrapper bounded n), so it[uindex] is within the key.
          // Avoids using a hash table
          constexpr auto first_key_char = reflect<T>::keys[0][uindex];
          return (uint8_t(it[uindex] ^ first_key_char) * HashInfo.seed) % 4;
@@ -2761,13 +2770,15 @@ namespace glz
    };
 
    template <uint32_t Format, class T, auto HashInfo>
-   struct decode_hash_with_size<Format, T, HashInfo, hash_type::front_hash>
+   struct decode_hash_with_size_impl<Format, T, HashInfo, hash_type::front_hash>
    {
       static constexpr auto N = reflect<T>::size;
       static constexpr auto bsize = bucket_size(hash_type::front_hash, N);
 
       GLZ_ALWAYS_INLINE static constexpr size_t op(auto&& it, auto&&, const size_t) noexcept
       {
+         // front_hash_bytes <= min_length <= n, so reading the prefix stays within the key (the
+         // wrapper rejects keys shorter than min_length before dispatching here).
          if constexpr (HashInfo.front_hash_bytes == 2) {
             uint16_t h;
             if consteval {
@@ -2823,13 +2834,17 @@ namespace glz
    };
 
    template <uint32_t Format, class T, auto HashInfo>
-   struct decode_hash_with_size<Format, T, HashInfo, hash_type::unique_per_length>
+   struct decode_hash_with_size_impl<Format, T, HashInfo, hash_type::unique_per_length>
    {
       static constexpr auto N = reflect<T>::size;
       static constexpr auto bsize = bucket_size(hash_type::unique_per_length, N);
 
       GLZ_ALWAYS_INLINE static constexpr size_t op(auto&& it, auto&& end, const size_t n) noexcept
       {
+         // Unlike the other readers, the read offset here is indexed by key length and absent
+         // lengths map to 255 (see unique_per_length_info), so a foreign key whose length falls in
+         // a gap of [min_length, max_length] would read it[255]. The wrapper's length pre-screen
+         // does not catch that, so this reader keeps its own end check.
          const auto pos = per_length_info<T>.unique_index[uint8_t(n)];
          if ((it + pos) >= end) [[unlikely]] {
             return N; // error
@@ -2840,7 +2855,7 @@ namespace glz
    };
 
    template <uint32_t Format, class T, auto HashInfo>
-   struct decode_hash_with_size<Format, T, HashInfo, hash_type::full_flat>
+   struct decode_hash_with_size_impl<Format, T, HashInfo, hash_type::full_flat>
    {
       static constexpr auto N = reflect<T>::size;
       static constexpr auto bsize = bucket_size(hash_type::full_flat, N);

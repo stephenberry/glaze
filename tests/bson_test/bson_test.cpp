@@ -6,9 +6,11 @@
 #include <array>
 #include <chrono>
 #include <cstdint>
+#include <cstring>
 #include <filesystem>
 #include <limits>
 #include <map>
+#include <memory>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -1628,6 +1630,153 @@ suite bson_skip_marker_suite = [] {
       expect(decoded.active == false);
       expect(decoded.count == 7);
       expect(decoded.name == "world");
+   };
+};
+
+// decode_hash_with_size::op is always called as op(key.data(), key.data() + key.size(),
+// key.size()) by the in-place decoders (see bson/read.hpp and msgpack/read.hpp). Its length
+// pre-screen rejects any key whose length is outside [min_length, max_length] before dispatching to
+// a reader, which is the single bound that keeps these readers from dereferencing key bytes past a
+// short key:
+//   - front_hash reads the first front_hash_bytes of the key
+//   - the sized unique_index path reads it[unique_index]
+//   - mod4 / xor_mod4 / minus_mod4 dereference the first key byte (*it)
+//   - three_element_unique_index with unique_index == 0 reads it[0]
+// The static_asserts pin the selected hash so each case keeps exercising a distinct reader if the
+// hashing-selection logic ever changes.
+namespace bson_hash_bounds_tests
+{
+   // front_hash_bytes == 4: distinguished by the first four bytes.
+   struct front_hash_keys
+   {
+      int aaaa{};
+      int aaab{};
+      int aaba{};
+      int bbbb{};
+      int aabb{};
+   };
+   static_assert(glz::hash_info<front_hash_keys>.type == glz::hash_type::front_hash);
+   static_assert(glz::hash_info<front_hash_keys>.front_hash_bytes == 4);
+
+   struct sized_unique_keys
+   {
+      int xaa{};
+      int xab{};
+      int xabb{};
+   };
+   static_assert(glz::hash_info<sized_unique_keys>.type == glz::hash_type::unique_index);
+   static_assert(glz::hash_info<sized_unique_keys>.sized_hash);
+   static_assert(glz::hash_info<sized_unique_keys>.unique_index == 2);
+
+   struct mod4_keys
+   {
+      int x{};
+      int yy{};
+      int zzz{};
+   };
+   static_assert(glz::hash_info<mod4_keys>.type == glz::hash_type::mod4);
+
+   struct three_element_keys
+   {
+      int dzz{};
+      int gzz{};
+      int fzz{};
+   };
+   static_assert(glz::hash_info<three_element_keys>.type == glz::hash_type::three_element_unique_index);
+   static_assert(glz::hash_info<three_element_keys>.unique_index == 0);
+
+   // Reproduce the exact call the in-place decoders make for a foreign key of length n: op(it, it +
+   // n, n). [key, key + n) is an exact-size heap allocation, so a read past the key lands in ASAN's
+   // redzone when the bound is missing.
+   template <class T>
+   size_t hash_index_of_short_key(const char* key, size_t n)
+   {
+      constexpr auto& HashInfo = glz::hash_info<T>;
+      return glz::decode_hash_with_size<glz::BSON, T, HashInfo, HashInfo.type>::op(key, key + n, n);
+   }
+}
+
+// A foreign key shorter than the bytes its hash reads must be rejected (returning the not-found
+// index reflect<T>::size) without reading past the key, and a valid document must still decode.
+suite bson_hash_bounds_suite = [] {
+   using namespace bson_hash_bounds_tests;
+
+   "front_hash short key stays in bounds"_test = [] {
+      // front_hash reads 4 bytes; a one-byte key would run three bytes past it.
+      auto buffer = std::make_unique<char[]>(1);
+      buffer[0] = 'a';
+      const auto index = hash_index_of_short_key<front_hash_keys>(buffer.get(), 1);
+      expect(index == glz::reflect<front_hash_keys>::size); // no field matches a one-byte key
+   };
+
+   "sized unique_index short key stays in bounds"_test = [] {
+      // unique_index is 2, so a one-byte key has no it[2]; the read would run two bytes past it.
+      auto buffer = std::make_unique<char[]>(1);
+      buffer[0] = 'x';
+      const auto index = hash_index_of_short_key<sized_unique_keys>(buffer.get(), 1);
+      expect(index == glz::reflect<sized_unique_keys>::size);
+   };
+
+   "mod4 empty key stays in bounds"_test = [] {
+      // mod4 dereferences the first key byte; an empty key has none.
+      auto buffer = std::make_unique<char[]>(1);
+      const auto index = hash_index_of_short_key<mod4_keys>(buffer.get() + 1, 0);
+      expect(index == glz::reflect<mod4_keys>::size);
+   };
+
+   "three_element_unique_index empty key stays in bounds"_test = [] {
+      // unique_index is 0, so the lookup reads it[0]; an empty key has none.
+      auto buffer = std::make_unique<char[]>(1);
+      const auto index = hash_index_of_short_key<three_element_keys>(buffer.get() + 1, 0);
+      expect(index == glz::reflect<three_element_keys>::size);
+   };
+
+   "front_hash valid keys round-trip"_test = [] {
+      const front_hash_keys original{1, 2, 3, 4, 5};
+      const auto encoded = glz::write_bson(original);
+      expect(encoded.has_value());
+
+      front_hash_keys decoded{};
+      const auto ec = glz::read_bson(decoded, *encoded);
+      expect(!ec);
+      expect(decoded.aaaa == 1);
+      expect(decoded.aabb == 5);
+   };
+
+   "sized unique_index valid keys round-trip"_test = [] {
+      const sized_unique_keys original{4, 5, 6};
+      const auto encoded = glz::write_bson(original);
+      expect(encoded.has_value());
+
+      sized_unique_keys decoded{};
+      const auto ec = glz::read_bson(decoded, *encoded);
+      expect(!ec);
+      expect(decoded.xaa == 4);
+      expect(decoded.xabb == 6);
+   };
+
+   "mod4 valid keys round-trip"_test = [] {
+      const mod4_keys original{1, 2, 3};
+      const auto encoded = glz::write_bson(original);
+      expect(encoded.has_value());
+
+      mod4_keys decoded{};
+      const auto ec = glz::read_bson(decoded, *encoded);
+      expect(!ec);
+      expect(decoded.x == 1);
+      expect(decoded.zzz == 3);
+   };
+
+   "three_element_unique_index valid keys round-trip"_test = [] {
+      const three_element_keys original{7, 8, 9};
+      const auto encoded = glz::write_bson(original);
+      expect(encoded.has_value());
+
+      three_element_keys decoded{};
+      const auto ec = glz::read_bson(decoded, *encoded);
+      expect(!ec);
+      expect(decoded.dzz == 7);
+      expect(decoded.fzz == 9);
    };
 };
 
