@@ -273,7 +273,11 @@ namespace glz::repe
       }
 
       const auto& hdr = result.request.hdr;
-      const size_t expected_length = sizeof(header) + hdr.query_length + hdr.body_length;
+      uint64_t expected_length{};
+      if (!checked_message_length(hdr, expected_length)) {
+         result.ec = error_code::invalid_header;
+         return result;
+      }
 
       // Validate header.length field matches expected value
       if (hdr.length != expected_length) {
@@ -281,7 +285,7 @@ namespace glz::repe
          return result;
       }
 
-      if (buffer.size() < expected_length) {
+      if (uint64_t(buffer.size()) < expected_length) {
          result.ec = error_code::invalid_body;
          return result;
       }

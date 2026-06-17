@@ -66,6 +66,25 @@ namespace glz
          return buf;
       }
 
+      // Reported when query_length + body_length overflow the 64-bit message length,
+      // so no meaningful "expected" total can be formed (see repe::checked_message_length).
+      inline std::string_view build_length_overflow_error(uint64_t query_length, uint64_t body_length)
+      {
+         auto& buf = error_buffer();
+         buf = "REPE length overflow: query_length ";
+         auto n = buf.size();
+         buf.resize(n + 24);
+         auto* end = glz::to_chars(buf.data() + n, query_length);
+         buf.resize(size_t(end - buf.data()));
+         buf.append(" + body_length ");
+         n = buf.size();
+         buf.resize(n + 24);
+         end = glz::to_chars(buf.data() + n, body_length);
+         buf.resize(size_t(end - buf.data()));
+         buf.append(" exceed uint64_t");
+         return buf;
+      }
+
       inline std::string_view build_magic_error(uint16_t spec)
       {
          auto& buf = error_buffer();
@@ -296,8 +315,9 @@ namespace glz
          }
 
          // Length validation - REPE spec requires length = 48 + query_length + body_length
-         const uint64_t expected_length = sizeof(repe::header) + in.header.query_length + in.header.body_length;
-         if (in.header.length != expected_length) {
+         // (overflow-safe: query_length/body_length are attacker-controlled 64-bit fields)
+         uint64_t expected_length{};
+         if (!repe::checked_message_length(in.header, expected_length) || in.header.length != expected_length) {
             out.header.ec = error_code::invalid_header;
             out.header.id = in.header.id; // Echo back the original ID
             write_error(detail::build_length_error(expected_length, in.header.length));
@@ -374,9 +394,15 @@ namespace glz
                      resp.set_error(result.ec, detail::build_magic_error(hdr.spec));
                   }
                   else {
-                     // Length mismatch
-                     const uint64_t expected = sizeof(repe::header) + hdr.query_length + hdr.body_length;
-                     resp.set_error(result.ec, detail::build_length_error(expected, hdr.length));
+                     // Length mismatch, or query/body lengths that overflow the total
+                     // (overflow-safe: query_length/body_length are attacker-controlled).
+                     uint64_t expected{};
+                     if (repe::checked_message_length(hdr, expected)) {
+                        resp.set_error(result.ec, detail::build_length_error(expected, hdr.length));
+                     }
+                     else {
+                        resp.set_error(result.ec, detail::build_length_overflow_error(hdr.query_length, hdr.body_length));
+                     }
                   }
                }
                else {
