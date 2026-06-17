@@ -2766,8 +2766,16 @@ namespace glz
       static constexpr auto N = reflect<T>::size;
       static constexpr auto bsize = bucket_size(hash_type::front_hash, N);
 
-      GLZ_ALWAYS_INLINE static constexpr size_t op(auto&& it, auto&&, const size_t) noexcept
+      GLZ_ALWAYS_INLINE static constexpr size_t op(auto&& it, auto&& end, const size_t) noexcept
       {
+         // front_hash is only chosen when every key is at least front_hash_bytes long, so a
+         // shorter key cannot match and reading the prefix would run past it. The non-padded
+         // readers (BSON, MessagePack, CBOR, CSV, TOML) pass end = key.data() + key.size(),
+         // so an unguarded read here is an out-of-bounds read of the input buffer. The
+         // decode_hash<JSON> front_hash variant already guards each read against end.
+         if (static_cast<size_t>(end - it) < HashInfo.front_hash_bytes) [[unlikely]] {
+            return N;
+         }
          if constexpr (HashInfo.front_hash_bytes == 2) {
             uint16_t h;
             if consteval {

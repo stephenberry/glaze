@@ -6,9 +6,11 @@
 #include <array>
 #include <chrono>
 #include <cstdint>
+#include <cstring>
 #include <filesystem>
 #include <limits>
 #include <map>
+#include <memory>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -1628,6 +1630,52 @@ suite bson_skip_marker_suite = [] {
       expect(decoded.active == false);
       expect(decoded.count == 7);
       expect(decoded.name == "world");
+   };
+};
+
+namespace bson_front_hash_tests
+{
+   // All keys are 8 bytes and are distinguished only by their first 8 bytes, which
+   // selects the front_hash key lookup with front_hash_bytes == 8.
+   struct front_hash_keys
+   {
+      int alphaaa1{};
+      int alphaaa2{};
+      int alphaab1{};
+      int alphaab2{};
+      int betaaaa1{};
+      int betaaaa2{};
+   };
+}
+
+// A document key shorter than front_hash_bytes must not make the key hash read past
+// the end of the (unpadded) input buffer. The buffer is an exact-size heap allocation
+// so the over-read lands in ASAN's redzone when the bound is missing.
+suite bson_front_hash_bounds_suite = [] {
+   using namespace bson_front_hash_tests;
+
+   "front_hash short key stays in bounds"_test = [] {
+      // { "x": null } : int32 len=8 | 0x0A null tag | "x"\0 | 0x00 terminator
+      static constexpr unsigned char doc[] = {0x08, 0x00, 0x00, 0x00, 0x0A, 0x78, 0x00, 0x00};
+      auto buffer = std::make_unique<char[]>(sizeof(doc));
+      std::memcpy(buffer.get(), doc, sizeof(doc));
+      const std::string_view view(buffer.get(), sizeof(doc));
+
+      front_hash_keys value{};
+      const auto ec = glz::read_bson(value, view);
+      expect(bool(ec)); // a one-byte key matches no field
+   };
+
+   "front_hash exact-length key still matches"_test = [] {
+      const front_hash_keys original{1, 2, 3, 4, 5, 6};
+      const auto encoded = glz::write_bson(original);
+      expect(encoded.has_value());
+
+      front_hash_keys decoded{};
+      const auto ec = glz::read_bson(decoded, *encoded);
+      expect(!ec);
+      expect(decoded.alphaaa1 == 1);
+      expect(decoded.betaaaa2 == 6);
    };
 };
 
