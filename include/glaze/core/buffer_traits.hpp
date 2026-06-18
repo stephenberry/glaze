@@ -71,6 +71,13 @@ namespace glz
    template <class B>
    concept is_output_streaming = buffer_traits<std::remove_cvref_t<B>>::is_output_streaming;
 
+   // Concept to check if a buffer type is both bounded and supports streaming.
+   // These buffers cannot grow but can flush to handle data larger than their capacity.
+   template <class B>
+   concept is_bounded_output_streaming =
+      buffer_traits<std::remove_cvref_t<B>>::is_output_streaming &&
+      buffer_traits<std::remove_cvref_t<B>>::has_bounded_capacity;
+
    // Flush helper for streaming output buffers
    template <class B>
    GLZ_ALWAYS_INLINE void flush_buffer(B&& b, size_t written) noexcept
