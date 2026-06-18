@@ -387,6 +387,55 @@ struct glz::to<Format, mp_fc_variant>
    }
 };
 
+// Regression coverage for https://github.com/stephenberry/glaze/issues/2647
+// Fixed std::array<char, N> must round trip (previously its read was undefined).
+struct mp_char_array_rec
+{
+   std::array<char, 8> name{};
+   int id{};
+};
+
+suite msgpack_char_array_tests = [] {
+   "msgpack std::array<char, N> round trips"_test = [] {
+      std::array<char, 16> src{'h', 'e', 'l', 'l', 'o'};
+      std::string buffer{};
+      expect(not glz::write_msgpack(src, buffer));
+      std::array<char, 16> dst{};
+      expect(not glz::read_msgpack(dst, buffer));
+      expect(dst == src);
+   };
+
+   "msgpack std::array<char, N> zero-fills and rejects oversize"_test = [] {
+      std::string short_src = "abc";
+      std::string buffer{};
+      expect(not glz::write_msgpack(short_src, buffer));
+      std::array<char, 8> dst{'Z', 'Z', 'Z', 'Z', 'Z', 'Z', 'Z', 'Z'};
+      expect(not glz::read_msgpack(dst, buffer));
+      expect(std::string_view(dst.data(), 3) == "abc");
+      for (size_t i = 3; i < dst.size(); ++i) {
+         expect(dst[i] == '\0');
+      }
+
+      std::string big_src = "0123456789";
+      std::string big_buffer{};
+      expect(not glz::write_msgpack(big_src, big_buffer));
+      std::array<char, 4> small{};
+      expect(bool(glz::read_msgpack(small, big_buffer)));
+   };
+
+   "msgpack std::array<char, N> as a struct member"_test = [] {
+      mp_char_array_rec src{};
+      src.name = {'h', 'i'};
+      src.id = 7;
+      std::string buffer{};
+      expect(not glz::write_msgpack(src, buffer));
+      mp_char_array_rec dst{};
+      expect(not glz::read_msgpack(dst, buffer));
+      expect(dst.name == src.name);
+      expect(dst.id == src.id);
+   };
+};
+
 int main()
 {
    // Only the write side is exercised here: MessagePack passes its type-tag byte

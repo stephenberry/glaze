@@ -367,7 +367,18 @@ namespace glz
          }
          std::string_view sv{};
          if (!bson_detail::read_bson_string(ctx, it, end, sv)) return;
-         if constexpr (requires { value.assign(sv.data(), sv.size()); }) {
+         if constexpr (array_char_t<std::remove_cvref_t<decltype(value)>>) {
+            // Fixed-size std::array<char, N>: bounds-check, copy, zero-fill remainder.
+            if (sv.size() > value.size()) [[unlikely]] {
+               ctx.error = error_code::syntax_error;
+               return;
+            }
+            std::memcpy(value.data(), sv.data(), sv.size());
+            if (sv.size() < value.size()) {
+               std::memset(value.data() + sv.size(), 0, value.size() - sv.size());
+            }
+         }
+         else if constexpr (requires { value.assign(sv.data(), sv.size()); }) {
             value.assign(sv.data(), sv.size());
          }
          else {
