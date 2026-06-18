@@ -659,11 +659,14 @@ suite working_http_tests = [] {
       std::this_thread::sleep_for(std::chrono::milliseconds(50));
    };
 
-   "cors_wildcard_with_credentials_echoes_origin"_test = [] {
+   "cors_wildcard_with_credentials_rejects_origin"_test = [] {
+      // A wildcard origin list with credentials enabled must not reflect the request
+      // origin. Echoing the origin next to Access-Control-Allow-Credentials: true would
+      // let any site read authenticated cross-origin responses, so an unlisted origin is
+      // rejected and no Allow-Origin/Allow-Credentials headers are emitted.
       glz::cors_config config;
       config.allowed_origins = {"*"};
       config.allow_credentials = true;
-      config.allowed_methods = {"GET", "HEAD", "POST", "PUT", "DELETE", "PATCH"};
 
       working_test_server server;
       server.set_cors_config(config);
@@ -671,18 +674,18 @@ suite working_http_tests = [] {
 
       simple_test_client client;
       auto result = client.options(server.base_url() + "/hello",
-                                   {{"Origin", "http://auth.local"}, {"Access-Control-Request-Method", "POST"}});
+                                   {{"Origin", "http://auth.local"}, {"Access-Control-Request-Method", "GET"}});
 
       expect(result.has_value());
       if (result.has_value()) {
-         auto origin_it = result->response_headers.find("access-control-allow-origin");
-         expect(origin_it != result->response_headers.end());
-         if (origin_it != result->response_headers.end()) {
-            expect(origin_it->second == "http://auth.local");
-         }
+         expect(result->status_code == 403)
+            << "Wildcard + credentials should reject an unlisted origin (got " << result->status_code << ")\n";
 
-         auto credentials_it = result->response_headers.find("access-control-allow-credentials");
-         expect(credentials_it != result->response_headers.end());
+         expect(result->response_headers.find("access-control-allow-origin") == result->response_headers.end())
+            << "Allow-Origin must not be echoed for a wildcard + credentials config\n";
+
+         expect(result->response_headers.find("access-control-allow-credentials") == result->response_headers.end())
+            << "Allow-Credentials must not be sent for a rejected origin\n";
       }
 
       server.stop();
