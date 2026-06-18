@@ -58,7 +58,6 @@ jobs:
           -B "$env:GITHUB_WORKSPACE/build/windows-header-compatibility/build" `
           -DGLAZE_SOURCE_DIR="$env:GITHUB_WORKSPACE" `
           -DERLANG_OTP_DIR="$env:INSTALL_DIR_FOR_OTP" `
-          -DCMAKE_CXX_STANDARD=23 `
           -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_INSTALLATION_ROOT/scripts/buildsystems/vcpkg.cmake" `
           -DVCPKG_TARGET_TRIPLET=x64-windows `
           -A x64
