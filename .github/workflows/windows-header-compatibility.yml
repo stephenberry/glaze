@@ -60,7 +60,6 @@ jobs:
           -DERLANG_OTP_DIR="$env:INSTALL_DIR_FOR_OTP" `
           -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_INSTALLATION_ROOT/scripts/buildsystems/vcpkg.cmake" `
           -DVCPKG_TARGET_TRIPLET=x64-windows `
-          -A x64
 
     - name: Build
       run: cmake --build "$env:GITHUB_WORKSPACE/build/windows-header-compatibility/build" --config Debug --target glaze_windows_header_compatibility --parallel
