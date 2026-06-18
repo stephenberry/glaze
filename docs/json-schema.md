@@ -55,6 +55,41 @@ struct local_schema_t
 };
 ```
 
+## Automatic Default Extraction (opt-in)
+
+Glaze can populate each property's `"default"` keyword from the corresponding C++ member's default-constructed value. The feature is **off by default** — C++ default-initialization and JSON Schema's `default` keyword have overlapping but not identical semantics, so enabling it implicitly would change the meaning of every generated schema.
+
+Opt in via a custom `opts` struct:
+
+```c++
+struct my_opts : glz::opts { bool schema_auto_defaults = true; };
+auto schema = glz::write_json_schema<MyType, my_opts{}>();
+```
+
+### What gets extracted
+
+Only primitive, representable-in-JSON defaults are emitted: `bool`, integer types, floating-point types, and `std::monostate`. `std::string`, containers, and user-defined types are skipped (their storage wouldn't outlive the transient consteval `T{}`).
+
+### What gets filtered
+
+Values that equal their value-initialized form (`int{}`, `bool{}`, `double{}`, …) are **not** emitted, so value-init members like `int x{};` or `bool enabled{false};` don't produce `"default":0` or `"default":false`. Only deliberate non-sentinel values like `int count{42}` or `bool flag{true}` are surfaced.
+
+### Explicit overrides always win
+
+An explicit `glz::json_schema<T>` entry with `.defaultValue = ...` takes precedence, whether or not the flag is on:
+
+```c++
+struct explicit_override { int value{42}; };
+
+template <>
+struct glz::json_schema<explicit_override>
+{
+   schema value{ .defaultValue = 99L }; // wins over the struct's 42
+};
+```
+
+If you want `"default":0` or another sentinel value that the filter would otherwise drop, set it explicitly here.
+
 ## Required Fields
 
 Glaze can automatically mark fields as required in the generated JSON schema based on their nullability and compile options.
