@@ -166,21 +166,35 @@ namespace glz
 
       if (check_invalid_offset(ctx, it, end, sz)) return;
 
-      // ei_decode_atom/ei_decode_string write the token followed by a terminating NUL, but
-      // ei_get_type reports sz as the token length without that NUL. Sizing the buffer to sz
-      // would let the trailing NUL be written one byte past the end (heap overflow on
-      // attacker-controlled atoms/strings), so reserve sz + 1 and trim the NUL afterwards.
-      value.resize(static_cast<std::size_t>(sz) + 1);
+      // ei_get_type reports sz as the on-wire token length without the terminating NUL, while
+      // ei_decode_atom/ei_decode_string write the token plus a NUL. Sizing a buffer to exactly
+      // sz would let that NUL be written one byte past the end (heap overflow on attacker-
+      // controlled atoms/strings), so each branch must reserve room for the terminator.
       if (eetf::is_atom(type)) {
-         detail::decode_impl(std::bind(ei_decode_atom, _1, _2, value.data()), ctx, it, end);
+         // ei_decode_atom writes the Latin-1 name + a NUL; for a UTF-8 atom the decoded length is
+         // <= sz, and the NUL is never counted in sz. Decode into a bounded scratch buffer (the
+         // size ei itself uses for atom names; ei_decode_atom caps its own write at MAXATOMLEN and
+         // errors rather than overrunning) and copy out the real length, so we neither overrun nor
+         // leave trailing bytes.
+         char buffer[MAXATOMLEN_UTF8];
+         detail::decode_impl(std::bind(ei_decode_atom, _1, _2, buffer), ctx, it, end);
+         if (bool(ctx.error)) [[unlikely]] {
+            return;
+         }
+         const std::size_t len = std::char_traits<char>::length(buffer);
+         value.resize(len);
+         std::char_traits<char>::copy(value.data(), buffer, len);
       }
       else {
+         // ei_decode_string writes sz bytes + a NUL; an Erlang string may contain embedded NULs,
+         // so its length is sz, not strlen. Size to sz + 1 for the NUL, then trim it off.
+         value.resize(static_cast<std::size_t>(sz) + 1);
          detail::decode_impl(std::bind(ei_decode_string, _1, _2, value.data()), ctx, it, end);
+         if (bool(ctx.error)) [[unlikely]] {
+            return;
+         }
+         value.resize(static_cast<std::size_t>(sz));
       }
-      if (bool(ctx.error)) [[unlikely]] {
-         return;
-      }
-      value.resize(static_cast<std::size_t>(sz));
    }
 
    template <class... Args>
