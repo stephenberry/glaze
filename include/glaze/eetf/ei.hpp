@@ -116,35 +116,39 @@ namespace glz
    template <num_t T, class... Args>
    GLZ_ALWAYS_INLINE void decode_number(T&& value, Args&&... args) noexcept
    {
-      using namespace std::placeholders;
       using V = std::remove_cvref_t<T>;
       if constexpr (std::floating_point<std::remove_cvref_t<T>>) {
          double v;
-         detail::decode_impl(std::bind(ei_decode_double, _1, _2, &v), std::forward<Args>(args)...);
+         detail::decode_impl([&](const char* buf, int* index) { return ei_decode_double(buf, index, &v); },
+                             std::forward<Args>(args)...);
          value = static_cast<std::remove_cvref_t<T>>(v);
       }
       else {
          if constexpr (sizeof(V) > sizeof(long)) {
             if constexpr (std::is_signed_v<V>) {
                long long v;
-               detail::decode_impl(std::bind(ei_decode_longlong, _1, _2, &v), std::forward<Args>(args)...);
+               detail::decode_impl([&](const char* buf, int* index) { return ei_decode_longlong(buf, index, &v); },
+                                   std::forward<Args>(args)...);
                value = static_cast<T>(v);
             }
             else {
                unsigned long long v;
-               detail::decode_impl(std::bind(ei_decode_ulonglong, _1, _2, &v), std::forward<Args>(args)...);
+               detail::decode_impl([&](const char* buf, int* index) { return ei_decode_ulonglong(buf, index, &v); },
+                                   std::forward<Args>(args)...);
                value = static_cast<T>(v);
             }
          }
          else {
             if constexpr (std::is_signed_v<V>) {
                long v;
-               detail::decode_impl(std::bind(ei_decode_long, _1, _2, &v), std::forward<Args>(args)...);
+               detail::decode_impl([&](const char* buf, int* index) { return ei_decode_long(buf, index, &v); },
+                                   std::forward<Args>(args)...);
                value = static_cast<T>(v);
             }
             else {
                unsigned long v;
-               detail::decode_impl(std::bind(ei_decode_ulong, _1, _2, &v), std::forward<Args>(args)...);
+               detail::decode_impl([&](const char* buf, int* index) { return ei_decode_ulong(buf, index, &v); },
+                                   std::forward<Args>(args)...);
                value = static_cast<T>(v);
             }
          }
@@ -154,8 +158,6 @@ namespace glz
    template <class It0, class It1>
    GLZ_ALWAYS_INLINE void decode_token(auto&& value, is_context auto&& ctx, It0&& it, It1&& end)
    {
-      using namespace std::placeholders;
-
       int index{};
       int type{};
       int sz{};
@@ -177,7 +179,8 @@ namespace glz
          // errors rather than overrunning) and copy out the real length, so we neither overrun nor
          // leave trailing bytes.
          char buffer[MAXATOMLEN_UTF8];
-         detail::decode_impl(std::bind(ei_decode_atom, _1, _2, buffer), ctx, it, end);
+         detail::decode_impl([&](const char* buf, int* index) { return ei_decode_atom(buf, index, buffer); }, ctx, it,
+                             end);
          if (bool(ctx.error)) [[unlikely]] {
             return;
          }
@@ -189,7 +192,8 @@ namespace glz
          // ei_decode_string writes sz bytes + a NUL; an Erlang string may contain embedded NULs,
          // so its length is sz, not strlen. Size to sz + 1 for the NUL, then trim it off.
          value.resize(static_cast<std::size_t>(sz) + 1);
-         detail::decode_impl(std::bind(ei_decode_string, _1, _2, value.data()), ctx, it, end);
+         detail::decode_impl([&](const char* buf, int* index) { return ei_decode_string(buf, index, value.data()); },
+                             ctx, it, end);
          if (bool(ctx.error)) [[unlikely]] {
             return;
          }
@@ -200,18 +204,15 @@ namespace glz
    template <class... Args>
    GLZ_ALWAYS_INLINE void decode_boolean(auto&& value, Args&&... args) noexcept
    {
-      using namespace std::placeholders;
-
       int v{};
-      detail::decode_impl(std::bind(ei_decode_boolean, _1, _2, &v), std::forward<Args>(args)...);
+      detail::decode_impl([&](const char* buf, int* index) { return ei_decode_boolean(buf, index, &v); },
+                          std::forward<Args>(args)...);
       value = v != 0;
    }
 
    template <auto Opts, class T, class It0>
    void decode_binary(T&& value, std::size_t sz, is_context auto&& ctx, It0&& it, auto&& end)
    {
-      using namespace std::placeholders;
-
       if (check_invalid_offset(ctx, it, end, sz * sizeof(std::uint8_t))) return;
 
       using V = range_value_t<std::decay_t<T>>;
@@ -231,11 +232,14 @@ namespace glz
 
       [[maybe_unused]] long szl{};
       if constexpr (sizeof(V) == sizeof(std::uint8_t)) {
-         detail::decode_impl(std::bind(ei_decode_binary, _1, _2, value.data(), &szl), ctx, it, end);
+         detail::decode_impl(
+            [&](const char* buf, int* index) { return ei_decode_binary(buf, index, value.data(), &szl); }, ctx, it,
+            end);
       }
       else {
          std::vector<std::uint8_t> buff(sz);
-         detail::decode_impl(std::bind(ei_decode_binary, _1, _2, buff.data(), &szl), ctx, it, end);
+         detail::decode_impl(
+            [&](const char* buf, int* index) { return ei_decode_binary(buf, index, buff.data(), &szl); }, ctx, it, end);
          std::copy(buff.begin(), buff.end(), value.begin());
       }
    }
@@ -376,33 +380,36 @@ namespace glz
    template <class... Args>
    GLZ_ALWAYS_INLINE void encode_boolean(const bool value, Args&&... args)
    {
-      using namespace std::placeholders;
-      detail::encode_impl(std::bind(ei_encode_boolean, _1, _2, value), std::forward<Args>(args)...);
+      detail::encode_impl([&](char* buf, int* index) { return ei_encode_boolean(buf, index, value); },
+                          std::forward<Args>(args)...);
    }
 
    template <class T, class... Args>
    GLZ_ALWAYS_INLINE void encode_number(T&& value, Args&&... args)
    {
-      using namespace std::placeholders;
-
       using V = std::remove_cvref_t<T>;
       if constexpr (std::floating_point<std::remove_cvref_t<T>>) {
-         detail::encode_impl(std::bind(ei_encode_double, _1, _2, value), std::forward<Args>(args)...);
+         detail::encode_impl([&](char* buf, int* index) { return ei_encode_double(buf, index, value); },
+                             std::forward<Args>(args)...);
       }
       else if constexpr (sizeof(T) > sizeof(long)) {
          if constexpr (std::is_signed_v<V>) {
-            detail::encode_impl(std::bind(ei_encode_longlong, _1, _2, value), std::forward<Args>(args)...);
+            detail::encode_impl([&](char* buf, int* index) { return ei_encode_longlong(buf, index, value); },
+                                std::forward<Args>(args)...);
          }
          else {
-            detail::encode_impl(std::bind(ei_encode_ulonglong, _1, _2, value), std::forward<Args>(args)...);
+            detail::encode_impl([&](char* buf, int* index) { return ei_encode_ulonglong(buf, index, value); },
+                                std::forward<Args>(args)...);
          }
       }
       else {
          if constexpr (std::is_signed_v<V>) {
-            detail::encode_impl(std::bind(ei_encode_long, _1, _2, value), std::forward<Args>(args)...);
+            detail::encode_impl([&](char* buf, int* index) { return ei_encode_long(buf, index, value); },
+                                std::forward<Args>(args)...);
          }
          else {
-            detail::encode_impl(std::bind(ei_encode_ulong, _1, _2, value), std::forward<Args>(args)...);
+            detail::encode_impl([&](char* buf, int* index) { return ei_encode_ulong(buf, index, value); },
+                                std::forward<Args>(args)...);
          }
       }
    }
@@ -410,54 +417,54 @@ namespace glz
    template <class... Args>
    GLZ_ALWAYS_INLINE void encode_atom(auto&& value, Args&&... args)
    {
-      using namespace std::placeholders;
-      detail::encode_impl(std::bind(ei_encode_atom, _1, _2, value.data()), std::forward<Args>(args)...);
+      detail::encode_impl([&](char* buf, int* index) { return ei_encode_atom(buf, index, value.data()); },
+                          std::forward<Args>(args)...);
    }
 
    template <class... Args>
    GLZ_ALWAYS_INLINE void encode_atom_len(auto&& value, std::size_t sz, Args&&... args)
    {
-      using namespace std::placeholders;
-      detail::encode_impl(std::bind(ei_encode_atom_len, _1, _2, value.data(), static_cast<int>(sz)),
-                          std::forward<Args>(args)...);
+      detail::encode_impl(
+         [&](char* buf, int* index) { return ei_encode_atom_len(buf, index, value.data(), static_cast<int>(sz)); },
+         std::forward<Args>(args)...);
    }
 
    template <class... Args>
    GLZ_ALWAYS_INLINE void encode_string(auto&& value, Args&&... args)
    {
-      using namespace std::placeholders;
-      detail::encode_impl(std::bind(ei_encode_string, _1, _2, value.data()), std::forward<Args>(args)...);
+      detail::encode_impl([&](char* buf, int* index) { return ei_encode_string(buf, index, value.data()); },
+                          std::forward<Args>(args)...);
    }
 
    template <class... Args>
    GLZ_ALWAYS_INLINE void encode_tuple_header(std::size_t arity, Args&&... args)
    {
-      using namespace std::placeholders;
-      detail::encode_impl(std::bind(ei_encode_tuple_header, _1, _2, static_cast<int>(arity)),
-                          std::forward<Args>(args)...);
+      detail::encode_impl(
+         [&](char* buf, int* index) { return ei_encode_tuple_header(buf, index, static_cast<int>(arity)); },
+         std::forward<Args>(args)...);
    }
 
    template <class... Args>
    GLZ_ALWAYS_INLINE void encode_list_header(std::size_t arity, Args&&... args)
    {
-      using namespace std::placeholders;
-      detail::encode_impl(std::bind(ei_encode_list_header, _1, _2, static_cast<int>(arity)),
-                          std::forward<Args>(args)...);
+      detail::encode_impl(
+         [&](char* buf, int* index) { return ei_encode_list_header(buf, index, static_cast<int>(arity)); },
+         std::forward<Args>(args)...);
    }
 
    template <class... Args>
    GLZ_ALWAYS_INLINE void encode_list_tail(Args&&... args)
    {
-      using namespace std::placeholders;
-      detail::encode_impl(std::bind(ei_encode_list_header, _1, _2, 0), std::forward<Args>(args)...);
+      detail::encode_impl([&](char* buf, int* index) { return ei_encode_list_header(buf, index, 0); },
+                          std::forward<Args>(args)...);
    }
 
    template <class... Args>
    GLZ_ALWAYS_INLINE void encode_map_header(std::size_t arity, Args&&... args)
    {
-      using namespace std::placeholders;
-      detail::encode_impl(std::bind(ei_encode_map_header, _1, _2, static_cast<int>(arity)),
-                          std::forward<Args>(args)...);
+      detail::encode_impl(
+         [&](char* buf, int* index) { return ei_encode_map_header(buf, index, static_cast<int>(arity)); },
+         std::forward<Args>(args)...);
    }
 
 } // namespace glz
