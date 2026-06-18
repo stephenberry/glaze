@@ -50,7 +50,7 @@ jobs:
         version-type: strict
 
     - name: Install vcpkg dependencies
-      run: '& "$env:VCPKG_INSTALLATION_ROOT\vcpkg.exe" install asio eigen3 --triplet x64-windows'
+      run: '& "$env:VCPKG_INSTALLATION_ROOT\vcpkg.exe" install asio eigen3
 
     - name: Configure CMake
       run: |
