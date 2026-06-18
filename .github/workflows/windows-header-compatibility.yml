@@ -2,11 +2,12 @@
 # <Windows.h> in an unsanitized Windows project.
 #
 # NOMINMAX and WIN32_LEAN_AND_MEAN are manually disabled before including <Windows.h>
-# The workflow generates a single aggregate translation unit that recursively
-# includes every .hpp file inside include/glaze.
-# This will catch collisions with Windows macros such as 'min', 'max', 'ERROR',
-# 'near', 'far', and 'small', and will also prevent fixes that silently mutate
-# the user's macro environment by undefining those macros.
+# The workflow generates two aggregate translation units that recursively include
+# every .hpp file inside include/glaze. This will catch collisions with Windows
+# macros such as 'min', 'max', 'ERROR', 'near', 'far', and 'small', and will also
+# prevent fixes that silently mutate the user's macro environment by undefining
+# those macros.
+#
 # DELETE is a special case for 'net' which undefs it, so this macro is not checked.
 # Headers that depend on Winsock2 are compiled separately with WIN32_LEAN_AND_MEAN
 # because Windows.h otherwise includes Winsock.h, which conflicts with Winsock2.h.
@@ -49,13 +50,18 @@ jobs:
         version-type: strict
 
     - name: Install vcpkg dependencies
-      run: |
-        & "$env:VCPKG_INSTALLATION_ROOT\vcpkg.exe" install asio eigen3 --triplet x64-windows
+      run: '& "$env:VCPKG_INSTALLATION_ROOT\vcpkg.exe" install asio eigen3 --triplet x64-windows'
 
     - name: Configure CMake
       run: |
-        $vcpkgToolchain = Join-Path $env:VCPKG_INSTALLATION_ROOT "scripts/buildsystems/vcpkg.cmake"
-        cmake -S ${{github.workspace}}/cmake/ci/windows-header-compatibility -B ${{github.workspace}}/build/windows-header-compatibility/build -DGLAZE_SOURCE_DIR=${{github.workspace}} -DERLANG_OTP_DIR="$env:INSTALL_DIR_FOR_OTP" -DCMAKE_CXX_STANDARD=23 -DCMAKE_TOOLCHAIN_FILE="$vcpkgToolchain" -DVCPKG_TARGET_TRIPLET=x64-windows -A x64
+        cmake -S "$env:GITHUB_WORKSPACE/cmake/ci/windows-header-compatibility" `
+          -B "$env:GITHUB_WORKSPACE/build/windows-header-compatibility/build" `
+          -DGLAZE_SOURCE_DIR="$env:GITHUB_WORKSPACE" `
+          -DERLANG_OTP_DIR="$env:INSTALL_DIR_FOR_OTP" `
+          -DCMAKE_CXX_STANDARD=23 `
+          -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_INSTALLATION_ROOT/scripts/buildsystems/vcpkg.cmake" `
+          -DVCPKG_TARGET_TRIPLET=x64-windows `
+          -A x64
 
     - name: Build
-      run: cmake --build build/windows-header-compatibility/build --config Debug --target glaze_windows_header_compatibility --parallel
+      run: cmake --build "$env:GITHUB_WORKSPACE/build/windows-header-compatibility/build" --config Debug --target glaze_windows_header_compatibility --parallel
