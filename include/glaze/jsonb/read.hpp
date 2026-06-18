@@ -294,6 +294,19 @@ namespace glz
             jsonb_detail::parse_float_payload(ctx, tc, reinterpret_cast<const char*>(it), static_cast<size_t>(sz), tmp);
             if (bool(ctx.error)) [[unlikely]]
                return;
+            // A float payload may hold NaN, +/-Inf (e.g. a JSON5 "NaN"/"Infinity" sentinel) or a
+            // finite value outside T's range; casting any of those to an integer is undefined
+            // behavior, so reject anything not representable as T before converting. The upper
+            // bound is exclusive at max(T) + 1, which is an exact power of two in double, whereas
+            // static_cast<double>(max(T)) rounds up past the true maximum for 64-bit integer types
+            // and would let that boundary value slip through. NaN fails both comparisons, so it is
+            // rejected here as well.
+            constexpr double lowest = static_cast<double>((std::numeric_limits<T>::lowest)());
+            constexpr double upper_exclusive = static_cast<double>((std::numeric_limits<T>::max)() / 2 + 1) * 2.0;
+            if (!(tmp >= lowest && tmp < upper_exclusive)) [[unlikely]] {
+               ctx.error = error_code::parse_number_failure;
+               return;
+            }
             value = static_cast<T>(tmp);
             it += sz;
          }

@@ -295,6 +295,91 @@ suite header_tests = [] {
    };
 };
 
+// Reading a FLOAT/FLOAT5 payload into an integer target casts the decoded double to the
+// integer type. NaN, +/-Inf, and finite-but-out-of-range values are not representable as
+// the integer and previously hit static_cast<T>(tmp) directly, which is undefined behavior
+// (UBSan: "nan is outside the range of representable values of type 'int'"). These must now
+// be rejected with an error, while genuinely integral floats still convert.
+suite float_to_int_coercion_tests = [] {
+   "NaN/Inf float payload into integer is rejected"_test = [] {
+      const std::array<double, 3> nonfinite{
+         std::numeric_limits<double>::quiet_NaN(),
+         std::numeric_limits<double>::infinity(),
+         -std::numeric_limits<double>::infinity(),
+      };
+      for (double v : nonfinite) {
+         std::string buf;
+         expect(not glz::write_jsonb(v, buf)); // emits a FLOAT5 sentinel payload
+         int out = 12345;
+         expect(bool(glz::read_jsonb(out, buf))); // must be an error, not UB
+      }
+   };
+
+   "out-of-range finite float into integer is rejected"_test = [] {
+      std::string buf;
+      expect(not glz::write_jsonb(1e300, buf));
+      {
+         int32_t out = 0;
+         expect(bool(glz::read_jsonb(out, buf)));
+      }
+      {
+         int64_t out = 0;
+         expect(bool(glz::read_jsonb(out, buf)));
+      }
+      {
+         uint64_t out = 0;
+         expect(bool(glz::read_jsonb(out, buf)));
+      }
+   };
+
+   "64-bit boundary float into integer is rejected without UB"_test = [] {
+      // static_cast<double>(INT64_MAX) rounds up to 2^63, so a naive `tmp <= max` guard would
+      // admit exactly 2^63 and then invoke UB. It must be rejected.
+      std::string buf;
+      expect(not glz::write_jsonb(9223372036854775808.0, buf)); // 2^63 == INT64_MAX + 1
+      int64_t out = 0;
+      expect(bool(glz::read_jsonb(out, buf)));
+
+      // The largest representable double strictly below 2^63 is in range and must convert.
+      buf.clear();
+      const double in_range = 9223372036854774784.0; // 2^63 - 1024
+      expect(not glz::write_jsonb(in_range, buf));
+      out = 0;
+      expect(not glz::read_jsonb(out, buf));
+      expect(out == static_cast<int64_t>(in_range));
+   };
+
+   "integral float into integer still converts"_test = [] {
+      std::string buf;
+      expect(not glz::write_jsonb(3.0, buf));
+      int out = 0;
+      expect(not glz::read_jsonb(out, buf));
+      expect(out == 3);
+
+      // Exact extremes round-trip through the float payload into the integer.
+      buf.clear();
+      expect(not glz::write_jsonb(2147483647.0, buf)); // INT32_MAX
+      int32_t out32 = 0;
+      expect(not glz::read_jsonb(out32, buf));
+      expect(out32 == 2147483647);
+
+      buf.clear();
+      expect(not glz::write_jsonb(-2147483648.0, buf)); // INT32_MIN
+      out32 = 0;
+      expect(not glz::read_jsonb(out32, buf));
+      expect(out32 == -2147483648);
+   };
+
+   "fractional float into integer truncates toward zero"_test = [] {
+      // Pre-existing, well-defined behavior (the cast truncates); the UB guard preserves it.
+      std::string buf;
+      expect(not glz::write_jsonb(3.9, buf));
+      int out = 0;
+      expect(not glz::read_jsonb(out, buf));
+      expect(out == 3);
+   };
+};
+
 suite container_tests = [] {
    "vector of int"_test = [] {
       std::vector<int> v = {1, 2, 3, 4, 5};
