@@ -6,10 +6,12 @@
 #include <array>
 #include <bit>
 #include <concepts>
+#include <cstddef>
 #include <cstdint>
 #include <cstring>
 #include <iterator>
 
+#include "glaze/concepts/container_concepts.hpp"
 #include "glaze/core/context.hpp"
 #include "glaze/util/inline.hpp"
 
@@ -104,6 +106,18 @@ namespace glz
    constexpr uint8_t byte_count = uint8_t(std::bit_width(sizeof(T)) - 1);
 
    inline constexpr std::array<uint8_t, 8> byte_count_lookup{1, 2, 4, 8, 16, 32, 64, 128};
+
+   // Types that BEVE encodes as elements of a numeric typed array.
+   //
+   // std::byte is serialized identically to a uint8_t (an unsigned 8-bit value): the
+   // numeric formulas below produce byte_count == 0, an unsigned type, and a u8 typed-array
+   // header for it, exactly matching uint8_t. It is the only byte_like type that is not
+   // already num_t (uint8_t and unsigned char are integral), so the numeric typed-array
+   // code paths must opt it in explicitly. This keeps an array of std::byte compact (a
+   // typed u8 array) and consistent with how a scalar std::byte is encoded (a u8 number),
+   // instead of an inflated generic array that stores a type header per element.
+   template <class T>
+   concept beve_num_t = num_t<T> || std::same_as<std::remove_cvref_t<T>, std::byte>;
 
    [[nodiscard]] GLZ_ALWAYS_INLINE constexpr size_t int_from_compressed(auto&& ctx, auto&& it, auto end) noexcept
    {

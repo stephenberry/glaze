@@ -295,7 +295,7 @@ namespace glz
             const auto num_bytes = (value.size() + 7) / 8;
             result += num_bytes;
          }
-         else if constexpr (num_t<V>) {
+         else if constexpr (beve_num_t<V>) {
             if constexpr (check_aligned_arrays(Opts) && sizeof(V) > 1) {
                result += 1; // extra numeric header byte
                result += 1; // padding length byte
