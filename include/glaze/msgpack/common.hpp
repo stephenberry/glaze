@@ -254,7 +254,7 @@ namespace glz::msgpack
       }
       type = static_cast<int8_t>(type_byte);
 
-      if ((it + length) > end) [[unlikely]] {
+      if (static_cast<size_t>(end - it) < length) [[unlikely]] {
          ctx.error = error_code::unexpected_end;
          return false;
       }
@@ -287,7 +287,7 @@ namespace glz::msgpack
    template <class It>
    GLZ_ALWAYS_INLINE bool skip_bytes(is_context auto& ctx, It& it, const It& end, size_t n) noexcept
    {
-      if ((it + n) > end) [[unlikely]] {
+      if (static_cast<size_t>(end - it) < n) [[unlikely]] {
          ctx.error = error_code::unexpected_end;
          return false;
       }

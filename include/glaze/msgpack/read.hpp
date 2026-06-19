@@ -129,7 +129,7 @@ namespace glz::msgpack::detail
       if (!read_str_length(ctx, tag, it, end, len)) {
          return false;
       }
-      if ((it + len) > end) [[unlikely]] {
+      if (static_cast<size_t>(end - it) < len) [[unlikely]] {
          ctx.error = error_code::unexpected_end;
          return false;
       }
@@ -146,7 +146,7 @@ namespace glz::msgpack::detail
       if (!read_bin_length(ctx, tag, it, end, len)) {
          return false;
       }
-      if ((it + len) > end) [[unlikely]] {
+      if (static_cast<size_t>(end - it) < len) [[unlikely]] {
          ctx.error = error_code::unexpected_end;
          return false;
       }

@@ -868,7 +868,7 @@ namespace glz
                }
             }
 
-            if ((it + n) > end) [[unlikely]] {
+            if (uint64_t(end - it) < n) [[unlikely]] {
                ctx.error = error_code::unexpected_end;
                return;
             }
