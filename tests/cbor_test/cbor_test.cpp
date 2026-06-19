@@ -3488,6 +3488,64 @@ suite cbor_byte_and_char_array_tests = [] {
    };
 };
 
+// Follow-up to #2650: CBOR treats std::byte and uint8_t/unsigned char ranges uniformly.
+// Every contiguous byte-like range encodes as a CBOR byte string (major type 2) regardless of
+// element type or container, and the variants are cross-readable on the wire.
+suite cbor_byte_uint8_unify_tests = [] {
+   "cbor uint8 and byte vectors produce identical bytes"_test = [] {
+      std::vector<uint8_t> v_u8{0x10, 0x20, 0x30, 0x40};
+      std::vector<std::byte> v_byte{std::byte{0x10}, std::byte{0x20}, std::byte{0x30}, std::byte{0x40}};
+      std::string buf_u8{};
+      std::string buf_byte{};
+      expect(not glz::write_cbor(v_u8, buf_u8));
+      expect(not glz::write_cbor(v_byte, buf_byte));
+      // Both are byte strings, so the encoded bytes match exactly.
+      expect(buf_u8 == buf_byte);
+      expect(static_cast<uint8_t>(buf_u8[0]) == 0x44); // bstr, length 4
+   };
+
+   "cbor std::span<uint8_t> encodes as a byte string"_test = [] {
+      std::array<uint8_t, 4> backing{0x01, 0x02, 0x03, 0x04};
+      std::span<uint8_t> sp{backing};
+      std::string buffer{};
+      expect(not glz::write_cbor(sp, buffer));
+      // Previously a uint8_t span fell through to an RFC 8746 typed array (tag + bstr); it must
+      // now be a plain byte string, matching std::span<std::byte> and std::vector<uint8_t>.
+      expect(buffer.size() == 5);
+      expect(static_cast<uint8_t>(buffer[0]) == 0x44);
+
+      std::array<std::byte, 4> backing_b{std::byte{1}, std::byte{2}, std::byte{3}, std::byte{4}};
+      std::span<std::byte> sp_b{backing_b};
+      std::string buffer_b{};
+      expect(not glz::write_cbor(sp_b, buffer_b));
+      expect(buffer == buffer_b);
+   };
+
+   "cbor byte/uint8 vectors are cross-readable"_test = [] {
+      std::vector<std::byte> src{std::byte{7}, std::byte{8}, std::byte{9}};
+      std::string buffer{};
+      expect(not glz::write_cbor(src, buffer));
+      std::vector<uint8_t> as_u8{};
+      expect(not glz::read_cbor(as_u8, buffer)); // byte string -> uint8_t vector
+      expect(as_u8 == (std::vector<uint8_t>{7, 8, 9}));
+
+      std::string buffer2{};
+      expect(not glz::write_cbor(as_u8, buffer2));
+      std::vector<std::byte> as_byte{};
+      expect(not glz::read_cbor(as_byte, buffer2)); // and back again
+      expect(as_byte == src);
+   };
+
+   "cbor byte/uint8 fixed arrays are cross-readable"_test = [] {
+      std::array<uint8_t, 4> src{0xAA, 0xBB, 0xCC, 0xDD};
+      std::string buffer{};
+      expect(not glz::write_cbor(src, buffer));
+      std::array<std::byte, 4> dst{};
+      expect(not glz::read_cbor(dst, buffer));
+      expect(dst == (std::array<std::byte, 4>{std::byte{0xAA}, std::byte{0xBB}, std::byte{0xCC}, std::byte{0xDD}}));
+   };
+};
+
 int main()
 {
    custom_variant_ambiguity_tests();
