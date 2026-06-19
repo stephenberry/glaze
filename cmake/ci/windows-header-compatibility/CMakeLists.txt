@@ -34,29 +34,79 @@ file(GLOB_RECURSE glaze_public_headers CONFIGURE_DEPENDS RELATIVE "${GLAZE_SOURC
   "${GLAZE_SOURCE_DIR}/include/glaze/*.hpp"
 )
 
-# Headers that include Winsock2 must be tested with WIN32_LEAN_AND_MEAN,
-# otherwise Windows.h includes Winsock.h first
-set(glaze_windows_lean_header_globs
-  "glaze/net/*.hpp"
-  "glaze/rpc/*.hpp"
-)
-set(glaze_windows_lean_headers
-  "glaze/ext/glaze_asio.hpp"
-  "glaze/file/hostname_include.hpp"
-)
+list(LENGTH glaze_public_headers glaze_public_header_count)
+if(glaze_public_header_count EQUAL 0)
+  message(FATAL_ERROR "No Glaze public headers were found")
+endif()
 
-# Append all headers from the Winsock2-sensitive directories
-foreach(header IN LISTS glaze_windows_lean_header_globs)
-  file(GLOB_RECURSE glaze_windows_lean_header_matches CONFIGURE_DEPENDS RELATIVE "${GLAZE_SOURCE_DIR}/include"
-    "${GLAZE_SOURCE_DIR}/include/${header}"
-  )
-  list(APPEND glaze_windows_lean_headers ${glaze_windows_lean_header_matches})
+# --- Classify headers by their actual Winsock2/asio dependency, not by directory ---
+#
+# A header must be compiled with WIN32_LEAN_AND_MEAN if it (transitively) pulls in
+# Winsock2 or asio. Otherwise <Windows.h> includes the legacy <Winsock.h> first,
+# which then conflicts with <Winsock2.h>. Hard-coding the directories that happen to
+# contain such headers today silently misclassifies any future socket header added
+# elsewhere (it lands in the unsanitized group and fails with an opaque Winsock
+# redefinition error). Instead we derive the set from the headers' own #include
+# directives, so it stays correct automatically as headers are added/moved/renamed.
+#
+# Step 1: read each header's #include lines once. Record the glaze headers it
+# includes (rooted "glaze/..." paths) and whether it directly pulls in Winsock/asio.
+set(glaze_winsock_seeds "")
+foreach(header IN LISTS glaze_public_headers)
+  string(MAKE_C_IDENTIFIER "${header}" header_id)
+  file(STRINGS "${GLAZE_SOURCE_DIR}/include/${header}" include_lines REGEX "^[ \t]*#[ \t]*include")
+
+  set(glaze_header_deps_${header_id} "")
+  foreach(line IN LISTS include_lines)
+    # Direct dependency on another glaze header (rooted include path)
+    if(line MATCHES "[<\"](glaze/[A-Za-z0-9_./]+\\.hpp)[\">]")
+      list(APPEND glaze_header_deps_${header_id} "${CMAKE_MATCH_1}")
+    endif()
+    # Direct dependency on Winsock2/asio marks this header as a classification seed
+    if(line MATCHES "[<\"](asio[/.]|winsock|ws2def|ws2tcpip|mswsock)")
+      list(APPEND glaze_winsock_seeds "${header}")
+    endif()
+  endforeach()
 endforeach()
+list(REMOVE_DUPLICATES glaze_winsock_seeds)
 
-# Everything starts in the unsanitized Windows.h group
+# Step 2: propagate seeds along the include graph to a fixed point. A header is
+# "lean" if its transitive include closure reaches a seed.
+set(glaze_windows_lean_headers ${glaze_winsock_seeds})
+set(glaze_lean_changed TRUE)
+while(glaze_lean_changed)
+  set(glaze_lean_changed FALSE)
+  foreach(header IN LISTS glaze_public_headers)
+    if(NOT header IN_LIST glaze_windows_lean_headers)
+      string(MAKE_C_IDENTIFIER "${header}" header_id)
+      foreach(dep IN LISTS glaze_header_deps_${header_id})
+        if(dep IN_LIST glaze_windows_lean_headers)
+          list(APPEND glaze_windows_lean_headers "${header}")
+          set(glaze_lean_changed TRUE)
+          break()
+        endif()
+      endforeach()
+    endif()
+  endforeach()
+endwhile()
+
+# Some headers are include-fragments rather than standalone units: they specialize
+# templates whose primary declaration lives only in a parent header that #includes
+# them (e.g. the *_registry_impl.hpp fragments are pulled in by rpc/registry.hpp and
+# fail to compile on their own). They must never be #included directly, so we drop
+# them from the generated translation units; they are still exercised transitively
+# through their parent. This also removes the load-bearing include-ordering hack the
+# directory-based approach needed for registry.hpp.
+set(glaze_non_standalone_fragments
+  "glaze/net/rest_registry_impl.hpp"
+  "glaze/rpc/jsonrpc_registry_impl.hpp"
+  "glaze/rpc/repe/repe_registry_impl.hpp"
+)
+list(REMOVE_ITEM glaze_public_headers ${glaze_non_standalone_fragments})
+list(REMOVE_ITEM glaze_windows_lean_headers ${glaze_non_standalone_fragments})
+
+# The unsanitized group is everything that is not Winsock2/asio-dependent.
 set(glaze_windows_headers "${glaze_public_headers}")
-
-# Remove headers intended for WIN32_LEAN_AND_MEAN build from regular headers
 list(REMOVE_ITEM glaze_windows_headers ${glaze_windows_lean_headers})
 
 list(REMOVE_DUPLICATES glaze_windows_lean_headers)
@@ -64,25 +114,14 @@ list(SORT glaze_public_headers)
 list(SORT glaze_windows_headers)
 list(SORT glaze_windows_lean_headers)
 
-# Include registry.hpp before headers that specialize its templates
-set(glaze_windows_lean_first_headers
-  "glaze/rpc/registry.hpp"
-)
-list(REMOVE_ITEM glaze_windows_lean_headers ${glaze_windows_lean_first_headers})
-list(PREPEND glaze_windows_lean_headers ${glaze_windows_lean_first_headers})
-
 # Counting headers is needed only for CI logs
-list(LENGTH glaze_public_headers glaze_public_header_count)
 list(LENGTH glaze_windows_headers glaze_windows_header_count)
 list(LENGTH glaze_windows_lean_headers glaze_windows_lean_header_count)
 
-if(glaze_public_header_count EQUAL 0)
-  message(FATAL_ERROR "No Glaze public headers were found")
-endif()
-
 message(STATUS "Found ${glaze_public_header_count} Glaze public headers")
 message(STATUS "Using unsanitized Windows.h for ${glaze_windows_header_count} Glaze public headers")
-message(STATUS "Using WIN32_LEAN_AND_MEAN Windows.h for ${glaze_windows_lean_header_count} Glaze public headers")
+message(STATUS "Using WIN32_LEAN_AND_MEAN Windows.h for ${glaze_windows_lean_header_count} Glaze public headers: ${glaze_windows_lean_headers}")
+message(STATUS "Excluding ${glaze_non_standalone_fragments} (compiled transitively via their parent header)")
 
 # Checks that Glaze code haven't accidentally #undef-ed any Windows macro
 function(append_windows_macro_asserts content_var error_context require_delete require_small)
@@ -148,7 +187,21 @@ function(append_windows_prelude content_var use_win32_lean_and_mean)
   set(${content_var} "${${content_var}}" PARENT_SCOPE)
 endfunction()
 
-# Writes a .cpp file that includes Windows.h, then tests every provided Glaze header
+# Each header group is compiled as ONE aggregate translation unit (Windows.h once,
+# followed by every header in the group), rather than one TU per header or per
+# directory. This is deliberate, not just a speed optimization:
+#
+#   * Glaze headers are not all standalone. Many rely on declarations established by
+#     an earlier include (e.g. util/dump.hpp uses string_literal, core/array_apply.hpp
+#     uses size_t) and do not compile in isolation. Splitting per-header or per-subdir
+#     would produce spurious failures that have nothing to do with Windows macros, so
+#     the aggregate TU in a stable (sorted) order is what actually reflects real usage.
+#   * A genuine Windows-macro collision is still pinpointed: the compiler reports the
+#     offending header through its #include stack, and the macro-preservation #error
+#     below names the exact header it followed. So the aggregate model does not lose
+#     the ability to locate a failure.
+#
+# Writes a .cpp file that includes Windows.h, then tests every provided Glaze header.
 function(write_header_test_source source_path use_win32_lean_and_mean)
   set(source_content "")
   append_windows_prelude(source_content ${use_win32_lean_and_mean})
