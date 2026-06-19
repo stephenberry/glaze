@@ -748,7 +748,7 @@ namespace glz
                static_assert(false_v<T>);
             }
          }
-         else if constexpr (num_t<V>) {
+         else if constexpr (beve_num_t<V>) {
             constexpr uint8_t type = std::floating_point<V> ? 0 : (std::is_signed_v<V> ? 0b000'01'000 : 0b000'10'000);
             constexpr uint8_t numeric_header = tag::typed_array | type | (byte_count<V> << 5);
 
