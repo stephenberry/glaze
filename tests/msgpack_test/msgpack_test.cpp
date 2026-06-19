@@ -514,8 +514,12 @@ suite msgpack_reserve_amplification_tests = [] {
       const auto ec = glz::read_msgpack(m, map32_bomb);
       expect(ec.ec == glz::error_code::unexpected_end)
          << "expected unexpected_end, got: " << glz::format_error(ec, map32_bomb);
-      // Bucket count scales with the reservation; the cap keeps it within the buffer size.
-      expect(g_largest_alloc_count <= map32_bomb.size())
+      // The reservation must stay a small constant tied to the input, not the 2^32-1 wire count.
+      // Unlike the vector case, unordered_map implementations pre-allocate a baseline bucket array
+      // (e.g. the MSVC STL starts at 16), so an exact input-size bound does not hold here. A generous
+      // ceiling still cleanly separates a bounded reservation from the multi-billion-bucket bug.
+      constexpr size_t sane_bucket_bound = 1024;
+      expect(g_largest_alloc_count < sane_bucket_bound)
          << "reserve requested " << g_largest_alloc_count << " buckets for a " << map32_bomb.size()
          << "-byte payload";
    };
