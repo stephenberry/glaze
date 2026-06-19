@@ -963,8 +963,7 @@ namespace glz
             }
             std::memcpy(value.data(), it, length);
             if (length < value.size()) {
-               std::memset(value.data() + static_cast<size_t>(length), 0,
-                           value.size() - static_cast<size_t>(length));
+               std::memset(value.data() + static_cast<size_t>(length), 0, value.size() - static_cast<size_t>(length));
             }
             it += length;
          }
