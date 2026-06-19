@@ -380,10 +380,12 @@ namespace glz
       }
    };
 
-   // Byte strings (std::vector<std::byte>, std::span<std::byte>, etc.)
+   // Byte strings - any contiguous byte-like range (std::vector<std::byte>, std::vector<uint8_t>,
+   // std::array<std::byte, N>, std::array<uint8_t, N>, std::span<std::byte>, std::span<uint8_t>, ...).
+   // std::byte, unsigned char, and uint8_t ranges all encode as a CBOR byte string (major type 2),
+   // so they share a single specialization (see glz::contiguous_byte_range / byte_like).
    template <class T>
-      requires(contiguous<std::remove_cvref_t<T>> && std::same_as<range_value_t<std::remove_cvref_t<T>>, std::byte> &&
-               !str_t<T>)
+      requires(contiguous_byte_range<std::remove_cvref_t<T>> && !str_t<T>)
    struct to<CBOR, T> final
    {
       template <auto Opts>
@@ -404,76 +406,11 @@ namespace glz
       }
    };
 
-   // std::vector<uint8_t> as byte string
-   template <>
-   struct to<CBOR, std::vector<uint8_t>> final
-   {
-      template <auto Opts>
-      static void op(const auto& value, is_context auto&& ctx, auto&& b, auto& ix)
-      {
-         if (!cbor_detail::encode_arg(ctx, cbor::major::bstr, value.size(), b, ix)) [[unlikely]] {
-            return;
-         }
-
-         const auto n = value.size();
-         if (!ensure_space(ctx, b, ix + n + write_padding_bytes)) [[unlikely]] {
-            return;
-         }
-         if (n) {
-            std::memcpy(&b[ix], value.data(), n);
-            ix += n;
-         }
-      }
-   };
-
-   // std::array<std::byte, N> as byte string
-   template <size_t N>
-   struct to<CBOR, std::array<std::byte, N>> final
-   {
-      template <auto Opts>
-      static void op(const auto& value, is_context auto&& ctx, auto&& b, auto& ix)
-      {
-         if (!cbor_detail::encode_arg_cx<N>(ctx, cbor::major::bstr, b, ix)) [[unlikely]] {
-            return;
-         }
-
-         if (!ensure_space(ctx, b, ix + N + write_padding_bytes)) [[unlikely]] {
-            return;
-         }
-         if constexpr (N > 0) {
-            std::memcpy(&b[ix], value.data(), N);
-            ix += N;
-         }
-      }
-   };
-
-   // std::array<uint8_t, N> as byte string
-   template <size_t N>
-   struct to<CBOR, std::array<uint8_t, N>> final
-   {
-      template <auto Opts>
-      static void op(const auto& value, is_context auto&& ctx, auto&& b, auto& ix)
-      {
-         if (!cbor_detail::encode_arg_cx<N>(ctx, cbor::major::bstr, b, ix)) [[unlikely]] {
-            return;
-         }
-
-         if (!ensure_space(ctx, b, ix + N + write_padding_bytes)) [[unlikely]] {
-            return;
-         }
-         if constexpr (N > 0) {
-            std::memcpy(&b[ix], value.data(), N);
-            ix += N;
-         }
-      }
-   };
-
    // Arrays (std::vector, std::array, std::deque, etc.)
    // Note: eigen_t types have their own specialization in glaze/ext/eigen.hpp
-   // Contiguous std::byte ranges are excluded here; they are written as CBOR byte strings above.
+   // Contiguous byte-like ranges are excluded here; they are written as CBOR byte strings above.
    template <writable_array_t T>
-      requires(!eigen_t<T> &&
-               !(contiguous<std::remove_cvref_t<T>> && std::same_as<range_value_t<std::remove_cvref_t<T>>, std::byte>))
+      requires(!eigen_t<T> && !contiguous_byte_range<std::remove_cvref_t<T>>)
    struct to<CBOR, T> final
    {
       template <auto Opts>

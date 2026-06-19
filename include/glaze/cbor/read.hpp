@@ -615,10 +615,12 @@ namespace glz
       }
    };
 
-   // Byte strings - contiguous std::byte ranges (std::vector<std::byte>, std::array<std::byte, N>, ...)
+   // Byte strings - any contiguous byte-like range (std::vector<std::byte>, std::vector<uint8_t>,
+   // std::array<std::byte, N>, std::array<uint8_t, N>, ...). Handles both resizable and fixed-size
+   // targets (the latter bounds-checked with the remainder zero-filled); std::byte, unsigned char,
+   // and uint8_t ranges share one implementation (see glz::contiguous_byte_range / byte_like).
    template <class T>
-      requires(contiguous<std::remove_cvref_t<T>> && std::same_as<range_value_t<std::remove_cvref_t<T>>, std::byte> &&
-               !str_t<T>)
+      requires(contiguous_byte_range<std::remove_cvref_t<T>> && !str_t<T>)
    struct from<CBOR, T>
    {
       template <auto Opts>
@@ -753,229 +755,11 @@ namespace glz
       }
    };
 
-   // Byte strings - std::vector<uint8_t>
-   template <>
-   struct from<CBOR, std::vector<uint8_t>>
-   {
-      template <auto Opts>
-      static void op(auto& value, is_context auto& ctx, auto& it, auto end)
-      {
-         using namespace cbor;
-
-         if (it >= end) [[unlikely]] {
-            ctx.error = error_code::unexpected_end;
-            return;
-         }
-
-         uint8_t initial;
-         std::memcpy(&initial, it, 1);
-         ++it;
-
-         const uint8_t major_type = get_major_type(initial);
-         const uint8_t additional_info = get_additional_info(initial);
-
-         if (major_type != major::bstr) [[unlikely]] {
-            ctx.error = error_code::syntax_error;
-            return;
-         }
-
-         if (additional_info == info::indefinite) {
-            value.clear();
-            while (true) {
-               if (it >= end) [[unlikely]] {
-                  ctx.error = error_code::unexpected_end;
-                  return;
-               }
-
-               uint8_t chunk_initial;
-               std::memcpy(&chunk_initial, it, 1);
-
-               if (chunk_initial == initial_byte(major::simple, simple::break_code)) {
-                  ++it;
-                  break;
-               }
-
-               const uint8_t chunk_major = get_major_type(chunk_initial);
-               const uint8_t chunk_info = get_additional_info(chunk_initial);
-
-               if (chunk_major != major::bstr) [[unlikely]] {
-                  ctx.error = error_code::syntax_error;
-                  return;
-               }
-               if (chunk_info == info::indefinite) [[unlikely]] {
-                  ctx.error = error_code::syntax_error;
-                  return;
-               }
-
-               ++it;
-               uint64_t chunk_len = cbor_detail::decode_arg(ctx, it, end, chunk_info);
-               if (bool(ctx.error)) [[unlikely]]
-                  return;
-
-               if (static_cast<uint64_t>(end - it) < chunk_len) [[unlikely]] {
-                  ctx.error = error_code::unexpected_end;
-                  return;
-               }
-
-               const size_t old_size = value.size();
-               value.resize(old_size + static_cast<size_t>(chunk_len));
-               std::memcpy(value.data() + old_size, it, chunk_len);
-               it += chunk_len;
-            }
-         }
-         else {
-            uint64_t length = cbor_detail::decode_arg(ctx, it, end, additional_info);
-            if (bool(ctx.error)) [[unlikely]]
-               return;
-
-            if (static_cast<uint64_t>(end - it) < length) [[unlikely]] {
-               ctx.error = error_code::unexpected_end;
-               return;
-            }
-
-            // Check user-configured array size limit
-            if constexpr (check_max_array_size(Opts) > 0) {
-               if (length > check_max_array_size(Opts)) [[unlikely]] {
-                  ctx.error = error_code::invalid_length;
-                  return;
-               }
-            }
-            if constexpr (has_runtime_max_array_size<std::decay_t<decltype(ctx)>>) {
-               if (ctx.max_array_size > 0 && length > ctx.max_array_size) [[unlikely]] {
-                  ctx.error = error_code::invalid_length;
-                  return;
-               }
-            }
-
-            value.resize(static_cast<size_t>(length));
-            std::memcpy(value.data(), it, length);
-            it += length;
-         }
-      }
-   };
-
-   // Byte strings - std::array<uint8_t, N>
-   // The matching writer (to<CBOR, std::array<uint8_t, N>>) emits a byte string, so the reader
-   // must decode one into the fixed-size buffer (bounds-checked, remainder zero-filled), mirroring
-   // the std::vector<uint8_t> reader above and the std::array<std::byte, N> handling.
-   template <size_t N>
-   struct from<CBOR, std::array<uint8_t, N>>
-   {
-      template <auto Opts>
-      static void op(auto& value, is_context auto& ctx, auto& it, auto end)
-      {
-         using namespace cbor;
-
-         if (it >= end) [[unlikely]] {
-            ctx.error = error_code::unexpected_end;
-            return;
-         }
-
-         uint8_t initial;
-         std::memcpy(&initial, it, 1);
-         ++it;
-
-         const uint8_t major_type = get_major_type(initial);
-         const uint8_t additional_info = get_additional_info(initial);
-
-         if (major_type != major::bstr) [[unlikely]] {
-            ctx.error = error_code::syntax_error;
-            return;
-         }
-
-         if (additional_info == info::indefinite) {
-            size_t offset = 0; // fill position in the fixed-size buffer
-            while (true) {
-               if (it >= end) [[unlikely]] {
-                  ctx.error = error_code::unexpected_end;
-                  return;
-               }
-
-               uint8_t chunk_initial;
-               std::memcpy(&chunk_initial, it, 1);
-
-               if (chunk_initial == initial_byte(major::simple, simple::break_code)) {
-                  ++it;
-                  break;
-               }
-
-               const uint8_t chunk_major = get_major_type(chunk_initial);
-               const uint8_t chunk_info = get_additional_info(chunk_initial);
-
-               if (chunk_major != major::bstr) [[unlikely]] {
-                  ctx.error = error_code::syntax_error;
-                  return;
-               }
-               if (chunk_info == info::indefinite) [[unlikely]] {
-                  ctx.error = error_code::syntax_error;
-                  return;
-               }
-
-               ++it;
-               uint64_t chunk_len = cbor_detail::decode_arg(ctx, it, end, chunk_info);
-               if (bool(ctx.error)) [[unlikely]]
-                  return;
-
-               if (static_cast<uint64_t>(end - it) < chunk_len) [[unlikely]] {
-                  ctx.error = error_code::unexpected_end;
-                  return;
-               }
-
-               if (offset + chunk_len > value.size()) [[unlikely]] {
-                  ctx.error = error_code::syntax_error;
-                  return;
-               }
-               std::memcpy(value.data() + offset, it, chunk_len);
-               offset += static_cast<size_t>(chunk_len);
-               it += chunk_len;
-            }
-            if (offset < value.size()) {
-               std::memset(value.data() + offset, 0, value.size() - offset);
-            }
-         }
-         else {
-            uint64_t length = cbor_detail::decode_arg(ctx, it, end, additional_info);
-            if (bool(ctx.error)) [[unlikely]]
-               return;
-
-            if (static_cast<uint64_t>(end - it) < length) [[unlikely]] {
-               ctx.error = error_code::unexpected_end;
-               return;
-            }
-
-            // Check user-configured array size limit
-            if constexpr (check_max_array_size(Opts) > 0) {
-               if (length > check_max_array_size(Opts)) [[unlikely]] {
-                  ctx.error = error_code::invalid_length;
-                  return;
-               }
-            }
-            if constexpr (has_runtime_max_array_size<std::decay_t<decltype(ctx)>>) {
-               if (ctx.max_array_size > 0 && length > ctx.max_array_size) [[unlikely]] {
-                  ctx.error = error_code::invalid_length;
-                  return;
-               }
-            }
-
-            if (length > value.size()) [[unlikely]] {
-               ctx.error = error_code::syntax_error;
-               return;
-            }
-            std::memcpy(value.data(), it, length);
-            if (length < value.size()) {
-               std::memset(value.data() + static_cast<size_t>(length), 0, value.size() - static_cast<size_t>(length));
-            }
-            it += length;
-         }
-      }
-   };
-
    // Arrays (std::vector, std::deque, etc.)
    // Note: eigen_t types have their own specialization in glaze/ext/eigen.hpp
-   // Contiguous std::byte ranges are excluded here; they are read as CBOR byte strings above.
+   // Contiguous byte-like ranges are excluded here; they are read as CBOR byte strings above.
    template <readable_array_t T>
-      requires(!eigen_t<T> &&
-               !(contiguous<std::remove_cvref_t<T>> && std::same_as<range_value_t<std::remove_cvref_t<T>>, std::byte>))
+      requires(!eigen_t<T> && !contiguous_byte_range<std::remove_cvref_t<T>>)
    struct from<CBOR, T> final
    {
       template <auto Opts>
