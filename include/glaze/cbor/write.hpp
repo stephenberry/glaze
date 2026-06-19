@@ -382,7 +382,8 @@ namespace glz
 
    // Byte strings (std::vector<std::byte>, std::span<std::byte>, etc.)
    template <class T>
-      requires(std::same_as<typename T::value_type, std::byte> && !str_t<T>)
+      requires(contiguous<std::remove_cvref_t<T>> && std::same_as<range_value_t<std::remove_cvref_t<T>>, std::byte> &&
+               !str_t<T>)
    struct to<CBOR, T> final
    {
       template <auto Opts>
@@ -469,8 +470,10 @@ namespace glz
 
    // Arrays (std::vector, std::array, std::deque, etc.)
    // Note: eigen_t types have their own specialization in glaze/ext/eigen.hpp
+   // Contiguous std::byte ranges are excluded here; they are written as CBOR byte strings above.
    template <writable_array_t T>
-      requires(!eigen_t<T>)
+      requires(!eigen_t<T> &&
+               !(contiguous<std::remove_cvref_t<T>> && std::same_as<range_value_t<std::remove_cvref_t<T>>, std::byte>))
    struct to<CBOR, T> final
    {
       template <auto Opts>

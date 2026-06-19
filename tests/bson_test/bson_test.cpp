@@ -1780,4 +1780,65 @@ suite bson_hash_bounds_suite = [] {
    };
 };
 
+// Regression coverage for https://github.com/stephenberry/glaze/issues/2647
+// A fixed std::array<char, N> string member must round trip (previously a
+// "no viable operator=" compile error in the BSON string reader).
+struct bson_char_array_rec
+{
+   std::array<char, 8> name{};
+   int id{};
+};
+
+struct bson_string_src
+{
+   std::string name{};
+};
+
+struct bson_short_code
+{
+   std::array<char, 4> code{};
+};
+
+struct bson_long_code_src
+{
+   std::string code{};
+};
+
+suite bson_char_array_tests = [] {
+   "bson std::array<char, N> member round trips"_test = [] {
+      bson_char_array_rec src{};
+      src.name = {'h', 'i'};
+      src.id = 7;
+      std::string buffer{};
+      expect(not glz::write_bson(src, buffer));
+      bson_char_array_rec dst{};
+      expect(not glz::read_bson(dst, buffer));
+      expect(dst.name == src.name);
+      expect(dst.id == src.id);
+   };
+
+   "bson std::array<char, N> member zero-fills a shorter string"_test = [] {
+      bson_string_src src{};
+      src.name = "ab";
+      std::string buffer{};
+      expect(not glz::write_bson(src, buffer));
+      bson_char_array_rec dst{};
+      dst.name = {'Z', 'Z', 'Z', 'Z', 'Z', 'Z', 'Z', 'Z'};
+      expect(not glz::read_bson(dst, buffer));
+      expect(std::string_view(dst.name.data(), 2) == "ab");
+      for (size_t i = 2; i < dst.name.size(); ++i) {
+         expect(dst.name[i] == '\0');
+      }
+   };
+
+   "bson std::array<char, N> member rejects an oversized string"_test = [] {
+      bson_long_code_src src{};
+      src.code = "toolong";
+      std::string buffer{};
+      expect(not glz::write_bson(src, buffer));
+      bson_short_code dst{};
+      expect(bool(glz::read_bson(dst, buffer)));
+   };
+};
+
 int main() { return 0; }

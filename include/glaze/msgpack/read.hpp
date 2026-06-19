@@ -560,6 +560,29 @@ namespace glz
       }
    };
 
+   // Fixed-size std::array<char, N>: read the string into the buffer, bounds-checked,
+   // zero-filling any unused tail so a shorter payload yields a deterministic buffer.
+   template <array_char_t T>
+   struct from<MSGPACK, T>
+   {
+      template <auto Opts, class Value, is_context Ctx, class It, class End>
+      GLZ_ALWAYS_INLINE static void op(Value&& value, uint8_t tag, Ctx&& ctx, It& it, const End& end) noexcept
+      {
+         std::string_view sv{};
+         if (!msgpack::detail::read_string_view(ctx, tag, it, end, sv)) {
+            return;
+         }
+         if (sv.size() > value.size()) [[unlikely]] {
+            ctx.error = error_code::syntax_error;
+            return;
+         }
+         std::memcpy(value.data(), sv.data(), sv.size());
+         if (sv.size() < value.size()) {
+            std::memset(value.data() + sv.size(), 0, value.size() - sv.size());
+         }
+      }
+   };
+
    template <glaze_object_t T>
       requires(!custom_read<T>)
    struct from<MSGPACK, T>

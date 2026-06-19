@@ -336,6 +336,21 @@ namespace glz
       requires(std::is_enum_v<T> && !glaze_enum_t<T>)
    struct from<BEVE, T>
    {
+      // Tagged overload: the type tag has already been read and is supplied by the caller
+      // (used by the typed-array conversion paths). Delegate to the underlying integer's
+      // reader so enums reuse the same numeric decoding and conversion handling, then cast
+      // back. This makes std::byte (a byte-valued enum) readable as a u8 typed-array element.
+      template <auto Opts, class Value, class Tag, is_context Ctx, class It0, class It1>
+         requires(check_no_header(Opts))
+      GLZ_ALWAYS_INLINE static void op(Value&& value, Tag&& tag, Ctx&& ctx, It0&& it, It1 end) noexcept
+      {
+         using U = std::underlying_type_t<std::decay_t<T>>;
+         U underlying{};
+         from<BEVE, U>::template op<Opts>(underlying, std::forward<Tag>(tag), std::forward<Ctx>(ctx),
+                                          std::forward<It0>(it), end);
+         value = static_cast<std::decay_t<T>>(underlying);
+      }
+
       template <auto Opts>
       GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&& it, auto end) noexcept
       {
@@ -567,6 +582,33 @@ namespace glz
       using V = typename std::decay_t<T>::value_type;
       static_assert(sizeof(V) == 1);
 
+      // Stores n decoded bytes (already length-validated by the caller) into the target.
+      // Handles resizable strings, string views, and fixed-size std::array<char, N> uniformly
+      // so the tagged and untagged code paths share identical storage semantics.
+      GLZ_ALWAYS_INLINE static void store(auto&& value, is_context auto&& ctx, auto&& it, const size_t n)
+      {
+         if constexpr (string_view_t<T>) {
+            value = {it, n};
+         }
+         else if constexpr (array_char_t<T>) {
+            // Fixed-size std::array<char, N> cannot be resized, so the decoded payload must
+            // fit within it. Any trailing bytes are zero-filled to keep the buffer
+            // deterministic when a shorter payload is read into a larger array.
+            if (n > value.size()) [[unlikely]] {
+               ctx.error = error_code::syntax_error;
+               return;
+            }
+            std::memcpy(value.data(), it, n);
+            if (n < value.size()) {
+               std::memset(value.data() + n, 0, value.size() - n);
+            }
+         }
+         else {
+            value.resize(n);
+            std::memcpy(value.data(), it, n);
+         }
+      }
+
       template <auto Opts>
          requires(check_no_header(Opts))
       GLZ_ALWAYS_INLINE static void op(auto&& value, const uint8_t, is_context auto&& ctx, auto&& it, auto end)
@@ -591,8 +633,10 @@ namespace glz
                return;
             }
          }
-         value.resize(n);
-         std::memcpy(value.data(), it, n);
+         store(value, ctx, it, n);
+         if (bool(ctx.error)) [[unlikely]] {
+            return;
+         }
          it += n;
       }
 
@@ -633,12 +677,9 @@ namespace glz
             }
          }
 
-         if constexpr (string_view_t<T>) {
-            value = {it, n};
-         }
-         else {
-            value.resize(n);
-            std::memcpy(value.data(), it, n);
+         store(value, ctx, it, n);
+         if (bool(ctx.error)) [[unlikely]] {
+            return;
          }
          it += n;
       }
@@ -689,7 +730,7 @@ namespace glz
                }
             }
          }
-         else if constexpr (num_t<V>) {
+         else if constexpr (beve_num_t<V>) {
             constexpr uint8_t type = std::floating_point<V> ? 0 : (std::is_signed_v<V> ? 0b000'01'000 : 0b000'10'000);
             constexpr uint8_t header = tag::typed_array | type | (byte_count<V> << 5);
 
@@ -970,7 +1011,7 @@ namespace glz
                }
             }
          }
-         else if constexpr (num_t<V>) {
+         else if constexpr (beve_num_t<V>) {
             constexpr uint8_t type = std::floating_point<V> ? 0 : (std::is_signed_v<V> ? 0b000'01'000 : 0b000'10'000);
             constexpr uint8_t header = tag::typed_array | type | (byte_count<V> << 5);
 

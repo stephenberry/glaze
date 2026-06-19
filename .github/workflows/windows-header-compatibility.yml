@@ -1,0 +1,64 @@
+# This workflow verifies that Glaze headers can be compiled after including
+# <Windows.h> in an unsanitized Windows project.
+#
+# NOMINMAX and WIN32_LEAN_AND_MEAN are manually disabled before including <Windows.h>
+# The workflow generates two aggregate translation units that recursively include
+# every .hpp file inside include/glaze. This will catch collisions with Windows
+# macros such as 'min', 'max', 'ERROR', 'near', 'far', and 'small', and will also
+# prevent fixes that silently mutate the user's macro environment by undefining
+# those macros.
+#
+# DELETE is a special case for 'net' which undefs it, so this macro is not checked.
+# Headers that depend on Winsock2 are compiled separately with WIN32_LEAN_AND_MEAN
+# because Windows.h otherwise includes Winsock.h, which conflicts with Winsock2.h.
+
+name: windows-header-compatibility
+
+on:
+  push:
+    branches:
+      - main
+      - feature/*
+    paths:
+      - 'include/**'
+      - 'cmake/**'
+      - 'CMakeLists.txt'
+      - '.github/workflows/windows-header-compatibility.yml'
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'include/**'
+      - 'cmake/**'
+      - 'CMakeLists.txt'
+      - '.github/workflows/windows-header-compatibility.yml'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 45
+
+    steps:
+    - uses: actions/checkout@v6
+
+    - uses: erlef/setup-beam@v1.24.0
+      env:
+        ImageOS: win25
+      with:
+        otp-version: '28.5.0.2'
+        version-type: strict
+
+    - name: Install vcpkg dependencies
+      run: '& "$env:VCPKG_INSTALLATION_ROOT\vcpkg.exe" install asio eigen3'
+
+    - name: Configure CMake
+      run: |
+        cmake -S "$env:GITHUB_WORKSPACE/cmake/ci/windows-header-compatibility" `
+          -B "$env:GITHUB_WORKSPACE/build/windows-header-compatibility/build" `
+          -DGLAZE_SOURCE_DIR="$env:GITHUB_WORKSPACE" `
+          -DERLANG_OTP_DIR="$env:INSTALL_DIR_FOR_OTP" `
+          -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_INSTALLATION_ROOT/scripts/buildsystems/vcpkg.cmake" `
+
+    - name: Build
+      run: cmake --build "$env:GITHUB_WORKSPACE/build/windows-header-compatibility/build" --config Debug --target glaze_windows_header_compatibility --parallel
