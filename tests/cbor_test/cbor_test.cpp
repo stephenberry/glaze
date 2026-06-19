@@ -3405,6 +3405,89 @@ void custom_variant_ambiguity_tests()
    };
 }
 
+// Regression coverage for https://github.com/stephenberry/glaze/issues/2647
+// std::byte ranges must encode as CBOR byte strings (not be ambiguous), and fixed
+// std::array<char, N> / std::array<std::byte, N> must round trip.
+suite cbor_byte_and_char_array_tests = [] {
+   "cbor std::vector<std::byte> is a byte string"_test = [] {
+      std::vector<std::byte> src{std::byte{1}, std::byte{2}, std::byte{0xFF}, std::byte{0}};
+      std::string buffer{};
+      expect(not glz::write_cbor(src, buffer));
+      // Major type 2 (byte string), length 4: initial byte 0x44, then 4 data bytes.
+      expect(buffer.size() == 5);
+      expect(static_cast<uint8_t>(buffer[0]) == 0x44);
+      std::vector<std::byte> dst{};
+      expect(not glz::read_cbor(dst, buffer));
+      expect(dst == src);
+   };
+
+   "cbor std::array<std::byte, N> round trips"_test = [] {
+      std::array<std::byte, 4> src{std::byte{1}, std::byte{2}, std::byte{3}, std::byte{4}};
+      std::string buffer{};
+      expect(not glz::write_cbor(src, buffer));
+      std::array<std::byte, 4> dst{};
+      expect(not glz::read_cbor(dst, buffer));
+      expect(dst == src);
+   };
+
+   "cbor std::array<std::byte, N> zero-fills and rejects oversize"_test = [] {
+      std::vector<std::byte> short_src{std::byte{5}, std::byte{6}};
+      std::string buffer{};
+      expect(not glz::write_cbor(short_src, buffer));
+      std::array<std::byte, 4> dst{std::byte{0x77}, std::byte{0x77}, std::byte{0x77}, std::byte{0x77}};
+      expect(not glz::read_cbor(dst, buffer));
+      expect(dst == (std::array<std::byte, 4>{std::byte{5}, std::byte{6}, std::byte{0}, std::byte{0}}));
+
+      std::vector<std::byte> big_src(10, std::byte{1});
+      std::string big_buffer{};
+      expect(not glz::write_cbor(big_src, big_buffer));
+      std::array<std::byte, 4> small{};
+      expect(bool(glz::read_cbor(small, big_buffer)));
+   };
+
+   "cbor std::array<uint8_t, N> round trips as a byte string"_test = [] {
+      std::array<uint8_t, 4> src{1, 2, 3, 255};
+      std::string buffer{};
+      expect(not glz::write_cbor(src, buffer));
+      expect(buffer.size() == 5);
+      expect(static_cast<uint8_t>(buffer[0]) == 0x44);
+      std::array<uint8_t, 4> dst{};
+      expect(not glz::read_cbor(dst, buffer));
+      expect(dst == src);
+      // Cross-readable with std::vector<uint8_t> (both byte strings).
+      std::vector<uint8_t> as_vec{};
+      expect(not glz::read_cbor(as_vec, buffer));
+      expect(as_vec == (std::vector<uint8_t>{1, 2, 3, 255}));
+   };
+
+   "cbor std::array<char, N> round trips"_test = [] {
+      std::array<char, 16> src{'h', 'e', 'l', 'l', 'o'};
+      std::string buffer{};
+      expect(not glz::write_cbor(src, buffer));
+      std::array<char, 16> dst{};
+      expect(not glz::read_cbor(dst, buffer));
+      expect(dst == src);
+   };
+
+   "cbor std::array<char, N> zero-fills and rejects oversize"_test = [] {
+      std::string short_src = "abc";
+      std::string buffer{};
+      expect(not glz::write_cbor(short_src, buffer));
+      std::array<char, 8> dst{'Z', 'Z', 'Z', 'Z', 'Z', 'Z', 'Z', 'Z'};
+      expect(not glz::read_cbor(dst, buffer));
+      expect(std::string_view(dst.data(), 3) == "abc");
+      for (size_t i = 3; i < dst.size(); ++i) {
+         expect(dst[i] == '\0');
+      }
+
+      std::string big_src = "0123456789";
+      std::string big_buffer{};
+      expect(not glz::write_cbor(big_src, big_buffer));
+      std::array<char, 4> small{};
+      expect(bool(glz::read_cbor(small, big_buffer)));
+   };
+};
+
 int main()
 {
    custom_variant_ambiguity_tests();
