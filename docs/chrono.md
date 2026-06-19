@@ -180,6 +180,76 @@ struct Event {
 };
 ```
 
+## Per-Field Format Customization
+
+The clock type alone decides the default representation (ISO 8601 for `system_clock`, numeric count for `steady_clock`, and so on). When a single field needs a different shape, the per-field wrappers below decouple the *format* from the *type*. They are applied inside `glz::object(...)` within a `glz::meta<T>` specialization and require `#include "glaze/chrono.hpp"`.
+
+### `glz::date_format` — custom strftime-subset pattern
+
+`glz::date_format<&T::member, "pattern">` serializes a `system_clock` time point (or a `year_month_day`) using a `strftime`-style pattern instead of ISO 8601:
+
+```cpp
+#include "glaze/chrono.hpp"
+
+struct Event {
+    std::chrono::system_clock::time_point start{};
+    std::chrono::sys_days day{};
+};
+
+template <>
+struct glz::meta<Event> {
+    using T = Event;
+    static constexpr auto value = glz::object(
+        "start", glz::date_format<&T::start, "%Y-%m-%d %H:%M:%S">,  // "2026-06-18 12:34:56"
+        "day",   glz::date_format<&T::day,   "%Y/%m/%d">);          // "2026/06/18"
+};
+```
+
+Supported conversion specifiers (locale-independent by design):
+
+| Token | Meaning              | Token | Meaning                |
+|-------|----------------------|-------|------------------------|
+| `%Y`  | year (4 digits)      | `%H`  | hour, 24-hour (2)      |
+| `%m`  | month (2 digits)     | `%M`  | minute (2 digits)      |
+| `%d`  | day (2 digits)       | `%S`  | second (2 digits)      |
+| `%F`  | `%Y-%m-%d`           | `%T`  | `%H:%M:%S`             |
+| `%%`  | literal `%`          |       |                        |
+
+The pattern is validated at compile time:
+
+- An unsupported token (e.g. `%A`, `%j`, `%z`) is a hard compile error.
+- The pattern must contain a full calendar date (`%Y %m %d`, or `%F`); a time-only pattern cannot reconstruct an absolute time point and is rejected.
+- A `year_month_day` field rejects time tokens (`%H %M %S %T`).
+
+Notes and limitations (MVP scope):
+
+- **Times are treated as UTC wall-clock.** There is no timezone token; the decomposed fields are UTC, matching the ISO 8601 writer.
+- **`%S` writes integer seconds only.** Sub-second precision is truncated on write (the format you typed has nowhere to put it), so round-tripping a finer-than-seconds value through a `%S` pattern is lossy by design. Use the default ISO 8601 representation when you need sub-second fidelity. Explicit-width fraction tokens (`%3S`/`%6S`/`%9S`) are a planned extension.
+- **JSON only.** `date_format` is a textual wrapper; serializing a field that uses it to a binary backend (BEVE, CBOR, MsgPack, BSON) is a compile error rather than a silent miscoding.
+
+### `glz::epoch_count` — per-field Unix timestamp
+
+`glz::epoch_count<&T::member, Duration>` serializes a `system_clock` time point as a numeric Unix timestamp in units of `Duration`. It is the per-field counterpart to the `glz::epoch_time` storage wrapper, letting one field be an epoch count while others stay ISO 8601:
+
+```cpp
+#include "glaze/chrono.hpp"
+
+struct Reading {
+    std::chrono::system_clock::time_point observed{};   // ISO 8601 (default)
+    std::chrono::sys_time<std::chrono::milliseconds> logged{};
+};
+
+template <>
+struct glz::meta<Reading> {
+    using T = Reading;
+    static constexpr auto value = glz::object(
+        "observed", &T::observed,                                       // "2026-06-18T12:34:56Z"
+        "logged",   glz::epoch_count<&T::logged, std::chrono::milliseconds>);  // 1781786096789
+};
+```
+
+Unlike `glz::epoch_time<Duration>` (a storage type you declare your member as), `glz::epoch_count` wraps an ordinary `system_clock` time-point member in place, so you can keep the field's native type. Like `date_format`, it is JSON only.
+
 ## Complete Example
 
 ```cpp

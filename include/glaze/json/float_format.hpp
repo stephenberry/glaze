@@ -6,6 +6,7 @@
 #include <string_view>
 #include <type_traits>
 
+#include "glaze/core/format_str.hpp"
 #include "glaze/core/opts.hpp"
 #include "glaze/json/read.hpp"
 #include "glaze/json/write.hpp"
@@ -20,16 +21,7 @@
 
 namespace glz
 {
-   // Compile-time string for use as template parameter
-   template <size_t N>
-   struct format_str
-   {
-      char data[N]{};
-
-      consteval format_str(const char (&str)[N]) noexcept { std::copy_n(str, N, data); }
-
-      constexpr operator std::string_view() const noexcept { return {data, N - 1}; }
-   };
+   // format_str (compile-time format string NTTP) lives in glaze/core/format_str.hpp
 
    // Wrapper for formatting floats with a specific format string
    template <format_str Fmt, class T>
