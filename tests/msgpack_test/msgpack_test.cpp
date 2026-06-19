@@ -436,6 +436,100 @@ suite msgpack_char_array_tests = [] {
    };
 };
 
+// Records the largest single allocation request so a test can assert that an array/map reserve was
+// bounded by the input rather than by an attacker-controlled wire count.
+inline size_t g_largest_alloc_count = 0;
+
+template <class T>
+struct recording_allocator
+{
+   using value_type = T;
+
+   recording_allocator() = default;
+   template <class U>
+   recording_allocator(const recording_allocator<U>&) noexcept
+   {}
+
+   T* allocate(std::size_t n)
+   {
+      if (n > g_largest_alloc_count) {
+         g_largest_alloc_count = n;
+      }
+      return std::allocator<T>{}.allocate(n);
+   }
+   void deallocate(T* p, std::size_t n) noexcept { std::allocator<T>{}.deallocate(p, n); }
+
+   template <class U>
+   bool operator==(const recording_allocator<U>&) const noexcept
+   {
+      return true;
+   }
+   template <class U>
+   bool operator!=(const recording_allocator<U>&) const noexcept
+   {
+      return false;
+   }
+};
+
+// Regression guard for the array/map reserve amplification fix. An array32/map32 header carries a
+// 32-bit element count read straight off the wire; before the fix the reader reserved that many
+// slots unconditionally, so a 5-byte payload claiming 2^32-1 elements triggered a multi-GB
+// allocation (e.g. ~34 GB for vector<double>) that throws bad_alloc inside the noexcept op and
+// terminates the process. The reservation is now capped at the bytes remaining, so the reader must
+// never request an allocation larger than the input and must return unexpected_end on the truncated
+// body. The behavioral assertions alone are not enough: on an overcommitting OS the oversized
+// reservation succeeds lazily and the loop still reports unexpected_end, so the recording allocator
+// is what actually pins the bug.
+suite msgpack_reserve_amplification_tests = [] {
+   // array32 tag (0xdd) followed by length 0xFFFFFFFF, with no element data.
+   const std::string array32_bomb{char(0xdd), char(0xff), char(0xff), char(0xff), char(0xff)};
+   // map32 tag (0xdf) followed by length 0xFFFFFFFF, with no entry data.
+   const std::string map32_bomb{char(0xdf), char(0xff), char(0xff), char(0xff), char(0xff)};
+
+   "msgpack array32 reserve is bounded by the input, not the wire count"_test = [&] {
+      g_largest_alloc_count = 0;
+      std::vector<double, recording_allocator<double>> v{};
+      const auto ec = glz::read_msgpack(v, array32_bomb);
+      expect(ec.ec == glz::error_code::unexpected_end)
+         << "expected unexpected_end, got: " << glz::format_error(ec, array32_bomb);
+      // Without the cap this would be 0xFFFFFFFF; the cap keeps it within the buffer size.
+      expect(g_largest_alloc_count <= array32_bomb.size())
+         << "reserve requested " << g_largest_alloc_count << " elements for a " << array32_bomb.size()
+         << "-byte payload";
+   };
+
+   "msgpack array32 amplification guard is element-type agnostic"_test = [&] {
+      std::vector<int> v{};
+      const auto ec = glz::read_msgpack(v, array32_bomb);
+      expect(ec.ec == glz::error_code::unexpected_end)
+         << "expected unexpected_end, got: " << glz::format_error(ec, array32_bomb);
+   };
+
+   "msgpack map32 reserve is bounded by the input, not the wire count"_test = [&] {
+      g_largest_alloc_count = 0;
+      // unordered_map exposes reserve() (std::map does not), so this exercises the capped map path.
+      std::unordered_map<std::string, double, std::hash<std::string>, std::equal_to<std::string>,
+                         recording_allocator<std::pair<const std::string, double>>>
+         m{};
+      const auto ec = glz::read_msgpack(m, map32_bomb);
+      expect(ec.ec == glz::error_code::unexpected_end)
+         << "expected unexpected_end, got: " << glz::format_error(ec, map32_bomb);
+      // Bucket count scales with the reservation; the cap keeps it within the buffer size.
+      expect(g_largest_alloc_count <= map32_bomb.size())
+         << "reserve requested " << g_largest_alloc_count << " buckets for a " << map32_bomb.size()
+         << "-byte payload";
+   };
+
+   "msgpack reserve cap leaves valid arrays intact"_test = [] {
+      const std::vector<double> original{1.0, 2.0, 3.0};
+      std::string buffer{};
+      expect(not glz::write_msgpack(original, buffer));
+      std::vector<double> decoded{};
+      expect(not glz::read_msgpack(decoded, buffer));
+      expect(decoded == original);
+   };
+};
+
 int main()
 {
    // Only the write side is exercised here: MessagePack passes its type-tag byte
