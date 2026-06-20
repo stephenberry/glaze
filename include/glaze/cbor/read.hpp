@@ -1200,8 +1200,11 @@ namespace glz
             if (bool(ctx.error)) [[unlikely]]
                return;
 
-            // Validate count against remaining buffer size (minimum 2 bytes per key-value pair)
-            if (count * 2 > static_cast<uint64_t>(end - it)) [[unlikely]] {
+            // Validate count against remaining buffer size (minimum 2 bytes per key-value pair).
+            // Tested as a division so count * 2 cannot overflow uint64_t for an attacker-supplied
+            // count (decode_arg returns an unclamped 64-bit value); this is equivalent to
+            // count * 2 > end - it.
+            if (count > static_cast<uint64_t>(end - it) / 2) [[unlikely]] {
                ctx.error = error_code::unexpected_end;
                return;
             }

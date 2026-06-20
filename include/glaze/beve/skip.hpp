@@ -133,10 +133,7 @@ namespace glz
             ctx.error = error_code::syntax_error;
             return;
          }
-         if (uint64_t(end - it) < padding + elem_byte_count * n) [[unlikely]] {
-            ctx.error = error_code::unexpected_end;
-            return;
-         }
+         if (typed_array_out_of_bounds(ctx, it, end, n, elem_byte_count, padding)) return;
          it += padding + elem_byte_count * n;
          return;
       }
@@ -152,10 +149,7 @@ namespace glz
             return;
          }
          const uint8_t byte_count = byte_count_lookup[tag >> 5];
-         if (uint64_t(end - it) < byte_count * n) [[unlikely]] {
-            ctx.error = error_code::unexpected_end;
-            return;
-         }
+         if (typed_array_out_of_bounds(ctx, it, end, n, byte_count)) return;
          it += byte_count * n;
          break;
       }

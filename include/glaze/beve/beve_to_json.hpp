@@ -302,10 +302,7 @@ namespace glz
                   ctx.error = error_code::syntax_error;
                   return;
                }
-               if (uint64_t(end - it) < padding + byte_count_inner * n) [[unlikely]] {
-                  ctx.error = error_code::unexpected_end;
-                  return;
-               }
+               if (typed_array_out_of_bounds(ctx, it, end, n, byte_count_inner, padding)) return;
                it += padding;
 
                // Now decode as a normal numeric typed array

@@ -868,7 +868,7 @@ namespace glz
                }
             }
 
-            if ((it + n) > end) [[unlikely]] {
+            if (uint64_t(end - it) < n) [[unlikely]] {
                ctx.error = error_code::unexpected_end;
                return;
             }
@@ -924,10 +924,7 @@ namespace glz
                return;
             }
 
-            if ((it + padding + n * sizeof(V)) > end) [[unlikely]] {
-               ctx.error = error_code::unexpected_end;
-               return;
-            }
+            if (typed_array_out_of_bounds(ctx, it, end, n, sizeof(V), padding)) return;
             it += padding;
 
             value = std::span<T, Extent>{reinterpret_cast<const V*>(&(*it)), n};
@@ -1060,10 +1057,7 @@ namespace glz
                   n = value.size();
                }
 
-               if ((it + n * element_size) > end) [[unlikely]] {
-                  ctx.error = error_code::unexpected_end;
-                  return 0;
-               }
+               if (typed_array_out_of_bounds(ctx, it, end, n, element_size)) return 0;
                if (!validate_and_resize(n)) {
                   return 0;
                }
@@ -1114,10 +1108,7 @@ namespace glz
                         ctx.error = error_code::syntax_error;
                         return;
                      }
-                     if ((it + padding + count * elem_byte_count) > end) [[unlikely]] {
-                        ctx.error = error_code::unexpected_end;
-                        return;
-                     }
+                     if (typed_array_out_of_bounds(ctx, it, end, count, elem_byte_count, padding)) return;
                      it += padding;
 
                      if (!validate_and_resize(count)) {
@@ -1156,10 +1147,7 @@ namespace glz
                   return;
                }
 
-               if ((it + padding + count * sizeof(V)) > end) [[unlikely]] {
-                  ctx.error = error_code::unexpected_end;
-                  return;
-               }
+               if (typed_array_out_of_bounds(ctx, it, end, count, sizeof(V), padding)) return;
                it += padding;
 
                if (!validate_and_resize(count)) {
@@ -1228,10 +1216,7 @@ namespace glz
                }
                else if constexpr (std::endian::native == std::endian::big && sizeof(V) > 1) {
                   // On big endian, read and swap each element
-                  if ((it + n * sizeof(V)) > end) [[unlikely]] {
-                     ctx.error = error_code::unexpected_end;
-                     return;
-                  }
+                  if (typed_array_out_of_bounds(ctx, it, end, n, sizeof(V))) return;
                   for (size_t i = 0; i < n; ++i) {
                      std::memcpy(&value[i], it, sizeof(V));
                      byteswap_le(value[i]);
@@ -1240,10 +1225,7 @@ namespace glz
                }
                else {
                   // Little endian or single-byte: bulk memcpy
-                  if ((it + n * sizeof(V)) > end) [[unlikely]] {
-                     ctx.error = error_code::unexpected_end;
-                     return;
-                  }
+                  if (typed_array_out_of_bounds(ctx, it, end, n, sizeof(V))) return;
                   std::memcpy(value.data(), it, n * sizeof(V));
                   it += n * sizeof(V);
                }
@@ -1371,10 +1353,7 @@ namespace glz
                n = value.size();
             }
 
-            if (uint64_t(end - it) < n * sizeof(V)) [[unlikely]] {
-               ctx.error = error_code::unexpected_end;
-               return;
-            }
+            if (typed_array_out_of_bounds(ctx, it, end, n, sizeof(V))) return;
             if constexpr (check_max_array_size(Opts) > 0) {
                if (n > check_max_array_size(Opts)) [[unlikely]] {
                   ctx.error = error_code::invalid_length;
