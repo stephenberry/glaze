@@ -740,7 +740,13 @@ namespace glz
          if constexpr (!Opts.partial_read) {
             value.clear();
             if constexpr (has_reserve<std::decay_t<Value>>) {
-               value.reserve(len);
+               // Each map entry is a key plus a value, so it occupies at least two bytes on the
+               // wire and a valid len can never exceed the bytes remaining. Cap the reservation
+               // against the input size to avoid an allocation bomb from a tiny header (e.g. map32
+               // claiming 2^32-1 entries); the loop below still parses every entry and reports
+               // unexpected_end on truncated input.
+               const size_t remaining = size_t(end - it);
+               value.reserve(len < remaining ? len : remaining);
             }
 
             for (size_t i = 0; i < len && ctx.error == error_code::none; ++i) {
@@ -849,7 +855,12 @@ namespace glz
          if constexpr (emplace_backable<std::decay_t<Value>>) {
             value.clear();
             if constexpr (has_reserve<std::decay_t<Value>>) {
-               value.reserve(len);
+               // Each element occupies at least one byte on the wire, so a valid len can never
+               // exceed the bytes remaining. Cap the reservation against the input size to avoid an
+               // allocation bomb from a tiny header (e.g. array32 claiming 2^32-1 elements); the
+               // loop below still parses every element and reports unexpected_end on truncated input.
+               const size_t remaining = size_t(end - it);
+               value.reserve(len < remaining ? len : remaining);
             }
             for (size_t i = 0; i < len && ctx.error == error_code::none; ++i) {
                value.emplace_back();
