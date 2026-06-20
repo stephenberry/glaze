@@ -131,6 +131,14 @@ namespace glz::yaml
    template <class It, class End, class Ctx>
    inline void skip_flow_content(It& it, End end, Ctx& ctx, char open, char close) noexcept
    {
+      // Nested flow collections with alternating delimiters ("[{[{...") recurse one frame per
+      // delimiter, so bound the recursion to stop adversarial skipped input from overflowing the
+      // stack. Same-delimiter nesting ("[[[[") is handled by the loop below without recursing.
+      depth_guard guard{ctx};
+      if (!guard) [[unlikely]] {
+         return;
+      }
+
       if (it == end || *it != open) [[unlikely]] {
          ctx.error = error_code::syntax_error;
          return;

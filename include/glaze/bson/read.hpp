@@ -34,31 +34,9 @@ namespace glz
 {
    namespace bson_detail
    {
-      // RAII guard bumping ctx.depth on entry to a document/array reader and
-      // popping on exit. Errors with exceeded_max_recursive_depth before the
-      // stack can overflow on adversarial input — pathologically nested BSON
-      // (e.g. `{"a": {"a": {...}}}`) is cheap to produce and a real DoS vector.
-      template <class Ctx>
-      struct depth_guard
-      {
-         Ctx& ctx;
-         bool entered = false;
-
-         depth_guard(Ctx& c) noexcept : ctx(c)
-         {
-            if (ctx.depth >= max_recursive_depth_limit) [[unlikely]] {
-               ctx.error = error_code::exceeded_max_recursive_depth;
-               return;
-            }
-            ++ctx.depth;
-            entered = true;
-         }
-         ~depth_guard()
-         {
-            if (entered) --ctx.depth;
-         }
-         explicit operator bool() const noexcept { return entered; }
-      };
+      // Document/array readers guard recursion depth with the shared glz::depth_guard
+      // (core/context.hpp): pathologically nested BSON (e.g. `{"a": {"a": {...}}}`) is cheap to
+      // produce and a real DoS vector on adversarial input.
 
       // --- Little-endian readers ----------------------------------------------
       //
@@ -1115,7 +1093,7 @@ namespace glz
             ctx.error = error_code::syntax_error;
             return;
          }
-         bson_detail::depth_guard guard{ctx};
+         depth_guard guard{ctx};
          if (!guard) return;
          It stop{};
          if (!bson_detail::read_document_stop(ctx, it, end, stop)) return;
@@ -1142,7 +1120,7 @@ namespace glz
          static_assert(str_t<key_t> || std::is_constructible_v<key_t, std::string_view>,
                        "BSON map keys must be string-like");
 
-         bson_detail::depth_guard guard{ctx};
+         depth_guard guard{ctx};
          if (!guard) return;
          It stop{};
          if (!bson_detail::read_document_stop(ctx, it, end, stop)) return;
@@ -1175,7 +1153,7 @@ namespace glz
             ctx.error = error_code::syntax_error;
             return;
          }
-         bson_detail::depth_guard guard{ctx};
+         depth_guard guard{ctx};
          if (!guard) return;
          It stop{};
          if (!bson_detail::read_document_stop(ctx, it, end, stop)) return;
@@ -1216,7 +1194,7 @@ namespace glz
             ctx.error = error_code::syntax_error;
             return;
          }
-         bson_detail::depth_guard guard{ctx};
+         depth_guard guard{ctx};
          if (!guard) return;
          It stop{};
          if (!bson_detail::read_document_stop(ctx, it, end, stop)) return;
