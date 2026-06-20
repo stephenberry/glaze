@@ -10029,4 +10029,30 @@ suite issue_2595_transparent_wrappers = [] {
    };
 };
 
+suite recursion_depth_tests = [] {
+   "deeply nested flow sequence is bounded"_test = [] {
+      const std::string yaml(100000, '[');
+      glz::generic value{};
+      auto ec = glz::read_yaml(value, yaml);
+      expect(ec.ec == glz::error_code::exceeded_max_recursive_depth);
+   };
+
+   "deeply nested flow mapping is bounded"_test = [] {
+      const std::string yaml(100000, '{');
+      glz::generic value{};
+      auto ec = glz::read_yaml(value, yaml);
+      expect(ec.ec == glz::error_code::exceeded_max_recursive_depth);
+   };
+
+   "nesting within the limit still parses"_test = [] {
+      const std::string yaml = "[1, 2, [3, [4, 5]]]";
+      glz::generic value{};
+      auto ec = glz::read_yaml(value, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      std::string json{};
+      expect(!glz::write_json(value, json));
+      expect(json == "[1,2,[3,[4,5]]]") << json;
+   };
+};
+
 int main() { return 0; }

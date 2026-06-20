@@ -2689,6 +2689,13 @@ namespace glz
             return;
          }
 
+         // Nested arrays and inline tables recurse back through this reader, so cap the depth
+         // here; a deeply nested value (e.g. "a=[[[[...") otherwise overflows the stack.
+         depth_guard guard{ctx};
+         if (!guard) [[unlikely]] {
+            return;
+         }
+
          skip_ws_and_comments(it, end);
 
          if (it == end) [[unlikely]] {

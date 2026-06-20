@@ -5787,4 +5787,23 @@ suite issue_2595_transparent_wrappers = [] {
    };
 };
 
+suite recursion_depth_tests = [] {
+   "deeply nested array is bounded"_test = [] {
+      const std::string toml = "a = " + std::string(100000, '[');
+      glz::generic value{};
+      auto ec = glz::read_toml(value, toml);
+      expect(ec.ec == glz::error_code::exceeded_max_recursive_depth);
+   };
+
+   "nesting within the limit still parses"_test = [] {
+      const std::string toml = "a = [1, [2, [3]]]";
+      glz::generic value{};
+      auto ec = glz::read_toml(value, toml);
+      expect(!ec) << glz::format_error(ec, toml);
+      std::string json{};
+      expect(!glz::write_json(value, json));
+      expect(json == R"({"a":[1,[2,[3]]]})") << json;
+   };
+};
+
 int main() { return 0; }
