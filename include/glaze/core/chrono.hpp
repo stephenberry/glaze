@@ -314,5 +314,315 @@ namespace glz
          using Duration = typename std::remove_cvref_t<TP>::duration;
          value = time_point_cast<Duration>(tp);
       }
+
+      // ============================================
+      // strftime-subset format support (glz::date_format)
+      // ============================================
+      //
+      // Glaze deliberately hand-rolls a small, locale-independent strftime subset
+      // rather than relying on std::chrono::format / std::chrono::parse, whose
+      // calendar-type support is uneven across the supported compiler matrix
+      // (libstdc++ / libc++ / MSVC). The subset reuses the same write_digits /
+      // parse_digits primitives as the ISO 8601 path so the [0000,9999] year and
+      // component-range guarantees are preserved.
+      //
+      // Supported conversion specifiers:
+      //   %Y  year   (4 digits)        %H  hour   (2 digits, 24-hour)
+      //   %m  month  (2 digits)        %M  minute (2 digits)
+      //   %d  day    (2 digits)        %S  second (2 digits)
+      //   %F  = %Y-%m-%d               %T  = %H:%M:%S
+      //   %%  literal '%'
+      //
+      // Times are treated as UTC wall-clock (no timezone token in this subset).
+      // %S writes integer seconds only, matching POSIX strftime: sub-second
+      // precision is truncated on write. Round-tripping a value finer than seconds
+      // through a %S format is therefore lossy by design (the format the user typed
+      // has no place to put the fraction). Explicit-width fraction tokens
+      // (%3S/%6S/%9S) are a planned extension. Locale-dependent tokens
+      // (%A, %B, %p, ...) are intentionally unsupported.
+
+      // Decomposed UTC wall-clock fields shared by the date_format writer and parser.
+      struct date_time_fields
+      {
+         int year{};
+         int month{};
+         int day{};
+         int hour{};
+         int minute{};
+         int second{};
+      };
+
+      // Compile-time validation: every '%' must introduce a supported token.
+      inline consteval bool date_format_tokens_valid(std::string_view fmt) noexcept
+      {
+         for (size_t i = 0; i < fmt.size(); ++i) {
+            if (fmt[i] != '%') continue;
+            if (i + 1 >= fmt.size()) return false; // dangling '%'
+            switch (fmt[i + 1]) {
+            case 'Y':
+            case 'm':
+            case 'd':
+            case 'H':
+            case 'M':
+            case 'S':
+            case 'F':
+            case 'T':
+            case '%':
+               ++i;
+               break;
+            default:
+               return false;
+            }
+         }
+         return true;
+      }
+
+      // Compile-time check: the format supplies a full calendar date (year, month,
+      // day) either explicitly or via %F. A time_point cannot be reconstructed on
+      // read without one, so this is enforced where date_format is applied.
+      inline consteval bool date_format_has_full_date(std::string_view fmt) noexcept
+      {
+         bool y = false, mo = false, d = false, f = false;
+         for (size_t i = 0; i < fmt.size(); ++i) {
+            if (fmt[i] != '%' || i + 1 >= fmt.size()) continue;
+            switch (fmt[i + 1]) {
+            case 'Y':
+               y = true;
+               break;
+            case 'm':
+               mo = true;
+               break;
+            case 'd':
+               d = true;
+               break;
+            case 'F':
+               f = true;
+               break;
+            }
+            ++i;
+         }
+         return f || (y && mo && d);
+      }
+
+      // Compile-time check: the format references any time-of-day field.
+      inline consteval bool date_format_has_time(std::string_view fmt) noexcept
+      {
+         for (size_t i = 0; i < fmt.size(); ++i) {
+            if (fmt[i] != '%' || i + 1 >= fmt.size()) continue;
+            switch (fmt[i + 1]) {
+            case 'H':
+            case 'M':
+            case 'S':
+            case 'T':
+               return true;
+            }
+            ++i;
+         }
+         return false;
+      }
+
+      // Render decomposed fields through the format string. Caller must ensure the buffer has
+      // space for at least fmt.size() * 5 + a small constant bytes: the widest token, %F,
+      // expands its two source characters to the 10-byte "YYYY-MM-DD" (5 bytes per source char).
+      // The JSON caller reserves fmt.size() * 6 + 4 (extra slack plus the surrounding quotes).
+      template <class B>
+      inline void write_date_format(std::string_view fmt, const date_time_fields& f, B& b, auto& ix) noexcept
+      {
+         for (size_t i = 0; i < fmt.size(); ++i) {
+            const char c = fmt[i];
+            if (c != '%') {
+               b[ix++] = c;
+               continue;
+            }
+            switch (fmt[++i]) {
+            case 'Y':
+               write_digits<4>(b, ix, static_cast<uint64_t>(f.year));
+               break;
+            case 'm':
+               write_digits<2>(b, ix, static_cast<uint64_t>(f.month));
+               break;
+            case 'd':
+               write_digits<2>(b, ix, static_cast<uint64_t>(f.day));
+               break;
+            case 'H':
+               write_digits<2>(b, ix, static_cast<uint64_t>(f.hour));
+               break;
+            case 'M':
+               write_digits<2>(b, ix, static_cast<uint64_t>(f.minute));
+               break;
+            case 'S':
+               write_digits<2>(b, ix, static_cast<uint64_t>(f.second));
+               break;
+            case 'F':
+               write_digits<4>(b, ix, static_cast<uint64_t>(f.year));
+               b[ix++] = '-';
+               write_digits<2>(b, ix, static_cast<uint64_t>(f.month));
+               b[ix++] = '-';
+               write_digits<2>(b, ix, static_cast<uint64_t>(f.day));
+               break;
+            case 'T':
+               write_digits<2>(b, ix, static_cast<uint64_t>(f.hour));
+               b[ix++] = ':';
+               write_digits<2>(b, ix, static_cast<uint64_t>(f.minute));
+               b[ix++] = ':';
+               write_digits<2>(b, ix, static_cast<uint64_t>(f.second));
+               break;
+            case '%':
+               b[ix++] = '%';
+               break;
+            }
+         }
+      }
+
+      // Parse a string against the format string into decomposed fields. Component
+      // ranges are validated the same way parse_iso8601 validates them; on failure
+      // ec is set to parse_error and fields are left partially written.
+      inline void parse_date_format(std::string_view fmt, std::string_view str, date_time_fields& f,
+                                    error_code& ec) noexcept
+      {
+         const char* s = str.data();
+         const size_t n = str.size();
+         size_t si = 0;
+
+         // Consume exactly `count` digits at the current position, advancing si on
+         // success. Returns -1 on non-digit or if fewer than `count` chars remain.
+         const auto take = [&](size_t count) -> int {
+            if (si + count > n) return -1;
+            const int v = parse_digits(s, si, count);
+            if (v >= 0) si += count;
+            return v;
+         };
+
+         // Parse the seconds field (2 digits). Sub-second fractions are not part of
+         // the %S contract; a trailing fraction is left for the format/literal to
+         // consume, and otherwise surfaces as unconsumed trailing input.
+         const auto parse_seconds = [&]() -> bool {
+            const int sec = take(2);
+            if (sec < 0 || sec > 59) return false;
+            f.second = sec;
+            return true;
+         };
+
+         const auto expect_literal = [&](char c) -> bool {
+            if (si >= n || s[si] != c) return false;
+            ++si;
+            return true;
+         };
+
+         for (size_t i = 0; i < fmt.size(); ++i) {
+            const char c = fmt[i];
+            if (c != '%') {
+               if (!expect_literal(c)) {
+                  ec = error_code::parse_error;
+                  return;
+               }
+               continue;
+            }
+            switch (fmt[++i]) {
+            case 'Y': {
+               const int v = take(4);
+               if (v < 0) {
+                  ec = error_code::parse_error;
+                  return;
+               }
+               f.year = v;
+               break;
+            }
+            case 'm': {
+               const int v = take(2);
+               if (v < 1 || v > 12) {
+                  ec = error_code::parse_error;
+                  return;
+               }
+               f.month = v;
+               break;
+            }
+            case 'd': {
+               const int v = take(2);
+               if (v < 1 || v > 31) {
+                  ec = error_code::parse_error;
+                  return;
+               }
+               f.day = v;
+               break;
+            }
+            case 'H': {
+               const int v = take(2);
+               if (v < 0 || v > 23) {
+                  ec = error_code::parse_error;
+                  return;
+               }
+               f.hour = v;
+               break;
+            }
+            case 'M': {
+               const int v = take(2);
+               if (v < 0 || v > 59) {
+                  ec = error_code::parse_error;
+                  return;
+               }
+               f.minute = v;
+               break;
+            }
+            case 'S':
+               if (!parse_seconds()) {
+                  ec = error_code::parse_error;
+                  return;
+               }
+               break;
+            case 'F': {
+               const int y = take(4);
+               if (y < 0 || !expect_literal('-')) {
+                  ec = error_code::parse_error;
+                  return;
+               }
+               const int mo = take(2);
+               if (mo < 1 || mo > 12 || !expect_literal('-')) {
+                  ec = error_code::parse_error;
+                  return;
+               }
+               const int d = take(2);
+               if (d < 1 || d > 31) {
+                  ec = error_code::parse_error;
+                  return;
+               }
+               f.year = y;
+               f.month = mo;
+               f.day = d;
+               break;
+            }
+            case 'T': {
+               const int h = take(2);
+               if (h < 0 || h > 23 || !expect_literal(':')) {
+                  ec = error_code::parse_error;
+                  return;
+               }
+               const int mi = take(2);
+               if (mi < 0 || mi > 59 || !expect_literal(':')) {
+                  ec = error_code::parse_error;
+                  return;
+               }
+               f.hour = h;
+               f.minute = mi;
+               if (!parse_seconds()) {
+                  ec = error_code::parse_error;
+                  return;
+               }
+               break;
+            }
+            case '%':
+               if (!expect_literal('%')) {
+                  ec = error_code::parse_error;
+                  return;
+               }
+               break;
+            }
+         }
+
+         // Reject trailing input the format did not consume.
+         if (si != n) {
+            ec = error_code::parse_error;
+         }
+      }
    }
 }

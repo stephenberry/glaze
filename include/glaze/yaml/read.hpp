@@ -5208,6 +5208,13 @@ namespace glz
          if (bool(ctx.error)) [[unlikely]]
             return;
 
+         // Every nested generic/variant value routes back through this reader, so bounding
+         // depth here caps flow-collection and flow-embedded mapping recursion that the
+         // indent stack does not cover.
+         depth_guard guard{ctx};
+         if (!guard) [[unlikely]]
+            return;
+
          // At root level (indent == -1), skip leading whitespace, newlines, and comments
          // For nested values, only skip inline whitespace to preserve block structure
          if (ctx.current_indent() < 0) {

@@ -10029,4 +10029,93 @@ suite issue_2595_transparent_wrappers = [] {
    };
 };
 
+struct skip_depth_probe
+{
+   int known{};
+};
+
+template <>
+struct glz::meta<skip_depth_probe>
+{
+   using T = skip_depth_probe;
+   static constexpr auto value = object("known", &T::known);
+};
+
+suite recursion_depth_tests = [] {
+   "deeply nested flow sequence is bounded"_test = [] {
+      const std::string yaml(100000, '[');
+      glz::generic value{};
+      auto ec = glz::read_yaml(value, yaml);
+      expect(ec.ec == glz::error_code::exceeded_max_recursive_depth);
+   };
+
+   "deeply nested flow mapping is bounded"_test = [] {
+      const std::string yaml(100000, '{');
+      glz::generic value{};
+      auto ec = glz::read_yaml(value, yaml);
+      expect(ec.ec == glz::error_code::exceeded_max_recursive_depth);
+   };
+
+   "nesting within the limit still parses"_test = [] {
+      const std::string yaml = "[1, 2, [3, [4, 5]]]";
+      glz::generic value{};
+      auto ec = glz::read_yaml(value, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      std::string json{};
+      expect(!glz::write_json(value, json));
+      expect(json == "[1,2,[3,[4,5]]]") << json;
+   };
+
+   "flow nesting at the depth limit boundary"_test = [] {
+      // Pin the exact contract against the named constant: a generic value nested exactly to the
+      // limit parses, one level deeper is rejected. The bracket-count-based deep tests above sit far
+      // from the boundary and would not catch an off-by-one in the guard.
+      constexpr size_t limit = glz::max_recursive_depth_limit;
+      {
+         const std::string yaml = std::string(limit, '[') + std::string(limit, ']');
+         glz::generic value{};
+         auto ec = glz::read_yaml(value, yaml);
+         expect(!ec) << glz::format_error(ec, yaml);
+      }
+      {
+         const std::string yaml = std::string(limit + 1, '[') + std::string(limit + 1, ']');
+         glz::generic value{};
+         auto ec = glz::read_yaml(value, yaml);
+         expect(ec.ec == glz::error_code::exceeded_max_recursive_depth);
+      }
+   };
+
+   "deeply nested value under a block mapping is bounded"_test = [] {
+      // The deep flow tests above take the single-category direct branch and never touch the
+      // speculative block-mapping probe (try_parse_block_mapping_into_variant -> make_speculative).
+      // A block-mapping value routes through that probe; confirm the descent stays bounded there too.
+      const std::string yaml = "k:\n  " + std::string(100000, '[');
+      glz::generic value{};
+      auto ec = glz::read_yaml(value, yaml);
+      expect(ec.ec == glz::error_code::exceeded_max_recursive_depth);
+   };
+
+   "block mapping value within the limit still parses"_test = [] {
+      const std::string yaml = "k:\n  [1, [2, [3]]]";
+      glz::generic value{};
+      auto ec = glz::read_yaml(value, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      std::string json{};
+      expect(!glz::write_json(value, json));
+      expect(json == R"({"k":[1,[2,[3]]]})") << json;
+   };
+
+   "skipped alternating flow content is bounded"_test = [] {
+      // Skipping an unknown key routes through skip_flow_content; alternating delimiters "[{[{..."
+      // recurse one frame per delimiter (unlike same-delimiter nesting, which loops). The descent
+      // must stay bounded rather than overflow the stack.
+      std::string yaml = "unknown: ";
+      for (int i = 0; i < 100000; ++i) yaml += "[{";
+      yaml += "\nknown: 1";
+      skip_depth_probe value{};
+      auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(value, yaml);
+      expect(ec.ec == glz::error_code::exceeded_max_recursive_depth);
+   };
+};
+
 int main() { return 0; }

@@ -5787,4 +5787,55 @@ suite issue_2595_transparent_wrappers = [] {
    };
 };
 
+suite recursion_depth_tests = [] {
+   "deeply nested array is bounded"_test = [] {
+      const std::string toml = "a = " + std::string(100000, '[');
+      glz::generic value{};
+      auto ec = glz::read_toml(value, toml);
+      expect(ec.ec == glz::error_code::exceeded_max_recursive_depth);
+   };
+
+   "nesting within the limit still parses"_test = [] {
+      const std::string toml = "a = [1, [2, [3]]]";
+      glz::generic value{};
+      auto ec = glz::read_toml(value, toml);
+      expect(!ec) << glz::format_error(ec, toml);
+      std::string json{};
+      expect(!glz::write_json(value, json));
+      expect(json == R"({"a":[1,[2,[3]]]})") << json;
+   };
+
+   "deeply nested dotted key is bounded"_test = [] {
+      // A dotted key recurses through resolve_nested_map, one frame per segment, not through
+      // the variant reader, so it needs its own depth bound.
+      std::string toml = "a";
+      for (int i = 0; i < 100000; ++i) toml += ".a";
+      toml += " = 1";
+      glz::generic value{};
+      auto ec = glz::read_toml(value, toml);
+      expect(ec.ec == glz::error_code::exceeded_max_recursive_depth);
+   };
+
+   "deeply nested table header is bounded"_test = [] {
+      // A table header recurses through ensure_map_path, one frame per segment. A leading key-value
+      // line is required so the document map reader is active when the header is parsed.
+      std::string toml = "x = 1\n[a";
+      for (int i = 0; i < 100000; ++i) toml += ".a";
+      toml += "]\n";
+      glz::generic value{};
+      auto ec = glz::read_toml(value, toml);
+      expect(ec.ec == glz::error_code::exceeded_max_recursive_depth);
+   };
+
+   "dotted key within the limit still parses"_test = [] {
+      const std::string toml = "a.b.c = 1";
+      glz::generic value{};
+      auto ec = glz::read_toml(value, toml);
+      expect(!ec) << glz::format_error(ec, toml);
+      std::string json{};
+      expect(!glz::write_json(value, json));
+      expect(json == R"({"a":{"b":{"c":1}}})") << json;
+   };
+};
+
 int main() { return 0; }

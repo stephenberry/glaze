@@ -1923,6 +1923,14 @@ namespace glz
       template <auto Opts, class T>
       bool resolve_nested_map(T& root, std::span<std::string> path, auto& ctx, auto& it, auto& end)
       {
+         // A dotted key recurses one frame per path segment, with nothing else bounding the
+         // descent, so an adversarial key like "a.a.a.…=1" otherwise overflows the stack. Share
+         // the same depth budget the variant reader uses so combined nesting is bounded too.
+         depth_guard guard{ctx};
+         if (!guard) [[unlikely]] {
+            return false;
+         }
+
          if (path.empty()) {
             ctx.error = error_code::syntax_error;
             return false;
@@ -2014,6 +2022,13 @@ namespace glz
       template <auto Opts, class T>
       bool ensure_map_path(T& root, std::span<std::string> path, auto& ctx)
       {
+         // A table header "[a.a.a.…]" recurses one frame per path segment with nothing bounding
+         // the descent, so cap it on the shared depth budget to avoid a stack overflow.
+         depth_guard guard{ctx};
+         if (!guard) [[unlikely]] {
+            return false;
+         }
+
          if (path.empty()) {
             return true;
          }
@@ -2686,6 +2701,13 @@ namespace glz
          using Variant = std::remove_cvref_t<T>;
 
          if (bool(ctx.error)) [[unlikely]] {
+            return;
+         }
+
+         // Nested arrays and inline tables recurse back through this reader, so cap the depth
+         // here; a deeply nested value (e.g. "a=[[[[...") otherwise overflows the stack.
+         depth_guard guard{ctx};
+         if (!guard) [[unlikely]] {
             return;
          }
 

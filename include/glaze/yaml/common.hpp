@@ -118,6 +118,9 @@ namespace glz::yaml
          c.allow_indentless_sequence = allow_indentless_sequence;
          c.stream_begin = stream_begin;
          c.secondary_tag_handle_overridden = secondary_tag_handle_overridden;
+         // Carry the recursion depth so a speculative type-probe shares the parent's budget
+         // and can't reset the stack-overflow guard partway down a deeply nested value.
+         c.depth = depth;
          return c;
       }
    };
