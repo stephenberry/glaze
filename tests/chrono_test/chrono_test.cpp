@@ -1338,7 +1338,10 @@ suite date_format_tests = [] {
    "date_format_year_boundaries"_test = [] {
       {
          CompactTime c;
-         c.tp = sys_days{9999y / December / 31} + 23h + 59min + 59s;
+         // Anchor at seconds precision before adding the time-of-day: MSVC's chrono hours and
+         // minutes use a 32-bit rep, so `sys_days{9999y...} + 23h + 59min` overflows the
+         // intermediate minutes count (~4.2e9 > INT_MAX) and would otherwise build a bogus instant.
+         c.tp = sys_time<seconds>{sys_days{9999y / December / 31}} + 23h + 59min + 59s;
          std::string json;
          expect(!glz::write_json(c, json));
          expect(json == R"({"tp":"9999-12-31T23:59:59"})") << json;

@@ -184,7 +184,13 @@ namespace glz
          }
          else {
             using Duration = typename V::duration;
-            const auto tp = sys_days{ymd} + hours{f.hour} + minutes{f.minute} + seconds{f.second};
+            // Anchor the day at seconds precision before adding the time-of-day. MSVC's
+            // std::chrono::hours and minutes use a 32-bit rep, so `sys_days + hours + minutes`
+            // overflows the intermediate minutes count (days * 24 * 60 exceeds INT_MAX for
+            // far-future years, e.g. ~4.2e9 at year 9999) and silently wraps to a bogus
+            // instant. sys_seconds widens the arithmetic to 64 bits before the time-of-day
+            // is folded in, so the reconstruction is exact on every supported standard library.
+            const auto tp = sys_seconds{sys_days{ymd}} + hours{f.hour} + minutes{f.minute} + seconds{f.second};
             wrapper.val = time_point_cast<Duration>(tp);
          }
       }
