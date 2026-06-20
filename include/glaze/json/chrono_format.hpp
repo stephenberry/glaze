@@ -8,24 +8,31 @@
 #include <type_traits>
 
 #include "glaze/core/chrono.hpp"
-#include "glaze/core/format_str.hpp"
 #include "glaze/json/read.hpp"
 #include "glaze/json/write.hpp"
 
 // Per-field chrono customization wrappers.
 //
 // These decouple the *format* from the chrono *type*, addressing the limitation
-// that the clock type alone dictates the wire representation. They follow the
-// established field-wrapper precedents (glz::float_format for the NTTP format
-// string, glz::quoted for the fully-custom read+write pair) and are applied
+// that the clock type alone dictates the wire representation. They are applied
 // inside glz::object(...) within a glz::meta<T> specialization:
 //
 //   template <> struct glz::meta<event> {
 //      using T = event;
 //      static constexpr auto value = glz::object(
-//         "start",  glz::date_format<&T::start, "%Y-%m-%d %H:%M:%S">,
-//         "logged", glz::epoch_count<&T::logged, std::chrono::milliseconds>);
+//         "start",  glz::date_format(&T::start, "%Y-%m-%d %H:%M:%S"),
+//         "logged", glz::epoch_count<std::chrono::milliseconds>(&T::logged));
 //   };
+//
+// Both take the member pointer as a value argument. The format string (date_format)
+// and member pointer live as data rather than as non-type template parameters, so a
+// struct with many distinct formats does not multiply the wrapper's template
+// instantiations: the view type is keyed on the member type alone, and the format is
+// carried as a runtime std::string_view. The strftime pattern is still validated at
+// compile time — a consteval guard in the date_format() factory rejects unsupported
+// tokens, a missing calendar date, or time tokens on a year_month_day field. (glz::
+// float_format keeps its NTTP form because it leans on std::format's compile-time
+// format checking, which date_format's hand-rolled runtime walk does not need.)
 //
 // Scope (MVP): JSON only. date_format supports system_clock time_points and
 // year_month_day; epoch_count supports system_clock time_points. utc_time and
@@ -37,64 +44,36 @@ namespace glz
    // glz::date_format — per-field strftime-subset format string
    // ============================================
 
-   // Wrapper carrying the compile-time format string and a reference to the field.
-   // Both directions are fully custom (no meta<>::value indirection) because the
-   // underlying chrono parser only understands ISO 8601 and cannot honor Fmt.
+   // View carrying the bound member and the (runtime) format string. Parameterized on the
+   // member type alone, so two fields that differ only in their format string share one set
+   // of to<>/from<> instantiations.
    //
    // glaze_reflect = false keeps the binary backends from silently reflecting the
    // wrapper as an aggregate: date_format is a textual, JSON-only wrapper, so a
    // binary serialization should fail loudly (undefined to<BEVE, ...>) rather than
    // emit a meaningless encoding of the wrapper struct.
-   template <format_str Fmt, class T>
+   template <class T>
    struct date_format_t
    {
       static constexpr bool glaze_wrapper = true;
       static constexpr bool glaze_reflect = false;
       using value_type = T;
       T& val;
+      std::string_view fmt;
    };
 
-   namespace chrono_detail
-   {
-      // Compile-time guards shared by the date_format read and write paths.
-      template <format_str Fmt, class V>
-      consteval void validate_date_format() noexcept
-      {
-         static_assert(is_system_time_point<V> || is_year_month_day<V>,
-                       "glz::date_format requires a std::chrono::system_clock time_point or year_month_day member");
-         static_assert(date_format_tokens_valid(std::string_view(Fmt)),
-                       "glz::date_format: unsupported format token (supported: %Y %m %d %H %M %S %F %T %%)");
-         static_assert(date_format_has_full_date(std::string_view(Fmt)),
-                       "glz::date_format: format must include a full date (%Y %m %d, or %F)");
-         if constexpr (is_year_month_day<V>) {
-            static_assert(!date_format_has_time(std::string_view(Fmt)),
-                          "glz::date_format: a year_month_day field must not include time tokens (%H %M %S %T)");
-         }
-      }
-
-      // Compile-time guards shared by the epoch_count read and write paths. Validates both
-      // axes (the member type and the Duration unit) so a misuse on either surfaces as a
-      // friendly message rather than a deep cascade out of `typename Duration::rep`.
-      template <class Duration, class V>
-      consteval void validate_epoch_count() noexcept
-      {
-         static_assert(is_system_time_point<V>,
-                       "glz::epoch_count requires a std::chrono::system_clock time_point member");
-         static_assert(is_duration<Duration>,
-                       "glz::epoch_count requires a std::chrono::duration unit (e.g. std::chrono::milliseconds)");
-      }
-   }
-
-   template <format_str Fmt, class T>
-   struct to<JSON, date_format_t<Fmt, T>>
+   template <class T>
+   struct to<JSON, date_format_t<T>>
    {
       template <auto Opts, class B>
       static void op(auto&& wrapper, is_context auto&& ctx, B&& b, auto& ix) noexcept
       {
          using namespace std::chrono;
          using V = std::remove_cvref_t<T>;
-         chrono_detail::validate_date_format<Fmt, V>();
+         static_assert(is_system_time_point<V> || is_year_month_day<V>,
+                       "glz::date_format requires a std::chrono::system_clock time_point or year_month_day member");
 
+         const std::string_view fmt = wrapper.fmt;
          chrono_detail::date_time_fields f{};
 
          if constexpr (is_year_month_day<V>) {
@@ -131,12 +110,11 @@ namespace glz
          }
 
          // Upper bound on rendered size: the widest token is %F, which expands two source
-         // characters to "YYYY-MM-DD" (10 bytes, 5 per source char); %T expands two to
-         // "HH:MM:SS" (8 bytes, 4 per source char). *6 bounds both with room to spare, plus a
-         // small constant for the surrounding quotes. Skipped on the write_unchecked fast path,
-         // where the caller has already reserved the space (matches to<JSON, num_t>).
+         // characters to "YYYY-MM-DD" (10 bytes, 5 per source char). *6 bounds it with room
+         // to spare, plus a small constant for the surrounding quotes. Skipped on the
+         // write_unchecked fast path, where the caller has already reserved the space.
          if constexpr (not check_write_unchecked(Opts)) {
-            const size_t max_size = std::string_view(Fmt).size() * 6 + 4;
+            const size_t max_size = fmt.size() * 6 + 4;
             if (!ensure_space(ctx, b, ix + max_size)) [[unlikely]] {
                return;
             }
@@ -145,22 +123,23 @@ namespace glz
          if constexpr (not check_unquoted(Opts)) {
             b[ix++] = '"';
          }
-         chrono_detail::write_date_format(std::string_view(Fmt), f, b, ix);
+         chrono_detail::write_date_format(fmt, f, b, ix);
          if constexpr (not check_unquoted(Opts)) {
             b[ix++] = '"';
          }
       }
    };
 
-   template <format_str Fmt, class T>
-   struct from<JSON, date_format_t<Fmt, T>>
+   template <class T>
+   struct from<JSON, date_format_t<T>>
    {
       template <auto Opts>
       static void op(auto&& wrapper, is_context auto&& ctx, auto&&... args) noexcept
       {
          using namespace std::chrono;
          using V = std::remove_cvref_t<T>;
-         chrono_detail::validate_date_format<Fmt, V>();
+         static_assert(is_system_time_point<V> || is_year_month_day<V>,
+                       "glz::date_format requires a std::chrono::system_clock time_point or year_month_day member");
 
          std::string_view str;
          from<JSON, std::string_view>::template op<Opts>(str, ctx, args...);
@@ -168,7 +147,7 @@ namespace glz
             return;
 
          chrono_detail::date_time_fields f{};
-         chrono_detail::parse_date_format(std::string_view(Fmt), str, f, ctx.error);
+         chrono_detail::parse_date_format(wrapper.fmt, str, f, ctx.error);
          if (bool(ctx.error)) [[unlikely]]
             return;
 
@@ -196,23 +175,65 @@ namespace glz
       }
    };
 
-   template <auto MemPtr, format_str Fmt>
-   inline constexpr decltype(auto) date_format_impl() noexcept
+   namespace chrono_detail
    {
-      return [](auto&& val) { return date_format_t<Fmt, std::remove_reference_t<decltype(val.*MemPtr)>>{val.*MemPtr}; };
+      // Compile-time validation for date_format(). Rejects unsupported tokens, a missing
+      // calendar date, and time tokens applied to a year_month_day field. Runs inside the
+      // consteval date_format() factory, where the literal is a constant expression, even
+      // though the format is carried onward as a runtime value (a throw on the error path
+      // makes the surrounding immediate invocation non-constant, i.e. a hard compile error).
+      template <class Mem>
+      consteval void validate_date_format(std::string_view fmt)
+      {
+         static_assert(is_system_time_point<Mem> || is_year_month_day<Mem>,
+                       "glz::date_format requires a std::chrono::system_clock time_point or year_month_day member");
+         if (!date_format_tokens_valid(fmt)) {
+            throw "glz::date_format: unsupported format token (supported: %Y %m %d %H %M %S %F %T %%)";
+         }
+         if (!date_format_has_full_date(fmt)) {
+            throw "glz::date_format: format must include a full date (%Y %m %d, or %F)";
+         }
+         if constexpr (is_year_month_day<Mem>) {
+            if (date_format_has_time(fmt)) {
+               throw "glz::date_format: a year_month_day field must not include time tokens (%H %M %S %T)";
+            }
+         }
+      }
    }
 
-   // Usage: glz::date_format<&T::member, "%Y-%m-%d %H:%M:%S">
-   template <auto MemPtr, format_str Fmt>
-   constexpr auto date_format = date_format_impl<MemPtr, Fmt>();
+   // The object element: an invocable value carrying the member pointer + format. When the
+   // serializer iterates the meta object it calls this with the live instance (the same
+   // std::invocable dispatch every glaze field wrapper uses) to bind the member by reference.
+   template <class MemPtr>
+   struct date_format_spec
+   {
+      MemPtr ptr;
+      std::string_view fmt;
+
+      constexpr auto operator()(auto&& parent) const
+      {
+         using Mem = std::remove_reference_t<decltype(parent.*ptr)>;
+         return date_format_t<Mem>{parent.*ptr, fmt};
+      }
+   };
+
+   // Usage: glz::date_format(&T::member, "%Y-%m-%d %H:%M:%S")
+   template <class MemPtr>
+   consteval auto date_format(MemPtr ptr, const char* fmt)
+   {
+      using Mem = std::remove_cvref_t<typename unwrap_pointer<MemPtr>::type>;
+      const std::string_view sv{fmt};
+      chrono_detail::validate_date_format<Mem>(sv);
+      return date_format_spec<MemPtr>{ptr, sv};
+   }
 
    // ============================================
    // glz::epoch_count — per-field Unix timestamp count
    // ============================================
 
-   // Serializes a system_clock time_point field as a numeric Unix timestamp in
-   // units of Duration, the per-field counterpart to the glz::epoch_time storage
-   // wrapper (so one field can be an epoch count while others stay ISO 8601).
+   // View serializing a system_clock time_point field as a numeric Unix timestamp in units
+   // of Duration, the per-field counterpart to the glz::epoch_time storage wrapper (so one
+   // field can be an epoch count while others stay ISO 8601).
    template <class Duration, class T>
    struct epoch_count_t
    {
@@ -229,7 +250,10 @@ namespace glz
       static void op(auto&& wrapper, is_context auto&& ctx, B&& b, auto& ix) noexcept
       {
          using V = std::remove_cvref_t<T>;
-         chrono_detail::validate_epoch_count<Duration, V>();
+         static_assert(is_system_time_point<V>,
+                       "glz::epoch_count requires a std::chrono::system_clock time_point member");
+         static_assert(is_duration<Duration>,
+                       "glz::epoch_count requires a std::chrono::duration unit (e.g. std::chrono::milliseconds)");
          using Rep = typename Duration::rep;
          const auto count = std::chrono::duration_cast<Duration>(wrapper.val.time_since_epoch()).count();
          to<JSON, Rep>::template op<Opts>(count, ctx, b, ix);
@@ -243,7 +267,10 @@ namespace glz
       static void op(auto&& wrapper, is_context auto&& ctx, auto&&... args) noexcept
       {
          using V = std::remove_cvref_t<T>;
-         chrono_detail::validate_epoch_count<Duration, V>();
+         static_assert(is_system_time_point<V>,
+                       "glz::epoch_count requires a std::chrono::system_clock time_point member");
+         static_assert(is_duration<Duration>,
+                       "glz::epoch_count requires a std::chrono::duration unit (e.g. std::chrono::milliseconds)");
          using Rep = typename Duration::rep;
          Rep count{};
          from<JSON, Rep>::template op<Opts>(count, ctx, args...);
@@ -254,15 +281,27 @@ namespace glz
       }
    };
 
-   template <auto MemPtr, class Duration>
-   inline constexpr decltype(auto) epoch_count_impl() noexcept
+   template <class Duration, class MemPtr>
+   struct epoch_count_spec
    {
-      return [](auto&& val) {
-         return epoch_count_t<Duration, std::remove_reference_t<decltype(val.*MemPtr)>>{val.*MemPtr};
-      };
-   }
+      MemPtr ptr;
 
-   // Usage: glz::epoch_count<&T::member, std::chrono::milliseconds>
-   template <auto MemPtr, class Duration>
-   constexpr auto epoch_count = epoch_count_impl<MemPtr, Duration>();
+      constexpr auto operator()(auto&& parent) const
+      {
+         using Mem = std::remove_reference_t<decltype(parent.*ptr)>;
+         return epoch_count_t<Duration, Mem>{parent.*ptr};
+      }
+   };
+
+   // Usage: glz::epoch_count<std::chrono::milliseconds>(&T::member)
+   template <class Duration, class MemPtr>
+   constexpr auto epoch_count(MemPtr ptr)
+   {
+      using Mem = std::remove_cvref_t<typename unwrap_pointer<MemPtr>::type>;
+      static_assert(is_system_time_point<Mem>,
+                    "glz::epoch_count requires a std::chrono::system_clock time_point member");
+      static_assert(is_duration<Duration>,
+                    "glz::epoch_count requires a std::chrono::duration unit (e.g. std::chrono::milliseconds)");
+      return epoch_count_spec<Duration, MemPtr>{ptr};
+   }
 }

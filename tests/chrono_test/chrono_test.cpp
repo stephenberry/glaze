@@ -1157,9 +1157,9 @@ struct glz::meta<FormattedEvent>
 {
    using T = FormattedEvent;
    static constexpr auto value = glz::object( //
-      "start", glz::date_format<&T::start, "%Y-%m-%d %H:%M:%S">, //
-      "logged", glz::epoch_count<&T::logged, std::chrono::milliseconds>, //
-      "day", glz::date_format<&T::day, "%Y-%m-%d">);
+      "start", glz::date_format(&T::start, "%Y-%m-%d %H:%M:%S"), //
+      "logged", glz::epoch_count<std::chrono::milliseconds>(&T::logged), //
+      "day", glz::date_format(&T::day, "%Y-%m-%d"));
 };
 
 struct YmdSlashed
@@ -1171,7 +1171,7 @@ template <>
 struct glz::meta<YmdSlashed>
 {
    using T = YmdSlashed;
-   static constexpr auto value = glz::object("ymd", glz::date_format<&T::ymd, "%Y/%m/%d">);
+   static constexpr auto value = glz::object("ymd", glz::date_format(&T::ymd, "%Y/%m/%d"));
 };
 
 struct CompactTime
@@ -1184,7 +1184,7 @@ template <>
 struct glz::meta<CompactTime>
 {
    using T = CompactTime;
-   static constexpr auto value = glz::object("tp", glz::date_format<&T::tp, "%FT%T">);
+   static constexpr auto value = glz::object("tp", glz::date_format(&T::tp, "%FT%T"));
 };
 
 struct PercentLiteral
@@ -1197,7 +1197,7 @@ struct glz::meta<PercentLiteral>
 {
    using T = PercentLiteral;
    // %% renders a literal '%' on write and consumes a literal '%' on read.
-   static constexpr auto value = glz::object("tp", glz::date_format<&T::tp, "%Y-%m-%d %H%%">);
+   static constexpr auto value = glz::object("tp", glz::date_format(&T::tp, "%Y-%m-%d %H%%"));
 };
 
 struct CoarseLog
@@ -1210,7 +1210,7 @@ template <>
 struct glz::meta<CoarseLog>
 {
    using T = CoarseLog;
-   static constexpr auto value = glz::object("at", glz::epoch_count<&T::at, std::chrono::milliseconds>);
+   static constexpr auto value = glz::object("at", glz::epoch_count<std::chrono::milliseconds>(&T::at));
 };
 
 // Compile-time guards exercised directly (the wrapper-level static_assert *messages* in

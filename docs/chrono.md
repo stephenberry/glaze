@@ -186,7 +186,7 @@ The clock type alone decides the default representation (ISO 8601 for `system_cl
 
 ### `glz::date_format` — custom strftime-subset pattern
 
-`glz::date_format<&T::member, "pattern">` serializes a `system_clock` time point (or a `year_month_day`) using a `strftime`-style pattern instead of ISO 8601:
+`glz::date_format(&T::member, "pattern")` serializes a `system_clock` time point (or a `year_month_day`) using a `strftime`-style pattern instead of ISO 8601:
 
 ```cpp
 #include "glaze/chrono.hpp"
@@ -200,10 +200,12 @@ template <>
 struct glz::meta<Event> {
     using T = Event;
     static constexpr auto value = glz::object(
-        "start", glz::date_format<&T::start, "%Y-%m-%d %H:%M:%S">,  // "2026-06-18 12:34:56"
-        "day",   glz::date_format<&T::day,   "%Y/%m/%d">);          // "2026/06/18"
+        "start", glz::date_format(&T::start, "%Y-%m-%d %H:%M:%S"),  // "2026-06-18 12:34:56"
+        "day",   glz::date_format(&T::day,   "%Y/%m/%d"));          // "2026/06/18"
 };
 ```
+
+The member pointer and pattern are passed as ordinary arguments (not template parameters), so fields that share a member type but differ in format do not each spin up a fresh set of template instantiations. The pattern is still a compile-time literal and is validated at compile time.
 
 Supported conversion specifiers (locale-independent by design):
 
@@ -229,7 +231,7 @@ Notes and limitations (MVP scope):
 
 ### `glz::epoch_count` — per-field Unix timestamp
 
-`glz::epoch_count<&T::member, Duration>` serializes a `system_clock` time point as a numeric Unix timestamp in units of `Duration`. It is the per-field counterpart to the `glz::epoch_time` storage wrapper, letting one field be an epoch count while others stay ISO 8601:
+`glz::epoch_count<Duration>(&T::member)` serializes a `system_clock` time point as a numeric Unix timestamp in units of `Duration`. It is the per-field counterpart to the `glz::epoch_time` storage wrapper, letting one field be an epoch count while others stay ISO 8601:
 
 ```cpp
 #include "glaze/chrono.hpp"
@@ -244,7 +246,7 @@ struct glz::meta<Reading> {
     using T = Reading;
     static constexpr auto value = glz::object(
         "observed", &T::observed,                                       // "2026-06-18T12:34:56Z"
-        "logged",   glz::epoch_count<&T::logged, std::chrono::milliseconds>);  // 1781786096789
+        "logged",   glz::epoch_count<std::chrono::milliseconds>(&T::logged));  // 1781786096789
 };
 ```
 

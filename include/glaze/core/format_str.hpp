@@ -12,7 +12,7 @@ namespace glz
    // Compile-time string for use as a non-type template parameter.
    // Captures a string literal (including its null terminator) so that format
    // specifications can be carried through the type system, e.g.
-   // glz::float_format<&T::x, "{:.2f}"> or glz::date_format<&T::t, "%Y-%m-%d">.
+   // glz::float_format<&T::x, "{:.2f}">.
    template <size_t N>
    struct format_str
    {
