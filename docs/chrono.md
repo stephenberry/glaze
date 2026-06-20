@@ -225,7 +225,7 @@ Notes and limitations (MVP scope):
 
 - **Times are treated as UTC wall-clock.** There is no timezone token; the decomposed fields are UTC, matching the ISO 8601 writer.
 - **`%S` writes integer seconds only.** Sub-second precision is truncated on write (the format you typed has nowhere to put it), so round-tripping a finer-than-seconds value through a `%S` pattern is lossy by design. Use the default ISO 8601 representation when you need sub-second fidelity. Explicit-width fraction tokens (`%3S`/`%6S`/`%9S`) are a planned extension.
-- **JSON only.** `date_format` is a textual wrapper; serializing a field that uses it to a binary backend (BEVE, CBOR, MsgPack, BSON) is a compile error rather than a silent miscoding.
+- **Text/JSON-family backends only.** `date_format` is a textual wrapper that routes through the JSON serializer, so it also works for the JSON-family text outputs (NDJSON, stencil/mustache). Serializing a field that uses it to a backend with its own native encoding (BEVE, CBOR, MsgPack, BSON, or TOML) is a compile error (an undefined `glz::to<Format, …>`) rather than a silent miscoding.
 
 ### `glz::epoch_count` — per-field Unix timestamp
 
@@ -248,7 +248,9 @@ struct glz::meta<Reading> {
 };
 ```
 
-Unlike `glz::epoch_time<Duration>` (a storage type you declare your member as), `glz::epoch_count` wraps an ordinary `system_clock` time-point member in place, so you can keep the field's native type. Like `date_format`, it is JSON only.
+Unlike `glz::epoch_time<Duration>` (a storage type you declare your member as), `glz::epoch_count` wraps an ordinary `system_clock` time-point member in place, so you can keep the field's native type. Like `date_format`, it routes through the JSON serializer (so it also works for NDJSON and stencil output) and is a compile error under the native-encoding backends (BEVE, CBOR, MsgPack, BSON, TOML).
+
+The count is read as a JSON integer: exponent form (`1e3` → `1000`) is accepted, while fractional values (`1.5`) and quoted numbers (`"1500"`) are rejected with `error_code::parse_error`.
 
 ## Complete Example
 
@@ -333,6 +335,8 @@ TOML has native datetime types (not quoted strings). When using `glz::write_toml
 - `year_month_day` → TOML Local Date (`2024-06-15`)
 - `hh_mm_ss<Duration>` → TOML Local Time (`10:30:45.123`)
 - Durations and other time points → Numeric values
+
+> The per-field `glz::date_format` / `glz::epoch_count` wrappers are JSON-text-only and do **not** compile under `glz::write_toml`. Native (unwrapped) chrono members serialize as TOML datetimes as shown above; only the per-field format wrappers are restricted.
 
 See [TOML Documentation](./toml.md#datetime-support) for full details.
 

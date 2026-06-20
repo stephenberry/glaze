@@ -421,8 +421,10 @@ namespace glz
          return false;
       }
 
-      // Render decomposed fields through the format string. Caller must ensure the
-      // buffer has space for at least fmt.size() * 4 + a small constant bytes.
+      // Render decomposed fields through the format string. Caller must ensure the buffer has
+      // space for at least fmt.size() * 5 + a small constant bytes: the widest token, %F,
+      // expands its two source characters to the 10-byte "YYYY-MM-DD" (5 bytes per source char).
+      // The JSON caller reserves fmt.size() * 6 + 4 (extra slack plus the surrounding quotes).
       template <class B>
       inline void write_date_format(std::string_view fmt, const date_time_fields& f, B& b, auto& ix) noexcept
       {

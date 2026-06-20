@@ -71,6 +71,18 @@ namespace glz
                           "glz::date_format: a year_month_day field must not include time tokens (%H %M %S %T)");
          }
       }
+
+      // Compile-time guards shared by the epoch_count read and write paths. Validates both
+      // axes (the member type and the Duration unit) so a misuse on either surfaces as a
+      // friendly message rather than a deep cascade out of `typename Duration::rep`.
+      template <class Duration, class V>
+      consteval void validate_epoch_count() noexcept
+      {
+         static_assert(is_system_time_point<V>,
+                       "glz::epoch_count requires a std::chrono::system_clock time_point member");
+         static_assert(is_duration<Duration>,
+                       "glz::epoch_count requires a std::chrono::duration unit (e.g. std::chrono::milliseconds)");
+      }
    }
 
    template <format_str Fmt, class T>
@@ -86,6 +98,13 @@ namespace glz
          chrono_detail::date_time_fields f{};
 
          if constexpr (is_year_month_day<V>) {
+            // Reject a default/invalid year_month_day (month 0, day 0, Feb 30, ...) on write so the
+            // wrapper never emits a string its own reader would reject, and so an out-of-range
+            // month/day cannot slip past write_digits<2> as silently truncated low digits.
+            if (!wrapper.val.ok()) [[unlikely]] {
+               ctx.error = error_code::constraint_violated;
+               return;
+            }
             f.year = static_cast<int>(wrapper.val.year());
             f.month = static_cast<int>(static_cast<unsigned>(wrapper.val.month()));
             f.day = static_cast<int>(static_cast<unsigned>(wrapper.val.day()));
@@ -111,12 +130,16 @@ namespace glz
             return;
          }
 
-         // Upper bound on rendered size: the widest token (%T) expands two source
-         // characters to "HH:MM:SS" (8 bytes) and %F two chars to "YYYY-MM-DD"
-         // (10 bytes), i.e. < 6 bytes per source char; plus the surrounding quotes.
-         const size_t max_size = std::string_view(Fmt).size() * 6 + 4;
-         if (!ensure_space(ctx, b, ix + max_size)) [[unlikely]] {
-            return;
+         // Upper bound on rendered size: the widest token is %F, which expands two source
+         // characters to "YYYY-MM-DD" (10 bytes, 5 per source char); %T expands two to
+         // "HH:MM:SS" (8 bytes, 4 per source char). *6 bounds both with room to spare, plus a
+         // small constant for the surrounding quotes. Skipped on the write_unchecked fast path,
+         // where the caller has already reserved the space (matches to<JSON, num_t>).
+         if constexpr (not check_write_unchecked(Opts)) {
+            const size_t max_size = std::string_view(Fmt).size() * 6 + 4;
+            if (!ensure_space(ctx, b, ix + max_size)) [[unlikely]] {
+               return;
+            }
          }
 
          if constexpr (not check_unquoted(Opts)) {
@@ -200,8 +223,7 @@ namespace glz
       static void op(auto&& wrapper, is_context auto&& ctx, B&& b, auto& ix) noexcept
       {
          using V = std::remove_cvref_t<T>;
-         static_assert(is_system_time_point<V>,
-                       "glz::epoch_count requires a std::chrono::system_clock time_point member");
+         chrono_detail::validate_epoch_count<Duration, V>();
          using Rep = typename Duration::rep;
          const auto count = std::chrono::duration_cast<Duration>(wrapper.val.time_since_epoch()).count();
          to<JSON, Rep>::template op<Opts>(count, ctx, b, ix);
@@ -215,8 +237,7 @@ namespace glz
       static void op(auto&& wrapper, is_context auto&& ctx, auto&&... args) noexcept
       {
          using V = std::remove_cvref_t<T>;
-         static_assert(is_system_time_point<V>,
-                       "glz::epoch_count requires a std::chrono::system_clock time_point member");
+         chrono_detail::validate_epoch_count<Duration, V>();
          using Rep = typename Duration::rep;
          Rep count{};
          from<JSON, Rep>::template op<Opts>(count, ctx, args...);
