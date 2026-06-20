@@ -156,8 +156,14 @@ namespace glz
                return;
             }
             write_sequence(arity, idx, ctx, it, end, out, ix, recursive_depth + 1);
+            if (bool(ctx.error)) [[unlikely]] {
+               return;
+            }
 
             // handle tail
+            if (invalid_end(ctx, it, end)) [[unlikely]] {
+               return;
+            }
             const auto tag = get_type(ctx, it);
             if (tag != ERL_NIL_EXT) {
                ctx.error = error_code::array_element_not_found;
@@ -199,6 +205,9 @@ namespace glz
 
             while (arity--) {
                // write key
+               if (invalid_end(ctx, it, end)) [[unlikely]] {
+                  return;
+               }
                const auto key_type = get_type(ctx, it);
                // support only string or atom keys in json
                if (!eetf::is_string(key_type) && !eetf::is_atom(key_type)) {
@@ -254,6 +263,9 @@ namespace glz
 
       // Check format version
       if constexpr (not check_no_header(Opts)) {
+         if (it == end) [[unlikely]] {
+            return {0, error_code::no_read_input};
+         }
          const auto version = decode_version(ctx, it);
          if (eetf_magic_version != version) {
             return {0, error_code::version_mismatch};
