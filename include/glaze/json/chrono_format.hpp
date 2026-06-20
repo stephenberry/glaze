@@ -177,25 +177,42 @@ namespace glz
 
    namespace chrono_detail
    {
+      // Compile-time error reporting for the consteval date_format() factory.
+      //
+      // These are intentionally NOT constexpr: when validate_date_format() takes an error
+      // branch during constant evaluation, calling one makes the surrounding immediate
+      // invocation non-constant, which the compiler reports as a hard error naming the
+      // function (the function name is the diagnostic). We cannot use `throw` here — it is
+      // ill-formed under -fno-exceptions even inside an immediate function, and glaze's
+      // test-suite (and many consumers) build with exceptions disabled. We cannot use
+      // static_assert either, because a function parameter is never a constant expression
+      // within the function body.
+      //
+      //   supported tokens: %Y %m %d %H %M %S %F %T %%
+      //   a full date (%Y %m %d, or %F) is required
+      //   a year_month_day field must not include time tokens (%H %M %S %T)
+      inline void glaze_date_format_unsupported_token() {}
+      inline void glaze_date_format_missing_full_date() {}
+      inline void glaze_date_format_time_tokens_on_year_month_day() {}
+
       // Compile-time validation for date_format(). Rejects unsupported tokens, a missing
       // calendar date, and time tokens applied to a year_month_day field. Runs inside the
       // consteval date_format() factory, where the literal is a constant expression, even
-      // though the format is carried onward as a runtime value (a throw on the error path
-      // makes the surrounding immediate invocation non-constant, i.e. a hard compile error).
+      // though the format is carried onward as a runtime value.
       template <class Mem>
       consteval void validate_date_format(std::string_view fmt)
       {
          static_assert(is_system_time_point<Mem> || is_year_month_day<Mem>,
                        "glz::date_format requires a std::chrono::system_clock time_point or year_month_day member");
          if (!date_format_tokens_valid(fmt)) {
-            throw "glz::date_format: unsupported format token (supported: %Y %m %d %H %M %S %F %T %%)";
+            glaze_date_format_unsupported_token();
          }
          if (!date_format_has_full_date(fmt)) {
-            throw "glz::date_format: format must include a full date (%Y %m %d, or %F)";
+            glaze_date_format_missing_full_date();
          }
          if constexpr (is_year_month_day<Mem>) {
             if (date_format_has_time(fmt)) {
-               throw "glz::date_format: a year_month_day field must not include time tokens (%H %M %S %T)";
+               glaze_date_format_time_tokens_on_year_month_day();
             }
          }
       }
