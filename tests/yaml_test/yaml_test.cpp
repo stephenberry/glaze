@@ -10029,6 +10029,18 @@ suite issue_2595_transparent_wrappers = [] {
    };
 };
 
+struct skip_depth_probe
+{
+   int known{};
+};
+
+template <>
+struct glz::meta<skip_depth_probe>
+{
+   using T = skip_depth_probe;
+   static constexpr auto value = object("known", &T::known);
+};
+
 suite recursion_depth_tests = [] {
    "deeply nested flow sequence is bounded"_test = [] {
       const std::string yaml(100000, '[');
@@ -10091,6 +10103,18 @@ suite recursion_depth_tests = [] {
       std::string json{};
       expect(!glz::write_json(value, json));
       expect(json == R"({"k":[1,[2,[3]]]})") << json;
+   };
+
+   "skipped alternating flow content is bounded"_test = [] {
+      // Skipping an unknown key routes through skip_flow_content; alternating delimiters "[{[{..."
+      // recurse one frame per delimiter (unlike same-delimiter nesting, which loops). The descent
+      // must stay bounded rather than overflow the stack.
+      std::string yaml = "unknown: ";
+      for (int i = 0; i < 100000; ++i) yaml += "[{";
+      yaml += "\nknown: 1";
+      skip_depth_probe value{};
+      auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(value, yaml);
+      expect(ec.ec == glz::error_code::exceeded_max_recursive_depth);
    };
 };
 
