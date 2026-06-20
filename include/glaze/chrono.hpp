@@ -7,5 +7,6 @@
 // Includes all necessary headers for chrono serialization
 
 #include "glaze/core/chrono.hpp"
+#include "glaze/json/chrono_format.hpp"
 #include "glaze/json/read.hpp"
 #include "glaze/json/write.hpp"
