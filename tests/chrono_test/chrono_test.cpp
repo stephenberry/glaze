@@ -1,6 +1,8 @@
 // Glaze Library
 // For the license information refer to glaze.hpp
 
+#include "glaze/chrono.hpp"
+
 #include <chrono>
 #include <thread>
 
@@ -1136,6 +1138,313 @@ suite chrono_date_only_tests = [] {
       sys_days parsed{};
       expect(!glz::read_json(parsed, "\"2024-06-15T23:59:59.999999999+00:00\""));
       expect(parsed == sys_days{year{2024} / month{6} / day{15}});
+   };
+};
+
+// ============================================
+// Per-field chrono format wrappers (glz::date_format / glz::epoch_count)
+// ============================================
+
+struct FormattedEvent
+{
+   std::chrono::system_clock::time_point start{};
+   std::chrono::sys_time<std::chrono::milliseconds> logged{};
+   std::chrono::sys_days day{};
+};
+
+template <>
+struct glz::meta<FormattedEvent>
+{
+   using T = FormattedEvent;
+   static constexpr auto value = glz::object( //
+      "start", glz::date_format(&T::start, "%Y-%m-%d %H:%M:%S"), //
+      "logged", glz::epoch_count<std::chrono::milliseconds>(&T::logged), //
+      "day", glz::date_format(&T::day, "%Y-%m-%d"));
+};
+
+struct YmdSlashed
+{
+   std::chrono::year_month_day ymd{};
+};
+
+template <>
+struct glz::meta<YmdSlashed>
+{
+   using T = YmdSlashed;
+   static constexpr auto value = glz::object("ymd", glz::date_format(&T::ymd, "%Y/%m/%d"));
+};
+
+struct CompactTime
+{
+   // %F and %T aliases, no separators between date and time other than a literal 'T'
+   std::chrono::sys_time<std::chrono::seconds> tp{};
+};
+
+template <>
+struct glz::meta<CompactTime>
+{
+   using T = CompactTime;
+   static constexpr auto value = glz::object("tp", glz::date_format(&T::tp, "%FT%T"));
+};
+
+struct PercentLiteral
+{
+   std::chrono::sys_time<std::chrono::seconds> tp{};
+};
+
+template <>
+struct glz::meta<PercentLiteral>
+{
+   using T = PercentLiteral;
+   // %% renders a literal '%' on write and consumes a literal '%' on read.
+   static constexpr auto value = glz::object("tp", glz::date_format(&T::tp, "%Y-%m-%d %H%%"));
+};
+
+struct CoarseLog
+{
+   // Member is seconds-precision; epoch_count emits milliseconds (cross-precision).
+   std::chrono::sys_time<std::chrono::seconds> at{};
+};
+
+template <>
+struct glz::meta<CoarseLog>
+{
+   using T = CoarseLog;
+   static constexpr auto value = glz::object("at", glz::epoch_count<std::chrono::milliseconds>(&T::at));
+};
+
+// Compile-time guards exercised directly (the wrapper-level static_assert *messages* in
+// validate_date_format / validate_epoch_count can only be observed via an actual compile
+// failure, so they are not asserted live; testing the consteval validators is the equivalent
+// stable coverage for docs/chrono.md's three documented date_format guarantees).
+static_assert(glz::chrono_detail::date_format_tokens_valid("%Y-%m-%d %H:%M:%S"));
+static_assert(glz::chrono_detail::date_format_tokens_valid("%F %T %%"));
+static_assert(!glz::chrono_detail::date_format_tokens_valid("%A"));
+static_assert(!glz::chrono_detail::date_format_tokens_valid("%j"));
+static_assert(!glz::chrono_detail::date_format_tokens_valid("%z"));
+static_assert(!glz::chrono_detail::date_format_tokens_valid("ends-with-%"));
+static_assert(glz::chrono_detail::date_format_has_full_date("%F"));
+static_assert(glz::chrono_detail::date_format_has_full_date("%Y-%m-%d"));
+static_assert(!glz::chrono_detail::date_format_has_full_date("%H:%M:%S"));
+static_assert(glz::chrono_detail::date_format_has_time("%T"));
+static_assert(glz::chrono_detail::date_format_has_time("%H"));
+static_assert(!glz::chrono_detail::date_format_has_time("%F"));
+
+suite date_format_tests = [] {
+   using namespace std::chrono;
+
+   "date_format_custom_separators"_test = [] {
+      FormattedEvent e;
+      e.start = sys_days{2026y / June / 18} + 12h + 34min + 56s;
+      e.logged = time_point_cast<milliseconds>(sys_days{2026y / June / 18} + 1h + 789ms);
+      e.day = sys_days{2026y / June / 18};
+
+      std::string json;
+      expect(!glz::write_json(e, json));
+
+      const long long ms = duration_cast<milliseconds>(e.logged.time_since_epoch()).count();
+      const std::string expected =
+         std::string{R"({"start":"2026-06-18 12:34:56","logged":)"} + std::to_string(ms) + R"(,"day":"2026-06-18"})";
+      expect(json == expected) << json;
+
+      FormattedEvent r;
+      expect(!glz::read_json(r, json));
+      expect(r.start == e.start);
+      expect(r.logged == e.logged);
+      expect(r.day == e.day);
+   };
+
+   "date_format_year_month_day_slashed"_test = [] {
+      YmdSlashed y{year_month_day{2026y / December / 31}};
+      std::string json;
+      expect(!glz::write_json(y, json));
+      expect(json == R"({"ymd":"2026/12/31"})") << json;
+
+      YmdSlashed r;
+      expect(!glz::read_json(r, json));
+      expect(r.ymd == y.ymd);
+   };
+
+   "date_format_F_T_aliases"_test = [] {
+      CompactTime c;
+      c.tp = sys_days{2024y / February / 29} + 23h + 59min + 7s; // leap day
+      std::string json;
+      expect(!glz::write_json(c, json));
+      expect(json == R"({"tp":"2024-02-29T23:59:07"})") << json;
+
+      CompactTime r;
+      expect(!glz::read_json(r, json));
+      expect(r.tp == c.tp);
+   };
+
+   "date_format_subsecond_truncates_on_write"_test = [] {
+      // %S emits integer seconds; the millisecond component is dropped on write.
+      FormattedEvent e;
+      e.start = sys_days{2026y / June / 18} + 12h + 34min + 56s + 500ms;
+      std::string json;
+      expect(!glz::write_json(e, json));
+      expect(json.find("12:34:56\"") != std::string::npos) << json;
+   };
+
+   "date_format_rejects_malformed_input"_test = [] {
+      FormattedEvent r;
+      expect(bool(glz::read_json(r, R"({"start":"not-a-date","logged":0,"day":"2026-06-18"})")));
+   };
+
+   "date_format_rejects_wrong_separator"_test = [] {
+      // The format demands '/', but the input uses '-'.
+      YmdSlashed r;
+      expect(bool(glz::read_json(r, R"({"ymd":"2026-12-31"})")));
+   };
+
+   "date_format_rejects_trailing_input"_test = [] {
+      // Extra characters past the format must not be silently ignored.
+      YmdSlashed r;
+      expect(bool(glz::read_json(r, R"({"ymd":"2026/12/31 extra"})")));
+   };
+
+   "date_format_rejects_invalid_calendar_date"_test = [] {
+      // Feb 30 parses field-wise but fails year_month_day::ok().
+      YmdSlashed r;
+      expect(bool(glz::read_json(r, R"({"ymd":"2026/02/30"})")));
+   };
+
+   "epoch_count_per_field_roundtrip"_test = [] {
+      FormattedEvent e;
+      e.logged = time_point_cast<milliseconds>(sys_days{1970y / January / 1} + 1234ms);
+      std::string json;
+      expect(!glz::write_json(e, json));
+      expect(json.find("\"logged\":1234") != std::string::npos) << json;
+
+      FormattedEvent r;
+      expect(!glz::read_json(r, json));
+      expect(r.logged == e.logged);
+   };
+
+   "date_format_roundtrip_stress"_test = [] {
+      // Many distinct seconds-precision instants must round-trip exactly.
+      auto base = sys_days{2000y / January / 1};
+      for (int i = 0; i < 1000; ++i) {
+         CompactTime c;
+         c.tp = time_point_cast<seconds>(base + hours{i * 37} + minutes{i % 60} + seconds{i % 60});
+         std::string json;
+         expect(!glz::write_json(c, json));
+         CompactTime r;
+         expect(!glz::read_json(r, json));
+         expect(r.tp == c.tp) << json;
+      }
+   };
+
+   "date_format_year_boundaries"_test = [] {
+      {
+         CompactTime c;
+         // Anchor at seconds precision before adding the time-of-day: MSVC's chrono hours and
+         // minutes use a 32-bit rep, so `sys_days{9999y...} + 23h + 59min` overflows the
+         // intermediate minutes count (~4.2e9 > INT_MAX) and would otherwise build a bogus instant.
+         c.tp = sys_time<seconds>{sys_days{9999y / December / 31}} + 23h + 59min + 59s;
+         std::string json;
+         expect(!glz::write_json(c, json));
+         expect(json == R"({"tp":"9999-12-31T23:59:59"})") << json;
+         CompactTime r;
+         expect(!glz::read_json(r, json));
+         expect(r.tp == c.tp);
+      }
+      {
+         CompactTime c;
+         c.tp = sys_days{0000y / January / 1};
+         std::string json;
+         expect(!glz::write_json(c, json));
+         expect(json == R"({"tp":"0000-01-01T00:00:00"})") << json;
+         CompactTime r;
+         expect(!glz::read_json(r, json));
+         expect(r.tp == c.tp);
+      }
+      {
+         // Year >= 10000 must fail to serialize (constraint_violated), not wrap around.
+         CompactTime c;
+         c.tp = sys_days{year{10000} / January / 1};
+         std::string json;
+         expect(bool(glz::write_json(c, json)));
+      }
+      {
+         // A 5-digit year on read is rejected ('0' where the '-' separator is expected).
+         CompactTime r;
+         expect(bool(glz::read_json(r, R"({"tp":"10000-01-01T00:00:00"})")));
+      }
+   };
+
+   "date_format_pre_1970_roundtrip"_test = [] {
+      // floor<days> + hh_mm_ss{floor<seconds>(tp - dp)} must handle negative time_since_epoch.
+      CompactTime c;
+      c.tp = sys_days{1969y / December / 31} + 23h + 59min + 59s;
+      std::string json;
+      expect(!glz::write_json(c, json));
+      expect(json == R"({"tp":"1969-12-31T23:59:59"})") << json;
+      CompactTime r;
+      expect(!glz::read_json(r, json));
+      expect(r.tp == c.tp);
+
+      // Pre-epoch with a non-midnight time-of-day exercises the intra-day remainder.
+      CompactTime c2;
+      c2.tp = sys_days{1900y / July / 4} + 13h + 25min + 47s;
+      std::string j2;
+      expect(!glz::write_json(c2, j2));
+      CompactTime r2;
+      expect(!glz::read_json(r2, j2));
+      expect(r2.tp == c2.tp);
+   };
+
+   "date_format_percent_literal"_test = [] {
+      PercentLiteral p;
+      p.tp = sys_days{2026y / June / 18} + 9h;
+      std::string json;
+      expect(!glz::write_json(p, json));
+      expect(json == R"({"tp":"2026-06-18 09%"})") << json;
+      PercentLiteral r;
+      expect(!glz::read_json(r, json));
+      expect(r.tp == p.tp);
+   };
+
+   "date_format_subsecond_readback_zeroed"_test = [] {
+      // The write side truncates the millisecond fraction; the read side reconstructs at
+      // seconds precision, so the round-tripped instant differs from the original by < 1s.
+      FormattedEvent e;
+      e.start = sys_days{2026y / June / 18} + 12h + 34min + 56s + 789ms;
+      e.logged = time_point_cast<milliseconds>(sys_days{2026y / June / 18});
+      e.day = sys_days{2026y / June / 18};
+      std::string json;
+      expect(!glz::write_json(e, json));
+      FormattedEvent r;
+      expect(!glz::read_json(r, json));
+      const auto seconds_floor = sys_days{2026y / June / 18} + 12h + 34min + 56s;
+      expect(r.start == seconds_floor) << json;
+      expect(r.start != e.start); // the 789ms fraction was lost by design
+   };
+
+   "epoch_count_cross_precision"_test = [] {
+      // A seconds-precision member emitted as a millisecond count, and the duration_cast
+      // truncation that brings a sub-second count back to the member's coarser precision.
+      CoarseLog c;
+      c.at = time_point_cast<seconds>(sys_days{1970y / January / 1} + 5s);
+      std::string json;
+      expect(!glz::write_json(c, json));
+      expect(json == R"({"at":5000})") << json;
+      CoarseLog r;
+      expect(!glz::read_json(r, json));
+      expect(r.at == c.at);
+
+      // 1500ms truncates toward the member's seconds precision (-> 1s).
+      CoarseLog r2;
+      expect(!glz::read_json(r2, R"({"at":1500})"));
+      expect(r2.at == time_point_cast<seconds>(sys_days{1970y / January / 1} + 1s)) << "1500ms -> 1s";
+   };
+
+   "date_format_invalid_ymd_write_errors"_test = [] {
+      // A default-constructed year_month_day (month 0 / day 0) is not ok(); the writer must
+      // fail with constraint_violated rather than emit an unreadable "0000/00/00".
+      YmdSlashed y{};
+      std::string json;
+      expect(bool(glz::write_json(y, json))) << "expected constraint_violated for invalid ymd";
    };
 };
 
