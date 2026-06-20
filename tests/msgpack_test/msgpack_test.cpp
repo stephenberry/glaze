@@ -471,20 +471,31 @@ struct recording_allocator
    }
 };
 
-// Regression guard for the array/map reserve amplification fix. An array32/map32 header carries a
-// 32-bit element count read straight off the wire; before the fix the reader reserved that many
-// slots unconditionally, so a 5-byte payload claiming 2^32-1 elements triggered a multi-GB
-// allocation (e.g. ~34 GB for vector<double>) that throws bad_alloc inside the noexcept op and
-// terminates the process. The reservation is now capped at the bytes remaining, so the reader must
-// never request an allocation larger than the input and must return unexpected_end on the truncated
-// body. The behavioral assertions alone are not enough: on an overcommitting OS the oversized
-// reservation succeeds lazily and the loop still reports unexpected_end, so the recording allocator
-// is what actually pins the bug.
+// Regression guard for the array/map reserve amplification fix. An array32/map32 header carries an
+// element count read straight off the wire; before the fix the reader reserved that many slots
+// unconditionally, so a tiny payload claiming far more elements than the input could possibly contain
+// drove an allocation sized by the wire count rather than the input. The reservation is now capped at
+// the bytes remaining, so the reader must never request an allocation larger than the input and must
+// return unexpected_end on the truncated body.
+//
+// The behavioral assertion (unexpected_end) cannot by itself tell the fix from the bug: both the
+// capped and the un-capped reader report unexpected_end on a truncated body. The recording allocator
+// is what pins the bug, by observing the size the reader actually asked for.
+//
+// The claimed count is a large-but-safely-allocatable value rather than the maximal 2^32-1. It is
+// still vastly larger than any of these few-byte payloads could justify (every element needs at least
+// one wire byte), so on un-patched code the recorded request blows past the input-size bound and the
+// assertion fails. But it is only a few MB, so the un-patched path fails by a clean assertion on every
+// platform instead of std::terminate-ing: a 2^32-1 reserve of vector<double> is a ~34 GB request that
+// throws bad_alloc out of the noexcept op on any config where it cannot be served lazily (strict
+// overcommit, cgroup-limited, 32-bit, or ASAN builds), aborting the whole test binary rather than
+// reporting a failure.
+inline constexpr size_t amplified_count = 1'000'000; // wire count, far beyond what any payload below backs
 suite msgpack_reserve_amplification_tests = [] {
-   // array32 tag (0xdd) followed by length 0xFFFFFFFF, with no element data.
-   const std::string array32_bomb{char(0xdd), char(0xff), char(0xff), char(0xff), char(0xff)};
-   // map32 tag (0xdf) followed by length 0xFFFFFFFF, with no entry data.
-   const std::string map32_bomb{char(0xdf), char(0xff), char(0xff), char(0xff), char(0xff)};
+   // array32 tag (0xdd) followed by a big-endian uint32 count of 1,000,000 (0x000F4240), no element data.
+   const std::string array32_bomb{char(0xdd), char(0x00), char(0x0f), char(0x42), char(0x40)};
+   // map32 tag (0xdf) followed by a big-endian uint32 count of 1,000,000 (0x000F4240), no entry data.
+   const std::string map32_bomb{char(0xdf), char(0x00), char(0x0f), char(0x42), char(0x40)};
 
    "msgpack array32 reserve is bounded by the input, not the wire count"_test = [&] {
       g_largest_alloc_count = 0;
@@ -492,10 +503,11 @@ suite msgpack_reserve_amplification_tests = [] {
       const auto ec = glz::read_msgpack(v, array32_bomb);
       expect(ec.ec == glz::error_code::unexpected_end)
          << "expected unexpected_end, got: " << glz::format_error(ec, array32_bomb);
-      // Without the cap this would be 0xFFFFFFFF; the cap keeps it within the buffer size.
+      // No element data follows the header, so remaining == 0 and the cap holds the reservation to
+      // the buffer size. Without the cap this would be amplified_count.
       expect(g_largest_alloc_count <= array32_bomb.size())
          << "reserve requested " << g_largest_alloc_count << " elements for a " << array32_bomb.size()
-         << "-byte payload";
+         << "-byte payload (wire count was " << amplified_count << ")";
    };
 
    "msgpack array32 amplification guard is element-type agnostic"_test = [&] {
@@ -514,14 +526,38 @@ suite msgpack_reserve_amplification_tests = [] {
       const auto ec = glz::read_msgpack(m, map32_bomb);
       expect(ec.ec == glz::error_code::unexpected_end)
          << "expected unexpected_end, got: " << glz::format_error(ec, map32_bomb);
-      // The reservation must stay a small constant tied to the input, not the 2^32-1 wire count.
-      // Unlike the vector case, unordered_map implementations pre-allocate a baseline bucket array
-      // (e.g. the MSVC STL starts at 16), so an exact input-size bound does not hold here. A generous
-      // ceiling still cleanly separates a bounded reservation from the multi-billion-bucket bug.
+      // The reservation must stay a small constant tied to the input, not the amplified_count wire
+      // count. Unlike the vector case, unordered_map implementations pre-allocate a baseline bucket
+      // array (e.g. the MSVC STL starts at 16), so an exact input-size bound does not hold here. A
+      // generous ceiling still cleanly separates a bounded reservation from the wire-count-sized bug.
       constexpr size_t sane_bucket_bound = 1024;
       expect(g_largest_alloc_count < sane_bucket_bound)
          << "reserve requested " << g_largest_alloc_count << " buckets for a " << map32_bomb.size()
-         << "-byte payload";
+         << "-byte payload (wire count was " << amplified_count << ")";
+   };
+
+   "msgpack array reserve clamps to remaining bytes, not the wire count"_test = [&] {
+      // The zero-body bombs above only ever exercise reserve(0) on the patched path. This case drives
+      // the cap's min(len, remaining) with a NON-ZERO remaining: an array32 claiming amplified_count
+      // elements followed by 8 one-byte elements (positive fixints) and then truncated. The reader may
+      // reserve up to the 8 trailing bytes, never the wire count, then walks the present elements and
+      // reports unexpected_end on the missing remainder.
+      std::string payload{char(0xdd), char(0x00), char(0x0f), char(0x42), char(0x40)};
+      for (char i = 0; i < 8; ++i) {
+         payload.push_back(i); // positive fixint -> one wire byte each
+      }
+      g_largest_alloc_count = 0;
+      std::vector<double, recording_allocator<double>> v{};
+      const auto ec = glz::read_msgpack(v, payload);
+      expect(ec.ec == glz::error_code::unexpected_end)
+         << "expected unexpected_end, got: " << glz::format_error(ec, payload);
+      // Bounded by a small multiple of the 8-byte body (reserve(8) plus at most one growth step),
+      // never the amplified_count wire count. A generous ceiling separates the two unambiguously
+      // without coupling to a specific growth policy.
+      constexpr size_t sane_bound = 1024;
+      expect(g_largest_alloc_count < sane_bound)
+         << "reserve requested " << g_largest_alloc_count
+         << " elements; expected a small bound tied to the 8-byte body, not " << amplified_count;
    };
 
    "msgpack reserve cap leaves valid arrays intact"_test = [] {
