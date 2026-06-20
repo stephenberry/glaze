@@ -205,6 +205,19 @@ struct glz::meta<Event> {
 };
 ```
 
+The wrapper is bidirectional: the same pattern parses the value back on read.
+
+```cpp
+Event e{};
+e.start = std::chrono::sys_days{std::chrono::year{2026} / 6 / 18} + std::chrono::hours{12} +
+          std::chrono::minutes{34} + std::chrono::seconds{56};
+
+std::string json = glz::write_json(e).value();   // {"start":"2026-06-18 12:34:56","day":"..."}
+
+Event parsed{};
+auto ec = glz::read_json(parsed, json);           // parsed.start == e.start
+```
+
 The member pointer and pattern are passed as ordinary arguments (not template parameters), so fields that share a member type but differ in format do not each spin up a fresh set of template instantiations. The pattern is still a compile-time literal and is validated at compile time.
 
 Supported conversion specifiers (locale-independent by design):
@@ -226,6 +239,7 @@ The pattern is validated at compile time:
 Notes and limitations (MVP scope):
 
 - **Times are treated as UTC wall-clock.** There is no timezone token; the decomposed fields are UTC, matching the ISO 8601 writer.
+- **The four-digit-year range still applies.** As with the ISO 8601 writers, a year outside `[0000, 9999]` (or a non-`ok()` `year_month_day`) fails to serialize with `error_code::constraint_violated` rather than emitting wrap-around digits.
 - **`%S` writes integer seconds only.** Sub-second precision is truncated on write (the format you typed has nowhere to put it), so round-tripping a finer-than-seconds value through a `%S` pattern is lossy by design. Use the default ISO 8601 representation when you need sub-second fidelity. Explicit-width fraction tokens (`%3S`/`%6S`/`%9S`) are a planned extension.
 - **Text/JSON-family backends only.** `date_format` is a textual wrapper that routes through the JSON serializer, so it also works for the JSON-family text outputs (NDJSON, stencil/mustache). Serializing a field that uses it to a backend with its own native encoding (BEVE, CBOR, MsgPack, BSON, or TOML) is a compile error (an undefined `glz::to<Format, …>`) rather than a silent miscoding.
 
