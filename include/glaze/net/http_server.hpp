@@ -1819,6 +1819,17 @@ namespace glz
             return;
          }
 
+         // Chunked request bodies are unsupported, so a request that carries
+         // Transfer-Encoding cannot be framed by Content-Length. Treating it as a
+         // zero-length body leaves the encoded payload in the buffer, where the
+         // keep-alive loop parses it as a second, smuggled request (TE/CL desync).
+         // RFC 7230 3.3.1 requires answering an undecodable Transfer-Encoding with
+         // 501 and closing the connection.
+         if (headers.find("transfer-encoding") != headers.end()) {
+            send_error_response_with_close(conn, 501, "Not Implemented");
+            return;
+         }
+
          std::size_t content_length = 0;
          if (auto it = headers.find("content-length"); it != headers.end()) {
             const auto& cl = it->second;
