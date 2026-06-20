@@ -164,8 +164,10 @@ namespace glz
             if (invalid_end(ctx, it, end)) [[unlikely]] {
                return;
             }
-            const auto tag = get_type(ctx, it);
-            if (tag != ERL_NIL_EXT) {
+            // A proper list terminates with ERL_NIL_EXT, a single tag byte. Read that tag directly
+            // rather than through get_type/ei_get_type, which reads a 2-4 byte length header off the
+            // raw pointer (past end when the tail tag is the final byte) for any other term type.
+            if (uint8_t(*it) != ERL_NIL_EXT) {
                ctx.error = error_code::array_element_not_found;
                return;
             }
@@ -208,7 +210,12 @@ namespace glz
                if (invalid_end(ctx, it, end)) [[unlikely]] {
                   return;
                }
-               const auto key_type = get_type(ctx, it);
+               // Read the key tag directly rather than through get_type/ei_get_type, which reads a
+               // 2-4 byte length header off the raw pointer (past end when the tag is the final byte).
+               // is_string/is_atom accept the raw, un-normalized tag, and term_to_json_value re-reads
+               // and bounds-checks the full key below. Widen to int so the tag clears the int_t
+               // constraint on is_string/is_atom (uint8_t is a char type and would be rejected).
+               const int key_type = uint8_t(*it);
                // support only string or atom keys in json
                if (!eetf::is_string(key_type) && !eetf::is_atom(key_type)) {
                   ctx.error = error_code::syntax_error;
