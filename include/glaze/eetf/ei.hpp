@@ -117,6 +117,10 @@ namespace glz
    GLZ_ALWAYS_INLINE void decode_number(T&& value, Args&&... args) noexcept
    {
       using V = std::remove_cvref_t<T>;
+      // Cast the scratch value through V (the decayed value type), never T. T is a forwarding
+      // reference, so static_cast<T>(v) forms a reference cast that fails to compile when the
+      // scratch type (long / long long) is a distinct type of the same width as V -- e.g. on
+      // platforms where int64_t is long long while long is also 64-bit (macOS/LLP64-style).
       if constexpr (std::floating_point<std::remove_cvref_t<T>>) {
          double v;
          detail::decode_impl([&](const char* buf, int* index) { return ei_decode_double(buf, index, &v); },
@@ -129,13 +133,13 @@ namespace glz
                long long v;
                detail::decode_impl([&](const char* buf, int* index) { return ei_decode_longlong(buf, index, &v); },
                                    std::forward<Args>(args)...);
-               value = static_cast<T>(v);
+               value = static_cast<V>(v);
             }
             else {
                unsigned long long v;
                detail::decode_impl([&](const char* buf, int* index) { return ei_decode_ulonglong(buf, index, &v); },
                                    std::forward<Args>(args)...);
-               value = static_cast<T>(v);
+               value = static_cast<V>(v);
             }
          }
          else {
@@ -143,13 +147,13 @@ namespace glz
                long v;
                detail::decode_impl([&](const char* buf, int* index) { return ei_decode_long(buf, index, &v); },
                                    std::forward<Args>(args)...);
-               value = static_cast<T>(v);
+               value = static_cast<V>(v);
             }
             else {
                unsigned long v;
                detail::decode_impl([&](const char* buf, int* index) { return ei_decode_ulong(buf, index, &v); },
                                    std::forward<Args>(args)...);
-               value = static_cast<T>(v);
+               value = static_cast<V>(v);
             }
          }
       }
