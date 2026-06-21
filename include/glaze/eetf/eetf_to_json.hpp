@@ -85,6 +85,11 @@ namespace glz
             dump('[', out, ix);
             while (arity--) {
                term_to_json_value<Opts>(ctx, it, end, out, ix, recursive_depth);
+               // Stop on error instead of spinning the remaining (attacker-declared, up to 2^32)
+               // iterations once the input is exhausted.
+               if (bool(ctx.error)) [[unlikely]] {
+                  return;
+               }
                if (arity) {
                   dump(',', out, ix);
                   if constexpr (Opts.prettify) {
@@ -99,6 +104,9 @@ namespace glz
          switch (type) {
          case ERL_SMALL_INTEGER_EXT:
          case ERL_INTEGER_EXT: {
+            // ei_decode_long reads the tag plus a fixed payload (1 byte for SMALL_INTEGER_EXT,
+            // 4 for INTEGER_EXT) off the raw pointer; bound it before the decode.
+            if (check_invalid_offset(ctx, it, end, type == ERL_SMALL_INTEGER_EXT ? 2u : 5u)) return;
             term_to_json_number<Opts>(std::int64_t{}, ctx, it, end, out, ix);
             if (bool(ctx.error)) return;
             break;
@@ -112,6 +120,9 @@ namespace glz
 
          case ERL_FLOAT_EXT:
          case NEW_FLOAT_EXT: {
+            // ei_decode_double reads the tag plus a fixed payload (8 bytes for NEW_FLOAT_EXT, the
+            // 31-byte ASCII form for the legacy FLOAT_EXT) off the raw pointer; bound it first.
+            if (check_invalid_offset(ctx, it, end, type == NEW_FLOAT_EXT ? 9u : 32u)) return;
             term_to_json_number<Opts>(double{}, ctx, it, end, out, ix);
             if (bool(ctx.error)) return;
             break;
@@ -151,6 +162,8 @@ namespace glz
          }
 
          case ERL_LIST_EXT: {
+            // decode_list_header reads the tag plus a 4-byte arity off the raw pointer; bound it.
+            if (check_invalid_offset(ctx, it, end, 5u)) return;
             [[maybe_unused]] auto [arity, idx] = decode_list_header(ctx, it);
             if (bool(ctx.error)) {
                return;
@@ -183,6 +196,9 @@ namespace glz
 
          case ERL_SMALL_TUPLE_EXT:
          case ERL_LARGE_TUPLE_EXT: {
+            // decode_tuple_header reads the tag plus the arity (1 byte for SMALL_TUPLE_EXT, 4 for
+            // LARGE_TUPLE_EXT) off the raw pointer; bound it.
+            if (check_invalid_offset(ctx, it, end, type == ERL_SMALL_TUPLE_EXT ? 2u : 5u)) return;
             [[maybe_unused]] auto [arity, idx] = decode_tuple_header(ctx, it);
             if (bool(ctx.error)) {
                return;
@@ -192,6 +208,8 @@ namespace glz
          }
 
          case ERL_MAP_EXT: {
+            // decode_map_header reads the tag plus a 4-byte arity off the raw pointer; bound it.
+            if (check_invalid_offset(ctx, it, end, 5u)) return;
             [[maybe_unused]] auto [arity, idx] = decode_map_header(ctx, it);
             if (bool(ctx.error)) {
                return;
