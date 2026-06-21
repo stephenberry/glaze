@@ -1717,6 +1717,27 @@ suite yaml_tag_tests = [] {
       expect(bool(ec));
    };
 
+   "dq_reject_lone_high_surrogate_u"_test = [] {
+      std::string yaml = R"("\uD800")"; // lone high surrogate, not a scalar value
+      std::string value;
+      auto ec = glz::read_yaml(value, yaml);
+      expect(bool(ec));
+   };
+
+   "dq_reject_lone_low_surrogate_u"_test = [] {
+      std::string yaml = R"("\uDC00")"; // lone low surrogate
+      std::string value;
+      auto ec = glz::read_yaml(value, yaml);
+      expect(bool(ec));
+   };
+
+   "dq_reject_surrogate_unicode8"_test = [] {
+      std::string yaml = R"("\U0000D800")"; // surrogate via 8-digit escape
+      std::string value;
+      auto ec = glz::read_yaml(value, yaml);
+      expect(bool(ec));
+   };
+
    "dq_unterminated"_test = [] {
       std::string yaml = R"("hello)"; // no closing quote
       std::string value;
