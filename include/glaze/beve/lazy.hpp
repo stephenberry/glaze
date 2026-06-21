@@ -681,7 +681,14 @@ namespace glz
             if (is_string) {
                // String array - variable length elements
                for (size_t i = 0; i < index; ++i) {
+                  const char* const before = p;
                   const auto len = detail::read_compressed_int(p, end);
+                  // Reject a truncated length prefix (no progress) or a length that runs past the
+                  // buffer; either would otherwise leave p pointing out of bounds and yield a view
+                  // over invalid memory.
+                  if (p == before || static_cast<size_t>(end - p) < len) [[unlikely]] {
+                     return make_error(error_code::unexpected_end);
+                  }
                   p += len;
                }
                // Return view with synthetic string tag
@@ -696,6 +703,12 @@ namespace glz
          else {
             // Numeric typed array - fixed size elements
             const size_t elem_size = byte_count_lookup[t >> 5];
+            // Bound index against the remaining bytes before the multiply so a fabricated element
+            // count cannot overflow index * elem_size or push p past the end (OOB on the returned
+            // view). Division avoids forming the overflowing product.
+            if (elem_size == 0 || index > static_cast<size_t>(end - p) / elem_size) [[unlikely]] {
+               return make_error(error_code::unexpected_end);
+            }
             p += index * elem_size;
             // Return view with synthetic numeric tag
             const uint8_t synthetic_tag = tag::number | (t & 0b11111000);
@@ -747,7 +760,13 @@ namespace glz
       // Forward pass: search from current position
       const char* iter = search_start;
       for (size_t i = start_index; i < n_keys; ++i) {
+         const char* const before = iter;
          const auto key_len = detail::read_compressed_int(iter, end);
+         // Reject a truncated key-length prefix (no progress) or a key that runs past the buffer
+         // before forming the view that is compared against the search key (OOB read otherwise).
+         if (iter == before || static_cast<size_t>(end - iter) < key_len) [[unlikely]] {
+            return make_error(error_code::unexpected_end);
+         }
          std::string_view current_key{iter, key_len};
          iter += key_len;
 
@@ -763,7 +782,13 @@ namespace glz
       if (start_index > 0) {
          iter = p;
          for (size_t i = 0; i < start_index; ++i) {
+            const char* const before = iter;
             const auto key_len = detail::read_compressed_int(iter, end);
+            // Same bound as the forward pass: reject a truncated prefix or an out-of-range key
+            // length before constructing the view that is compared against the search key.
+            if (iter == before || static_cast<size_t>(end - iter) < key_len) [[unlikely]] {
+               return make_error(error_code::unexpected_end);
+            }
             std::string_view current_key{iter, key_len};
             iter += key_len;
 
