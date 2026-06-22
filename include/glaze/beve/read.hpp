@@ -1226,8 +1226,10 @@ namespace glz
                else {
                   // Little endian or single-byte: bulk memcpy
                   if (typed_array_out_of_bounds(ctx, it, end, n, sizeof(V))) return;
-                  std::memcpy(value.data(), it, n * sizeof(V));
-                  it += n * sizeof(V);
+                  if (n) {
+                     std::memcpy(value.data(), it, n * sizeof(V));
+                     it += n * sizeof(V);
+                  }
                }
             }
             else {
@@ -1396,8 +1398,10 @@ namespace glz
                }
                else {
                   // Little endian or single-byte: bulk memcpy
-                  std::memcpy(value.data(), it, n * sizeof(V));
-                  it += n * sizeof(V);
+                  if (n) {
+                     std::memcpy(value.data(), it, n * sizeof(V));
+                     it += n * sizeof(V);
+                  }
                }
             }
             else {
