@@ -958,24 +958,44 @@ namespace glz
          using Element = typename T::value_type;
          using Key = typename Element::first_type;
 
-         constexpr uint8_t tag = beve_key_traits<Key>::header;
-         dump_type(ctx, tag, b, ix);
-         if (bool(ctx.error)) [[unlikely]] {
-            return;
-         }
-
-         dump_compressed_int(ctx, value.size(), b, ix);
-         if (bool(ctx.error)) [[unlikely]] {
-            return;
-         }
-         for (auto&& [k, v] : value) {
-            serialize<BEVE>::no_header<Opts>(k, ctx, b, ix);
+         if constexpr (beve_key_traits<Key>::native) {
+            constexpr uint8_t tag = beve_key_traits<Key>::header;
+            dump_type(ctx, tag, b, ix);
             if (bool(ctx.error)) [[unlikely]] {
                return;
             }
-            serialize<BEVE>::op<Opts>(v, ctx, b, ix);
+
+            dump_compressed_int(ctx, value.size(), b, ix);
             if (bool(ctx.error)) [[unlikely]] {
                return;
+            }
+            for (auto&& [k, v] : value) {
+               serialize<BEVE>::no_header<Opts>(k, ctx, b, ix);
+               if (bool(ctx.error)) [[unlikely]] {
+                  return;
+               }
+               serialize<BEVE>::op<Opts>(v, ctx, b, ix);
+               if (bool(ctx.error)) [[unlikely]] {
+                  return;
+               }
+            }
+         }
+         else {
+            // Non-native key: a BEVE object header can't carry a struct key, so write a generic array
+            // of [key, value] entries. This matches std::vector<std::tuple<Key, Value>> on the wire.
+            if (!ensure_space(ctx, b, ix + 1 + write_padding_bytes)) [[unlikely]] {
+               return;
+            }
+            dump<tag::generic_array>(b, ix);
+            dump_compressed_int(ctx, value.size(), b, ix);
+            if (bool(ctx.error)) [[unlikely]] {
+               return;
+            }
+            for (auto&& entry : value) {
+               serialize<BEVE>::op<Opts>(entry, ctx, b, ix);
+               if (bool(ctx.error)) [[unlikely]] {
+                  return;
+               }
             }
          }
       }
@@ -989,22 +1009,42 @@ namespace glz
       {
          using Key = typename T::first_type;
 
-         constexpr uint8_t tag = beve_key_traits<Key>::header;
-         dump_type(ctx, tag, b, ix);
-         if (bool(ctx.error)) [[unlikely]] {
-            return;
-         }
+         if constexpr (beve_key_traits<Key>::native) {
+            constexpr uint8_t tag = beve_key_traits<Key>::header;
+            dump_type(ctx, tag, b, ix);
+            if (bool(ctx.error)) [[unlikely]] {
+               return;
+            }
 
-         dump_compressed_int<1>(ctx, b, ix);
-         if (bool(ctx.error)) [[unlikely]] {
-            return;
+            dump_compressed_int<1>(ctx, b, ix);
+            if (bool(ctx.error)) [[unlikely]] {
+               return;
+            }
+            const auto& [k, v] = value;
+            serialize<BEVE>::no_header<Opts>(k, ctx, b, ix);
+            if (bool(ctx.error)) [[unlikely]] {
+               return;
+            }
+            serialize<BEVE>::op<Opts>(v, ctx, b, ix);
          }
-         const auto& [k, v] = value;
-         serialize<BEVE>::no_header<Opts>(k, ctx, b, ix);
-         if (bool(ctx.error)) [[unlikely]] {
-            return;
+         else {
+            // Non-native key: write the pair as a generic array [key, value], identical to
+            // std::tuple<Key, Value>. Each element carries its own header.
+            if (!ensure_space(ctx, b, ix + 1 + write_padding_bytes)) [[unlikely]] {
+               return;
+            }
+            dump<tag::generic_array>(b, ix);
+            dump_compressed_int<2>(ctx, b, ix);
+            if (bool(ctx.error)) [[unlikely]] {
+               return;
+            }
+            const auto& [k, v] = value;
+            serialize<BEVE>::op<Opts>(k, ctx, b, ix);
+            if (bool(ctx.error)) [[unlikely]] {
+               return;
+            }
+            serialize<BEVE>::op<Opts>(v, ctx, b, ix);
          }
-         serialize<BEVE>::op<Opts>(v, ctx, b, ix);
       }
    };
 
@@ -1018,39 +1058,75 @@ namespace glz
          using val_t = std::remove_cvref_t<detail::iterator_second_type<T>>;
          constexpr bool may_skip = null_t<val_t> && Opts.skip_null_members;
 
-         constexpr uint8_t tag = beve_key_traits<Key>::header;
-         dump_type(ctx, tag, b, ix);
-         if (bool(ctx.error)) [[unlikely]] {
-            return;
-         }
-
-         size_t count = value.size();
-         if constexpr (may_skip) {
-            count = 0;
-            for (auto&& [k, v] : value) {
-               (void)k;
-               if (!skip_member<Opts>(v)) ++count;
+         if constexpr (beve_key_traits<Key>::native) {
+            constexpr uint8_t tag = beve_key_traits<Key>::header;
+            dump_type(ctx, tag, b, ix);
+            if (bool(ctx.error)) [[unlikely]] {
+               return;
             }
-         }
 
-         dump_compressed_int(ctx, count, b, ix);
-         if (bool(ctx.error)) [[unlikely]] {
-            return;
-         }
-         for (auto&& [k, v] : value) {
+            size_t count = value.size();
             if constexpr (may_skip) {
-               if (skip_member<Opts>(v)) continue;
+               count = 0;
+               for (auto&& [k, v] : value) {
+                  (void)k;
+                  if (!skip_member<Opts>(v)) ++count;
+               }
             }
-            serialize<BEVE>::no_header<Opts>(k, ctx, b, ix);
+
+            dump_compressed_int(ctx, count, b, ix);
             if (bool(ctx.error)) [[unlikely]] {
                return;
             }
-            serialize<BEVE>::op<Opts>(v, ctx, b, ix);
+            for (auto&& [k, v] : value) {
+               if constexpr (may_skip) {
+                  if (skip_member<Opts>(v)) continue;
+               }
+               serialize<BEVE>::no_header<Opts>(k, ctx, b, ix);
+               if (bool(ctx.error)) [[unlikely]] {
+                  return;
+               }
+               serialize<BEVE>::op<Opts>(v, ctx, b, ix);
+               if (bool(ctx.error)) [[unlikely]] {
+                  return;
+               }
+               if constexpr (is_output_streaming<std::remove_cvref_t<B>>) {
+                  flush_buffer(b, ix);
+               }
+            }
+         }
+         else {
+            // Non-native key: write a generic array of [key, value] entries (each entry identical to
+            // std::tuple<Key, Value>), since a BEVE object header can't carry a struct key.
+            if (!ensure_space(ctx, b, ix + 1 + write_padding_bytes)) [[unlikely]] {
+               return;
+            }
+            dump<tag::generic_array>(b, ix);
+
+            size_t count = value.size();
+            if constexpr (may_skip) {
+               count = 0;
+               for (auto&& [k, v] : value) {
+                  (void)k;
+                  if (!skip_member<Opts>(v)) ++count;
+               }
+            }
+
+            dump_compressed_int(ctx, count, b, ix);
             if (bool(ctx.error)) [[unlikely]] {
                return;
             }
-            if constexpr (is_output_streaming<std::remove_cvref_t<B>>) {
-               flush_buffer(b, ix);
+            for (auto&& entry : value) {
+               if constexpr (may_skip) {
+                  if (skip_member<Opts>(entry.second)) continue;
+               }
+               serialize<BEVE>::op<Opts>(entry, ctx, b, ix);
+               if (bool(ctx.error)) [[unlikely]] {
+                  return;
+               }
+               if constexpr (is_output_streaming<std::remove_cvref_t<B>>) {
+                  flush_buffer(b, ix);
+               }
             }
          }
       }

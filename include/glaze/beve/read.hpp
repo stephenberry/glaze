@@ -1470,47 +1470,86 @@ namespace glz
          using Element = typename T::value_type;
          using Key = typename Element::first_type;
 
-         constexpr uint8_t header = beve_key_traits<Key>::header;
+         if constexpr (beve_key_traits<Key>::native) {
+            constexpr uint8_t header = beve_key_traits<Key>::header;
 
-         if (invalid_end(ctx, it, end)) {
-            return;
-         }
-         const auto tag = uint8_t(*it);
-         if (tag != header) [[unlikely]] {
-            if constexpr (check_allow_conversions(Opts)) {
-               const auto key_type = tag & 0b000'11'000;
-               if constexpr (beve_key_traits<Key>::as_string) {
-                  if (key_type != 0) {
-                     ctx.error = error_code::syntax_error;
-                     return;
+            if (invalid_end(ctx, it, end)) {
+               return;
+            }
+            const auto tag = uint8_t(*it);
+            if (tag != header) [[unlikely]] {
+               if constexpr (check_allow_conversions(Opts)) {
+                  const auto key_type = tag & 0b000'11'000;
+                  if constexpr (beve_key_traits<Key>::as_string) {
+                     if (key_type != 0) {
+                        ctx.error = error_code::syntax_error;
+                        return;
+                     }
+                  }
+                  else {
+                     if (key_type == 0) {
+                        ctx.error = error_code::syntax_error;
+                        return;
+                     }
                   }
                }
                else {
-                  if (key_type == 0) {
-                     ctx.error = error_code::syntax_error;
-                     return;
-                  }
+                  ctx.error = error_code::syntax_error;
+                  return;
                }
             }
-            else {
+
+            ++it;
+            const size_t n = int_from_compressed(ctx, it, end);
+            if (bool(ctx.error)) [[unlikely]] {
+               return;
+            }
+
+            // Validate count against remaining buffer size (minimum 1 byte per key-value pair)
+            if (n > size_t(end - it)) [[unlikely]] {
+               ctx.error = error_code::unexpected_end;
+               return;
+            }
+
+            value.clear();
+
+            constexpr uint8_t key_tag = beve_key_traits<Key>::key_tag;
+            for (size_t i = 0; i < n; ++i) {
+               auto& item = value.emplace_back();
+               parse<BEVE>::op<no_header_on<Opts>()>(item.first, key_tag, ctx, it, end);
+               parse<BEVE>::op<Opts>(item.second, ctx, it, end);
+            }
+         }
+         else {
+            // Non-native key: read the generic-array fallback (an array of [key, value] entries; see
+            // the writer). Each entry is itself a generic array, identical to std::tuple<Key, Value>.
+            if (invalid_end(ctx, it, end)) {
+               return;
+            }
+            if (uint8_t(*it) != tag::generic_array) [[unlikely]] {
                ctx.error = error_code::syntax_error;
                return;
             }
-         }
+            ++it;
 
-         ++it;
-         const size_t n = int_from_compressed(ctx, it, end);
-         if (bool(ctx.error)) [[unlikely]] {
-            return;
-         }
+            const size_t n = int_from_compressed(ctx, it, end);
+            if (bool(ctx.error)) [[unlikely]] {
+               return;
+            }
+            // Validate count against remaining buffer size (minimum 1 byte per entry)
+            if (n > size_t(end - it)) [[unlikely]] {
+               ctx.error = error_code::unexpected_end;
+               return;
+            }
 
-         value.clear();
-
-         constexpr uint8_t key_tag = beve_key_traits<Key>::key_tag;
-         for (size_t i = 0; i < n; ++i) {
-            auto& item = value.emplace_back();
-            parse<BEVE>::op<no_header_on<Opts>()>(item.first, key_tag, ctx, it, end);
-            parse<BEVE>::op<Opts>(item.second, ctx, it, end);
+            value.clear();
+            for (size_t i = 0; i < n; ++i) {
+               auto& item = value.emplace_back();
+               parse<BEVE>::op<Opts>(item, ctx, it, end);
+               if (bool(ctx.error)) [[unlikely]] {
+                  return;
+               }
+            }
          }
       }
    };
@@ -1523,31 +1562,60 @@ namespace glz
       {
          using Key = typename T::first_type;
 
-         constexpr uint8_t header = beve_key_traits<Key>::header;
+         if constexpr (beve_key_traits<Key>::native) {
+            constexpr uint8_t header = beve_key_traits<Key>::header;
 
-         if (invalid_end(ctx, it, end)) {
-            return;
-         }
-         const auto tag = uint8_t(*it);
-         if (tag != header) [[unlikely]] {
-            ctx.error = error_code::syntax_error;
-            return;
-         }
+            if (invalid_end(ctx, it, end)) {
+               return;
+            }
+            const auto tag = uint8_t(*it);
+            if (tag != header) [[unlikely]] {
+               ctx.error = error_code::syntax_error;
+               return;
+            }
 
-         ++it;
-         const auto n = int_from_compressed(ctx, it, end);
-         if (bool(ctx.error)) [[unlikely]] {
-            return;
-         }
+            ++it;
+            const auto n = int_from_compressed(ctx, it, end);
+            if (bool(ctx.error)) [[unlikely]] {
+               return;
+            }
 
-         if (n != 1) [[unlikely]] {
-            ctx.error = error_code::syntax_error;
-            return;
-         }
+            if (n != 1) [[unlikely]] {
+               ctx.error = error_code::syntax_error;
+               return;
+            }
 
-         constexpr uint8_t key_tag = beve_key_traits<Key>::key_tag;
-         parse<BEVE>::op<no_header_on<Opts>()>(value.first, key_tag, ctx, it, end);
-         parse<BEVE>::op<Opts>(value.second, ctx, it, end);
+            constexpr uint8_t key_tag = beve_key_traits<Key>::key_tag;
+            parse<BEVE>::op<no_header_on<Opts>()>(value.first, key_tag, ctx, it, end);
+            parse<BEVE>::op<Opts>(value.second, ctx, it, end);
+         }
+         else {
+            // Non-native key: read the generic-array fallback [key, value], identical to
+            // std::tuple<Key, Value>. Each element carries its own header.
+            if (invalid_end(ctx, it, end)) {
+               return;
+            }
+            if (uint8_t(*it) != tag::generic_array) [[unlikely]] {
+               ctx.error = error_code::syntax_error;
+               return;
+            }
+            ++it;
+
+            const auto n = int_from_compressed(ctx, it, end);
+            if (bool(ctx.error)) [[unlikely]] {
+               return;
+            }
+            if (n != 2) [[unlikely]] {
+               ctx.error = error_code::syntax_error;
+               return;
+            }
+
+            parse<BEVE>::op<Opts>(value.first, ctx, it, end);
+            if (bool(ctx.error)) [[unlikely]] {
+               return;
+            }
+            parse<BEVE>::op<Opts>(value.second, ctx, it, end);
+         }
       }
    };
 
@@ -1558,6 +1626,84 @@ namespace glz
       static void op(auto&& value, is_context auto&& ctx, auto&& it, auto end)
       {
          using Key = typename T::key_type;
+
+         // Non-native key (e.g. a multi-field struct): a BEVE object header can't carry a struct key,
+         // so the writer emits a generic array of [key, value] entries. Read that fallback form here;
+         // native keys use the compact object/map encoding below.
+         if constexpr (not beve_key_traits<Key>::native) {
+            if (invalid_end(ctx, it, end)) {
+               return;
+            }
+            if (uint8_t(*it) != tag::generic_array) [[unlikely]] {
+               ctx.error = error_code::syntax_error;
+               return;
+            }
+            ++it;
+
+            const size_t n = int_from_compressed(ctx, it, end);
+            if (bool(ctx.error)) [[unlikely]] {
+               return;
+            }
+            // Validate count against remaining buffer size (minimum 1 byte per entry)
+            if (n > size_t(end - it)) [[unlikely]] {
+               ctx.error = error_code::unexpected_end;
+               return;
+            }
+            if constexpr (check_max_map_size(Opts) > 0) {
+               if (n > check_max_map_size(Opts)) [[unlikely]] {
+                  ctx.error = error_code::invalid_length;
+                  return;
+               }
+            }
+            if constexpr (has_runtime_max_map_size<std::decay_t<decltype(ctx)>>) {
+               if (ctx.max_map_size > 0 && n > ctx.max_map_size) [[unlikely]] {
+                  ctx.error = error_code::invalid_length;
+                  return;
+               }
+            }
+
+            for (size_t i = 0; i < n; ++i) {
+               // each entry is a generic array [key, value]
+               if (invalid_end(ctx, it, end)) {
+                  return;
+               }
+               if (uint8_t(*it) != tag::generic_array) [[unlikely]] {
+                  ctx.error = error_code::syntax_error;
+                  return;
+               }
+               ++it;
+               const auto m = int_from_compressed(ctx, it, end);
+               if (bool(ctx.error)) [[unlikely]] {
+                  return;
+               }
+               if (m != 2) [[unlikely]] {
+                  ctx.error = error_code::syntax_error;
+                  return;
+               }
+
+               Key key{};
+               parse<BEVE>::op<Opts>(key, ctx, it, end);
+               if (bool(ctx.error)) [[unlikely]] {
+                  return;
+               }
+               if constexpr (Opts.partial_read) {
+                  if (auto element = value.find(key); element != value.end()) {
+                     parse<BEVE>::op<Opts>(element->second, ctx, it, end);
+                  }
+                  else {
+                     typename T::mapped_type discard{};
+                     parse<BEVE>::op<Opts>(discard, ctx, it, end);
+                  }
+               }
+               else {
+                  parse<BEVE>::op<Opts>(value[key], ctx, it, end);
+               }
+               if (bool(ctx.error)) [[unlikely]] {
+                  return;
+               }
+            }
+            return;
+         }
 
          constexpr uint8_t header = beve_key_traits<Key>::header;
 
@@ -1618,7 +1764,7 @@ namespace glz
             }
          }
 
-         constexpr uint8_t key_tag = beve_key_traits<Key>::key_tag;
+         [[maybe_unused]] constexpr uint8_t key_tag = beve_key_traits<Key>::key_tag;
 
          if constexpr (beve_key_traits<Key>::as_number) {
             Key key{}; // Value-initialize to silence false positive -Wmaybe-uninitialized
@@ -1651,7 +1797,7 @@ namespace glz
                }
             }
          }
-         else {
+         else if constexpr (beve_key_traits<Key>::native) {
             Key key;
             for (size_t i = 0; i < n; ++i) {
                if constexpr (Opts.partial_read) {

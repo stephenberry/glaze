@@ -438,6 +438,23 @@ struct glz::meta<ModuleID> {
 };
 ```
 
+### Keys that are not numeric or string
+
+A BEVE object (map) header encodes a *single shared key type*, so the compact map encoding requires keys that reduce to a numeric or string type. When a key does not, such as a multi-field struct, the map/pair serializers automatically fall back to a **generic array of `[key, value]` entries**, where each key is written as a full BEVE value. The container still round-trips with no extra code:
+
+```c++
+struct CompositeKey {
+   int32_t id{};
+   std::string name{};
+   auto operator<=>(const CompositeKey&) const = default;
+};
+
+std::unordered_map<CompositeKey, int> m{{{1, "a"}, 10}, {{2, "b"}, 20}};
+glz::write_beve(m, beve); // a generic array of [key, value] entries
+```
+
+This applies to `std::map`, `std::unordered_map`, `std::vector<std::pair<Key, Value>>`, and a standalone `std::pair<Key, Value>`. The fallback is portable and self-describing, and each entry is encoded identically to `std::tuple<Key, Value>` (so a non-native `std::pair` and the corresponding `std::tuple` produce the same bytes). Native (numeric/string) keys are unaffected and keep the compact shared-header encoding.
+
 ## Partial Objects
 
 It is sometimes desirable to write out only a portion of an object. This is permitted via an array of JSON pointers, which indicate which parts of the object should be written out.
