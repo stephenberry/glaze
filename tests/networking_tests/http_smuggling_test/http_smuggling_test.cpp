@@ -126,6 +126,37 @@ suite http_smuggling_suite = [] {
       expect(smuggled_hits.load(std::memory_order_relaxed) == 0) << "Smuggled request reached a route handler";
    };
 
+   "Conflicting Content-Length headers are refused, not desynced"_test = [&] {
+      // Two Content-Length values disagree (53 vs 7). The header map keeps the last value (7),
+      // so the server used to frame only "BLOCKED" as the body and re-parse the trailing bytes
+      // as a smuggled GET /smuggled. A proxy framing by the first value (53) would have passed
+      // the whole region through as one body, so the split is a CL.CL desync.
+      std::string payload =
+         "POST /front HTTP/1.1\r\n"
+         "Host: localhost\r\n"
+         "Content-Length: 53\r\n"
+         "Content-Length: 7\r\n"
+         "Connection: keep-alive\r\n"
+         "\r\n"
+         "BLOCKED"
+         "GET /smuggled HTTP/1.1\r\n"
+         "Host: localhost\r\n"
+         "Connection: close\r\n"
+         "\r\n";
+
+      std::future<std::string> f = std::async(std::launch::async, [&] { return send_raw(payload); });
+
+      auto future_timeout = std::chrono::system_clock::now() + std::chrono::seconds(5);
+      std::string response;
+      if (std::future_status::ready == f.wait_until(future_timeout)) {
+         response = f.get();
+      }
+
+      expect(response.find("400") != std::string::npos) << "Expected 400 for conflicting Content-Length";
+      std::this_thread::sleep_for(std::chrono::milliseconds(100));
+      expect(smuggled_hits.load(std::memory_order_relaxed) == 0) << "Smuggled request reached a route handler";
+   };
+
    server.stop();
    io_ctx->stop();
    if (server_thr.joinable()) server_thr.join();

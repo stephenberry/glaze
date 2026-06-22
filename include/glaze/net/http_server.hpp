@@ -1797,6 +1797,18 @@ namespace glz
                value_sv.remove_prefix((std::min)(value_sv.find_first_not_of(" \t"), value_sv.size()));
                std::string key(name_sv);
                for (auto& c : key) c = ascii_tolower(c);
+               // RFC 7230 3.3.2: multiple Content-Length fields with differing values make the
+               // body framing unrecoverable. The header map keeps last-wins, so a second
+               // Content-Length would silently override the first; a proxy that frames the body
+               // by the first value then desyncs from this server (CL.CL request smuggling).
+               // Reject with 400 and close. Identical repeats are tolerated.
+               if (key == "content-length") {
+                  if (auto existing = headers.find(key); existing != headers.end() && existing->second != value_sv) {
+                     result.status = parse_status::error;
+                     send_error_response_with_close(conn, 400, "Bad Request");
+                     return result;
+                  }
+               }
                headers[std::move(key)] = std::string(value_sv);
             }
 
