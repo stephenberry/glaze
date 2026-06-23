@@ -631,21 +631,26 @@ namespace glz
                   value.clear();
                }
             }
-            else {
-               // For steps != 1 (or negative steps), the fallback path was already chosen.
-               // Just apply the same logic as before.
+            else if (step_idx > 0) {
+               // Positive step compacts in place: the write index never overtakes the
+               // read index, so every read stays within the live range.
                std::size_t dest = 0;
-               if (step_idx > 0) {
-                  for (int32_t i = start_idx; i < end_idx; i += step_idx) {
-                     value[dest++] = std::move(value[i]);
-                  }
-               }
-               else {
-                  for (int32_t i = start_idx; i > end_idx; i += step_idx) {
-                     value[dest++] = std::move(value[i]);
-                  }
+               for (int32_t i = start_idx; i < end_idx; i += step_idx) {
+                  value[dest++] = std::move(value[i]);
                }
                value.resize(dest);
+            }
+            else {
+               // A negative step reads in reverse, so compacting in place would
+               // overwrite elements before they are read. wrap_index also clamps start
+               // to [0, size], and a start at or past the end would index one past the
+               // buffer on the first read. Build the slice in a separate buffer, taking
+               // the last element as the highest readable index.
+               std::decay_t<T> result;
+               for (int32_t i = (std::min)(start_idx, size - 1); i > end_idx; i += step_idx) {
+                  result.emplace_back(std::move(value[i]));
+               }
+               value = std::move(result);
             }
 
             return;

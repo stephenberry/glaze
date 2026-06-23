@@ -165,6 +165,37 @@ suite jmespath_slice_tests = [] {
       expect(slice[4] == 4);
    };
 
+   "slice negative step start past end"_test = [] {
+      // [start:end:-1] with start >= size clamped the start index to size and read
+      // value[size] (one past the end) on the first move. The reversed read also
+      // aliased the in-place compaction, so even an in-bounds start returned garbage.
+      std::vector<int> data{1, 2, 3, 4, 5};
+      std::string buffer{};
+      expect(not glz::write_json(data, buffer));
+
+      std::vector<int> slice{};
+      glz::jmespath_expression expr{"[10:0:-1]"};
+      expect(not glz::read_jmespath(expr, slice, buffer));
+      expect(slice == (std::vector<int>{5, 4, 3, 2}));
+
+      std::vector<int> slice_ct{};
+      expect(not glz::read_jmespath<"[4:0:-1]">(slice_ct, buffer));
+      expect(slice_ct == (std::vector<int>{5, 4, 3, 2}));
+
+      std::vector<int> slice_step{};
+      expect(not glz::read_jmespath<"[5:0:-2]">(slice_step, buffer));
+      expect(slice_step == (std::vector<int>{5, 3}));
+
+      // Start past the end of a shorter array (the heap-buffer-overflow case).
+      std::vector<int> small{1, 2, 3};
+      std::string small_buf{};
+      expect(not glz::write_json(small, small_buf));
+      std::vector<int> slice_small{};
+      glz::jmespath_expression expr_small{"[5:0:-1]"};
+      expect(not glz::read_jmespath(expr_small, slice_small, small_buf));
+      expect(slice_small == (std::vector<int>{3, 2}));
+   };
+
    "slice compile-time multi-bracket"_test = [] {
       std::vector<std::vector<int>> data{{1, 2}, {3, 4, 5}, {6, 7}};
       std::string buffer{};
