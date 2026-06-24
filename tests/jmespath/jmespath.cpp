@@ -217,6 +217,132 @@ suite jmespath_slice_tests = [] {
    };
 };
 
+suite jmespath_negative_slice_tests = [] {
+   "slice omitted-end negative step reverses"_test = [] {
+      // With an omitted end and a negative step the slice descends to and includes index 0,
+      // so "[::-1]" reverses the whole array (previously it returned empty).
+      std::vector<int> data{1, 2, 3, 4, 5};
+      std::string buffer{};
+      expect(not glz::write_json(data, buffer));
+
+      std::vector<int> rev{};
+      expect(not glz::read_jmespath(glz::jmespath_expression{"[::-1]"}, rev, buffer));
+      expect(rev == (std::vector<int>{5, 4, 3, 2, 1}));
+
+      std::vector<int> rev_ct{};
+      expect(not glz::read_jmespath<"[::-1]">(rev_ct, buffer));
+      expect(rev_ct == (std::vector<int>{5, 4, 3, 2, 1}));
+
+      std::vector<int> from2{};
+      expect(not glz::read_jmespath<"[2::-1]">(from2, buffer));
+      expect(from2 == (std::vector<int>{3, 2, 1}));
+
+      std::vector<int> step2{};
+      expect(not glz::read_jmespath<"[4::-2]">(step2, buffer));
+      expect(step2 == (std::vector<int>{5, 3, 1}));
+   };
+
+   "slice negative end wraps to include index 0"_test = [] {
+      // A negative end that resolves below 0 means "include index 0"; it must not be clamped
+      // up to 0, which would drop the first element on a reverse slice.
+      std::vector<int> data{1, 2, 3, 4, 5};
+      std::string buffer{};
+      expect(not glz::write_json(data, buffer));
+
+      std::vector<int> all{};
+      expect(not glz::read_jmespath<"[4:-6:-1]">(all, buffer));
+      expect(all == (std::vector<int>{5, 4, 3, 2, 1}));
+
+      std::vector<int> neg_start{};
+      expect(not glz::read_jmespath<"[-1::-1]">(neg_start, buffer));
+      expect(neg_start == (std::vector<int>{5, 4, 3, 2, 1}));
+   };
+
+   "slice step of zero is rejected"_test = [] {
+      // A step of 0 is invalid; previously it spun in a non-terminating loop. It must error.
+      std::vector<int> data{1, 2, 3, 4, 5};
+      std::string buffer{};
+      expect(not glz::write_json(data, buffer));
+
+      std::vector<int> out{};
+      expect(glz::read_jmespath(glz::jmespath_expression{"[5:0:0]"}, out, buffer));
+      expect(glz::read_jmespath(glz::jmespath_expression{"[3:1:0]"}, out, buffer));
+      expect(glz::read_jmespath(glz::jmespath_expression{"[::0]"}, out, buffer));
+   };
+
+   "slice out-of-range literal is rejected"_test = [] {
+      // A bound/step/index literal that overflows int32 is malformed; it must error rather than
+      // silently fall back to default bounds (which previously returned the whole array).
+      std::vector<int> data{1, 2, 3, 4, 5};
+      std::string buffer{};
+      expect(not glz::write_json(data, buffer));
+
+      std::vector<int> out{};
+      expect(glz::read_jmespath(glz::jmespath_expression{"[::9999999999]"}, out, buffer));
+      expect(glz::read_jmespath(glz::jmespath_expression{"[9999999999:0:-1]"}, out, buffer));
+      expect(glz::read_jmespath(glz::jmespath_expression{"[0:9999999999]"}, out, buffer));
+
+      int v{};
+      expect(glz::read_jmespath(glz::jmespath_expression{"[9999999999]"}, v, buffer));
+   };
+};
+
+suite jmespath_negative_index_tests = [] {
+   "negative single index"_test = [] {
+      // [-1] is the last element, [-n] counts back from the end.
+      std::vector<int> data{10, 20, 30, 40, 50};
+      std::string buffer{};
+      expect(not glz::write_json(data, buffer));
+
+      int v{};
+      expect(not glz::read_jmespath<"[-1]">(v, buffer));
+      expect(v == 50);
+      expect(not glz::read_jmespath<"[-2]">(v, buffer));
+      expect(v == 40);
+      expect(not glz::read_jmespath<"[-5]">(v, buffer));
+      expect(v == 10);
+
+      expect(not glz::read_jmespath(glz::jmespath_expression{"[-1]"}, v, buffer));
+      expect(v == 50);
+
+      // Out of range still errors rather than wrapping further.
+      int oob{};
+      expect(glz::read_jmespath<"[-6]">(oob, buffer));
+   };
+
+   "negative index on empty array errors"_test = [] {
+      std::vector<int> data{};
+      std::string buffer{};
+      expect(not glz::write_json(data, buffer));
+      int v{};
+      expect(glz::read_jmespath<"[-1]">(v, buffer));
+   };
+
+   "negative index after key"_test = [] {
+      std::string buffer = R"({"v":[10,20,30]})";
+      int v{};
+      expect(not glz::read_jmespath<"v[-1]">(v, buffer));
+      expect(v == 30);
+      expect(not glz::read_jmespath(glz::jmespath_expression{"v[-3]"}, v, buffer));
+      expect(v == 10);
+      expect(glz::read_jmespath<"v[-4]">(v, buffer));
+   };
+
+   "negative index nested"_test = [] {
+      std::vector<std::vector<int>> data{{1, 2}, {3, 4, 5}, {6, 7}};
+      std::string buffer{};
+      expect(not glz::write_json(data, buffer));
+
+      int v{};
+      expect(not glz::read_jmespath<"[-1][0]">(v, buffer));
+      expect(v == 6);
+      expect(not glz::read_jmespath<"[0][-1]">(v, buffer));
+      expect(v == 2);
+      expect(not glz::read_jmespath<"[-2][-1]">(v, buffer));
+      expect(v == 5);
+   };
+};
+
 // A test case for a GCC14 warning
 struct gcc_maybe_uninitialized_t
 {
@@ -352,6 +478,24 @@ suite non_null_terminated_slice_bounds = [] {
       expect(not ec);
       expect(std::get<0>(target) == 7);
       expect(std::get<1>(target) == 8);
+   };
+
+   "nnt single index stays in bounds"_test = [] {
+      // A negative index scans the whole array to resolve its length, and an out-of-range
+      // positive index scans past every element, so both must respect end on a
+      // non-null-terminated buffer rather than reading past it. (An in-range positive index
+      // short-circuits as soon as its element is complete, so it is not a truncation case.)
+      fuzz_slice_prefixes<int, "[-1]">("[10,20,30,40,50]");
+      fuzz_slice_prefixes<int, "[10]">("[10,20,30,40,50]");
+
+      std::vector<char> buf{};
+      const std::string_view complete = "[10,20,30]";
+      buf.assign(complete.begin(), complete.end());
+      int value{};
+      const auto ec =
+         glz::read_jmespath<"[-1]", options>(value, std::string_view{buf.data(), buf.data() + buf.size()});
+      expect(not ec);
+      expect(value == 30);
    };
 };
 
