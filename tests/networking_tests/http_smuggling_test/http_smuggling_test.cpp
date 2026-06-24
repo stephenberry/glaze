@@ -126,6 +126,98 @@ suite http_smuggling_suite = [] {
       expect(smuggled_hits.load(std::memory_order_relaxed) == 0) << "Smuggled request reached a route handler";
    };
 
+   "Conflicting Content-Length headers are refused, not desynced"_test = [&] {
+      // Two Content-Length values disagree (53 vs 7). The header map keeps the last value (7),
+      // so the server used to frame only "BLOCKED" as the body and re-parse the trailing bytes
+      // as a smuggled GET /smuggled. A proxy framing by the first value (53) would have passed
+      // the whole region through as one body, so the split is a CL.CL desync.
+      std::string payload =
+         "POST /front HTTP/1.1\r\n"
+         "Host: localhost\r\n"
+         "Content-Length: 53\r\n"
+         "Content-Length: 7\r\n"
+         "Connection: keep-alive\r\n"
+         "\r\n"
+         "BLOCKED"
+         "GET /smuggled HTTP/1.1\r\n"
+         "Host: localhost\r\n"
+         "Connection: close\r\n"
+         "\r\n";
+
+      std::future<std::string> f = std::async(std::launch::async, [&] { return send_raw(payload); });
+
+      auto future_timeout = std::chrono::system_clock::now() + std::chrono::seconds(5);
+      std::string response;
+      if (std::future_status::ready == f.wait_until(future_timeout)) {
+         response = f.get();
+      }
+
+      // Match the status line, not a bare "400" substring, so an unrelated rejection
+      // (or a "400" appearing in a body) cannot make this pass for the wrong reason.
+      expect(response.find("HTTP/1.1 400") != std::string::npos) << "Expected 400 for conflicting Content-Length";
+      std::this_thread::sleep_for(std::chrono::milliseconds(100));
+      expect(smuggled_hits.load(std::memory_order_relaxed) == 0) << "Smuggled request reached a route handler";
+   };
+
+   "Identical duplicate Content-Length headers are tolerated"_test = [&] {
+      // RFC 7230 3.3.2 permits collapsing repeated Content-Length fields that carry the same
+      // value, so a lenient-but-honest client that sends the header twice must still be served.
+      // This pins the "identical repeats are tolerated" branch of the fix: a regression that
+      // rejected all duplicate Content-Length headers would break such clients, and the only
+      // thing catching it would be this test.
+      std::string payload =
+         "POST /front HTTP/1.1\r\n"
+         "Host: localhost\r\n"
+         "Content-Length: 5\r\n"
+         "Content-Length: 5\r\n"
+         "Connection: close\r\n"
+         "\r\n"
+         "HELLO";
+
+      std::future<std::string> f = std::async(std::launch::async, [&] { return send_raw(payload); });
+
+      auto future_timeout = std::chrono::system_clock::now() + std::chrono::seconds(5);
+      std::string response;
+      if (std::future_status::ready == f.wait_until(future_timeout)) {
+         response = f.get();
+      }
+
+      expect(response.find("HTTP/1.1 200") != std::string::npos)
+         << "Identical duplicate Content-Length should be accepted";
+   };
+
+   "Case-varied duplicate Content-Length headers are refused, not desynced"_test = [&] {
+      // The duplicate check lowercases the field-name before the map lookup, so varying the
+      // case ("Content-Length" vs "content-length") must not land two distinct keys that would
+      // let a conflicting value slip past conflict detection. Same CL.CL desync as above, only
+      // obfuscated by case.
+      std::string payload =
+         "POST /front HTTP/1.1\r\n"
+         "Host: localhost\r\n"
+         "Content-Length: 53\r\n"
+         "content-length: 7\r\n"
+         "Connection: keep-alive\r\n"
+         "\r\n"
+         "BLOCKED"
+         "GET /smuggled HTTP/1.1\r\n"
+         "Host: localhost\r\n"
+         "Connection: close\r\n"
+         "\r\n";
+
+      std::future<std::string> f = std::async(std::launch::async, [&] { return send_raw(payload); });
+
+      auto future_timeout = std::chrono::system_clock::now() + std::chrono::seconds(5);
+      std::string response;
+      if (std::future_status::ready == f.wait_until(future_timeout)) {
+         response = f.get();
+      }
+
+      expect(response.find("HTTP/1.1 400") != std::string::npos)
+         << "Expected 400 for case-varied conflicting Content-Length";
+      std::this_thread::sleep_for(std::chrono::milliseconds(100));
+      expect(smuggled_hits.load(std::memory_order_relaxed) == 0) << "Smuggled request reached a route handler";
+   };
+
    server.stop();
    io_ctx->stop();
    if (server_thr.joinable()) server_thr.join();
