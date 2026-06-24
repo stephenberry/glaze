@@ -492,8 +492,7 @@ suite non_null_terminated_slice_bounds = [] {
       const std::string_view complete = "[10,20,30]";
       buf.assign(complete.begin(), complete.end());
       int value{};
-      const auto ec =
-         glz::read_jmespath<"[-1]", options>(value, std::string_view{buf.data(), buf.data() + buf.size()});
+      const auto ec = glz::read_jmespath<"[-1]", options>(value, std::string_view{buf.data(), buf.data() + buf.size()});
       expect(not ec);
       expect(value == 30);
    };

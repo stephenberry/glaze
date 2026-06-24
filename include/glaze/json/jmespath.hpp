@@ -702,8 +702,10 @@ namespace glz
 
             // An omitted bound defaults to the start/end of the iteration range for the
             // chosen direction (e.g. "[::-1]" reverses the whole array).
-            const int32_t start_idx = decomposed_key.start.has_value() ? wrap_index(*decomposed_key.start) : (negative_step ? upper : lower);
-            const int32_t end_idx = decomposed_key.end.has_value() ? wrap_index(*decomposed_key.end) : (negative_step ? lower : upper);
+            const int32_t start_idx =
+               decomposed_key.start.has_value() ? wrap_index(*decomposed_key.start) : (negative_step ? upper : lower);
+            const int32_t end_idx =
+               decomposed_key.end.has_value() ? wrap_index(*decomposed_key.end) : (negative_step ? lower : upper);
 
             if (step_idx == 1) {
                if (start_idx < end_idx) {
