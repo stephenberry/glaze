@@ -844,6 +844,11 @@ namespace glz
             static constexpr auto decomposed_key = jmespath::parse_jmespath_token(tokens[I]);
             static constexpr auto key = decomposed_key.key;
 
+            // A malformed token (e.g. an index/bound literal that overflows int32, or an
+            // invalid slice) is rejected at compile time, matching tokenize_as_array which
+            // already fails to compile on tokenization errors.
+            static_assert(not decomposed_key.error, "invalid JMESPath expression");
+
             if constexpr (decomposed_key.is_array_access) {
                // If we have a key, that means we're looking into an object like: key[0:5]
                if constexpr (key.empty()) {
@@ -1095,6 +1100,13 @@ namespace glz
             [&] {
                const auto decomposed_key = jmespath::parse_jmespath_token(tokens[I]);
                const auto& key = decomposed_key.key;
+
+               // A malformed token (e.g. an index/bound literal that overflows int32, or an
+               // invalid slice) must error rather than silently fall back to default bounds.
+               if (decomposed_key.error) {
+                  ctx.error = error_code::syntax_error;
+                  return;
+               }
 
                if (decomposed_key.is_array_access) {
                   if (key.empty()) {

@@ -269,6 +269,22 @@ suite jmespath_negative_slice_tests = [] {
       expect(glz::read_jmespath(glz::jmespath_expression{"[3:1:0]"}, out, buffer));
       expect(glz::read_jmespath(glz::jmespath_expression{"[::0]"}, out, buffer));
    };
+
+   "slice out-of-range literal is rejected"_test = [] {
+      // A bound/step/index literal that overflows int32 is malformed; it must error rather than
+      // silently fall back to default bounds (which previously returned the whole array).
+      std::vector<int> data{1, 2, 3, 4, 5};
+      std::string buffer{};
+      expect(not glz::write_json(data, buffer));
+
+      std::vector<int> out{};
+      expect(glz::read_jmespath(glz::jmespath_expression{"[::9999999999]"}, out, buffer));
+      expect(glz::read_jmespath(glz::jmespath_expression{"[9999999999:0:-1]"}, out, buffer));
+      expect(glz::read_jmespath(glz::jmespath_expression{"[0:9999999999]"}, out, buffer));
+
+      int v{};
+      expect(glz::read_jmespath(glz::jmespath_expression{"[9999999999]"}, v, buffer));
+   };
 };
 
 suite jmespath_negative_index_tests = [] {
