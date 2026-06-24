@@ -975,6 +975,10 @@ glz::write_json(color, buffer);
 expect(buffer == "\"Red\"");
 ```
 
+> [!NOTE]
+>
+> Writing a registered enum whose value is not one of the enumerated values (for example a default-constructed sentinel) returns an `unexpected_enum` error. The string formats (JSON, TOML, YAML, MessagePack) validate enum names on read, so emitting such a value would produce output that could not be read back. Binary formats (BEVE, CBOR, BSON) intentionally serialize the underlying integer and round-trip any value. To restore the previous behavior of emitting the underlying integer for unmapped values, set the inheritable option `enum_int_fallback = true` (e.g. `struct my_opts : glz::opts { bool enum_int_fallback = true; };`).
+
 > [!TIP]
 >
 > For automatic enum-to-string serialization without writing metadata for each enum, use an enum reflection library ([magic_enum](https://github.com/Neargye/magic_enum), [enchantum](https://github.com/ZXShady/enchantum), or [simple_enum](https://github.com/arturbac/simple_enum)) with a generic `glz::meta` specialization. See [Automatic Enum Strings](https://stephenberry.github.io/glaze/enum-reflection/) for details.

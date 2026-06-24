@@ -205,6 +205,15 @@ namespace glz
    // This allows enum string serialization without explicit glz::meta specializations.
 
    // ---
+   // bool enum_int_fallback = false;
+   // Controls how named enums (registered via glz::meta with enumerate(...) or keys/value arrays) are
+   // written when the value is not one of the enumerated values, so it has no string name.
+   // By default Glaze errors with error_code::unexpected_enum, because the string formats (JSON, TOML,
+   // YAML, MessagePack) validate enum names on read and could not round-trip such a value.
+   // Set this to true to restore the previous behavior of emitting the underlying integer instead.
+   // Only affects writing of named enums; binary formats (BEVE, CBOR, BSON) always write the integer.
+
+   // ---
    // bool qualified_type_names = false;
    // When true and GLZ_REFLECTION26 is enabled, type_name_for_opts and name_for_opts return
    // fully-qualified type names with namespace prefixes (e.g., "mylib::MyType" instead of "MyType").
@@ -785,6 +794,16 @@ namespace glz
    {
       if constexpr (requires { Opts.reflect_enums; }) {
          return Opts.reflect_enums;
+      }
+      else {
+         return false;
+      }
+   }
+
+   consteval bool check_enum_int_fallback(auto&& Opts)
+   {
+      if constexpr (requires { Opts.enum_int_fallback; }) {
+         return Opts.enum_int_fallback;
       }
       else {
          return false;
