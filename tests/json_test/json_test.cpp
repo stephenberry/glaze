@@ -2418,6 +2418,30 @@ suite non_null_terminated_scanner_bounds = [] {
          expect(v == std::vector<int>{1, 2});
       }
    };
+
+   "nnt json-pointer seek over non-matching keys stays in bounds"_test = [] {
+      static constexpr glz::opts options{.null_terminated = false};
+      // The seek loop skips over non-target members and then tests for the ',' separator. When the
+      // document is truncated right after a skipped value the iterator sits at the end, so that test
+      // must be bounded rather than reading one past the buffer.
+      const auto resolves = [](std::string_view s) {
+         std::vector<char> buf{s.begin(), s.end()};
+         return glz::get_view_json<"/y", options>(std::string_view{buf.data(), buf.data() + buf.size()}).has_value();
+      };
+      expect(not resolves(R"({"x":1)")); // number value, truncated before the separator
+      expect(not resolves(R"({"x":true)")); // literal value
+      expect(not resolves(R"({"x":"ab")")); // string value
+      expect(not resolves(R"({"x":[1,2])")); // array value
+      expect(not resolves(R"({"x":{"z":1})")); // nested object value
+      expect(resolves(R"({"x":1,"y":2})")); // a later key still resolves
+
+      const auto resolves_index = [](std::string_view s) {
+         std::vector<char> buf{s.begin(), s.end()};
+         return glz::get_view_json<"/1", options>(std::string_view{buf.data(), buf.data() + buf.size()}).has_value();
+      };
+      expect(not resolves_index(R"([10)")); // truncated before the indexed element
+      expect(resolves_index(R"([10,20])")); // complete array resolves
+   };
 };
 
 suite minified_custom_object = [] {
