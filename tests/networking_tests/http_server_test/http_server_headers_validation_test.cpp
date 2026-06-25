@@ -75,7 +75,7 @@ suite http_server_headers_validation_suite = [] {
    auto io_ctx = std::make_shared<asio::io_context>();
    glz::http_server<> server(io_ctx, error_handler);
 
-   std::jthread server_thr([&] {
+   std::thread server_thr([&] {
       server.bind("0.0.0.0", test_port);
       server.start(0);
       io_ctx->run();
@@ -135,6 +135,7 @@ suite http_server_headers_validation_suite = [] {
 
    server.stop();
    io_ctx->stop();
+   if (server_thr.joinable()) server_thr.join();
 };
 
 int main() { return 0; }
