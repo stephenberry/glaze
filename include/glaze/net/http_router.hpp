@@ -20,6 +20,14 @@
 #include "glaze/net/url.hpp"
 #include "glaze/util/key_transformers.hpp"
 
+// To deconflict Windows.h, which defines a DELETE macro that collides with the
+// http_method::DELETE used in the route helpers below. http.hpp's own undef is
+// include-guarded, so it does not re-run when a later include (e.g. asio via
+// http_client.hpp) pulls in Windows.h before this header is parsed.
+#ifdef DELETE
+#undef DELETE
+#endif
+
 namespace glz
 {
    // Request context object

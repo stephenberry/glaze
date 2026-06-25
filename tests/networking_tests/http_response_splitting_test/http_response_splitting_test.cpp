@@ -91,6 +91,25 @@ suite header_field_crlf_helper = [] {
       expect(glz::header_field_has_crlf("bad\rname", "value")); // lone CR in name
       expect(glz::header_field_has_crlf("bad\nname", "value")); // lone LF in name
    };
+
+   // valid_header_name / valid_header_value are the shared RFC 7230 predicates the
+   // WebSocket handshake also validates against (websocket_client delegates to them).
+   "valid_header_name enforces non-empty tchar names"_test = [] {
+      expect(glz::valid_header_name("X-Echo"));
+      expect(glz::valid_header_name("Content-Type"));
+      expect(not glz::valid_header_name("")); // empty
+      expect(not glz::valid_header_name("X Echo")); // space is not a tchar
+      expect(not glz::valid_header_name("X:Echo")); // colon is not a tchar
+      expect(not glz::valid_header_name("bad\r\nname")); // CR/LF
+   };
+
+   "valid_header_value rejects control chars and DEL but allows VCHAR/SP/HTAB"_test = [] {
+      expect(glz::valid_header_value("plain value, with punctuation: ok"));
+      expect(glz::valid_header_value("tab\tseparated")); // HTAB is allowed
+      expect(not glz::valid_header_value("ok\r\nInjected: 1")); // CRLF
+      expect(not glz::valid_header_value(std::string_view("nul\0byte", 8))); // NUL
+      expect(not glz::valid_header_value("del\x7f")); // DEL
+   };
 };
 
 suite client_request_serializer_crlf = [] {
@@ -148,6 +167,15 @@ suite http_response_splitting_suite = [] {
    // one alongside it as a positive control.
    server.stream_get("/stream", [&](glz::request&, glz::streaming_response& res) {
       res.start_stream(200, {{"X-Echo", "ok\r\nInjected-Header: pwned"}, {"X-Safe", "kept"}});
+      res.send("hello");
+      res.close();
+   });
+
+   // A CRLF-bearing transfer-encoding is dropped, but that drop must not suppress
+   // the auto-generated chunked framing: otherwise the stream would be emitted
+   // with no Transfer-Encoding and no framing at all.
+   server.stream_get("/stream_te", [&](glz::request&, glz::streaming_response& res) {
+      res.start_stream(200, {{"transfer-encoding", "chunked\r\nInjected-Header: pwned"}});
       res.send("hello");
       res.close();
    });
@@ -216,6 +244,23 @@ suite http_response_splitting_suite = [] {
       expect(response.find("200") != std::string::npos) << "Stream should be served";
       expect(response.find("Injected-Header") == std::string::npos) << "Reflected CRLF must not inject a header";
       expect(response.find("X-Safe: kept") != std::string::npos) << "Benign streaming header should round-trip";
+   };
+
+   "a dropped streaming transfer-encoding still frames the stream"_test = [&] {
+      // The malicious transfer-encoding is dropped; the server must fall back to
+      // its auto Transfer-Encoding: chunked rather than leaving the stream
+      // unframed, and the injected header must not appear.
+      const std::string payload =
+         "GET /stream_te HTTP/1.1\r\n"
+         "Host: localhost\r\n"
+         "Connection: close\r\n"
+         "\r\n";
+
+      const std::string response = send_raw_timed(port, payload);
+      expect(response.find("200") != std::string::npos) << "Stream should be served";
+      expect(response.find("Injected-Header") == std::string::npos) << "Reflected CRLF must not inject a header";
+      expect(response.find("Transfer-Encoding: chunked") != std::string::npos)
+         << "Auto chunked framing must survive the dropped transfer-encoding override";
    };
 
    server.stop();
