@@ -14,6 +14,7 @@
 
 #include "glaze/bson/header.hpp"
 #include "glaze/bson/skip.hpp"
+#include "glaze/core/chrono.hpp"
 #include "glaze/core/opts.hpp"
 #include "glaze/core/read.hpp"
 #include "glaze/core/reflect.hpp"
@@ -329,6 +330,46 @@ namespace glz
          from<BSON, U>::template op<Opts>(u, tag, ctx, it, end);
          if (bool(ctx.error)) return;
          value = static_cast<T>(u);
+      }
+   };
+
+   // --- std::chrono::duration ------------------------------------------------
+   //
+   // Read as the bare integer/double rep count written by the BSON duration
+   // writer; mirrors the enum delegation above.
+   template <is_duration T>
+      requires(not custom_read<T>)
+   struct from<BSON, T>
+   {
+      template <auto Opts, class It, class End>
+      static void op(auto& value, uint8_t tag, is_context auto& ctx, It& it, const End& end) noexcept
+      {
+         using V = std::remove_cvref_t<T>;
+         typename V::rep count{};
+         from<BSON, typename V::rep>::template op<Opts>(count, tag, ctx, it, end);
+         if (bool(ctx.error)) [[unlikely]]
+            return;
+         value = V(count);
+      }
+   };
+
+   // --- steady_clock / high_resolution_clock time_point ----------------------
+   //
+   // Read as the bare rep count written by the BSON time_point writer above.
+   template <is_count_time_point T>
+      requires(not custom_read<T>)
+   struct from<BSON, T>
+   {
+      template <auto Opts, class It, class End>
+      static void op(auto& value, uint8_t tag, is_context auto& ctx, It& it, const End& end) noexcept
+      {
+         using V = std::remove_cvref_t<T>;
+         using Duration = typename V::duration;
+         typename V::rep count{};
+         from<BSON, typename V::rep>::template op<Opts>(count, tag, ctx, it, end);
+         if (bool(ctx.error)) [[unlikely]]
+            return;
+         value = V(Duration(count));
       }
    };
 

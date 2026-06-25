@@ -6,7 +6,7 @@ Glaze provides first-class support for `std::chrono` types, enabling seamless se
 
 ### Durations
 
-All `std::chrono::duration` types are supported and serialize as their numeric count value:
+All `std::chrono::duration` types are supported and serialize as their numeric count value (the `rep`, expressed in the duration's own period). This representation is shared by every Glaze format (JSON, BEVE, CBOR, MsgPack, BSON, TOML, YAML, CSV, JSONB, EETF), so the same type round-trips between any of them interchangeably:
 
 ```cpp
 std::chrono::milliseconds ms{12345};
@@ -14,7 +14,16 @@ std::string json = glz::write_json(ms).value();  // "12345"
 
 std::chrono::milliseconds parsed{};
 glz::read_json(parsed, json);  // parsed.count() == 12345
+
+// The same value over a binary format: BEVE encodes the duration byte-for-byte
+// like its underlying integer rep.
+std::string beve{};
+glz::write_beve(ms, beve);
+std::chrono::milliseconds from_beve{};
+glz::read_beve(from_beve, beve);  // from_beve == ms
 ```
+
+> In BSON, whose document root cannot be a bare scalar, a duration is supported as a struct/map field (encoded as the rep's native BSON number type) rather than as a top-level value.
 
 This works with any duration type, including custom periods:
 

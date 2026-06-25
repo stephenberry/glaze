@@ -3,6 +3,7 @@
 #include "defs.hpp"
 #include "ei.hpp"
 #include "glaze/core/buffer_traits.hpp"
+#include "glaze/core/chrono.hpp"
 #include "glaze/core/reflect.hpp"
 #include "glaze/core/write.hpp"
 #include "glaze/util/variant.hpp"

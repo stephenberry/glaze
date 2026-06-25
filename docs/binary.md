@@ -392,6 +392,21 @@ ALIGNED_HEADER | NUMERIC_HEADER | SIZE | PADDING_LENGTH | PADDING | DATA
 
 The overhead is 2 extra bytes (numeric header + padding length) plus at most `alignment - 1` bytes of padding. For large arrays this is negligible.
 
+## std::chrono Durations
+
+`std::chrono::duration` values serialize as their bare numeric count (the `rep`), so a duration is written byte-for-byte like the equivalent BEVE number. This makes a duration interchangeable with a numeric field in a shared schema:
+
+```c++
+std::chrono::milliseconds ms{12345};
+std::string buffer{};
+glz::write_beve(ms, buffer);
+
+std::chrono::milliseconds decoded{};
+glz::read_beve(decoded, buffer); // decoded.count() == 12345
+```
+
+Because the encoding is the numeric `rep`, durations also work as numeric BEVE map and pair keys (e.g. `std::map<std::chrono::seconds, V>`), producing the same wire form as the equivalent rep-keyed container. See [std::chrono Support](./chrono.md#durations) for the full cross-format behavior.
+
 ## Untagged Binary
 
 By default Glaze will handle structs as tagged objects, meaning that keys will be written/read. However, structs can be written/read without tags by using the option `structs_as_arrays` or the functions `glz::write_beve_untagged` and `glz::read_beve_untagged`.

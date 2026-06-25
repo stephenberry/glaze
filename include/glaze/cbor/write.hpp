@@ -1073,17 +1073,8 @@ namespace glz
       }
    };
 
-   // std::chrono::duration - bare numeric count in the duration's native units
-   template <is_duration T>
-   struct to<CBOR, T> final
-   {
-      template <auto Opts>
-      GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&& b, auto& ix)
-      {
-         using Rep = typename std::remove_cvref_t<T>::rep;
-         to<CBOR, Rep>::template op<Opts>(value.count(), ctx, b, ix);
-      }
-   };
+   // std::chrono::duration - serialized generically (as the bare rep count) by the
+   // to<uint32_t Format, is_duration T> specialization in core/chrono.hpp.
 
    // system_clock::time_point - tag 0 (RFC 3339 date/time string)
    template <is_system_time_point T>
@@ -1183,31 +1174,8 @@ namespace glz
       }
    };
 
-   // steady_clock::time_point - bare count in native duration (epoch is implementation-defined)
-   template <is_steady_time_point T>
-   struct to<CBOR, T> final
-   {
-      template <auto Opts>
-      GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&& b, auto& ix)
-      {
-         using Duration = typename std::remove_cvref_t<T>::duration;
-         using Rep = typename Duration::rep;
-         to<CBOR, Rep>::template op<Opts>(value.time_since_epoch().count(), ctx, b, ix);
-      }
-   };
-
-   // high_resolution_clock::time_point when it's a distinct type (rare)
-   template <is_high_res_time_point T>
-   struct to<CBOR, T> final
-   {
-      template <auto Opts>
-      GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&& b, auto& ix)
-      {
-         using Duration = typename std::remove_cvref_t<T>::duration;
-         using Rep = typename Duration::rep;
-         to<CBOR, Rep>::template op<Opts>(value.time_since_epoch().count(), ctx, b, ix);
-      }
-   };
+   // steady_clock / high_resolution_clock time_points: serialized generically (as the bare
+   // count) by the to<uint32_t Format, is_count_time_point T> specialization in core/chrono.hpp.
 
    // epoch_time wrapper - RFC 8949 §3.4.2 tag 1 (epoch-based date/time).
    // Per §3.4.2 the tag 1 content MUST be an unsigned/negative integer (major types 0 or 1)
