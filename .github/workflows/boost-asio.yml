@@ -18,14 +18,14 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     strategy:
       fail-fast: false
       matrix:
         compiler:
-          - { name: clang, version: 18 }
-          - { name: clang, version: 20 }
-          - { name: gcc, version: 14 }
+          - { name: clang, version: 21 }
+          - { name: clang, version: 22 }
+          - { name: gcc, version: 15 }
         boost_version: [1.88.0, 1.86.0]
 
     env:
@@ -35,14 +35,11 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
-      - name: Install clang
-        if: matrix.compiler.name == 'clang'
+      - name: Install Clang dependencies
+        if: ${{ matrix.compiler.name == 'clang' }}
         run: |
-          wget -O - https://apt.llvm.org/llvm-snapshot.gpg.key | sudo apt-key add -
-          echo "deb http://apt.llvm.org/noble/ llvm-toolchain-noble-${{ matrix.compiler.version }} main" | sudo tee /etc/apt/sources.list.d/llvm.list
           sudo apt-get update
-          sudo apt-get install -y --fix-missing clang-${{ matrix.compiler.version }} libc++-${{ matrix.compiler.version }}-dev libc++abi-${{ matrix.compiler.version }}-dev
-          echo "PATH=/usr/lib/llvm-${{ matrix.compiler.version }}/bin:$PATH" >> $GITHUB_ENV
+          sudo apt-get install -y libc++-dev libc++abi-dev
 
       - name: Install Boost
         id: install-boost
