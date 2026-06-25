@@ -161,6 +161,9 @@ namespace glz
 
          // Add custom headers
          for (const auto& [name, value] : headers) {
+            if (header_field_has_crlf(name, value)) [[unlikely]] {
+               continue;
+            }
             response_str.append(name);
             response_str.append(": ");
             response_str.append(value);
@@ -2203,6 +2206,9 @@ namespace glz
          }
 
          for (const auto& [name, value] : response.response_headers) {
+            if (header_field_has_crlf(name, value)) [[unlikely]] {
+               continue;
+            }
             h.append(name);
             h.append(": ");
             h.append(value);

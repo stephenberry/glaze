@@ -238,6 +238,18 @@ namespace glz
       std::string_view status_message{};
    };
 
+   // RFC 7230 3.2: a header field-name and field-value cannot contain CR or LF.
+   // A field whose name or value carries CR or LF would terminate the field on
+   // the wire, letting attacker-influenced header data inject extra headers or a
+   // message body (CWE-113, HTTP request/response splitting). Serializers call
+   // this to drop such a field instead of writing a corrupted message; the wire
+   // writer is the only layer that can enforce the framing.
+   [[nodiscard]] inline bool header_field_has_crlf(std::string_view name, std::string_view value) noexcept
+   {
+      return name.find_first_of("\r\n") != std::string_view::npos ||
+             value.find_first_of("\r\n") != std::string_view::npos;
+   }
+
    inline std::expected<HttpStatusLine, std::error_code> parse_http_status_line(std::string_view status_line)
    {
       if (status_line.empty()) {

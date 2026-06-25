@@ -288,6 +288,9 @@ namespace glz
             request_str.append("\r\n");
          }
          for (const auto& [name, value] : headers) {
+            if (header_field_has_crlf(name, value)) [[unlikely]] {
+               continue;
+            }
             request_str.append(name);
             request_str.append(": ");
             request_str.append(value);
