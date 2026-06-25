@@ -1,8 +1,16 @@
-// Verifies that glz::http_server does not emit a header field whose name or
-// value contains CR or LF. A handler that reflects request-derived data into a
-// response header value used to write it verbatim, so a value carrying CR/LF
-// terminated the field on the wire and injected attacker-controlled headers
-// (CWE-113, HTTP response splitting). The serializer now drops such a field.
+// Verifies that glz does not emit a header field whose name or value contains
+// CR or LF. A handler that reflects request-derived data into a response header
+// value used to write it verbatim, so a value carrying CR/LF terminated the
+// field on the wire and injected attacker-controlled headers (CWE-113, HTTP
+// response splitting). The field is now dropped.
+//
+// Coverage spans all three guarded serializers plus the set-time guard:
+//   - send_response_with_conn (the keep-alive response writer) via GET /echo,
+//   - streaming_connection::send_headers via the streaming route /stream,
+//   - detail::build_http_request_bytes (the client request writer) as a unit,
+// and the GET /cl case proves the set-time guard in response::header() keeps a
+// dropped Content-Length from suppressing the auto-generated one (which would
+// otherwise leave the response unframed).
 #include <atomic>
 #include <chrono>
 #include <future>
@@ -11,6 +19,7 @@
 #include <ut/ut.hpp>
 
 #include "glaze/net/http.hpp"
+#include "glaze/net/http_client.hpp"
 #include "glaze/net/http_server.hpp"
 
 #if defined(GLZ_USING_BOOST_ASIO)
@@ -75,9 +84,35 @@ static void error_handler(std::error_code, std::source_location) {}
 suite header_field_crlf_helper = [] {
    "header_field_has_crlf flags CR or LF in name or value"_test = [] {
       expect(not glz::header_field_has_crlf("X-Echo", "plain value"));
-      expect(glz::header_field_has_crlf("X-Echo", "ok\r\nSet-Cookie: sid=evil"));
-      expect(glz::header_field_has_crlf("X-Echo", "trailing\n"));
-      expect(glz::header_field_has_crlf("bad\rname", "value"));
+      expect(not glz::header_field_has_crlf("", "")); // empty name and value are well-formed
+      expect(glz::header_field_has_crlf("X-Echo", "ok\r\nSet-Cookie: sid=evil")); // CRLF in value
+      expect(glz::header_field_has_crlf("X-Echo", "trailing\n")); // lone LF in value
+      expect(glz::header_field_has_crlf("X-Echo", "lone\rcarriage")); // lone CR in value
+      expect(glz::header_field_has_crlf("bad\rname", "value")); // lone CR in name
+      expect(glz::header_field_has_crlf("bad\nname", "value")); // lone LF in name
+   };
+};
+
+suite client_request_serializer_crlf = [] {
+   // The client request writer is one of the three guarded serializers but is not
+   // reachable through the server harness, so exercise it directly. A header whose
+   // value carries CRLF must be dropped from the request bytes, never written
+   // verbatim where it would smuggle a second header onto the wire.
+   "build_http_request_bytes drops a CRLF-bearing header"_test = [] {
+      glz::url_parts url;
+      url.protocol = "http";
+      url.host = "example.com";
+      url.port = 80;
+      url.path = "/";
+
+      const std::unordered_map<std::string, std::string> headers{
+         {"X-Evil", "a\r\nSmuggled-Header: 1"},
+         {"X-Safe", "kept"},
+      };
+
+      const std::string request = glz::detail::build_http_request_bytes("GET", url, false, "", headers);
+      expect(request.find("Smuggled-Header") == std::string::npos) << "CRLF-bearing header must be dropped";
+      expect(request.find("X-Safe: kept") != std::string::npos) << "Benign header must still be written";
    };
 };
 
@@ -93,6 +128,28 @@ suite http_response_splitting_suite = [] {
       res.header("X-Echo", it != req.query.end() ? it->second : "");
       res.status(200);
       res.body("ok");
+   });
+
+   // Reflects a url-decoded query parameter into the Content-Length header. This
+   // is the case where dropping the malformed field is not enough on its own:
+   // response::header() records that the user set Content-Length, which suppresses
+   // the auto-generated one, so a guard that only dropped at serialization would
+   // leave the response with no Content-Length at all. The set-time guard keeps
+   // the framing header intact.
+   server.get("/cl", [&](const glz::request& req, glz::response& res) {
+      auto it = req.query.find("v");
+      res.header("Content-Length", it != req.query.end() ? it->second : "");
+      res.status(200);
+      res.body("hello world"); // 11 bytes
+   });
+
+   // Streaming responses go through a different serializer (send_headers) than the
+   // keep-alive writer. Reflects a CRLF value into one header and keeps a benign
+   // one alongside it as a positive control.
+   server.stream_get("/stream", [&](glz::request&, glz::streaming_response& res) {
+      res.start_stream(200, {{"X-Echo", "ok\r\nInjected-Header: pwned"}, {"X-Safe", "kept"}});
+      res.send("hello");
+      res.close();
    });
 
    server.bind(test_host, 0);
@@ -127,6 +184,38 @@ suite http_response_splitting_suite = [] {
       expect(response.find("200") != std::string::npos) << "Request should be served";
       // response::header() lowercases the field-name (RFC 7230 case-insensitive).
       expect(response.find("x-echo: harmless-value") != std::string::npos) << "Benign header should round-trip";
+   };
+
+   "dropping a reflected Content-Length still frames the response"_test = [&] {
+      // The reflected value decodes to "11\r\nX-Injected: pwned". The malformed
+      // Content-Length is dropped, and because the set-time guard never recorded
+      // it the server still emits its own Content-Length for the 11-byte body.
+      const std::string payload =
+         "GET /cl?v=11%0d%0aX-Injected:%20pwned HTTP/1.1\r\n"
+         "Host: localhost\r\n"
+         "Connection: close\r\n"
+         "\r\n";
+
+      const std::string response = send_raw_timed(port, payload);
+      expect(response.find("200") != std::string::npos) << "Request should still be served";
+      expect(response.find("X-Injected") == std::string::npos) << "Reflected CRLF must not inject a header";
+      expect(response.find("Content-Length: 11") != std::string::npos)
+         << "Auto Content-Length must survive the dropped override so the message stays framed";
+   };
+
+   "a CRLF-bearing streaming header cannot inject a header"_test = [&] {
+      // Streaming uses send_headers, a separate serializer from the keep-alive
+      // writer. The malicious X-Echo is dropped while the benign X-Safe remains.
+      const std::string payload =
+         "GET /stream HTTP/1.1\r\n"
+         "Host: localhost\r\n"
+         "Connection: close\r\n"
+         "\r\n";
+
+      const std::string response = send_raw_timed(port, payload);
+      expect(response.find("200") != std::string::npos) << "Stream should be served";
+      expect(response.find("Injected-Header") == std::string::npos) << "Reflected CRLF must not inject a header";
+      expect(response.find("X-Safe: kept") != std::string::npos) << "Benign streaming header should round-trip";
    };
 
    server.stop();
