@@ -1750,6 +1750,7 @@ namespace glz
          // --- Parse headers line by line (single pass) ---
          size_t pos = rl_end + 2;
          auto& headers = conn->request_.headers;
+         bool host_header_parsed = false;
 
          while (true) {
             // Need at least 2 bytes to check for empty line
@@ -1757,6 +1758,14 @@ namespace glz
 
             // Empty line = end of headers
             if (data[pos] == '\r' && data[pos + 1] == '\n') {
+               // RFC 9112, 3.2: A server MUST respond with a 400 (Bad Request) status
+               // code to any HTTP/1.1 request message that lacks a Host header
+               if (result.is_http_11 && !headers.contains("host")) {
+                  result.status = parse_status::error;
+                  send_error_response_with_close(conn, 400, "Bad Request");
+                  return result;
+               }
+
                result.headers_end = pos + 2;
                result.status = parse_status::complete;
                return result;
@@ -1809,6 +1818,18 @@ namespace glz
                      return result;
                   }
                }
+
+               // RFC 9112, 3.2: A server MUST respond with a 400 (Bad Request) status code to
+               // any HTTP/1.1 request message that ... contains more than one Host header field.
+               if (result.is_http_11 && key == "host") {
+                  if (host_header_parsed) {
+                     result.status = parse_status::error;
+                     send_error_response_with_close(conn, 400, "Bad Request");
+                     return result;
+                  }
+                  host_header_parsed = true;
+               }
+
                headers[std::move(key)] = std::string(value_sv);
             }
 
