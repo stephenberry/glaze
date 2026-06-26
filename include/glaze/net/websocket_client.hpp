@@ -89,38 +89,16 @@ namespace glz
             });
          }
 
-         static bool is_tchar(unsigned char c)
-         {
-            if ((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9')) return true;
-
-            switch (c) {
-            case '!':
-            case '#':
-            case '$':
-            case '%':
-            case '&':
-            case '\'':
-            case '*':
-            case '+':
-            case '-':
-            case '.':
-            case '^':
-            case '_':
-            case '`':
-            case '|':
-            case '~':
-               return true;
-            default:
-               return false;
-            }
-         }
-
          static bool is_reserved_handshake_header(std::string_view name)
          {
             return header_name_equal(name, "Host") || header_name_equal(name, "Upgrade") ||
                    header_name_equal(name, "Connection") || header_name_starts_with(name, "Sec-WebSocket-");
          }
 
+         // Field-name and field-value validity (tchar names, no CR/LF/CTL/DEL
+         // values) is shared with the rest of the net stack via glz::valid_header_name
+         // and glz::valid_header_value (glaze/net/http.hpp); only the handshake-specific
+         // reserved-name rule and the error-code reporting live here.
          static bool validate_header_name(std::string_view name, header_validation_error& error)
          {
             if (name.empty()) {
@@ -133,26 +111,18 @@ namespace glz
                return false;
             }
 
-            for (const unsigned char c : name) {
-               if (!is_tchar(c)) {
-                  error = header_validation_error::invalid_name;
-                  return false;
-               }
+            if (!valid_header_name(name)) {
+               error = header_validation_error::invalid_name;
+               return false;
             }
             return true;
          }
 
          static bool validate_header_value(std::string_view value, header_validation_error& error)
          {
-            for (const unsigned char c : value) {
-               if (c == '\r' || c == '\n' || c == 127) {
-                  error = header_validation_error::invalid_value;
-                  return false;
-               }
-               if (c < 32 && c != '\t') {
-                  error = header_validation_error::invalid_value;
-                  return false;
-               }
+            if (!valid_header_value(value)) {
+               error = header_validation_error::invalid_value;
+               return false;
             }
             return true;
          }
