@@ -253,8 +253,8 @@ namespace glz
             value.resize(static_cast<Eigen::Index>(rows), static_cast<Eigen::Index>(cols));
          }
          else {
-            if (static_cast<Eigen::Index>(rows) != value.rows() ||
-                static_cast<Eigen::Index>(cols) != value.cols()) [[unlikely]] {
+            if (static_cast<Eigen::Index>(rows) != value.rows() || static_cast<Eigen::Index>(cols) != value.cols())
+               [[unlikely]] {
                ctx.error = error_code::syntax_error;
                return;
             }
