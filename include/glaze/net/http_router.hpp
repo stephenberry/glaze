@@ -20,6 +20,14 @@
 #include "glaze/net/url.hpp"
 #include "glaze/util/key_transformers.hpp"
 
+// To deconflict Windows.h, which defines a DELETE macro that collides with the
+// http_method::DELETE used in the route helpers below. http.hpp's own undef is
+// include-guarded, so it does not re-run when a later include (e.g. asio via
+// http_client.hpp) pulls in Windows.h before this header is parsed.
+#ifdef DELETE
+#undef DELETE
+#endif
+
 namespace glz
 {
    // Request context object
@@ -69,6 +77,18 @@ namespace glz
 
       inline response& header(std::string_view name, std::string_view value)
       {
+         // RFC 7230 3.2: a field-name or field-value carrying CR or LF would
+         // terminate the field on the wire, letting attacker-influenced data
+         // inject extra headers or a body (CWE-113). Reject such a field where it
+         // is set so it never enters the map and, crucially, the default-header
+         // bookkeeping below is skipped: otherwise a dropped Content-Length or
+         // Connection would still suppress its auto-generated counterpart and
+         // leave the message unframed. The wire serializers keep an independent
+         // drop as a backstop for headers that bypass this setter.
+         if (header_field_has_crlf(name, value)) [[unlikely]] {
+            return *this;
+         }
+
          // Convert header name to lowercase for case-insensitive lookups (RFC 7230)
          std::string key(name);
          for (auto& c : key) c = ascii_tolower(c);

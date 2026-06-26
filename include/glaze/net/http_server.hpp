@@ -161,21 +161,33 @@ namespace glz
 
          // Add custom headers
          for (const auto& [name, value] : headers) {
+            if (header_field_has_crlf(name, value)) [[unlikely]] {
+               continue;
+            }
             response_str.append(name);
             response_str.append(": ");
             response_str.append(value);
             response_str.append("\r\n");
          }
 
-         // Default headers for streaming
-         if (headers.find("transfer-encoding") == headers.end()) {
+         // Default headers for streaming. A control header that was dropped above
+         // for containing CR/LF must not suppress its auto-generated default: a
+         // dropped Transfer-Encoding/Connection would otherwise leave the stream
+         // unframed (no chunked framing, no keep-alive signal). Treat a
+         // present-but-invalid header as absent, matching what was written.
+         const auto present_and_valid = [&](const char* key) {
+            const auto it = headers.find(key);
+            return it != headers.end() && !header_field_has_crlf(it->first, it->second);
+         };
+
+         if (!present_and_valid("transfer-encoding")) {
             response_str.append("Transfer-Encoding: chunked\r\n");
             chunked_encoding_ = true;
          }
-         if (headers.find("connection") == headers.end()) {
+         if (!present_and_valid("connection")) {
             response_str.append("Connection: keep-alive\r\n");
          }
-         if (headers.find("cache-control") == headers.end()) {
+         if (!present_and_valid("cache-control")) {
             response_str.append("Cache-Control: no-cache\r\n");
          }
 
@@ -2203,6 +2215,9 @@ namespace glz
          }
 
          for (const auto& [name, value] : response.response_headers) {
+            if (header_field_has_crlf(name, value)) [[unlikely]] {
+               continue;
+            }
             h.append(name);
             h.append(": ");
             h.append(value);
