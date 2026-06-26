@@ -646,4 +646,19 @@ int main()
       expect(not glz::read_cbor(e, b));
       expect(m == e);
    };
+
+   // A fixed-size matrix must reject wire dimensions larger than its storage. The
+   // payload below declares 8x8 (64 doubles) but the target holds only 2x2; reading
+   // it must error instead of writing 64 doubles into the 32-byte fixed buffer.
+   "cbor fixed matrix oversized dims"_test = [] {
+      Eigen::MatrixXd big(8, 8);
+      big.setOnes();
+      std::string b;
+      expect(not glz::write_cbor(big, b));
+
+      Eigen::Matrix<double, 2, 2> e{};
+      e.setZero();
+      expect(bool(glz::read_cbor(e, b)));
+      expect(e == (Eigen::Matrix<double, 2, 2>::Zero()));
+   };
 }
