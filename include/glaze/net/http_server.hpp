@@ -434,6 +434,7 @@ namespace glz
             return true;
          }
 
+         constexpr uint32_t min_port = 1;
          constexpr uint32_t max_port = 65535;
          uint32_t port_value = 0;
 
@@ -449,7 +450,7 @@ namespace glz
             }
          }
 
-         return true;
+         return port_value >= min_port;
       }
 
       inline bool validate_host_header(std::string_view host_header) noexcept
