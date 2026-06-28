@@ -1929,6 +1929,12 @@ namespace glz
 
          if (*it == '\\') [[unlikely]] {
             ++it;
+            if constexpr (not Opts.null_terminated) {
+               if (it == end) [[unlikely]] {
+                  ctx.error = error_code::unexpected_end;
+                  return;
+               }
+            }
             switch (*it) {
             case '\0': {
                ctx.error = error_code::unexpected_end;

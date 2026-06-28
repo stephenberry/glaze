@@ -2442,6 +2442,32 @@ suite non_null_terminated_scanner_bounds = [] {
       expect(not resolves_index(R"([10)")); // truncated before the indexed element
       expect(resolves_index(R"([10,20])")); // complete array resolves
    };
+
+   "nnt char scalar escape stays in bounds"_test = [] {
+      static constexpr glz::opts options{.null_terminated = false};
+      // The char reader consumes the backslash before reading the escaped char. A value truncated
+      // right after the backslash leaves the iterator at the end, so that read must be bounded
+      // rather than reading one past the buffer.
+      const auto read_char = [](std::string_view s) {
+         std::vector<char> buf{s.begin(), s.end()};
+         char value{};
+         return glz::read<options>(value, std::string_view{buf.data(), buf.data() + buf.size()});
+      };
+      expect(read_char(R"("\)")); // trailing backslash at the end
+      expect(read_char(R"("a)")); // unterminated single char
+      // Complete char values still parse.
+      const auto value_of = [](std::string_view s) {
+         std::vector<char> buf{s.begin(), s.end()};
+         char value{};
+         const auto ec = glz::read<options>(value, std::string_view{buf.data(), buf.data() + buf.size()});
+         expect(not ec);
+         return value;
+      };
+      expect(value_of(R"("a")") == 'a');
+      expect(value_of(R"("\n")") == '\n');
+      expect(value_of(R"("\\")") == '\\');
+      expect(value_of(R"("")") == '\0');
+   };
 };
 
 suite minified_custom_object = [] {
