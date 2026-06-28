@@ -147,19 +147,20 @@ suite http_server_host_header_value_validation_suite = [] {
 
    "accepts valid Host header port values"_test = [] {
       expect(validate_host_header("example.com:"));
-      expect(validate_host_header("example.com:0"));
       expect(validate_host_header("example.com:00080"));
       expect(validate_host_header("example.com:80"));
       expect(validate_host_header("example.com:65535"));
       expect(validate_host_header("127.0.0.1:"));
       expect(validate_host_header("127.0.0.1:443"));
       expect(validate_host_header("[::1]:"));
-      expect(validate_host_header("[::1]:0"));
       expect(validate_host_header("[::1]:65535"));
    };
 
    "rejects invalid Host header port values"_test = [] {
       expect(not validate_host_header(":80"));
+      expect(not validate_host_header("example.com:0"));
+      expect(not validate_host_header("example.com:00"));
+      expect(not validate_host_header("example.com:00000"));
       expect(not validate_host_header("example.com:65536"));
       expect(not validate_host_header("example.com:99999"));
       expect(not validate_host_header("example.com:80:90"));
@@ -168,6 +169,10 @@ suite http_server_host_header_value_validation_suite = [] {
       expect(not validate_host_header("example.com:-1"));
       expect(not validate_host_header("example.com: 80"));
       expect(not validate_host_header("example.com:80 "));
+      expect(not validate_host_header("127.0.0.1:0"));
+      expect(not validate_host_header("127.0.0.1:00000"));
+      expect(not validate_host_header("[::1]:0"));
+      expect(not validate_host_header("[::1]:00000"));
       expect(not validate_host_header("[::1]:65536"));
       expect(not validate_host_header("[::1]:abc"));
       expect(not validate_host_header("[::1]:-1"));
@@ -437,6 +442,40 @@ suite http_server_headers_validation_suite = [] {
       }
 
       expect(response.contains("HTTP/1.1 400")) << "Expected 400 for Host header with non-digit port";
+   };
+
+   "request with Host header zero port is rejected with 400 bad request"_test = [&] {
+      std::string payload =
+         "GET /front HTTP/1.1\r\n"
+         "Host: example.com:0\r\n"
+         "Connection: close\r\n"
+         "\r\n";
+
+      std::future<std::string> f = std::async(std::launch::async, [&] { return send_raw(payload); });
+
+      std::string response;
+      if (f.wait_for(5s) == std::future_status::ready) {
+         response = f.get();
+      }
+
+      expect(response.contains("HTTP/1.1 400")) << "Expected 400 for Host header with zero port";
+   };
+
+   "request with bracketed IPv6 Host header zero port is rejected with 400 bad request"_test = [&] {
+      std::string payload =
+         "GET /front HTTP/1.1\r\n"
+         "Host: [::1]:0\r\n"
+         "Connection: close\r\n"
+         "\r\n";
+
+      std::future<std::string> f = std::async(std::launch::async, [&] { return send_raw(payload); });
+
+      std::string response;
+      if (f.wait_for(5s) == std::future_status::ready) {
+         response = f.get();
+      }
+
+      expect(response.contains("HTTP/1.1 400")) << "Expected 400 for bracketed IPv6 Host header with zero port";
    };
 
    "request with Host header port above server policy range is rejected with 400 bad request"_test = [&] {
