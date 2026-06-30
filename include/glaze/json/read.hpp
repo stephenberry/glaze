@@ -2977,6 +2977,12 @@ namespace glz
       requires((readable_map_t<T> || glaze_object_t<T> || reflectable<T>) && not custom_read<T>)
    struct from<JSON, T>
    {
+      static_assert([]() {
+         return []<size_t... I>(std::index_sequence<I...>) {
+            return ((is_any_function_ptr<field_t<T, I>> || always_skipped<field_t<T, I>> || read_supported<field_t<T, I>, JSON>) && ...);
+         }(std::make_index_sequence<reflect<T>::size>{});
+      }(), "One of the object's members is not deserializable. Check if member's type has glz::meta or is reflectable.");
+
       template <auto Options, string_literal tag = "">
       static void op(auto&& value, is_context auto&& ctx, auto&& it, auto end)
       {
