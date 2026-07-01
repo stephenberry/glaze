@@ -541,9 +541,17 @@ namespace glz
                return;
             }
          }
-         else {
-            // fallback to numeric representation
-            serialize<MSGPACK>::op<Opts>(static_cast<std::underlying_type_t<T>>(value), ctx, b, ix);
+         else [[unlikely]] {
+            // The value is not in the enumerate map, so it has no string name. By default error rather
+            // than emitting the underlying integer, which the reader (requiring a known name) could not
+            // round-trip; writes are trusted, so this signals a producer bug (issue #2672). The
+            // enum_int_fallback option restores the old integer-fallback behavior.
+            if constexpr (check_enum_int_fallback(Opts)) {
+               serialize<MSGPACK>::op<Opts>(static_cast<std::underlying_type_t<T>>(value), ctx, b, ix);
+            }
+            else {
+               ctx.error = error_code::unexpected_enum;
+            }
          }
       }
    };
