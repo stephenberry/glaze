@@ -77,6 +77,35 @@ struct std::hash<CastModuleID>
    size_t operator()(const CastModuleID& id) const noexcept { return std::hash<uint64_t>{}(id.value); }
 };
 
+// A multi-field key that reduces to neither a numeric nor a string type. A BEVE object header encodes
+// a single shared key type, so this key can't use the compact map encoding; the serializers fall back
+// to a generic array of [key, value] entries instead. See issue #2666.
+struct CompositeKey
+{
+   int32_t id{};
+   std::string name{};
+
+   auto operator<=>(const CompositeKey&) const = default;
+};
+
+// An explicit entry struct, equivalent on the wire to the [key, value] fallback above.
+struct CompositeEntry
+{
+   CompositeKey key{};
+   int value{};
+
+   auto operator<=>(const CompositeEntry&) const = default;
+};
+
+template <>
+struct std::hash<CompositeKey>
+{
+   size_t operator()(const CompositeKey& k) const noexcept
+   {
+      return std::hash<int32_t>{}(k.id) ^ (std::hash<std::string>{}(k.name) << 1);
+   }
+};
+
 namespace
 {
    template <class ID>
@@ -2712,6 +2741,111 @@ suite beve_custom_key_tests = [] {
    "vector pair CastModuleID"_test = [] { verify_vector_pair_roundtrip<CastModuleID>(); };
 };
 
+// A BEVE object header encodes a single shared key type. Native (numeric/string-like) keys use the
+// compact map encoding; non-native keys (e.g. multi-field structs) fall back to a generic array of
+// [key, value] entries so they still round-trip. See issue #2666.
+suite beve_key_classification_tests = [] {
+   // Native keys reduce to a numeric or string type.
+   static_assert(glz::beve_key_traits<int>::native);
+   static_assert(glz::beve_key_traits<uint64_t>::native);
+   static_assert(glz::beve_key_traits<char>::native);
+   static_assert(glz::beve_key_traits<std::string>::native);
+   static_assert(glz::beve_key_traits<std::string_view>::native);
+   static_assert(glz::beve_key_traits<ModuleID>::native); // wraps a uint64_t via glz::meta
+   static_assert(glz::beve_key_traits<CastModuleID>::native);
+
+   // Multi-field structs are not native; they use the generic-array fallback rather than a map header.
+   static_assert(not glz::beve_key_traits<CompositeKey>::native);
+
+   // The exact case from issue #2666: a std::unordered_map keyed by a multi-field struct now serializes.
+   "unordered_map with struct key"_test = [] {
+      const std::unordered_map<CompositeKey, int> src{{{1, "a"}, 10}, {{2, "b"}, 20}, {{3, "c"}, 30}};
+
+      std::string buffer{};
+      expect(not glz::write_beve(src, buffer));
+      std::unordered_map<CompositeKey, int> dst{};
+      expect(!glz::read_beve(dst, buffer));
+      expect(dst == src);
+   };
+
+   "map with struct key"_test = [] {
+      const std::map<CompositeKey, int> src{{{1, "a"}, 10}, {{2, "b"}, 20}, {{3, "c"}, 30}};
+
+      std::string buffer{};
+      expect(not glz::write_beve(src, buffer));
+      std::map<CompositeKey, int> dst{};
+      expect(!glz::read_beve(dst, buffer));
+      expect(dst == src);
+
+      std::string untagged{};
+      expect(not glz::write_beve_untagged(src, untagged));
+      std::map<CompositeKey, int> dst2{};
+      expect(!glz::read_beve_untagged(dst2, untagged));
+      expect(dst2 == src);
+   };
+
+   "vector of pairs with struct key"_test = [] {
+      const std::vector<std::pair<CompositeKey, int>> src{{{1, "a"}, 10}, {{2, "b"}, 20}, {{3, "c"}, 30}};
+
+      std::string buffer{};
+      expect(not glz::write_beve(src, buffer));
+      std::vector<std::pair<CompositeKey, int>> dst{};
+      expect(!glz::read_beve(dst, buffer));
+      expect(dst == src);
+   };
+
+   "standalone pair with struct key"_test = [] {
+      const std::pair<CompositeKey, int> src{{9, "i"}, 42};
+
+      std::string buffer{};
+      expect(not glz::write_beve(src, buffer));
+      std::pair<CompositeKey, int> dst{};
+      expect(!glz::read_beve(dst, buffer));
+      expect(dst == src);
+   };
+
+   // The fallback encodes each entry exactly like std::tuple<Key, Value>: a non-native pair and the
+   // corresponding tuple must produce identical bytes.
+   "pair fallback matches tuple bytes"_test = [] {
+      const std::pair<CompositeKey, int> p{{9, "i"}, 42};
+      const std::tuple<CompositeKey, int> t{{9, "i"}, 42};
+
+      std::string pair_buffer{};
+      std::string tuple_buffer{};
+      expect(not glz::write_beve(p, pair_buffer));
+      expect(not glz::write_beve(t, tuple_buffer));
+      expect(pair_buffer == tuple_buffer);
+   };
+
+   // An explicit entry struct still works and is equivalent to the [key, value] fallback.
+   "vector of explicit entries"_test = [] {
+      const std::vector<CompositeEntry> src{{{1, "a"}, 10}, {{2, "b"}, 20}, {{3, "c"}, 30}};
+
+      std::string buffer{};
+      expect(not glz::write_beve(src, buffer));
+      std::vector<CompositeEntry> dst{};
+      expect(!glz::read_beve(dst, buffer));
+      expect(dst == src);
+
+      std::string untagged{};
+      expect(not glz::write_beve_untagged(src, untagged));
+      std::vector<CompositeEntry> dst2{};
+      expect(!glz::read_beve_untagged(dst2, untagged));
+      expect(dst2 == src);
+   };
+
+   // std::tuple already round-trips a non-native first element.
+   "tuple with struct first element"_test = [] {
+      const std::tuple<CompositeKey, int> src{{9, "i"}, 42};
+
+      std::string buffer{};
+      expect(not glz::write_beve(src, buffer));
+      std::tuple<CompositeKey, int> dst{};
+      expect(!glz::read_beve(dst, buffer));
+      expect(dst == src);
+   };
+};
+
 suite beve_to_json_tests = [] {
    "beve_to_json bool"_test = [] {
       bool b = true;
@@ -4903,6 +5037,29 @@ suite dos_prevention = [] {
       std::map<std::string, int> result;
       auto ec = glz::read_beve(result, truncated);
       expect(bool(ec)) << "Should fail on truncated map";
+   };
+
+   "vector-of-pairs with huge key count protection"_test = [] {
+      // std::vector<std::pair<...>> shares the concatenated-map encoding, but is read by a separate
+      // path than std::map. A buffer claiming a huge element count must be rejected before allocating.
+      std::vector<std::pair<std::string, int>> sample = {{"one", 1}, {"two", 2}};
+      std::string valid_buffer;
+      expect(not glz::write_beve(sample, valid_buffer));
+
+      // Reuse the object-header byte, then claim ~2^40 entries with no element data following. The
+      // count stays below the compressed-int safety limit (2^48) so it reaches the per-element bound.
+      std::string malicious;
+      malicious.push_back(valid_buffer.at(0)); // object header for a string-keyed map
+      const uint64_t huge_count = uint64_t(1) << 40;
+      const uint64_t encoded = (huge_count << 2) | 0b11; // 8-byte compressed int (config 3)
+      for (int i = 0; i < 8; ++i) {
+         malicious.push_back(char(uint8_t(encoded >> (8 * i))));
+      }
+
+      std::vector<std::pair<std::string, int>> result;
+      auto ec = glz::read_beve(result, malicious);
+      expect(bool(ec)) << "Should reject huge vector-of-pairs count, not allocate";
+      expect(result.empty());
    };
 };
 
