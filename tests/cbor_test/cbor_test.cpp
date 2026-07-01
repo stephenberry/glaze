@@ -3403,6 +3403,16 @@ void custom_variant_ambiguity_tests()
       cbor_fc_variant r{};
       expect(not glz::read_cbor(r, s));
    };
+
+   "out-of-range variant index is rejected"_test = [] {
+      using V = std::variant<int32_t, double>;
+      std::string buf;
+      expect(not glz::write_cbor(V{int32_t{111}}, buf)); // [index, value], holds index 0
+      // Byte 1 is the type index (a small CBOR uint); force it past the two alternatives.
+      buf[1] = static_cast<char>(0x07);
+      V in{};
+      expect(glz::read_cbor(in, buf).ec == glz::error_code::no_matching_variant_type);
+   };
 }
 
 // Regression coverage for https://github.com/stephenberry/glaze/issues/2647
