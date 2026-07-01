@@ -555,7 +555,7 @@ namespace glz
                         return;
                      }
                      const uint32_t codepoint = hex_to_u32(src);
-                     if (codepoint == 0xFFFFFFFFu) [[unlikely]] {
+                     if (codepoint == 0xFFFFFFFFu || (codepoint >= 0xD800 && codepoint <= 0xDFFF)) [[unlikely]] {
                         ctx.error = error_code::syntax_error;
                         return;
                      }
@@ -577,6 +577,10 @@ namespace glz
                      }
                      const uint32_t codepoint = (hi << 16) | lo;
                      src += 8;
+                     if (codepoint >= 0xD800 && codepoint <= 0xDFFF) [[unlikely]] {
+                        ctx.error = error_code::syntax_error;
+                        return;
+                     }
                      if (codepoint <= 0x10FFFF) {
                         dst += code_point_to_utf8(codepoint, dst);
                      }
