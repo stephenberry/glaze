@@ -362,7 +362,7 @@ void run_initial_data_handshake_server(std::atomic<bool>& server_ready, std::ato
 void run_raw_control_frame_server(std::atomic<bool>& server_ready, std::atomic<bool>& should_stop,
                                   std::atomic<uint16_t>& selected_port, std::vector<uint8_t> frame_payload,
                                   std::atomic<bool>& client_close_received, std::atomic<uint16_t>& client_close_code,
-                                  uint8_t frame_first_byte)
+                                  uint8_t frame_first_byte, bool mask_frame = false)
 {
    try {
       asio::io_context io_ctx;
@@ -426,7 +426,17 @@ void run_raw_control_frame_server(std::atomic<bool>& server_ready, std::atomic<b
          control_frame.push_back(static_cast<uint8_t>(frame_payload.size() >> 8));
          control_frame.push_back(static_cast<uint8_t>(frame_payload.size() & 0xFF));
       }
-      control_frame.insert(control_frame.end(), frame_payload.begin(), frame_payload.end());
+      if (mask_frame) {
+         control_frame[1] |= 0x80; // set the MASK bit in the length byte
+         const std::array<uint8_t, 4> mask_key{0x12, 0x34, 0x56, 0x78};
+         control_frame.insert(control_frame.end(), mask_key.begin(), mask_key.end());
+         for (size_t i = 0; i < frame_payload.size(); ++i) {
+            control_frame.push_back(static_cast<uint8_t>(frame_payload[i] ^ mask_key[i % 4]));
+         }
+      }
+      else {
+         control_frame.insert(control_frame.end(), frame_payload.begin(), frame_payload.end());
+      }
 
       asio::write(socket, asio::buffer(control_frame), ec);
       if (ec) return;
@@ -525,6 +535,92 @@ struct glz::meta<TestMessage>
    using T = TestMessage;
    static constexpr auto value = object("type", &T::type, "content", &T::content, "timestamp", &T::timestamp);
 };
+
+void run_invalid_frame_case(std::string_view name, std::vector<uint8_t> frame_payload, ws_close_code expected_code,
+                            std::string_view expected_reason, uint8_t frame_first_byte = 0x88, bool mask_frame = false)
+{
+   std::atomic<bool> server_ready{false};
+   std::atomic<bool> stop_server{false};
+   std::atomic<uint16_t> port{0};
+   std::atomic<bool> client_close_received{false};
+   std::atomic<uint16_t> client_close_code{0};
+
+   std::thread server_thread(run_raw_control_frame_server, std::ref(server_ready), std::ref(stop_server),
+                             std::ref(port), std::move(frame_payload), std::ref(client_close_received),
+                             std::ref(client_close_code), frame_first_byte, mask_frame);
+
+   if (!wait_for_condition([&] { return server_ready.load() && port.load() != 0; })) {
+      expect(false) << name << ": server failed to start";
+      stop_server = true;
+      if (server_thread.joinable()) {
+         server_thread.join();
+      }
+      return;
+   }
+
+   websocket_client client;
+   std::atomic<bool> open_called{false};
+   std::atomic<bool> close_called{false};
+   std::atomic<bool> error_called{false};
+   std::atomic<bool> message_received{false};
+   std::atomic<uint16_t> observed_close_code{0};
+   std::string observed_close_reason;
+   std::mutex close_mu;
+
+   client.on_open([&] { open_called = true; });
+   client.on_message([&](std::string_view, ws_opcode) { message_received = true; });
+   client.on_close([&](ws_close_code code, std::string_view reason) {
+      observed_close_code = static_cast<uint16_t>(code);
+      {
+         std::lock_guard lock(close_mu);
+         observed_close_reason = std::string(reason);
+      }
+      close_called = true;
+      client.context()->stop();
+   });
+   client.on_error([&](std::error_code ec) {
+      std::cerr << "[invalid_control_frame_test] Client Error: " << ec.message() << "\n";
+      error_called = true;
+      client.context()->stop();
+   });
+
+   const std::string client_url = "ws://127.0.0.1:" + std::to_string(port.load()) + "/ws";
+   client.connect(client_url);
+
+   std::thread client_thread([&client]() { client.context()->run(); });
+
+   const bool completed =
+      wait_for_condition([&] { return error_called.load() || (close_called.load() && client_close_received.load()); });
+
+   expect(completed) << name << ": client did not complete invalid control frame handling";
+   expect(open_called.load()) << name << ": client did not open before receiving control frame";
+   expect(!error_called.load()) << name << ": invalid control frame should complete through on_close";
+   expect(!message_received.load()) << name << ": payload must not be delivered to on_message";
+   expect(close_called.load()) << name << ": on_close was not called";
+   expect(observed_close_code.load() == static_cast<uint16_t>(expected_code))
+      << name << ": unexpected local close code";
+   expect(client_close_received.load()) << name << ": client did not send close frame response";
+   expect(client_close_code.load() == static_cast<uint16_t>(expected_code))
+      << name << ": unexpected close response code";
+
+   {
+      std::lock_guard lock(close_mu);
+      expect(observed_close_reason == expected_reason)
+         << name << ": unexpected local close reason: " << observed_close_reason;
+   }
+
+   if (!client.context()->stopped()) {
+      client.context()->stop();
+   }
+   if (client_thread.joinable()) {
+      client_thread.join();
+   }
+
+   stop_server = true;
+   if (server_thread.joinable()) {
+      server_thread.join();
+   }
+}
 
 suite websocket_client_tests = [] {
    "basic_echo_test"_test = [] {
@@ -862,108 +958,32 @@ suite websocket_client_tests = [] {
    };
 
    "invalid_server_control_frame_test"_test = [] {
-      auto run_case = [](std::string_view name, std::vector<uint8_t> frame_payload, ws_close_code expected_code,
-                         std::string_view expected_reason, uint8_t frame_first_byte = 0x88) {
-         std::atomic<bool> server_ready{false};
-         std::atomic<bool> stop_server{false};
-         std::atomic<uint16_t> port{0};
-         std::atomic<bool> client_close_received{false};
-         std::atomic<uint16_t> client_close_code{0};
-
-         std::thread server_thread(run_raw_control_frame_server, std::ref(server_ready), std::ref(stop_server),
-                                   std::ref(port), std::move(frame_payload), std::ref(client_close_received),
-                                   std::ref(client_close_code), frame_first_byte);
-
-         if (!wait_for_condition([&] { return server_ready.load() && port.load() != 0; })) {
-            expect(false) << name << ": server failed to start";
-            stop_server = true;
-            if (server_thread.joinable()) {
-               server_thread.join();
-            }
-            return;
-         }
-
-         websocket_client client;
-         std::atomic<bool> open_called{false};
-         std::atomic<bool> close_called{false};
-         std::atomic<bool> error_called{false};
-         std::atomic<uint16_t> observed_close_code{0};
-         std::string observed_close_reason;
-         std::mutex close_mu;
-
-         client.on_open([&] { open_called = true; });
-         client.on_message([](std::string_view, ws_opcode) {});
-         client.on_close([&](ws_close_code code, std::string_view reason) {
-            observed_close_code = static_cast<uint16_t>(code);
-            {
-               std::lock_guard lock(close_mu);
-               observed_close_reason = std::string(reason);
-            }
-            close_called = true;
-            client.context()->stop();
-         });
-         client.on_error([&](std::error_code ec) {
-            std::cerr << "[invalid_control_frame_test] Client Error: " << ec.message() << "\n";
-            error_called = true;
-            client.context()->stop();
-         });
-
-         const std::string client_url = "ws://127.0.0.1:" + std::to_string(port.load()) + "/ws";
-         client.connect(client_url);
-
-         std::thread client_thread([&client]() { client.context()->run(); });
-
-         const bool completed = wait_for_condition(
-            [&] { return error_called.load() || (close_called.load() && client_close_received.load()); });
-
-         expect(completed) << name << ": client did not complete invalid control frame handling";
-         expect(open_called.load()) << name << ": client did not open before receiving control frame";
-         expect(!error_called.load()) << name << ": invalid control frame should complete through on_close";
-         expect(close_called.load()) << name << ": on_close was not called";
-         expect(observed_close_code.load() == static_cast<uint16_t>(expected_code))
-            << name << ": unexpected local close code";
-         expect(client_close_received.load()) << name << ": client did not send close frame response";
-         expect(client_close_code.load() == static_cast<uint16_t>(expected_code))
-            << name << ": unexpected close response code";
-
-         {
-            std::lock_guard lock(close_mu);
-            expect(observed_close_reason == expected_reason)
-               << name << ": unexpected local close reason: " << observed_close_reason;
-         }
-
-         if (!client.context()->stopped()) {
-            client.context()->stop();
-         }
-         if (client_thread.joinable()) {
-            client_thread.join();
-         }
-
-         stop_server = true;
-         if (server_thread.joinable()) {
-            server_thread.join();
-         }
-      };
-
-      run_case("invalid close payload length", {0x03}, ws_close_code::protocol_error, "Invalid close payload length");
-      run_case("invalid close code", {0x03, 0xED}, ws_close_code::protocol_error, "Invalid close code");
-      run_case("invalid close reason", {0x03, 0xE8, 0xC3, 0x28}, ws_close_code::invalid_payload,
-               "Invalid close reason");
+      run_invalid_frame_case("invalid close payload length", {0x03}, ws_close_code::protocol_error,
+                             "Invalid close payload length");
+      run_invalid_frame_case("invalid close code", {0x03, 0xED}, ws_close_code::protocol_error, "Invalid close code");
+      run_invalid_frame_case("invalid close reason", {0x03, 0xE8, 0xC3, 0x28}, ws_close_code::invalid_payload,
+                             "Invalid close reason");
 
       std::vector<uint8_t> oversized_close_payload(126, 'x');
       oversized_close_payload[0] = 0x03;
       oversized_close_payload[1] = 0xE8;
-      run_case("oversized close payload", std::move(oversized_close_payload), ws_close_code::protocol_error,
-               "Invalid control frame payload length");
-      run_case("oversized ping payload", std::vector<uint8_t>(126, 'x'), ws_close_code::protocol_error,
-               "Invalid control frame payload length", 0x89);
-      run_case("oversized pong payload", std::vector<uint8_t>(126, 'x'), ws_close_code::protocol_error,
-               "Invalid control frame payload length", 0x8A);
+      run_invalid_frame_case("oversized close payload", std::move(oversized_close_payload),
+                             ws_close_code::protocol_error, "Invalid control frame payload length");
+      run_invalid_frame_case("oversized ping payload", std::vector<uint8_t>(126, 'x'), ws_close_code::protocol_error,
+                             "Invalid control frame payload length", 0x89);
+      run_invalid_frame_case("oversized pong payload", std::vector<uint8_t>(126, 'x'), ws_close_code::protocol_error,
+                             "Invalid control frame payload length", 0x8A);
 
       // RFC 6455 Section 5.5: control frames MUST NOT be fragmented. First byte 0x08 is a close
       // opcode with FIN cleared, which must fail the connection with a protocol error.
-      run_case("fragmented control frame", {0x03, 0xE8}, ws_close_code::protocol_error, "Fragmented control frame",
-               0x08);
+      run_invalid_frame_case("fragmented control frame", {0x03, 0xE8}, ws_close_code::protocol_error,
+                             "Fragmented control frame", 0x08);
+   };
+
+   "masked_frame_from_server_closes_with_protocol_error"_test = [] {
+      // RFC 6455 Section 5.1: A client MUST close a connection if it detects a masked frame.
+      run_invalid_frame_case("masked frame from server", {'H', 'i'}, ws_close_code::protocol_error,
+                             "Masked frame from server", 0x81, true);
    };
 
    "multiple_clients_shared_context_test"_test = [] {
