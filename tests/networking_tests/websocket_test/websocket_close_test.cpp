@@ -257,7 +257,6 @@ std::vector<uint8_t> make_masked_client_frame(uint8_t opcode, const std::vector<
    return frame;
 }
 
-// Build a client frame with the mask bit clear (RFC 6455 violation for client->server traffic)
 std::vector<uint8_t> make_unmasked_client_frame(uint8_t opcode, const std::vector<uint8_t>& payload, bool fin = true)
 {
    std::vector<uint8_t> frame;
