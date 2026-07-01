@@ -12,6 +12,7 @@
 #include <iterator>
 
 #include "glaze/concepts/container_concepts.hpp"
+#include "glaze/core/chrono.hpp"
 #include "glaze/core/context.hpp"
 #include "glaze/util/inline.hpp"
 
@@ -150,6 +151,66 @@ namespace glz
    // instead of an inflated generic array that stores a type header per element.
    template <class T>
    concept beve_num_t = num_t<T> || std::same_as<std::remove_cvref_t<T>, std::byte>;
+
+   // A std::chrono::duration / steady-or-high-res time point is bit-compatible with its
+   // `rep` (a single arithmetic member, no padding), so an array of them can be packed into
+   // a numeric typed array of the rep -- byte-identical to an array of the rep itself, and
+   // far more compact than a generic array (which writes a type tag per element). These
+   // helpers map an element type to that wire `rep` type and convert between the two.
+   template <class V>
+   struct beve_num_array_value
+   {
+      using type = std::remove_cvref_t<V>;
+   };
+   template <is_duration V>
+   struct beve_num_array_value<V>
+   {
+      using type = typename std::remove_cvref_t<V>::rep;
+   };
+   template <is_count_time_point V>
+   struct beve_num_array_value<V>
+   {
+      using type = typename std::remove_cvref_t<V>::rep;
+   };
+   template <class V>
+   using beve_num_array_value_t = typename beve_num_array_value<V>::type;
+
+   // True when V lays out as a numeric typed-array element: a number/byte, or a chrono type
+   // that reduces to one.
+   template <class V>
+   concept beve_num_array_t = beve_num_t<beve_num_array_value_t<V>>;
+
+   // Extract the wire `rep` value from an element (identity for plain numbers).
+   template <class V>
+   GLZ_ALWAYS_INLINE constexpr auto beve_num_array_extract(const V& x) noexcept
+   {
+      using D = std::remove_cvref_t<V>;
+      if constexpr (is_duration<D>) {
+         return x.count();
+      }
+      else if constexpr (is_count_time_point<D>) {
+         return x.time_since_epoch().count();
+      }
+      else {
+         return x;
+      }
+   }
+
+   // Construct an element from a wire `rep` value (identity for plain numbers).
+   template <class V>
+   GLZ_ALWAYS_INLINE constexpr std::remove_cvref_t<V> beve_num_array_construct(beve_num_array_value_t<V> nv) noexcept
+   {
+      using D = std::remove_cvref_t<V>;
+      if constexpr (is_duration<D>) {
+         return D(nv);
+      }
+      else if constexpr (is_count_time_point<D>) {
+         return D(typename D::duration(nv));
+      }
+      else {
+         return nv;
+      }
+   }
 
    [[nodiscard]] GLZ_ALWAYS_INLINE constexpr size_t int_from_compressed(auto&& ctx, auto&& it, auto end) noexcept
    {

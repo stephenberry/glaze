@@ -6,6 +6,7 @@
 #include "glaze/beve/header.hpp"
 #include "glaze/beve/key_traits.hpp"
 #include "glaze/beve/skip.hpp"
+#include "glaze/core/chrono.hpp"
 #include "glaze/core/opts.hpp"
 #include "glaze/core/read.hpp"
 #include "glaze/core/reflect.hpp"
@@ -730,9 +731,12 @@ namespace glz
                }
             }
          }
-         else if constexpr (beve_num_t<V>) {
-            constexpr uint8_t type = std::floating_point<V> ? 0 : (std::is_signed_v<V> ? 0b000'01'000 : 0b000'10'000);
-            constexpr uint8_t header = tag::typed_array | type | (byte_count<V> << 5);
+         else if constexpr (beve_num_array_t<V>) {
+            // NV is the arithmetic wire type: V for plain numbers, the rep for chrono
+            // durations / count-based time points (which are bit-compatible with it).
+            using NV = beve_num_array_value_t<V>;
+            constexpr uint8_t type = std::floating_point<NV> ? 0 : (std::is_signed_v<NV> ? 0b000'01'000 : 0b000'10'000);
+            constexpr uint8_t header = tag::typed_array | type | (byte_count<NV> << 5);
 
             if (tag != header) [[unlikely]] {
                ctx.error = error_code::syntax_error;
@@ -753,13 +757,13 @@ namespace glz
                   return;
                }
 
-               V x;
-               std::memcpy(&x, it, sizeof(V));
+               NV temp;
+               std::memcpy(&temp, it, sizeof(NV));
                if constexpr (std::endian::native == std::endian::big) {
-                  byteswap_le(x);
+                  byteswap_le(temp);
                }
-               it += sizeof(V);
-               value.emplace(x);
+               it += sizeof(NV);
+               value.emplace(beve_num_array_construct<V>(temp));
             }
          }
          else if constexpr (str_t<V>) {
@@ -833,10 +837,15 @@ namespace glz
    // For multi-byte types: requires an aligned typed array and little-endian host.
    // For single-byte types: accepts standard typed arrays on any endianness.
    template <class T, size_t Extent>
-      requires(std::is_const_v<T> && num_t<std::remove_const_t<T>>)
+      requires(std::is_const_v<T> && beve_num_array_t<std::remove_const_t<T>>)
    struct from<BEVE, std::span<T, Extent>> final
    {
       using V = std::remove_const_t<T>;
+      // Wire arithmetic type: V for plain numbers, the rep for chrono durations / count-based
+      // time points. The header bits must be computed from NV (e.g. std::is_signed_v<duration>
+      // is false, but a duration's rep can be signed), while the zero-copy view still points
+      // at V objects (which are bit-identical to NV, so sizeof and layout match).
+      using NV = beve_num_array_value_t<V>;
 
       template <auto Opts>
       static void op(std::span<T, Extent>& value, is_context auto&& ctx, auto&& it, auto end)
@@ -848,8 +857,8 @@ namespace glz
 
          if constexpr (sizeof(V) == 1) {
             // Single-byte types: accept standard typed arrays (no alignment or endian concerns)
-            constexpr uint8_t type = std::floating_point<V> ? 0 : (std::is_signed_v<V> ? 0b000'01'000 : 0b000'10'000);
-            constexpr uint8_t expected_header = tag::typed_array | type | (byte_count<V> << 5);
+            constexpr uint8_t type = std::floating_point<NV> ? 0 : (std::is_signed_v<NV> ? 0b000'01'000 : 0b000'10'000);
+            constexpr uint8_t expected_header = tag::typed_array | type | (byte_count<NV> << 5);
             if (tag != expected_header) [[unlikely]] {
                ctx.error = error_code::syntax_error;
                return;
@@ -893,8 +902,8 @@ namespace glz
                return;
             }
             const auto numeric_tag = uint8_t(*it);
-            constexpr uint8_t type = std::floating_point<V> ? 0 : (std::is_signed_v<V> ? 0b000'01'000 : 0b000'10'000);
-            constexpr uint8_t expected_header = tag::typed_array | type | (byte_count<V> << 5);
+            constexpr uint8_t type = std::floating_point<NV> ? 0 : (std::is_signed_v<NV> ? 0b000'01'000 : 0b000'10'000);
+            constexpr uint8_t expected_header = tag::typed_array | type | (byte_count<NV> << 5);
             if (numeric_tag != expected_header) [[unlikely]] {
                ctx.error = error_code::syntax_error;
                return;
@@ -1008,9 +1017,12 @@ namespace glz
                }
             }
          }
-         else if constexpr (beve_num_t<V>) {
-            constexpr uint8_t type = std::floating_point<V> ? 0 : (std::is_signed_v<V> ? 0b000'01'000 : 0b000'10'000);
-            constexpr uint8_t header = tag::typed_array | type | (byte_count<V> << 5);
+         else if constexpr (beve_num_array_t<V>) {
+            // NV is the arithmetic wire type: V for plain numbers, the rep for chrono
+            // durations / count-based time points (which are bit-compatible with it).
+            using NV = beve_num_array_value_t<V>;
+            constexpr uint8_t type = std::floating_point<NV> ? 0 : (std::is_signed_v<NV> ? 0b000'01'000 : 0b000'10'000);
+            constexpr uint8_t header = tag::typed_array | type | (byte_count<NV> << 5);
 
             auto validate_and_resize = [&](size_t n) -> bool {
                if constexpr (check_max_array_size(Opts) > 0) {
@@ -1205,26 +1217,30 @@ namespace glz
                         return;
                      }
 
-                     V temp;
-                     std::memcpy(&temp, it, sizeof(V));
+                     NV temp;
+                     std::memcpy(&temp, it, sizeof(NV));
                      if constexpr (std::endian::native == std::endian::big) {
                         byteswap_le(temp);
                      }
-                     value[i] = temp;
-                     it += sizeof(V);
+                     value[i] = beve_num_array_construct<V>(temp);
+                     it += sizeof(NV);
                   }
                }
                else if constexpr (std::endian::native == std::endian::big && sizeof(V) > 1) {
-                  // On big endian, read and swap each element
+                  // On big endian, read and swap each element (through the rep so a chrono
+                  // element is byteswapped as its underlying number).
                   if (typed_array_out_of_bounds(ctx, it, end, n, sizeof(V))) return;
                   for (size_t i = 0; i < n; ++i) {
-                     std::memcpy(&value[i], it, sizeof(V));
-                     byteswap_le(value[i]);
-                     it += sizeof(V);
+                     NV temp;
+                     std::memcpy(&temp, it, sizeof(NV));
+                     byteswap_le(temp);
+                     value[i] = beve_num_array_construct<V>(temp);
+                     it += sizeof(NV);
                   }
                }
                else {
-                  // Little endian or single-byte: bulk memcpy
+                  // Little endian or single-byte: bulk memcpy. A chrono element is
+                  // bit-identical to its rep, so the raw wire bytes populate it directly.
                   if (typed_array_out_of_bounds(ctx, it, end, n, sizeof(V))) return;
                   if (n) {
                      std::memcpy(value.data(), it, n * sizeof(V));
@@ -1239,11 +1255,13 @@ namespace glz
                      return;
                   }
 
-                  std::memcpy(&x, it, sizeof(V));
+                  NV temp;
+                  std::memcpy(&temp, it, sizeof(NV));
                   if constexpr (std::endian::native == std::endian::big) {
-                     byteswap_le(x);
+                     byteswap_le(temp);
                   }
-                  it += sizeof(V);
+                  x = beve_num_array_construct<V>(temp);
+                  it += sizeof(NV);
                }
             }
          }

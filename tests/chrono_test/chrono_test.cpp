@@ -4,9 +4,19 @@
 #include "glaze/chrono.hpp"
 
 #include <chrono>
+#include <map>
 #include <thread>
+#include <utility>
+#include <vector>
 
+#include "glaze/bson.hpp"
+#include "glaze/cbor.hpp"
+#include "glaze/csv.hpp"
 #include "glaze/glaze.hpp"
+#include "glaze/jsonb.hpp"
+#include "glaze/msgpack.hpp"
+#include "glaze/toml.hpp"
+#include "glaze/yaml.hpp"
 #include "ut/ut.hpp"
 
 using namespace ut;
@@ -23,6 +33,47 @@ struct Record
 {
    glz::epoch_seconds created_at;
    glz::epoch_millis updated_at;
+};
+
+struct DurationBag
+{
+   std::chrono::milliseconds ms{};
+   std::chrono::seconds s{};
+   std::chrono::nanoseconds ns{};
+   std::chrono::duration<double, std::milli> dms{};
+   std::chrono::duration<int32_t, std::milli> i32{}; // BSON int32 type_code
+   std::chrono::duration<int16_t, std::ratio<1, 60>> i16{}; // BSON int32 type_code (small signed)
+   std::chrono::duration<uint32_t, std::milli> u32{}; // unsigned rep -> BSON int64 widening
+   bool operator==(const DurationBag&) const = default;
+};
+
+// Single-field structs for the BSON/MsgPack wire-equivalence checks and the CSV column
+// test. Glaze reflection requires reflected structs to have linkage, so these live at
+// namespace scope rather than inside the test lambdas.
+struct one_duration
+{
+   std::chrono::milliseconds v{};
+   bool operator==(const one_duration&) const = default;
+};
+
+struct one_integer
+{
+   int64_t v{};
+   bool operator==(const one_integer&) const = default;
+};
+
+struct duration_rows
+{
+   std::vector<std::chrono::milliseconds> ms{std::chrono::milliseconds{1}, std::chrono::milliseconds{2},
+                                             std::chrono::milliseconds{3}};
+   bool operator==(const duration_rows&) const = default;
+};
+
+struct steady_bag
+{
+   std::chrono::steady_clock::time_point t{};
+   std::chrono::time_point<std::chrono::steady_clock, std::chrono::milliseconds> ms{};
+   bool operator==(const steady_bag&) const = default;
 };
 
 suite chrono_duration_tests = [] {
@@ -96,6 +147,209 @@ suite chrono_duration_tests = [] {
       frames parsed{};
       expect(!glz::read_json(parsed, json.value()));
       expect(parsed == f);
+   };
+};
+
+// Durations and count-based time points (steady_clock / high_resolution_clock) are
+// serialized once generically (core/chrono.hpp) as the bare rep count, so every format
+// that accepts a top-level scalar must round-trip identically. BSON has no bare-scalar
+// root and is exercised separately via struct members. These tests guard that the
+// previously per-format JSON/CBOR/TOML implementations and the lifted generic stay in
+// agreement across all formats.
+template <class D>
+void check_chrono_scalar_roundtrip(const D& value)
+{
+   {
+      std::string buf{};
+      expect(not glz::write_beve(value, buf));
+      D out{};
+      expect(not glz::read_beve(out, buf));
+      expect(out == value);
+   }
+   {
+      std::string buf{};
+      expect(not glz::write_msgpack(value, buf));
+      D out{};
+      expect(not glz::read_msgpack(out, buf));
+      expect(out == value);
+   }
+   {
+      std::string buf{};
+      expect(not glz::write_cbor(value, buf));
+      D out{};
+      expect(not glz::read_cbor(out, buf));
+      expect(out == value);
+   }
+   {
+      std::string buf{};
+      expect(not glz::write_json(value, buf));
+      D out{};
+      expect(not glz::read_json(out, buf));
+      expect(out == value);
+   }
+   {
+      std::string buf{};
+      expect(not glz::write_toml(value, buf));
+      D out{};
+      expect(not glz::read_toml(out, buf));
+      expect(out == value);
+   }
+   {
+      std::string buf{};
+      expect(not glz::write_yaml(value, buf));
+      D out{};
+      expect(not glz::read_yaml(out, buf));
+      expect(out == value);
+   }
+   {
+      std::string buf{};
+      expect(not glz::write_jsonb(value, buf));
+      D out{};
+      expect(not glz::read_jsonb(out, buf));
+      expect(out == value);
+   }
+}
+
+suite chrono_duration_cross_format_tests = [] {
+   "duration_seconds_all_formats"_test = [] { check_chrono_scalar_roundtrip(std::chrono::seconds{3600}); };
+
+   "duration_milliseconds_all_formats"_test = [] { check_chrono_scalar_roundtrip(std::chrono::milliseconds{12345}); };
+
+   "duration_negative_all_formats"_test = [] { check_chrono_scalar_roundtrip(std::chrono::seconds{-42}); };
+
+   "duration_nanoseconds_all_formats"_test = [] { check_chrono_scalar_roundtrip(std::chrono::nanoseconds{987654321}); };
+
+   "duration_hours_all_formats"_test = [] { check_chrono_scalar_roundtrip(std::chrono::hours{24}); };
+
+   "duration_float_rep_all_formats"_test = [] {
+      check_chrono_scalar_roundtrip(std::chrono::duration<double, std::milli>{123.5});
+   };
+
+   "duration_custom_period_all_formats"_test = [] {
+      using frames = std::chrono::duration<int64_t, std::ratio<1, 60>>;
+      check_chrono_scalar_roundtrip(frames{90});
+   };
+
+   "duration_small_signed_rep_all_formats"_test = [] {
+      check_chrono_scalar_roundtrip(std::chrono::duration<int32_t, std::milli>{-123456});
+      check_chrono_scalar_roundtrip(std::chrono::duration<int16_t, std::ratio<1, 60>>{-3000});
+   };
+
+   "duration_unsigned_rep_all_formats"_test = [] {
+      // Exceeds INT32_MAX so the unsigned path (and BSON's uint32 -> int64 widening) is exercised.
+      check_chrono_scalar_roundtrip(std::chrono::duration<uint32_t, std::milli>{4000000000u});
+   };
+
+   // A duration must encode in BEVE byte-for-byte like its underlying rep. This is
+   // exactly what lets one meta schema serialize to JSON and BEVE interchangeably,
+   // which is the use case from issue #2671.
+   "duration_beve_matches_rep_encoding"_test = [] {
+      const std::chrono::milliseconds d{123456};
+      const int64_t raw = d.count();
+      std::string a{}, b{};
+      expect(not glz::write_beve(d, a));
+      expect(not glz::write_beve(raw, b));
+      expect(a == b);
+   };
+
+   // The same wire-identity guarantee for the self-describing binary formats.
+   "duration_msgpack_bson_match_rep_encoding"_test = [] {
+      const std::chrono::milliseconds d{123456};
+      const int64_t raw = d.count();
+      {
+         std::string a{}, b{};
+         expect(not glz::write_msgpack(d, a));
+         expect(not glz::write_msgpack(raw, b));
+         expect(a == b);
+      }
+      // BSON has no bare-scalar root, so compare the element encoding inside a document.
+      std::string a{}, b{};
+      expect(not glz::write_bson(one_duration{d}, a));
+      expect(not glz::write_bson(one_integer{raw}, b));
+      expect(a == b);
+   };
+
+   // CSV is tabular, so durations are exercised as a column.
+   "duration_csv_column"_test = [] {
+      const duration_rows in{};
+      std::string buf{};
+      expect(not glz::write_csv(in, buf));
+      duration_rows out{};
+      out.ms.clear();
+      expect(not glz::read_csv(out, buf));
+      expect(out == in);
+   };
+
+   // Durations used as BEVE map / pair keys must encode as numeric keys (matching the
+   // bare-count value encoding), not as the default string-keyed object.
+   "duration_beve_map_and_pair_keys"_test = [] {
+      using namespace std::chrono;
+      std::map<seconds, int> m{{seconds{1}, 10}, {seconds{5}, 50}, {seconds{-3}, -30}};
+      std::string buf{};
+      expect(not glz::write_beve(m, buf));
+      std::map<seconds, int> out{};
+      expect(not glz::read_beve(out, buf));
+      expect(out == m);
+
+      // A duration-keyed map encodes identically to the equivalent rep-keyed map.
+      std::map<int64_t, int> raw{{1, 10}, {5, 50}, {-3, -30}};
+      std::string rawbuf{};
+      expect(not glz::write_beve(raw, rawbuf));
+      expect(buf == rawbuf);
+
+      std::pair<milliseconds, int> p{milliseconds{7}, 99};
+      std::string pbuf{};
+      expect(not glz::write_beve(p, pbuf));
+      std::pair<milliseconds, int> pout{};
+      expect(not glz::read_beve(pout, pbuf));
+      expect(pout == p);
+   };
+
+   // Durations as struct members, including BSON (whose root is always a document
+   // so a bare top-level scalar is not representable).
+   "duration_struct_members_all_formats"_test = [] {
+      const DurationBag in{std::chrono::milliseconds{7},
+                           std::chrono::seconds{8},
+                           std::chrono::nanoseconds{9},
+                           std::chrono::duration<double, std::milli>{10.25},
+                           std::chrono::duration<int32_t, std::milli>{-123456},
+                           std::chrono::duration<int16_t, std::ratio<1, 60>>{-3000},
+                           std::chrono::duration<uint32_t, std::milli>{4000000000u}};
+      {
+         std::string buf{};
+         expect(not glz::write_beve(in, buf));
+         DurationBag out{};
+         expect(not glz::read_beve(out, buf));
+         expect(out == in);
+      }
+      {
+         std::string buf{};
+         expect(not glz::write_msgpack(in, buf));
+         DurationBag out{};
+         expect(not glz::read_msgpack(out, buf));
+         expect(out == in);
+      }
+      {
+         std::string buf{};
+         expect(not glz::write_cbor(in, buf));
+         DurationBag out{};
+         expect(not glz::read_cbor(out, buf));
+         expect(out == in);
+      }
+      {
+         std::string buf{};
+         expect(not glz::write_json(in, buf));
+         DurationBag out{};
+         expect(not glz::read_json(out, buf));
+         expect(out == in);
+      }
+      {
+         std::string buf{};
+         expect(not glz::write_bson(in, buf));
+         DurationBag out{};
+         expect(not glz::read_bson(out, buf));
+         expect(out == in);
+      }
    };
 };
 
@@ -187,6 +441,52 @@ suite chrono_steady_clock_tests = [] {
       ms_steady parsed;
       expect(!glz::read_json(parsed, json.value()));
       expect(parsed == original);
+   };
+
+   // steady_clock time points are now serialized by the same generic count conversion
+   // across every format (not just JSON/CBOR/TOML), matching durations.
+   "steady_clock_all_formats"_test = [] {
+      using sc = std::chrono::steady_clock;
+      check_chrono_scalar_roundtrip(sc::time_point{sc::duration{123456789}});
+      using ms_steady = std::chrono::time_point<sc, std::chrono::milliseconds>;
+      check_chrono_scalar_roundtrip(ms_steady{std::chrono::milliseconds{-987654}});
+   };
+
+   "steady_clock_beve_matches_rep_encoding"_test = [] {
+      using sc = std::chrono::steady_clock;
+      const sc::time_point tp{sc::duration{123456789}};
+      std::string a{}, b{};
+      expect(not glz::write_beve(tp, a));
+      expect(not glz::write_beve(tp.time_since_epoch().count(), b));
+      expect(a == b);
+   };
+
+   // Struct members, including BSON (whose root is always a document).
+   "steady_clock_struct_members_all_formats"_test = [] {
+      using sc = std::chrono::steady_clock;
+      const steady_bag in{sc::time_point{sc::duration{555}},
+                          std::chrono::time_point<sc, std::chrono::milliseconds>{std::chrono::milliseconds{777}}};
+      {
+         std::string buf{};
+         expect(not glz::write_beve(in, buf));
+         steady_bag out{};
+         expect(not glz::read_beve(out, buf));
+         expect(out == in);
+      }
+      {
+         std::string buf{};
+         expect(not glz::write_msgpack(in, buf));
+         steady_bag out{};
+         expect(not glz::read_msgpack(out, buf));
+         expect(out == in);
+      }
+      {
+         std::string buf{};
+         expect(not glz::write_bson(in, buf));
+         steady_bag out{};
+         expect(not glz::read_bson(out, buf));
+         expect(out == in);
+      }
    };
 };
 

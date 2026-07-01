@@ -15,6 +15,7 @@
 
 #include "glaze/bson/header.hpp"
 #include "glaze/core/buffer_traits.hpp"
+#include "glaze/core/chrono.hpp"
 #include "glaze/core/opts.hpp"
 #include "glaze/core/reflect.hpp"
 #include "glaze/core/to.hpp"
@@ -370,6 +371,46 @@ namespace glz
       GLZ_ALWAYS_INLINE static void op(T value, is_context auto&& ctx, auto&& b, auto& ix) noexcept
       {
          to<BSON, U>::template op<Opts>(static_cast<U>(value), ctx, b, ix);
+      }
+   };
+
+   // --- std::chrono::duration ------------------------------------------------
+   //
+   // A duration has no calendar meaning, so it is encoded as its bare integer or
+   // floating-point `rep` count, reusing the BSON mapping of the underlying
+   // arithmetic type (int32/int64/double). BSON's element model requires a
+   // per-type `type_code`, so this delegates to the rep type's writer rather than
+   // the generic cross-format duration specialization in core/chrono.hpp.
+   template <is_duration T>
+      requires(not custom_write<T>)
+   struct to<BSON, T>
+   {
+      using Rep = typename std::remove_cvref_t<T>::rep;
+      static constexpr uint8_t type_code = to<BSON, Rep>::type_code;
+
+      template <auto Opts>
+      GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&& b, auto& ix) noexcept
+      {
+         to<BSON, Rep>::template op<Opts>(value.count(), ctx, b, ix);
+      }
+   };
+
+   // --- steady_clock / high_resolution_clock time_point ----------------------
+   //
+   // Implementation-defined epoch, so encoded as the bare count of the time point's
+   // duration since epoch (same rule as a duration). Like the duration writer above,
+   // BSON needs a per-type `type_code`, so it delegates to the rep type's writer.
+   template <is_count_time_point T>
+      requires(not custom_write<T>)
+   struct to<BSON, T>
+   {
+      using Rep = typename std::remove_cvref_t<T>::rep;
+      static constexpr uint8_t type_code = to<BSON, Rep>::type_code;
+
+      template <auto Opts>
+      GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&& b, auto& ix) noexcept
+      {
+         to<BSON, Rep>::template op<Opts>(value.time_since_epoch().count(), ctx, b, ix);
       }
    };
 

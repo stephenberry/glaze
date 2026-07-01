@@ -9,6 +9,7 @@
 #include <type_traits>
 
 #include "glaze/core/context.hpp"
+#include "glaze/core/meta.hpp"
 #include "glaze/core/traits.hpp"
 
 namespace glz
@@ -48,6 +49,14 @@ namespace glz
    concept is_high_res_time_point =
       is_time_point<T> && std::is_same_v<typename std::remove_cvref_t<T>::clock, std::chrono::high_resolution_clock> &&
       !hrc_is_system && !hrc_is_steady;
+
+   // Concept for time points that serialize as a bare numeric count: steady_clock and a
+   // distinct high_resolution_clock. Their epochs are implementation-defined, so (unlike
+   // system_clock) there is no portable calendar representation -- the count in the time
+   // point's own duration period is the payload. The two clocks are mutually exclusive and
+   // both disjoint from system_clock.
+   template <class T>
+   concept is_count_time_point = is_steady_time_point<T> || is_high_res_time_point<T>;
 
    // ============================================
    // epoch_time wrapper for Unix timestamp format
@@ -125,6 +134,138 @@ namespace glz
    template <class Duration>
    struct specified<epoch_time<Duration>> : std::true_type
    {};
+
+   // ============================================
+   // std::chrono::duration generic serialization
+   // ============================================
+   //
+   // A duration carries no calendar semantics, so every format serializes it as
+   // the bare numeric `rep` count expressed in the duration's own period. The
+   // conversion is identical across formats, so it is defined once here generically
+   // (parameterized over Format) rather than repeated per format. Round-trips are
+   // exact: the count is read and written at the duration's native precision with
+   // no unit conversion.
+   //
+   // Every format's read/write header includes this file, so the generic applies
+   // uniformly: a duration round-trips identically through every Glaze format. BSON
+   // is the one exception: it overrides this generic with a more specialized
+   // to<BSON, T>/from<BSON, T> (which wins under partial ordering) because its
+   // element model requires a per-type `type_code`, so it delegates to the rep
+   // type's writer itself.
+
+   template <uint32_t Format, is_duration T>
+      requires(not custom_write<T>)
+   struct to<Format, T>
+   {
+      template <auto Opts, class... Args>
+      static void op(auto&& value, is_context auto&& ctx, Args&&... args) noexcept
+      {
+         using Rep = typename std::remove_cvref_t<T>::rep;
+         to<Format, Rep>::template op<Opts>(value.count(), ctx, std::forward<Args>(args)...);
+      }
+
+      // Used by binary formats (e.g. BEVE) that elide the per-value type tag in
+      // certain contexts, such as numeric map keys. Only instantiated when such a
+      // context applies, so formats without a no_header concept (e.g. JSON, CBOR,
+      // MsgPack) never require to<Format, Rep>::no_header to exist.
+      template <auto Opts, class... Args>
+      static void no_header(auto&& value, is_context auto&& ctx, Args&&... args) noexcept
+      {
+         using Rep = typename std::remove_cvref_t<T>::rep;
+         to<Format, Rep>::template no_header<Opts>(value.count(), ctx, std::forward<Args>(args)...);
+      }
+   };
+
+   template <uint32_t Format, is_duration T>
+      requires(not custom_read<T>)
+   struct from<Format, T>
+   {
+      // Standard path: the type tag (if any) is still in the stream. Used by text
+      // formats (JSON, CBOR) and by tagged binary formats reading with the header
+      // present (e.g. BEVE outside a no_header context).
+      template <auto Opts, class... Args>
+      static void op(auto&& value, is_context auto&& ctx, Args&&... args) noexcept
+      {
+         using V = std::remove_cvref_t<T>;
+         typename V::rep count{};
+         from<Format, typename V::rep>::template op<Opts>(count, ctx, std::forward<Args>(args)...);
+         if (bool(ctx.error)) [[unlikely]]
+            return;
+         value = V(count);
+      }
+
+      // Pre-read-tag path: the caller has already consumed the type tag and passes
+      // it through. MsgPack uses this for every value; BEVE uses it inside
+      // no_header contexts. Selected unambiguously over the overload above because
+      // its second parameter is the tag byte rather than the context.
+      template <auto Opts, class... Args>
+      static void op(auto&& value, const uint8_t tag, is_context auto&& ctx, Args&&... args) noexcept
+      {
+         using V = std::remove_cvref_t<T>;
+         typename V::rep count{};
+         from<Format, typename V::rep>::template op<Opts>(count, tag, ctx, std::forward<Args>(args)...);
+         if (bool(ctx.error)) [[unlikely]]
+            return;
+         value = V(count);
+      }
+   };
+
+   // ============================================
+   // steady_clock / high_resolution_clock time_point generic serialization
+   // ============================================
+   //
+   // These clocks have implementation-defined epochs, so they serialize as the bare count
+   // of their duration since epoch -- the same numeric form as a duration. The conversion
+   // is format-agnostic and defined once here. As with durations, BSON overrides it with a
+   // type_code-bearing specialization; every other format uses this generic.
+
+   template <uint32_t Format, is_count_time_point T>
+      requires(not custom_write<T>)
+   struct to<Format, T>
+   {
+      template <auto Opts, class... Args>
+      static void op(auto&& value, is_context auto&& ctx, Args&&... args) noexcept
+      {
+         using Rep = typename std::remove_cvref_t<T>::rep;
+         to<Format, Rep>::template op<Opts>(value.time_since_epoch().count(), ctx, std::forward<Args>(args)...);
+      }
+
+      template <auto Opts, class... Args>
+      static void no_header(auto&& value, is_context auto&& ctx, Args&&... args) noexcept
+      {
+         using Rep = typename std::remove_cvref_t<T>::rep;
+         to<Format, Rep>::template no_header<Opts>(value.time_since_epoch().count(), ctx, std::forward<Args>(args)...);
+      }
+   };
+
+   template <uint32_t Format, is_count_time_point T>
+      requires(not custom_read<T>)
+   struct from<Format, T>
+   {
+      template <auto Opts, class... Args>
+      static void op(auto&& value, is_context auto&& ctx, Args&&... args) noexcept
+      {
+         using V = std::remove_cvref_t<T>;
+         using Duration = typename V::duration;
+         typename V::rep count{};
+         from<Format, typename V::rep>::template op<Opts>(count, ctx, std::forward<Args>(args)...);
+         if (bool(ctx.error)) [[unlikely]]
+            return;
+         value = V(Duration(count));
+      }
+
+      template <auto Opts, class... Args>
+      static void op(auto&& value, const uint8_t tag, is_context auto&& ctx, Args&&... args) noexcept
+      {
+         using V = std::remove_cvref_t<T>;
+         using Duration = typename V::duration;
+         typename V::rep count{};
+         from<Format, typename V::rep>::template op<Opts>(count, tag, ctx, std::forward<Args>(args)...);
+         if (bool(ctx.error)) [[unlikely]]
+            return;
+         value = V(Duration(count));
+      }
+   };
 
    namespace chrono_detail
    {

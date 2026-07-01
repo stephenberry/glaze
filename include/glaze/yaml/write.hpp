@@ -4,6 +4,7 @@
 #pragma once
 
 #include "glaze/core/buffer_traits.hpp"
+#include "glaze/core/chrono.hpp"
 #include "glaze/core/custom_meta.hpp"
 #include "glaze/core/opts.hpp"
 #include "glaze/core/reflect.hpp"

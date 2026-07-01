@@ -6995,6 +6995,197 @@ suite beve_byte_and_char_array_tests = [] {
    };
 };
 
+struct beve_durations_s
+{
+   std::chrono::milliseconds ms{};
+   std::chrono::seconds s{};
+   std::chrono::duration<double, std::milli> dms{};
+   bool operator==(const beve_durations_s&) const = default;
+};
+
+suite beve_chrono_duration_tests = [] {
+   "duration roundtrip"_test = [] {
+      using namespace std::chrono;
+      auto check = [](auto v) {
+         std::string buffer{};
+         expect(not glz::write_beve(v, buffer));
+         decltype(v) decoded{};
+         expect(not glz::read_beve(decoded, buffer));
+         expect(decoded == v);
+      };
+      check(seconds{3600});
+      check(milliseconds{12345});
+      check(seconds{-42});
+      check(nanoseconds{987654321});
+      check(duration<double, std::milli>{123.5});
+      check(duration<int64_t, std::ratio<1, 60>>{90});
+   };
+
+   // A duration must serialize byte-for-byte like its underlying rep so a shared
+   // meta schema can target JSON and BEVE interchangeably (issue #2671).
+   "duration matches rep encoding"_test = [] {
+      const std::chrono::milliseconds d{123456};
+      const int64_t raw = d.count();
+      std::string a{}, b{};
+      expect(not glz::write_beve(d, a));
+      expect(not glz::write_beve(raw, b));
+      expect(a == b);
+   };
+
+   "duration in struct"_test = [] {
+      beve_durations_s original{std::chrono::milliseconds{7}, std::chrono::seconds{8},
+                                std::chrono::duration<double, std::milli>{9.5}};
+      std::string buffer{};
+      expect(not glz::write_beve(original, buffer));
+      beve_durations_s decoded{};
+      expect(not glz::read_beve(decoded, buffer));
+      expect(decoded == original);
+   };
+
+   // Duration map/pair keys must use a numeric key header (matching the bare-count
+   // key bytes), so the buffer is self-consistent and round-trips. A regression here
+   // previously produced a string-key header over numeric key bytes.
+   "duration map and pair keys"_test = [] {
+      using namespace std::chrono;
+      std::map<seconds, int> m{{seconds{1}, 10}, {seconds{5}, 50}, {seconds{-3}, -30}};
+      std::string buffer{};
+      expect(not glz::write_beve(m, buffer));
+      std::map<seconds, int> decoded{};
+      expect(not glz::read_beve(decoded, buffer));
+      expect(decoded == m);
+
+      // Identical encoding to the equivalent rep-keyed map.
+      std::map<int64_t, int> raw{{1, 10}, {5, 50}, {-3, -30}};
+      std::string rawbuffer{};
+      expect(not glz::write_beve(raw, rawbuffer));
+      expect(buffer == rawbuffer);
+
+      std::pair<milliseconds, int> p{milliseconds{7}, 99};
+      std::string pbuffer{};
+      expect(not glz::write_beve(p, pbuffer));
+      std::pair<milliseconds, int> pdecoded{};
+      expect(not glz::read_beve(pdecoded, pbuffer));
+      expect(pdecoded == p);
+   };
+
+   // A range of durations packs into a numeric typed array of the rep, byte-identical to a
+   // range of the rep itself (not an inflated generic array with a tag per element).
+   "duration ranges pack as typed arrays"_test = [] {
+      using namespace std::chrono;
+      {
+         std::vector<seconds> v{seconds{1}, seconds{2}, seconds{-3}, seconds{1000000}};
+         std::string buffer{};
+         expect(not glz::write_beve(v, buffer));
+         std::vector<seconds> decoded{};
+         expect(not glz::read_beve(decoded, buffer));
+         expect(decoded == v);
+
+         std::vector<int64_t> rep{1, 2, -3, 1000000};
+         std::string repbuffer{};
+         expect(not glz::write_beve(rep, repbuffer));
+         expect(buffer == repbuffer); // packed, byte-identical to vector<rep>
+      }
+      {
+         std::vector<duration<double, std::milli>> v{duration<double, std::milli>{1.5},
+                                                     duration<double, std::milli>{2.5}};
+         std::string buffer{};
+         expect(not glz::write_beve(v, buffer));
+         std::vector<duration<double, std::milli>> decoded{};
+         expect(not glz::read_beve(decoded, buffer));
+         expect(decoded == v);
+
+         std::vector<double> rep{1.5, 2.5};
+         std::string repbuffer{};
+         expect(not glz::write_beve(rep, repbuffer));
+         expect(buffer == repbuffer);
+      }
+      {
+         std::array<seconds, 3> v{seconds{1}, seconds{2}, seconds{3}};
+         std::string buffer{};
+         expect(not glz::write_beve(v, buffer));
+         std::array<seconds, 3> decoded{};
+         expect(not glz::read_beve(decoded, buffer));
+         expect(decoded == v);
+      }
+      {
+         using sc = steady_clock;
+         std::vector<sc::time_point> v{sc::time_point{sc::duration{5}}, sc::time_point{sc::duration{99}}};
+         std::string buffer{};
+         expect(not glz::write_beve(v, buffer));
+         std::vector<sc::time_point> decoded{};
+         expect(not glz::read_beve(decoded, buffer));
+         expect(decoded == v);
+
+         std::vector<sc::duration::rep> rep{5, 99};
+         std::string repbuffer{};
+         expect(not glz::write_beve(rep, repbuffer));
+         expect(buffer == repbuffer);
+      }
+   };
+
+   // beve_size must agree with the packed typed-array writer for chrono scalars and ranges.
+   "duration beve_size matches written size"_test = [] {
+      using namespace std::chrono;
+      {
+         milliseconds d{12345};
+         std::string b{};
+         expect(not glz::write_beve(d, b));
+         expect(glz::beve_size(d) == b.size());
+      }
+      {
+         std::vector<seconds> v{seconds{1}, seconds{2}, seconds{-3}};
+         std::string b{};
+         expect(not glz::write_beve(v, b));
+         expect(glz::beve_size(v) == b.size());
+      }
+      {
+         using sc = steady_clock;
+         const sc::time_point tp{sc::duration{77}};
+         std::string b{};
+         expect(not glz::write_beve(tp, b));
+         expect(glz::beve_size(tp) == b.size());
+      }
+   };
+
+   // A steady_clock time_point key must encode as a numeric key (like a duration key), not a
+   // string-key object over numeric bytes.
+   "count time_point map and pair keys"_test = [] {
+      using sc = std::chrono::steady_clock;
+      std::map<sc::time_point, int> m{{sc::time_point{sc::duration{1}}, 10}, {sc::time_point{sc::duration{5}}, 50}};
+      std::string buffer{};
+      expect(not glz::write_beve(m, buffer));
+      std::map<sc::time_point, int> decoded{};
+      expect(not glz::read_beve(decoded, buffer));
+      expect(decoded == m);
+
+      std::map<sc::duration::rep, int> raw{{1, 10}, {5, 50}};
+      std::string rawbuffer{};
+      expect(not glz::write_beve(raw, rawbuffer));
+      expect(buffer == rawbuffer);
+
+      std::pair<sc::time_point, int> p{sc::time_point{sc::duration{7}}, 99};
+      std::string pbuffer{};
+      expect(not glz::write_beve(p, pbuffer));
+      std::pair<sc::time_point, int> pdecoded{};
+      expect(not glz::read_beve(pdecoded, pbuffer));
+      expect(pdecoded == p);
+   };
+
+   // A std::span<const duration> can read a packed aligned typed array zero-copy (the view
+   // points into the buffer, which is bit-identical to a span of the rep).
+   "duration span zero-copy read"_test = [] {
+      using namespace std::chrono;
+      std::vector<milliseconds> src{milliseconds{10}, milliseconds{20}, milliseconds{30}};
+      std::string buffer{};
+      expect(not glz::write<aligned_beve_opts>(src, buffer));
+      std::span<const milliseconds> sp{};
+      expect(not glz::read<aligned_beve_opts>(sp, buffer));
+      expect(sp.size() == 3);
+      expect(sp[0] == milliseconds{10});
+      expect(sp[2] == milliseconds{30});
+   };
+};
+
 int main()
 {
    trace.begin("binary_test");

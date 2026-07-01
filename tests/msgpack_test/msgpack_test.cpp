@@ -1042,6 +1042,23 @@ int main()
       expect(decoded == epoch);
    };
 
+   "chrono duration roundtrip"_test = [] {
+      using namespace std::chrono;
+      auto check = [](auto v) {
+         std::string buffer{};
+         expect(not glz::write_msgpack(v, buffer));
+         decltype(v) decoded{};
+         expect(not glz::read_msgpack(decoded, buffer));
+         expect(decoded == v);
+      };
+      check(seconds{3600});
+      check(milliseconds{12345});
+      check(seconds{-42});
+      check(nanoseconds{987654321});
+      check(duration<double, std::milli>{123.5});
+      check(duration<int64_t, std::ratio<1, 60>>{90});
+   };
+
    "timestamp in struct"_test = [] {
       struct event
       {

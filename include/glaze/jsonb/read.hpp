@@ -11,6 +11,7 @@
 #include <string>
 #include <utility>
 
+#include "glaze/core/chrono.hpp"
 #include "glaze/core/opts.hpp"
 #include "glaze/core/read.hpp"
 #include "glaze/core/reflect.hpp"

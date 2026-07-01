@@ -226,6 +226,27 @@ namespace glz
       }
    };
 
+   // std::chrono::duration / steady-or-high-res time_point encode as their bare `rep`
+   // (tag + rep value), matching the generic to<BEVE, ...> writer.
+   template <class T>
+      requires(is_duration<T> || is_count_time_point<T>)
+   struct calculate_size<BEVE, T>
+   {
+      using Rep = typename std::remove_cvref_t<T>::rep;
+
+      template <auto Opts>
+      [[nodiscard]] GLZ_ALWAYS_INLINE static size_t op(auto&&, size_t = 0) noexcept
+      {
+         return 1 + sizeof(Rep); // tag + value
+      }
+
+      template <auto Opts>
+      [[nodiscard]] GLZ_ALWAYS_INLINE static size_t no_header(auto&&, size_t = 0) noexcept
+      {
+         return sizeof(Rep); // value only
+      }
+   };
+
    template <complex_t T>
    struct calculate_size<BEVE, T>
    {
@@ -295,7 +316,9 @@ namespace glz
             const auto num_bytes = (value.size() + 7) / 8;
             result += num_bytes;
          }
-         else if constexpr (beve_num_t<V>) {
+         else if constexpr (beve_num_array_t<V>) {
+            // A chrono element packs as its rep; sizeof(V) == sizeof(rep) so the byte counts
+            // below match the numeric typed array the writer emits.
             if constexpr (check_aligned_arrays(Opts) && sizeof(V) > 1) {
                result += 1; // extra numeric header byte
                result += 1; // padding length byte
