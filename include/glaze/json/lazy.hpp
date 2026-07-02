@@ -82,6 +82,34 @@ namespace glz
          if constexpr (NullTerminated) {
             return {p, end};
          }
+#if defined(__clang__) || defined(__GNUC__)
+         // Wide portable SIMD via GCC/Clang vector extensions: the compiler lowers this
+         // to AVX2/SSE2 on x86 and NEON on ARM for the target arch, with no intrinsics.
+         // MSVC's cl.exe lacks vector extensions and falls through to the SWAR loop
+         // below (this project builds with clang-cl, which does support them).
+         if (!std::is_constant_evaluated()) {
+            using vbytes = unsigned char __attribute__((vector_size(32)));
+            while (p + 32 <= end) {
+               vbytes chunk;
+               std::memcpy(&chunk, p, sizeof(chunk));
+               const vbytes hits =
+                  (chunk == '"') | (chunk == '[') | (chunk == ']') | (chunk == '{') | (chunk == '}');
+               std::uint64_t words[4];
+               std::memcpy(words, &hits, sizeof(words));
+               for (int w = 0; w < 4; ++w) {
+                  std::uint64_t bits = words[w];
+                  if constexpr (std::endian::native == std::endian::big) {
+                     bits = std::byteswap(bits);
+                  }
+                  if (bits) {
+                     p += w * 8 + (glz::countr_zero(bits) >> 3);
+                     return {p, end};
+                  }
+               }
+               p += 32;
+            }
+         }
+#endif
          while (p + 8 <= end) {
             uint64_t chunk{};
             std::memcpy(&chunk, p, 8);
