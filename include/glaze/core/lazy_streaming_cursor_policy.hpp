@@ -52,4 +52,17 @@ namespace glz
    {
       return get_lazy_streaming_cursor_policy(Opts) != lazy_streaming_cursor_policy::disabled;
    }
+
+   // Opt-out SWAR pre-scan in the lazy skip loops (end-bounded, non-null-terminated
+   // buffers only). An absent field or `true` keeps the SWAR pre-scan enabled (the
+   // default). Set `lazy_swar_skip = false` on your opts to compile the plain scalar
+   // skip path instead — useful for A/B ablation and to reproduce the exact
+   // pre-SWAR (upstream-equivalent) skip behavior from the same headers.
+   consteval bool lazy_swar_skip_active(auto&& Opts)
+   {
+      if constexpr (requires { Opts.lazy_swar_skip; }) {
+         return Opts.lazy_swar_skip;
+      }
+      return true;
+   }
 } // namespace glz
