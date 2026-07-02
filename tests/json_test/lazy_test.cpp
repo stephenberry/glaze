@@ -2,6 +2,7 @@
 // For the license information refer to glaze.hpp
 
 #include "glaze/json.hpp"
+#include "glaze/core/lazy_streaming_cursor_policy.hpp"
 #include "ut/ut.hpp"
 
 using namespace ut;
@@ -30,6 +31,38 @@ struct Item
    int id{};
    std::string value{};
 };
+
+struct LazyRow
+{
+   int a{};
+   int b{};
+};
+
+struct LazyItem
+{
+   int id{};
+   std::string name{};
+};
+
+struct lazy_streaming_enabled_opts : glz::opts
+{
+   glz::lazy_streaming_cursor_policy lazy_streaming_cursor = glz::lazy_streaming_cursor_policy::enabled;
+};
+
+struct lazy_streaming_disabled_opts : glz::opts
+{
+   glz::lazy_streaming_cursor_policy lazy_streaming_cursor = glz::lazy_streaming_cursor_policy::disabled;
+};
+
+struct lazy_streaming_packed_opts : glz::opts
+{
+   glz::lazy_streaming_cursor_policy lazy_streaming_cursor =
+      glz::lazy_streaming_cursor_policy::packed_with_fallback;
+};
+
+inline constexpr lazy_streaming_enabled_opts kLazyStreamingEnabled{};
+inline constexpr lazy_streaming_disabled_opts kLazyStreamingDisabled{};
+inline constexpr lazy_streaming_packed_opts kLazyStreamingPacked{};
 
 struct MinimalUser
 {
@@ -1277,6 +1310,46 @@ suite dynamic_key_custom_tests = [] {
       expect(top.a.val == 1);
       expect(top.b.val == 2);
       expect(top.c.val == 3);
+   };
+
+   "lazy_streaming_cursor_read_into_row_loop"_test = [] {
+      std::string buffer = R"({"rows":[{"a":1,"b":2},{"a":3,"b":4},{"a":5,"b":6}]})";
+      auto result = glz::lazy_json<kLazyStreamingEnabled>(buffer);
+      expect(result.has_value());
+
+      std::int64_t sum{};
+      for (auto& row : (*result)["rows"]) {
+         LazyRow parsed{};
+         expect(not row.read_into(parsed));
+         sum += parsed.a + parsed.b;
+      }
+      expect(sum == 21);
+   };
+
+   "lazy_streaming_cursor_disabled_matches_default"_test = [] {
+      std::string buffer = R"({"rows":[{"a":1},{"a":2}]})";
+      auto result = glz::lazy_json<kLazyStreamingDisabled>(buffer);
+      expect(result.has_value());
+
+      std::int64_t sum{};
+      for (auto& row : (*result)["rows"]) {
+         expect(row["a"].get<int64_t>().value() == ++sum);
+      }
+      expect(sum == 2);
+   };
+
+   "lazy_streaming_packed_with_fallback_policy"_test = [] {
+      std::string buffer = R"({"items":[{"id":1,"name":"alpha"},{"id":2,"name":"beta"}]})";
+      auto result = glz::lazy_json<kLazyStreamingPacked>(buffer);
+      expect(result.has_value());
+
+      std::int64_t checksum{};
+      for (auto& item : (*result)["items"]) {
+         LazyItem row{};
+         expect(not item.read_into(row));
+         checksum += row.id + static_cast<std::int64_t>(row.name.size());
+      }
+      expect(checksum == 13);
    };
 };
 
