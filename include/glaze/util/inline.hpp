@@ -53,3 +53,18 @@
 #define GLZ_NO_INLINE __declspec((noinline))
 #endif
 #endif
+
+#ifndef GLZ_NO_INLINE
+#define GLZ_NO_INLINE
+#endif
+
+// Pure leaf helpers: no globals, no side effects — lets the compiler hoist CSE across calls.
+#if defined(__clang__) || defined(__GNUC__)
+#ifndef GLZ_GNU_CONST_LEAF
+#define GLZ_GNU_CONST_LEAF [[gnu::const, gnu::leaf]]
+#endif
+#endif
+
+#ifndef GLZ_GNU_CONST_LEAF
+#define GLZ_GNU_CONST_LEAF
+#endif

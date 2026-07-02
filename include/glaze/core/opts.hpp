@@ -7,6 +7,7 @@
 #include <type_traits>
 
 #include "glaze/core/context.hpp"
+#include "glaze/core/lazy_streaming_cursor_policy.hpp"
 #include "glaze/core/optimization_level.hpp"
 #include "glaze/core/traits.hpp"
 #include "glaze/forward.hpp"
@@ -184,6 +185,12 @@ namespace glz
    // bool skip_self_constraint = false;
    // Skip self_constraint validation during reading. Useful for performance when constraints are known to be valid
    // or when validation should be deferred.
+
+   // ---
+   // lazy_streaming_cursor_policy lazy_streaming_cursor = lazy_streaming_cursor_policy::disabled;
+   // When not disabled, lazy JSON records byte extents of fully consumed values (read_into and
+   // finished container iteration) so a subsequent lazy_iterator advance can jump past them.
+   // See lazy_streaming_cursor_policy and docs/lazy-json.md#streaming-cursor-opt-in.
 
    // ---
    // bool linear_search = false;
@@ -709,6 +716,11 @@ namespace glz
       else {
          return false;
       }
+   }
+
+   consteval bool check_lazy_streaming_cursor(auto&& Opts)
+   {
+      return lazy_streaming_cursor_active(Opts);
    }
 
    consteval bool check_linear_search(auto&& Opts)
