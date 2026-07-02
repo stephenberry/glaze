@@ -419,13 +419,22 @@ namespace lazy_load_bench
          break;
       }
       case row_kind::object: {
+         // Consume object records key-by-key via operator[] rather than
+         // read_into<struct>. This mirrors a materialization layer that maps
+         // named JSON fields onto its own storage (positional/columnar) instead
+         // of Glaze reflection — the streaming cursor does not accelerate this
+         // shape, so keeping it here prevents the headline from being inflated
+         // by a read_into pattern such a consumer never exercises.
          for (auto& row : entity["rows"]) {
-            generic_record record{};
-            if (!row.read_into(record)) {
-               ++row_count;
-               checksum += record.score + static_cast<std::int64_t>(record.name.size() + record.label.size());
-               heap.touch(checksum, record.name.size() + record.label.size());
-            }
+            std::int64_t   score{};
+            std::string    name{};
+            std::string    label{};
+            row["score"].read_into(score);
+            row["name" ].read_into(name);
+            row["label"].read_into(label);
+            ++row_count;
+            checksum += score + static_cast<std::int64_t>(name.size() + label.size());
+            heap.touch(checksum, name.size() + label.size());
          }
          break;
       }

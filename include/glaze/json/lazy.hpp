@@ -22,13 +22,13 @@
 namespace glz
 {
    // Forward declarations (needed for circular references)
-   template <opts Opts>
+   template <auto Opts>
    struct lazy_document;
-   template <opts Opts>
+   template <auto Opts>
    class lazy_iterator;
-   template <opts Opts>
+   template <auto Opts>
    struct indexed_lazy_view;
-   template <opts Opts>
+   template <auto Opts>
    class indexed_lazy_iterator;
 
    // ============================================================================
@@ -38,7 +38,7 @@ namespace glz
    namespace detail
    {
       // Skip string - returns position after closing quote
-      template <opts Opts>
+      template <auto Opts>
       GLZ_ALWAYS_INLINE const char* skip_string_fast(const char* p, const char* end) noexcept
       {
          const char* const start = p;
@@ -98,16 +98,16 @@ namespace glz
          return {p, end};
       }
 
-      template <opts Opts>
+      template <auto Opts>
       GLZ_ALWAYS_INLINE const char* skip_value_lazy(const char* p, const char* end) noexcept;
 
       // Skip from current position to depth zero (end of enclosing container)
-      template <opts Opts>
+      template <auto Opts>
       GLZ_ALWAYS_INLINE const char* skip_to_depth_zero(const char* p, const char* end, int depth) noexcept
       {
          using enum lazy_char_type;
          while (depth > 0) {
-            if constexpr (!Opts.null_terminated) {
+            if constexpr (!Opts.null_terminated && lazy_swar_skip_active(Opts)) {
                std::tie(p, end) = lazy_swar_advance_any_bracket<false>(p, end);
             }
 
@@ -148,7 +148,7 @@ namespace glz
       }
 
       // Skip any JSON value - upstream depth logic + SWAR pre-scan on end-bounded buffers
-      template <opts Opts>
+      template <auto Opts>
       GLZ_ALWAYS_INLINE const char* skip_value_lazy(const char* p, const char* end) noexcept
       {
          using enum lazy_char_type;
@@ -167,7 +167,7 @@ namespace glz
             ++p;
 
             while (depth > 0) {
-               if constexpr (!Opts.null_terminated) {
+               if constexpr (!Opts.null_terminated && lazy_swar_skip_active(Opts)) {
                   std::tie(p, end) = lazy_swar_advance_any_bracket<false>(p, end);
                }
 
@@ -293,27 +293,27 @@ namespace glz
          std::conditional_t<lazy_streaming_packed_is_enabled, lazy_streaming_extent_enabled,
                             lazy_streaming_extent<std::uint32_t, WithFallback>>;
 
-      template <opts Opts>
+      template <auto Opts>
       struct lazy_streaming_slot_for
       {
          using type = lazy_streaming_extent_disabled;
       };
 
-      template <opts Opts>
+      template <auto Opts>
          requires(get_lazy_streaming_cursor_policy(Opts) == lazy_streaming_cursor_policy::enabled)
       struct lazy_streaming_slot_for<Opts>
       {
          using type = lazy_streaming_extent_enabled;
       };
 
-      template <opts Opts>
+      template <auto Opts>
          requires(get_lazy_streaming_cursor_policy(Opts) == lazy_streaming_cursor_policy::packed)
       struct lazy_streaming_slot_for<Opts>
       {
          using type = lazy_streaming_extent_packed<false>;
       };
 
-      template <opts Opts>
+      template <auto Opts>
          requires(get_lazy_streaming_cursor_policy(Opts) == lazy_streaming_cursor_policy::packed_with_fallback)
       struct lazy_streaming_slot_for<Opts>
       {
@@ -321,7 +321,7 @@ namespace glz
       };
    } // namespace detail
 
-   template <opts Opts>
+   template <auto Opts>
    using lazy_streaming_slot = typename detail::lazy_streaming_slot_for<Opts>::type;
 
    // ============================================================================
@@ -348,7 +348,7 @@ namespace glz
     * - error_: error code (4 bytes)
     * - padding: 4/0 bytes
     */
-   template <opts Opts = opts{}>
+   template <auto Opts = opts{}>
    struct lazy_json_view
    {
      private:
@@ -493,7 +493,7 @@ namespace glz
    // lazy_document - Minimal container, no upfront processing
    // ============================================================================
 
-   template <opts Opts = opts{}>
+   template <auto Opts = opts{}>
    struct lazy_document
    {
      private:
@@ -509,7 +509,7 @@ namespace glz
       friend class lazy_iterator<Opts>;
 
       // Factory method for lazy_json
-      template <opts O, class Buffer>
+      template <auto O, class Buffer>
       friend expected<lazy_document<O>, error_ctx> lazy_json(Buffer&&);
 
       // Helper to initialize root_view_ with correct doc_ pointer
@@ -585,7 +585,7 @@ namespace glz
    // lazy_iterator - Forward iterator with lazy scanning
    // ============================================================================
 
-   template <opts Opts>
+   template <auto Opts>
    class lazy_iterator
    {
      private:
@@ -654,7 +654,7 @@ namespace glz
     *
     * Memory: Base view + 8 bytes per element (+ 16 bytes per element for objects with keys)
     */
-   template <opts Opts>
+   template <auto Opts>
    struct indexed_lazy_view
    {
      private:
@@ -747,7 +747,7 @@ namespace glz
    // indexed_lazy_iterator - O(1) advancement using pre-built index
    // ============================================================================
 
-   template <opts Opts>
+   template <auto Opts>
    class indexed_lazy_iterator
    {
      private:
@@ -854,13 +854,13 @@ namespace glz
    // Implementation: lazy_json_view methods (truly lazy - no structural index)
    // ============================================================================
 
-   template <opts Opts>
+   template <auto Opts>
    inline const char* lazy_json_view<Opts>::json_end() const noexcept
    {
       return doc_ ? doc_->json_ + doc_->len_ : nullptr;
    }
 
-   template <opts Opts>
+   template <auto Opts>
    inline std::string_view lazy_json_view<Opts>::parse_key(const char*& p, const char* end) noexcept
    {
       if (*p != '"') return {};
@@ -895,7 +895,7 @@ namespace glz
       return std::string_view{key_start, static_cast<size_t>(p - key_start)};
    }
 
-   template <opts Opts>
+   template <auto Opts>
    inline lazy_json_view<Opts> lazy_json_view<Opts>::operator[](size_t index) const
    {
       if (has_error()) return *this;
@@ -934,7 +934,7 @@ namespace glz
       return {doc_, p};
    }
 
-   template <opts Opts>
+   template <auto Opts>
    inline lazy_json_view<Opts> lazy_json_view<Opts>::operator[](std::string_view key) const
    {
       if (has_error()) return *this;
@@ -1044,14 +1044,14 @@ namespace glz
       return make_error(error_code::key_not_found);
    }
 
-   template <opts Opts>
+   template <auto Opts>
    inline bool lazy_json_view<Opts>::contains(std::string_view key) const
    {
       auto result = (*this)[key];
       return !result.has_error();
    }
 
-   template <opts Opts>
+   template <auto Opts>
    inline size_t lazy_json_view<Opts>::size() const
    {
       if (has_error() || !data_) return 0;
@@ -1103,7 +1103,7 @@ namespace glz
       }
    }
 
-   template <opts Opts>
+   template <auto Opts>
    inline bool lazy_json_view<Opts>::empty() const noexcept
    {
       if (has_error() || !data_) return true;
@@ -1127,7 +1127,7 @@ namespace glz
    // lazy_iterator implementation (truly lazy)
    // ============================================================================
 
-   template <opts Opts>
+   template <auto Opts>
    inline lazy_iterator<Opts>::lazy_iterator(const lazy_document<Opts>* doc, const char* container_start,
                                              const char* end, bool is_object)
       : doc_(doc), json_end_(end), container_start_(container_start), is_object_(is_object), at_end_(false)
@@ -1165,7 +1165,7 @@ namespace glz
       advance_to_next_element(pos);
    }
 
-   template <opts Opts>
+   template <auto Opts>
    inline void lazy_iterator<Opts>::advance_to_next_element(const char*& pos)
    {
       std::string_view key{};
@@ -1184,7 +1184,7 @@ namespace glz
       current_view_ = lazy_json_view<Opts>{doc_, pos, key};
    }
 
-   template <opts Opts>
+   template <auto Opts>
    inline lazy_iterator<Opts>& lazy_iterator<Opts>::operator++()
    {
       if (at_end_) return *this;
@@ -1254,7 +1254,7 @@ namespace glz
       return *this;
    }
 
-   template <opts Opts>
+   template <auto Opts>
    inline lazy_iterator<Opts> lazy_json_view<Opts>::begin() const
    {
       if (has_error() || !data_) return end();
@@ -1262,7 +1262,7 @@ namespace glz
       return lazy_iterator<Opts>{doc_, data_, json_end(), is_object()};
    }
 
-   template <opts Opts>
+   template <auto Opts>
    inline lazy_iterator<Opts> lazy_json_view<Opts>::end() const
    {
       return lazy_iterator<Opts>{};
@@ -1272,13 +1272,13 @@ namespace glz
    // indexed_lazy_view implementation
    // ============================================================================
 
-   template <opts Opts>
+   template <auto Opts>
    inline indexed_lazy_iterator<Opts> indexed_lazy_view<Opts>::begin() const
    {
       return indexed_lazy_iterator<Opts>{this, 0};
    }
 
-   template <opts Opts>
+   template <auto Opts>
    inline indexed_lazy_iterator<Opts> indexed_lazy_view<Opts>::end() const
    {
       return indexed_lazy_iterator<Opts>{this, value_starts_.size()};
@@ -1288,7 +1288,7 @@ namespace glz
    // lazy_json_view::index() implementation
    // ============================================================================
 
-   template <opts Opts>
+   template <auto Opts>
    inline indexed_lazy_view<Opts> lazy_json_view<Opts>::index() const
    {
       // Return empty indexed view for non-containers or errors
@@ -1357,7 +1357,7 @@ namespace glz
    // lazy_json_view::get<T>() implementation
    // ============================================================================
 
-   template <opts Opts>
+   template <auto Opts>
    template <class T>
    [[nodiscard]] inline expected<T, error_ctx> lazy_json_view<Opts>::get() const
    {
@@ -1467,7 +1467,7 @@ namespace glz
    // JSON writer for lazy_json_view
    // ============================================================================
 
-   template <opts Opts>
+   template <auto Opts>
    struct to<JSON, lazy_json_view<Opts>>
    {
       template <auto WriteOpts, class B>
@@ -1521,7 +1521,7 @@ namespace glz
     * @param buffer The JSON text buffer (must remain valid for document lifetime)
     * @return lazy_document on success, error_ctx on failure
     */
-   template <opts Opts = opts{}, class Buffer>
+   template <auto Opts = opts{}, class Buffer>
    [[nodiscard]] inline expected<lazy_document<Opts>, error_ctx> lazy_json(Buffer&& buffer)
    {
       lazy_document<Opts> doc;

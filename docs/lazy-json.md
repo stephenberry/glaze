@@ -556,7 +556,7 @@ Compile-time `lazy_streaming_cursor_policy != disabled` does **not** imply `doc_
 
 **Pros**
 
-- Large win on sequential `read_into` + iterator loops on Rama-shaped multi‑MB fixtures (`lazy_load_benchmark`: streaming **on** vs **off** on ~32 MB `dimensions`/`variables` dump; `read_into` stage in `lazy_benchmark`: ~2× throughput vs upstream on the official fixture).
+- Large win on sequential `read_into` + iterator loops on warehouse-shaped multi‑MB fixtures (`lazy_load_benchmark`: streaming **on** vs **off** on a catalog-of-record-matrices dump; `read_into` stage in `lazy_benchmark`: ~2× throughput vs upstream on the official fixture).
 - No change to default `glz::opts` behavior or `lazy_document` layout when disabled.
 - `packed` / `packed_with_fallback` use compact `uint32_t` offsets on 64-bit when the document span fits in 4 GiB (on 32-bit, equivalent to `enabled`).
 
@@ -567,7 +567,7 @@ Compile-time `lazy_streaming_cursor_policy != disabled` does **not** imply `doc_
 - Single slot per document — only the **most recently recorded** extent is eligible for a jump. Any other `operator++` (stale extent, interleaved iterators, no prior `read_into`) falls back to `skip_value_lazy`; correctness is unchanged, only the fast path is skipped.
 - `packed_with_fallback`: not recorded when offsets exceed 32 bits (graceful fallback to byte skip — see **Spans larger than 4 GiB** above). `packed`: overflow is a programmer error (assert).
 
-See `benchmarks/lazy_load_benchmark.cpp` (Rama-shaped ~32 MB ingest + flat smoke) and `benchmarks/lazy_benchmark.cpp` for micro-stages.
+See `benchmarks/lazy_load_benchmark.cpp` (warehouse-shaped ingest + flat smoke) and `benchmarks/lazy_benchmark.cpp` for micro-stages.
 
 ### The `raw_json()` Method
 
