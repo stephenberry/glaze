@@ -569,6 +569,11 @@ namespace glz
             return;
          }
 
+         if (type_index >= std::variant_size_v<T>) [[unlikely]] {
+            ctx.error = error_code::no_matching_variant_type;
+            return;
+         }
+
          if (value.index() != type_index) {
             emplace_runtime_variant(value, type_index);
          }
