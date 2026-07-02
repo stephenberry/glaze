@@ -35,6 +35,29 @@ target_compile_options(lazy_benchmark PRIVATE
   $<$<CXX_COMPILER_ID:MSVC>:/O2>
 )
 
+# Tabular bulk-load pattern (nested arrays-of-arrays + scalar read_into)
+add_executable(lazy_load_benchmark lazy_load_benchmark.cpp)
+target_link_libraries(lazy_load_benchmark PRIVATE
+  glaze
+  bencher::bencher
+)
+target_compile_options(lazy_load_benchmark PRIVATE
+  $<$<CXX_COMPILER_ID:GNU,Clang,AppleClang>:-O3 -march=native>
+  $<$<CXX_COMPILER_ID:MSVC>:/O2>
+)
+
+# Header-scan stage on large split-catalog fixture (skip/iterator guard; no row read_into loop)
+add_executable(lazy_load_scalar lazy_load_scalar.cpp)
+target_compile_definitions(lazy_load_scalar PRIVATE GLAZE_LAZY_LOAD_FORK)
+target_link_libraries(lazy_load_scalar PRIVATE
+  glaze
+  bencher::bencher
+)
+target_compile_options(lazy_load_scalar PRIVATE
+  $<$<CXX_COMPILER_ID:GNU,Clang,AppleClang>:-O3 -march=native>
+  $<$<CXX_COMPILER_ID:MSVC>:/O2>
+)
+
 # Simple float benchmark
 add_executable(simple_float_benchmark simple_float_benchmark.cpp)
 target_link_libraries(simple_float_benchmark PRIVATE
