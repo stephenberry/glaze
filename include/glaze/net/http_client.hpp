@@ -2735,8 +2735,8 @@ namespace glz
                [&, this](auto& sock) {
                   asio::async_read(
                      *sock, *buffer, asio::transfer_exactly(remaining_to_read),
-                     [this, socket_var, buffer, url, use_https, status_code = parsed_status->status_code,
-                      response_headers = std::move(response_headers),
+                     [this, socket_var, buffer, url, use_https, content_length,
+                      status_code = parsed_status->status_code, response_headers = std::move(response_headers),
                       handler = std::forward<CompletionHandler>(handler)](asio::error_code ec, std::size_t) mutable {
                         // EOF is expected if the server closes the connection.
                         if (ec && ec != asio::error::eof) {
@@ -2744,8 +2744,12 @@ namespace glz
                            return;
                         }
 
-                        // Directly construct the string from the buffer's contiguous memory.
-                        std::string body(static_cast<const char*>(buffer->data().data()), buffer->size());
+                        // Frame the body by Content-Length. A server can deliver more than
+                        // content_length octets in the same segment (a pipelined next response or
+                        // trailing junk); clamp so those bytes never leak into response_body. Matches
+                        // the synchronous path.
+                        std::string body(static_cast<const char*>(buffer->data().data()),
+                                         (std::min)(content_length, buffer->size()));
 
                         response resp;
                         resp.status_code = status_code;
