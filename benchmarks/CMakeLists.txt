@@ -147,5 +147,25 @@ if (GLZ_HAS_MALLOC_MALLOC_H)
   )
 endif()
 
+add_executable(ip_address_validation_benchmark ip_address_validation_benchmark.cpp)
+
+list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/../cmake")
+include(glaze-asio)
+glaze_setup_asio()
+
+target_link_libraries(ip_address_validation_benchmark PRIVATE
+  glaze
+  glaze::asio
+  bencher::bencher
+)
+target_compile_definitions(ip_address_validation_benchmark PRIVATE
+  $<$<PLATFORM_ID:Windows>:WIN32_LEAN_AND_MEAN>
+  $<$<PLATFORM_ID:Windows>:NOMINMAX>
+)
+target_compile_options(ip_address_validation_benchmark PRIVATE
+  $<$<CXX_COMPILER_ID:GNU,Clang,AppleClang>:-O3 -march=native>
+  $<$<CXX_COMPILER_ID:MSVC>:/O2>
+)
+
 # HTTP server benchmark: Glaze vs Boost.Beast
 add_subdirectory(http_benchmark)
