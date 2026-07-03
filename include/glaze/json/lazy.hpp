@@ -414,6 +414,7 @@ namespace glz
       explicit operator bool() const noexcept { return !has_error() && data_ && *data_ != 'n'; }
 
       [[nodiscard]] const char* data() const noexcept { return data_; }
+      [[nodiscard]] const lazy_document<Opts>* document() const noexcept { return doc_; }
       [[nodiscard]] const char* json_end() const noexcept;
 
       // Progressive object-scan cursor accessors. Exposed so an external handle
