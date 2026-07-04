@@ -161,3 +161,5 @@ suite http_server_ipv6_address_validation = [] {
       expect(validate_ipv6_address("ffff:ffff:ffff:ffff:ffff:ffff:255.255.255.255"));
    };
 };
+
+int main() { return 0; }
