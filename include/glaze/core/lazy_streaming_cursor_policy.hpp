@@ -65,4 +65,20 @@ namespace glz
       }
       return true;
    }
+
+   // Opt-in slim lazy_json_view. When enabled, lazy_json_view drops its per-value
+   // object-key (a pure object-iteration artifact) and error-code members, shrinking
+   // the value from 48 to 24 bytes on 64-bit. In the slim layout the object key is
+   // obtained from the iterator (lazy_iterator::key() / indexed_lazy_iterator::key())
+   // rather than from the element view, and error state is signalled by a null value
+   // pointer (has_error() == (data() == nullptr)); the specific error_code is not
+   // retained. An absent field or `false` keeps the full (default) 48-byte value.
+   // Opt in by setting `lazy_slim_view = true` on your opts.
+   consteval bool lazy_slim_view_active(auto&& Opts)
+   {
+      if constexpr (requires { Opts.lazy_slim_view; }) {
+         return Opts.lazy_slim_view;
+      }
+      return false;
+   }
 } // namespace glz

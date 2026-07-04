@@ -43,6 +43,9 @@ namespace
 
 int main()
 {
+   std::cerr << "sizeof(lazy_json_view) full = " << sizeof(glz::lazy_json_view<lazy_load_bench::kStreamingEnabled>)
+             << " bytes, slim = " << sizeof(glz::lazy_json_view<lazy_load_bench::kStreamingEnabledSlim>) << " bytes\n";
+
    constexpr std::size_t k_prefix = 120;
    constexpr std::size_t k_prefix_rows = lazy_load_bench::k_default_cols_per_row;
    constexpr std::size_t k_payload = 500;
@@ -65,6 +68,19 @@ int main()
                                                     lazy_load_bench::k_flat_smoke_rows_per_table,
                                                     lazy_load_bench::k_flat_smoke_cols_per_row);
 
+   // GB-scale, pure-scalar-cell fixture: millions of small numeric/string cells, no giant
+   // blobs, out of cache — isolates the effect of lazy_json_view size on cell-heavy ingest.
+   constexpr std::size_t k_flat_big_num_tables = 60;
+   constexpr std::size_t k_flat_big_rows_per_table = 120000;
+   constexpr std::size_t k_flat_big_cols_per_row = lazy_load_bench::k_default_cols_per_row; // 12
+   std::cerr << "generating GB-scale flat-tables fixture (" << k_flat_big_num_tables << " tables x "
+             << k_flat_big_rows_per_table << " rows x " << k_flat_big_cols_per_row << " cols)...\n";
+   const auto flat_big_json =
+      generate_flat_tables_json(k_flat_big_num_tables, k_flat_big_rows_per_table, k_flat_big_cols_per_row);
+   const auto flat_big_label = format_megabytes(flat_big_json.size());
+   std::cerr << "GB-scale flat-tables fixture ready: " << flat_big_label << " (" << flat_big_json.size()
+             << " bytes)\n";
+
    std::int64_t expected_warehouse{};
    {
       auto doc = glz::lazy_json<kStreamingEnabled>(warehouse_json);
@@ -84,6 +100,13 @@ int main()
       auto doc = glz::lazy_json<kEndBounded>(flat_json);
       if (!doc) std::abort();
       expected_flat = load_flat_tables_scalars<kEndBounded>((*doc)["tables"]);
+   }
+
+   std::int64_t expected_flat_big{};
+   {
+      auto doc = glz::lazy_json<kEndBounded>(flat_big_json);
+      if (!doc) std::abort();
+      expected_flat_big = load_flat_tables_scalars<kEndBounded>((*doc)["tables"]);
    }
 
    {
@@ -134,6 +157,24 @@ int main()
                                                [](const glz::lazy_document<kStreamingEnabled>& doc) {
                                                   return load_flat_tables_scalars<kStreamingEnabled>(doc["tables"]);
                                                });
+
+      bencher::print_results(stage);
+   }
+
+   {
+      bencher::stage stage;
+      configure_large_load_stage(stage);
+      stage.name = std::string("GB-scale flat-tables cell-heavy ingest (~") + flat_big_label +
+                   "): pure scalar cells, out of cache, streaming off vs on";
+
+      bench_scalar_ingest<kEndBounded>(stage, "streaming off (default opts)", flat_big_json, expected_flat_big,
+                                       [](const glz::lazy_document<kEndBounded>& doc) {
+                                          return load_flat_tables_scalars<kEndBounded>(doc["tables"]);
+                                       });
+      bench_scalar_ingest<kStreamingEnabled>(stage, "streaming on (enabled)", flat_big_json, expected_flat_big,
+                                             [](const glz::lazy_document<kStreamingEnabled>& doc) {
+                                                return load_flat_tables_scalars<kStreamingEnabled>(doc["tables"]);
+                                             });
 
       bencher::print_results(stage);
    }
