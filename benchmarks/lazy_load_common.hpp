@@ -98,8 +98,17 @@ namespace lazy_load_bench
 #endif
    };
 
+   // Same as streaming_enabled_opts but opts into the slim (24-byte) lazy_json_view.
+   // Used for the size/throughput A/B against the full 48-byte layout.
+   struct streaming_enabled_slim_opts : streaming_enabled_opts {
+#if GLZ_LAZY_LOAD_HAS_STREAMING_POLICY
+      bool lazy_slim_view = true;
+#endif
+   };
+
    inline constexpr end_bounded_opts kEndBounded{};
    inline constexpr streaming_enabled_opts kStreamingEnabled{};
+   inline constexpr streaming_enabled_slim_opts kStreamingEnabledSlim{};
 
    struct generic_record
    {
