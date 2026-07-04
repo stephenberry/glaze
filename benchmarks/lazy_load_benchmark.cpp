@@ -43,6 +43,12 @@ namespace
 
 int main()
 {
+   // Confirm the slim opts still carry the streaming cursor (rule out silent streaming-off).
+   static_assert(glz::lazy_streaming_cursor_active(lazy_load_bench::kStreamingEnabled), "full: streaming expected ON");
+   static_assert(glz::lazy_streaming_cursor_active(lazy_load_bench::kStreamingEnabledSlim),
+                 "slim: streaming expected ON");
+   static_assert(!glz::lazy_streaming_cursor_active(lazy_load_bench::kEndBoundedSlim), "slim end-bounded: streaming OFF");
+
    std::cerr << "sizeof(lazy_json_view) full = " << sizeof(glz::lazy_json_view<lazy_load_bench::kStreamingEnabled>)
              << " bytes, slim = " << sizeof(glz::lazy_json_view<lazy_load_bench::kStreamingEnabledSlim>) << " bytes\n";
 
@@ -176,6 +182,49 @@ int main()
                                                 return load_flat_tables_scalars<kStreamingEnabled>(doc["tables"]);
                                              });
 
+      bencher::print_results(stage);
+   }
+
+   // Full (48-byte) vs slim (24-byte) lazy_json_view on the same realistic ingest loop
+   // (streaming on for both, so the only variable is the value view size). This is the
+   // faithful A/B: the actual read_into-per-cell workload, no synthetic copy harness.
+   {
+      bencher::stage stage;
+      configure_large_load_stage(stage);
+      stage.name = std::string("Split-catalog scalar-cell load (~") + catalog_label +
+                   "): full 48B view vs slim 24B view, streaming on";
+      bench_scalar_ingest<kStreamingEnabled>(stage, "full view (48 B)", catalog_json, expected_catalog,
+                                             [](const glz::lazy_document<kStreamingEnabled>& doc) {
+                                                return load_split_catalog_scalars<kStreamingEnabled>(doc);
+                                             });
+      bench_scalar_ingest<kStreamingEnabledSlim>(stage, "slim view (24 B)", catalog_json, expected_catalog,
+                                                 [](const glz::lazy_document<kStreamingEnabledSlim>& doc) {
+                                                    return load_split_catalog_scalars<kStreamingEnabledSlim>(doc);
+                                                 });
+      bencher::print_results(stage);
+   }
+
+   {
+      bencher::stage stage;
+      configure_large_load_stage(stage);
+      stage.name = std::string("GB-scale flat-tables cell-heavy ingest (~") + flat_big_label +
+                   "): full vs slim view x streaming off/on (4-way isolation)";
+      bench_scalar_ingest<kEndBounded>(stage, "full 48B, streaming OFF", flat_big_json, expected_flat_big,
+                                       [](const glz::lazy_document<kEndBounded>& doc) {
+                                          return load_flat_tables_scalars<kEndBounded>(doc["tables"]);
+                                       });
+      bench_scalar_ingest<kStreamingEnabled>(stage, "full 48B, streaming ON", flat_big_json, expected_flat_big,
+                                             [](const glz::lazy_document<kStreamingEnabled>& doc) {
+                                                return load_flat_tables_scalars<kStreamingEnabled>(doc["tables"]);
+                                             });
+      bench_scalar_ingest<kEndBoundedSlim>(stage, "slim 24B, streaming OFF", flat_big_json, expected_flat_big,
+                                           [](const glz::lazy_document<kEndBoundedSlim>& doc) {
+                                              return load_flat_tables_scalars<kEndBoundedSlim>(doc["tables"]);
+                                           });
+      bench_scalar_ingest<kStreamingEnabledSlim>(stage, "slim 24B, streaming ON", flat_big_json, expected_flat_big,
+                                                 [](const glz::lazy_document<kStreamingEnabledSlim>& doc) {
+                                                    return load_flat_tables_scalars<kStreamingEnabledSlim>(doc["tables"]);
+                                                 });
       bencher::print_results(stage);
    }
 

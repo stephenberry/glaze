@@ -725,6 +725,27 @@ See [Partial Read](./partial-read.md) for detailed documentation.
 
 *k = bytes to skip to reach field
 
+## Slim view (opt-in): `lazy_slim_view`
+
+`lazy_json_view` is 48 bytes on 64-bit: three pointers plus a per-value object key
+(`std::string_view`, only meaningful during object iteration) and an `error_code` (only set
+on views returned by fallible lookups). Setting `lazy_slim_view = true` on your `opts` drops
+both from the value, shrinking it to **24 bytes** (the three pointers). The object key then
+comes from the iterator (`lazy_iterator::key()` / `indexed_lazy_iterator::key()`) instead of
+the element view, and error state is signalled by a null value pointer
+(`has_error() == (data() == nullptr)`; the specific `error_code` is not retained). Default is
+the full 48-byte layout, so existing code is unaffected.
+
+Use it for consumers that store or copy the value handle per element (a smaller handle is
+cheaper to move); a pure transient read sees little difference.
+
+> **Known limitation — `lazy_slim_view` + streaming cursor on Windows/clang-cl.** With the
+> streaming cursor enabled, the slim view is a win on Apple clang (arm64, ~+8%) and neutral
+> on Linux clang (x86), but **clang-cl (MSVC-mode) on x86 regresses ~26%** on cell-access-bound
+> streaming ingest — a clang-cl-specific codegen artifact (L1 store-ordering stalls; not
+> reproduced by Linux clang on the same hardware, and not a struct-layout issue). If you
+> target clang-cl with the streaming cursor on a cell-heavy read path, keep the full layout.
+
 ## See Also
 
 - [Partial Read](./partial-read.md) - Compile-time partial reading with structs

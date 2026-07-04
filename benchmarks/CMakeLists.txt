@@ -46,6 +46,14 @@ target_compile_options(lazy_load_benchmark PRIVATE
   $<$<CXX_COMPILER_ID:MSVC>:/O2>
 )
 
+# Single-config GB-scale ingest, selected by argv, for interleaved separate-process A/B
+add_executable(flat_ingest_single flat_ingest_single.cpp)
+target_link_libraries(flat_ingest_single PRIVATE glaze)
+target_compile_options(flat_ingest_single PRIVATE
+  $<$<CXX_COMPILER_ID:GNU,Clang,AppleClang>:-O3 -march=native>
+  $<$<CXX_COMPILER_ID:MSVC>:/O2>
+)
+
 # Header-scan stage on large split-catalog fixture (skip/iterator guard; no row read_into loop)
 add_executable(lazy_load_scalar lazy_load_scalar.cpp)
 target_compile_definitions(lazy_load_scalar PRIVATE GLAZE_LAZY_LOAD_FORK)
