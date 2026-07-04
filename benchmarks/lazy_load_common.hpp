@@ -106,9 +106,18 @@ namespace lazy_load_bench
 #endif
    };
 
+   // Slim view + streaming OFF, to isolate the slim view's effect from the streaming cursor.
+   struct end_bounded_slim_opts : end_bounded_opts
+   {
+#if GLZ_LAZY_LOAD_HAS_STREAMING_POLICY
+      bool lazy_slim_view = true;
+#endif
+   };
+
    inline constexpr end_bounded_opts kEndBounded{};
    inline constexpr streaming_enabled_opts kStreamingEnabled{};
    inline constexpr streaming_enabled_slim_opts kStreamingEnabledSlim{};
+   inline constexpr end_bounded_slim_opts kEndBoundedSlim{};
 
    struct generic_record
    {
