@@ -37,6 +37,23 @@ namespace glz
 
    namespace detail
    {
+      // Minimal parse context for the scalar (number/bool) read_into fast path.
+      //
+      // glz::context carries two std::string members (current_file, scratch) that object and
+      // string parsing use but that number/bool parsing never touches. Because the context is
+      // passed by reference into the parser, some toolchains cannot prove those strings stay
+      // untouched and so fail to elide their (empty) construction/destruction — leaving dead
+      // std::string setup/teardown on the hottest scalar read path. This heap-free context
+      // satisfies is_context and is provably sufficient for num_t/bool_t parsing (which reads
+      // only ctx.error/ctx.depth), so nothing is emitted for its lifetime.
+      struct scalar_parse_context
+      {
+         error_code error{};
+         uint32_t depth{};
+         std::string_view custom_error_message{};
+      };
+      static_assert(is_context<scalar_parse_context>);
+
       // Skip string - returns position after closing quote
       template <auto Opts>
       GLZ_ALWAYS_INLINE const char* skip_string_fast(const char* p, const char* end) noexcept
@@ -509,8 +526,13 @@ namespace glz
             return error_ctx{0, error_code::unexpected_end};
          }
          // Use parse<JSON>::op which naturally stops at value end
-         // This avoids the need to pre-scan to find the value's extent
-         context ctx{};
+         // This avoids the need to pre-scan to find the value's extent.
+         // Scalar (number/bool) parsing touches only ctx.error/ctx.depth, so it runs on a
+         // heap-free context (detail::scalar_parse_context) to keep glz::context's two
+         // std::string members off the hottest read path, where some toolchains fail to elide
+         // their otherwise-dead construction. Objects/strings keep the full context.
+         using ctx_t = std::conditional_t<num_t<T> || bool_t<T>, detail::scalar_parse_context, context>;
+         ctx_t ctx{};
          auto it = data_;
          auto end = json_end();
          parse<JSON>::op<Opts>(value, ctx, it, end);
