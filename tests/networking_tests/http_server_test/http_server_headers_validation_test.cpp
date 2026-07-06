@@ -458,7 +458,8 @@ suite http_server_headers_validation_suite = [] {
       // since no route is registered the unmatched path returns 404 (not the 400 a rejected
       // Host would produce). Asserting the positive 404 also fails closed on an empty/timed-out
       // response, unlike a bare "not 400" check which an empty string would satisfy vacuously.
-      expect(response.contains("HTTP/1.1 404")) << "Expected underscore Host to pass validation and reach routing (404)";
+      expect(response.contains("HTTP/1.1 404"))
+         << "Expected underscore Host to pass validation and reach routing (404)";
    };
 
    "request with trailing OWS in Host header passes host validation"_test = [&] {
@@ -479,7 +480,8 @@ suite http_server_headers_validation_suite = [] {
          // Trailing OWS is stripped, so the Host passes validation and reaches routing; with no
          // route registered the unmatched path returns 404 rather than the 400 a rejected Host
          // would produce. The positive 404 also fails closed on an empty/timed-out response.
-         expect(response.contains("HTTP/1.1 404")) << "Expected trailing-OWS Host to pass validation and reach routing (404)";
+         expect(response.contains("HTTP/1.1 404"))
+            << "Expected trailing-OWS Host to pass validation and reach routing (404)";
       }
    };
 

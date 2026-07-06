@@ -405,8 +405,8 @@ namespace glz
             // interior characters only letters, digits, and hyphen.
             // The underscore is permitted as a pragmatic superset (see note above);
             // unlike hyphen it carries no start/end position restriction.
-            bool is_dns_label_char = (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') ||
-                                     (ch >= '0' && ch <= '9') || ch == '-' || ch == '_';
+            bool is_dns_label_char = (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || (ch >= '0' && ch <= '9') ||
+                                     ch == '-' || ch == '_';
             if (!is_dns_label_char) {
                return false;
             }
