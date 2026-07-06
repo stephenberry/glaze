@@ -85,6 +85,21 @@ suite http_server_host_header_value_validation_suite = [] {
       expect(validate_host_header("123.abc"));
       expect(validate_host_header("example.com."));
 
+      // Underscore is accepted as a pragmatic superset of RFC 1035 labels: it appears in
+      // real-world Host values (internal service names, underscore-prefixed labels like
+      // "_dmarc" / "_sip._tcp") and common servers tolerate it. Unlike hyphen, it is valid
+      // at any position within a label. Tilde '~' is in the same RFC 3986 unreserved set but
+      // is still rejected (see the reject cases below), since it has no such real-world use.
+      expect(validate_host_header("my_service.internal"));
+      expect(validate_host_header("db_primary"));
+      expect(validate_host_header("db_primary:5432"));
+      expect(validate_host_header("exa_mple.com"));
+      expect(validate_host_header("example_com"));
+      expect(validate_host_header("_dmarc.example.com"));
+      expect(validate_host_header("_sip._tcp.example.com"));
+      expect(validate_host_header("trailing_.example"));
+      expect(validate_host_header("_"));
+
       const std::string max_label(63, 'a');
       expect(validate_host_header(max_label));
       expect(validate_host_header(max_label + ".example"));
@@ -105,8 +120,6 @@ suite http_server_host_header_value_validation_suite = [] {
       expect(not validate_host_header("example-.com"));
       expect(not validate_host_header("example.-com"));
       expect(not validate_host_header("example.com-"));
-      expect(not validate_host_header("exa_mple.com"));
-      expect(not validate_host_header("example_com"));
       expect(not validate_host_header("example~com"));
       expect(not validate_host_header("example!$&'()*+,;=com"));
       expect(not validate_host_header("example.com/"));
@@ -413,7 +426,7 @@ suite http_server_headers_validation_suite = [] {
    "request with Host header outside DNS-like reg-name policy is rejected with 400 bad request"_test = [&] {
       std::string payload =
          "GET /front HTTP/1.1\r\n"
-         "Host: exa_mple.com\r\n"
+         "Host: example~com\r\n"
          "Connection: close\r\n"
          "\r\n";
 
@@ -425,6 +438,27 @@ suite http_server_headers_validation_suite = [] {
       }
 
       expect(response.contains("HTTP/1.1 400")) << "Expected 400 for Host header outside DNS-like reg-name policy";
+   };
+
+   "request with underscore Host header passes host validation"_test = [&] {
+      std::string payload =
+         "GET /front HTTP/1.1\r\n"
+         "Host: my_service.internal\r\n"
+         "Connection: close\r\n"
+         "\r\n";
+
+      std::future<std::string> f = std::async(std::launch::async, [&] { return send_raw(payload); });
+
+      std::string response;
+      if (f.wait_for(5s) == std::future_status::ready) {
+         response = f.get();
+      }
+
+      // Host validation must accept the underscore; the request then reaches routing, and
+      // since no route is registered the unmatched path returns 404 (not the 400 a rejected
+      // Host would produce). Asserting the positive 404 also fails closed on an empty/timed-out
+      // response, unlike a bare "not 400" check which an empty string would satisfy vacuously.
+      expect(response.contains("HTTP/1.1 404")) << "Expected underscore Host to pass validation and reach routing (404)";
    };
 
    "request with Host header non-digit port is rejected with 400 bad request"_test = [&] {

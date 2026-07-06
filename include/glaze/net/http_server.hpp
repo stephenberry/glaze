@@ -330,7 +330,23 @@ namespace glz
       inline bool validate_hostname(std::string_view host) noexcept
       {
          // Current implementation accepts strict ASCII DNS-like hostnames, allows
-         // numeric-only DNS labels, while rejecting raw unicode and percent-encoding.
+         // numeric-only DNS labels, and additionally permits the underscore '_',
+         // while rejecting raw unicode and percent-encoding.
+
+         // The underscore is not a valid DNS label character under RFC 1035, but it
+         // appears routinely in real-world Host values: internal service names
+         // (e.g. "my_service.internal") and underscore-prefixed labels such as "_dmarc"
+         // or the SRV form "_sip._tcp". Common servers (nginx, Go net/http, Node.js)
+         // tolerate it, and since this server does not route on the Host value, rejecting
+         // '_' is pure interop cost with no security benefit (it is inert as a delimiter).
+         // It is therefore treated as an ordinary label character valid at any position,
+         // including leading and trailing.
+         //
+         // We deliberately do NOT extend this to '~', the other character in RFC 3986's
+         // reg-name "unreserved" set that is likewise not a DNS label character: unlike
+         // '_', tilde does not occur in practice as a hostname character, so accepting it
+         // would widen the input surface with no interop gain. Unreserved-set membership
+         // alone is thus not the criterion here; real-world usage is.
 
          // Before implementing percent-encoding parser, we should weigh the
          // pros and cons and accept the fact that it may create an additional
@@ -387,8 +403,10 @@ namespace glz
             // The labels must follow the rules for ARPANET host names. They must
             // start with a letter, end with a letter or digit, and have as
             // interior characters only letters, digits, and hyphen.
-            bool is_dns_label_char =
-               (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || (ch >= '0' && ch <= '9') || ch == '-';
+            // The underscore is permitted as a pragmatic superset (see note above);
+            // unlike hyphen it carries no start/end position restriction.
+            bool is_dns_label_char = (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') ||
+                                     (ch >= '0' && ch <= '9') || ch == '-' || ch == '_';
             if (!is_dns_label_char) {
                return false;
             }
