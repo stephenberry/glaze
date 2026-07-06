@@ -2303,6 +2303,13 @@ namespace glz
                }
                std::string_view value_sv = line.substr(colon_pos + 1);
                value_sv.remove_prefix((std::min)(value_sv.find_first_not_of(" \t"), value_sv.size()));
+               // RFC 9110 §5.5 / RFC 9112 §5: a field value excludes trailing OWS as well;
+               // recipients MUST strip it before evaluating (e.g. "Host: example.com " is legal
+               // and must not be rejected by the Host reg-name check). Leading OWS is already
+               // gone above, so an all-whitespace value is empty here and the guard no-ops.
+               if (const auto last = value_sv.find_last_not_of(" \t"); last != std::string_view::npos) {
+                  value_sv.remove_suffix(value_sv.size() - (last + 1));
+               }
                std::string key(name_sv);
                for (auto& c : key) c = ascii_tolower(c);
                // RFC 7230 3.3.2: multiple Content-Length fields with differing values make the

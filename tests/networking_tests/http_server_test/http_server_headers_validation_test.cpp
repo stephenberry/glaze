@@ -461,6 +461,28 @@ suite http_server_headers_validation_suite = [] {
       expect(response.contains("HTTP/1.1 404")) << "Expected underscore Host to pass validation and reach routing (404)";
    };
 
+   "request with trailing OWS in Host header passes host validation"_test = [&] {
+      // RFC 9110 §5.5 / RFC 9112 §5: trailing optional whitespace (SP/HTAB) is not part of the
+      // field value; a recipient MUST strip it before evaluating. The header parser must remove
+      // it so a spec-legal "Host: example.com " does not reach the reg-name check as "example.com "
+      // and get spuriously rejected. Both a trailing space and a trailing tab must be tolerated.
+      for (const std::string& host_line : {"Host: example.com \r\n", "Host: example.com\t\r\n"}) {
+         std::string payload = "GET /front HTTP/1.1\r\n" + host_line + "Connection: close\r\n\r\n";
+
+         std::future<std::string> f = std::async(std::launch::async, [&] { return send_raw(payload); });
+
+         std::string response;
+         if (f.wait_for(5s) == std::future_status::ready) {
+            response = f.get();
+         }
+
+         // Trailing OWS is stripped, so the Host passes validation and reaches routing; with no
+         // route registered the unmatched path returns 404 rather than the 400 a rejected Host
+         // would produce. The positive 404 also fails closed on an empty/timed-out response.
+         expect(response.contains("HTTP/1.1 404")) << "Expected trailing-OWS Host to pass validation and reach routing (404)";
+      }
+   };
+
    "request with Host header non-digit port is rejected with 400 bad request"_test = [&] {
       std::string payload =
          "GET /front HTTP/1.1\r\n"
