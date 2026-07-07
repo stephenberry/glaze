@@ -1097,7 +1097,10 @@ namespace glz
                   const auto member_idx = decode_hash_with_size<CSV, U, HashInfo, HashInfo.type>::op(
                      key.data(), key.data() + key.size(), key.size());
 
-                  if (member_idx >= N) [[unlikely]] {
+                  // Confirm the decoded index actually matches the header string. The hash can
+                  // return an in-range index for a non-member key that happens to collide, so a
+                  // bare index check would silently route a foreign column onto a real member.
+                  if (member_idx >= N || reflect<U>::keys[member_idx] != key) [[unlikely]] {
                      ctx.error = error_code::unknown_key;
                      return;
                   }
@@ -1460,7 +1463,7 @@ namespace glz
                      const auto index = decode_hash_with_size<CSV, T, HashInfo, HashInfo.type>::op(
                         key.data(), key.data() + key.size(), key.size());
 
-                     if (index < N) [[likely]] {
+                     if (index < N && reflect<T>::keys[index] == key) [[likely]] {
                         visit<N>(
                            [&]<size_t I>() {
                               decltype(auto) member = [&]() -> decltype(auto) {
