@@ -1974,6 +1974,155 @@ suite yaml_container_tests = [] {
 };
 
 // ============================================================
+// Sequence overwrite semantics (GitHub issue #2694)
+// Reading a YAML sequence into a pre-populated container must OVERWRITE the
+// existing contents (matching the JSON parser), not append to them.
+// ============================================================
+
+struct overwrite_struct
+{
+   std::vector<int> a = std::vector{3, 2, 4};
+   int b = 4;
+};
+
+struct yaml_append_arrays_opts : glz::opts
+{
+   bool append_arrays = true;
+};
+
+suite yaml_overwrite_semantics_tests = [] {
+   // Exact reproduction from issue #2694: block sequence into a defaulted member.
+   "issue_2694_block_sequence_member"_test = [] {
+      overwrite_struct data{};
+      const std::string yaml = "a:\n  - 3\n  - 4\nb: 2";
+      auto ec = glz::read_yaml(data, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(data.a == std::vector{3, 4}); // previously appended to {3,2,4}
+      expect(data.b == 2);
+   };
+
+   "flow_sequence_grows"_test = [] {
+      std::vector<int> v{7};
+      const std::string yaml = "[1, 2, 3, 4]";
+      auto ec = glz::read_yaml(v, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(v == std::vector{1, 2, 3, 4});
+   };
+
+   "flow_sequence_shrinks"_test = [] {
+      std::vector<int> v{9, 9, 9, 9, 9};
+      const std::string yaml = "[1, 2]";
+      auto ec = glz::read_yaml(v, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(v == std::vector{1, 2});
+   };
+
+   "block_sequence_shrinks"_test = [] {
+      std::vector<int> v{9, 9, 9, 9, 9};
+      const std::string yaml = "- 1\n- 2\n";
+      auto ec = glz::read_yaml(v, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(v == std::vector{1, 2});
+   };
+
+   "empty_flow_sequence_clears"_test = [] {
+      std::vector<int> v{1, 2, 3};
+      const std::string yaml = "[]";
+      auto ec = glz::read_yaml(v, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(v.empty());
+   };
+
+   "same_size_replaces_not_merges"_test = [] {
+      std::vector<int> v{5, 6, 7};
+      const std::string yaml = "[1, 2, 3]";
+      auto ec = glz::read_yaml(v, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(v == std::vector{1, 2, 3});
+   };
+
+   "consecutive_reads_into_same_variable"_test = [] {
+      std::vector<int> v;
+      auto ec1 = glz::read_yaml(v, std::string{"[1, 2, 3]"});
+      expect(!ec1);
+      expect(v == std::vector{1, 2, 3});
+      auto ec2 = glz::read_yaml(v, std::string{"[4, 5]"});
+      expect(!ec2);
+      expect(v == std::vector{4, 5}); // not {1, 2, 3, 4, 5}
+   };
+
+   "deque_overwrites"_test = [] {
+      std::deque<int> d{9, 9, 9};
+      auto ec = glz::read_yaml(d, std::string{"[1, 2]"});
+      expect(!ec);
+      expect(d == std::deque<int>{1, 2});
+   };
+
+   "list_overwrites"_test = [] {
+      std::list<int> l{9, 9, 9};
+      auto ec = glz::read_yaml(l, std::string{"- 1\n- 2\n"});
+      expect(!ec);
+      expect(l == std::list<int>{1, 2});
+   };
+
+   "set_block_overwrites"_test = [] {
+      std::set<int> s{100, 200};
+      auto ec = glz::read_yaml(s, std::string{"- 1\n- 2\n- 3\n"});
+      expect(!ec);
+      expect(s == std::set<int>{1, 2, 3}); // old members gone
+   };
+
+   "set_flow_overwrites"_test = [] {
+      std::set<int> s{100, 200};
+      auto ec = glz::read_yaml(s, std::string{"[1, 2, 3]"});
+      expect(!ec);
+      expect(s == std::set<int>{1, 2, 3});
+   };
+
+   "unordered_set_overwrites"_test = [] {
+      std::unordered_set<int> s{100, 200};
+      auto ec = glz::read_yaml(s, std::string{"[1, 2, 3]"});
+      expect(!ec);
+      expect(s == std::unordered_set<int>{1, 2, 3});
+   };
+
+   "nested_vectors_overwrite"_test = [] {
+      // Outer shrinks and each reused inner element is cleared, not appended into.
+      std::vector<std::vector<int>> v{{9, 9, 9}, {8, 8}};
+      auto ec = glz::read_yaml(v, std::string{"[[1, 2], [3]]"});
+      expect(!ec);
+      expect(v == std::vector<std::vector<int>>{{1, 2}, {3}});
+   };
+
+   "struct_member_reuse_across_reads"_test = [] {
+      overwrite_struct data{};
+      data.a = {9, 9, 9, 9};
+      const std::string yaml = "a: [1, 2]\nb: 5";
+      auto ec = glz::read_yaml(data, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(data.a == std::vector{1, 2});
+      expect(data.b == 5);
+   };
+
+   // std::array is fixed-size: overwritten in place, never cleared/resized.
+   "fixed_array_overwrites_in_place"_test = [] {
+      std::array<int, 3> arr{9, 9, 9};
+      auto ec = glz::read_yaml(arr, std::string{"[1, 2, 3]"});
+      expect(!ec);
+      expect(arr == std::array<int, 3>{1, 2, 3});
+   };
+
+   // Opting into append_arrays keeps the pre-existing contents (matches JSON).
+   "append_arrays_option_still_appends"_test = [] {
+      std::vector<int> v{1, 2, 3};
+      constexpr yaml_append_arrays_opts opts{{.format = glz::YAML}};
+      auto ec = glz::read<opts>(v, std::string{"[4, 5, 6]"});
+      expect(!ec);
+      expect(v == std::vector{1, 2, 3, 4, 5, 6});
+   };
+};
+
+// ============================================================
 // Map with Various Key Types
 // ============================================================
 

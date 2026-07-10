@@ -2254,6 +2254,27 @@ namespace glz
 
    namespace yaml
    {
+      // Reading a YAML sequence node into a container OVERWRITES its previous
+      // contents rather than appending to them, matching the JSON parser
+      // (see json/read.hpp). Growable containers are cleared up front so that
+      // pre-existing elements do not leak into the parsed result; fixed-size
+      // containers (e.g. std::array) are overwritten element-by-element and are
+      // intentionally left untouched here.
+      template <auto Opts, class V>
+      inline void clear_sequence_before_read(V& value)
+      {
+         if constexpr (emplace_backable<V> && requires { value.clear(); }) {
+            // vector-like: honor the append_arrays option, matching json/read.hpp
+            if constexpr (!check_append_arrays(Opts)) {
+               value.clear();
+            }
+         }
+         else if constexpr (emplaceable<V> && requires { value.clear(); }) {
+            // set-like: json/read.hpp clears unconditionally; append_arrays does not apply
+            value.clear();
+         }
+      }
+
       // Parse flow sequence [item, item, ...]
       template <auto Opts, class T, class Ctx, class It, class End>
       inline void parse_flow_sequence(T&& value, Ctx& ctx, It& it, End end)
@@ -2293,6 +2314,10 @@ namespace glz
             ctx.error = error_code::syntax_error;
             return;
          }
+
+         // Overwrite (do not append to) any pre-existing contents. Must happen
+         // before the empty-array early return below so that `[]` also clears.
+         clear_sequence_before_read<Opts>(value);
 
          ++it; // Skip '['
          // Skip whitespace and newlines after opening bracket (YAML allows multi-line flow sequences)
@@ -2764,6 +2789,11 @@ namespace glz
                }
             }
          };
+
+         // Overwrite (do not append to) any pre-existing contents. A block
+         // sequence is only entered once a '-' item is confirmed, so clearing
+         // up front correctly (re)assigns the container to the parsed sequence.
+         clear_sequence_before_read<Opts>(value);
 
          sequence_container_adapter adapter{};
 
