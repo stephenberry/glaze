@@ -3162,7 +3162,7 @@ namespace glz
 
       // Send error response with keep-alive support (for normal errors)
       inline void send_error_response_with_conn(std::shared_ptr<connection_state> conn, int status_code,
-                                                const std::string& message)
+                                                std::string_view message)
       {
          conn->response_.clear();
          conn->response_.status(status_code).content_type("text/plain").body(message);
@@ -3171,7 +3171,7 @@ namespace glz
 
       // Send error response and close connection (for protocol errors)
       inline void send_error_response_with_close(std::shared_ptr<connection_state> conn, int status_code,
-                                                 const std::string& message)
+                                                 std::string_view message)
       {
          conn->should_close = true; // Force close after error
          send_error_response_with_conn(conn, status_code, message);
