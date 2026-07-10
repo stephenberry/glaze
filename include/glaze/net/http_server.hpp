@@ -76,7 +76,7 @@ namespace glz
       inline constexpr bool is_ssl_stream<asio::ssl::stream<T>> = true;
 #endif
 
-      inline bool validate_ipv4_address(std::string_view address) noexcept
+      inline bool is_valid_ipv4_address(std::string_view address) noexcept
       {
          // RFC 3986, Section 3.2.2:
          // A host identified by an IPv4 literal address is represented in
@@ -222,7 +222,7 @@ namespace glz
          return true;
       }
 
-      inline bool validate_ipv6_address(std::string_view address) noexcept
+      inline bool is_valid_ipv6_address(std::string_view address) noexcept
       {
          constexpr size_t min_ipv6_length = 2; // "::"
          constexpr size_t max_ipv6_length = 45; // "xxxx:xxxx:xxxx:xxxx:xxxx:xxxx:255.255.255.255"
@@ -247,7 +247,7 @@ namespace glz
             // Assume that everything after the last IPv6 separator is the
             // IPv4 tail, the IPv4 validator will catch any issues
             std::string_view ipv4_tail = address.substr(tail_separator_pos + 1); // +1 to skip ':'
-            if (!validate_ipv4_address(ipv4_tail)) {
+            if (!is_valid_ipv4_address(ipv4_tail)) {
                return false;
             }
 
@@ -303,15 +303,15 @@ namespace glz
          return piece_count + ipv4_tail_piece_count == 8;
       }
 
-      inline bool is_ipv4_address_like(std::string_view host) noexcept
+      inline bool is_ipv4_address_like(std::string_view text) noexcept
       {
-         if (host.empty()) {
+         if (text.empty()) {
             return false;
          }
 
          bool has_ipv4_separator = false;
 
-         for (char ch : host) {
+         for (char ch : text) {
             if (ch == '.') {
                has_ipv4_separator = true;
                continue;
@@ -327,7 +327,7 @@ namespace glz
          return has_ipv4_separator;
       }
 
-      inline bool validate_hostname(std::string_view host) noexcept
+      inline bool is_valid_hostname(std::string_view hostname) noexcept
       {
          // Current implementation accepts strict ASCII DNS-like hostnames, allows
          // numeric-only DNS labels, and additionally permits the underscore '_',
@@ -348,7 +348,7 @@ namespace glz
          // would widen the input surface with no interop gain. Unreserved-set membership
          // alone is thus not the criterion here; real-world usage is.
 
-         // Before implementing percent-encoding parser, we should weigh the
+         // Before implementing a percent-encoding parser, we should weigh the
          // pros and cons and accept the fact that it may create an additional
          // attack surface for HTTP server routing.
 
@@ -362,26 +362,26 @@ namespace glz
          // Labels must be 63 characters or less.
          constexpr size_t max_dns_label_length = 63;
 
-         if (host.empty()) {
+         if (hostname.empty()) {
             return false;
          }
 
-         // Accept and normalize absolute hostnames that ends with '.'
-         if (host.ends_with('.')) {
-            host.remove_suffix(1);
-            if (host.empty()) {
+         // Accept and normalize absolute hostnames that end with '.'
+         if (hostname.ends_with('.')) {
+            hostname.remove_suffix(1);
+            if (hostname.empty()) {
                return false;
             }
          }
 
-         if (host.empty() || host.size() > max_host_name_length) {
+         if (hostname.empty() || hostname.size() > max_host_name_length) {
             return false;
          }
 
          size_t dns_label_length = 0;
          char prev_char = '\0';
 
-         for (char ch : host) {
+         for (char ch : hostname) {
             if (ch == '.') {
                // DNS label must not be empty
                if (dns_label_length == 0) {
@@ -440,7 +440,7 @@ namespace glz
          return true;
       }
 
-      inline bool validate_host_port(std::string_view port_str) noexcept
+      inline bool is_valid_port(std::string_view port_str) noexcept
       {
          // RFC 3986, Section 3.2.3:
          // port = *DIGIT
@@ -471,16 +471,20 @@ namespace glz
          return port_value >= min_port;
       }
 
-      inline bool validate_host_header(std::string_view host_header) noexcept
+      // Deliberately stricter than RFC 3986 authority:
+      //  - userinfo is rejected per RFC 9110, Section 4.2.4 (deprecated in http/https URIs)
+      //  - IPvFuture literals are rejected by internal policy
+      inline bool is_valid_authority(std::string_view authority) noexcept
       {
          // RFC 9110, Section 7.2:
          // Host = uri-host [ ":" port ]
-         std::string_view uri_host = host_header;
+         std::string_view uri_host = authority;
 
          // RFC 9110, Section 4.2.1 and Section 4.2.2:
          // A sender MUST NOT generate an "http" or "https" URI with an empty host
-         // identifier. A recipient that processes such URI reference must reject it.
-         if (host_header.empty()) {
+         // identifier. A recipient that processes such a URI reference MUST reject
+         // it as invalid.
+         if (authority.empty()) {
             return false;
          }
 
@@ -501,7 +505,7 @@ namespace glz
             }
 
             std::string_view bracketless_ipv6 = uri_host.substr(1, closing_bracket_pos - 1);
-            if (!validate_ipv6_address(bracketless_ipv6)) {
+            if (!is_valid_ipv6_address(bracketless_ipv6)) {
                return false;
             }
 
@@ -519,27 +523,27 @@ namespace glz
 
             std::string_view port_str = tail_after_ipv6.substr(1);
 
-            return validate_host_port(port_str);
+            return is_valid_port(port_str);
          }
 
          // RFC 9110, Section 4.2.3:
          // If the port is equal to the default port for a scheme, the normal
          // form is to omit the port subcomponent.
-         size_t port_delimiter_pos = host_header.find(':');
+         size_t port_delimiter_pos = authority.find(':');
          if (port_delimiter_pos != std::string_view::npos) {
             // Only one port delimiter is allowed
-            if (host_header.find(':', port_delimiter_pos + 1) != std::string_view::npos) {
+            if (authority.find(':', port_delimiter_pos + 1) != std::string_view::npos) {
                return false;
             }
 
-            uri_host = host_header.substr(0, port_delimiter_pos);
-            std::string_view port_str = host_header.substr(port_delimiter_pos + 1);
+            uri_host = authority.substr(0, port_delimiter_pos);
+            std::string_view port_str = authority.substr(port_delimiter_pos + 1);
 
             if (uri_host.empty()) {
                return false;
             }
 
-            if (!validate_host_port(port_str)) {
+            if (!is_valid_port(port_str)) {
                return false;
             }
          }
@@ -550,7 +554,7 @@ namespace glz
          // In order to disambiguate the syntax, we apply the "first-match-wins"
          // algorithm: If host matches the rule for IPv4address, then it should
          // be considered an IPv4 address literal and not a reg-name.
-         if (validate_ipv4_address(uri_host)) {
+         if (is_valid_ipv4_address(uri_host)) {
             return true;
          }
 
@@ -559,7 +563,7 @@ namespace glz
             return false;
          }
 
-         return validate_hostname(uri_host);
+         return is_valid_hostname(uri_host);
       }
 
       inline std::expected<detail::request_line, int> parse_request_line(std::string_view request_line)

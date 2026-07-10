@@ -71,9 +71,9 @@ constexpr std::array ipv6_mixed_cases{
    address_case{"::ffff:192.168.1.256", false},
 };
 
-bool glaze_validate_ipv4(const std::string_view input) noexcept { return glz::detail::validate_ipv4_address(input); }
+bool glaze_validate_ipv4(const std::string_view input) noexcept { return glz::detail::is_valid_ipv4_address(input); }
 
-bool glaze_validate_ipv6(const std::string_view input) noexcept { return glz::detail::validate_ipv6_address(input); }
+bool glaze_validate_ipv6(const std::string_view input) noexcept { return glz::detail::is_valid_ipv6_address(input); }
 
 bool asio_validate_ipv4(const std::string_view input) noexcept
 {
