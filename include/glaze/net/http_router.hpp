@@ -30,6 +30,16 @@
 
 namespace glz
 {
+   namespace detail
+   {
+      struct request_line
+      {
+         http_method method;
+         std::string_view target;
+         bool is_http11;
+      };
+   }
+
    // Request context object
    struct request
    {

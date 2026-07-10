@@ -561,6 +561,59 @@ namespace glz
 
          return validate_hostname(uri_host);
       }
+
+      inline std::expected<detail::request_line, int> parse_request_line(std::string_view request_line)
+      {
+         size_t first_space = request_line.find(' ');
+         if (first_space == std::string_view::npos) {
+            return std::unexpected(400);
+         }
+
+         std::string_view method_sv = request_line.substr(0, first_space);
+
+         size_t second_space = request_line.find(' ', first_space + 1);
+         if (second_space == std::string_view::npos) {
+            return std::unexpected(400);
+         }
+
+         std::string_view target_sv = request_line.substr(first_space + 1, second_space - first_space - 1);
+         if (target_sv.empty() || target_sv.find(' ') != std::string_view::npos) {
+            return std::unexpected(400);
+         }
+
+         std::string_view http_version_part = request_line.substr(second_space + 1);
+         if (http_version_part.size() > 0 && http_version_part.back() == '\r') {
+            http_version_part.remove_suffix(1);
+         }
+         if (http_version_part.size() < 7 || http_version_part.rfind("HTTP/", 0) != 0) {
+            return std::unexpected(400);
+         }
+
+         std::string_view version_number = http_version_part.substr(5);
+         size_t dot_pos = version_number.find('.');
+         if (dot_pos == std::string_view::npos || dot_pos == 0 || dot_pos == version_number.length() - 1) {
+            return std::unexpected(400);
+         }
+
+         std::string_view major_v = version_number.substr(0, dot_pos);
+         std::string_view minor_v = version_number.substr(dot_pos + 1);
+         const auto is_digit = [](unsigned char c) { return std::isdigit(c); };
+         if (major_v.empty() || !std::all_of(major_v.begin(), major_v.end(), is_digit) || minor_v.empty() ||
+             !std::all_of(minor_v.begin(), minor_v.end(), is_digit)) {
+            return std::unexpected(400);
+         }
+
+         auto method_opt = glz::from_string(method_sv);
+         if (!method_opt) {
+            return std::unexpected(501);
+         }
+
+         return glz::detail::request_line{
+            .method = *method_opt,
+            .target = target_sv,
+            .is_http11 = major_v == "1" && minor_v == "1",
+         };
+      }
    }
 
    // Interface for streaming connections (type-erased for HTTP/HTTPS compatibility)
