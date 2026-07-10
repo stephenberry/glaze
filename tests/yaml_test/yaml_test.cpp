@@ -1990,6 +1990,27 @@ struct yaml_append_arrays_opts : glz::opts
    bool append_arrays = true;
 };
 
+// Move-constructible but NOT move-assignable, with settable members. Used to
+// guard against a regression where inserting into a map of such a type via
+// insert_or_assign would fail to compile (it must fall back to emplace).
+struct non_assignable_value
+{
+   int a{};
+   int b{};
+   non_assignable_value() = default;
+   non_assignable_value(const non_assignable_value&) = default;
+   non_assignable_value(non_assignable_value&&) = default;
+   non_assignable_value& operator=(const non_assignable_value&) = delete;
+   non_assignable_value& operator=(non_assignable_value&&) = delete;
+};
+
+template <>
+struct glz::meta<non_assignable_value>
+{
+   using T = non_assignable_value;
+   static constexpr auto value = object("a", &T::a, "b", &T::b);
+};
+
 suite yaml_overwrite_semantics_tests = [] {
    // Exact reproduction from issue #2694: block sequence into a defaulted member.
    "issue_2694_block_sequence_member"_test = [] {
@@ -2119,6 +2140,101 @@ suite yaml_overwrite_semantics_tests = [] {
       auto ec = glz::read<opts>(v, std::string{"[4, 5, 6]"});
       expect(!ec);
       expect(v == std::vector{1, 2, 3, 4, 5, 6});
+   };
+
+   // ---- Maps/objects: overwrite an existing key's value, keep other keys ----
+   // (matches JSON's value[key] merge; a full clear would wrongly drop key "b")
+
+   "map_block_overwrites_existing_key"_test = [] {
+      std::map<std::string, std::vector<int>> m{{"a", {7, 8, 9}}};
+      const std::string yaml = "a:\n  - 1\n  - 2\n";
+      auto ec = glz::read_yaml(m, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(m["a"] == std::vector{1, 2}); // overwritten, not appended
+      expect(m.size() == 1u);
+   };
+
+   "map_flow_overwrites_and_keeps_other_keys"_test = [] {
+      std::map<std::string, int> m{{"a", 1}, {"b", 2}};
+      const std::string yaml = "{a: 9}";
+      auto ec = glz::read_yaml(m, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(m["a"] == 9); // overwritten
+      expect(m["b"] == 2); // untouched
+      expect(m.size() == 2u);
+   };
+
+   "map_block_overwrites_adds_and_keeps"_test = [] {
+      std::map<std::string, int> m{{"a", 1}, {"b", 2}};
+      const std::string yaml = "a: 100\nc: 3";
+      auto ec = glz::read_yaml(m, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(m["a"] == 100); // overwritten
+      expect(m["b"] == 2); // kept
+      expect(m["c"] == 3); // added
+      expect(m.size() == 3u);
+   };
+
+   "unordered_map_overwrites"_test = [] {
+      std::unordered_map<std::string, int> m{{"a", 1}};
+      auto ec = glz::read_yaml(m, std::string{"a: 42\nb: 7"});
+      expect(!ec);
+      expect(m["a"] == 42);
+      expect(m["b"] == 7);
+   };
+
+   "map_consecutive_reads_merge_and_overwrite"_test = [] {
+      std::map<std::string, int> m;
+      expect(!glz::read_yaml(m, std::string{"a: 1\nb: 2"}));
+      expect(!glz::read_yaml(m, std::string{"a: 9"}));
+      expect(m["a"] == 9); // overwritten on second read
+      expect(m["b"] == 2); // kept from first read
+   };
+
+   // A duplicate key within a single document keeps its FIRST value. YAML
+   // mappings disallow duplicate keys; glaze resolves them first-wins (see the
+   // conformance suite, e.g. X38W), which differs from JSON's last-wins.
+   "map_duplicate_key_first_wins"_test = [] {
+      std::map<std::string, int> m;
+      auto ec = glz::read_yaml(m, std::string{"a: 1\na: 2"});
+      expect(!ec);
+      expect(m["a"] == 1);
+   };
+
+   // A pre-existing key (from before the read) is still overwritten even though
+   // in-document duplicates are first-wins: the first document occurrence wins
+   // over the prior value, later duplicates are ignored.
+   "map_preexisting_overwritten_but_indoc_first_wins"_test = [] {
+      std::map<std::string, int> m{{"a", 100}};
+      auto ec = glz::read_yaml(m, std::string{"a: 1\na: 2"});
+      expect(!ec);
+      expect(m["a"] == 1); // 100 overwritten by first doc value, second ignored
+   };
+
+   // glz::generic object entries overwrite too (routes through the map handler).
+   "generic_object_overwrites"_test = [] {
+      glz::generic j;
+      expect(!glz::read_yaml(j, std::string{"a:\n  - 1\n  - 2\n  - 3\nb: 5"}));
+      expect(!glz::read_yaml(j, std::string{"a:\n  - 9\nb: 6"}));
+      expect(j.is_object());
+      if (j.is_object()) {
+         auto& obj = j.get_object();
+         expect(obj["a"].is_array());
+         if (obj["a"].is_array()) expect(obj["a"].get_array().size() == 1u);
+         expect(obj["b"].get<double>() == 6.0);
+      }
+   };
+
+   // A move-constructible but non-assignable mapped_type must still compile and
+   // read: the insert_or_assign path is guarded on assignability and falls back
+   // to emplace for such types (which then keep the prior emplace behavior).
+   "map_of_non_assignable_value_reads"_test = [] {
+      std::map<std::string, non_assignable_value> m;
+      const std::string yaml = "w1:\n  a: 1\n  b: 2\n";
+      auto ec = glz::read_yaml(m, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(m.at("w1").a == 1);
+      expect(m.at("w1").b == 2);
    };
 };
 

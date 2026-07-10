@@ -4152,6 +4152,35 @@ namespace glz
          using key_t = typename std::remove_cvref_t<T>::key_type;
          using val_t = typename std::remove_cvref_t<T>::mapped_type;
 
+         // Reading a YAML mapping MERGES into the target: an entry overwrites the
+         // value of a key that existed before the read and adds new keys, while
+         // pre-existing keys the document does not mention are preserved (like a
+         // struct/object read, and like json/read.hpp's per-key value[key]).
+         // Within a single document a repeated key keeps its FIRST value -- YAML
+         // mappings disallow duplicate keys and the conformance suite expects
+         // first-wins, which falls out of emplace into an empty map. Any
+         // pre-existing entry the document leaves untouched is restored on scope
+         // exit (including error paths). When the target starts empty (the common
+         // case) this is a no-op with negligible cost.
+         std::remove_cvref_t<T> preexisting_entries;
+         if (!value.empty()) {
+            preexisting_entries = std::move(value);
+            value.clear();
+         }
+         struct merge_restore_guard
+         {
+            std::remove_cvref_t<T>& target;
+            std::remove_cvref_t<T>& saved;
+            ~merge_restore_guard()
+            {
+               // emplace is a no-op for keys the document already wrote, so only
+               // untouched pre-existing entries are put back.
+               for (auto& entry : saved) {
+                  target.emplace(entry.first, std::move(entry.second));
+               }
+            }
+         } merge_restore{value, preexisting_entries};
+
          const bool treat_as_block_mapping =
             !yaml::check_flow_context(Opts) && *it == '{' && yaml::inline_value_has_plain_mapping_indicator(it, end);
 
