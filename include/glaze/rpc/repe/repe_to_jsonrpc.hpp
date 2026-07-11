@@ -53,6 +53,16 @@ namespace glz::repe
    // Convert REPE message to JSON-RPC request
    // The query should be a method name (with or without leading slash)
    // The body should be JSON formatted params
+   //
+   // Precondition: msg.body must be a single, complete JSON value. It is spliced
+   // in verbatim as the "params" value; it is NOT validated or re-serialized (by
+   // design, to avoid a redundant parse). A body that is a valid JSON value
+   // followed by trailing bytes (e.g. `[1,2,3],"method":"other"`) injects sibling
+   // members into the emitted object. This is not caught downstream: duplicate
+   // keys are valid JSON, so the reader accepts the request and the injected
+   // members silently override the caller's (last-wins). Callers converting
+   // untrusted, wire-sourced messages must validate the body (e.g. with
+   // glz::validate_json) at their trust boundary before calling this.
    inline std::string to_jsonrpc_request(const message& msg)
    {
       if (msg.header.body_format != body_format::JSON) {
@@ -94,6 +104,16 @@ namespace glz::repe
    }
 
    // Convert REPE message to JSON-RPC response
+   //
+   // Precondition: for a success response (msg.header.ec == none), msg.body must
+   // be a single, complete JSON value. It is spliced in verbatim as the "result"
+   // value; it is NOT validated or re-serialized (by design, to avoid a redundant
+   // parse). A body that is a valid JSON value followed by trailing bytes injects
+   // sibling members into the emitted object, which the downstream reader accepts
+   // as valid JSON rather than rejects. Callers converting untrusted, wire-sourced
+   // messages must validate the body (e.g. with glz::validate_json) at their trust
+   // boundary before calling this. (Error responses carry msg.body as the error
+   // "data" string and are escaped, so this does not apply to them.)
    inline std::string to_jsonrpc_response(const message& msg)
    {
       if (msg.header.body_format != body_format::JSON && msg.header.body_format != body_format::UTF8) {
