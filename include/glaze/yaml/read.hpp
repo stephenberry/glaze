@@ -6155,17 +6155,24 @@ namespace glz
       return read<set_yaml<Opts>()>(std::forward<T>(value), std::forward<Buffer>(buffer), ctx);
    }
 
-   template <auto Opts = yaml::yaml_opts{}, class T>
-   [[nodiscard]] error_ctx read_file_yaml(T&& value, const sv file_path) noexcept
+   template <auto Opts = yaml::yaml_opts{}, class T, is_buffer Buffer>
+   [[nodiscard]] error_ctx read_file_yaml(T&& value, const sv file_path, Buffer&& buffer) noexcept
    {
-      std::string buffer;
-      const auto ec = file_to_buffer(buffer, file_path);
+      yaml::yaml_context ctx{};
+      ctx.current_file = file_path;
+      const auto ec = file_to_buffer(buffer, ctx.current_file);
+
       if (bool(ec)) {
          return {0, ec};
       }
 
-      yaml::yaml_context ctx{};
       return read<set_yaml<Opts>()>(std::forward<T>(value), buffer, ctx);
+   }
+
+   template <auto Opts = yaml::yaml_opts{}, class T>
+   [[nodiscard]] error_ctx read_file_yaml(T&& value, const sv file_path) noexcept
+   {
+      return read_file_yaml<Opts>(value, file_path, std::string{});
    }
 
 } // namespace glz
