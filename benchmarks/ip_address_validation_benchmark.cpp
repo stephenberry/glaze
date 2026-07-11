@@ -71,9 +71,9 @@ constexpr std::array ipv6_mixed_cases{
    address_case{"::ffff:192.168.1.256", false},
 };
 
-bool glaze_validate_ipv4(const std::string_view input) noexcept { return glz::detail::validate_ipv4_address(input); }
+bool glaze_validate_ipv4(const std::string_view input) noexcept { return glz::detail::is_valid_ipv4_address(input); }
 
-bool glaze_validate_ipv6(const std::string_view input) noexcept { return glz::detail::validate_ipv6_address(input); }
+bool glaze_validate_ipv6(const std::string_view input) noexcept { return glz::detail::is_valid_ipv6_address(input); }
 
 bool asio_validate_ipv4(const std::string_view input) noexcept
 {
@@ -144,34 +144,34 @@ void bench_case_set(const char* stage_name, const char* glaze_name, const char* 
 
 int main()
 {
-   verify_case_set("glz::detail::validate_ipv4_address", "IPv4 valid", ipv4_valid_cases, glaze_validate_ipv4);
+   verify_case_set("glz::detail::is_valid_ipv4_address", "IPv4 valid", ipv4_valid_cases, glaze_validate_ipv4);
    verify_case_set("asio::ip::make_address_v4", "IPv4 valid", ipv4_valid_cases, asio_validate_ipv4);
-   verify_case_set("glz::detail::validate_ipv4_address", "IPv4 invalid", ipv4_invalid_cases, glaze_validate_ipv4);
+   verify_case_set("glz::detail::is_valid_ipv4_address", "IPv4 invalid", ipv4_invalid_cases, glaze_validate_ipv4);
    verify_case_set("asio::ip::make_address_v4", "IPv4 invalid", ipv4_invalid_cases, asio_validate_ipv4);
-   verify_case_set("glz::detail::validate_ipv4_address", "IPv4 mixed", ipv4_mixed_cases, glaze_validate_ipv4);
+   verify_case_set("glz::detail::is_valid_ipv4_address", "IPv4 mixed", ipv4_mixed_cases, glaze_validate_ipv4);
    verify_case_set("asio::ip::make_address_v4", "IPv4 mixed", ipv4_mixed_cases, asio_validate_ipv4);
 
-   verify_case_set("glz::detail::validate_ipv6_address", "IPv6 valid", ipv6_valid_cases, glaze_validate_ipv6);
+   verify_case_set("glz::detail::is_valid_ipv6_address", "IPv6 valid", ipv6_valid_cases, glaze_validate_ipv6);
    verify_case_set("asio::ip::make_address_v6", "IPv6 valid", ipv6_valid_cases, asio_validate_ipv6);
-   verify_case_set("glz::detail::validate_ipv6_address", "IPv6 invalid", ipv6_invalid_cases, glaze_validate_ipv6);
+   verify_case_set("glz::detail::is_valid_ipv6_address", "IPv6 invalid", ipv6_invalid_cases, glaze_validate_ipv6);
    verify_case_set("asio::ip::make_address_v6", "IPv6 invalid", ipv6_invalid_cases, asio_validate_ipv6);
-   verify_case_set("glz::detail::validate_ipv6_address", "IPv6 mixed", ipv6_mixed_cases, glaze_validate_ipv6);
+   verify_case_set("glz::detail::is_valid_ipv6_address", "IPv6 mixed", ipv6_mixed_cases, glaze_validate_ipv6);
    verify_case_set("asio::ip::make_address_v6", "IPv6 mixed", ipv6_mixed_cases, asio_validate_ipv6);
 
    std::printf("=== IPv4 Address Validation Benchmarks ===\n\n");
-   bench_case_set("IPv4 valid literals", "glz::detail::validate_ipv4_address", "asio::ip::make_address_v4",
+   bench_case_set("IPv4 valid literals", "glz::detail::is_valid_ipv4_address", "asio::ip::make_address_v4",
                   ipv4_valid_cases, glaze_validate_ipv4, asio_validate_ipv4);
-   bench_case_set("IPv4 invalid literals", "glz::detail::validate_ipv4_address", "asio::ip::make_address_v4",
+   bench_case_set("IPv4 invalid literals", "glz::detail::is_valid_ipv4_address", "asio::ip::make_address_v4",
                   ipv4_invalid_cases, glaze_validate_ipv4, asio_validate_ipv4);
-   bench_case_set("IPv4 mixed literals", "glz::detail::validate_ipv4_address", "asio::ip::make_address_v4",
+   bench_case_set("IPv4 mixed literals", "glz::detail::is_valid_ipv4_address", "asio::ip::make_address_v4",
                   ipv4_mixed_cases, glaze_validate_ipv4, asio_validate_ipv4);
 
    std::printf("\n=== IPv6 Address Validation Benchmarks ===\n\n");
-   bench_case_set("IPv6 valid literals", "glz::detail::validate_ipv6_address", "asio::ip::make_address_v6",
+   bench_case_set("IPv6 valid literals", "glz::detail::is_valid_ipv6_address", "asio::ip::make_address_v6",
                   ipv6_valid_cases, glaze_validate_ipv6, asio_validate_ipv6);
-   bench_case_set("IPv6 invalid literals", "glz::detail::validate_ipv6_address", "asio::ip::make_address_v6",
+   bench_case_set("IPv6 invalid literals", "glz::detail::is_valid_ipv6_address", "asio::ip::make_address_v6",
                   ipv6_invalid_cases, glaze_validate_ipv6, asio_validate_ipv6);
-   bench_case_set("IPv6 mixed literals", "glz::detail::validate_ipv6_address", "asio::ip::make_address_v6",
+   bench_case_set("IPv6 mixed literals", "glz::detail::is_valid_ipv6_address", "asio::ip::make_address_v6",
                   ipv6_mixed_cases, glaze_validate_ipv6, asio_validate_ipv6);
 
    return 0;

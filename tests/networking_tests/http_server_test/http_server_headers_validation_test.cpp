@@ -17,7 +17,7 @@ namespace asio
 
 using namespace ut;
 using namespace std::chrono_literals;
-using glz::detail::validate_host_header;
+using glz::detail::is_valid_authority;
 
 constexpr int test_port = 8899;
 constexpr char test_host[] = "127.0.0.1";
@@ -74,188 +74,188 @@ static void error_handler(std::error_code, std::source_location) {}
 
 suite http_server_host_header_value_validation_suite = [] {
    "accepts valid Host header DNS-like reg-name values"_test = [] {
-      expect(validate_host_header("a"));
-      expect(validate_host_header("localhost"));
-      expect(validate_host_header("example.com"));
-      expect(validate_host_header("EXAMPLE.com"));
-      expect(validate_host_header("a-b.example"));
-      expect(validate_host_header("0"));
-      expect(validate_host_header("123"));
-      expect(validate_host_header("123.example"));
-      expect(validate_host_header("123.abc"));
-      expect(validate_host_header("example.com."));
+      expect(is_valid_authority("a"));
+      expect(is_valid_authority("localhost"));
+      expect(is_valid_authority("example.com"));
+      expect(is_valid_authority("EXAMPLE.com"));
+      expect(is_valid_authority("a-b.example"));
+      expect(is_valid_authority("0"));
+      expect(is_valid_authority("123"));
+      expect(is_valid_authority("123.example"));
+      expect(is_valid_authority("123.abc"));
+      expect(is_valid_authority("example.com."));
 
       // Underscore is accepted as a pragmatic superset of RFC 1035 labels: it appears in
       // real-world Host values (internal service names, underscore-prefixed labels like
       // "_dmarc" / "_sip._tcp") and common servers tolerate it. Unlike hyphen, it is valid
       // at any position within a label. Tilde '~' is in the same RFC 3986 unreserved set but
       // is still rejected (see the reject cases below), since it has no such real-world use.
-      expect(validate_host_header("my_service.internal"));
-      expect(validate_host_header("db_primary"));
-      expect(validate_host_header("db_primary:5432"));
-      expect(validate_host_header("exa_mple.com"));
-      expect(validate_host_header("example_com"));
-      expect(validate_host_header("_dmarc.example.com"));
-      expect(validate_host_header("_sip._tcp.example.com"));
-      expect(validate_host_header("trailing_.example"));
-      expect(validate_host_header("_"));
+      expect(is_valid_authority("my_service.internal"));
+      expect(is_valid_authority("db_primary"));
+      expect(is_valid_authority("db_primary:5432"));
+      expect(is_valid_authority("exa_mple.com"));
+      expect(is_valid_authority("example_com"));
+      expect(is_valid_authority("_dmarc.example.com"));
+      expect(is_valid_authority("_sip._tcp.example.com"));
+      expect(is_valid_authority("trailing_.example"));
+      expect(is_valid_authority("_"));
 
       const std::string max_label(63, 'a');
-      expect(validate_host_header(max_label));
-      expect(validate_host_header(max_label + ".example"));
+      expect(is_valid_authority(max_label));
+      expect(is_valid_authority(max_label + ".example"));
 
       const std::string max_host =
          std::string(63, 'a') + "." + std::string(63, 'b') + "." + std::string(63, 'c') + "." + std::string(61, 'd');
       expect(max_host.size() == 253);
-      expect(validate_host_header(max_host));
+      expect(is_valid_authority(max_host));
    };
 
    "rejects Host header reg-name values outside server DNS-like policy"_test = [] {
-      expect(not validate_host_header(""));
-      expect(not validate_host_header("."));
-      expect(not validate_host_header(".example.com"));
-      expect(not validate_host_header("example..com"));
-      expect(not validate_host_header("example.com.."));
-      expect(not validate_host_header("-example.com"));
-      expect(not validate_host_header("example-.com"));
-      expect(not validate_host_header("example.-com"));
-      expect(not validate_host_header("example.com-"));
-      expect(not validate_host_header("example~com"));
-      expect(not validate_host_header("example!$&'()*+,;=com"));
-      expect(not validate_host_header("example.com/"));
-      expect(not validate_host_header("example.com?x"));
-      expect(not validate_host_header("example.com#x"));
-      expect(not validate_host_header("user@example.com"));
-      expect(not validate_host_header("example%2ecom"));
-      expect(not validate_host_header("%41.example"));
-      expect(not validate_host_header("%F0%9F%92%A9.example"));
-      expect(not validate_host_header("example%"));
-      expect(not validate_host_header("example%2"));
-      expect(not validate_host_header("example%zz"));
-      expect(not validate_host_header("example com"));
-      expect(not validate_host_header(" example.com"));
-      expect(not validate_host_header("example.com "));
-      expect(not validate_host_header("\texample.com"));
-      expect(not validate_host_header("example.com\t"));
-      expect(not validate_host_header("example.com\n"));
-      expect(not validate_host_header(std::string_view{"example.com\0", 12}));
+      expect(not is_valid_authority(""));
+      expect(not is_valid_authority("."));
+      expect(not is_valid_authority(".example.com"));
+      expect(not is_valid_authority("example..com"));
+      expect(not is_valid_authority("example.com.."));
+      expect(not is_valid_authority("-example.com"));
+      expect(not is_valid_authority("example-.com"));
+      expect(not is_valid_authority("example.-com"));
+      expect(not is_valid_authority("example.com-"));
+      expect(not is_valid_authority("example~com"));
+      expect(not is_valid_authority("example!$&'()*+,;=com"));
+      expect(not is_valid_authority("example.com/"));
+      expect(not is_valid_authority("example.com?x"));
+      expect(not is_valid_authority("example.com#x"));
+      expect(not is_valid_authority("user@example.com"));
+      expect(not is_valid_authority("example%2ecom"));
+      expect(not is_valid_authority("%41.example"));
+      expect(not is_valid_authority("%F0%9F%92%A9.example"));
+      expect(not is_valid_authority("example%"));
+      expect(not is_valid_authority("example%2"));
+      expect(not is_valid_authority("example%zz"));
+      expect(not is_valid_authority("example com"));
+      expect(not is_valid_authority(" example.com"));
+      expect(not is_valid_authority("example.com "));
+      expect(not is_valid_authority("\texample.com"));
+      expect(not is_valid_authority("example.com\t"));
+      expect(not is_valid_authority("example.com\n"));
+      expect(not is_valid_authority(std::string_view{"example.com\0", 12}));
 
-      expect(not validate_host_header(std::string(64, 'a')));
+      expect(not is_valid_authority(std::string(64, 'a')));
 
       const std::string too_long_host =
          std::string(63, 'a') + "." + std::string(63, 'b') + "." + std::string(63, 'c') + "." + std::string(62, 'd');
       expect(too_long_host.size() == 254);
-      expect(not validate_host_header(too_long_host));
+      expect(not is_valid_authority(too_long_host));
 
       std::string del_char_host = "exa";
       del_char_host.push_back('\x7f');
       del_char_host += "mple.com";
-      expect(not validate_host_header(del_char_host));
+      expect(not is_valid_authority(del_char_host));
 
       std::string non_ascii_host = "exa";
       non_ascii_host.push_back(static_cast<char>(0x80));
       non_ascii_host += "mple.com";
-      expect(not validate_host_header(non_ascii_host));
+      expect(not is_valid_authority(non_ascii_host));
    };
 
    "accepts valid Host header port values"_test = [] {
-      expect(validate_host_header("example.com:"));
-      expect(validate_host_header("example.com:00080"));
-      expect(validate_host_header("example.com:80"));
-      expect(validate_host_header("example.com:65535"));
-      expect(validate_host_header("127.0.0.1:"));
-      expect(validate_host_header("127.0.0.1:443"));
-      expect(validate_host_header("[::1]:"));
-      expect(validate_host_header("[::1]:65535"));
+      expect(is_valid_authority("example.com:"));
+      expect(is_valid_authority("example.com:00080"));
+      expect(is_valid_authority("example.com:80"));
+      expect(is_valid_authority("example.com:65535"));
+      expect(is_valid_authority("127.0.0.1:"));
+      expect(is_valid_authority("127.0.0.1:443"));
+      expect(is_valid_authority("[::1]:"));
+      expect(is_valid_authority("[::1]:65535"));
    };
 
    "rejects invalid Host header port values"_test = [] {
-      expect(not validate_host_header(":80"));
-      expect(not validate_host_header("example.com:0"));
-      expect(not validate_host_header("example.com:00"));
-      expect(not validate_host_header("example.com:00000"));
-      expect(not validate_host_header("example.com:65536"));
-      expect(not validate_host_header("example.com:99999"));
-      expect(not validate_host_header("example.com:80:90"));
-      expect(not validate_host_header("example.com:abc"));
-      expect(not validate_host_header("example.com:+80"));
-      expect(not validate_host_header("example.com:-1"));
-      expect(not validate_host_header("example.com: 80"));
-      expect(not validate_host_header("example.com:80 "));
-      expect(not validate_host_header("127.0.0.1:0"));
-      expect(not validate_host_header("127.0.0.1:00000"));
-      expect(not validate_host_header("[::1]:0"));
-      expect(not validate_host_header("[::1]:00000"));
-      expect(not validate_host_header("[::1]:65536"));
-      expect(not validate_host_header("[::1]:abc"));
-      expect(not validate_host_header("[::1]:-1"));
-      expect(not validate_host_header("[::1]:443:extra"));
+      expect(not is_valid_authority(":80"));
+      expect(not is_valid_authority("example.com:0"));
+      expect(not is_valid_authority("example.com:00"));
+      expect(not is_valid_authority("example.com:00000"));
+      expect(not is_valid_authority("example.com:65536"));
+      expect(not is_valid_authority("example.com:99999"));
+      expect(not is_valid_authority("example.com:80:90"));
+      expect(not is_valid_authority("example.com:abc"));
+      expect(not is_valid_authority("example.com:+80"));
+      expect(not is_valid_authority("example.com:-1"));
+      expect(not is_valid_authority("example.com: 80"));
+      expect(not is_valid_authority("example.com:80 "));
+      expect(not is_valid_authority("127.0.0.1:0"));
+      expect(not is_valid_authority("127.0.0.1:00000"));
+      expect(not is_valid_authority("[::1]:0"));
+      expect(not is_valid_authority("[::1]:00000"));
+      expect(not is_valid_authority("[::1]:65536"));
+      expect(not is_valid_authority("[::1]:abc"));
+      expect(not is_valid_authority("[::1]:-1"));
+      expect(not is_valid_authority("[::1]:443:extra"));
    };
 
    "accepts valid Host header IPv4 literal values"_test = [] {
-      expect(validate_host_header("0.0.0.0"));
-      expect(validate_host_header("9.10.99.100"));
-      expect(validate_host_header("127.0.0.1"));
-      expect(validate_host_header("255.255.255.255"));
-      expect(validate_host_header("127.0.0.1:"));
-      expect(validate_host_header("127.0.0.1:80"));
+      expect(is_valid_authority("0.0.0.0"));
+      expect(is_valid_authority("9.10.99.100"));
+      expect(is_valid_authority("127.0.0.1"));
+      expect(is_valid_authority("255.255.255.255"));
+      expect(is_valid_authority("127.0.0.1:"));
+      expect(is_valid_authority("127.0.0.1:80"));
    };
 
    "rejects invalid Host header IPv4-like values"_test = [] {
-      expect(not validate_host_header("256.0.0.1"));
-      expect(not validate_host_header("1.2.3"));
-      expect(not validate_host_header("127.1"));
-      expect(not validate_host_header("1.2.3.4.5"));
-      expect(not validate_host_header("1..2.3"));
-      expect(not validate_host_header(".1.2.3.4"));
-      expect(not validate_host_header("1.2.3.4."));
-      expect(not validate_host_header("01.2.3.4"));
-      expect(not validate_host_header("1.2.003.4"));
-      expect(not validate_host_header("1.2.3.04"));
-      expect(not validate_host_header("1.2.3.4:65536"));
+      expect(not is_valid_authority("256.0.0.1"));
+      expect(not is_valid_authority("1.2.3"));
+      expect(not is_valid_authority("127.1"));
+      expect(not is_valid_authority("1.2.3.4.5"));
+      expect(not is_valid_authority("1..2.3"));
+      expect(not is_valid_authority(".1.2.3.4"));
+      expect(not is_valid_authority("1.2.3.4."));
+      expect(not is_valid_authority("01.2.3.4"));
+      expect(not is_valid_authority("1.2.003.4"));
+      expect(not is_valid_authority("1.2.3.04"));
+      expect(not is_valid_authority("1.2.3.4:65536"));
    };
 
    "rejects invalid Host header IPv4 literal port values"_test = [] {
-      expect(not validate_host_header("1.2.3.4:abc"));
-      expect(not validate_host_header("1.2.3.4:80:90"));
+      expect(not is_valid_authority("1.2.3.4:abc"));
+      expect(not is_valid_authority("1.2.3.4:80:90"));
    };
 
    "accepts valid Host header bracketed IPv6 literal values"_test = [] {
-      expect(validate_host_header("[::]"));
-      expect(validate_host_header("[::1]"));
-      expect(validate_host_header("[2001:db8::1]"));
-      expect(validate_host_header("[2001:db8::ff00:42:8329]"));
-      expect(validate_host_header("[::ffff:192.0.2.1]"));
-      expect(validate_host_header("[0:0:0:0:0:0:192.0.2.1]"));
-      expect(validate_host_header("[ffff:ffff:ffff:ffff:ffff:ffff:255.255.255.255]"));
-      expect(validate_host_header("[::1]:443"));
-      expect(validate_host_header("[2001:db8::1]:443"));
+      expect(is_valid_authority("[::]"));
+      expect(is_valid_authority("[::1]"));
+      expect(is_valid_authority("[2001:db8::1]"));
+      expect(is_valid_authority("[2001:db8::ff00:42:8329]"));
+      expect(is_valid_authority("[::ffff:192.0.2.1]"));
+      expect(is_valid_authority("[0:0:0:0:0:0:192.0.2.1]"));
+      expect(is_valid_authority("[ffff:ffff:ffff:ffff:ffff:ffff:255.255.255.255]"));
+      expect(is_valid_authority("[::1]:443"));
+      expect(is_valid_authority("[2001:db8::1]:443"));
    };
 
    "rejects invalid Host header IPv6 literal values"_test = [] {
-      expect(not validate_host_header("::1"));
-      expect(not validate_host_header("2001:db8::1"));
-      expect(not validate_host_header("["));
-      expect(not validate_host_header("[]"));
-      expect(not validate_host_header("[::1"));
-      expect(not validate_host_header("[::1]]"));
-      expect(not validate_host_header("[::1]host"));
-      expect(not validate_host_header("[gggg::1]"));
-      expect(not validate_host_header("[12345::1]"));
-      expect(not validate_host_header("[::ffff:999.0.2.1]"));
-      expect(not validate_host_header("[::ffff:192.0.2.01]"));
-      expect(not validate_host_header("[1:2:3:4:5:6:7:8:9]"));
-      expect(not validate_host_header("[::1] :80"));
+      expect(not is_valid_authority("::1"));
+      expect(not is_valid_authority("2001:db8::1"));
+      expect(not is_valid_authority("["));
+      expect(not is_valid_authority("[]"));
+      expect(not is_valid_authority("[::1"));
+      expect(not is_valid_authority("[::1]]"));
+      expect(not is_valid_authority("[::1]host"));
+      expect(not is_valid_authority("[gggg::1]"));
+      expect(not is_valid_authority("[12345::1]"));
+      expect(not is_valid_authority("[::ffff:999.0.2.1]"));
+      expect(not is_valid_authority("[::ffff:192.0.2.01]"));
+      expect(not is_valid_authority("[1:2:3:4:5:6:7:8:9]"));
+      expect(not is_valid_authority("[::1] :80"));
    };
 
    "rejects Host header IPvFuture literal values outside server policy"_test = [] {
-      expect(not validate_host_header("[v1.fe80]"));
-      expect(not validate_host_header("[vF.a:b]"));
-      expect(not validate_host_header("[v1.!$&'()*+,;=:_~-]"));
-      expect(not validate_host_header("[v1.fe80]:443"));
-      expect(not validate_host_header("[v.fe80]"));
-      expect(not validate_host_header("[vX.fe80]"));
-      expect(not validate_host_header("[v1.]"));
+      expect(not is_valid_authority("[v1.fe80]"));
+      expect(not is_valid_authority("[vF.a:b]"));
+      expect(not is_valid_authority("[v1.!$&'()*+,;=:_~-]"));
+      expect(not is_valid_authority("[v1.fe80]:443"));
+      expect(not is_valid_authority("[v.fe80]"));
+      expect(not is_valid_authority("[vX.fe80]"));
+      expect(not is_valid_authority("[v1.]"));
    };
 };
 

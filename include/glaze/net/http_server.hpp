@@ -15,21 +15,21 @@
 #include <cstring>
 #include <expected>
 #include <functional>
-#include <future>
 #include <glaze/glaze.hpp>
 #include <iostream>
 #include <mutex>
 #include <optional>
-#include <set>
 #include <source_location>
 #include <thread>
 #include <unordered_map>
 
 #include "glaze/ext/glaze_asio.hpp"
 #include "glaze/net/cors.hpp"
+#include "glaze/net/http.hpp"
 #include "glaze/net/http_router.hpp"
 #include "glaze/net/openapi.hpp"
 #include "glaze/net/websocket_connection.hpp"
+#include "glaze/util/compare.hpp"
 #include "glaze/util/itoa.hpp"
 #include "glaze/util/key_transformers.hpp"
 
@@ -76,7 +76,7 @@ namespace glz
       inline constexpr bool is_ssl_stream<asio::ssl::stream<T>> = true;
 #endif
 
-      inline bool validate_ipv4_address(std::string_view address) noexcept
+      inline bool is_valid_ipv4_address(std::string_view address) noexcept
       {
          // RFC 3986, Section 3.2.2:
          // A host identified by an IPv4 literal address is represented in
@@ -222,7 +222,7 @@ namespace glz
          return true;
       }
 
-      inline bool validate_ipv6_address(std::string_view address) noexcept
+      inline bool is_valid_ipv6_address(std::string_view address) noexcept
       {
          constexpr size_t min_ipv6_length = 2; // "::"
          constexpr size_t max_ipv6_length = 45; // "xxxx:xxxx:xxxx:xxxx:xxxx:xxxx:255.255.255.255"
@@ -247,7 +247,7 @@ namespace glz
             // Assume that everything after the last IPv6 separator is the
             // IPv4 tail, the IPv4 validator will catch any issues
             std::string_view ipv4_tail = address.substr(tail_separator_pos + 1); // +1 to skip ':'
-            if (!validate_ipv4_address(ipv4_tail)) {
+            if (!is_valid_ipv4_address(ipv4_tail)) {
                return false;
             }
 
@@ -303,15 +303,15 @@ namespace glz
          return piece_count + ipv4_tail_piece_count == 8;
       }
 
-      inline bool is_ipv4_address_like(std::string_view host) noexcept
+      inline bool is_ipv4_address_like(std::string_view text) noexcept
       {
-         if (host.empty()) {
+         if (text.empty()) {
             return false;
          }
 
          bool has_ipv4_separator = false;
 
-         for (char ch : host) {
+         for (char ch : text) {
             if (ch == '.') {
                has_ipv4_separator = true;
                continue;
@@ -327,11 +327,11 @@ namespace glz
          return has_ipv4_separator;
       }
 
-      inline bool validate_hostname(std::string_view host) noexcept
+      inline bool is_valid_hostname(std::string_view hostname) noexcept
       {
-         // Current implementation accepts strict ASCII DNS-like hostnames, allows
+         // The current implementation accepts strict ASCII DNS-like hostnames, allows
          // numeric-only DNS labels, and additionally permits the underscore '_',
-         // while rejecting raw unicode and percent-encoding.
+         // while rejecting raw Unicode and percent-encoding.
 
          // The underscore is not a valid DNS label character under RFC 1035, but it
          // appears routinely in real-world Host values: internal service names
@@ -348,7 +348,7 @@ namespace glz
          // would widen the input surface with no interop gain. Unreserved-set membership
          // alone is thus not the criterion here; real-world usage is.
 
-         // Before implementing percent-encoding parser, we should weigh the
+         // Before implementing a percent-encoding parser, we should weigh the
          // pros and cons and accept the fact that it may create an additional
          // attack surface for HTTP server routing.
 
@@ -362,26 +362,26 @@ namespace glz
          // Labels must be 63 characters or less.
          constexpr size_t max_dns_label_length = 63;
 
-         if (host.empty()) {
+         if (hostname.empty()) {
             return false;
          }
 
-         // Accept and normalize absolute hostnames that ends with '.'
-         if (host.ends_with('.')) {
-            host.remove_suffix(1);
-            if (host.empty()) {
+         // Accept and normalize absolute hostnames that end with '.'
+         if (hostname.ends_with('.')) {
+            hostname.remove_suffix(1);
+            if (hostname.empty()) {
                return false;
             }
          }
 
-         if (host.empty() || host.size() > max_host_name_length) {
+         if (hostname.empty() || hostname.size() > max_host_name_length) {
             return false;
          }
 
          size_t dns_label_length = 0;
          char prev_char = '\0';
 
-         for (char ch : host) {
+         for (char ch : hostname) {
             if (ch == '.') {
                // DNS label must not be empty
                if (dns_label_length == 0) {
@@ -440,7 +440,7 @@ namespace glz
          return true;
       }
 
-      inline bool validate_host_port(std::string_view port_str) noexcept
+      inline bool is_valid_port(std::string_view port_str) noexcept
       {
          // RFC 3986, Section 3.2.3:
          // port = *DIGIT
@@ -471,16 +471,20 @@ namespace glz
          return port_value >= min_port;
       }
 
-      inline bool validate_host_header(std::string_view host_header) noexcept
+      // Deliberately stricter than RFC 3986 authority:
+      //  - userinfo is rejected per RFC 9110, Section 4.2.4 (deprecated in http/https URIs)
+      //  - IPvFuture literals are rejected by internal policy
+      inline bool is_valid_authority(std::string_view authority) noexcept
       {
          // RFC 9110, Section 7.2:
          // Host = uri-host [ ":" port ]
-         std::string_view uri_host = host_header;
+         std::string_view uri_host = authority;
 
          // RFC 9110, Section 4.2.1 and Section 4.2.2:
          // A sender MUST NOT generate an "http" or "https" URI with an empty host
-         // identifier. A recipient that processes such URI reference must reject it.
-         if (host_header.empty()) {
+         // identifier. A recipient that processes such a URI reference MUST reject
+         // it as invalid.
+         if (authority.empty()) {
             return false;
          }
 
@@ -501,7 +505,7 @@ namespace glz
             }
 
             std::string_view bracketless_ipv6 = uri_host.substr(1, closing_bracket_pos - 1);
-            if (!validate_ipv6_address(bracketless_ipv6)) {
+            if (!is_valid_ipv6_address(bracketless_ipv6)) {
                return false;
             }
 
@@ -519,27 +523,27 @@ namespace glz
 
             std::string_view port_str = tail_after_ipv6.substr(1);
 
-            return validate_host_port(port_str);
+            return is_valid_port(port_str);
          }
 
          // RFC 9110, Section 4.2.3:
          // If the port is equal to the default port for a scheme, the normal
          // form is to omit the port subcomponent.
-         size_t port_delimiter_pos = host_header.find(':');
+         size_t port_delimiter_pos = authority.find(':');
          if (port_delimiter_pos != std::string_view::npos) {
             // Only one port delimiter is allowed
-            if (host_header.find(':', port_delimiter_pos + 1) != std::string_view::npos) {
+            if (authority.find(':', port_delimiter_pos + 1) != std::string_view::npos) {
                return false;
             }
 
-            uri_host = host_header.substr(0, port_delimiter_pos);
-            std::string_view port_str = host_header.substr(port_delimiter_pos + 1);
+            uri_host = authority.substr(0, port_delimiter_pos);
+            std::string_view port_str = authority.substr(port_delimiter_pos + 1);
 
             if (uri_host.empty()) {
                return false;
             }
 
-            if (!validate_host_port(port_str)) {
+            if (!is_valid_port(port_str)) {
                return false;
             }
          }
@@ -550,7 +554,7 @@ namespace glz
          // In order to disambiguate the syntax, we apply the "first-match-wins"
          // algorithm: If host matches the rule for IPv4address, then it should
          // be considered an IPv4 address literal and not a reg-name.
-         if (validate_ipv4_address(uri_host)) {
+         if (is_valid_ipv4_address(uri_host)) {
             return true;
          }
 
@@ -559,7 +563,381 @@ namespace glz
             return false;
          }
 
-         return validate_hostname(uri_host);
+         return is_valid_hostname(uri_host);
+      }
+
+      inline bool is_tchar(char ch) noexcept
+      {
+         // RFC 9110, Section 5.6.2:
+         // token = 1*tchar
+         // tchar = "!" / "#" / "$" / "%" / "&" / "'" / "*"
+         //       / "+" / "-" / "." / "^" / "_" / "`" / "|" / "~"
+         //       / DIGIT / ALPHA
+         return (ch >= 'A' && ch <= 'Z') || (ch >= 'a' && ch <= 'z') || (ch >= '0' && ch <= '9') || ch == '!' ||
+                ch == '#' || ch == '$' || ch == '%' || ch == '&' || ch == '\'' || ch == '*' || ch == '+' || ch == '-' ||
+                ch == '.' || ch == '^' || ch == '_' || ch == '`' || ch == '|' || ch == '~';
+      }
+
+      inline bool is_pct_encoded(std::string_view str) noexcept
+      {
+         // RFC 3986, Appendix A:
+         // pct-encoded = "%" HEXDIG HEXDIG
+
+         if (str.size() != 3) {
+            return false;
+         }
+
+         auto is_pct_encoded_hex_digit = [](char ch) -> bool {
+            return ('0' <= ch && ch <= '9') || ('A' <= ch && ch <= 'F') || ('a' <= ch && ch <= 'f');
+         };
+
+         return str.starts_with('%') && is_pct_encoded_hex_digit(str[1]) && is_pct_encoded_hex_digit(str[2]);
+      }
+
+      inline constexpr bool is_unreserved(char value) noexcept
+      {
+         // RFC 3986, Appendix A:
+         // unreserved = ALPHA / DIGIT / "-" / "." / "_" / "~"
+         return ('A' <= value && value <= 'Z') || ('a' <= value && value <= 'z') || ('0' <= value && value <= '9') ||
+                value == '-' || value == '.' || value == '_' || value == '~';
+      }
+
+      inline constexpr bool is_sub_delim(char value) noexcept
+      {
+         // RFC 3986, Appendix A:
+         // sub-delims = "!" / "$" / "&" / "'" / "(" / ")" / "*" / "+" / "," / ";" / "="
+         return value == '!' || value == '$' || value == '&' || value == '\'' || value == '(' || value == ')' ||
+                value == '*' || value == '+' || value == ',' || value == ';' || value == '=';
+      }
+
+      inline bool is_valid_absolute_path(std::string_view path) noexcept
+      {
+         // RFC 9112, Section 3.2.1:
+         // absolute-path  = 1*( "/" segment )
+         //
+         // RFC 3986, Appendix A:
+         // segment     = *pchar
+         // pchar       = unreserved / pct-encoded / sub-delims / ":" / "@"
+         // unreserved  = ALPHA / DIGIT / "-" / "." / "_" / "~"
+         // pct-encoded = "%" HEXDIG HEXDIG
+         // sub-delims  = "!" / "$" / "&" / "'" / "(" / ")"
+         //             / "*" / "+" / "," / ";" / "="
+
+         if (path.empty() || !path.starts_with('/')) {
+            return false;
+         }
+
+         size_t pos = 0;
+         while (pos != path.size()) {
+            char ch = path[pos];
+
+            // Skip segment delimiters
+            if (ch == '/') {
+               pos++;
+               continue;
+            }
+
+            // Handle a percent-encoded token, which must be exactly 3 bytes
+            if (ch == '%') {
+               if (!is_pct_encoded(path.substr(pos, 3))) {
+                  return false;
+               }
+
+               pos += 3;
+               continue;
+            }
+
+            // Percent encoding has already been validated above, so all that
+            // remains is to check whether the character is one of the allowed
+            // pchar, unreserved, or sub-delimiter characters.
+            if (ch != ':' && ch != '@' && !is_unreserved(ch) && !is_sub_delim(ch)) {
+               return false;
+            }
+
+            pos++;
+         }
+
+         return true;
+      }
+
+      inline bool is_valid_uri_query(std::string_view query) noexcept
+      {
+         // RFC 3986, Appendix A:
+         // query       = *( pchar / "/" / "?" )
+         // pchar       = unreserved / pct-encoded / sub-delims / ":" / "@"
+         // unreserved  = ALPHA / DIGIT / "-" / "." / "_" / "~"
+         // pct-encoded = "%" HEXDIG HEXDIG
+         // sub-delims  = "!" / "$" / "&" / "'" / "(" / ")"
+         //             / "*" / "+" / "," / ";" / "="
+
+         if (query.empty()) {
+            return true;
+         }
+
+         size_t pos = 0;
+         while (pos < query.size()) {
+            char ch = query[pos];
+
+            // Handle a percent-encoded token, which must be exactly 3 bytes
+            if (ch == '%') {
+               if (!is_pct_encoded(query.substr(pos, 3))) {
+                  return false;
+               }
+
+               pos += 3;
+               continue;
+            }
+
+            // Percent encoding has already been validated above, so all that
+            // remains is to check whether the character is one of the allowed
+            // query, pchar, unreserved, or sub-delimiter characters.
+            if (ch != '/' && ch != '?' && ch != ':' && ch != '@' && !is_unreserved(ch) && !is_sub_delim(ch))
+               [[unlikely]] {
+               return false;
+            }
+
+            pos++;
+         }
+
+         return true;
+      }
+
+      inline bool is_valid_origin_form(std::string_view origin) noexcept
+      {
+         if (!origin.starts_with('/')) {
+            return false;
+         }
+
+         if (origin.size() == 1) {
+            return true; // "/" is a valid origin-form
+         }
+
+         std::string_view absolute_path = origin;
+         std::string_view query;
+
+         size_t query_separator_pos = origin.find('?', 1);
+         bool has_query_params = query_separator_pos != std::string_view::npos;
+
+         if (has_query_params) {
+            absolute_path = origin.substr(0, query_separator_pos);
+            query = origin.substr(query_separator_pos + 1);
+
+            if (!is_valid_uri_query(query)) {
+               return false;
+            }
+         }
+
+         return is_valid_absolute_path(absolute_path);
+      }
+
+      inline bool is_valid_request_target(http_method method, std::string_view target) noexcept
+      {
+         // RFC 9112, Section 3.2:
+         // There are four distinct formats for the request-target, depending on both
+         // the method being requested and whether the request is to a proxy.
+         // request-target = origin-form
+         //                / absolute-form
+         //                / authority-form
+         //                / asterisk-form
+
+         // We do not validate the authority-form, since this form is intended
+         // exclusively for CONNECT requests, and Glaze does not currently
+         // support this method. It is expected that the CONNECT method has been
+         // rejected before this function is called.
+
+         // RFC 3986 "scheme" + "://" separator
+         static constexpr std::string_view http_scheme = "http://";
+         static constexpr std::string_view https_scheme = "https://";
+
+         // RFC 9112, Section 3.2.4:
+         // When a client wishes to request OPTIONS for the server as a whole, as
+         // opposed to a specific named resource of that server, the client MUST
+         // send only "*" (%x2A) as the request-target.
+         if (target == "*") {
+            return method == http_method::OPTIONS ? true : false;
+         }
+
+         // RFC 9112, 9110 and 3986:
+         // origin-form    = absolute-path [ "?" query ]
+         // absolute-path  = 1*( "/" segment )
+         // segment        = *pchar
+         bool is_origin_form = target.starts_with('/');
+         if (is_origin_form) {
+            return is_valid_origin_form(target);
+         }
+
+         // RFC 9112, Section 3.2.2:
+         // absolute-form = absolute-URI
+         // ...
+         // A server MUST accept the absolute-form in requests even though most
+         // HTTP/1.1 clients will only send the absolute-form to a proxy.
+         //
+         // RFC 9110, Section 4.2.1 and Section 4.2.2:
+         // http-URI  = "http"  "://" authority path-abempty [ "?" query ]
+         // https-URI = "https" "://" authority path-abempty [ "?" query ]
+
+         // RFC 3986, Section 3.1: An implementation should accept uppercase
+         // letters as equivalent to lowercase in scheme names (e.g., allow
+         // "HTTP" as well as "http") for the sake of robustness but should only
+         // produce lowercase scheme names for consistency.
+
+         // We need to determine exactly which prefix the string has if the
+         // request target is specified in absolute-form, but we don't want to
+         // validate the prefix again unnecessarily
+         bool starts_with_http = glz::striequal(target.substr(0, http_scheme.size()), http_scheme);
+         bool starts_with_https = false;
+         if (!starts_with_http) {
+            starts_with_https = glz::striequal(target.substr(0, https_scheme.size()), https_scheme);
+         }
+
+         bool is_absolute_form = starts_with_http || starts_with_https;
+         if (is_absolute_form) {
+            std::string_view scheme_prefix = starts_with_http ? http_scheme : https_scheme;
+            target.remove_prefix(scheme_prefix.size());
+
+            std::string_view authority = target;
+
+            // RFC 3986, Section 3.2:
+            // The authority component is preceded by a double slash ("//") and is
+            // terminated by the next slash ("/"), question mark ("?"), or number
+            // sign ("#") character, or by the end of the URI.
+            //
+            // '#' is deliberately not searched for here. RFC 3986, Section 4.3
+            // defines absolute-URI = scheme ":" hier-part [ "?" query ], with
+            // no fragment allowed, so a '#' anywhere in the target must fail
+            // validation, which it does in the authority/path/query checks
+            size_t authority_end = target.find_first_of("/?");
+            bool ends_with_authority = authority_end == std::string_view::npos;
+
+            // RFC 3986, Section 3.3:
+            // path-abempty ... begins with "/" or is empty
+            //
+            // In cases such as "http://example.com" no path or query is present
+            // and the entire remainder is the authority
+            if (ends_with_authority) {
+               return is_valid_authority(authority);
+            }
+
+            // Otherwise, a path or query is present, and we validate the authority first
+            authority = target.substr(0, authority_end);
+            if (!is_valid_authority(authority)) {
+               return false;
+            }
+
+            target.remove_prefix(authority.size());
+
+            // After the authority is validated and removed from the string, all
+            // that should be left is the origin-form, but the authority can be
+            // followed either by a path or a query, so we need to decide which
+            // one to validate
+            bool is_path_after_authority = target.starts_with('/');
+            if (is_path_after_authority) {
+               return is_valid_origin_form(target);
+            }
+
+            // If the authority is not followed by a path, it MUST be followed by a query
+            return is_valid_uri_query(target);
+         }
+
+         return false;
+      }
+
+      inline std::expected<detail::request_line, int> parse_request_line(std::string_view request_line)
+      {
+         static constexpr std::string_view http_version_prefix = "HTTP/";
+
+         // RFC 9112, Section 3:
+         // request-line = method SP request-target SP HTTP-version
+
+         if (request_line.empty()) {
+            return std::unexpected(400);
+         }
+
+         size_t first_space = request_line.find(' ');
+         bool starts_with_space = first_space == 0;
+
+         if (first_space == std::string_view::npos || starts_with_space) {
+            return std::unexpected(400);
+         }
+
+         std::string_view method_sv = request_line.substr(0, first_space);
+
+         // from_string validates by matching against known methods; rejects all unknown input
+         auto method_opt = glz::from_string(method_sv);
+         if (!method_opt) {
+            // RFC 9112:
+            // method = token
+            // token = 1*tchar
+            if (!std::ranges::all_of(method_sv, is_tchar)) {
+               return std::unexpected(400);
+            }
+
+            // RFC 9110, Section 15.6.2:
+            // The 501 (Not Implemented) status code ... is the appropriate response
+            // when the server does not recognize the request method...
+            return std::unexpected(501);
+         }
+
+         size_t second_space = request_line.find(' ', first_space + 1);
+         if (second_space == std::string_view::npos) {
+            return std::unexpected(400);
+         }
+
+         // The RFC 9112, Section 3 grammar prohibits two consecutive spaces
+         bool has_extra_space_after_method = second_space == first_space + 1;
+         if (has_extra_space_after_method) {
+            return std::unexpected(400);
+         }
+
+         std::string_view target = request_line.substr(first_space + 1, second_space - first_space - 1);
+         if (target.empty()) {
+            return std::unexpected(400);
+         }
+
+         if (!is_valid_request_target(*method_opt, target)) {
+            return std::unexpected(400);
+         }
+
+         // The RFC 9112 grammar states that only 2 SP characters are allowed inside the request-line
+         bool has_third_space = request_line.find(' ', second_space + 1) != std::string_view::npos;
+         if (has_third_space) {
+            return std::unexpected(400);
+         }
+
+         std::string_view http_version = request_line.substr(second_space + 1);
+         if (!http_version.starts_with(http_version_prefix)) {
+            return std::unexpected(400);
+         }
+
+         http_version.remove_prefix(http_version_prefix.size());
+
+         // After the "HTTP/" prefix is removed, exactly 3 characters of the
+         // version should remain
+         if (http_version.size() != 3) {
+            return std::unexpected(400);
+         }
+
+         // RFC 9112, Section 2.3:
+         // HTTP-version = HTTP-name "/" DIGIT "." DIGIT
+         char major_v = http_version[0];
+         char version_separator = http_version[1];
+         char minor_v = http_version[2];
+         if (!glz::is_digit(major_v) || version_separator != '.' || !glz::is_digit(minor_v)) {
+            return std::unexpected(400);
+         }
+
+         // RFC 9110, Section 6.2:
+         // A recipient that receives a message with a major version number that it
+         // implements and a minor version number higher than what it implements
+         // SHOULD process the message as if it were in the highest minor version
+         // within that major version to which the recipient is conformant.
+         bool is_http11 = major_v == '1' && minor_v >= '1';
+
+         return detail::request_line{
+            .method = *method_opt,
+            .target = target,
+            .is_http11 = is_http11,
+         };
       }
    }
 
@@ -2181,72 +2559,25 @@ namespace glz
          conn->request_.headers.clear();
 
          // --- Parse request line ---
-         size_t rl_end = data.find("\r\n");
-         if (rl_end == std::string_view::npos) return result; // incomplete
+         size_t request_line_end = data.find("\r\n");
+         if (request_line_end == std::string_view::npos) return result; // incomplete
 
-         std::string_view request_line = data.substr(0, rl_end);
+         std::string_view request_line_str = data.substr(0, request_line_end);
 
-         size_t first_space = request_line.find(' ');
-         if (first_space == std::string_view::npos) {
+         auto request_line = glz::detail::parse_request_line(request_line_str);
+         if (!request_line.has_value()) {
+            int status_code = request_line.error();
             result.status = parse_status::error;
-            send_error_response_with_close(conn, 400, "Bad Request");
-            return result;
-         }
-         std::string_view method_sv = request_line.substr(0, first_space);
-
-         size_t second_space = request_line.find(' ', first_space + 1);
-         if (second_space == std::string_view::npos) {
-            result.status = parse_status::error;
-            send_error_response_with_close(conn, 400, "Bad Request");
-            return result;
-         }
-         std::string_view target_sv = request_line.substr(first_space + 1, second_space - first_space - 1);
-         if (target_sv.empty() || target_sv.find(' ') != std::string_view::npos) {
-            result.status = parse_status::error;
-            send_error_response_with_close(conn, 400, "Bad Request");
+            send_error_response_with_close(conn, status_code, get_status_message(status_code));
             return result;
          }
 
-         std::string_view http_version_part = request_line.substr(second_space + 1);
-         if (http_version_part.size() > 0 && http_version_part.back() == '\r') {
-            http_version_part.remove_suffix(1);
-         }
-         if (http_version_part.size() < 7 || http_version_part.rfind("HTTP/", 0) != 0) {
-            result.status = parse_status::error;
-            send_error_response_with_close(conn, 400, "Bad Request");
-            return result;
-         }
-         std::string_view version_number = http_version_part.substr(5);
-         size_t dot_pos = version_number.find('.');
-         if (dot_pos == std::string_view::npos || dot_pos == 0 || dot_pos == version_number.length() - 1) {
-            result.status = parse_status::error;
-            send_error_response_with_close(conn, 400, "Bad Request");
-            return result;
-         }
-         std::string_view major_v = version_number.substr(0, dot_pos);
-         std::string_view minor_v = version_number.substr(dot_pos + 1);
-         const auto is_digit = [](unsigned char c) { return std::isdigit(c); };
-         if (major_v.empty() || !std::all_of(major_v.begin(), major_v.end(), is_digit) || minor_v.empty() ||
-             !std::all_of(minor_v.begin(), minor_v.end(), is_digit)) {
-            result.status = parse_status::error;
-            send_error_response_with_close(conn, 400, "Bad Request");
-            return result;
-         }
-
-         result.is_http_11 = (major_v == "1" && minor_v == "1");
-
-         // from_string validates by matching against known methods; rejects all unknown input
-         auto method_opt = from_string(method_sv);
-         if (!method_opt) {
-            result.status = parse_status::error;
-            send_error_response_with_close(conn, 501, "Not Implemented");
-            return result;
-         }
-         conn->request_.method = *method_opt;
-         conn->request_.target = target_sv;
+         conn->request_.method = request_line->method;
+         conn->request_.target = request_line->target;
+         result.is_http_11 = request_line->is_http11;
 
          // --- Parse headers line by line (single pass) ---
-         size_t pos = rl_end + 2;
+         size_t pos = request_line_end + 2;
          auto& headers = conn->request_.headers;
          bool host_header_parsed = false;
 
@@ -2270,7 +2601,7 @@ namespace glz
                   // RFC 9112, 3.2: A server MUST respond with a 400 (Bad Request) status
                   // code to any HTTP/1.1 request message that lacks a Host header ... or
                   // a Host header field with an invalid field value.
-                  if (!detail::validate_host_header(host_header_it->second)) {
+                  if (!detail::is_valid_authority(host_header_it->second)) {
                      result.status = parse_status::error;
                      send_error_response_with_close(conn, 400, "Bad Request");
                      return result;
@@ -2431,20 +2762,14 @@ namespace glz
          }
       }
 
-      // Determine if the connection should be kept alive
       // Case-insensitive substring search
       static bool ci_contains(std::string_view haystack, std::string_view needle)
       {
          if (needle.size() > haystack.size()) return false;
          for (size_t i = 0; i <= haystack.size() - needle.size(); ++i) {
-            bool match = true;
-            for (size_t j = 0; j < needle.size(); ++j) {
-               if (ascii_tolower(haystack[i + j]) != ascii_tolower(needle[j])) {
-                  match = false;
-                  break;
-               }
+            if (glz::striequal(haystack.substr(i, needle.size()), needle)) {
+               return true;
             }
-            if (match) return true;
          }
          return false;
       }
@@ -2837,7 +3162,7 @@ namespace glz
 
       // Send error response with keep-alive support (for normal errors)
       inline void send_error_response_with_conn(std::shared_ptr<connection_state> conn, int status_code,
-                                                const std::string& message)
+                                                std::string_view message)
       {
          conn->response_.clear();
          conn->response_.status(status_code).content_type("text/plain").body(message);
@@ -2846,7 +3171,7 @@ namespace glz
 
       // Send error response and close connection (for protocol errors)
       inline void send_error_response_with_close(std::shared_ptr<connection_state> conn, int status_code,
-                                                 const std::string& message)
+                                                 std::string_view message)
       {
          conn->should_close = true; // Force close after error
          send_error_response_with_conn(conn, status_code, message);
