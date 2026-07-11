@@ -57,8 +57,7 @@ suite http_server_request_line_validation_tests = [] {
       for (char minor = '2'; minor <= '9'; ++minor) {
          std::string line = "GET /products HTTP/1.";
          line.push_back(minor);
-         expect(parses_to(line, glz::http_method::GET, "/products", true))
-            << "failed to parse as is_http11: " << line;
+         expect(parses_to(line, glz::http_method::GET, "/products", true)) << "failed to parse as is_http11: " << line;
       }
    };
 
