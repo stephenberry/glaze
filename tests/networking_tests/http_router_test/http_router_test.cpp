@@ -433,6 +433,46 @@ suite path_param_decoding_tests = [] {
    };
 };
 
+// Route captures must not resolve to a ".." traversal component. The target is
+// split on literal '/' before percent-decoding, so a "%2e%2e%2f" reaches the
+// capture as "../" only here; leaving it in place lets a handler that resolves
+// the capture as a path escape its base directory.
+suite path_traversal_tests = [] {
+   "wildcard_rejects_encoded_traversal"_test = [] {
+      glz::http_router router;
+      router.get("/files/*path", [](const glz::request&, glz::response&) {});
+
+      auto [handler, params] = router.match(glz::http_method::GET, "/files/..%2f..%2f..%2fetc%2fpasswd");
+      expect(handler == nullptr);
+   };
+
+   "wildcard_rejects_plain_traversal"_test = [] {
+      glz::http_router router;
+      router.get("/files/*path", [](const glz::request&, glz::response&) {});
+
+      auto [handler, params] = router.match(glz::http_method::GET, "/files/../../etc/passwd");
+      expect(handler == nullptr);
+   };
+
+   "param_rejects_encoded_traversal"_test = [] {
+      glz::http_router router;
+      router.get("/download/:file", [](const glz::request&, glz::response&) {});
+
+      auto [handler, params] = router.match(glz::http_method::GET, "/download/..%2f..%2fsecret");
+      expect(handler == nullptr);
+   };
+
+   "wildcard_allows_dotdot_within_segment"_test = [] {
+      glz::http_router router;
+      router.get("/files/*path", [](const glz::request&, glz::response&) {});
+
+      // ".." only escapes when it is a whole segment; "a..b" is an ordinary name.
+      auto [handler, params] = router.match(glz::http_method::GET, "/files/a..b/report.pdf");
+      expect(handler != nullptr);
+      expect(params["path"] == "a..b/report.pdf");
+   };
+};
+
 // Service composition test types (GitHub issue #2401)
 
 struct Task
