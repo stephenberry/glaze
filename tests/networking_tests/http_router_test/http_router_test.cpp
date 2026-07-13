@@ -471,6 +471,35 @@ suite path_traversal_tests = [] {
       expect(handler != nullptr);
       expect(params["path"] == "a..b/report.pdf");
    };
+
+   "wildcard_rejects_encoded_backslash_traversal"_test = [] {
+      glz::http_router router;
+      router.get("/files/*path", [](const glz::request&, glz::response&) {});
+
+      // '\' is a path separator on Windows, so "..%5c" decodes to a "..\"
+      // traversal segment that must be refused alongside "../".
+      auto [handler, params] = router.match(glz::http_method::GET, "/files/..%5c..%5cwindows%5cwin.ini");
+      expect(handler == nullptr);
+   };
+
+   "param_rejects_encoded_backslash_traversal"_test = [] {
+      glz::http_router router;
+      router.get("/download/:file", [](const glz::request&, glz::response&) {});
+
+      auto [handler, params] = router.match(glz::http_method::GET, "/download/..%5c..%5csecret");
+      expect(handler == nullptr);
+   };
+
+   "wildcard_allows_backslash_within_segment"_test = [] {
+      glz::http_router router;
+      router.get("/files/*path", [](const glz::request&, glz::response&) {});
+
+      // A backslash that does not delimit a lone ".." is left intact; only the
+      // ".." segment triggers a refusal.
+      auto [handler, params] = router.match(glz::http_method::GET, "/files/a..b%5creport.pdf");
+      expect(handler != nullptr);
+      expect(params["path"] == "a..b\\report.pdf");
+   };
 };
 
 // Service composition test types (GitHub issue #2401)

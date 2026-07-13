@@ -349,25 +349,32 @@ namespace glz
       /**
        * @brief Detect a ".." path-traversal component in a decoded capture.
        *
-       * Returns true when `path` contains a ".." segment delimited by '/' or a
-       * string boundary. Percent-decoding happens after the target is split on
-       * literal '/', so a "%2e%2e%2f" sequence only becomes a "../" here; a
-       * capture carrying such a segment can climb out of a base directory once
-       * a handler resolves it as a filesystem path.
+       * Returns true when `path` contains a ".." segment delimited by a
+       * separator or a string boundary. Percent-decoding happens after the
+       * target is split on literal '/', so a "%2e%2e%2f" sequence only becomes
+       * a "../" here; a capture carrying such a segment can climb out of a base
+       * directory once a handler resolves it as a filesystem path.
+       *
+       * Both '/' and '\\' are treated as separators: on Windows the backslash
+       * is a path separator too, so a "%2e%2e%5c" ("..\") capture traverses the
+       * same way and an encoded backslash would otherwise slip past a '/'-only
+       * check. A backslash is a legal byte in a POSIX filename, but a capture
+       * bound for a filesystem join is exactly the case guarded here, so the
+       * traversal reading wins over the rare literal-backslash name.
        */
       static bool has_dot_dot_segment(std::string_view path) noexcept
       {
          size_t start = 0;
          while (true) {
-            const size_t slash = path.find('/', start);
-            const size_t seg_len = (slash == std::string_view::npos ? path.size() : slash) - start;
+            const size_t sep = path.find_first_of("/\\", start);
+            const size_t seg_len = (sep == std::string_view::npos ? path.size() : sep) - start;
             if (seg_len == 2 && path[start] == '.' && path[start + 1] == '.') {
                return true;
             }
-            if (slash == std::string_view::npos) {
+            if (sep == std::string_view::npos) {
                return false;
             }
-            start = slash + 1;
+            start = sep + 1;
          }
       }
 
