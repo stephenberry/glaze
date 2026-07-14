@@ -129,8 +129,7 @@ suite content_length_framing = [] {
 
       server.join();
 
-      expect(!result.has_value())
-         << "async: a truncated Content-Length response must be an error, not a short body";
+      expect(!result.has_value()) << "async: a truncated Content-Length response must be an error, not a short body";
    };
 
    "sync_truncated_body_is_error"_test = [] {
@@ -142,8 +141,7 @@ suite content_length_framing = [] {
 
       server.join();
 
-      expect(!result.has_value())
-         << "sync: a truncated Content-Length response must be an error, not a short body";
+      expect(!result.has_value()) << "sync: a truncated Content-Length response must be an error, not a short body";
    };
 };
 
@@ -153,16 +151,14 @@ suite content_length_framing = [] {
 // for a connection that a buggy client won't make: if the EOF'd connection is wrongly
 // pooled, the follow-up request reuses that dead socket and connection 2 never arrives.
 static std::thread serve_sequence(std::shared_ptr<asio::io_context> listener,
-                                  std::shared_ptr<asio::ip::tcp::acceptor> acceptor,
-                                  std::vector<std::string> responses,
+                                  std::shared_ptr<asio::ip::tcp::acceptor> acceptor, std::vector<std::string> responses,
                                   std::shared_ptr<std::atomic<int>> accept_count)
 {
    return std::thread([listener, acceptor, responses = std::move(responses), accept_count] {
       asio::error_code ec;
       acceptor->non_blocking(true, ec);
       const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(3);
-      while (accept_count->load() < static_cast<int>(responses.size()) &&
-             std::chrono::steady_clock::now() < deadline) {
+      while (accept_count->load() < static_cast<int>(responses.size()) && std::chrono::steady_clock::now() < deadline) {
          asio::ip::tcp::socket socket(*listener);
          acceptor->accept(socket, ec);
          if (ec == asio::error::would_block || ec == asio::error::try_again) {
@@ -215,15 +211,14 @@ suite content_length_connection_reuse = [] {
 
       server.join();
 
-      expect(second.has_value())
-         << "after an EOF-truncated response the connection must not be pooled; the follow-up "
-            "request must open a fresh connection instead of reusing a dead socket";
+      expect(second.has_value()) << "after an EOF-truncated response the connection must not be pooled; the follow-up "
+                                    "request must open a fresh connection instead of reusing a dead socket";
       if (second) {
          expect(second->status_code == 200);
          expect(second->response_body == "HELLO");
       }
-      expect(accept_count->load() == 2)
-         << "expected two server connections (dead socket not reused), got: " << accept_count->load();
+      expect(accept_count->load() == 2) << "expected two server connections (dead socket not reused), got: "
+                                        << accept_count->load();
    };
 };
 
