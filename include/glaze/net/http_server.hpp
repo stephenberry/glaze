@@ -2581,31 +2581,28 @@ namespace glz
          auto& headers = conn->request_.headers;
          bool host_header_parsed = false;
 
+         // RFC 9112, Section 3.2:
+         // A server MUST respond with a 400 (Bad Request) status code to any
+         // HTTP/1.1 request message that lacks a Host header field and to any
+         // request message that contains more than one Host header field line
+         // or a Host header field with an invalid field value.
+         //
+         // The "HTTP/1.1" qualifier applies only to a missing Host field. The
+         // words "any request message" make the duplicate and invalid Host
+         // rules independent of the request's HTTP version. This means that we
+         // MUST also enforce those rules for HTTP/1.0 requests.
+
          while (true) {
             // Need at least 2 bytes to check for empty line
             if (pos + 1 >= conn->buf_len) return result; // incomplete
 
             // Empty line = end of headers
             if (data[pos] == '\r' && data[pos + 1] == '\n') {
-               if (result.is_http_11) {
-                  auto host_header_it = headers.find("host");
-
-                  // RFC 9112, 3.2: A server MUST respond with a 400 (Bad Request) status
-                  // code to any HTTP/1.1 request message that lacks a Host header...
-                  if (host_header_it == headers.end()) {
-                     result.status = parse_status::error;
-                     send_error_response_with_close(conn, 400, "Bad Request");
-                     return result;
-                  }
-
-                  // RFC 9112, 3.2: A server MUST respond with a 400 (Bad Request) status
-                  // code to any HTTP/1.1 request message that lacks a Host header ... or
-                  // a Host header field with an invalid field value.
-                  if (!detail::is_valid_authority(host_header_it->second)) {
-                     result.status = parse_status::error;
-                     send_error_response_with_close(conn, 400, "Bad Request");
-                     return result;
-                  }
+               // A missing Host field is an error only for HTTP/1.1 requests
+               if (result.is_http_11 && !host_header_parsed) {
+                  result.status = parse_status::error;
+                  send_error_response_with_close(conn, 400, "Bad Request");
+                  return result;
                }
 
                result.headers_end = pos + 2;
@@ -2668,10 +2665,9 @@ namespace glz
                   }
                }
 
-               // RFC 9112, 3.2: A server MUST respond with a 400 (Bad Request) status code to
-               // any HTTP/1.1 request message that ... contains more than one Host header field.
-               if (result.is_http_11 && key == "host") {
-                  if (host_header_parsed) {
+               // Duplicate or invalid Host fields are errors for any HTTP/1.x request
+               if (key == "host") {
+                  if (host_header_parsed || !detail::is_valid_authority(value_sv)) {
                      result.status = parse_status::error;
                      send_error_response_with_close(conn, 400, "Bad Request");
                      return result;
