@@ -2675,6 +2675,16 @@ namespace variants
          expect(not glz::write<glz::opt_true<glz::opts{.format = glz::BEVE}, glz::structs_as_arrays_opt_tag{}>>(
             d, out)); // testing compilation
       };
+
+      "out-of-range variant index is rejected"_test = [] {
+         using V = std::variant<int32_t, double>;
+         std::string buf;
+         expect(not glz::write_beve(V{int32_t{111}}, buf)); // holds index 0
+         // Byte 1 is the compressed type index; force it past the two alternatives.
+         buf[1] = static_cast<char>(7 << 2);
+         V in{};
+         expect(glz::read_beve(in, buf).ec == glz::error_code::no_matching_variant_type);
+      };
    };
 }
 
