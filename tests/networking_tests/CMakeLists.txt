@@ -7,6 +7,7 @@ option(glaze_BUILD_WEBSOCKET_AUTOBAHN_TEST "Build Autobahn WebSocket compliance 
 # HTTP Examples
 add_subdirectory(http_examples)
 add_subdirectory(http_server_post_test)
+add_subdirectory(http_server_test)
 add_subdirectory(http_smuggling_test)
 add_subdirectory(http_header_strictness_test)
 add_subdirectory(http_response_splitting_test)

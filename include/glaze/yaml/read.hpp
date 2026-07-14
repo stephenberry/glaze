@@ -555,7 +555,7 @@ namespace glz
                         return;
                      }
                      const uint32_t codepoint = hex_to_u32(src);
-                     if (codepoint == 0xFFFFFFFFu) [[unlikely]] {
+                     if (codepoint == 0xFFFFFFFFu || (codepoint >= 0xD800 && codepoint <= 0xDFFF)) [[unlikely]] {
                         ctx.error = error_code::syntax_error;
                         return;
                      }
@@ -577,6 +577,10 @@ namespace glz
                      }
                      const uint32_t codepoint = (hi << 16) | lo;
                      src += 8;
+                     if (codepoint >= 0xD800 && codepoint <= 0xDFFF) [[unlikely]] {
+                        ctx.error = error_code::syntax_error;
+                        return;
+                     }
                      if (codepoint <= 0x10FFFF) {
                         dst += code_point_to_utf8(codepoint, dst);
                      }
@@ -2250,6 +2254,27 @@ namespace glz
 
    namespace yaml
    {
+      // Reading a YAML sequence node into a container OVERWRITES its previous
+      // contents rather than appending to them, matching the JSON parser
+      // (see json/read.hpp). Growable containers are cleared up front so that
+      // pre-existing elements do not leak into the parsed result; fixed-size
+      // containers (e.g. std::array) are overwritten element-by-element and are
+      // intentionally left untouched here.
+      template <auto Opts, class V>
+      inline void clear_sequence_before_read(V& value)
+      {
+         if constexpr (emplace_backable<V> && requires { value.clear(); }) {
+            // vector-like: honor the append_arrays option, matching json/read.hpp
+            if constexpr (!check_append_arrays(Opts)) {
+               value.clear();
+            }
+         }
+         else if constexpr (emplaceable<V> && requires { value.clear(); }) {
+            // set-like: json/read.hpp clears unconditionally; append_arrays does not apply
+            value.clear();
+         }
+      }
+
       // Parse flow sequence [item, item, ...]
       template <auto Opts, class T, class Ctx, class It, class End>
       inline void parse_flow_sequence(T&& value, Ctx& ctx, It& it, End end)
@@ -2289,6 +2314,10 @@ namespace glz
             ctx.error = error_code::syntax_error;
             return;
          }
+
+         // Overwrite (do not append to) any pre-existing contents. Must happen
+         // before the empty-array early return below so that `[]` also clears.
+         clear_sequence_before_read<Opts>(value);
 
          ++it; // Skip '['
          // Skip whitespace and newlines after opening bracket (YAML allows multi-line flow sequences)
@@ -2760,6 +2789,11 @@ namespace glz
                }
             }
          };
+
+         // Overwrite (do not append to) any pre-existing contents. A block
+         // sequence is only entered once a '-' item is confirmed, so clearing
+         // up front correctly (re)assigns the container to the parsed sequence.
+         clear_sequence_before_read<Opts>(value);
 
          sequence_container_adapter adapter{};
 
@@ -4117,6 +4151,35 @@ namespace glz
 
          using key_t = typename std::remove_cvref_t<T>::key_type;
          using val_t = typename std::remove_cvref_t<T>::mapped_type;
+
+         // Reading a YAML mapping MERGES into the target: an entry overwrites the
+         // value of a key that existed before the read and adds new keys, while
+         // pre-existing keys the document does not mention are preserved (like a
+         // struct/object read, and like json/read.hpp's per-key value[key]).
+         // Within a single document a repeated key keeps its FIRST value -- YAML
+         // mappings disallow duplicate keys and the conformance suite expects
+         // first-wins, which falls out of emplace into an empty map. Any
+         // pre-existing entry the document leaves untouched is restored on scope
+         // exit (including error paths). When the target starts empty (the common
+         // case) this is a no-op with negligible cost.
+         std::remove_cvref_t<T> preexisting_entries;
+         if (!value.empty()) {
+            preexisting_entries = std::move(value);
+            value.clear();
+         }
+         struct merge_restore_guard
+         {
+            std::remove_cvref_t<T>& target;
+            std::remove_cvref_t<T>& saved;
+            ~merge_restore_guard()
+            {
+               // emplace is a no-op for keys the document already wrote, so only
+               // untouched pre-existing entries are put back.
+               for (auto& entry : saved) {
+                  target.emplace(entry.first, std::move(entry.second));
+               }
+            }
+         } merge_restore{value, preexisting_entries};
 
          const bool treat_as_block_mapping =
             !yaml::check_flow_context(Opts) && *it == '{' && yaml::inline_value_has_plain_mapping_indicator(it, end);
@@ -6151,17 +6214,24 @@ namespace glz
       return read<set_yaml<Opts>()>(std::forward<T>(value), std::forward<Buffer>(buffer), ctx);
    }
 
-   template <auto Opts = yaml::yaml_opts{}, class T>
-   [[nodiscard]] error_ctx read_file_yaml(T&& value, const sv file_path) noexcept
+   template <auto Opts = yaml::yaml_opts{}, class T, is_buffer Buffer>
+   [[nodiscard]] error_ctx read_file_yaml(T&& value, const sv file_path, Buffer&& buffer) noexcept
    {
-      std::string buffer;
-      const auto ec = file_to_buffer(buffer, file_path);
+      yaml::yaml_context ctx{};
+      ctx.current_file = file_path;
+      const auto ec = file_to_buffer(buffer, ctx.current_file);
+
       if (bool(ec)) {
          return {0, ec};
       }
 
-      yaml::yaml_context ctx{};
       return read<set_yaml<Opts>()>(std::forward<T>(value), buffer, ctx);
+   }
+
+   template <auto Opts = yaml::yaml_opts{}, class T>
+   [[nodiscard]] error_ctx read_file_yaml(T&& value, const sv file_path) noexcept
+   {
+      return read_file_yaml<Opts>(value, file_path, std::string{});
    }
 
 } // namespace glz

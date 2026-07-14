@@ -2515,6 +2515,26 @@ suite example_reflection_test = [] {
    };
 };
 
+struct untagged_bounds_inner
+{
+   int x{};
+   struct glaze
+   {
+      using T = untagged_bounds_inner;
+      static constexpr auto value = glz::object("x", &T::x);
+   };
+};
+
+struct untagged_bounds_outer
+{
+   untagged_bounds_inner a{};
+   struct glaze
+   {
+      using T = untagged_bounds_outer;
+      static constexpr auto value = glz::object("a", &T::a);
+   };
+};
+
 suite example_reflection_without_keys_test = [] {
    "example_reflection_without_keys"_test = [] {
       std::string without_keys;
@@ -2569,6 +2589,23 @@ suite example_reflection_without_keys_test = [] {
       expect(decoded.i == 42);
       expect(decoded.d == 2.718);
       expect(decoded.hello == "world");
+   };
+
+   "read_beve_untagged truncated nested struct"_test = [] {
+      untagged_bounds_outer obj{};
+      obj.a.x = 7;
+      auto encoded = glz::write_beve_untagged(obj);
+      expect(encoded.has_value());
+
+      // Keep only the outer generic_array header (tag + compressed count) so the
+      // nested struct member begins exactly at end-of-input. Read through an
+      // exact-size, non-padded string_view so an over-read lands past the buffer.
+      std::vector<char> truncated(encoded->begin(), encoded->begin() + 2);
+      std::string_view buffer{truncated.data(), truncated.size()};
+
+      untagged_bounds_outer decoded{};
+      auto ec = glz::read_beve_untagged(decoded, buffer);
+      expect(bool(ec));
    };
 };
 

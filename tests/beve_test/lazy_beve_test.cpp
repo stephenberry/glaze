@@ -1018,6 +1018,27 @@ suite lazy_beve_tests = [] {
       expect(missing.error() == glz::error_code::key_not_found);
    };
 
+   "lazy_beve_object_key_length_past_end"_test = [] {
+      // Object with string keys (0x03), one key (compressed count 0x04), a key
+      // length prefix of 60 (0xF0), and no key bytes: the declared key length
+      // runs past the end of the buffer. The scanner must not build a key view
+      // over the missing bytes.
+      std::vector<std::byte> buffer{std::byte{0x03}, std::byte{0x04}, std::byte{0xF0}};
+
+      auto result = glz::lazy_beve(buffer);
+      expect(result.has_value());
+      auto& doc = result.value();
+
+      for (auto v : doc.root()) {
+         expect(v.key().size() <= buffer.size());
+      }
+
+      expect(doc.root().index().size() == 0);
+
+      auto looked_up = doc.root()["anything"];
+      expect(looked_up.has_error());
+   };
+
    // ============================================================================
    // Unsigned integer array tests
    // ============================================================================

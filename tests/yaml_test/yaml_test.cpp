@@ -1717,6 +1717,27 @@ suite yaml_tag_tests = [] {
       expect(bool(ec));
    };
 
+   "dq_reject_lone_high_surrogate_u"_test = [] {
+      std::string yaml = R"("\uD800")"; // lone high surrogate, not a scalar value
+      std::string value;
+      auto ec = glz::read_yaml(value, yaml);
+      expect(bool(ec));
+   };
+
+   "dq_reject_lone_low_surrogate_u"_test = [] {
+      std::string yaml = R"("\uDC00")"; // lone low surrogate
+      std::string value;
+      auto ec = glz::read_yaml(value, yaml);
+      expect(bool(ec));
+   };
+
+   "dq_reject_surrogate_unicode8"_test = [] {
+      std::string yaml = R"("\U0000D800")"; // surrogate via 8-digit escape
+      std::string value;
+      auto ec = glz::read_yaml(value, yaml);
+      expect(bool(ec));
+   };
+
    "dq_unterminated"_test = [] {
       std::string yaml = R"("hello)"; // no closing quote
       std::string value;
@@ -1949,6 +1970,271 @@ suite yaml_container_tests = [] {
       expect(!wec);
       // Empty map writes as {} in flow style
       expect(yaml == "{}" || yaml == "");
+   };
+};
+
+// ============================================================
+// Sequence overwrite semantics (GitHub issue #2694)
+// Reading a YAML sequence into a pre-populated container must OVERWRITE the
+// existing contents (matching the JSON parser), not append to them.
+// ============================================================
+
+struct overwrite_struct
+{
+   std::vector<int> a = std::vector{3, 2, 4};
+   int b = 4;
+};
+
+struct yaml_append_arrays_opts : glz::opts
+{
+   bool append_arrays = true;
+};
+
+// Move-constructible but NOT move-assignable, with settable members. Used to
+// guard against a regression where inserting into a map of such a type via
+// insert_or_assign would fail to compile (it must fall back to emplace).
+struct non_assignable_value
+{
+   int a{};
+   int b{};
+   non_assignable_value() = default;
+   non_assignable_value(const non_assignable_value&) = default;
+   non_assignable_value(non_assignable_value&&) = default;
+   non_assignable_value& operator=(const non_assignable_value&) = delete;
+   non_assignable_value& operator=(non_assignable_value&&) = delete;
+};
+
+template <>
+struct glz::meta<non_assignable_value>
+{
+   using T = non_assignable_value;
+   static constexpr auto value = object("a", &T::a, "b", &T::b);
+};
+
+suite yaml_overwrite_semantics_tests = [] {
+   // Exact reproduction from issue #2694: block sequence into a defaulted member.
+   "issue_2694_block_sequence_member"_test = [] {
+      overwrite_struct data{};
+      const std::string yaml = "a:\n  - 3\n  - 4\nb: 2";
+      auto ec = glz::read_yaml(data, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(data.a == std::vector{3, 4}); // previously appended to {3,2,4}
+      expect(data.b == 2);
+   };
+
+   "flow_sequence_grows"_test = [] {
+      std::vector<int> v{7};
+      const std::string yaml = "[1, 2, 3, 4]";
+      auto ec = glz::read_yaml(v, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(v == std::vector{1, 2, 3, 4});
+   };
+
+   "flow_sequence_shrinks"_test = [] {
+      std::vector<int> v{9, 9, 9, 9, 9};
+      const std::string yaml = "[1, 2]";
+      auto ec = glz::read_yaml(v, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(v == std::vector{1, 2});
+   };
+
+   "block_sequence_shrinks"_test = [] {
+      std::vector<int> v{9, 9, 9, 9, 9};
+      const std::string yaml = "- 1\n- 2\n";
+      auto ec = glz::read_yaml(v, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(v == std::vector{1, 2});
+   };
+
+   "empty_flow_sequence_clears"_test = [] {
+      std::vector<int> v{1, 2, 3};
+      const std::string yaml = "[]";
+      auto ec = glz::read_yaml(v, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(v.empty());
+   };
+
+   "same_size_replaces_not_merges"_test = [] {
+      std::vector<int> v{5, 6, 7};
+      const std::string yaml = "[1, 2, 3]";
+      auto ec = glz::read_yaml(v, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(v == std::vector{1, 2, 3});
+   };
+
+   "consecutive_reads_into_same_variable"_test = [] {
+      std::vector<int> v;
+      auto ec1 = glz::read_yaml(v, std::string{"[1, 2, 3]"});
+      expect(!ec1);
+      expect(v == std::vector{1, 2, 3});
+      auto ec2 = glz::read_yaml(v, std::string{"[4, 5]"});
+      expect(!ec2);
+      expect(v == std::vector{4, 5}); // not {1, 2, 3, 4, 5}
+   };
+
+   "deque_overwrites"_test = [] {
+      std::deque<int> d{9, 9, 9};
+      auto ec = glz::read_yaml(d, std::string{"[1, 2]"});
+      expect(!ec);
+      expect(d == std::deque<int>{1, 2});
+   };
+
+   "list_overwrites"_test = [] {
+      std::list<int> l{9, 9, 9};
+      auto ec = glz::read_yaml(l, std::string{"- 1\n- 2\n"});
+      expect(!ec);
+      expect(l == std::list<int>{1, 2});
+   };
+
+   "set_block_overwrites"_test = [] {
+      std::set<int> s{100, 200};
+      auto ec = glz::read_yaml(s, std::string{"- 1\n- 2\n- 3\n"});
+      expect(!ec);
+      expect(s == std::set<int>{1, 2, 3}); // old members gone
+   };
+
+   "set_flow_overwrites"_test = [] {
+      std::set<int> s{100, 200};
+      auto ec = glz::read_yaml(s, std::string{"[1, 2, 3]"});
+      expect(!ec);
+      expect(s == std::set<int>{1, 2, 3});
+   };
+
+   "unordered_set_overwrites"_test = [] {
+      std::unordered_set<int> s{100, 200};
+      auto ec = glz::read_yaml(s, std::string{"[1, 2, 3]"});
+      expect(!ec);
+      expect(s == std::unordered_set<int>{1, 2, 3});
+   };
+
+   "nested_vectors_overwrite"_test = [] {
+      // Outer shrinks and each reused inner element is cleared, not appended into.
+      std::vector<std::vector<int>> v{{9, 9, 9}, {8, 8}};
+      auto ec = glz::read_yaml(v, std::string{"[[1, 2], [3]]"});
+      expect(!ec);
+      expect(v == std::vector<std::vector<int>>{{1, 2}, {3}});
+   };
+
+   "struct_member_reuse_across_reads"_test = [] {
+      overwrite_struct data{};
+      data.a = {9, 9, 9, 9};
+      const std::string yaml = "a: [1, 2]\nb: 5";
+      auto ec = glz::read_yaml(data, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(data.a == std::vector{1, 2});
+      expect(data.b == 5);
+   };
+
+   // std::array is fixed-size: overwritten in place, never cleared/resized.
+   "fixed_array_overwrites_in_place"_test = [] {
+      std::array<int, 3> arr{9, 9, 9};
+      auto ec = glz::read_yaml(arr, std::string{"[1, 2, 3]"});
+      expect(!ec);
+      expect(arr == std::array<int, 3>{1, 2, 3});
+   };
+
+   // Opting into append_arrays keeps the pre-existing contents (matches JSON).
+   "append_arrays_option_still_appends"_test = [] {
+      std::vector<int> v{1, 2, 3};
+      constexpr yaml_append_arrays_opts opts{{.format = glz::YAML}};
+      auto ec = glz::read<opts>(v, std::string{"[4, 5, 6]"});
+      expect(!ec);
+      expect(v == std::vector{1, 2, 3, 4, 5, 6});
+   };
+
+   // ---- Maps/objects: overwrite an existing key's value, keep other keys ----
+   // (matches JSON's value[key] merge; a full clear would wrongly drop key "b")
+
+   "map_block_overwrites_existing_key"_test = [] {
+      std::map<std::string, std::vector<int>> m{{"a", {7, 8, 9}}};
+      const std::string yaml = "a:\n  - 1\n  - 2\n";
+      auto ec = glz::read_yaml(m, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(m["a"] == std::vector{1, 2}); // overwritten, not appended
+      expect(m.size() == 1u);
+   };
+
+   "map_flow_overwrites_and_keeps_other_keys"_test = [] {
+      std::map<std::string, int> m{{"a", 1}, {"b", 2}};
+      const std::string yaml = "{a: 9}";
+      auto ec = glz::read_yaml(m, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(m["a"] == 9); // overwritten
+      expect(m["b"] == 2); // untouched
+      expect(m.size() == 2u);
+   };
+
+   "map_block_overwrites_adds_and_keeps"_test = [] {
+      std::map<std::string, int> m{{"a", 1}, {"b", 2}};
+      const std::string yaml = "a: 100\nc: 3";
+      auto ec = glz::read_yaml(m, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(m["a"] == 100); // overwritten
+      expect(m["b"] == 2); // kept
+      expect(m["c"] == 3); // added
+      expect(m.size() == 3u);
+   };
+
+   "unordered_map_overwrites"_test = [] {
+      std::unordered_map<std::string, int> m{{"a", 1}};
+      auto ec = glz::read_yaml(m, std::string{"a: 42\nb: 7"});
+      expect(!ec);
+      expect(m["a"] == 42);
+      expect(m["b"] == 7);
+   };
+
+   "map_consecutive_reads_merge_and_overwrite"_test = [] {
+      std::map<std::string, int> m;
+      expect(!glz::read_yaml(m, std::string{"a: 1\nb: 2"}));
+      expect(!glz::read_yaml(m, std::string{"a: 9"}));
+      expect(m["a"] == 9); // overwritten on second read
+      expect(m["b"] == 2); // kept from first read
+   };
+
+   // A duplicate key within a single document keeps its FIRST value. YAML
+   // mappings disallow duplicate keys; glaze resolves them first-wins (see the
+   // conformance suite, e.g. X38W), which differs from JSON's last-wins.
+   "map_duplicate_key_first_wins"_test = [] {
+      std::map<std::string, int> m;
+      auto ec = glz::read_yaml(m, std::string{"a: 1\na: 2"});
+      expect(!ec);
+      expect(m["a"] == 1);
+   };
+
+   // A pre-existing key (from before the read) is still overwritten even though
+   // in-document duplicates are first-wins: the first document occurrence wins
+   // over the prior value, later duplicates are ignored.
+   "map_preexisting_overwritten_but_indoc_first_wins"_test = [] {
+      std::map<std::string, int> m{{"a", 100}};
+      auto ec = glz::read_yaml(m, std::string{"a: 1\na: 2"});
+      expect(!ec);
+      expect(m["a"] == 1); // 100 overwritten by first doc value, second ignored
+   };
+
+   // glz::generic object entries overwrite too (routes through the map handler).
+   "generic_object_overwrites"_test = [] {
+      glz::generic j;
+      expect(!glz::read_yaml(j, std::string{"a:\n  - 1\n  - 2\n  - 3\nb: 5"}));
+      expect(!glz::read_yaml(j, std::string{"a:\n  - 9\nb: 6"}));
+      expect(j.is_object());
+      if (j.is_object()) {
+         auto& obj = j.get_object();
+         expect(obj["a"].is_array());
+         if (obj["a"].is_array()) expect(obj["a"].get_array().size() == 1u);
+         expect(obj["b"].get<double>() == 6.0);
+      }
+   };
+
+   // A move-constructible but non-assignable mapped_type must still compile and
+   // read: the insert_or_assign path is guarded on assignability and falls back
+   // to emplace for such types (which then keep the prior emplace behavior).
+   "map_of_non_assignable_value_reads"_test = [] {
+      std::map<std::string, non_assignable_value> m;
+      const std::string yaml = "w1:\n  a: 1\n  b: 2\n";
+      auto ec = glz::read_yaml(m, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(m.at("w1").a == 1);
+      expect(m.at("w1").b == 2);
    };
 };
 
