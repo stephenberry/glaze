@@ -6,6 +6,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
+#include <limits>
 #include <string>
 #include <string_view>
 
@@ -130,9 +131,13 @@ namespace glz
             return;
          }
          case jsonb::type::int5: {
-            // Parse and re-emit as decimal so the output is strict JSON.
+            // Parse and re-emit as strict JSON. The magnitude is accumulated as an
+            // unsigned value so a negative literal whose magnitude has the sign bit
+            // set (e.g. "-0x8000000000000000") negates without the signed-overflow
+            // UB, and a positive literal above INT64_MAX ("0xFFFFFFFFFFFFFFFF") keeps
+            // its value instead of wrapping to a negative int. Mirrors the reader's
+            // parse_int_payload in jsonb/read.hpp.
             sv s{reinterpret_cast<const char*>(payload), static_cast<size_t>(sz)};
-            // Strip leading '+'.
             const char* p = s.data();
             const char* e = p + s.size();
             bool neg = false;
@@ -141,26 +146,26 @@ namespace glz
                neg = true;
                ++p;
             }
-            int64_t value = 0;
-            if (e - p >= 2 && p[0] == '0' && (p[1] == 'x' || p[1] == 'X')) {
-               uint64_t tmp = 0;
-               auto [ptr, ec] = std::from_chars(p + 2, e, tmp, 16);
-               if (ec != std::errc{} || ptr != e) {
+            const int base = (e - p >= 2 && p[0] == '0' && (p[1] == 'x' || p[1] == 'X')) ? 16 : 10;
+            const char* digits = (base == 16) ? p + 2 : p;
+            uint64_t mag = 0;
+            auto [ptr, ec] = std::from_chars(digits, e, mag, base);
+            if (ec != std::errc{} || ptr != e) {
+               ctx.error = error_code::parse_number_failure;
+               return;
+            }
+            if (neg) {
+               // |INT64_MIN| == INT64_MAX + 1, so that magnitude is still representable.
+               constexpr uint64_t max_neg_mag = static_cast<uint64_t>((std::numeric_limits<int64_t>::max)()) + 1u;
+               if (mag > max_neg_mag) {
                   ctx.error = error_code::parse_number_failure;
                   return;
                }
-               value = neg ? -static_cast<int64_t>(tmp) : static_cast<int64_t>(tmp);
+               to<JSON, int64_t>::template op<Opts>(static_cast<int64_t>(uint64_t{0} - mag), ctx, out, ix);
             }
             else {
-               int64_t tmp = 0;
-               auto [ptr, ec] = std::from_chars(p, e, tmp, 10);
-               if (ec != std::errc{} || ptr != e) {
-                  ctx.error = error_code::parse_number_failure;
-                  return;
-               }
-               value = neg ? -tmp : tmp;
+               to<JSON, uint64_t>::template op<Opts>(mag, ctx, out, ix);
             }
-            to<JSON, int64_t>::template op<Opts>(value, ctx, out, ix);
             return;
          }
          case jsonb::type::float5: {
