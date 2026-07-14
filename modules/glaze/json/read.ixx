@@ -1990,6 +1990,12 @@ namespace glz
 
          if (*it == '\\') [[unlikely]] {
             ++it;
+            if constexpr (not Opts.null_terminated) {
+               if (it == end) [[unlikely]] {
+                  ctx.error = error_code::unexpected_end;
+                  return;
+               }
+            }
             switch (*it) {
             case '\0': {
                ctx.error = error_code::unexpected_end;
@@ -2148,8 +2154,14 @@ namespace glz
 
             // Extract the string key
             const auto start = it;
-            while (*it != '"' && it != end) {
+            while (it != end && *it != '"') {
                ++it;
+            }
+            if constexpr (not Opts.null_terminated) {
+               if (it == end) [[unlikely]] {
+                  ctx.error = error_code::unexpected_end;
+                  return;
+               }
             }
             const sv key{start, static_cast<size_t>(it - start)};
             ++it; // skip closing quote
@@ -2475,6 +2487,17 @@ namespace glz
                      return;
                   }
                }
+
+               // A valid array always returns from inside the loop upon reaching ']'.
+               // For a null-terminated buffer the loop can only exit here by falling
+               // through when `it` reaches the terminator without a closing bracket,
+               // which means the input was truncated (e.g. "[", "[1," or "[1,2,").
+               // Non-null-terminated buffers surface this through skip_ws/depth
+               // tracking (or the streaming refill break), so this guard is limited
+               // to the null-terminated case.
+               if constexpr (Opts.null_terminated) {
+                  ctx.error = error_code::unexpected_end;
+               }
             }
             else {
                ctx.error = error_code::exceeded_static_array_size;
@@ -2610,11 +2633,25 @@ namespace glz
       if (bool(ctx.error)) [[unlikely]]
          return {};
 
+      if constexpr (not Opts.null_terminated) {
+         if (it == end) [[unlikely]] {
+            ctx.error = error_code::unexpected_end;
+            return {};
+         }
+      }
       if (*it == ']') [[unlikely]] {
          return 0;
       }
       size_t count = 1;
       while (true) {
+         // A null-terminated buffer falls out through the '\0' case below; a non-null-terminated
+         // buffer has no sentinel, so bound the scan here before dereferencing.
+         if constexpr (not Opts.null_terminated) {
+            if (it == end) [[unlikely]] {
+               ctx.error = error_code::unexpected_end;
+               return {};
+            }
+         }
          switch (*it) {
          case ',': {
             ++count;

@@ -381,6 +381,21 @@ namespace glz
       requires(std::is_enum_v<T> && !glaze_enum_t<T>)
    struct from<BEVE, T>
    {
+      // Tagged overload: the type tag has already been read and is supplied by the caller
+      // (used by the typed-array conversion paths). Delegate to the underlying integer's
+      // reader so enums reuse the same numeric decoding and conversion handling, then cast
+      // back. This makes std::byte (a byte-valued enum) readable as a u8 typed-array element.
+      template <auto Opts, class Value, class Tag, is_context Ctx, class It0, class It1>
+         requires(check_no_header(Opts))
+      GLZ_ALWAYS_INLINE static void op(Value&& value, Tag&& tag, Ctx&& ctx, It0&& it, It1 end) noexcept
+      {
+         using U = std::underlying_type_t<std::decay_t<T>>;
+         U underlying{};
+         from<BEVE, U>::template op<Opts>(underlying, std::forward<Tag>(tag), std::forward<Ctx>(ctx),
+                                          std::forward<It0>(it), end);
+         value = static_cast<std::decay_t<T>>(underlying);
+      }
+
       template <auto Opts>
       GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&& it, auto end) noexcept
       {
@@ -599,6 +614,11 @@ namespace glz
             return;
          }
 
+         if (type_index >= std::variant_size_v<T>) [[unlikely]] {
+            ctx.error = error_code::no_matching_variant_type;
+            return;
+         }
+
          if (value.index() != type_index) {
             emplace_runtime_variant(value, type_index);
          }
@@ -611,6 +631,33 @@ namespace glz
    {
       using V = typename std::decay_t<T>::value_type;
       static_assert(sizeof(V) == 1);
+
+      // Stores n decoded bytes (already length-validated by the caller) into the target.
+      // Handles resizable strings, string views, and fixed-size std::array<char, N> uniformly
+      // so the tagged and untagged code paths share identical storage semantics.
+      GLZ_ALWAYS_INLINE static void store(auto&& value, is_context auto&& ctx, auto&& it, const size_t n)
+      {
+         if constexpr (string_view_t<T>) {
+            value = {it, n};
+         }
+         else if constexpr (array_char_t<T>) {
+            // Fixed-size std::array<char, N> cannot be resized, so the decoded payload must
+            // fit within it. Any trailing bytes are zero-filled to keep the buffer
+            // deterministic when a shorter payload is read into a larger array.
+            if (n > value.size()) [[unlikely]] {
+               ctx.error = error_code::syntax_error;
+               return;
+            }
+            std::memcpy(value.data(), it, n);
+            if (n < value.size()) {
+               std::memset(value.data() + n, 0, value.size() - n);
+            }
+         }
+         else {
+            value.resize(n);
+            std::memcpy(value.data(), it, n);
+         }
+      }
 
       template <auto Opts>
          requires(check_no_header(Opts))
@@ -636,8 +683,10 @@ namespace glz
                return;
             }
          }
-         value.resize(n);
-         std::memcpy(value.data(), it, n);
+         store(value, ctx, it, n);
+         if (bool(ctx.error)) [[unlikely]] {
+            return;
+         }
          it += n;
       }
 
@@ -678,12 +727,9 @@ namespace glz
             }
          }
 
-         if constexpr (string_view_t<T>) {
-            value = {it, n};
-         }
-         else {
-            value.resize(n);
-            std::memcpy(value.data(), it, n);
+         store(value, ctx, it, n);
+         if (bool(ctx.error)) [[unlikely]] {
+            return;
          }
          it += n;
       }
@@ -734,7 +780,7 @@ namespace glz
                }
             }
          }
-         else if constexpr (num_t<V>) {
+         else if constexpr (beve_num_t<V>) {
             constexpr uint8_t type = std::floating_point<V> ? 0 : (std::is_signed_v<V> ? 0b000'01'000 : 0b000'10'000);
             constexpr uint8_t header = tag::typed_array | type | (byte_count<V> << 5);
 
@@ -872,7 +918,7 @@ namespace glz
                }
             }
 
-            if ((it + n) > end) [[unlikely]] {
+            if (uint64_t(end - it) < n) [[unlikely]] {
                ctx.error = error_code::unexpected_end;
                return;
             }
@@ -928,10 +974,7 @@ namespace glz
                return;
             }
 
-            if ((it + padding + n * sizeof(V)) > end) [[unlikely]] {
-               ctx.error = error_code::unexpected_end;
-               return;
-            }
+            if (typed_array_out_of_bounds(ctx, it, end, n, sizeof(V), padding)) return;
             it += padding;
 
             value = std::span<T, Extent>{reinterpret_cast<const V*>(&(*it)), n};
@@ -963,9 +1006,13 @@ namespace glz
             }
 
             ++it;
-            const auto n = int_from_compressed(ctx, it, end);
+            std::conditional_t<Opts.partial_read, size_t, const size_t> n = int_from_compressed(ctx, it, end);
             if (bool(ctx.error)) [[unlikely]] {
                return;
+            }
+
+            if constexpr (Opts.partial_read) {
+               n = value.size();
             }
 
             const auto num_bytes = (n + 7) / 8;
@@ -993,6 +1040,12 @@ namespace glz
                   value.shrink_to_fit();
                }
             }
+            else {
+               if (n > value.size()) {
+                  ctx.error = error_code::syntax_error;
+                  return;
+               }
+            }
 
             for (size_t byte_i{}, i{}; byte_i < num_bytes; ++byte_i, ++it) {
                if (invalid_end(ctx, it, end)) {
@@ -1005,7 +1058,7 @@ namespace glz
                }
             }
          }
-         else if constexpr (num_t<V>) {
+         else if constexpr (beve_num_t<V>) {
             constexpr uint8_t type = std::floating_point<V> ? 0 : (std::is_signed_v<V> ? 0b000'01'000 : 0b000'10'000);
             constexpr uint8_t header = tag::typed_array | type | (byte_count<V> << 5);
 
@@ -1054,10 +1107,7 @@ namespace glz
                   n = value.size();
                }
 
-               if ((it + n * element_size) > end) [[unlikely]] {
-                  ctx.error = error_code::unexpected_end;
-                  return 0;
-               }
+               if (typed_array_out_of_bounds(ctx, it, end, n, element_size)) return 0;
                if (!validate_and_resize(n)) {
                   return 0;
                }
@@ -1108,10 +1158,7 @@ namespace glz
                         ctx.error = error_code::syntax_error;
                         return;
                      }
-                     if ((it + padding + count * elem_byte_count) > end) [[unlikely]] {
-                        ctx.error = error_code::unexpected_end;
-                        return;
-                     }
+                     if (typed_array_out_of_bounds(ctx, it, end, count, elem_byte_count, padding)) return;
                      it += padding;
 
                      if (!validate_and_resize(count)) {
@@ -1150,10 +1197,7 @@ namespace glz
                   return;
                }
 
-               if ((it + padding + count * sizeof(V)) > end) [[unlikely]] {
-                  ctx.error = error_code::unexpected_end;
-                  return;
-               }
+               if (typed_array_out_of_bounds(ctx, it, end, count, sizeof(V), padding)) return;
                it += padding;
 
                if (!validate_and_resize(count)) {
@@ -1222,10 +1266,7 @@ namespace glz
                }
                else if constexpr (std::endian::native == std::endian::big && sizeof(V) > 1) {
                   // On big endian, read and swap each element
-                  if ((it + n * sizeof(V)) > end) [[unlikely]] {
-                     ctx.error = error_code::unexpected_end;
-                     return;
-                  }
+                  if (typed_array_out_of_bounds(ctx, it, end, n, sizeof(V))) return;
                   for (size_t i = 0; i < n; ++i) {
                      std::memcpy(&value[i], it, sizeof(V));
                      byteswap_le(value[i]);
@@ -1234,12 +1275,11 @@ namespace glz
                }
                else {
                   // Little endian or single-byte: bulk memcpy
-                  if ((it + n * sizeof(V)) > end) [[unlikely]] {
-                     ctx.error = error_code::unexpected_end;
-                     return;
+                  if (typed_array_out_of_bounds(ctx, it, end, n, sizeof(V))) return;
+                  if (n) {
+                     std::memcpy(value.data(), it, n * sizeof(V));
+                     it += n * sizeof(V);
                   }
-                  std::memcpy(value.data(), it, n * sizeof(V));
-                  it += n * sizeof(V);
                }
             }
             else {
@@ -1365,10 +1405,7 @@ namespace glz
                n = value.size();
             }
 
-            if (uint64_t(end - it) < n * sizeof(V)) [[unlikely]] {
-               ctx.error = error_code::unexpected_end;
-               return;
-            }
+            if (typed_array_out_of_bounds(ctx, it, end, n, sizeof(V))) return;
             if constexpr (check_max_array_size(Opts) > 0) {
                if (n > check_max_array_size(Opts)) [[unlikely]] {
                   ctx.error = error_code::invalid_length;
@@ -1389,6 +1426,12 @@ namespace glz
                   value.shrink_to_fit();
                }
             }
+            else {
+               if (n > value.size()) {
+                  ctx.error = error_code::syntax_error;
+                  return;
+               }
+            }
 
             if constexpr (contiguous<T>) {
                if constexpr (std::endian::native == std::endian::big && sizeof(X) > 1) {
@@ -1405,8 +1448,10 @@ namespace glz
                }
                else {
                   // Little endian or single-byte: bulk memcpy
-                  std::memcpy(value.data(), it, n * sizeof(V));
-                  it += n * sizeof(V);
+                  if (n) {
+                     std::memcpy(value.data(), it, n * sizeof(V));
+                     it += n * sizeof(V);
+                  }
                }
             }
             else {
@@ -1908,6 +1953,9 @@ namespace glz
             constexpr auto N = detail::count_members<T>;
             if constexpr (N == 0) {
                // Handle empty structs by just reading and validating the generic_array header
+               if (invalid_end(ctx, it, end)) {
+                  return;
+               }
                const auto tag = uint8_t(*it);
                if (tag != tag::generic_array) [[unlikely]] {
                   ctx.error = error_code::syntax_error;
@@ -1929,6 +1977,9 @@ namespace glz
             }
          }
          else {
+            if (invalid_end(ctx, it, end)) {
+               return;
+            }
             const auto tag = uint8_t(*it);
             if (tag != tag::generic_array) [[unlikely]] {
                ctx.error = error_code::syntax_error;

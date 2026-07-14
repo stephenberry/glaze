@@ -92,6 +92,8 @@ add_subdirectory(exceptions_test)
 # Temporarily disabled for Clang std-module builds due to exception-mode BMI mismatch.
 # add_subdirectory(inplace_vector)
 add_subdirectory(float_write_test)
+add_subdirectory(size_optimization_test)
+add_subdirectory(inplace_vector)
 option(glaze_BUILD_PERFORMANCE_TESTS "Build performance tests" ON)
 if(glaze_BUILD_PERFORMANCE_TESTS)
     add_subdirectory(int_parsing)

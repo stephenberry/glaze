@@ -160,7 +160,7 @@ namespace glz::msgpack::detail
       if (!read_str_length(ctx, tag, it, end, len)) {
          return false;
       }
-      if ((it + len) > end) [[unlikely]] {
+      if (static_cast<size_t>(end - it) < len) [[unlikely]] {
          ctx.error = error_code::unexpected_end;
          return false;
       }
@@ -177,7 +177,7 @@ namespace glz::msgpack::detail
       if (!read_bin_length(ctx, tag, it, end, len)) {
          return false;
       }
-      if ((it + len) > end) [[unlikely]] {
+      if (static_cast<size_t>(end - it) < len) [[unlikely]] {
          ctx.error = error_code::unexpected_end;
          return false;
       }
@@ -592,6 +592,29 @@ namespace glz
       }
    };
 
+   // Fixed-size std::array<char, N>: read the string into the buffer, bounds-checked,
+   // zero-filling any unused tail so a shorter payload yields a deterministic buffer.
+   template <array_char_t T>
+   struct from<MSGPACK, T>
+   {
+      template <auto Opts, class Value, is_context Ctx, class It, class End>
+      GLZ_ALWAYS_INLINE static void op(Value&& value, uint8_t tag, Ctx&& ctx, It& it, const End& end) noexcept
+      {
+         std::string_view sv{};
+         if (!msgpack::detail::read_string_view(ctx, tag, it, end, sv)) {
+            return;
+         }
+         if (sv.size() > value.size()) [[unlikely]] {
+            ctx.error = error_code::syntax_error;
+            return;
+         }
+         std::memcpy(value.data(), sv.data(), sv.size());
+         if (sv.size() < value.size()) {
+            std::memset(value.data() + sv.size(), 0, value.size() - sv.size());
+         }
+      }
+   };
+
    template <glaze_object_t T>
       requires(!custom_read<T>)
    struct from<MSGPACK, T>
@@ -749,7 +772,13 @@ namespace glz
          if constexpr (!Opts.partial_read) {
             value.clear();
             if constexpr (has_reserve<std::decay_t<Value>>) {
-               value.reserve(len);
+               // Each map entry is a key plus a value, so it occupies at least two bytes on the
+               // wire and a valid len can never exceed the bytes remaining. Cap the reservation
+               // against the input size to avoid an allocation bomb from a tiny header (e.g. map32
+               // claiming 2^32-1 entries); the loop below still parses every entry and reports
+               // unexpected_end on truncated input.
+               const size_t remaining = size_t(end - it);
+               value.reserve(len < remaining ? len : remaining);
             }
 
             for (size_t i = 0; i < len && ctx.error == error_code::none; ++i) {
@@ -858,7 +887,12 @@ namespace glz
          if constexpr (emplace_backable<std::decay_t<Value>>) {
             value.clear();
             if constexpr (has_reserve<std::decay_t<Value>>) {
-               value.reserve(len);
+               // Each element occupies at least one byte on the wire, so a valid len can never
+               // exceed the bytes remaining. Cap the reservation against the input size to avoid an
+               // allocation bomb from a tiny header (e.g. array32 claiming 2^32-1 elements); the
+               // loop below still parses every element and reports unexpected_end on truncated input.
+               const size_t remaining = size_t(end - it);
+               value.reserve(len < remaining ? len : remaining);
             }
             for (size_t i = 0; i < len && ctx.error == error_code::none; ++i) {
                value.emplace_back();

@@ -430,6 +430,163 @@ suite eetf_to_json_tests = [] {
       expect(json == R"([99,"spiders"])") << json;
    };
 
+   "eetf_to_json small big integer"_test = [] {
+      const std::array<std::uint8_t, 5> buffer{uint8_t(glz::eetf_magic_version), uint8_t(ERL_SMALL_BIG_EXT), 1, 0, 42};
+
+      std::string json{};
+      expect(!glz::eetf_to_json(buffer, json));
+      expect(json == "42") << json;
+   };
+
+   "eetf_to_json truncated small big integer"_test = [] {
+      auto expect_unexpected_end = [](const auto& buffer) {
+         std::string json{};
+         const auto ec = glz::eetf_to_json(buffer, json);
+         expect(ec.ec == glz::error_code::unexpected_end);
+      };
+
+      const std::array<std::uint8_t, 2> missing_size{uint8_t(glz::eetf_magic_version), uint8_t(ERL_SMALL_BIG_EXT)};
+      const std::array<std::uint8_t, 3> missing_sign{uint8_t(glz::eetf_magic_version), uint8_t(ERL_SMALL_BIG_EXT), 1};
+      const std::array<std::uint8_t, 4> missing_digits{uint8_t(glz::eetf_magic_version), uint8_t(ERL_SMALL_BIG_EXT), 8,
+                                                       0};
+      const std::array<std::uint8_t, 6> partial_digits{
+         uint8_t(glz::eetf_magic_version), uint8_t(ERL_SMALL_BIG_EXT), 3, 0, 1, 2};
+
+      expect_unexpected_end(missing_size);
+      expect_unexpected_end(missing_sign);
+      expect_unexpected_end(missing_digits);
+      expect_unexpected_end(partial_digits);
+   };
+
+   "eetf_to_json empty buffer"_test = [] {
+      // No version byte at all: the entry guard rejects before decode_version reads the tag.
+      const std::string buffer{};
+      std::string json{};
+      const auto ec = glz::eetf_to_json(buffer, json);
+      expect(ec.ec == glz::error_code::no_read_input);
+   };
+
+   "eetf_to_json truncated map"_test = [] {
+      auto expect_unexpected_end = [](const auto& buffer) {
+         std::string json{};
+         const auto ec = glz::eetf_to_json(buffer, json);
+         expect(ec.ec == glz::error_code::unexpected_end);
+      };
+
+      // ERL_MAP_EXT declares arity 1 but the buffer ends before any key/value entry.
+      const std::array<std::uint8_t, 6> missing_entries{
+         uint8_t(glz::eetf_magic_version), uint8_t(ERL_MAP_EXT), 0, 0, 0, 1};
+      // ERL_MAP_EXT arity 1 with a key tag (ERL_ATOM_EXT) as the final byte: the tag must be
+      // classified without ei_get_type reading its 2-byte length header past the end.
+      const std::array<std::uint8_t, 7> truncated_key{
+         uint8_t(glz::eetf_magic_version), uint8_t(ERL_MAP_EXT), 0, 0, 0, 1, uint8_t(ERL_ATOM_EXT)};
+
+      expect_unexpected_end(missing_entries);
+      expect_unexpected_end(truncated_key);
+   };
+
+   "eetf_to_json list missing tail"_test = [] {
+      // ERL_LIST_EXT, one element (small integer 5), but the ERL_NIL_EXT tail is missing.
+      const std::array<std::uint8_t, 8> missing_tail{
+         uint8_t(glz::eetf_magic_version), uint8_t(ERL_LIST_EXT), 0, 0, 0, 1, uint8_t(ERL_SMALL_INTEGER_EXT), 5};
+      std::string json{};
+      const auto ec = glz::eetf_to_json(missing_tail, json);
+      expect(ec.ec == glz::error_code::unexpected_end);
+
+      // The same list with the NIL tail present parses cleanly: the tail guard must not reject it.
+      const std::array<std::uint8_t, 9> with_tail{uint8_t(glz::eetf_magic_version),
+                                                  uint8_t(ERL_LIST_EXT),
+                                                  0,
+                                                  0,
+                                                  0,
+                                                  1,
+                                                  uint8_t(ERL_SMALL_INTEGER_EXT),
+                                                  5,
+                                                  uint8_t(ERL_NIL_EXT)};
+      json.clear();
+      expect(!glz::eetf_to_json(with_tail, json));
+      expect(json == "[5]") << json;
+   };
+
+   "eetf_to_json list improper tail"_test = [] {
+      // ERL_LIST_EXT with one element and a non-NIL tail tag (ERL_MAP_EXT) as the final byte. The
+      // tail must be classified from its single tag byte without ei_get_type reading the 4-byte
+      // length header past the end of the buffer.
+      const std::array<std::uint8_t, 9> buffer{uint8_t(glz::eetf_magic_version),
+                                               uint8_t(ERL_LIST_EXT),
+                                               0,
+                                               0,
+                                               0,
+                                               1,
+                                               uint8_t(ERL_SMALL_INTEGER_EXT),
+                                               5,
+                                               uint8_t(ERL_MAP_EXT)};
+      std::string json{};
+      const auto ec = glz::eetf_to_json(buffer, json);
+      expect(ec.ec == glz::error_code::array_element_not_found);
+   };
+
+   "eetf_to_json truncated scalar"_test = [] {
+      auto expect_unexpected_end = [](const auto& buffer) {
+         std::string json{};
+         const auto ec = glz::eetf_to_json(buffer, json);
+         expect(ec.ec == glz::error_code::unexpected_end);
+      };
+
+      // Numeric tags whose fixed payload is cut off after the tag: ei_decode_long/double must not
+      // read it off the raw pointer before the bounds check.
+      const std::array<std::uint8_t, 2> small_int{uint8_t(glz::eetf_magic_version), uint8_t(ERL_SMALL_INTEGER_EXT)};
+      const std::array<std::uint8_t, 2> integer{uint8_t(glz::eetf_magic_version), uint8_t(ERL_INTEGER_EXT)};
+      const std::array<std::uint8_t, 4> integer_partial{uint8_t(glz::eetf_magic_version), uint8_t(ERL_INTEGER_EXT), 0,
+                                                        0};
+      const std::array<std::uint8_t, 2> new_float{uint8_t(glz::eetf_magic_version), uint8_t(NEW_FLOAT_EXT)};
+      const std::array<std::uint8_t, 2> old_float{uint8_t(glz::eetf_magic_version), uint8_t(ERL_FLOAT_EXT)};
+
+      expect_unexpected_end(small_int);
+      expect_unexpected_end(integer);
+      expect_unexpected_end(integer_partial);
+      expect_unexpected_end(new_float);
+      expect_unexpected_end(old_float);
+   };
+
+   "eetf_to_json truncated container header"_test = [] {
+      auto expect_unexpected_end = [](const auto& buffer) {
+         std::string json{};
+         const auto ec = glz::eetf_to_json(buffer, json);
+         expect(ec.ec == glz::error_code::unexpected_end);
+      };
+
+      // Container tags whose 1- or 4-byte arity is cut off after the tag: decode_*_header must not
+      // read it off the raw pointer before the bounds check.
+      const std::array<std::uint8_t, 2> list{uint8_t(glz::eetf_magic_version), uint8_t(ERL_LIST_EXT)};
+      const std::array<std::uint8_t, 4> list_partial{uint8_t(glz::eetf_magic_version), uint8_t(ERL_LIST_EXT), 0, 0};
+      const std::array<std::uint8_t, 2> map{uint8_t(glz::eetf_magic_version), uint8_t(ERL_MAP_EXT)};
+      const std::array<std::uint8_t, 2> small_tuple{uint8_t(glz::eetf_magic_version), uint8_t(ERL_SMALL_TUPLE_EXT)};
+      const std::array<std::uint8_t, 2> large_tuple{uint8_t(glz::eetf_magic_version), uint8_t(ERL_LARGE_TUPLE_EXT)};
+
+      expect_unexpected_end(list);
+      expect_unexpected_end(list_partial);
+      expect_unexpected_end(map);
+      expect_unexpected_end(small_tuple);
+      expect_unexpected_end(large_tuple);
+   };
+
+   "eetf_to_json oversized list arity terminates"_test = [] {
+      // List header declares 2^32-1 elements but only one is present. The sequence loop must stop
+      // on the first exhausted read rather than spinning through the declared arity.
+      const std::array<std::uint8_t, 8> buffer{uint8_t(glz::eetf_magic_version),
+                                               uint8_t(ERL_LIST_EXT),
+                                               0xFF,
+                                               0xFF,
+                                               0xFF,
+                                               0xFF,
+                                               uint8_t(ERL_SMALL_INTEGER_EXT),
+                                               1};
+      std::string json{};
+      const auto ec = glz::eetf_to_json(buffer, json);
+      expect(ec.ec == glz::error_code::unexpected_end);
+   };
+
    "eetf_to_json no header"_test = [] {
       constexpr int items = 3;
       std::vector<simple> v;

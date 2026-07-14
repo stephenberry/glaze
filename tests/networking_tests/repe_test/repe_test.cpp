@@ -1,6 +1,7 @@
 // Glaze Library
 // For the license information refer to glaze.hpp
 
+#include <cstring>
 #include <latch>
 #include <span>
 #include <thread>
@@ -707,6 +708,79 @@ suite validation_tests = [] {
       auto response = call_json(server, {"/hello"});
 
       // Should succeed and not have validation errors
+      expect(response.header.ec == glz::error_code::none);
+      expect(response.body == R"("Hello")");
+   };
+};
+
+// Regression test for the integer-overflow out-of-bounds read fixed in PR #2638.
+// query_length and body_length are attacker-controlled 64-bit header fields. Choosing
+// them so that 48 + query_length + body_length wraps mod 2^64 back to a small value lets
+// a tiny buffer satisfy both the header.length check and the buffer-size check, after
+// which the parser would build a query view spanning ~2^63 bytes over a ~100-byte buffer.
+// registry::call then hands that view to endpoints.find(), whose transparent hashing reads
+// far past the end of the buffer. The fix rejects the wrap as invalid_header before any
+// view is constructed. Under the ASAN CI build this test additionally traps the over-read
+// itself should the guard ever regress.
+suite overflow_validation_tests = [] {
+   using namespace test_helpers;
+
+   // Build a raw REPE message whose header advertises wrapping query/body lengths over an
+   // exact-size (small) buffer: 48 + query_length + body_length == total_size (mod 2^64).
+   auto make_overflow_buffer = [](uint64_t total_size) {
+      std::string buffer(total_size, '\0');
+      repe::header hdr{};
+      hdr.spec = repe::repe_magic;
+      hdr.version = 1;
+      hdr.query_length = uint64_t(1) << 63;
+      hdr.body_length = (uint64_t(1) << 63) + total_size - sizeof(repe::header);
+      hdr.length = total_size; // equals the wrapped expected length, so the field check passes
+      std::memcpy(buffer.data(), &hdr, sizeof(repe::header));
+      return buffer;
+   };
+
+   "parse_request_rejects_length_overflow"_test = [&] {
+      const auto buffer = make_overflow_buffer(100);
+      const auto result = repe::parse_request(std::span<const char>{buffer});
+      expect(!result) << "wrapping query/body lengths must be rejected";
+      expect(result.ec == glz::error_code::invalid_header);
+   };
+
+   "registry_call_rejects_length_overflow"_test = [&] {
+      glz::registry server{};
+      my_functions_t obj{};
+      server.on(obj);
+
+      const auto buffer = make_overflow_buffer(100);
+      std::string response_buffer;
+      // Must return an error rather than constructing an out-of-bounds query view.
+      server.call(std::span<const char>{buffer}, response_buffer);
+
+      repe::message response{};
+      expect(repe::from_buffer(response_buffer, response) == glz::error_code::none);
+      expect(response.header.ec == glz::error_code::invalid_header);
+      expect(response.body.find("overflow") != std::string::npos) << response.body;
+   };
+
+   "from_buffer_rejects_length_overflow"_test = [&] {
+      const auto buffer = make_overflow_buffer(100);
+      repe::message msg{};
+      const auto ec = repe::from_buffer(buffer, msg);
+      expect(ec == glz::error_code::invalid_header);
+   };
+
+   "extract_query_rejects_length_overflow"_test = [&] {
+      const auto buffer = make_overflow_buffer(100);
+      const auto query = repe::extract_query(buffer);
+      expect(query.empty()) << "overflowing query_length must not yield a view";
+   };
+
+   "valid_message_after_overflow_guard"_test = [] {
+      // The overflow guard must not reject legitimate messages.
+      glz::registry server{};
+      my_functions_t obj{};
+      server.on(obj);
+      auto response = call_json(server, {"/hello"});
       expect(response.header.ec == glz::error_code::none);
       expect(response.body == R"("Hello")");
    };

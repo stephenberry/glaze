@@ -180,6 +180,94 @@ struct Event {
 };
 ```
 
+## Per-Field Format Customization
+
+The clock type alone decides the default representation (ISO 8601 for `system_clock`, numeric count for `steady_clock`, and so on). When a single field needs a different shape, the per-field wrappers below decouple the *format* from the *type*. They are applied inside `glz::object(...)` within a `glz::meta<T>` specialization and require `#include "glaze/chrono.hpp"`.
+
+### `glz::date_format` — custom strftime-subset pattern
+
+`glz::date_format(&T::member, "pattern")` serializes a `system_clock` time point (or a `year_month_day`) using a `strftime`-style pattern instead of ISO 8601:
+
+```cpp
+#include "glaze/chrono.hpp"
+
+struct Event {
+    std::chrono::system_clock::time_point start{};
+    std::chrono::sys_days day{};
+};
+
+template <>
+struct glz::meta<Event> {
+    using T = Event;
+    static constexpr auto value = glz::object(
+        "start", glz::date_format(&T::start, "%Y-%m-%d %H:%M:%S"),  // "2026-06-18 12:34:56"
+        "day",   glz::date_format(&T::day,   "%Y/%m/%d"));          // "2026/06/18"
+};
+```
+
+The wrapper is bidirectional: the same pattern parses the value back on read.
+
+```cpp
+Event e{};
+e.start = std::chrono::sys_days{std::chrono::year{2026} / 6 / 18} + std::chrono::hours{12} +
+          std::chrono::minutes{34} + std::chrono::seconds{56};
+
+std::string json = glz::write_json(e).value();   // {"start":"2026-06-18 12:34:56","day":"..."}
+
+Event parsed{};
+auto ec = glz::read_json(parsed, json);           // parsed.start == e.start
+```
+
+The member pointer and pattern are passed as ordinary arguments (not template parameters), so fields that share a member type but differ in format do not each spin up a fresh set of template instantiations. The pattern is still a compile-time literal and is validated at compile time.
+
+Supported conversion specifiers (locale-independent by design):
+
+| Token | Meaning              | Token | Meaning                |
+|-------|----------------------|-------|------------------------|
+| `%Y`  | year (4 digits)      | `%H`  | hour, 24-hour (2)      |
+| `%m`  | month (2 digits)     | `%M`  | minute (2 digits)      |
+| `%d`  | day (2 digits)       | `%S`  | second (2 digits)      |
+| `%F`  | `%Y-%m-%d`           | `%T`  | `%H:%M:%S`             |
+| `%%`  | literal `%`          |       |                        |
+
+The pattern is validated at compile time:
+
+- An unsupported token (e.g. `%A`, `%j`, `%z`) is a hard compile error.
+- The pattern must contain a full calendar date (`%Y %m %d`, or `%F`); a time-only pattern cannot reconstruct an absolute time point and is rejected.
+- A `year_month_day` field rejects time tokens (`%H %M %S %T`).
+
+Notes and limitations (MVP scope):
+
+- **Times are treated as UTC wall-clock.** There is no timezone token; the decomposed fields are UTC, matching the ISO 8601 writer.
+- **The four-digit-year range still applies.** As with the ISO 8601 writers, a year outside `[0000, 9999]` (or a non-`ok()` `year_month_day`) fails to serialize with `error_code::constraint_violated` rather than emitting wrap-around digits.
+- **`%S` writes integer seconds only.** Sub-second precision is truncated on write (the format you typed has nowhere to put it), so round-tripping a finer-than-seconds value through a `%S` pattern is lossy by design. Use the default ISO 8601 representation when you need sub-second fidelity. Explicit-width fraction tokens (`%3S`/`%6S`/`%9S`) are a planned extension.
+- **Text/JSON-family backends only.** `date_format` is a textual wrapper that routes through the JSON serializer, so it also works for the JSON-family text outputs (NDJSON, stencil/mustache). Serializing a field that uses it to a backend with its own native encoding (BEVE, CBOR, MsgPack, BSON, or TOML) is a compile error (an undefined `glz::to<Format, …>`) rather than a silent miscoding.
+
+### `glz::epoch_count` — per-field Unix timestamp
+
+`glz::epoch_count<Duration>(&T::member)` serializes a `system_clock` time point as a numeric Unix timestamp in units of `Duration`. It is the per-field counterpart to the `glz::epoch_time` storage wrapper, letting one field be an epoch count while others stay ISO 8601:
+
+```cpp
+#include "glaze/chrono.hpp"
+
+struct Reading {
+    std::chrono::system_clock::time_point observed{};   // ISO 8601 (default)
+    std::chrono::sys_time<std::chrono::milliseconds> logged{};
+};
+
+template <>
+struct glz::meta<Reading> {
+    using T = Reading;
+    static constexpr auto value = glz::object(
+        "observed", &T::observed,                                       // "2026-06-18T12:34:56Z"
+        "logged",   glz::epoch_count<std::chrono::milliseconds>(&T::logged));  // 1781786096789
+};
+```
+
+Unlike `glz::epoch_time<Duration>` (a storage type you declare your member as), `glz::epoch_count` wraps an ordinary `system_clock` time-point member in place, so you can keep the field's native type. Like `date_format`, it routes through the JSON serializer (so it also works for NDJSON and stencil output) and is a compile error under the native-encoding backends (BEVE, CBOR, MsgPack, BSON, TOML).
+
+The count is read as a JSON integer: exponent form (`1e3` → `1000`) is accepted, while fractional values (`1.5`) and quoted numbers (`"1500"`) are rejected with `error_code::parse_error`.
+
 ## Complete Example
 
 ```cpp
@@ -263,6 +351,8 @@ TOML has native datetime types (not quoted strings). When using `glz::write_toml
 - `year_month_day` → TOML Local Date (`2024-06-15`)
 - `hh_mm_ss<Duration>` → TOML Local Time (`10:30:45.123`)
 - Durations and other time points → Numeric values
+
+> The per-field `glz::date_format` / `glz::epoch_count` wrappers are JSON-text-only and do **not** compile under `glz::write_toml`. Native (unwrapped) chrono members serialize as TOML datetimes as shown above; only the per-field format wrappers are restricted.
 
 See [TOML Documentation](./toml.md#datetime-support) for full details.
 

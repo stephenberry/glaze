@@ -27,6 +27,22 @@ struct my_struct
    std::array<uint64_t, 3> arr = {1, 2, 3};
 };
 
+struct cbor_mod4_object
+{
+   int x{};
+   int y{};
+   int z{};
+};
+
+struct cbor_front_hash_object
+{
+   int aaaa{};
+   int aaab{};
+   int aaba{};
+   int aabb{};
+   int abaa{};
+};
+
 template <>
 struct glz::meta<my_struct>
 {
@@ -2256,6 +2272,26 @@ void past_fuzzing_issues()
 
 void error_tests()
 {
+   const auto read_exact = []<class T, size_t N>(const std::array<uint8_t, N>& input) {
+      auto buffer = std::make_unique_for_overwrite<char[]>(N);
+      std::copy_n(reinterpret_cast<const char*>(input.data()), N, buffer.get());
+      T value{};
+      return glz::read_cbor(value, std::string_view{buffer.get(), N});
+   };
+
+   "empty object key stays within the buffer"_test = [=] {
+      static_assert(glz::hash_info<cbor_mod4_object>.type == glz::hash_type::mod4);
+      constexpr std::array<uint8_t, 3> input{0xa1, 0x60, 0x00};
+      expect(read_exact.template operator()<cbor_mod4_object>(input).ec == glz::error_code::unknown_key);
+   };
+
+   "short front hash key stays within the buffer"_test = [=] {
+      static_assert(glz::hash_info<cbor_front_hash_object>.type == glz::hash_type::front_hash);
+      static_assert(glz::hash_info<cbor_front_hash_object>.front_hash_bytes == 4);
+      constexpr std::array<uint8_t, 4> input{0xa1, 0x61, 'a', 0x00};
+      expect(read_exact.template operator()<cbor_front_hash_object>(input).ec == glz::error_code::unknown_key);
+   };
+
    "truncated_input"_test = [] {
       std::string buffer;
       buffer.push_back(static_cast<char>(glz::cbor::initial_byte(glz::cbor::major::uint, 24)));
@@ -3365,7 +3401,158 @@ void custom_variant_ambiguity_tests()
       cbor_fc_variant r{};
       expect(not glz::read_cbor(r, s));
    };
+
+   "out-of-range variant index is rejected"_test = [] {
+      using V = std::variant<int32_t, double>;
+      std::string buf;
+      expect(not glz::write_cbor(V{int32_t{111}}, buf)); // [index, value], holds index 0
+      // Byte 1 is the type index (a small CBOR uint); force it past the two alternatives.
+      buf[1] = static_cast<char>(0x07);
+      V in{};
+      expect(glz::read_cbor(in, buf).ec == glz::error_code::no_matching_variant_type);
+   };
 }
+
+// Regression coverage for https://github.com/stephenberry/glaze/issues/2647
+// std::byte ranges must encode as CBOR byte strings (not be ambiguous), and fixed
+// std::array<char, N> / std::array<std::byte, N> must round trip.
+suite cbor_byte_and_char_array_tests = [] {
+   "cbor std::vector<std::byte> is a byte string"_test = [] {
+      std::vector<std::byte> src{std::byte{1}, std::byte{2}, std::byte{0xFF}, std::byte{0}};
+      std::string buffer{};
+      expect(not glz::write_cbor(src, buffer));
+      // Major type 2 (byte string), length 4: initial byte 0x44, then 4 data bytes.
+      expect(buffer.size() == 5);
+      expect(static_cast<uint8_t>(buffer[0]) == 0x44);
+      std::vector<std::byte> dst{};
+      expect(not glz::read_cbor(dst, buffer));
+      expect(dst == src);
+   };
+
+   "cbor std::array<std::byte, N> round trips"_test = [] {
+      std::array<std::byte, 4> src{std::byte{1}, std::byte{2}, std::byte{3}, std::byte{4}};
+      std::string buffer{};
+      expect(not glz::write_cbor(src, buffer));
+      std::array<std::byte, 4> dst{};
+      expect(not glz::read_cbor(dst, buffer));
+      expect(dst == src);
+   };
+
+   "cbor std::array<std::byte, N> zero-fills and rejects oversize"_test = [] {
+      std::vector<std::byte> short_src{std::byte{5}, std::byte{6}};
+      std::string buffer{};
+      expect(not glz::write_cbor(short_src, buffer));
+      std::array<std::byte, 4> dst{std::byte{0x77}, std::byte{0x77}, std::byte{0x77}, std::byte{0x77}};
+      expect(not glz::read_cbor(dst, buffer));
+      expect(dst == (std::array<std::byte, 4>{std::byte{5}, std::byte{6}, std::byte{0}, std::byte{0}}));
+
+      std::vector<std::byte> big_src(10, std::byte{1});
+      std::string big_buffer{};
+      expect(not glz::write_cbor(big_src, big_buffer));
+      std::array<std::byte, 4> small{};
+      expect(bool(glz::read_cbor(small, big_buffer)));
+   };
+
+   "cbor std::array<uint8_t, N> round trips as a byte string"_test = [] {
+      std::array<uint8_t, 4> src{1, 2, 3, 255};
+      std::string buffer{};
+      expect(not glz::write_cbor(src, buffer));
+      expect(buffer.size() == 5);
+      expect(static_cast<uint8_t>(buffer[0]) == 0x44);
+      std::array<uint8_t, 4> dst{};
+      expect(not glz::read_cbor(dst, buffer));
+      expect(dst == src);
+      // Cross-readable with std::vector<uint8_t> (both byte strings).
+      std::vector<uint8_t> as_vec{};
+      expect(not glz::read_cbor(as_vec, buffer));
+      expect(as_vec == (std::vector<uint8_t>{1, 2, 3, 255}));
+   };
+
+   "cbor std::array<char, N> round trips"_test = [] {
+      std::array<char, 16> src{'h', 'e', 'l', 'l', 'o'};
+      std::string buffer{};
+      expect(not glz::write_cbor(src, buffer));
+      std::array<char, 16> dst{};
+      expect(not glz::read_cbor(dst, buffer));
+      expect(dst == src);
+   };
+
+   "cbor std::array<char, N> zero-fills and rejects oversize"_test = [] {
+      std::string short_src = "abc";
+      std::string buffer{};
+      expect(not glz::write_cbor(short_src, buffer));
+      std::array<char, 8> dst{'Z', 'Z', 'Z', 'Z', 'Z', 'Z', 'Z', 'Z'};
+      expect(not glz::read_cbor(dst, buffer));
+      expect(std::string_view(dst.data(), 3) == "abc");
+      for (size_t i = 3; i < dst.size(); ++i) {
+         expect(dst[i] == '\0');
+      }
+
+      std::string big_src = "0123456789";
+      std::string big_buffer{};
+      expect(not glz::write_cbor(big_src, big_buffer));
+      std::array<char, 4> small{};
+      expect(bool(glz::read_cbor(small, big_buffer)));
+   };
+};
+
+// Follow-up to #2650: CBOR treats std::byte and uint8_t/unsigned char ranges uniformly.
+// Every contiguous byte-like range encodes as a CBOR byte string (major type 2) regardless of
+// element type or container, and the variants are cross-readable on the wire.
+suite cbor_byte_uint8_unify_tests = [] {
+   "cbor uint8 and byte vectors produce identical bytes"_test = [] {
+      std::vector<uint8_t> v_u8{0x10, 0x20, 0x30, 0x40};
+      std::vector<std::byte> v_byte{std::byte{0x10}, std::byte{0x20}, std::byte{0x30}, std::byte{0x40}};
+      std::string buf_u8{};
+      std::string buf_byte{};
+      expect(not glz::write_cbor(v_u8, buf_u8));
+      expect(not glz::write_cbor(v_byte, buf_byte));
+      // Both are byte strings, so the encoded bytes match exactly.
+      expect(buf_u8 == buf_byte);
+      expect(static_cast<uint8_t>(buf_u8[0]) == 0x44); // bstr, length 4
+   };
+
+   "cbor std::span<uint8_t> encodes as a byte string"_test = [] {
+      std::array<uint8_t, 4> backing{0x01, 0x02, 0x03, 0x04};
+      std::span<uint8_t> sp{backing};
+      std::string buffer{};
+      expect(not glz::write_cbor(sp, buffer));
+      // Previously a uint8_t span fell through to an RFC 8746 typed array (tag + bstr); it must
+      // now be a plain byte string, matching std::span<std::byte> and std::vector<uint8_t>.
+      expect(buffer.size() == 5);
+      expect(static_cast<uint8_t>(buffer[0]) == 0x44);
+
+      std::array<std::byte, 4> backing_b{std::byte{1}, std::byte{2}, std::byte{3}, std::byte{4}};
+      std::span<std::byte> sp_b{backing_b};
+      std::string buffer_b{};
+      expect(not glz::write_cbor(sp_b, buffer_b));
+      expect(buffer == buffer_b);
+   };
+
+   "cbor byte/uint8 vectors are cross-readable"_test = [] {
+      std::vector<std::byte> src{std::byte{7}, std::byte{8}, std::byte{9}};
+      std::string buffer{};
+      expect(not glz::write_cbor(src, buffer));
+      std::vector<uint8_t> as_u8{};
+      expect(not glz::read_cbor(as_u8, buffer)); // byte string -> uint8_t vector
+      expect(as_u8 == (std::vector<uint8_t>{7, 8, 9}));
+
+      std::string buffer2{};
+      expect(not glz::write_cbor(as_u8, buffer2));
+      std::vector<std::byte> as_byte{};
+      expect(not glz::read_cbor(as_byte, buffer2)); // and back again
+      expect(as_byte == src);
+   };
+
+   "cbor byte/uint8 fixed arrays are cross-readable"_test = [] {
+      std::array<uint8_t, 4> src{0xAA, 0xBB, 0xCC, 0xDD};
+      std::string buffer{};
+      expect(not glz::write_cbor(src, buffer));
+      std::array<std::byte, 4> dst{};
+      expect(not glz::read_cbor(dst, buffer));
+      expect(dst == (std::array<std::byte, 4>{std::byte{0xAA}, std::byte{0xBB}, std::byte{0xCC}, std::byte{0xDD}}));
+   };
+};
 
 int main()
 {

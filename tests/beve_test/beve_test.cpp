@@ -2536,6 +2536,26 @@ suite example_reflection_test = [] {
    };
 };
 
+struct untagged_bounds_inner
+{
+   int x{};
+   struct glaze
+   {
+      using T = untagged_bounds_inner;
+      static constexpr auto value = glz::object("x", &T::x);
+   };
+};
+
+struct untagged_bounds_outer
+{
+   untagged_bounds_inner a{};
+   struct glaze
+   {
+      using T = untagged_bounds_outer;
+      static constexpr auto value = glz::object("a", &T::a);
+   };
+};
+
 suite example_reflection_without_keys_test = [] {
    "example_reflection_without_keys"_test = [] {
       std::string without_keys;
@@ -2590,6 +2610,23 @@ suite example_reflection_without_keys_test = [] {
       expect(decoded.i == 42);
       expect(decoded.d == 2.718);
       expect(decoded.hello == "world");
+   };
+
+   "read_beve_untagged truncated nested struct"_test = [] {
+      untagged_bounds_outer obj{};
+      obj.a.x = 7;
+      auto encoded = glz::write_beve_untagged(obj);
+      expect(encoded.has_value());
+
+      // Keep only the outer generic_array header (tag + compressed count) so the
+      // nested struct member begins exactly at end-of-input. Read through an
+      // exact-size, non-padded string_view so an over-read lands past the buffer.
+      std::vector<char> truncated(encoded->begin(), encoded->begin() + 2);
+      std::string_view buffer{truncated.data(), truncated.size()};
+
+      untagged_bounds_outer decoded{};
+      auto ec = glz::read_beve_untagged(decoded, buffer);
+      expect(bool(ec));
    };
 };
 
@@ -2658,6 +2695,16 @@ namespace variants
          D d{};
          expect(not glz::write<glz::opt_true<glz::opts{.format = glz::BEVE}, glz::structs_as_arrays_opt_tag{}>>(
             d, out)); // testing compilation
+      };
+
+      "out-of-range variant index is rejected"_test = [] {
+         using V = std::variant<int32_t, double>;
+         std::string buf;
+         expect(not glz::write_beve(V{int32_t{111}}, buf)); // holds index 0
+         // Byte 1 is the compressed type index; force it past the two alternatives.
+         buf[1] = static_cast<char>(7 << 2);
+         V in{};
+         expect(glz::read_beve(in, buf).ec == glz::error_code::no_matching_variant_type);
       };
    };
 }
@@ -6826,6 +6873,193 @@ suite beve_fully_custom_variant_tests = [] {
       expect(not glz::write_beve(v, s));
       beve_fc_variant r{};
       expect(not glz::read_beve(r, s));
+   };
+};
+
+suite beve_fixed_array_bounds_tests = [] {
+   "beve fixed array rejects oversized complex typed array"_test = [] {
+      std::vector<std::complex<double>> src(8, std::complex<double>{1.0, 2.0});
+      std::string buffer{};
+      expect(not glz::write_beve(src, buffer));
+      std::array<std::complex<double>, 2> dst{};
+      expect(bool(glz::read_beve(dst, buffer)));
+   };
+
+   "beve fixed array rejects oversized bool typed array"_test = [] {
+      std::vector<bool> src(64, true);
+      std::string buffer{};
+      expect(not glz::write_beve(src, buffer));
+      std::array<bool, 2> dst{};
+      expect(bool(glz::read_beve(dst, buffer)));
+   };
+
+   "beve fixed bool array supports partial reads"_test = [] {
+      std::vector<bool> src{true, false, true, true, false, true, false, false};
+      std::string buffer{};
+      expect(not glz::write_beve(src, buffer));
+      std::array<bool, 2> dst{};
+      constexpr glz::opts partial{.format = glz::BEVE, .partial_read = true};
+      expect(not glz::read<partial>(dst, buffer));
+      expect(dst == std::array{true, false});
+   };
+
+   "beve fixed array exact-size typed arrays round trip"_test = [] {
+      {
+         std::array<std::complex<double>, 3> src{{{1, 2}, {3, 4}, {5, 6}}};
+         std::string buffer{};
+         expect(not glz::write_beve(src, buffer));
+         std::array<std::complex<double>, 3> dst{};
+         expect(not glz::read_beve(dst, buffer));
+         expect(src == dst);
+      }
+      {
+         std::array<bool, 5> src{true, false, true, true, false};
+         std::string buffer{};
+         expect(not glz::write_beve(src, buffer));
+         std::array<bool, 5> dst{};
+         expect(not glz::read_beve(dst, buffer));
+         expect(src == dst);
+      }
+   };
+};
+
+// Regression coverage for https://github.com/stephenberry/glaze/issues/2647
+// std::byte ranges must serialize as a compact u8 typed array (identical to uint8_t),
+// not an inflated generic array, and fixed std::array<char, N> must round trip.
+struct byte_packet_t
+{
+   std::vector<std::byte> payload{};
+   int id{};
+};
+
+suite beve_byte_and_char_array_tests = [] {
+   "std::vector<std::byte> uses compact u8 typed array"_test = [] {
+      std::vector<std::byte> src{std::byte{0}, std::byte{1}, std::byte{0x7f}, std::byte{0xff}};
+      std::string byte_buffer{};
+      expect(not glz::write_beve(src, byte_buffer));
+
+      // Wire format must be byte-for-byte identical to the equivalent uint8_t vector.
+      std::vector<uint8_t> u8{0, 1, 0x7f, 0xff};
+      std::string u8_buffer{};
+      expect(not glz::write_beve(u8, u8_buffer));
+      expect(byte_buffer == u8_buffer);
+
+      // Compact: tag + compressed size + N data bytes (no per-element headers).
+      expect(byte_buffer.size() == 2 + src.size());
+
+      std::vector<std::byte> dst{};
+      expect(not glz::read_beve(dst, byte_buffer));
+      expect(dst == src);
+   };
+
+   "std::byte and uint8_t are cross-readable"_test = [] {
+      std::vector<std::byte> src{std::byte{10}, std::byte{20}, std::byte{30}};
+      std::string buffer{};
+      expect(not glz::write_beve(src, buffer));
+
+      std::vector<uint8_t> as_u8{};
+      expect(not glz::read_beve(as_u8, buffer));
+      expect(as_u8 == (std::vector<uint8_t>{10, 20, 30}));
+
+      std::vector<uint8_t> u8{1, 2, 3};
+      std::string u8_buffer{};
+      expect(not glz::write_beve(u8, u8_buffer));
+      std::vector<std::byte> as_byte{};
+      expect(not glz::read_beve(as_byte, u8_buffer));
+      expect(as_byte == (std::vector<std::byte>{std::byte{1}, std::byte{2}, std::byte{3}}));
+   };
+
+   "std::array<std::byte, N> round trips"_test = [] {
+      std::array<std::byte, 4> src{std::byte{1}, std::byte{2}, std::byte{3}, std::byte{4}};
+      std::string buffer{};
+      expect(not glz::write_beve(src, buffer));
+      expect(buffer.size() == 2 + src.size());
+      std::array<std::byte, 4> dst{};
+      expect(not glz::read_beve(dst, buffer));
+      expect(dst == src);
+   };
+
+   "empty std::vector<std::byte> round trips"_test = [] {
+      std::vector<std::byte> src{};
+      std::string buffer{};
+      expect(not glz::write_beve(src, buffer));
+      std::vector<std::byte> dst{std::byte{9}};
+      expect(not glz::read_beve(dst, buffer));
+      expect(dst.empty());
+   };
+
+   "std::deque<std::byte> (non-contiguous) round trips"_test = [] {
+      std::deque<std::byte> src{std::byte{7}, std::byte{8}, std::byte{9}};
+      std::string buffer{};
+      expect(not glz::write_beve(src, buffer));
+      std::deque<std::byte> dst{};
+      expect(not glz::read_beve(dst, buffer));
+      expect(dst == src);
+   };
+
+   "std::byte vector renders to JSON as numbers"_test = [] {
+      std::vector<std::byte> src{std::byte{1}, std::byte{200}};
+      std::string buffer{};
+      expect(not glz::write_beve(src, buffer));
+      std::string json{};
+      expect(not glz::beve_to_json(buffer, json));
+      expect(json == "[1,200]");
+   };
+
+   "std::byte members inside a reflected struct"_test = [] {
+      byte_packet_t src{};
+      src.payload = {std::byte{0xDE}, std::byte{0xAD}, std::byte{0xBE}, std::byte{0xEF}};
+      src.id = 42;
+      std::string buffer{};
+      expect(not glz::write_beve(src, buffer));
+      byte_packet_t dst{};
+      expect(not glz::read_beve(dst, buffer));
+      expect(dst.payload == src.payload);
+      expect(dst.id == src.id);
+   };
+
+   "std::array<char, N> round trips (full)"_test = [] {
+      std::array<char, 16> src{};
+      const std::string_view text = "hello world";
+      std::memcpy(src.data(), text.data(), text.size());
+      std::string buffer{};
+      expect(not glz::write_beve(src, buffer));
+      std::array<char, 16> dst{};
+      for (auto& c : dst) c = 'x';
+      expect(not glz::read_beve(dst, buffer));
+      expect(dst == src);
+   };
+
+   "std::array<char, N> zero-fills when payload is shorter"_test = [] {
+      std::string src = "abc";
+      std::string buffer{};
+      expect(not glz::write_beve(src, buffer));
+      std::array<char, 8> dst{};
+      for (auto& c : dst) c = 'Z';
+      expect(not glz::read_beve(dst, buffer));
+      expect(std::string_view(dst.data(), 3) == "abc");
+      for (size_t i = 3; i < dst.size(); ++i) {
+         expect(dst[i] == '\0');
+      }
+   };
+
+   "std::array<char, N> rejects an oversized payload"_test = [] {
+      std::string src = "0123456789";
+      std::string buffer{};
+      expect(not glz::write_beve(src, buffer));
+      std::array<char, 4> dst{};
+      expect(bool(glz::read_beve(dst, buffer)));
+   };
+
+   "untagged std::byte and char array round trip"_test = [] {
+      std::tuple<std::vector<std::byte>, std::array<char, 8>> src{{std::byte{5}, std::byte{6}}, {}};
+      std::memcpy(std::get<1>(src).data(), "hi", 2);
+      std::string buffer{};
+      expect(not glz::write_beve_untagged(src, buffer));
+      std::tuple<std::vector<std::byte>, std::array<char, 8>> dst{};
+      expect(not glz::read_beve_untagged(dst, buffer));
+      expect(std::get<0>(dst) == std::get<0>(src));
+      expect(std::get<1>(dst) == std::get<1>(src));
    };
 };
 

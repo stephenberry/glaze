@@ -12,6 +12,11 @@
 #define _WIN32_WINNT 0x0601
 #endif
 
+#if defined(_WIN32) && defined(_WINSOCKAPI_) && !defined(_WINSOCK2API_)
+#error glaze/ext/glaze_asio.hpp cannot be included after Windows.h has included Winsock.h. \
+       Define WIN32_LEAN_AND_MEAN before including Windows.h to prevent Windows.h from including Winsock.h.
+#endif
+
 // Two distinct, intentionally similar macros govern the Asio backend. Do not confuse them:
 //
 //   GLZ_USE_BOOST_ASIO   - INPUT (you set it, or CMake's glaze::asio target sets it).

@@ -18,15 +18,15 @@ namespace glz
       GLZ_ALWAYS_INLINE size_t get8s(auto&& ctx, It0&& it, It1&& end) noexcept
       {
          if (check_invalid_offset(ctx, it, end, 1)) return 0;
-         return std::size_t(*it++);
+         return std::size_t(static_cast<uint8_t>(*it++));
       }
 
       template <class It0, class It1>
       GLZ_ALWAYS_INLINE size_t get16be(auto&& ctx, It0&& it, It1&& end) noexcept
       {
          if (check_invalid_offset(ctx, it, end, 2)) return 0;
-         const std::size_t b1 = (*it++) << 8;
-         return b1 | *it++;
+         const std::size_t b1 = std::size_t(static_cast<uint8_t>(*it++)) << 8;
+         return b1 | static_cast<uint8_t>(*it++);
       }
 
       template <auto Opts, typename I>
@@ -46,11 +46,13 @@ namespace glz
          auto tit = it;
          ++tit; // skip type
          const auto size = get8s(ctx, tit, end);
+         if (bool(ctx.error)) return;
          if (size > 8u) {
             ctx.error = error_code::no_matching_variant_type;
             return;
          }
 
+         if (check_invalid_offset(ctx, tit, end, 1 + size)) return;
          const int sign = *tit++;
          if (sign) {
             term_to_json_number<Opts>(std::int64_t{}, ctx, it, end, out, ix);
@@ -83,6 +85,11 @@ namespace glz
             dump('[', out, ix);
             while (arity--) {
                term_to_json_value<Opts>(ctx, it, end, out, ix, recursive_depth);
+               // Stop on error instead of spinning the remaining (attacker-declared, up to 2^32)
+               // iterations once the input is exhausted.
+               if (bool(ctx.error)) [[unlikely]] {
+                  return;
+               }
                if (arity) {
                   dump(',', out, ix);
                   if constexpr (Opts.prettify) {
@@ -97,6 +104,9 @@ namespace glz
          switch (type) {
          case ERL_SMALL_INTEGER_EXT:
          case ERL_INTEGER_EXT: {
+            // ei_decode_long reads the tag plus a fixed payload (1 byte for SMALL_INTEGER_EXT,
+            // 4 for INTEGER_EXT) off the raw pointer; bound it before the decode.
+            if (check_invalid_offset(ctx, it, end, type == ERL_SMALL_INTEGER_EXT ? 2u : 5u)) return;
             term_to_json_number<Opts>(std::int64_t{}, ctx, it, end, out, ix);
             if (bool(ctx.error)) return;
             break;
@@ -110,6 +120,9 @@ namespace glz
 
          case ERL_FLOAT_EXT:
          case NEW_FLOAT_EXT: {
+            // ei_decode_double reads the tag plus a fixed payload (8 bytes for NEW_FLOAT_EXT, the
+            // 31-byte ASCII form for the legacy FLOAT_EXT) off the raw pointer; bound it first.
+            if (check_invalid_offset(ctx, it, end, type == NEW_FLOAT_EXT ? 9u : 32u)) return;
             term_to_json_number<Opts>(double{}, ctx, it, end, out, ix);
             if (bool(ctx.error)) return;
             break;
@@ -149,15 +162,25 @@ namespace glz
          }
 
          case ERL_LIST_EXT: {
+            // decode_list_header reads the tag plus a 4-byte arity off the raw pointer; bound it.
+            if (check_invalid_offset(ctx, it, end, 5u)) return;
             [[maybe_unused]] auto [arity, idx] = decode_list_header(ctx, it);
             if (bool(ctx.error)) {
                return;
             }
             write_sequence(arity, idx, ctx, it, end, out, ix, recursive_depth + 1);
+            if (bool(ctx.error)) [[unlikely]] {
+               return;
+            }
 
             // handle tail
-            const auto tag = get_type(ctx, it);
-            if (tag != ERL_NIL_EXT) {
+            if (invalid_end(ctx, it, end)) [[unlikely]] {
+               return;
+            }
+            // A proper list terminates with ERL_NIL_EXT, a single tag byte. Read that tag directly
+            // rather than through get_type/ei_get_type, which reads a 2-4 byte length header off the
+            // raw pointer (past end when the tail tag is the final byte) for any other term type.
+            if (uint8_t(*it) != ERL_NIL_EXT) {
                ctx.error = error_code::array_element_not_found;
                return;
             }
@@ -173,6 +196,9 @@ namespace glz
 
          case ERL_SMALL_TUPLE_EXT:
          case ERL_LARGE_TUPLE_EXT: {
+            // decode_tuple_header reads the tag plus the arity (1 byte for SMALL_TUPLE_EXT, 4 for
+            // LARGE_TUPLE_EXT) off the raw pointer; bound it.
+            if (check_invalid_offset(ctx, it, end, type == ERL_SMALL_TUPLE_EXT ? 2u : 5u)) return;
             [[maybe_unused]] auto [arity, idx] = decode_tuple_header(ctx, it);
             if (bool(ctx.error)) {
                return;
@@ -182,6 +208,8 @@ namespace glz
          }
 
          case ERL_MAP_EXT: {
+            // decode_map_header reads the tag plus a 4-byte arity off the raw pointer; bound it.
+            if (check_invalid_offset(ctx, it, end, 5u)) return;
             [[maybe_unused]] auto [arity, idx] = decode_map_header(ctx, it);
             if (bool(ctx.error)) {
                return;
@@ -197,7 +225,15 @@ namespace glz
 
             while (arity--) {
                // write key
-               const auto key_type = get_type(ctx, it);
+               if (invalid_end(ctx, it, end)) [[unlikely]] {
+                  return;
+               }
+               // Read the key tag directly rather than through get_type/ei_get_type, which reads a
+               // 2-4 byte length header off the raw pointer (past end when the tag is the final byte).
+               // is_string/is_atom accept the raw, un-normalized tag, and term_to_json_value re-reads
+               // and bounds-checks the full key below. Widen to int so the tag clears the int_t
+               // constraint on is_string/is_atom (uint8_t is a char type and would be rejected).
+               const int key_type = uint8_t(*it);
                // support only string or atom keys in json
                if (!eetf::is_string(key_type) && !eetf::is_atom(key_type)) {
                   ctx.error = error_code::syntax_error;
@@ -252,6 +288,9 @@ namespace glz
 
       // Check format version
       if constexpr (not check_no_header(Opts)) {
+         if (it == end) [[unlikely]] {
+            return {0, error_code::no_read_input};
+         }
          const auto version = decode_version(ctx, it);
          if (eetf_magic_version != version) {
             return {0, error_code::version_mismatch};

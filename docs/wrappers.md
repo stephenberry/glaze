@@ -34,7 +34,14 @@ glz::custom<&T::read, &T::write> // Calls custom read and write std::functions, 
 glz::manage<&T::x, &T::read_x, &T::write_x> // Calls read_x() after reading x and calls write_x() before writing x
 glz::as_array<&T::member> // Treat a reflected/member-annotated type as a positional array for read and write
 glz::flatten_map<&T::member> // Flatten map-like containers into a JSON array [key..., value, ...]
+
+// Per-field std::chrono wrappers (require #include "glaze/chrono.hpp"; JSON-text backends only)
+glz::date_format(&T::time_point, "%Y-%m-%d %H:%M:%S") // Format a system_clock time point or year_month_day with a strftime-subset pattern
+glz::epoch_count<std::chrono::milliseconds>(&T::time_point) // Write a system_clock time point as a numeric Unix timestamp in the given units
 ```
+
+> [!NOTE]
+> Unlike the wrappers above, `glz::date_format` and `glz::epoch_count` take the member pointer as a value argument rather than a non-type template parameter, and they live in `#include "glaze/chrono.hpp"`. See [std::chrono Support](chrono.md#per-field-format-customization) for the supported tokens, compile-time validation, and limitations.
 
 ## Associated glz::opts
 

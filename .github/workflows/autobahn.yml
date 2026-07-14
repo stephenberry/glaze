@@ -1,0 +1,157 @@
+name: autobahn
+
+on:
+  push:
+    branches:
+      - main
+      - feature/*
+    paths-ignore:
+      - '**/*.md'
+      - 'docs/**'
+  pull_request:
+    branches:
+      - main
+    paths-ignore:
+      - '**/*.md'
+      - 'docs/**'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+
+    env:
+      CC: gcc-14
+      CXX: g++-14
+      AUTOBAHN_AGENT: glaze-websocket-client
+      AUTOBAHN_CASE_COUNT_FILE: ${{ github.workspace }}/autobahn-case-count.txt
+      AUTOBAHN_IMAGE: crossbario/autobahn-testsuite
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y g++-14 ninja-build
+
+      - name: Configure CMake
+        run: |
+          cmake -B ${{github.workspace}}/build \
+            -DCMAKE_BUILD_TYPE=Debug \
+            -DCMAKE_CXX_STANDARD=23 \
+            -DCMAKE_C_COMPILER=${{env.CC}} \
+            -DCMAKE_CXX_COMPILER=${{env.CXX}} \
+            -Dglaze_ENABLE_FUZZING=OFF \
+            -Dglaze_BUILD_PERFORMANCE_TESTS=OFF \
+            -Dglaze_BUILD_SSL_TESTS=OFF \
+            -Dglaze_DISABLE_SQLITE_TESTS=ON \
+            -Dglaze_BUILD_WEBSOCKET_AUTOBAHN_TEST=ON
+
+      - name: Build
+        run: cmake --build build -j $(nproc) --target websocket_autobahn_test
+
+      - name: Configure Autobahn
+        run: |
+          mkdir -p autobahn-config autobahn-reports
+          cat > autobahn-config/fuzzingserver.json <<'JSON'
+          {
+             "url": "ws://0.0.0.0:9001",
+             "outdir": "/reports",
+             "cases": ["*"],
+             "exclude-cases": ["9.*", "12.*", "13.*"],
+             "exclude-agent-cases": {}
+          }
+          JSON
+
+      - name: Start Autobahn fuzzingserver
+        run: |
+          docker run --rm -d \
+            --name autobahn \
+            -p 9001:9001 \
+            -v "$GITHUB_WORKSPACE/autobahn-config:/config:ro" \
+            -v "$GITHUB_WORKSPACE/autobahn-reports:/reports" \
+            "$AUTOBAHN_IMAGE" \
+            wstest -m fuzzingserver -s /config/fuzzingserver.json
+
+      - name: Test
+        run: ctest --output-on-failure --test-dir build -R "^websocket_autobahn_test$" --timeout 1800 --no-tests=error
+
+      - name: Check Autobahn reports
+        run: |
+          python3 - <<'PY'
+          import json
+          import os
+          import pathlib
+          import sys
+
+          allowed = {"OK", "INFORMATIONAL"}
+          agent = os.environ["AUTOBAHN_AGENT"]
+          reports = sorted(pathlib.Path("autobahn-reports").rglob("index.json"))
+
+          if not reports:
+             print("Autobahn did not produce an index.json report", file=sys.stderr)
+             sys.exit(1)
+
+          report_path = None
+          report = None
+          for path in reports:
+             with path.open(encoding="utf-8") as file:
+                candidate = json.load(file)
+             if agent in candidate:
+                report_path = path
+                report = candidate
+                break
+
+          if report is None:
+             available = sorted({key for path in reports for key in json.loads(path.read_text(encoding="utf-8")).keys()})
+             available = ", ".join(available)
+             print(f"Autobahn report does not contain agent {agent!r}. Available agents: {available}", file=sys.stderr)
+             sys.exit(1)
+
+          count_path = pathlib.Path(os.environ["AUTOBAHN_CASE_COUNT_FILE"])
+          try:
+             expected_count = int(count_path.read_text(encoding="utf-8").strip())
+          except (OSError, ValueError) as error:
+             print(f"Could not read Autobahn case count from {count_path}: {error}", file=sys.stderr)
+             sys.exit(1)
+
+          actual_count = len(report[agent])
+          if actual_count != expected_count:
+             print(
+                f"Autobahn report contains {actual_count} cases, but the server advertised {expected_count}",
+                file=sys.stderr,
+             )
+             sys.exit(1)
+
+          failures = []
+          for case_id, result in sorted(report[agent].items()):
+             if not isinstance(result, dict):
+                failures.append((case_id, "result", type(result).__name__))
+                continue
+             for field in ("behavior", "behaviorClose"):
+                value = result.get(field)
+                if value not in allowed:
+                   failures.append((case_id, field, value))
+
+          if failures:
+             for case_id, field, value in failures:
+                print(f"Autobahn case {case_id} has {field}={value}", file=sys.stderr)
+             sys.exit(1)
+
+          print(f"Autobahn report passed for {agent}: {len(report[agent])} cases checked in {report_path}")
+          PY
+
+      - name: Show Autobahn logs
+        if: ${{ failure() }}
+        run: docker logs autobahn || true
+
+      - name: Stop Autobahn fuzzingserver
+        if: ${{ always() }}
+        run: docker rm -f autobahn || true
+
+      - uses: actions/upload-artifact@v4
+        if: ${{ failure() }}
+        with:
+          name: autobahn-reports
+          path: autobahn-reports/

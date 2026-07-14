@@ -420,7 +420,13 @@ namespace glz
                   result.error = true;
                }
                else {
+                  // A step of 0 is invalid. Preserve the value (rather than discarding it) so the
+                  // step==0 guard in handle_slice rejects it even though the read paths do not yet
+                  // consult `error`, and also flag the token as malformed for callers that do.
                   result.step = val;
+                  if (*val == 0) {
+                     result.error = true;
+                  }
                }
             }
          };
@@ -477,9 +483,22 @@ namespace glz
             return;
          }
 
+         // A non-null-terminated buffer has no '\0' sentinel, so guard each structural *it read
+         // against the end of input. Compiles out entirely when null_terminated.
+         const auto at_end = [&]() -> bool {
+            if constexpr (not Opts.null_terminated) {
+               if (it == end) [[unlikely]] {
+                  ctx.error = error_code::unexpected_end;
+                  return true;
+               }
+            }
+            return false;
+         };
+
          const int32_t start_idx = decomposed_key.start.value_or(0);
          const int32_t end_idx = decomposed_key.end.value_or((std::numeric_limits<int32_t>::max)());
 
+         if (at_end()) return;
          if (*it == ']') {
             ++it;
             return;
@@ -503,6 +522,7 @@ namespace glz
 
             // Skip until target_idx
             while (current_index < target_idx) {
+               if (at_end()) return;
                if (*it == ']') {
                   // Array ended before we reached target
                   ctx.error = error_code::array_element_not_found;
@@ -510,6 +530,7 @@ namespace glz
                }
                skip_value<JSON>::op<Opts>(ctx, it, end);
                if (bool(ctx.error)) return;
+               if (at_end()) return;
                if (*it == ',') {
                   ++it;
                   skip_ws<Opts>(ctx, it, end);
@@ -521,6 +542,7 @@ namespace glz
             }
 
             // Now current_index == target_idx
+            if (at_end()) return;
             if (*it == ']') {
                ctx.error = error_code::array_element_not_found;
                return;
@@ -534,6 +556,7 @@ namespace glz
             }
             if (bool(ctx.error)) return;
 
+            if (at_end()) return;
             if (*it == ',') {
                ++it;
                skip_ws<Opts>(ctx, it, end);
@@ -544,15 +567,82 @@ namespace glz
          if (bool(ctx.error)) return;
 
          // Consume remainder of array
-         while (*it != ']') {
+         while (true) {
+            if (at_end()) return;
+            if (*it == ']') break;
             skip_value<JSON>::op<Opts>(ctx, it, end);
             if (bool(ctx.error)) return;
+            if (at_end()) return;
             if (*it == ',') {
                ++it;
                skip_ws<Opts>(ctx, it, end);
             }
          }
          ++it; // consume ']'
+      }
+
+      // Advances `it` to the first character of array element `n`, resolving a negative index
+      // against the array length per JMESPath (e.g. [-1] is the last element). On entry `it`
+      // must point at the first element (just past '['), or at ']' for an empty array. On
+      // success `it` is positioned at element `n`; otherwise ctx.error is set.
+      template <auto Opts = opts{}>
+      inline void seek_array_index(int32_t n, context& ctx, auto&& it, auto end)
+      {
+         const auto at_end = [&]() -> bool {
+            if constexpr (not Opts.null_terminated) {
+               if (it == end) [[unlikely]] {
+                  ctx.error = error_code::unexpected_end;
+                  return true;
+               }
+            }
+            return false;
+         };
+
+         if (n < 0) {
+            // A negative index counts from the back, so the length must be known first. Scan the
+            // array to count elements, then rewind and fall through to the forward skip below.
+            if (skip_ws<Opts>(ctx, it, end)) return;
+            auto* const array_start = it;
+            int32_t count = 0;
+            if (at_end()) return;
+            if (*it != ']') {
+               while (true) {
+                  skip_value<JSON>::op<Opts>(ctx, it, end);
+                  if (bool(ctx.error)) [[unlikely]]
+                     return;
+                  ++count;
+                  if (skip_ws<Opts>(ctx, it, end)) return;
+                  if (at_end()) return;
+                  if (*it == ']') break;
+                  if (*it != ',') {
+                     ctx.error = error_code::array_element_not_found;
+                     return;
+                  }
+                  ++it;
+                  if (skip_ws<Opts>(ctx, it, end)) return;
+               }
+            }
+            it = array_start;
+            n += count;
+            if (n < 0) {
+               ctx.error = error_code::array_element_not_found;
+               return;
+            }
+         }
+
+         for (int32_t i = 0; i < n; ++i) {
+            skip_value<JSON>::op<Opts>(ctx, it, end);
+            if (bool(ctx.error)) [[unlikely]]
+               return;
+            if (skip_ws<Opts>(ctx, it, end)) return;
+            if (at_end()) return;
+            if (*it != ',') {
+               ctx.error = error_code::array_element_not_found;
+               return;
+            }
+            ++it;
+            if (skip_ws<Opts>(ctx, it, end)) return;
+         }
       }
 
       template <auto Opts = opts{}, class T>
@@ -564,15 +654,35 @@ namespace glz
             return;
          }
 
+         // A non-null-terminated buffer has no '\0' sentinel, so guard each structural *it read
+         // against the end of input. Compiles out entirely when null_terminated.
+         const auto at_end = [&]() -> bool {
+            if constexpr (not Opts.null_terminated) {
+               if (it == end) [[unlikely]] {
+                  ctx.error = error_code::unexpected_end;
+                  return true;
+               }
+            }
+            return false;
+         };
+
          // Determine slice parameters
          int32_t step_idx = decomposed_key.step.value_or(1);
          bool has_negative_index = (decomposed_key.start.value_or(0) < 0) || (decomposed_key.end.value_or(0) < 0);
+
+         // A step of 0 is not a valid slice; without this guard the loops below would never
+         // terminate (the index never advances).
+         if (step_idx == 0) [[unlikely]] {
+            ctx.error = error_code::syntax_error;
+            return;
+         }
 
          // If we have negative indices or step != 1, fall back to the original method (read all then slice)
          if (step_idx != 1 || has_negative_index) {
             // Original fallback behavior:
             // Read entire array into value first
             value.clear();
+            if (at_end()) return;
             if (*it == ']') {
                // empty array
                ++it; // consume ']'
@@ -586,6 +696,7 @@ namespace glz
                   if (skip_ws<Opts>(ctx, it, end)) {
                      return;
                   }
+                  if (at_end()) return;
                   if (*it == ']') {
                      ++it;
                      break;
@@ -603,13 +714,25 @@ namespace glz
 
             // Now do the slicing
             const int32_t size = static_cast<int32_t>(value.size());
+            const bool negative_step = step_idx < 0;
+
+            // Resolve a (possibly negative) bound to a concrete index following Python/JMESPath
+            // slice semantics. The valid range depends on direction: a forward step walks
+            // [0, size]; a negative step walks the range [size-1, -1], where the -1 sentinel
+            // means "past the front, include index 0".
+            const int32_t lower = negative_step ? -1 : 0;
+            const int32_t upper = negative_step ? size - 1 : size;
             auto wrap_index = [&](int32_t idx) {
                if (idx < 0) idx += size;
-               return std::clamp(idx, int32_t{0}, size);
+               return std::clamp(idx, lower, upper);
             };
 
-            const int32_t start_idx = wrap_index(decomposed_key.start.value_or(0));
-            const int32_t end_idx = wrap_index(decomposed_key.end.value_or(size));
+            // An omitted bound defaults to the start/end of the iteration range for the
+            // chosen direction (e.g. "[::-1]" reverses the whole array).
+            const int32_t start_idx =
+               decomposed_key.start.has_value() ? wrap_index(*decomposed_key.start) : (negative_step ? upper : lower);
+            const int32_t end_idx =
+               decomposed_key.end.has_value() ? wrap_index(*decomposed_key.end) : (negative_step ? lower : upper);
 
             if (step_idx == 1) {
                if (start_idx < end_idx) {
@@ -624,21 +747,25 @@ namespace glz
                   value.clear();
                }
             }
-            else {
-               // For steps != 1 (or negative steps), the fallback path was already chosen.
-               // Just apply the same logic as before.
-               size_t dest = 0;
-               if (step_idx > 0) {
-                  for (int32_t i = start_idx; i < end_idx; i += step_idx) {
-                     value[dest++] = std::move(value[i]);
-                  }
-               }
-               else {
-                  for (int32_t i = start_idx; i > end_idx; i += step_idx) {
-                     value[dest++] = std::move(value[i]);
-                  }
+            else if (step_idx > 0) {
+               // Positive step compacts in place: the write index never overtakes the
+               // read index, so every read stays within the live range.
+               std::size_t dest = 0;
+               for (int32_t i = start_idx; i < end_idx; i += step_idx) {
+                  value[dest++] = std::move(value[i]);
                }
                value.resize(dest);
+            }
+            else {
+               // A negative step reads in reverse, so compacting in place would overwrite
+               // elements before they are read. Build the slice in a separate buffer instead.
+               // wrap_index already clamps start_idx to at most size-1 and end_idx to at
+               // least -1, so every read below stays within [0, size).
+               std::decay_t<T> result;
+               for (int32_t i = start_idx; i > end_idx; i += step_idx) {
+                  result.emplace_back(std::move(value[i]));
+               }
+               value = std::move(result);
             }
 
             return;
@@ -650,6 +777,7 @@ namespace glz
          const int32_t end_idx = decomposed_key.end.value_or((std::numeric_limits<int32_t>::max)());
 
          // If empty array
+         if (at_end()) return;
          if (*it == ']') {
             ++it; // consume ']'
             return;
@@ -661,6 +789,7 @@ namespace glz
             if (skip_ws<Opts>(ctx, it, end)) {
                return;
             }
+            if (at_end()) return;
 
             // Decide whether we read or skip this element
             if (current_index < start_idx) {
@@ -685,6 +814,7 @@ namespace glz
             if (skip_ws<Opts>(ctx, it, end)) {
                return;
             }
+            if (at_end()) return;
             if (*it == ']') {
                ++it; // finished reading array
                break;
@@ -743,6 +873,11 @@ namespace glz
             static constexpr auto decomposed_key = jmespath::parse_jmespath_token(tokens[I]);
             static constexpr auto key = decomposed_key.key;
 
+            // A malformed token (e.g. an index/bound literal that overflows int32, or an
+            // invalid slice) is rejected at compile time, matching tokenize_as_array which
+            // already fails to compile on tokenization errors.
+            static_assert(not decomposed_key.error, "invalid JMESPath expression");
+
             if constexpr (decomposed_key.is_array_access) {
                // If we have a key, that means we're looking into an object like: key[0:5]
                if constexpr (key.empty()) {
@@ -763,49 +898,15 @@ namespace glz
                      if constexpr (decomposed_key.start.has_value()) {
                         constexpr auto n = decomposed_key.start.value();
 
+                        // Position `it` at element n (negative indices count from the back).
+                        detail::seek_array_index<Opts>(int32_t(n), ctx, it, end);
+                        if (bool(ctx.error)) [[unlikely]]
+                           return;
+
+                        // For the final token read the element into value; otherwise leave `it`
+                        // positioned so the next token can continue indexing into it.
                         if constexpr (I == (N - 1)) {
-                           // Skip until we reach the target element n
-                           for (int32_t i = 0; i < n; ++i) {
-                              skip_value<JSON>::op<Opts>(ctx, it, end);
-                              if (bool(ctx.error)) [[unlikely]]
-                                 return;
-
-                              if (skip_ws<Opts>(ctx, it, end)) {
-                                 return;
-                              }
-                              if (*it != ',') {
-                                 ctx.error = error_code::array_element_not_found;
-                                 return;
-                              }
-                              ++it;
-                              if (skip_ws<Opts>(ctx, it, end)) {
-                                 return;
-                              }
-                           }
-
-                           // Now read the element at index n
                            parse<Opts.format>::template op<Opts>(value, ctx, it, end);
-                        }
-                        else {
-                           // Not the last token. We must still parse the element at index n so the next indexing can
-                           // proceed.
-                           for (int32_t i = 0; i < n; ++i) {
-                              skip_value<JSON>::op<Opts>(ctx, it, end);
-                              if (bool(ctx.error)) [[unlikely]]
-                                 return;
-
-                              if (skip_ws<Opts>(ctx, it, end)) {
-                                 return;
-                              }
-                              if (*it != ',') {
-                                 ctx.error = error_code::array_element_not_found;
-                                 return;
-                              }
-                              ++it;
-                              if (skip_ws<Opts>(ctx, it, end)) {
-                                 return;
-                              }
-                           }
                         }
                      }
                      else {
@@ -859,25 +960,12 @@ namespace glz
                         else {
                            // SINGLE INDEX SCENARIO (colon_count == 0)
                            if constexpr (decomposed_key.start.has_value()) {
-                              // Skip until we reach the target element
                               constexpr auto n = decomposed_key.start.value();
-                              for (int32_t i = 0; i < n; ++i) {
-                                 skip_value<JSON>::op<Opts>(ctx, it, end);
-                                 if (bool(ctx.error)) [[unlikely]]
-                                    return;
 
-                                 if (skip_ws<Opts>(ctx, it, end)) {
-                                    return;
-                                 }
-                                 if (*it != ',') {
-                                    ctx.error = error_code::array_element_not_found;
-                                    return;
-                                 }
-                                 ++it;
-                                 if (skip_ws<Opts>(ctx, it, end)) {
-                                    return;
-                                 }
-                              }
+                              // Position `it` at element n (negative indices count from the back).
+                              detail::seek_array_index<Opts>(int32_t(n), ctx, it, end);
+                              if (bool(ctx.error)) [[unlikely]]
+                                 return;
 
                               if (skip_ws<Opts>(ctx, it, end)) {
                                  return;
@@ -1042,6 +1130,13 @@ namespace glz
                const auto decomposed_key = jmespath::parse_jmespath_token(tokens[I]);
                const auto& key = decomposed_key.key;
 
+               // A malformed token (e.g. an index/bound literal that overflows int32, or an
+               // invalid slice) must error rather than silently fall back to default bounds.
+               if (decomposed_key.error) {
+                  ctx.error = error_code::syntax_error;
+                  return;
+               }
+
                if (decomposed_key.is_array_access) {
                   if (key.empty()) {
                      // Top-level array scenario
@@ -1062,49 +1157,15 @@ namespace glz
                         if (decomposed_key.start.has_value()) {
                            const int32_t n = decomposed_key.start.value();
 
+                           // Position `it` at element n (negative indices count from the back).
+                           detail::seek_array_index<Opts>(n, ctx, it, end);
+                           if (bool(ctx.error)) [[unlikely]]
+                              return;
+
+                           // For the final token read the element into value; otherwise leave `it`
+                           // positioned so the next token can continue indexing into it.
                            if (I == (N - 1)) {
-                              // Skip until we reach the target element n
-                              for (int32_t i = 0; i < n; ++i) {
-                                 skip_value<JSON>::op<Opts>(ctx, it, end);
-                                 if (bool(ctx.error)) [[unlikely]]
-                                    return;
-
-                                 if (skip_ws<Opts>(ctx, it, end)) {
-                                    return;
-                                 }
-                                 if (*it != ',') {
-                                    ctx.error = error_code::array_element_not_found;
-                                    return;
-                                 }
-                                 ++it;
-                                 if (skip_ws<Opts>(ctx, it, end)) {
-                                    return;
-                                 }
-                              }
-
-                              // Now read the element at index n
                               parse<Opts.format>::template op<Opts>(value, ctx, it, end);
-                           }
-                           else {
-                              // Not the last token. We must still parse the element at index n so the next indexing can
-                              // proceed.
-                              for (int32_t i = 0; i < n; ++i) {
-                                 skip_value<JSON>::op<Opts>(ctx, it, end);
-                                 if (bool(ctx.error)) [[unlikely]]
-                                    return;
-
-                                 if (skip_ws<Opts>(ctx, it, end)) {
-                                    return;
-                                 }
-                                 if (*it != ',') {
-                                    ctx.error = error_code::array_element_not_found;
-                                    return;
-                                 }
-                                 ++it;
-                                 if (skip_ws<Opts>(ctx, it, end)) {
-                                    return;
-                                 }
-                              }
                            }
                         }
                         else {
@@ -1157,24 +1218,12 @@ namespace glz
                            else {
                               // Single index scenario
                               if (decomposed_key.start.has_value()) {
-                                 int32_t n = decomposed_key.start.value();
-                                 for (int32_t i = 0; i < n; ++i) {
-                                    skip_value<JSON>::op<Opts>(ctx, it, end);
-                                    if (bool(ctx.error)) [[unlikely]]
-                                       return;
+                                 const int32_t n = decomposed_key.start.value();
 
-                                    if (skip_ws<Opts>(ctx, it, end)) {
-                                       return;
-                                    }
-                                    if (*it != ',') {
-                                       ctx.error = error_code::array_element_not_found;
-                                       return;
-                                    }
-                                    ++it;
-                                    if (skip_ws<Opts>(ctx, it, end)) {
-                                       return;
-                                    }
-                                 }
+                                 // Position `it` at element n (negative indices count from the back).
+                                 detail::seek_array_index<Opts>(n, ctx, it, end);
+                                 if (bool(ctx.error)) [[unlikely]]
+                                    return;
 
                                  if (skip_ws<Opts>(ctx, it, end)) {
                                     return;

@@ -36,6 +36,38 @@ namespace glz
       }
    }
 
+   // Bounds-checks a typed-array body of `count` elements of `element_size` bytes (element_size >= 1),
+   // optionally preceded by `padding` alignment bytes, against the bytes remaining in [it, end).
+   // Callers maintain it <= end (every advance is bounds-checked), so end - it is non-negative.
+   // Returns true and sets unexpected_end when the body does not fit.
+   //
+   // On 64-bit, int_from_compressed caps wire counts at 2^48 and element_size <= 128, so
+   // padding + count * element_size <= ~2^55 cannot overflow size_t: the fit is a single multiply
+   // and compare against end - it (which, unlike it + offset, is never out-of-bounds pointer
+   // arithmetic), so the 64-bit path pays nothing for the 32-bit safety. On 32-bit that product
+   // overflows size_t -- wrapping small so an oversized array would slip past the check -- so there
+   // the fit is tested as count > (remaining - padding) / element_size, a division that cannot
+   // overflow.
+   [[nodiscard]] GLZ_ALWAYS_INLINE bool typed_array_out_of_bounds(is_context auto& ctx, auto&& it, auto&& end,
+                                                                  size_t count, size_t element_size,
+                                                                  size_t padding = 0) noexcept
+   {
+      const uint64_t available = uint64_t(end - it);
+      if constexpr (sizeof(size_t) > sizeof(uint32_t)) {
+         if (available < padding + count * element_size) [[unlikely]] {
+            ctx.error = error_code::unexpected_end;
+            return true;
+         }
+      }
+      else {
+         if (available < padding || count > (available - padding) / element_size) [[unlikely]] {
+            ctx.error = error_code::unexpected_end;
+            return true;
+         }
+      }
+      return false;
+   }
+
    // Byteswaps a numeric value in-place for little-endian wire format compatibility.
    // Call ONLY inside: if constexpr (std::endian::native == std::endian::big) blocks.
    // On little-endian systems, this function is never instantiated (zero overhead).
@@ -115,7 +147,19 @@ namespace glz
 
    export inline constexpr std::array<uint8_t, 8> byte_count_lookup{1, 2, 4, 8, 16, 32, 64, 128};
 
-   export [[nodiscard]] GLZ_ALWAYS_INLINE constexpr size_t int_from_compressed(auto&& ctx, auto&& it, auto end) noexcept
+   // Types that BEVE encodes as elements of a numeric typed array.
+   //
+   // std::byte is serialized identically to a uint8_t (an unsigned 8-bit value): the
+   // numeric formulas below produce byte_count == 0, an unsigned type, and a u8 typed-array
+   // header for it, exactly matching uint8_t. It is the only byte_like type that is not
+   // already num_t (uint8_t and unsigned char are integral), so the numeric typed-array
+   // code paths must opt it in explicitly. This keeps an array of std::byte compact (a
+   // typed u8 array) and consistent with how a scalar std::byte is encoded (a u8 number),
+   // instead of an inflated generic array that stores a type header per element.
+   template <class T>
+   concept beve_num_t = num_t<T> || std::same_as<std::remove_cvref_t<T>, std::byte>;
+
+   [[nodiscard]] GLZ_ALWAYS_INLINE constexpr size_t int_from_compressed(auto&& ctx, auto&& it, auto end) noexcept
    {
       if (it >= end) [[unlikely]] {
          ctx.error = error_code::unexpected_end;

@@ -50,10 +50,7 @@ namespace glz
                   return false;
                }
 
-               if ((it + header.second) > end) [[unlikely]] {
-                  ctx.error = error_code::unexpected_end;
-                  return false;
-               }
+               if (check_invalid_offset(ctx, it, end, header.second)) return false;
 
                std::advance(it, header.second);
             }
@@ -252,10 +249,7 @@ namespace glz
             return;
          }
 
-         if (it + index > end) {
-            ctx.error = error_code::unexpected_end;
-            return;
-         }
+         if (check_invalid_offset(ctx, it, end, index)) return;
 
          it += index;
 
