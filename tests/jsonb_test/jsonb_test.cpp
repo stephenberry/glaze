@@ -1130,6 +1130,33 @@ suite converter_tests = [] {
       expect(j.value() == "255");
    };
 
+   "jsonb_to_json INT5 hex sign-bit magnitudes"_test = [] {
+      auto convert = [](const std::string& payload) {
+         std::string buf;
+         buf.push_back(static_cast<char>((12u << 4) | 4u)); // INT5, u8_follows
+         buf.push_back(static_cast<char>(payload.size()));
+         buf += payload;
+         return glz::jsonb_to_json(buf);
+      };
+
+      // "-0x8000000000000000" is exactly int64 min; negating the signed magnitude was UB.
+      auto j = convert("-0x8000000000000000");
+      expect(j.has_value());
+      expect(j.value() == "-9223372036854775808");
+
+      // Positive magnitudes with the sign bit set used to wrap to a negative int.
+      j = convert("0x8000000000000000");
+      expect(j.has_value());
+      expect(j.value() == "9223372036854775808");
+
+      j = convert("0xFFFFFFFFFFFFFFFF");
+      expect(j.has_value());
+      expect(j.value() == "18446744073709551615");
+
+      // A negative magnitude past int64 min has no representation and is rejected.
+      expect(!convert("-0x8000000000000001").has_value());
+   };
+
    "jsonb_to_json maps NaN to null and infinities to 9e999"_test = [] {
       std::string buf;
       expect(not glz::write_jsonb(std::numeric_limits<double>::quiet_NaN(), buf));

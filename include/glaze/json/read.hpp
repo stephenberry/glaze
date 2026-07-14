@@ -2426,6 +2426,17 @@ namespace glz
                      return;
                   }
                }
+
+               // A valid array always returns from inside the loop upon reaching ']'.
+               // For a null-terminated buffer the loop can only exit here by falling
+               // through when `it` reaches the terminator without a closing bracket,
+               // which means the input was truncated (e.g. "[", "[1," or "[1,2,").
+               // Non-null-terminated buffers surface this through skip_ws/depth
+               // tracking (or the streaming refill break), so this guard is limited
+               // to the null-terminated case.
+               if constexpr (Opts.null_terminated) {
+                  ctx.error = error_code::unexpected_end;
+               }
             }
             else {
                ctx.error = error_code::exceeded_static_array_size;

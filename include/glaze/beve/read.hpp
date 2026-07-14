@@ -1908,6 +1908,9 @@ namespace glz
             constexpr auto N = detail::count_members<T>;
             if constexpr (N == 0) {
                // Handle empty structs by just reading and validating the generic_array header
+               if (invalid_end(ctx, it, end)) {
+                  return;
+               }
                const auto tag = uint8_t(*it);
                if (tag != tag::generic_array) [[unlikely]] {
                   ctx.error = error_code::syntax_error;
@@ -1929,6 +1932,9 @@ namespace glz
             }
          }
          else {
+            if (invalid_end(ctx, it, end)) {
+               return;
+            }
             const auto tag = uint8_t(*it);
             if (tag != tag::generic_array) [[unlikely]] {
                ctx.error = error_code::syntax_error;
