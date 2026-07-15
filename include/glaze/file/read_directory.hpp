@@ -27,11 +27,32 @@ namespace glz
    [[nodiscard]] inline error_ctx directory_to_buffers(auto& files, const sv directory_path,
                                                        const sv target_extension = ".json")
    {
-      for (const auto& entry : std::filesystem::directory_iterator(directory_path)) {
-         if (entry.is_regular_file() && (target_extension.empty() || (entry.path().extension() == target_extension))) {
+      namespace fs = std::filesystem;
+
+      // Use the non-throwing overloads throughout: a concurrent modification of the
+      // directory must be reported through error_ctx, not by throwing a
+      // std::filesystem_error out of a function whose contract is to return one.
+      std::error_code fs_ec{};
+      fs::directory_iterator it(fs::path(directory_path), fs_ec);
+      if (fs_ec) {
+         return {0, error_code::file_open_failure};
+      }
+
+      const fs::directory_iterator end{};
+      while (it != end) {
+         const auto& entry = *it;
+         std::error_code stat_ec{};
+         const bool regular = entry.is_regular_file(stat_ec);
+         // Skip entries we cannot stat (e.g. removed mid-iteration) rather than
+         // failing the whole read.
+         if (!stat_ec && regular && (target_extension.empty() || entry.path().extension() == target_extension)) {
             if (auto ec = file_to_buffer(files[entry.path()], entry.path().string()); bool(ec)) {
                return {0, ec};
             }
+         }
+         it.increment(fs_ec);
+         if (fs_ec) {
+            return {0, error_code::file_open_failure};
          }
       }
       return {};
