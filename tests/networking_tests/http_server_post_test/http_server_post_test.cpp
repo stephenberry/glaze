@@ -20,7 +20,6 @@ namespace
 {
    using namespace ut;
 
-   constexpr int test_port = 8888;
    constexpr char test_host[] = "127.0.0.1";
    constexpr char test_route[] = "/post_test";
 
@@ -37,28 +36,8 @@ namespace
   "property1": "aeboomeLoo9eYohaeshue4Aesheimoal9EC9Ohquarepei8ut0aethue"
 })";
 
-   void wait_for_server_ready(int port, int max_tries = 50)
-   {
-      for (int tries = 0; tries < max_tries; ++tries) {
-         try {
-            asio::io_context io_ctx;
-            asio::ip::tcp::socket sock(io_ctx);
-            asio::ip::tcp::endpoint endpoint(asio::ip::make_address(test_host), uint16_t(port));
-            asio::error_code ec;
-            sock.connect(endpoint, ec);
-            if (ec != asio::error::connection_refused) {
-               return;
-            }
-         }
-         catch (...) {
-         }
-         std::this_thread::sleep_for(std::chrono::milliseconds(40));
-      }
-      throw std::runtime_error("Server did not start in time");
-   }
-
    // Build HTTP headers with many custom headers to simulate the original bug scenario
-   std::string build_headers(size_t content_length)
+   std::string build_headers(uint16_t port, size_t content_length)
    {
       std::ostringstream req;
       req << "POST " << test_route << " HTTP/1.1\r\n"
@@ -66,7 +45,7 @@ namespace
           << "User-Agent: glaze-test/1.0\r\n"
           << "Content-Length: " << content_length << "\r\n"
           << "Accept-Encoding: gzip, compress, deflate, br\r\n"
-          << "Host: " << test_host << ":" << test_port << "\r\n"
+          << "Host: " << test_host << ":" << port << "\r\n"
           << "Connection: close\r\n"
           // Many additional headers to fill the initial buffer read
           << "X-Testheader-1: zie3ethahf4oomouHohPhi5HuhahvuL8jeilohqua0Ohdaivahqueido\r\n"
@@ -96,19 +75,18 @@ namespace
    }
 
    // Send headers and body in a single write (tests the case where body is already buffered)
-   std::string post_single_write(const std::string& body)
+   std::string post_single_write(uint16_t port, const std::string& body)
    {
-      wait_for_server_ready(test_port);
       asio::io_context io_ctx;
       asio::ip::tcp::socket socket(io_ctx);
-      asio::ip::tcp::endpoint endpoint(asio::ip::make_address(test_host), uint16_t(test_port));
+      asio::ip::tcp::endpoint endpoint(asio::ip::make_address(test_host), port);
       asio::error_code ec;
       socket.connect(endpoint, ec);
       if (ec) {
          return "";
       }
 
-      std::string headers = build_headers(body.size());
+      std::string headers = build_headers(port, body.size());
       std::string request = headers + body;
       asio::write(socket, asio::buffer(request.data(), request.size()));
 
@@ -117,19 +95,18 @@ namespace
 
    // Send headers first, then body separately to exercise the async_read path
    // This simulates the scenario where the body hasn't arrived when headers are parsed
-   std::string post_chunked_write(const std::string& body)
+   std::string post_chunked_write(uint16_t port, const std::string& body)
    {
-      wait_for_server_ready(test_port);
       asio::io_context io_ctx;
       asio::ip::tcp::socket socket(io_ctx);
-      asio::ip::tcp::endpoint endpoint(asio::ip::make_address(test_host), uint16_t(test_port));
+      asio::ip::tcp::endpoint endpoint(asio::ip::make_address(test_host), port);
       asio::error_code ec;
       socket.connect(endpoint, ec);
       if (ec) {
          return "";
       }
 
-      std::string headers = build_headers(body.size());
+      std::string headers = build_headers(port, body.size());
 
       // Send headers first
       asio::write(socket, asio::buffer(headers.data(), headers.size()));
@@ -158,25 +135,24 @@ suite http_server_post_suite = [] {
    std::mutex body_mutex;
    std::string received_body;
 
-   std::thread server_thr([&] {
-      server.post(test_route, [&](const glz::request& req, glz::response& res) {
-         {
-            std::lock_guard<std::mutex> lock(body_mutex);
-            received_body = req.body;
-         }
-         res.status(200);
-         res.content_type("text/plain");
-         res.body("OK:" + std::to_string(req.body.size()));
-      });
-
-      server.bind("0.0.0.0", test_port);
-      server.start(0);
-      io_ctx->run();
+   server.post(test_route, [&](const glz::request& req, glz::response& res) {
+      {
+         std::lock_guard<std::mutex> lock(body_mutex);
+         received_body = req.body;
+      }
+      res.status(200);
+      res.content_type("text/plain");
+      res.body("OK:" + std::to_string(req.body.size()));
    });
+   server.bind(test_host, 0);
+   const uint16_t test_port = server.port();
+   server.start(0);
+
+   std::thread server_thr([&] { io_ctx->run(); });
 
    "POST with body sent in single write"_test = [&] {
       std::string body(post_body);
-      std::future<std::string> f = std::async(std::launch::async, [&] { return post_single_write(body); });
+      std::future<std::string> f = std::async(std::launch::async, [&] { return post_single_write(test_port, body); });
 
       auto future_timeout = std::chrono::system_clock::now() + std::chrono::seconds(5);
       std::string response;
@@ -195,7 +171,7 @@ suite http_server_post_suite = [] {
 
    "POST with headers and body sent separately (exercises async_read)"_test = [&] {
       std::string body(post_body);
-      std::future<std::string> f = std::async(std::launch::async, [&] { return post_chunked_write(body); });
+      std::future<std::string> f = std::async(std::launch::async, [&] { return post_chunked_write(test_port, body); });
 
       auto future_timeout = std::chrono::system_clock::now() + std::chrono::seconds(5);
       std::string response;
@@ -224,7 +200,8 @@ suite http_server_post_suite = [] {
       binary_body.push_back('\0');
       binary_body += "more data";
 
-      std::future<std::string> f = std::async(std::launch::async, [&] { return post_chunked_write(binary_body); });
+      std::future<std::string> f =
+         std::async(std::launch::async, [&] { return post_chunked_write(test_port, binary_body); });
 
       auto future_timeout = std::chrono::system_clock::now() + std::chrono::seconds(5);
       std::string response;
