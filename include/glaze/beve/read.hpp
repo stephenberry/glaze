@@ -553,6 +553,20 @@ namespace glz
       return glaze_object_t<X> || reflectable<X> || is_memory_object<X> || readable_map_t<X> || pair_t<X>;
    }();
 
+   // True when X is a reflectable struct with no members. reflect<X>::size may only be named for
+   // struct-like X, so the check is guarded here at namespace scope (naming reflect<X>::size from a
+   // nested lambda inside the variant reader would force a capture of the enclosing constexpr flags
+   // that GCC rejects).
+   template <class X>
+   inline constexpr bool beve_is_empty_struct = [] {
+      if constexpr (glaze_object_t<X> || reflectable<X>) {
+         return reflect<X>::size == 0;
+      }
+      else {
+         return false;
+      }
+   }();
+
    // BEVE Version 2 recovers a std::variant alternative from an ordinary, self-describing value.
    // Legacy Version 1 data still begins with the type-tag extension byte (0x0E) and is decoded by
    // positional index. Otherwise the alternative is deduced from the value's category; for objects
@@ -766,16 +780,10 @@ namespace glz
                   using X = std::conditional_t<is_memory_object<V>, memory_type<V>, V>;
 
                   // reflect<X>::size may only be named for struct-like X (a std::pair/map alternative
-                  // has no reflect specialization), so guard it behind the struct-like check.
+                  // has no reflect specialization); beve_is_empty_struct<X> guards that at namespace
+                  // scope. Both flags are constant-expression uses here, so no lambda capture occurs.
                   constexpr bool struct_like = glaze_object_t<X> || reflectable<X>;
-                  constexpr bool empty_tagged_struct = [] {
-                     if constexpr (tagged && struct_like) {
-                        return reflect<X>::size == 0;
-                     }
-                     else {
-                        return false;
-                     }
-                  }();
+                  constexpr bool empty_tagged_struct = tagged && beve_is_empty_struct<X>;
 
                   if constexpr (empty_tagged_struct) {
                      // Empty struct carrying only the discriminator: skip the whole {tag:id} object.
