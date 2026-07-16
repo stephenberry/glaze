@@ -1766,6 +1766,13 @@ namespace glz
          const auto tag = uint8_t(*it);
          if (tag != header) [[unlikely]] {
             if constexpr (check_allow_conversions(Opts)) {
+               // Every BEVE object/map has the object category in bits 0-2; only the key-type bits
+               // (3-4) may differ under conversions. Reject any non-object category so a non-object
+               // value (e.g. a typed array) is never mis-read as a map.
+               if ((tag & 0b00000'111) != tag::object) {
+                  ctx.error = error_code::syntax_error;
+                  return;
+               }
                const auto key_type = tag & 0b000'11'000;
                if constexpr (beve_key_traits<Key>::as_string) {
                   if (key_type != 0) {
@@ -1855,6 +1862,13 @@ namespace glz
          const auto tag = uint8_t(*it);
          if (tag != header) [[unlikely]] {
             if constexpr (check_allow_conversions(Opts)) {
+               // Every BEVE object/map has the object category in bits 0-2; only the key-type bits
+               // (3-4) may differ under conversions. Reject any non-object category so a non-object
+               // value (e.g. a typed array) is never mis-read as a map.
+               if ((tag & 0b00000'111) != tag::object) {
+                  ctx.error = error_code::syntax_error;
+                  return;
+               }
                const auto key_type = tag & 0b000'11'000;
                if constexpr (beve_key_traits<Key>::as_string) {
                   if (key_type != 0) {
