@@ -1278,6 +1278,76 @@ suite dynamic_key_custom_tests = [] {
       expect(top.b.val == 2);
       expect(top.c.val == 3);
    };
+
+   // Truncated, non-null-terminated input must not read past the buffer. Each buffer below is
+   // sized exactly to its bytes (a std::vector<char>, no trailing '\0'), so any read at
+   // data() + size() lands in unallocated memory and aborts under the sanitizer CI builds. The
+   // lazy scanner previously walked one byte past end whenever a value/element/key began at
+   // end-of-input (a value missing after ':', a truncated literal, an unclosed key, or a
+   // trailing comma), and it also handed back views positioned at end.
+   "lazy_json_truncated_missing_value"_test = [] {
+      const std::vector<char> buf{'{', '"', 'a', '"', ':'};
+      const std::string_view sv{buf.data(), buf.size()};
+      auto result = glz::lazy_json<glz::opts{.null_terminated = false}>(sv);
+      expect(result.has_value());
+      auto& doc = *result;
+      expect(doc["x"].has_error()); // non-matching key drives skip_value_lazy at end
+      expect(doc["a"].has_error()); // matching key whose value is truncated
+   };
+
+   "lazy_json_truncated_literal"_test = [] {
+      const std::vector<char> buf{'{', '"', 'a', '"', ':', 't'};
+      const std::string_view sv{buf.data(), buf.size()};
+      auto result = glz::lazy_json<glz::opts{.null_terminated = false}>(sv);
+      expect(result.has_value());
+      expect((*result)["x"].has_error()); // skip over a truncated 'true' literal
+
+      const std::vector<char> lit{'t'};
+      const std::string_view lit_sv{lit.data(), lit.size()};
+      auto lit_doc = glz::lazy_json<glz::opts{.null_terminated = false}>(lit_sv);
+      expect(lit_doc.has_value());
+      expect((*lit_doc).root().raw_json().size() == lit.size()); // span clamped to the buffer
+   };
+
+   "lazy_json_truncated_unclosed_key"_test = [] {
+      const std::vector<char> buf{'{', '"', 'a'};
+      const std::string_view sv{buf.data(), buf.size()};
+      auto result = glz::lazy_json<glz::opts{.null_terminated = false}>(sv);
+      expect(result.has_value());
+      auto& doc = *result;
+      expect(doc["a"].has_error());
+      (void)doc.root().index(); // index() scans the key at end
+      (void)doc.root().size();
+   };
+
+   "lazy_json_truncated_trailing_comma"_test = [] {
+      const std::vector<char> buf{'{', '"', 'a', '"', ':', '1', ','};
+      const std::string_view sv{buf.data(), buf.size()};
+      auto result = glz::lazy_json<glz::opts{.null_terminated = false}>(sv);
+      expect(result.has_value());
+      auto& doc = *result;
+      expect(doc["z"].has_error());
+      (void)doc.root().index(); // the next key parse begins at end after the comma
+      size_t count = 0;
+      for (auto element : doc.root()) {
+         (void)element;
+         ++count;
+      }
+      expect(count == 1u); // only the "a" element is complete
+   };
+
+   "lazy_json_truncated_iterate"_test = [] {
+      const std::vector<char> buf{'{', '"', 'a', '"', ':'};
+      const std::string_view sv{buf.data(), buf.size()};
+      auto result = glz::lazy_json<glz::opts{.null_terminated = false}>(sv);
+      expect(result.has_value());
+      size_t count = 0;
+      for (auto element : (*result).root()) {
+         (void)element;
+         ++count;
+      }
+      expect(count == 0u); // the truncated element is not yielded
+   };
 };
 
 int main() { return 0; }

@@ -107,15 +107,20 @@ namespace glz
       GLZ_ALWAYS_INLINE const char* skip_value_lazy(const char* p, const char* end) noexcept
       {
          using enum lazy_char_type;
+         if constexpr (!Opts.null_terminated) {
+            // Non-null-terminated buffers have no '\0' sentinel, so a caller can reach here
+            // with p == end (e.g. a key whose value is missing). Guard the tag dereference.
+            if (p >= end) return p;
+         }
          switch (*p) {
          case '"':
             return skip_string_fast<Opts>(p, end);
          case 't':
-            return p + 4;
+            return p + 4 <= end ? p + 4 : end;
          case 'f':
-            return p + 5;
+            return p + 5 <= end ? p + 5 : end;
          case 'n':
-            return p + 4;
+            return p + 4 <= end ? p + 4 : end;
          case '[':
          case '{': {
             int depth = 1;
@@ -681,6 +686,11 @@ namespace glz
    template <opts Opts>
    inline std::string_view lazy_json_view<Opts>::parse_key(const char*& p, const char* end) noexcept
    {
+      // A non-null-terminated buffer has no '\0' sentinel, so a scan loop can reach the next
+      // key position with p == end (e.g. after a trailing comma). Guard the opening dereference.
+      if constexpr (!Opts.null_terminated) {
+         if (p >= end) return {};
+      }
       if (*p != '"') return {};
       const char* const start = p;
       ++p; // skip opening quote
@@ -749,6 +759,11 @@ namespace glz
          }
       }
 
+      if constexpr (!Opts.null_terminated) {
+         // The requested index landed past end-of-input (e.g. a trailing comma with no
+         // following element); a view positioned at end would read past the buffer.
+         if (p >= end) return make_error(error_code::exceeded_static_array_size);
+      }
       return {doc_, p};
    }
 
@@ -770,7 +785,7 @@ namespace glz
          const char* p = parse_pos_;
          p = detail::skip_value_lazy<Opts>(p, end);
          skip_ws(p, end);
-         if (*p == ',') {
+         if (p < end && *p == ',') {
             ++p;
             skip_ws(p, end);
          }
@@ -795,7 +810,7 @@ namespace glz
          skip_ws(p, end);
 
          // Skip ':'
-         if (*p == ':') {
+         if (p < end && *p == ':') {
             ++p;
             skip_ws(p, end);
          }
@@ -803,6 +818,11 @@ namespace glz
          // Check if key matches
          if (k == key) {
             parse_pos_ = p; // Store value position (lazy - don't skip yet)
+            if constexpr (!Opts.null_terminated) {
+               // A matched key whose value begins at end-of-input is truncated; a view
+               // positioned at end would read past the buffer on its first access.
+               if (p >= end) return make_error(error_code::unexpected_end);
+            }
             return {doc_, p};
          }
 
@@ -811,7 +831,7 @@ namespace glz
          skip_ws(p, end);
 
          // Skip comma
-         if (*p == ',') {
+         if (p < end && *p == ',') {
             ++p;
             skip_ws(p, end);
          }
@@ -836,7 +856,7 @@ namespace glz
             skip_ws(p, end);
 
             // Skip ':'
-            if (*p == ':') {
+            if (p < end && *p == ':') {
                ++p;
                skip_ws(p, end);
             }
@@ -844,6 +864,11 @@ namespace glz
             // Check if key matches
             if (k == key) {
                parse_pos_ = p; // Store value position (lazy - don't skip yet)
+               if constexpr (!Opts.null_terminated) {
+                  // A matched key whose value begins at end-of-input is truncated; a view
+                  // positioned at end would read past the buffer on its first access.
+                  if (p >= end) return make_error(error_code::unexpected_end);
+               }
                return {doc_, p};
             }
 
@@ -852,7 +877,7 @@ namespace glz
             skip_ws(p, end);
 
             // Skip comma
-            if (*p == ',') {
+            if (p < end && *p == ',') {
                ++p;
                skip_ws(p, end);
             }
@@ -896,7 +921,7 @@ namespace glz
             // Skip key
             p = detail::skip_string_fast<Opts>(p, end);
             skip_ws(p, end);
-            if (*p == ':') {
+            if (p < end && *p == ':') {
                ++p;
                skip_ws(p, end);
             }
@@ -982,10 +1007,16 @@ namespace glz
          skip_ws(pos);
 
          // Skip ':'
-         if (*pos == ':') {
+         if (pos < json_end_ && *pos == ':') {
             ++pos;
             skip_ws(pos);
          }
+      }
+      // A value that begins at end-of-input is a truncated element; stop iterating instead
+      // of handing back a view whose data pointer sits at end (every view op reads *data_).
+      if (pos >= json_end_) {
+         at_end_ = true;
+         return;
       }
       // Store key in current_view_ (will be set properly after this call)
       current_view_ = lazy_json_view<Opts>{doc_, pos, key};
@@ -1109,10 +1140,16 @@ namespace glz
             skip_ws(p, end);
 
             // Skip ':'
-            if (*p == ':') {
+            if (p < end && *p == ':') {
                ++p;
                skip_ws(p, end);
             }
+         }
+
+         // A truncated element whose value begins at end-of-input must not be recorded:
+         // an indexed view would later hand back a view positioned at end.
+         if constexpr (!Opts.null_terminated) {
+            if (p >= end) break;
          }
 
          // Record element start position
