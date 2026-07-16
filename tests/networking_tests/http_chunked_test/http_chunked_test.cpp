@@ -39,17 +39,8 @@ struct chunked_test_server
       setup_routes();
 
       try {
-         for (uint16_t p = 19100; p < 19300; ++p) {
-            try {
-               server_.bind("127.0.0.1", p);
-               port_ = p;
-               break;
-            }
-            catch (...) {
-               continue;
-            }
-         }
-         if (port_ == 0) return false;
+         server_.bind("127.0.0.1", 0);
+         port_ = server_.port();
 
          running_ = true;
          server_thread_ = std::thread([this] {
@@ -650,18 +641,8 @@ suite chunked_sync_tests = [] {
          res.close();
       });
 
-      uint16_t port = 0;
-      for (uint16_t p = 19500; p < 19700; ++p) {
-         try {
-            server.bind("127.0.0.1", p);
-            port = p;
-            break;
-         }
-         catch (...) {
-            continue;
-         }
-      }
-      expect(port != 0) << "Server should bind";
+      server.bind("127.0.0.1", 0);
+      const uint16_t port = server.port();
 
       std::thread server_thread([&] { server.start(1); });
       expect(wait_until_listening(port)) << "Server should accept connections";
@@ -695,18 +676,8 @@ suite chunked_sync_tests = [] {
       glz::http_server<> server;
       server.mount("/api", router);
 
-      uint16_t port = 0;
-      for (uint16_t p = 19700; p < 19900; ++p) {
-         try {
-            server.bind("127.0.0.1", p);
-            port = p;
-            break;
-         }
-         catch (...) {
-            continue;
-         }
-      }
-      expect(port != 0) << "Server should bind";
+      server.bind("127.0.0.1", 0);
+      const uint16_t port = server.port();
 
       std::thread server_thread([&] { server.start(1); });
       expect(wait_until_listening(port)) << "Server should accept connections";
@@ -744,18 +715,8 @@ suite chunked_sync_tests = [] {
       glz::http_server<> server;
       server.mount("/", router);
 
-      uint16_t port = 0;
-      for (uint16_t p = 19900; p < 20100; ++p) {
-         try {
-            server.bind("127.0.0.1", p);
-            port = p;
-            break;
-         }
-         catch (...) {
-            continue;
-         }
-      }
-      expect(port != 0) << "Server should bind";
+      server.bind("127.0.0.1", 0);
+      const uint16_t port = server.port();
 
       std::thread server_thread([&] { server.start(1); });
       expect(wait_until_listening(port)) << "Server should accept connections";
@@ -790,18 +751,8 @@ suite chunked_sync_tests = [] {
       glz::http_server<> server;
       server.mount("/", router);
 
-      uint16_t port = 0;
-      for (uint16_t p = 20100; p < 20300; ++p) {
-         try {
-            server.bind("127.0.0.1", p);
-            port = p;
-            break;
-         }
-         catch (...) {
-            continue;
-         }
-      }
-      expect(port != 0) << "Server should bind";
+      server.bind("127.0.0.1", 0);
+      const uint16_t port = server.port();
 
       std::thread server_thread([&] { server.start(1); });
       expect(wait_until_listening(port)) << "Server should accept connections";
@@ -836,18 +787,8 @@ suite chunked_sync_tests = [] {
          res.close();
       });
 
-      uint16_t port = 0;
-      for (uint16_t p = 20300; p < 20500; ++p) {
-         try {
-            server.bind("127.0.0.1", p);
-            port = p;
-            break;
-         }
-         catch (...) {
-            continue;
-         }
-      }
-      expect(port != 0) << "Server should bind";
+      server.bind("127.0.0.1", 0);
+      const uint16_t port = server.port();
 
       std::thread server_thread([&] { server.start(1); });
       expect(wait_until_listening(port)) << "Server should accept connections";
@@ -879,18 +820,8 @@ suite chunked_sync_tests = [] {
          res.close();
       });
 
-      uint16_t port = 0;
-      for (uint16_t p = 20500; p < 20700; ++p) {
-         try {
-            server.bind("127.0.0.1", p);
-            port = p;
-            break;
-         }
-         catch (...) {
-            continue;
-         }
-      }
-      expect(port != 0) << "Server should bind";
+      server.bind("127.0.0.1", 0);
+      const uint16_t port = server.port();
 
       std::thread server_thread([&] { server.start(1); });
       expect(wait_until_listening(port)) << "Server should accept connections";
@@ -936,18 +867,8 @@ suite chunked_sync_tests = [] {
          },
          spec);
 
-      uint16_t port = 0;
-      for (uint16_t p = 20700; p < 20900; ++p) {
-         try {
-            server.bind("127.0.0.1", p);
-            port = p;
-            break;
-         }
-         catch (...) {
-            continue;
-         }
-      }
-      expect(port != 0) << "Server should bind";
+      server.bind("127.0.0.1", 0);
+      const uint16_t port = server.port();
 
       std::thread server_thread([&] { server.start(1); });
       expect(wait_until_listening(port)) << "Server should accept connections";

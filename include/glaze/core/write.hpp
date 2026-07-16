@@ -114,13 +114,22 @@ namespace glz
    }
 
    // requires file_name to be null terminated
+   //
+   // Writes the buffer verbatim in binary mode (symmetric with the "rb" read in
+   // file_to_buffer) so binary formats are not corrupted by newline translation on
+   // Windows, and reports a write/flush failure instead of silently succeeding.
    [[nodiscard]] inline error_code buffer_to_file(auto&& buffer, const sv file_name)
    {
-      auto file = std::ofstream(file_name.data(), std::ios::out);
+      std::ofstream file(file_name.data(), std::ios::out | std::ios::binary);
       if (!file) {
          return error_code::file_open_failure;
       }
       file.write(buffer.data(), buffer.size());
+      file.close();
+      if (!file) {
+         // A failed write or flush surfaces on close; do not report success silently.
+         return error_code::file_close_failure;
+      }
       return {};
    }
 }

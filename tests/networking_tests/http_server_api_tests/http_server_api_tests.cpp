@@ -1266,20 +1266,8 @@ struct keepalive_test_server
       setup_routes();
 
       try {
-         for (uint16_t test_port = 19080; test_port < 19200; ++test_port) {
-            try {
-               server_.bind("127.0.0.1", test_port);
-               port_ = test_port;
-               break;
-            }
-            catch (...) {
-               continue;
-            }
-         }
-
-         if (port_ == 0) {
-            return false;
-         }
+         server_.bind("127.0.0.1", 0);
+         port_ = server_.port();
 
          running_ = true;
 

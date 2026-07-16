@@ -13018,6 +13018,41 @@ suite directory_tests = [] {
       expect(input.contains("./dir/beta.json"));
       expect(input["./dir/beta.json"].i == 0);
    };
+
+   // read_directory must report a missing directory through its error_ctx rather
+   // than throwing a std::filesystem_error out of directory_to_buffers.
+   "read_directory nonexistent"_test = [] {
+      std::map<std::filesystem::path, my_struct> input{};
+      const auto ec = glz::read_directory(input, "./directory_that_does_not_exist_9f3a");
+      expect(bool(ec));
+      expect(input.empty());
+   };
+};
+
+suite buffer_to_file_tests = [] {
+   // buffer_to_file must write bytes verbatim: text-mode newline translation would
+   // corrupt binary formats on Windows (0x0A -> 0x0D 0x0A) and break byte-exact
+   // round-trips. On POSIX this passes regardless; it guards the Windows path.
+   "buffer_to_file byte-exact round trip"_test = [] {
+      const std::string path = "./verbatim_roundtrip.bin";
+      std::string payload{};
+      for (int rep = 0; rep < 4; ++rep) {
+         for (int b = 0; b < 256; ++b) {
+            payload.push_back(static_cast<char>(b)); // includes 0x0A and 0x0D
+         }
+      }
+      payload += "a\nb\r\nc\r"; // explicit newline combinations
+
+      expect(glz::buffer_to_file(payload, path) == glz::error_code::none);
+
+      std::string readback{};
+      expect(glz::file_to_buffer(readback, path) == glz::error_code::none);
+      expect(readback.size() == payload.size());
+      expect(readback == payload);
+
+      std::error_code fs_ec{};
+      std::filesystem::remove(path, fs_ec);
+   };
 };
 
 struct WorkshopModConfig
