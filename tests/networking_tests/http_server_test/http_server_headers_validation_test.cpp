@@ -307,7 +307,7 @@ suite http_server_headers_validation_suite = [] {
          "Connection: close\r\n"
          "\r\n";
 
-      std::future<std::string> f = std::async(std::launch::async, [&] { return send_raw(payload); });
+      std::future<std::string> f = std::async(std::launch::async, [&] { return send_raw(test_port, payload); });
 
       std::string response;
       if (f.wait_for(5s) == std::future_status::ready) {
@@ -325,7 +325,7 @@ suite http_server_headers_validation_suite = [] {
          "Connection: close\r\n"
          "\r\n";
 
-      std::future<std::string> f = std::async(std::launch::async, [&] { return send_raw(payload); });
+      std::future<std::string> f = std::async(std::launch::async, [&] { return send_raw(test_port, payload); });
 
       std::string response;
       if (f.wait_for(5s) == std::future_status::ready) {
@@ -344,7 +344,7 @@ suite http_server_headers_validation_suite = [] {
          "Connection: close\r\n"
          "\r\n";
 
-      std::future<std::string> f = std::async(std::launch::async, [&] { return send_raw(payload); });
+      std::future<std::string> f = std::async(std::launch::async, [&] { return send_raw(test_port, payload); });
 
       std::string response;
       if (f.wait_for(5s) == std::future_status::ready) {
@@ -361,7 +361,7 @@ suite http_server_headers_validation_suite = [] {
          "Connection: close\r\n"
          "\r\n";
 
-      std::future<std::string> f = std::async(std::launch::async, [&] { return send_raw(payload); });
+      std::future<std::string> f = std::async(std::launch::async, [&] { return send_raw(test_port, payload); });
 
       std::string response;
       if (f.wait_for(5s) == std::future_status::ready) {
