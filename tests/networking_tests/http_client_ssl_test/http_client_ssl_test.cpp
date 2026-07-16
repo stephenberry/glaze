@@ -259,11 +259,11 @@ class TestHTTPSServer
    glz::https_server server_;
    std::future<void> server_future_;
    std::atomic<bool> running_{false};
-   uint16_t port_;
+   uint16_t port_{};
    bool initialized_{false};
 
   public:
-   TestHTTPSServer(uint16_t port = 9443) : port_(port)
+   TestHTTPSServer()
    {
       // Always regenerate certificates so test expectations stay deterministic.
       if (!CertificateGenerator::generate_certificates()) {
@@ -282,7 +282,8 @@ class TestHTTPSServer
          server_.load_certificate("client_test_cert.pem", "client_test_key.pem");
          server_.set_ssl_verify_mode(0);
          server_.enable_cors();
-         server_.bind("127.0.0.1", port_);
+         server_.bind("127.0.0.1", 0);
+         port_ = server_.port();
 
          running_ = true;
          server_future_ = std::async(std::launch::async, [this]() { server_.start(2); });
@@ -367,7 +368,7 @@ class TestHTTPSServer
 };
 
 // Global test server - initialized before tests run
-static TestHTTPSServer g_server{9443};
+static TestHTTPSServer g_server;
 
 // Test suite
 suite https_client_tests = [] {

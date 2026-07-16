@@ -159,11 +159,11 @@ int main()
          }
       }
 
+      server.bind("127.0.0.1", 0);
+      const uint16_t port = server.port();
+
       // Start the server in a separate thread
-      std::thread server_thread([&]() {
-         server.bind("127.0.0.1", 8080);
-         server.start();
-      });
+      std::thread server_thread([&]() { server.start(); });
 
       // Give the server time to start
       std::this_thread::sleep_for(std::chrono::milliseconds(100));
@@ -171,7 +171,7 @@ int main()
       // Make HTTP request to get OpenAPI spec
       try {
          glz::http_client client{};
-         auto response_result = client.get("http://127.0.0.1:8080/openapi.json");
+         auto response_result = client.get("http://127.0.0.1:" + std::to_string(port) + "/openapi.json");
 
          if (response_result.has_value()) {
             const auto& response = response_result.value();
