@@ -170,6 +170,9 @@ namespace glz
       }
    };
 
+   // BEVE Version 2 variant size, mirroring the writer byte-for-byte (see to<BEVE, is_variant>):
+   // a tagged object alternative is sized as the merged { tag : id, ...members } object; every other
+   // case is sized as the active alternative's own value. No type-tag extension bytes are counted.
    template <is_variant T>
    struct calculate_size<BEVE, T>
    {
@@ -179,12 +182,52 @@ namespace glz
          return std::visit(
             [&](auto&& v) -> size_t {
                using V = std::decay_t<decltype(v)>;
-               using Variant = std::decay_t<decltype(value)>;
-               static constexpr uint64_t index = variant_index_v<V, Variant>;
 
-               // 1 byte tag + compressed index + value size
-               const size_t header = 1 + compressed_int_size<index>();
-               return header + calculate_size<BEVE, void>::template op<Opts>(v, offset + header);
+               if constexpr ((not check_structs_as_arrays(Opts)) && check_write_type_info(Opts) &&
+                             (not tag_v<T>.empty()) &&
+                             (glaze_object_t<V> || (reflectable<V> && not has_member_with_name<V>(tag_v<T>)) ||
+                              is_memory_object<V>)) {
+                  using X = std::conditional_t<is_memory_object<V>, memory_type<V>, V>;
+
+                  if constexpr (is_memory_object<V>) {
+                     // A null memory_object makes the writer error (invalid_variant_object) and emit
+                     // nothing; mirror that so beve_size never under-counts what is actually written.
+                     if (!v) {
+                        return size_t(0);
+                     }
+                  }
+
+                  size_t result = 1; // object tag (string keys)
+
+                  const size_t body_count = [&]() -> size_t {
+                     if constexpr (is_memory_object<V>) {
+                        return calculate_size<BEVE, X>::template written_member_count<Opts>(*v);
+                     }
+                     else {
+                        return calculate_size<BEVE, X>::template written_member_count<Opts>(v);
+                     }
+                  }();
+                  result += compressed_int_size(body_count + 1); // merged member count
+
+                  // discriminator: headerless string key + id VALUE (string or integral, with header)
+                  result += calculate_size<BEVE, std::remove_cvref_t<decltype(tag_v<T>)>>::template no_header_cx<
+                     tag_v<T>.size(), Opts>();
+                  result += calculate_size<BEVE, void>::template op<Opts>(ids_v<T>[value.index()], offset + result);
+
+                  // alternative body, header suppressed (members spliced into the merged object)
+                  if constexpr (is_memory_object<V>) {
+                     if (v) {
+                        result += calculate_size<BEVE, X>::template op<opening_handled<Opts>()>(*v, offset + result);
+                     }
+                  }
+                  else {
+                     result += calculate_size<BEVE, X>::template op<opening_handled<Opts>()>(v, offset + result);
+                  }
+                  return result;
+               }
+               else {
+                  return calculate_size<BEVE, void>::template op<Opts>(v, offset);
+               }
             },
             value);
       }
@@ -543,63 +586,27 @@ namespace glz
          }(std::make_index_sequence<N>{});
       }
 
-      template <auto Opts>
-         requires(check_structs_as_arrays(Opts) == true)
-      [[nodiscard]] static size_t op(auto&& value, size_t offset = 0)
+      // Number of members this object will size (and write) under Opts for the given value, matching
+      // the object writer. Used by the merged-object variant sizer so it agrees with the writer's
+      // discriminator + body member count.
+      template <auto Options>
+      [[nodiscard]] static size_t written_member_count(auto&& value)
       {
-         size_t result = 1; // generic_array tag
-         result += compressed_int_size<count_to_write<Opts>()>(); // element count
-
-         [[maybe_unused]] decltype(auto) t = [&]() -> decltype(auto) {
-            if constexpr (reflectable<T>) {
-               return to_tie(value);
-            }
-            else {
-               return nullptr;
-            }
-         }();
-
-         for_each<N>([&]<size_t I>() {
-            if constexpr (should_skip_field<Opts, I>()) {
-               return;
-            }
-            else {
+         if constexpr (!maybe_skipped<Options, T>) {
+            (void)value;
+            return count_to_write<Options>();
+         }
+         else {
+            [[maybe_unused]] decltype(auto) t = [&]() -> decltype(auto) {
                if constexpr (reflectable<T>) {
-                  result +=
-                     calculate_size<BEVE, void>::template op<Opts>(get_member(value, get<I>(t)), offset + result);
+                  return to_tie(value);
                }
                else {
-                  result += calculate_size<BEVE, void>::template op<Opts>(get_member(value, get<I>(reflect<T>::values)),
-                                                                          offset + result);
+                  return nullptr;
                }
-            }
-         });
+            }();
 
-         return result;
-      }
-
-      template <auto Options>
-         requires(check_structs_as_arrays(Options) == false)
-      [[nodiscard]] static size_t op(auto&& value, size_t offset = 0)
-      {
-         constexpr auto Opts = opening_handled_off<Options>();
-
-         [[maybe_unused]] decltype(auto) t = [&]() -> decltype(auto) {
-            if constexpr (reflectable<T>) {
-               return to_tie(value);
-            }
-            else {
-               return nullptr;
-            }
-         }();
-
-         size_t result = 0;
-
-         if constexpr (maybe_skipped<Options, T>) {
-            // Dynamic path: count members at runtime to handle skip_null_members
             size_t member_count = 0;
-
-            // First pass: count members that will be written
             for_each<N>([&]<size_t I>() {
                if constexpr (should_skip_field<Options, I>()) {
                   return;
@@ -655,6 +662,65 @@ namespace glz
                   }
                }
             });
+            return member_count;
+         }
+      }
+
+      template <auto Opts>
+         requires(check_structs_as_arrays(Opts) == true)
+      [[nodiscard]] static size_t op(auto&& value, size_t offset = 0)
+      {
+         size_t result = 1; // generic_array tag
+         result += compressed_int_size<count_to_write<Opts>()>(); // element count
+
+         [[maybe_unused]] decltype(auto) t = [&]() -> decltype(auto) {
+            if constexpr (reflectable<T>) {
+               return to_tie(value);
+            }
+            else {
+               return nullptr;
+            }
+         }();
+
+         for_each<N>([&]<size_t I>() {
+            if constexpr (should_skip_field<Opts, I>()) {
+               return;
+            }
+            else {
+               if constexpr (reflectable<T>) {
+                  result +=
+                     calculate_size<BEVE, void>::template op<Opts>(get_member(value, get<I>(t)), offset + result);
+               }
+               else {
+                  result += calculate_size<BEVE, void>::template op<Opts>(get_member(value, get<I>(reflect<T>::values)),
+                                                                          offset + result);
+               }
+            }
+         });
+
+         return result;
+      }
+
+      template <auto Options>
+         requires(check_structs_as_arrays(Options) == false)
+      [[nodiscard]] static size_t op(auto&& value, size_t offset = 0)
+      {
+         constexpr auto Opts = opening_handled_off<Options>();
+
+         [[maybe_unused]] decltype(auto) t = [&]() -> decltype(auto) {
+            if constexpr (reflectable<T>) {
+               return to_tie(value);
+            }
+            else {
+               return nullptr;
+            }
+         }();
+
+         size_t result = 0;
+
+         if constexpr (maybe_skipped<Options, T>) {
+            // Dynamic path: count members at runtime to handle skip_null_members
+            const size_t member_count = written_member_count<Options>(value);
 
             // Write header with dynamic count
             if constexpr (!check_opening_handled(Options)) {

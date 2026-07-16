@@ -546,38 +546,309 @@ namespace glz
       }
    };
 
+   // A variant alternative whose BEVE wire form is an object (used to constrain V2 object deduction).
+   template <class V>
+   inline constexpr bool beve_variant_is_object_alt = [] {
+      using X = std::decay_t<V>;
+      return glaze_object_t<X> || reflectable<X> || is_memory_object<X> || readable_map_t<X> || pair_t<X>;
+   }();
+
+   // BEVE Version 2 recovers a std::variant alternative from an ordinary, self-describing value.
+   // Legacy Version 1 data still begins with the type-tag extension byte (0x0E) and is decoded by
+   // positional index. Otherwise the alternative is deduced from the value's category; for objects
+   // it is resolved from the discriminator (tag_v/ids_v) when present, falling back to the set of
+   // keys (structural deduction), exactly as the JSON reader does. Positional structs-as-arrays data
+   // carries neither keys nor a tag, so each alternative is tried in turn. Every non-object category
+   // is likewise resolved by trying alternatives, which is reliable because each BEVE value reader
+   // validates its own type-tag byte and a mismatch fails cleanly.
    template <is_variant T>
       requires(not custom_read<T>)
    struct from<BEVE, T>
    {
+      static constexpr size_t variant_size = std::variant_size_v<T>;
+
+      // Try each alternative in declaration order, rewinding the iterator on failure.
       template <auto Opts>
-      GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&& it, auto end) noexcept
+      static void try_each(auto&& value, is_context auto&& ctx, auto&& it, auto end) noexcept
       {
-         constexpr uint8_t header = tag::extensions | 0b00001'000;
-         if (invalid_end(ctx, it, end)) {
-            return;
+         bool matched = false;
+         const auto start = it;
+         for_each<variant_size>([&]<size_t I>() {
+            if (matched) {
+               return;
+            }
+            it = start;
+            if (value.index() != I) {
+               emplace_runtime_variant(value, I);
+            }
+            ctx.error = error_code::none;
+            parse<BEVE>::op<Opts>(std::get<I>(value), ctx, it, end);
+            if (!bool(ctx.error)) {
+               matched = true;
+            }
+         });
+         if (!matched) [[unlikely]] {
+            it = start;
+            ctx.error = error_code::no_matching_variant_type;
          }
-         const auto tag = uint8_t(*it);
-         if (tag != header) [[unlikely]] {
-            ctx.error = error_code::syntax_error;
-            return;
-         }
+      }
 
-         ++it;
-         const auto type_index = int_from_compressed(ctx, it, end);
-         if (bool(ctx.error)) [[unlikely]] {
-            return;
-         }
+      // Object-category dispatch: single candidate is parsed directly; otherwise scan the keys once
+      // to find the discriminator and/or narrow the candidate set, then rewind and parse in full.
+      template <auto Opts>
+      static void read_object(auto&& value, is_context auto&& ctx, auto&& it, auto end) noexcept
+      {
+         constexpr size_t n_obj = []<size_t... I>(std::index_sequence<I...>) {
+            return (size_t(beve_variant_is_object_alt<std::variant_alternative_t<I, T>>) + ... + 0);
+         }(std::make_index_sequence<variant_size>{});
 
-         if (type_index >= std::variant_size_v<T>) [[unlikely]] {
+         if constexpr (n_obj == 0) {
             ctx.error = error_code::no_matching_variant_type;
             return;
          }
-
-         if (value.index() != type_index) {
-            emplace_runtime_variant(value, type_index);
+         else if constexpr (n_obj == 1 && tag_v<T>.empty()) {
+            constexpr size_t I = [] {
+               size_t r = variant_size;
+               [&]<size_t... J>(std::index_sequence<J...>) {
+                  ((beve_variant_is_object_alt<std::variant_alternative_t<J, T>> && r == variant_size
+                       ? (void)(r = J)
+                       : (void)0),
+                   ...);
+               }(std::make_index_sequence<variant_size>{});
+               return r;
+            }();
+            if (value.index() != I) {
+               emplace_runtime_variant(value, I);
+            }
+            parse<BEVE>::op<Opts>(std::get<I>(value), ctx, it, end);
          }
-         std::visit([&](auto&& v) { parse<BEVE>::op<Opts>(v, ctx, it, end); }, value);
+         else {
+            constexpr bool tagged = not tag_v<T>.empty();
+
+            // Pass 1: scan keys on a separate cursor without disturbing `it`.
+            auto scan = it;
+            ++scan; // object tag byte
+            const auto n_keys = int_from_compressed(ctx, scan, end);
+            if (bool(ctx.error)) [[unlikely]] {
+               return;
+            }
+
+            auto possible = bit_array<variant_size>{};
+            for_each<variant_size>([&]<size_t I>() {
+               if constexpr (beve_variant_is_object_alt<std::variant_alternative_t<I, T>>) {
+                  possible[I] = true;
+               }
+            });
+
+            size_t tag_index = variant_size; // sentinel: discriminator not yet resolved
+
+            for (size_t k = 0; k < n_keys; ++k) {
+               const auto klen = int_from_compressed(ctx, scan, end);
+               if (bool(ctx.error)) [[unlikely]] {
+                  return;
+               }
+               if (uint64_t(end - scan) < klen) [[unlikely]] {
+                  ctx.error = error_code::unexpected_end;
+                  return;
+               }
+               const sv key{scan, size_t(klen)};
+               scan += klen;
+
+               bool consumed_value = false;
+               if constexpr (tagged) {
+                  if (key == tag_v<T>) {
+                     using id_type = std::decay_t<decltype(ids_v<T>[0])>;
+                     if constexpr (std::integral<id_type>) {
+                        id_type id{};
+                        from<BEVE, id_type>::template op<Opts>(id, ctx, scan, end);
+                        if (bool(ctx.error)) [[unlikely]] {
+                           return;
+                        }
+                        tag_index = variant_id_to_index<T>::op(id);
+                     }
+                     else {
+                        // Read the string discriminator VALUE in place: [tag::string][len][bytes].
+                        if (invalid_end(ctx, scan, end)) {
+                           return;
+                        }
+                        if (uint8_t(*scan) != tag::string) [[unlikely]] {
+                           // Discriminator value is not a plain string; leave it unresolved and let
+                           // structural deduction decide, but still consume the value.
+                           skip_value<BEVE>::op<Opts>(ctx, scan, end);
+                           if (bool(ctx.error)) [[unlikely]] {
+                              return;
+                           }
+                           consumed_value = true;
+                           continue;
+                        }
+                        ++scan;
+                        const auto slen = int_from_compressed(ctx, scan, end);
+                        if (bool(ctx.error)) [[unlikely]] {
+                           return;
+                        }
+                        if (uint64_t(end - scan) < slen) [[unlikely]] {
+                           ctx.error = error_code::unexpected_end;
+                           return;
+                        }
+                        const sv id_view{scan, size_t(slen)};
+                        scan += slen;
+                        tag_index = variant_id_to_index<T>::op(id_view.data(), id_view.data() + id_view.size(),
+                                                               id_view.size());
+                     }
+                     consumed_value = true;
+                  }
+               }
+
+               if (!consumed_value) {
+                  if constexpr (variant_deduction_key_count<T> > 0) {
+                     using dk = keys_wrapper<variant_deduction_keys<T>>;
+                     static constexpr auto& H = hash_info<dk>;
+                     const auto di =
+                        decode_hash_with_size<JSON, dk, H, H.type>::op(key.data(), key.data() + klen, size_t(klen));
+                     if (di < variant_deduction_key_count<T> && variant_deduction_keys<T>[di] == key) {
+                        possible = possible & variant_deduction_bits<T>[di];
+                     }
+                  }
+                  skip_value<BEVE>::op<Opts>(ctx, scan, end);
+                  if (bool(ctx.error)) [[unlikely]] {
+                     return;
+                  }
+               }
+            }
+
+            // Resolve: an explicit discriminator wins; otherwise use the narrowed candidate set.
+            size_t resolved = variant_size;
+            if constexpr (tagged) {
+               if (tag_index < variant_size) {
+                  resolved = tag_index;
+               }
+            }
+            if (resolved >= variant_size) {
+               const auto pc = possible.popcount();
+               if (pc == 0) [[unlikely]] {
+                  ctx.error = error_code::no_matching_variant_type;
+                  return;
+               }
+               else if (pc == 1) {
+                  resolved = size_t(possible.countr_zero());
+               }
+               else {
+                  // Ambiguous: prefer the alternative with the fewest declared fields (JSON parity).
+                  // The first still-possible alternative is the baseline so a winner is always chosen
+                  // even when candidates are non-struct object types (maps/pairs) with no field count.
+                  size_t best = variant_size;
+                  size_t best_fields = (std::numeric_limits<size_t>::max)();
+                  for_each<variant_size>([&]<size_t I>() {
+                     if (possible[I]) {
+                        using V = std::variant_alternative_t<I, T>;
+                        using X = std::conditional_t<is_memory_object<V>, memory_type<V>, V>;
+                        size_t f = (std::numeric_limits<size_t>::max)();
+                        if constexpr (glaze_object_t<X> || reflectable<X>) {
+                           f = reflect<X>::size;
+                        }
+                        if (best == variant_size || f < best_fields) {
+                           best_fields = f;
+                           best = I;
+                        }
+                     }
+                  });
+                  resolved = best;
+               }
+            }
+
+            // Pass 2: parse the whole object (from the untouched `it`) as the resolved alternative.
+            if (value.index() != resolved) {
+               emplace_runtime_variant(value, resolved);
+            }
+            visit<variant_size>(
+               [&]<size_t I>() {
+                  using V = std::variant_alternative_t<I, T>;
+                  using X = std::conditional_t<is_memory_object<V>, memory_type<V>, V>;
+
+                  // reflect<X>::size may only be named for struct-like X (a std::pair/map alternative
+                  // has no reflect specialization), so guard it behind the struct-like check.
+                  constexpr bool struct_like = glaze_object_t<X> || reflectable<X>;
+                  constexpr bool empty_tagged_struct = [] {
+                     if constexpr (tagged && struct_like) {
+                        return reflect<X>::size == 0;
+                     }
+                     else {
+                        return false;
+                     }
+                  }();
+
+                  if constexpr (empty_tagged_struct) {
+                     // Empty struct carrying only the discriminator: skip the whole {tag:id} object.
+                     skip_value<BEVE>::op<Opts>(ctx, it, end);
+                  }
+                  else if constexpr (tagged && struct_like && (not is_memory_object<V>)) {
+                     // Thread the discriminator key into the object reader so it is skipped without
+                     // disabling unknown-key checking for the alternative's real fields (JSON parity).
+                     static constexpr auto tag_literal = string_literal_from_view<tag_v<T>.size()>(tag_v<T>);
+                     from<BEVE, X>::template op<Opts, tag_literal>(std::get<I>(value), ctx, it, end);
+                  }
+                  else if constexpr (tagged && (requires { Opts.error_on_unknown_keys; })) {
+                     // memory_object / map / pair alternative: tolerate the discriminator key here.
+                     static constexpr auto AltOpts = [] {
+                        auto o = Opts;
+                        o.error_on_unknown_keys = false;
+                        return o;
+                     }();
+                     parse<BEVE>::op<AltOpts>(std::get<I>(value), ctx, it, end);
+                  }
+                  else {
+                     parse<BEVE>::op<Opts>(std::get<I>(value), ctx, it, end);
+                  }
+               },
+               resolved);
+         }
+      }
+
+      template <auto Opts>
+      GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&& it, auto end) noexcept
+      {
+         if (invalid_end(ctx, it, end)) {
+            return;
+         }
+         const uint8_t header = uint8_t(*it);
+
+         // (A) Legacy Version 1 type-tag extension (0x0E): decode by positional index. Retained for
+         // backward compatibility; no Version 2 value begins with this byte.
+         if (header == (tag::extensions | 0b00001'000)) {
+            ++it;
+            const auto type_index = int_from_compressed(ctx, it, end);
+            if (bool(ctx.error)) [[unlikely]] {
+               return;
+            }
+            if (type_index >= variant_size) [[unlikely]] {
+               ctx.error = error_code::no_matching_variant_type;
+               return;
+            }
+            if (value.index() != type_index) {
+               emplace_runtime_variant(value, type_index);
+            }
+            std::visit([&](auto&& v) { parse<BEVE>::op<Opts>(v, ctx, it, end); }, value);
+            return;
+         }
+
+         // (B) Positional (structs-as-arrays) data carries no keys or discriminator.
+         if constexpr (check_structs_as_arrays(Opts)) {
+            try_each<Opts>(value, ctx, it, end);
+            return;
+         }
+
+         // (C) Version 2: deduce from the value's self-describing category. Only a string-keyed
+         // object (header == tag::object exactly) carries the struct field names / string
+         // discriminator that read_object's key scan understands. A numeric-keyed object (a map or
+         // pair with a non-string key) writes its keys as raw fixed-width numbers with no length
+         // prefix, so it cannot be scanned as string keys; resolve it (and every non-object
+         // category) by trying each alternative, whose reader validates its own full header.
+         if (header == tag::object) {
+            read_object<Opts>(value, ctx, it, end);
+         }
+         else {
+            try_each<Opts>(value, ctx, it, end);
+         }
       }
    };
 
@@ -1963,7 +2234,10 @@ namespace glz
          }
       }
 
-      template <auto Opts>
+      // `Tag`, when non-empty, names a discriminator key to skip silently (used by the variant
+      // reader so a merged discriminator is tolerated without disabling unknown-key checking for the
+      // object's real fields). Default empty => no discriminator, unchanged behavior.
+      template <auto Opts, string_literal Tag = "">
          requires(check_structs_as_arrays(Opts) == false)
       static void op(auto&& value, is_context auto&& ctx, auto&& it, auto end)
       {
@@ -2025,6 +2299,19 @@ namespace glz
                if (uint64_t(end - it) < n || it == end) [[unlikely]] {
                   ctx.error = error_code::unexpected_end;
                   return;
+               }
+
+               if constexpr (not Tag.sv().empty()) {
+                  // Discriminator key injected by the variant reader: skip it (and its value) without
+                  // consulting error_on_unknown_keys, while the alternative's real keys stay checked.
+                  if (sv{it, n} == Tag.sv()) {
+                     it += n;
+                     skip_value<BEVE>::op<Opts>(ctx, it, end);
+                     if (bool(ctx.error)) [[unlikely]] {
+                        return;
+                     }
+                     continue;
+                  }
                }
 
                const auto index = decode_hash_with_size<BEVE, T, HashInfo, HashInfo.type>::op(it, end, n);
