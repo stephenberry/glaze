@@ -56,22 +56,8 @@ class working_test_server
       setup_routes();
 
       try {
-         // Try to find a free port
-         for (uint16_t test_port = 18080; test_port < 18200; ++test_port) {
-            try {
-               server_.bind("127.0.0.1", test_port);
-               port_ = test_port;
-               break;
-            }
-            catch (...) {
-               continue;
-            }
-         }
-
-         if (port_ == 0) {
-            std::cerr << "Could not find free port for test server\n";
-            return false;
-         }
+         server_.bind("127.0.0.1", 0);
+         port_ = server_.port();
 
          running_ = true;
 
