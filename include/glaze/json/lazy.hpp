@@ -161,15 +161,27 @@ namespace glz
             }
             return p;
          }
-         default:
-            // Number
+         default: {
+            // Number, or an unrecognized byte.
+            const char* const start = p;
             if constexpr (Opts.null_terminated) {
                while (numeric_table[uint8_t(*p)]) ++p;
             }
             else {
                while (p < end && numeric_table[uint8_t(*p)]) ++p;
             }
+            // Guarantee forward progress. A byte that begins no valid value (not a string,
+            // literal, container, or number - impossible in well-formed JSON) leaves p unmoved,
+            // which would spin every caller that skips values in a loop (size(), index(),
+            // operator[], iteration) forever on malformed input. Treat it as a one-byte scalar so
+            // the scan always advances whenever p < end. Bounded by end because json_end_ is the
+            // authoritative message end: a byte within it is safe to step over, while at or past
+            // end we must not move (the caller's own p >= end guard then stops the loop). On
+            // valid input p is always a real value start, so this branch never fires - no
+            // behavior change.
+            if (p == start && p < end) ++p;
             return p;
+         }
          }
       }
    } // namespace detail
@@ -733,25 +745,16 @@ namespace glz
       const char* p = data_ + 1; // skip '['
       skip_ws(p, end);
 
-      // Check for empty array
-      if constexpr (Opts.null_terminated) {
-         if (*p == ']') return make_error(error_code::exceeded_static_array_size);
-      }
-      else {
-         if (p >= end || *p == ']') return make_error(error_code::exceeded_static_array_size);
-      }
+      // Check for empty array. json_end_ bounds the message in both modes: null_terminated does
+      // not guarantee the '\0' sits at json_end_, so fall back to the bound here too.
+      if (p >= end || *p == ']') return make_error(error_code::exceeded_static_array_size);
 
       // Skip 'index' elements using lazy scanning
       for (size_t i = 0; i < index; ++i) {
          p = detail::skip_value_lazy<Opts>(p, end);
          skip_ws(p, end);
 
-         if constexpr (Opts.null_terminated) {
-            if (*p == ']') return make_error(error_code::exceeded_static_array_size);
-         }
-         else {
-            if (p >= end || *p == ']') return make_error(error_code::exceeded_static_array_size);
-         }
+         if (p >= end || *p == ']') return make_error(error_code::exceeded_static_array_size);
 
          if (*p == ',') {
             ++p;
@@ -759,11 +762,10 @@ namespace glz
          }
       }
 
-      if constexpr (!Opts.null_terminated) {
-         // The requested index landed past end-of-input (e.g. a trailing comma with no
-         // following element); a view positioned at end would read past the buffer.
-         if (p >= end) return make_error(error_code::exceeded_static_array_size);
-      }
+      // The requested index landed at or past end-of-input (a trailing comma with no following
+      // element, or an unclosed array); a view positioned at end would read past the buffer, or,
+      // when null_terminated, off the message into trailing bytes.
+      if (p >= end) return make_error(error_code::exceeded_static_array_size);
       return {doc_, p};
    }
 
@@ -797,13 +799,10 @@ namespace glz
 
       // Forward pass: search from current position to end of object
       while (true) {
-         // Check for end of object
-         if constexpr (Opts.null_terminated) {
-            if (*p == '}') break;
-         }
-         else {
-            if (p >= end || *p == '}') break;
-         }
+         // Check for end of object. json_end_ bounds the message in both modes (null_terminated
+         // does not guarantee the '\0' sits at json_end_); this is also the loop's backstop
+         // against an unclosed object spinning forever on a key parse that never advances.
+         if (p >= end || *p == '}') break;
 
          // Parse key
          auto k = parse_key(p, end);
@@ -817,12 +816,12 @@ namespace glz
 
          // Check if key matches
          if (k == key) {
+            // A matched key whose value begins at or past json_end_ is truncated; a view
+            // positioned at end would read past the buffer (or, when null_terminated, off the
+            // message into trailing bytes). Return the error before storing parse_pos_ so a
+            // truncated match leaves no state.
+            if (p >= end) return make_error(error_code::unexpected_end);
             parse_pos_ = p; // Store value position (lazy - don't skip yet)
-            if constexpr (!Opts.null_terminated) {
-               // A matched key whose value begins at end-of-input is truncated; a view
-               // positioned at end would read past the buffer on its first access.
-               if (p >= end) return make_error(error_code::unexpected_end);
-            }
             return {doc_, p};
          }
 
@@ -843,13 +842,8 @@ namespace glz
          skip_ws(p, end);
 
          while (p < search_start) {
-            // Check for end of object
-            if constexpr (Opts.null_terminated) {
-               if (*p == '}') break;
-            }
-            else {
-               if (p >= end || *p == '}') break;
-            }
+            // Check for end of object (see forward pass).
+            if (p >= end || *p == '}') break;
 
             // Parse key
             auto k = parse_key(p, end);
@@ -863,12 +857,12 @@ namespace glz
 
             // Check if key matches
             if (k == key) {
+               // A matched key whose value begins at or past json_end_ is truncated; a view
+               // positioned at end would read past the buffer (or, when null_terminated, off the
+               // message into trailing bytes). Return the error before storing parse_pos_ so a
+               // truncated match leaves no state.
+               if (p >= end) return make_error(error_code::unexpected_end);
                parse_pos_ = p; // Store value position (lazy - don't skip yet)
-               if constexpr (!Opts.null_terminated) {
-                  // A matched key whose value begins at end-of-input is truncated; a view
-                  // positioned at end would read past the buffer on its first access.
-                  if (p >= end) return make_error(error_code::unexpected_end);
-               }
                return {doc_, p};
             }
 
@@ -906,17 +900,19 @@ namespace glz
 
       const char close_char = is_array() ? ']' : '}';
 
-      if constexpr (Opts.null_terminated) {
-         if (*p == close_char) return 0;
-      }
-      else {
-         if (p >= end || *p == close_char) return 0;
-      }
+      // json_end_ bounds the message in both modes: null_terminated does not guarantee the '\0'
+      // sits at json_end_, so fall back to the bound here and throughout the loop below.
+      if (p >= end || *p == close_char) return 0;
 
       size_t count = 0;
       const bool is_obj = is_object();
 
       while (true) {
+         // Stop before scanning a key/value at or past end. This keeps skip_string_fast and
+         // skip_value_lazy from dereferencing off the buffer, and is the loop's backstop against
+         // an unclosed container running off the end.
+         if (p >= end) return count;
+
          if (is_obj) {
             // Skip key
             p = detail::skip_string_fast<Opts>(p, end);
@@ -925,6 +921,9 @@ namespace glz
                ++p;
                skip_ws(p, end);
             }
+            // The value begins at or past end (truncated pair); don't count it, so size() agrees
+            // with index() and iteration.
+            if (p >= end) return count;
          }
 
          // Skip value
@@ -932,12 +931,7 @@ namespace glz
          ++count;
          skip_ws(p, end);
 
-         if constexpr (Opts.null_terminated) {
-            if (*p == close_char) return count;
-         }
-         else {
-            if (p >= end || *p == close_char) return count;
-         }
+         if (p >= end || *p == close_char) return count;
 
          if (*p == ',') {
             ++p;
@@ -958,12 +952,10 @@ namespace glz
       skip_ws(p, end);
 
       const char close_char = is_array() ? ']' : '}';
-      if constexpr (Opts.null_terminated) {
-         return *p == close_char;
-      }
-      else {
-         return p >= end || *p == close_char;
-      }
+      // json_end_ bounds the message in both modes (null_terminated does not guarantee the '\0'
+      // sits at json_end_); a container with nothing before end is empty. This keeps empty()
+      // consistent with size()/index()/iteration reporting 0 on a bare, unclosed container.
+      return p >= end || *p == close_char;
    }
 
    // ============================================================================
@@ -1012,8 +1004,13 @@ namespace glz
             skip_ws(pos);
          }
       }
-      // A value that begins at end-of-input is a truncated element; stop iterating instead
-      // of handing back a view whose data pointer sits at end (every view op reads *data_).
+      // A value that begins at or past json_end_ is a truncated element; stop iterating instead
+      // of handing back a view whose data pointer sits at end (every view op reads *data_, an
+      // out-of-bounds read for a non-null-terminated buffer). This bound is unconditional on
+      // purpose: json_end_ is the authoritative end of the message, whereas null_terminated only
+      // promises a '\0' sentinel exists, not that it sits at json_end_ (it may be trailing buffer
+      // content further on), so '\0' cannot substitute here. It is also the iterator's only
+      // backstop against spinning forever on unclosed null-terminated input.
       if (pos >= json_end_) {
          at_end_ = true;
          return;
@@ -1123,16 +1120,17 @@ namespace glz
       const char close_char = is_array() ? ']' : '}';
       const bool is_obj = is_object();
 
-      // Check for empty container
-      if constexpr (Opts.null_terminated) {
-         if (*p == close_char) return result;
-      }
-      else {
-         if (p >= end || *p == close_char) return result;
-      }
+      // Check for empty container. json_end_ bounds the message in both modes: null_terminated
+      // does not guarantee the '\0' sits at json_end_, so fall back to the bound throughout.
+      if (p >= end || *p == close_char) return result;
 
       // Scan and record all element positions
       while (true) {
+         // Stop before parsing a key/value at or past end: this keeps the scans from reading off
+         // the buffer and is the loop's backstop against an unclosed container looping forever
+         // (repeatedly recording an element positioned at end).
+         if (p >= end) break;
+
          std::string_view key{};
          if (is_obj) {
             // Parse and record key
@@ -1146,11 +1144,9 @@ namespace glz
             }
          }
 
-         // A truncated element whose value begins at end-of-input must not be recorded:
+         // A truncated element whose value begins at or past json_end_ must not be recorded:
          // an indexed view would later hand back a view positioned at end.
-         if constexpr (!Opts.null_terminated) {
-            if (p >= end) break;
-         }
+         if (p >= end) break;
 
          // Record element start position
          result.add_element(p, key);
@@ -1160,12 +1156,7 @@ namespace glz
          skip_ws(p, end);
 
          // Check for end of container
-         if constexpr (Opts.null_terminated) {
-            if (*p == close_char) break;
-         }
-         else {
-            if (p >= end || *p == close_char) break;
-         }
+         if (p >= end || *p == close_char) break;
 
          // Skip comma
          if (*p == ',') {

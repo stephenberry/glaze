@@ -1348,6 +1348,239 @@ suite dynamic_key_custom_tests = [] {
       }
       expect(count == 0u); // the truncated element is not yielded
    };
+
+   // size(), index().size(), and iteration must agree on a truncated object. size() used to
+   // count the incomplete "a": pair (returning 1) while index() and iteration reported 0.
+   "lazy_json_truncated_size_consistency"_test = [] {
+      const std::vector<char> buf{'{', '"', 'a', '"', ':'};
+      const std::string_view sv{buf.data(), buf.size()};
+      auto result = glz::lazy_json<glz::opts{.null_terminated = false}>(sv);
+      expect(result.has_value());
+      auto& root = (*result).root();
+      const size_t by_size = root.size();
+      const size_t by_index = root.index().size();
+      size_t by_iter = 0;
+      for (auto element : root) {
+         (void)element;
+         ++by_iter;
+      }
+      expect(by_size == 0u);
+      expect(by_index == 0u);
+      expect(by_iter == 0u);
+      expect(by_size == by_index);
+      expect(by_size == by_iter);
+   };
+
+   // Iterating a malformed null-terminated document (an unclosed container, valid to feed with
+   // the default null_terminated option since std::string supplies the '\0') must terminate via
+   // json_end_ rather than spinning forever on the end position.
+   "lazy_json_unterminated_iterate_null_terminated"_test = [] {
+      const std::string json = R"({"a":1)"; // no closing brace
+      auto result = glz::lazy_json<glz::opts{}>(json);
+      expect(result.has_value());
+      size_t count = 0;
+      for (auto element : (*result).root()) {
+         (void)element;
+         if (++count > 1000) break; // guard: a regression here would loop forever
+      }
+      expect(count == 1u); // only the complete "a" element is yielded, then iteration stops
+   };
+
+   // null_terminated only promises a '\0' sentinel exists somewhere the parser may rely on, not
+   // that it sits at json_end_. Here the message is the first 7 bytes ("{\"a\":1,"), but the
+   // backing storage continues with more JSON and the '\0' is far past json_end_. Iteration must
+   // stop at json_end_ (yielding only the complete "a" element), not run on into the trailing
+   // bytes toward the distant '\0'.
+   "lazy_json_null_terminated_end_before_sentinel"_test = [] {
+      const char storage[] = R"({"a":1,"b":2})"; // '\0' at storage[13], well past the view below
+      const std::string_view sv{storage, 7}; // "{\"a\":1,"
+      auto result = glz::lazy_json<glz::opts{}>(sv); // null_terminated = true (default)
+      expect(result.has_value());
+      size_t count = 0;
+      std::string_view last_key{};
+      for (auto element : (*result).root()) {
+         last_key = element.key();
+         if (++count > 10) break; // guard: a '\0'-based stop would iterate into "b" and beyond
+      }
+      expect(count == 1u); // "b" lies past json_end_, so it must not be yielded
+      expect(last_key == "a");
+   };
+
+   // A successful lookup primes parse_pos_, so a following lookup runs the progressive-scan branch.
+   // If that second lookup matches a key whose value is truncated at end-of-input, it must report
+   // the error and still leave the view usable: a later lookup of an earlier key must recover.
+   "lazy_json_truncated_match_recovers_after_progressive_scan"_test = [] {
+      // "a" has a complete value; "b" is matched but its value begins exactly at end-of-input.
+      const std::vector<char> buf{'{', '"', 'a', '"', ':', '1', ',', '"', 'b', '"', ':'};
+      const std::string_view sv{buf.data(), buf.size()};
+      auto result = glz::lazy_json<glz::opts{.null_terminated = false}>(sv);
+      expect(result.has_value());
+      auto& doc = *result;
+
+      auto a1 = doc["a"]; // primes parse_pos_ to the value of "a"
+      expect(!a1.has_error());
+      expect(a1.template get<int64_t>().value() == 1);
+
+      expect(doc["b"].has_error()); // progressive scan matches "b"; its value is truncated
+
+      auto a2 = doc["a"]; // must still resolve after the truncated match
+      expect(!a2.has_error());
+      expect(a2.template get<int64_t>().value() == 1);
+   };
+
+   // Malformed *null-terminated* input (an unclosed container) must stay bounded by json_end_ in
+   // the accessors too, not just iteration. Each backing store below is a heap std::vector holding
+   // the message bytes followed by a single '\0' at json_end_, with the view sized to exclude the
+   // '\0'; any read past that sentinel lands outside the allocation and aborts under the sanitizer
+   // CI builds. Before the fix, size() walked skip_string_fast past the sentinel (OOB read),
+   // index() recorded elements at end forever (OOM), operator[](key) spun forever, and
+   // operator[](index) handed back a view positioned at end.
+   "lazy_json_null_terminated_unclosed_object_size"_test = [] {
+      std::vector<char> storage{'{', '"', 'a', '"', ':', '1', '\0'}; // '\0' at index 6 == json_end_
+      const std::string_view sv{storage.data(), 6}; // "{\"a\":1"
+      auto result = glz::lazy_json<glz::opts{}>(sv); // null_terminated = true
+      expect(result.has_value());
+      expect((*result).root().size() == 1u); // one complete member, then bounded by json_end_
+   };
+
+   "lazy_json_null_terminated_unclosed_object_index"_test = [] {
+      std::vector<char> storage{'{', '"', 'a', '"', ':', '1', '\0'};
+      const std::string_view sv{storage.data(), 6};
+      auto result = glz::lazy_json<glz::opts{}>(sv);
+      expect(result.has_value());
+      auto idx = (*result).root().index();
+      expect(idx.size() == 1u); // loop stops at json_end_ instead of recording end forever
+      expect(idx["a"].template get<int64_t>().value() == 1);
+   };
+
+   "lazy_json_null_terminated_unclosed_object_lookup"_test = [] {
+      std::vector<char> storage{'{', '"', 'a', '"', ':', '1', '\0'};
+      const std::string_view sv{storage.data(), 6};
+      auto result = glz::lazy_json<glz::opts{}>(sv);
+      expect(result.has_value());
+      auto& root = (*result).root();
+      expect(!root["a"].has_error()); // present key resolves
+      expect(root["a"].template get<int64_t>().value() == 1);
+      expect(root["missing"].has_error()); // absent key on an unclosed object: not_found, no spin
+   };
+
+   "lazy_json_null_terminated_unclosed_array_index"_test = [] {
+      std::vector<char> storage{'[', '1', ',', '2', '\0'}; // "[1,2" then '\0' at json_end_
+      const std::string_view sv{storage.data(), 4};
+      auto result = glz::lazy_json<glz::opts{}>(sv);
+      expect(result.has_value());
+      auto& root = (*result).root();
+      expect(root[0].template get<int64_t>().value() == 1);
+      expect(root[1].template get<int64_t>().value() == 2);
+      expect(root[2].has_error()); // past the end: an error, not a bogus view positioned at end
+   };
+
+   // operator[](key) runs its value-truncation guard in null-terminated mode too. Without it, a
+   // matched key whose value begins at json_end_ hands back a bogus non-error view positioned at
+   // end; for a std::string that view's data_ points at the '\0', so ASan would NOT catch the
+   // regression. This test pins the behavior via has_error() instead.
+   "lazy_json_null_terminated_truncated_match_lookup"_test = [] {
+      // {"a":1,"b":  -- "a" is complete, "b" is matched but its value begins at json_end_.
+      std::vector<char> storage{'{', '"', 'a', '"', ':', '1', ',', '"', 'b', '"', ':', '\0'};
+      const std::string_view sv{storage.data(), 11}; // excludes the trailing '\0'
+      auto result = glz::lazy_json<glz::opts{}>(sv); // null_terminated = true
+      expect(result.has_value());
+      auto& root = *result;
+      expect(root["a"].template get<int64_t>().value() == 1); // complete member resolves
+      expect(root["b"].has_error()); // matched, value truncated at end: error, not a view at end
+   };
+
+   // empty() must agree with size()==0 for a clearly-empty (bare, unclosed) null-terminated
+   // container. Previously it inspected only the first byte after the brace and reported non-empty.
+   "lazy_json_null_terminated_unclosed_empty"_test = [] {
+      std::vector<char> obj{'{', '\0'};
+      std::vector<char> arr{'[', '\0'};
+      auto o = glz::lazy_json<glz::opts{}>(std::string_view{obj.data(), 1});
+      auto a = glz::lazy_json<glz::opts{}>(std::string_view{arr.data(), 1});
+      expect(o.has_value());
+      expect(a.has_value());
+      expect((*o).root().empty()); // '{' with nothing inside is empty
+      expect((*o).root().size() == 0u);
+      expect((*a).root().empty()); // '[' with nothing inside is empty
+      expect((*a).root().size() == 0u);
+   };
+
+   // An unrecognized byte in value position (not a string, literal, container, or number - e.g.
+   // '@') makes skip_value_lazy's number branch consume nothing. Before the fix that left the scan
+   // position unmoved, so every value-skipping loop (size/index/operator[]/iteration) spun forever
+   // on this malformed input. skip_value_lazy now guarantees forward progress by treating the byte
+   // as a one-byte scalar, so the accessors terminate. The backing stores below are heap vectors
+   // sized to exclude any '\0', so the sanitizer CI builds abort on any read past json_end_ - the
+   // force-advance must never step over the end.
+   "lazy_json_invalid_value_byte_array"_test = [] {
+      const std::vector<char> closed{'[', '@', ']'}; // garbage element, closed
+      const std::vector<char> open{'[', '@'}; // garbage element, unclosed
+      const std::string_view sv_closed{closed.data(), closed.size()};
+      const std::string_view sv_open{open.data(), open.size()};
+
+      auto rc = glz::lazy_json<glz::opts{.null_terminated = false}>(sv_closed);
+      auto ro = glz::lazy_json<glz::opts{.null_terminated = false}>(sv_open);
+      expect(rc.has_value());
+      expect(ro.has_value());
+
+      // Each of these calls spun forever before the fix; reaching the assertions proves termination.
+      expect((*rc).root().size() == 1u); // '@' counted as a lone scalar, then ']'
+      expect((*rc).root().index().size() == 1u);
+      expect((*rc).root()[1].has_error()); // only index 0 exists; index 1 is past the end
+
+      expect((*ro).root().size() == 1u); // unclosed: bounded by json_end_ after the one scalar
+      expect((*ro).root().index().size() == 1u);
+   };
+
+   // operator[](key) is the case the report called out: an invalid byte in value position hung the
+   // key search. {"a":@} matches "a" (its value is the garbage byte) and must resolve an absent key
+   // to not_found instead of spinning. {"a":1@ (a complete value followed by trailing garbage and
+   // no close) must likewise terminate. Non-null-terminated exact-sized stores catch any OOB.
+   "lazy_json_invalid_value_byte_object_lookup"_test = [] {
+      const std::vector<char> garbage_val{'{', '"', 'a', '"', ':', '@', '}'}; // {"a":@}
+      const std::vector<char> trailing{'{', '"', 'a', '"', ':', '1', '@'}; // {"a":1@  (unclosed)
+      const std::string_view sv_g{garbage_val.data(), garbage_val.size()};
+      const std::string_view sv_t{trailing.data(), trailing.size()};
+
+      auto rg = glz::lazy_json<glz::opts{.null_terminated = false}>(sv_g);
+      auto rt = glz::lazy_json<glz::opts{.null_terminated = false}>(sv_t);
+      expect(rg.has_value());
+      expect(rt.has_value());
+
+      expect(!(*rg).root()["a"].has_error()); // "a" matches (value is the garbage byte)
+      expect((*rg).root()["missing"].has_error()); // absent key: not_found, no spin
+
+      expect((*rt).root()["a"].template get<int64_t>().value() == 1); // "a" resolves to 1
+      expect((*rt).root()["missing"].has_error()); // scan past trailing garbage terminates
+   };
+
+   // Iteration must also terminate across an invalid value byte. A counter guard converts a
+   // regression from a true hang into a visible wrong count.
+   "lazy_json_invalid_value_byte_iteration"_test = [] {
+      const std::vector<char> arr{'[', '1', ',', '@', ',', '2', ']'}; // [1,@,2]
+      const std::string_view sv{arr.data(), arr.size()};
+      auto result = glz::lazy_json<glz::opts{.null_terminated = false}>(sv);
+      expect(result.has_value());
+      size_t count = 0;
+      for (auto element : (*result).root()) {
+         (void)element;
+         if (++count > 100) break; // guard: a regression here would loop forever
+      }
+      expect(count == 3u); // 1, the '@' scalar, and 2
+   };
+
+   // The same invalid-byte guarantee under the default null_terminated option: the garbage byte
+   // sits strictly before the '\0', which lands at json_end_. The scan must advance across the
+   // garbage and stop at json_end_, not spin and not walk past the sentinel.
+   "lazy_json_invalid_value_byte_null_terminated"_test = [] {
+      std::vector<char> storage{'[', '@', '\0'}; // '\0' at index 2 == json_end_
+      const std::string_view sv{storage.data(), 2}; // "[@"
+      auto result = glz::lazy_json<glz::opts{}>(sv); // null_terminated = true
+      expect(result.has_value());
+      expect((*result).root().size() == 1u); // '@' scalar, then bounded by json_end_
+      expect((*result).root().index().size() == 1u);
+      expect((*result).root()[1].has_error()); // nothing past the lone scalar
+   };
 };
 
 int main() { return 0; }
