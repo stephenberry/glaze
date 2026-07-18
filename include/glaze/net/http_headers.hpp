@@ -321,4 +321,7 @@ namespace glz
       std::vector<value_type> headers_;
    };
 
+   static_assert(std::ranges::forward_range<decltype(std::declval<http_headers&>().fields(""))>);
+   static_assert(std::ranges::forward_range<decltype(std::declval<http_headers&>().names())>);
+   static_assert(std::ranges::forward_range<decltype(std::declval<http_headers&>().values(""))>);
 }
