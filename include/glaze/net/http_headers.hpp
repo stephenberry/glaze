@@ -51,9 +51,8 @@ namespace glz
       }
    };
 
-   class http_headers
+   struct http_headers
    {
-     public:
       using value_type = glz::http_header;
       using iterator = std::vector<value_type>::iterator;
       using const_iterator = std::vector<value_type>::const_iterator;
