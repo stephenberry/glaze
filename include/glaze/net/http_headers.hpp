@@ -33,7 +33,7 @@ namespace glz
       std::string name;
       std::string value;
 
-      [[nodiscard]] bool contains_token(std::string_view token) const&
+      [[nodiscard]] bool contains_token(std::string_view token) const
       {
          if (token.empty()) {
             return false;
