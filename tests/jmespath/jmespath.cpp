@@ -440,6 +440,22 @@ void fuzz_slice_prefixes(std::string_view complete)
    }
 }
 
+// Same truncation sweep, but through the runtime (jmespath_expression) read_jmespath overload. The
+// runtime slice path passes its opts into handle_slice at a separate call site from the compile-time
+// path, so it needs its own coverage.
+template <class T>
+void fuzz_slice_prefixes_runtime(std::string_view path, std::string_view complete)
+{
+   static constexpr glz::opts options{.null_terminated = false};
+   const glz::jmespath_expression expr{path};
+   for (size_t n = 1; n < complete.size(); ++n) {
+      std::vector<char> buf{complete.begin(), complete.begin() + n};
+      T value{};
+      const auto ec = glz::read_jmespath<options>(expr, value, std::string_view{buf.data(), buf.data() + n});
+      expect(bool(ec)) << "expected truncation error at prefix length " << n;
+   }
+}
+
 // Bounds hardening for the JMESPath array-slice handlers (handle_slice). On a non-null-terminated
 // buffer there is no trailing '\0' sentinel, so the structural ']' / ',' scans must respect end
 // explicitly. Built under ASAN in CI, these cases catch reads past an exact-size buffer.
@@ -495,6 +511,49 @@ suite non_null_terminated_slice_bounds = [] {
       const auto ec = glz::read_jmespath<"[-1]", options>(value, std::string_view{buf.data(), buf.data() + buf.size()});
       expect(not ec);
       expect(value == 30);
+   };
+
+   "nnt runtime slice stays in bounds"_test = [] {
+      // Runtime read_jmespath dispatches slices through the same handle_slice as the compile-time
+      // path but at a different call site. That site did not forward its opts, so on a
+      // non-null-terminated buffer handle_slice ran with the null_terminated default and scanned
+      // the structural ']' / ',' past the end of the buffer. Cover both the top-level array slice
+      // and the object-member (key[...]) slice.
+      fuzz_slice_prefixes_runtime<std::vector<int>>("[1:3]", "[10,20,30,40,50]");
+      fuzz_slice_prefixes_runtime<std::vector<int>>("[::-1]", "[1,2,3,4,5]");
+
+      // Object-member slice with the array truncated before its ']': errors, does not over-read.
+      {
+         const std::string_view src = R"({"a":[10,20,30)";
+         std::vector<char> buf{src.begin(), src.end()};
+         std::vector<int> value{};
+         const glz::jmespath_expression expr{std::string_view{"a[1:3]"}};
+         const auto ec =
+            glz::read_jmespath<options>(expr, value, std::string_view{buf.data(), buf.data() + buf.size()});
+         expect(bool(ec));
+      }
+
+      // Complete inputs still resolve to the correct slice.
+      {
+         const std::string_view complete = "[10,20,30,40,50]";
+         std::vector<char> buf{complete.begin(), complete.end()};
+         std::vector<int> slice{};
+         const glz::jmespath_expression expr{std::string_view{"[1:3]"}};
+         const auto ec =
+            glz::read_jmespath<options>(expr, slice, std::string_view{buf.data(), buf.data() + buf.size()});
+         expect(not ec);
+         expect(slice == (std::vector<int>{20, 30}));
+      }
+      {
+         const std::string_view complete = R"({"a":[10,20,30,40,50]})";
+         std::vector<char> buf{complete.begin(), complete.end()};
+         std::vector<int> slice{};
+         const glz::jmespath_expression expr{std::string_view{"a[1:3]"}};
+         const auto ec =
+            glz::read_jmespath<options>(expr, slice, std::string_view{buf.data(), buf.data() + buf.size()});
+         expect(not ec);
+         expect(slice == (std::vector<int>{20, 30}));
+      }
    };
 };
 
