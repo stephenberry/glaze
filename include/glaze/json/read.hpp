@@ -2419,6 +2419,11 @@ namespace glz
                         --ctx.depth;
                      }
                      ++it;
+                     if constexpr (resizable<T>) {
+                        if constexpr (check_shrink_to_fit(Opts)) {
+                           value.shrink_to_fit();
+                        }
+                     }
                      return;
                   }
                   else [[unlikely]] {
