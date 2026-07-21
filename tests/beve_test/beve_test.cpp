@@ -7219,18 +7219,22 @@ suite beve_chrono_duration_tests = [] {
    };
 
    // A std::span<const duration> can read a packed aligned typed array zero-copy (the view
-   // points into the buffer, which is bit-identical to a span of the rep).
-   "duration span zero-copy read"_test = [] {
-      using namespace std::chrono;
-      std::vector<milliseconds> src{milliseconds{10}, milliseconds{20}, milliseconds{30}};
-      std::string buffer{};
-      expect(not glz::write<aligned_beve_opts>(src, buffer));
-      std::span<const milliseconds> sp{};
-      expect(not glz::read<aligned_beve_opts>(sp, buffer));
-      expect(sp.size() == 3);
-      expect(sp[0] == milliseconds{10});
-      expect(sp[2] == milliseconds{30});
-   };
+   // points into the buffer, which is bit-identical to a span of the rep). Like every other
+   // multi-byte zero-copy span read, this requires a little-endian host because the view
+   // aliases the little-endian wire bytes directly.
+   if constexpr (std::endian::native == std::endian::little) {
+      "duration span zero-copy read"_test = [] {
+         using namespace std::chrono;
+         std::vector<milliseconds> src{milliseconds{10}, milliseconds{20}, milliseconds{30}};
+         std::string buffer{};
+         expect(not glz::write<aligned_beve_opts>(src, buffer));
+         std::span<const milliseconds> sp{};
+         expect(not glz::read<aligned_beve_opts>(sp, buffer));
+         expect(sp.size() == 3);
+         expect(sp[0] == milliseconds{10});
+         expect(sp[2] == milliseconds{30});
+      };
+   }
 };
 
 struct beve_shrink_opts : glz::opts
