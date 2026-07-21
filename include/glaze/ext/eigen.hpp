@@ -245,13 +245,23 @@ namespace glz
          if (bool(ctx.error)) [[unlikely]]
             return;
 
-         // Resize if dynamic
+         // Resize dynamic matrices to the wire dimensions. A fixed-size matrix has exactly
+         // RowsAtCompileTime * ColsAtCompileTime scalars of storage, so a larger wire dimension
+         // would make the typed-array read below write past that fixed buffer; require the wire
+         // dimensions to match the compile-time extents.
          if constexpr (EigenType::RowsAtCompileTime < 0 || EigenType::ColsAtCompileTime < 0) {
             value.resize(static_cast<Eigen::Index>(rows), static_cast<Eigen::Index>(cols));
          }
+         else {
+            if (static_cast<Eigen::Index>(rows) != value.rows() || static_cast<Eigen::Index>(cols) != value.cols())
+               [[unlikely]] {
+               ctx.error = error_code::syntax_error;
+               return;
+            }
+         }
 
-         // Read data as typed array
-         std::span<Scalar> view(value.data(), rows * cols);
+         // Read data as typed array, bounded by the matrix's own storage
+         std::span<Scalar> view(value.data(), static_cast<size_t>(value.size()));
          parse<CBOR>::op<Opts>(view, ctx, it, end);
       }
    };

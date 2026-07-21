@@ -839,7 +839,7 @@ namespace glz
 
                   if constexpr (resizable<T>) {
                      value.resize(count);
-                     if constexpr (check_shrink_to_fit(Opts)) {
+                     if constexpr (check_shrink_to_fit(Opts) && has_shrink_to_fit<T>) {
                         value.shrink_to_fit();
                      }
                   }
@@ -986,7 +986,7 @@ namespace glz
 
                   if constexpr (resizable<T>) {
                      value.resize(count);
-                     if constexpr (check_shrink_to_fit(Opts)) {
+                     if constexpr (check_shrink_to_fit(Opts) && has_shrink_to_fit<T>) {
                         value.shrink_to_fit();
                      }
                   }
@@ -1120,7 +1120,7 @@ namespace glz
             if constexpr (resizable<T>) {
                value.resize(static_cast<size_t>(count));
 
-               if constexpr (check_shrink_to_fit(Opts)) {
+               if constexpr (check_shrink_to_fit(Opts) && has_shrink_to_fit<T>) {
                   value.shrink_to_fit();
                }
             }
@@ -1773,6 +1773,11 @@ namespace glz
          uint64_t type_index = cbor_detail::decode_arg(ctx, it, end, idx_info);
          if (bool(ctx.error)) [[unlikely]]
             return;
+
+         if (type_index >= std::variant_size_v<T>) [[unlikely]] {
+            ctx.error = error_code::no_matching_variant_type;
+            return;
+         }
 
          if (value.index() != type_index) {
             emplace_runtime_variant(value, type_index);

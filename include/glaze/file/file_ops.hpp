@@ -32,9 +32,19 @@ namespace glz
       }
       buffer.resize(n);
 
-      if (n != std::fread(static_cast<void*>(buffer.data()), 1, n, file)) {
-         std::fclose(file);
-         return error_code::file_open_failure;
+      // file_size() and the read below observe the file at two different moments,
+      // so the file may have changed size in between (e.g. a concurrent atomic
+      // replace). Trust the bytes actually read from the open handle, not the stat:
+      // a short read that is not a stream error simply means the file was smaller
+      // than reported, so keep exactly what was read instead of failing. This keeps
+      // the common case a single fread with no added cost.
+      const auto read = std::fread(static_cast<void*>(buffer.data()), 1, n, file);
+      if (read != n) {
+         if (std::ferror(file)) {
+            std::fclose(file);
+            return error_code::file_open_failure;
+         }
+         buffer.resize(read);
       }
 
       if (std::fclose(file)) {

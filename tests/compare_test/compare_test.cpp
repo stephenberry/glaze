@@ -4,6 +4,7 @@
 #include "glaze/compare/compare.hpp"
 
 #include "glaze/compare/approx.hpp"
+#include "glaze/util/compare.hpp"
 #include "ut/ut.hpp"
 
 using namespace ut;
@@ -52,6 +53,47 @@ suite equality = [] {
       obj1 = obj0;
 
       expect(glz::equal_to{}(obj0, obj1));
+   };
+};
+
+suite striequal_tests = [] {
+   "striequal basics"_test = [] {
+      expect(glz::striequal("", ""));
+      expect(glz::striequal("a", "A"));
+      expect(glz::striequal("Connection", "connection"));
+      expect(glz::striequal("KEEP-ALIVE", "keep-alive"));
+      expect(!glz::striequal("close", "closed"));
+      expect(!glz::striequal("close", "clos"));
+      expect(!glz::striequal("abc", "abd"));
+   };
+
+   "striequal block boundaries"_test = [] {
+      expect(glz::striequal("12345678", "12345678"));
+      expect(glz::striequal("AbCdEfGh", "aBcDeFgH"));
+      expect(glz::striequal("Transfer-Encoding", "TRANSFER-ENCODING"));
+      expect(!glz::striequal("Transfer-Encoding", "Transfer-Encodinh"));
+      expect(!glz::striequal("AbCdEfGhX", "aBcDeFgHY"));
+   };
+
+   "striequal only letters fold"_test = [] {
+      // '@' (0x40) vs '`' (0x60) and '[' (0x5B) vs '{' (0x7B) differ only in bit 0x20
+      expect(!glz::striequal("@", "`"));
+      expect(!glz::striequal("[", "{"));
+      expect(!glz::striequal("0", "P"));
+      expect(glz::striequal("a1!Z", "A1!z"));
+   };
+
+   "striequal non-ascii"_test = [] {
+      expect(!glz::striequal("\xC1", "\xE1"));
+      expect(glz::striequal("\xC1", "\xC1"));
+      expect(glz::striequal("caf\xC3\xA9", "CAF\xC3\xA9"));
+      expect(!glz::striequal("\xFF\x41", "\xFF\x42"));
+      expect(glz::striequal("\xFF\x41", "\xFF\x61"));
+   };
+
+   "striequal constexpr"_test = [] {
+      static_assert(glz::striequal("Host", "host"));
+      static_assert(!glz::striequal("Host", "hose"));
    };
 };
 

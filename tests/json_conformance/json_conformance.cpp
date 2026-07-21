@@ -52,6 +52,36 @@ inline void should_fail()
       }
    };
 
+   // A trailing comma with no following element, or a bare '[', must be rejected rather than
+   // silently accepted as a complete array.
+   "truncated array"_test = [] {
+      for (const sv s : {sv{"["}, sv{"[ "}, sv{"[1,"}, sv{"[1, "}, sv{"[1,2,"}}) {
+         {
+            std::vector<int> v;
+            expect(glz::read_json(v, s)) << s;
+         }
+         {
+            std::deque<int> v;
+            expect(glz::read_json(v, s)) << s;
+         }
+         {
+            std::list<int> v;
+            expect(glz::read_json(v, s)) << s;
+         }
+         {
+            glz::generic obj{};
+            expect(glz::read_json(obj, s)) << s;
+         }
+      }
+   };
+
+   "truncated nested array"_test = [] {
+      for (const sv s : {sv{"[["}, sv{"[[1,"}, sv{"[[1],"}}) {
+         std::vector<std::vector<int>> v;
+         expect(glz::read_json(v, s)) << s;
+      }
+   };
+
    "unquoted_key"_test = [] {
       constexpr sv s = R"({unquoted_key: "keys must be quoted"})";
       {

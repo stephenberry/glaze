@@ -1635,11 +1635,10 @@ namespace glz
    }
 
    template <auto Opts = yaml::yaml_opts{}, class T>
-   [[nodiscard]] error_ctx write_file_yaml(T&& value, const sv file_path) noexcept
+   [[nodiscard]] error_ctx write_file_yaml(T&& value, const sv file_path, auto&& buffer) noexcept
    {
-      std::string buffer;
       auto ec = write<set_yaml<Opts>()>(std::forward<T>(value), buffer);
-      if (bool(ec)) {
+      if (bool(ec)) [[unlikely]] {
          return ec;
       }
       const auto file_ec = buffer_to_file(buffer, file_path);
@@ -1647,6 +1646,12 @@ namespace glz
          return {0, file_ec};
       }
       return {};
+   }
+
+   template <auto Opts = yaml::yaml_opts{}, class T>
+   [[nodiscard]] error_ctx write_file_yaml(T&& value, const sv file_path) noexcept
+   {
+      return write_file_yaml<Opts>(std::forward<T>(value), file_path, std::string{});
    }
 
 } // namespace glz

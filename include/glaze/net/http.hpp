@@ -238,6 +238,57 @@ namespace glz
       std::string_view status_message{};
    };
 
+   // RFC 7230 3.2: a header field-name and field-value cannot contain CR or LF.
+   // A field whose name or value carries CR or LF would terminate the field on
+   // the wire, letting attacker-influenced header data inject extra headers or a
+   // message body (CWE-113, HTTP request/response splitting). Serializers call
+   // this to drop such a field instead of writing a corrupted message; the wire
+   // writer is the only layer that can enforce the framing.
+   [[nodiscard]] inline bool header_field_has_crlf(std::string_view name, std::string_view value) noexcept
+   {
+      return name.find_first_of("\r\n") != std::string_view::npos ||
+             value.find_first_of("\r\n") != std::string_view::npos;
+   }
+
+   // RFC 7230 3.2.6: a header field-name is one or more token characters (tchar).
+   // A name that is empty or carries any other byte (CR/LF, space, colon, a
+   // control char, ...) cannot be written as a well-formed field. This is the
+   // single source of truth for field-name validity across the net stack.
+   [[nodiscard]] inline bool valid_header_name(std::string_view name) noexcept
+   {
+      if (name.empty()) {
+         return false;
+      }
+      for (const unsigned char c : name) {
+         const bool tchar = (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '!' ||
+                            c == '#' || c == '$' || c == '%' || c == '&' || c == '\'' || c == '*' || c == '+' ||
+                            c == '-' || c == '.' || c == '^' || c == '_' || c == '`' || c == '|' || c == '~';
+         if (!tchar) {
+            return false;
+         }
+      }
+      return true;
+   }
+
+   // RFC 7230 3.2: a header field-value admits VCHAR, SP, HTAB and obs-text, but
+   // no other control characters and no DEL. CR and LF are the framing-critical
+   // subset that splits the message (CWE-113): header_field_has_crlf isolates
+   // that subset for the wire serializers (which silently drop a bad field),
+   // while valid_header_value is the full check used where an invalid field can
+   // be reported back to the caller (the WebSocket handshake).
+   [[nodiscard]] inline bool valid_header_value(std::string_view value) noexcept
+   {
+      for (const unsigned char c : value) {
+         if (c == '\r' || c == '\n' || c == 0x7f) {
+            return false;
+         }
+         if (c < 0x20 && c != '\t') {
+            return false;
+         }
+      }
+      return true;
+   }
+
    inline std::expected<HttpStatusLine, std::error_code> parse_http_status_line(std::string_view status_line)
    {
       if (status_line.empty()) {

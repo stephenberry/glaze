@@ -118,6 +118,14 @@ struct glz::meta<enum_column_struct>
    static constexpr auto value = glz::object("colors", &T::colors);
 };
 
+struct four_int_columns
+{
+   int alpha{};
+   int bravo{};
+   int charlie{};
+   int delta{};
+};
+
 suite csv_tests = [] {
    "read/write column wise"_test = [] {
       std::string input_col =
@@ -216,6 +224,35 @@ suite csv_tests = [] {
 )");
 
       expect(!glz::write_file_csv<glz::colwise>(obj, "csv_test_colwise.csv", std::string{}));
+   };
+
+   "column wise rejects colliding foreign header"_test = [] {
+      // "uJXtL" is not a member of four_int_columns, but the key hash decodes it to the
+      // same index as "alpha". The rowwise and enum readers already reject a decoded index
+      // whose key text does not match; the colwise readers must reject it too instead of
+      // silently routing the foreign column onto alpha.
+      {
+         four_int_columns obj{};
+         std::string input = "uJXtL\n77\n";
+         auto ec = glz::read_csv<glz::colwise>(obj, input);
+         expect(ec.ec == glz::error_code::unknown_key);
+         expect(obj.alpha == 0);
+      }
+      {
+         std::vector<four_int_columns> obj{};
+         std::string input = "uJXtL\n77\n";
+         auto ec = glz::read_csv<glz::colwise>(obj, input);
+         expect(ec.ec == glz::error_code::unknown_key);
+         expect(obj.empty());
+      }
+      // A legitimate header on the same struct still parses.
+      {
+         four_int_columns obj{};
+         std::string input = "alpha\n77\n";
+         auto ec = glz::read_csv<glz::colwise>(obj, input);
+         expect(!ec);
+         expect(obj.alpha == 77);
+      }
    };
 
    "signed minimum integers"_test = [] {

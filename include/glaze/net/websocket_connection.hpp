@@ -865,6 +865,15 @@ namespace glz
                return length; // Consume all
             }
 
+            // RFC 6455 Section 5.1: a server MUST close the connection upon receiving an unmasked
+            // frame from a client, and a client MUST close upon receiving a masked frame from a server.
+            // https://datatracker.ietf.org/doc/html/rfc6455#section-5.1
+            if (header.mask() == client_mode_) {
+               fail_connection(ws_close_code::protocol_error,
+                               client_mode_ ? "Masked frame from server" : "Unmasked frame from client");
+               return length; // Consume all
+            }
+
             // Get payload length
             uint64_t payload_length = header.payload_len();
 

@@ -570,6 +570,11 @@ namespace glz
             return;
          }
 
+         if (type_index >= std::variant_size_v<T>) [[unlikely]] {
+            ctx.error = error_code::no_matching_variant_type;
+            return;
+         }
+
          if (value.index() != type_index) {
             emplace_runtime_variant(value, type_index);
          }
@@ -995,7 +1000,7 @@ namespace glz
             if constexpr (resizable<T>) {
                value.resize(n);
 
-               if constexpr (check_shrink_to_fit(Opts)) {
+               if constexpr (check_shrink_to_fit(Opts) && has_shrink_to_fit<T>) {
                   value.shrink_to_fit();
                }
             }
@@ -1041,7 +1046,7 @@ namespace glz
                if constexpr (resizable<T>) {
                   value.resize(n);
 
-                  if constexpr (check_shrink_to_fit(Opts)) {
+                  if constexpr (check_shrink_to_fit(Opts) && has_shrink_to_fit<T>) {
                      value.shrink_to_fit();
                   }
                }
@@ -1306,7 +1311,7 @@ namespace glz
             if constexpr (resizable<T>) {
                value.resize(n);
 
-               if constexpr (check_shrink_to_fit(Opts)) {
+               if constexpr (check_shrink_to_fit(Opts) && has_shrink_to_fit<T>) {
                   value.shrink_to_fit();
                }
             }
@@ -1335,8 +1340,8 @@ namespace glz
 
                x.resize(length);
 
-               if constexpr (check_shrink_to_fit(Opts)) {
-                  value.shrink_to_fit();
+               if constexpr (check_shrink_to_fit(Opts) && has_shrink_to_fit<decltype(x)>) {
+                  x.shrink_to_fit();
                }
 
                std::memcpy(x.data(), it, length);
@@ -1390,7 +1395,7 @@ namespace glz
             if constexpr (resizable<T>) {
                value.resize(n);
 
-               if constexpr (check_shrink_to_fit(Opts)) {
+               if constexpr (check_shrink_to_fit(Opts) && has_shrink_to_fit<T>) {
                   value.shrink_to_fit();
                }
             }
@@ -1472,7 +1477,7 @@ namespace glz
             if constexpr (resizable<T>) {
                value.resize(n);
 
-               if constexpr (check_shrink_to_fit(Opts)) {
+               if constexpr (check_shrink_to_fit(Opts) && has_shrink_to_fit<T>) {
                   value.shrink_to_fit();
                }
             }
@@ -1921,6 +1926,9 @@ namespace glz
             constexpr auto N = detail::count_members<T>;
             if constexpr (N == 0) {
                // Handle empty structs by just reading and validating the generic_array header
+               if (invalid_end(ctx, it, end)) {
+                  return;
+               }
                const auto tag = uint8_t(*it);
                if (tag != tag::generic_array) [[unlikely]] {
                   ctx.error = error_code::syntax_error;
@@ -1942,6 +1950,9 @@ namespace glz
             }
          }
          else {
+            if (invalid_end(ctx, it, end)) {
+               return;
+            }
             const auto tag = uint8_t(*it);
             if (tag != tag::generic_array) [[unlikely]] {
                ctx.error = error_code::syntax_error;

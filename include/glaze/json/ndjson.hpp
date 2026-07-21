@@ -45,7 +45,7 @@ namespace glz
             if constexpr (resizable<T>) {
                value.clear();
 
-               if constexpr (check_shrink_to_fit(Opts)) {
+               if constexpr (check_shrink_to_fit(Opts) && has_shrink_to_fit<T>) {
                   value.shrink_to_fit();
                }
             }
@@ -98,7 +98,7 @@ namespace glz
                   value.erase(value_it,
                               value.end()); // use erase rather than resize for non-default constructible elements
 
-                  if constexpr (check_shrink_to_fit(Opts)) {
+                  if constexpr (check_shrink_to_fit(Opts) && has_shrink_to_fit<T>) {
                      value.shrink_to_fit();
                   }
                }
@@ -113,10 +113,21 @@ namespace glz
             while (it < end) {
                parse<JSON>::op<Opts>(value.emplace_back(), ctx, it, end);
                if (bool(ctx.error)) {
+                  // A non-null-terminated buffer has no sentinel, so the last record reports
+                  // end_reached instead of stopping on '\0'. A depth of zero means that record was
+                  // parsed completely, which is the normal end of input rather than a failure. This
+                  // matches the condition finalize_read_context clears the code on.
+                  if (ctx.error == error_code::end_reached && ctx.depth == 0) {
+                     break;
+                  }
                   return;
                }
 
                read_new_lines();
+            }
+
+            if constexpr (check_shrink_to_fit(Opts) && has_shrink_to_fit<T>) {
+               value.shrink_to_fit();
             }
          }
          else {

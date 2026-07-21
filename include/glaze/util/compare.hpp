@@ -9,8 +9,27 @@
 #include <string_view>
 #include <type_traits>
 
+#include "glaze/util/inline.hpp"
+
 namespace glz
 {
+   namespace detail
+   {
+      // Lowercases 8 packed bytes at once. Only 'A'..'Z' are changed.
+      // The high-bit mask keeps per-byte additions from carrying into neighbors
+      // and excludes non-ASCII bytes from classification.
+      inline constexpr uint64_t ascii_tolower_u64(const uint64_t v) noexcept
+      {
+         constexpr uint64_t ones = 0x0101010101010101ull;
+         constexpr uint64_t high = 0x8080808080808080ull;
+         const uint64_t seven = v & ~high;
+         const uint64_t ge_A = seven + (0x80 - 'A') * ones;
+         const uint64_t gt_Z = seven + (0x80 - ('Z' + 1)) * ones;
+         const uint64_t is_upper = ge_A & ~gt_Z & ~v & high;
+         return v | (is_upper >> 2);
+      }
+   }
+
    template <class Char>
    inline bool compare(const Char* lhs, const Char* rhs, uint64_t count) noexcept
    {
@@ -300,6 +319,47 @@ namespace glz
          // Packing data can create more binary on GCC
          // The other cases probably aren't needed as compiler explorer shows them optimized equally well as memcmp
          return 0 == std::memcmp(Str.data(), other, N);
+      }
+   }
+
+   // ASCII case-insensitive equality, checks sizes
+   inline constexpr bool striequal(const std::string_view lhs, const std::string_view rhs) noexcept
+   {
+      if (lhs.size() != rhs.size()) {
+         return false;
+      }
+
+      if consteval {
+         for (size_t i = 0; i < lhs.size(); ++i) {
+            const auto lower = [](char c) { return (c >= 'A' && c <= 'Z') ? char(c + 32) : c; };
+            if (lower(lhs[i]) != lower(rhs[i])) {
+               return false;
+            }
+         }
+         return true;
+      }
+      else {
+         const char* l = lhs.data();
+         const char* r = rhs.data();
+         uint64_t count = lhs.size();
+
+         for (; count >= 8; l += 8, r += 8, count -= 8) {
+            uint64_t a, b;
+            std::memcpy(&a, l, 8);
+            std::memcpy(&b, r, 8);
+            if (glz::detail::ascii_tolower_u64(a) != glz::detail::ascii_tolower_u64(b)) {
+               return false;
+            }
+         }
+
+         if (count) {
+            // Zero padding is safe, both sides pad identically and 0 is not 'A'..'Z'
+            uint64_t a{}, b{};
+            std::memcpy(&a, l, count);
+            std::memcpy(&b, r, count);
+            return glz::detail::ascii_tolower_u64(a) == glz::detail::ascii_tolower_u64(b);
+         }
+         return true;
       }
    }
 

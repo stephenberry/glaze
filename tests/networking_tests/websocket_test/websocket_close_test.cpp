@@ -257,6 +257,19 @@ std::vector<uint8_t> make_masked_client_frame(uint8_t opcode, const std::vector<
    return frame;
 }
 
+std::vector<uint8_t> make_unmasked_client_frame(uint8_t opcode, const std::vector<uint8_t>& payload, bool fin = true)
+{
+   std::vector<uint8_t> frame;
+   frame.reserve(2 + payload.size());
+
+   frame.push_back(static_cast<uint8_t>((fin ? 0x80 : 0x00) | (opcode & 0x0F)));
+   // Mask bit (0x80) intentionally left clear
+   frame.push_back(static_cast<uint8_t>(payload.size()));
+   frame.insert(frame.end(), payload.begin(), payload.end());
+
+   return frame;
+}
+
 uint16_t close_code_from_frame(const websocket_frame& frame)
 {
    if (frame.payload.size() < 2) {
@@ -267,7 +280,6 @@ uint16_t close_code_from_frame(const websocket_frame& frame)
 
 suite websocket_close_frame_tests = [] {
    "coalesced_close_response_is_processed"_test = [] {
-      constexpr uint16_t port = 18088;
       std::atomic<bool> server_ready{false};
       std::atomic<bool> server_closed{false};
       std::atomic<int> message_count{0};
@@ -281,9 +293,10 @@ suite websocket_close_frame_tests = [] {
 
       http_server server;
       server.websocket("/ws", ws_server);
+      server.bind("127.0.0.1", 0);
+      const uint16_t port = server.port();
 
       std::thread server_thread([&]() {
-         server.bind(port);
          server_ready = true;
          server.start();
       });
@@ -344,9 +357,10 @@ suite websocket_close_frame_tests = [] {
       // Create HTTP server
       http_server server;
       server.websocket("/ws", ws_server);
+      server.bind("127.0.0.1", 0);
+      const uint16_t port = server.port();
 
       std::thread server_thread([&]() {
-         server.bind(18081);
          server_ready = true;
          server.start();
       });
@@ -359,14 +373,16 @@ suite websocket_close_frame_tests = [] {
       asio::io_context io_context;
       asio::ip::tcp::socket socket(io_context);
       asio::ip::tcp::resolver resolver(io_context);
-      auto endpoints = resolver.resolve("127.0.0.1", "18081");
+      auto endpoints = resolver.resolve("127.0.0.1", std::to_string(port));
 
       asio::connect(socket, endpoints);
 
       // Send WebSocket handshake
       std::string handshake =
          "GET /ws HTTP/1.1\r\n"
-         "Host: localhost:18081\r\n"
+         "Host: localhost:" +
+         std::to_string(port) +
+         "\r\n"
          "Upgrade: websocket\r\n"
          "Connection: Upgrade\r\n"
          "Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\n"
@@ -418,9 +434,10 @@ suite websocket_close_frame_tests = [] {
       // Create HTTP server
       http_server server;
       server.websocket("/ws", ws_server);
+      server.bind("127.0.0.1", 0);
+      const uint16_t port = server.port();
 
       std::thread server_thread([&]() {
-         server.bind(18082);
          server_ready = true;
          server.start();
       });
@@ -433,14 +450,16 @@ suite websocket_close_frame_tests = [] {
       asio::io_context io_context;
       asio::ip::tcp::socket socket(io_context);
       asio::ip::tcp::resolver resolver(io_context);
-      auto endpoints = resolver.resolve("127.0.0.1", "18082");
+      auto endpoints = resolver.resolve("127.0.0.1", std::to_string(port));
 
       asio::connect(socket, endpoints);
 
       // Send WebSocket handshake
       std::string handshake =
          "GET /ws HTTP/1.1\r\n"
-         "Host: localhost:18082\r\n"
+         "Host: localhost:" +
+         std::to_string(port) +
+         "\r\n"
          "Upgrade: websocket\r\n"
          "Connection: Upgrade\r\n"
          "Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\n"
@@ -509,9 +528,10 @@ suite websocket_error_handling_tests = [] {
       // Create HTTP server
       http_server server;
       server.websocket("/ws", ws_server);
+      server.bind("127.0.0.1", 0);
+      const uint16_t port = server.port();
 
       std::thread server_thread([&]() {
-         server.bind(18083);
          server_ready = true;
          server.start();
       });
@@ -524,14 +544,16 @@ suite websocket_error_handling_tests = [] {
       asio::io_context io_context;
       asio::ip::tcp::socket socket(io_context);
       asio::ip::tcp::resolver resolver(io_context);
-      auto endpoints = resolver.resolve("127.0.0.1", "18083");
+      auto endpoints = resolver.resolve("127.0.0.1", std::to_string(port));
 
       asio::connect(socket, endpoints);
 
       // Send WebSocket handshake
       std::string handshake =
          "GET /ws HTTP/1.1\r\n"
-         "Host: localhost:18083\r\n"
+         "Host: localhost:" +
+         std::to_string(port) +
+         "\r\n"
          "Upgrade: websocket\r\n"
          "Connection: Upgrade\r\n"
          "Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\n"
@@ -579,9 +601,10 @@ suite websocket_error_handling_tests = [] {
       // Create HTTP server
       http_server server;
       server.websocket("/ws", ws_server);
+      server.bind("127.0.0.1", 0);
+      const uint16_t port = server.port();
 
       std::thread server_thread([&]() {
-         server.bind(18084);
          server_ready = true;
          server.start();
       });
@@ -594,14 +617,16 @@ suite websocket_error_handling_tests = [] {
       asio::io_context io_context;
       asio::ip::tcp::socket socket(io_context);
       asio::ip::tcp::resolver resolver(io_context);
-      auto endpoints = resolver.resolve("127.0.0.1", "18084");
+      auto endpoints = resolver.resolve("127.0.0.1", std::to_string(port));
 
       asio::connect(socket, endpoints);
 
       // Send WebSocket handshake
       std::string handshake =
          "GET /ws HTTP/1.1\r\n"
-         "Host: localhost:18084\r\n"
+         "Host: localhost:" +
+         std::to_string(port) +
+         "\r\n"
          "Upgrade: websocket\r\n"
          "Connection: Upgrade\r\n"
          "Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\n"
@@ -644,9 +669,10 @@ suite websocket_error_handling_tests = [] {
       // Create HTTP server
       http_server server;
       server.websocket("/ws", ws_server);
+      server.bind("127.0.0.1", 0);
+      const uint16_t port = server.port();
 
       std::thread server_thread([&]() {
-         server.bind(18085);
          server_ready = true;
          server.start();
       });
@@ -659,14 +685,16 @@ suite websocket_error_handling_tests = [] {
       asio::io_context io_context;
       asio::ip::tcp::socket socket(io_context);
       asio::ip::tcp::resolver resolver(io_context);
-      auto endpoints = resolver.resolve("127.0.0.1", "18085");
+      auto endpoints = resolver.resolve("127.0.0.1", std::to_string(port));
 
       asio::connect(socket, endpoints);
 
       // Send WebSocket handshake
       std::string handshake =
          "GET /ws HTTP/1.1\r\n"
-         "Host: localhost:18085\r\n"
+         "Host: localhost:" +
+         std::to_string(port) +
+         "\r\n"
          "Upgrade: websocket\r\n"
          "Connection: Upgrade\r\n"
          "Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\n"
@@ -712,7 +740,6 @@ suite websocket_error_handling_tests = [] {
 
 suite websocket_utf8_fail_fast_tests = [] {
    "invalid_utf8_in_incomplete_text_frame_fails_fast"_test = [] {
-      constexpr uint16_t port = 18086;
       std::atomic<bool> server_ready{false};
       std::atomic<bool> server_closed{false};
       std::atomic<int> message_count{0};
@@ -727,9 +754,10 @@ suite websocket_utf8_fail_fast_tests = [] {
 
       http_server server;
       server.websocket("/ws", ws_server);
+      server.bind("127.0.0.1", 0);
+      const uint16_t port = server.port();
 
       std::thread server_thread([&]() {
-         server.bind(port);
          server_ready = true;
          server.start();
       });
@@ -772,7 +800,6 @@ suite websocket_utf8_fail_fast_tests = [] {
    };
 
    "split_masked_text_frame_preserves_utf8_payload"_test = [] {
-      constexpr uint16_t port = 18087;
       std::atomic<bool> server_ready{false};
       std::atomic<int> message_count{0};
       std::mutex received_mutex;
@@ -790,9 +817,10 @@ suite websocket_utf8_fail_fast_tests = [] {
 
       http_server server;
       server.websocket("/ws", ws_server);
+      server.bind("127.0.0.1", 0);
+      const uint16_t port = server.port();
 
       std::thread server_thread([&]() {
-         server.bind(port);
          server_ready = true;
          server.start();
       });
@@ -835,6 +863,65 @@ suite websocket_utf8_fail_fast_tests = [] {
       send_close_frame(socket, 1000);
       socket.close();
 
+      server.stop();
+      server_thread.join();
+
+      std::this_thread::sleep_for(std::chrono::milliseconds(500));
+   };
+};
+
+suite websocket_masking_tests = [] {
+   "unmasked_client_frame_fails_with_protocol_error"_test = [] {
+      std::atomic<bool> server_ready{false};
+      std::atomic<bool> server_closed{false};
+      std::atomic<int> message_count{0};
+      std::atomic<uint16_t> server_close_code{0};
+
+      auto ws_server = std::make_shared<websocket_server>();
+      ws_server->on_message([&](auto, std::string_view, ws_opcode) { ++message_count; });
+      ws_server->on_close([&](auto, ws_close_code code, std::string_view) {
+         server_close_code = static_cast<uint16_t>(code);
+         server_closed = true;
+      });
+
+      http_server server;
+      server.websocket("/ws", ws_server);
+      server.bind("127.0.0.1", 0);
+      const uint16_t port = server.port();
+
+      std::thread server_thread([&]() {
+         server_ready = true;
+         server.start();
+      });
+
+      expect(wait_for_condition([&] { return server_ready.load(); })) << "Server should start";
+      std::this_thread::sleep_for(std::chrono::milliseconds(100));
+
+      asio::io_context io_context;
+      asio::ip::tcp::socket socket(io_context);
+      auto handshake_response = connect_raw_websocket(io_context, socket, port);
+      expect(handshake_response.response.find("101 Switching Protocols") != std::string::npos)
+         << "Handshake should succeed";
+
+      const std::vector<uint8_t> payload{'H', 'i'};
+      auto frame = make_unmasked_client_frame(0x01, payload);
+      asio::write(socket, asio::buffer(frame));
+
+      socket.non_blocking(true);
+      std::vector<uint8_t> pending = std::move(handshake_response.leftover);
+      auto close_frame = poll_for_frame(socket, pending, std::chrono::milliseconds(1000));
+
+      expect(close_frame.has_value()) << "Server should respond to an unmasked frame with a close frame";
+      expect(close_frame && close_frame->opcode == 0x08) << "Server frame should be a close frame";
+      if (close_frame) {
+         expect(close_code_from_frame(*close_frame) == 1002) << "Unmasked client frame should close with 1002";
+      }
+
+      expect(message_count.load() == 0) << "Unmasked frame payload must not be delivered";
+      expect(wait_for_condition([&] { return server_closed.load(); })) << "Server on_close should be called";
+      expect(server_close_code.load() == 1002) << "Server on_close should report 1002";
+
+      socket.close();
       server.stop();
       server_thread.join();
 

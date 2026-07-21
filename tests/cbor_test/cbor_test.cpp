@@ -3403,6 +3403,16 @@ void custom_variant_ambiguity_tests()
       cbor_fc_variant r{};
       expect(not glz::read_cbor(r, s));
    };
+
+   "out-of-range variant index is rejected"_test = [] {
+      using V = std::variant<int32_t, double>;
+      std::string buf;
+      expect(not glz::write_cbor(V{int32_t{111}}, buf)); // [index, value], holds index 0
+      // Byte 1 is the type index (a small CBOR uint); force it past the two alternatives.
+      buf[1] = static_cast<char>(0x07);
+      V in{};
+      expect(glz::read_cbor(in, buf).ec == glz::error_code::no_matching_variant_type);
+   };
 }
 
 // Regression coverage for https://github.com/stephenberry/glaze/issues/2647
@@ -3543,6 +3553,44 @@ suite cbor_byte_uint8_unify_tests = [] {
       std::array<std::byte, 4> dst{};
       expect(not glz::read_cbor(dst, buffer));
       expect(dst == (std::array<std::byte, 4>{std::byte{0xAA}, std::byte{0xBB}, std::byte{0xCC}, std::byte{0xDD}}));
+   };
+};
+
+struct cbor_shrink_opts : glz::opts
+{
+   bool shrink_to_fit = true;
+};
+
+// Resizable but deliberately without a shrink_to_fit member, like std::list.
+// std::list itself can't be used here: CBOR's array reader subscripts its target.
+// String elements keep this on the generic array path rather than the typed-array path.
+struct no_shrink_strings
+{
+   using value_type = std::string;
+   std::vector<std::string> data{};
+
+   auto begin() { return data.begin(); }
+   auto end() { return data.end(); }
+   auto begin() const { return data.begin(); }
+   auto end() const { return data.end(); }
+   size_t size() const { return data.size(); }
+   void resize(size_t n) { data.resize(n); }
+   void clear() { data.clear(); }
+   std::string& emplace_back() { return data.emplace_back(); }
+   std::string& back() { return data.back(); }
+   std::string& operator[](size_t i) { return data[i]; }
+   const std::string& operator[](size_t i) const { return data[i]; }
+};
+
+suite cbor_shrink_to_fit_tests = [] {
+   "containers without shrink_to_fit still compile"_test = [] {
+      const std::vector<std::string> src{"a", "b", "c"};
+      std::string buffer{};
+      expect(not glz::write_cbor(src, buffer));
+
+      no_shrink_strings dst{{"x", "x", "x", "x"}};
+      expect(not glz::read<cbor_shrink_opts{{.format = glz::CBOR}}>(dst, buffer));
+      expect(dst.data == src);
    };
 };
 

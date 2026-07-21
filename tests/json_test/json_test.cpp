@@ -2418,6 +2418,56 @@ suite non_null_terminated_scanner_bounds = [] {
          expect(v == std::vector<int>{1, 2});
       }
    };
+
+   "nnt json-pointer seek over non-matching keys stays in bounds"_test = [] {
+      static constexpr glz::opts options{.null_terminated = false};
+      // The seek loop skips over non-target members and then tests for the ',' separator. When the
+      // document is truncated right after a skipped value the iterator sits at the end, so that test
+      // must be bounded rather than reading one past the buffer.
+      const auto resolves = [](std::string_view s) {
+         std::vector<char> buf{s.begin(), s.end()};
+         return glz::get_view_json<"/y", options>(std::string_view{buf.data(), buf.data() + buf.size()}).has_value();
+      };
+      expect(not resolves(R"({"x":1)")); // number value, truncated before the separator
+      expect(not resolves(R"({"x":true)")); // literal value
+      expect(not resolves(R"({"x":"ab")")); // string value
+      expect(not resolves(R"({"x":[1,2])")); // array value
+      expect(not resolves(R"({"x":{"z":1})")); // nested object value
+      expect(resolves(R"({"x":1,"y":2})")); // a later key still resolves
+
+      const auto resolves_index = [](std::string_view s) {
+         std::vector<char> buf{s.begin(), s.end()};
+         return glz::get_view_json<"/1", options>(std::string_view{buf.data(), buf.data() + buf.size()}).has_value();
+      };
+      expect(not resolves_index(R"([10)")); // truncated before the indexed element
+      expect(resolves_index(R"([10,20])")); // complete array resolves
+   };
+
+   "nnt char scalar escape stays in bounds"_test = [] {
+      static constexpr glz::opts options{.null_terminated = false};
+      // The char reader consumes the backslash before reading the escaped char. A value truncated
+      // right after the backslash leaves the iterator at the end, so that read must be bounded
+      // rather than reading one past the buffer.
+      const auto read_char = [](std::string_view s) {
+         std::vector<char> buf{s.begin(), s.end()};
+         char value{};
+         return glz::read<options>(value, std::string_view{buf.data(), buf.data() + buf.size()});
+      };
+      expect(read_char(R"("\)")); // trailing backslash at the end
+      expect(read_char(R"("a)")); // unterminated single char
+      // Complete char values still parse.
+      const auto value_of = [](std::string_view s) {
+         std::vector<char> buf{s.begin(), s.end()};
+         char value{};
+         const auto ec = glz::read<options>(value, std::string_view{buf.data(), buf.data() + buf.size()});
+         expect(not ec);
+         return value;
+      };
+      expect(value_of(R"("a")") == 'a');
+      expect(value_of(R"("\n")") == '\n');
+      expect(value_of(R"("\\")") == '\\');
+      expect(value_of(R"("")") == '\0');
+   };
 };
 
 suite minified_custom_object = [] {
@@ -4382,23 +4432,106 @@ suite nested_file_include_test = [] {
    };
 };
 
-// Shrink to fit is nonbinding and cannot be properly tested
-/*suite shrink_to_fit = [] {
-   "shrink_to_fit"_test = [] {
-      std::vector<int> v = { 1, 2, 3, 4, 5, 6 };
-      std::string b = R"([1,2,3])";
-      expect(glz::read_json(v, b) == glz::error_code::none);
+struct shrink_opts : glz::opts
+{
+   bool shrink_to_fit = true;
+};
 
-      expect(v.size() == 3);
-      expect(v.capacity() > 3);
+// std::vector::shrink_to_fit() is a non-binding request, so capacity can't be asserted portably.
+// Track the call itself instead, which is what Glaze is responsible for.
+struct shrink_counter : std::vector<int>
+{
+   using std::vector<int>::vector;
+   size_t shrink_calls{};
+   void shrink_to_fit()
+   {
+      ++shrink_calls;
+      std::vector<int>::shrink_to_fit();
+   }
+};
 
-      v = { 1, 2, 3, 4, 5, 6 };
+const std::vector<int> expected_123{1, 2, 3};
 
-      expect(glz::read<glz::opts{.shrink_to_fit = true}>(v, b) == glz::error_code::none);
-      expect(v.size() == 3);
-      expect(v.capacity() == 3);
+suite shrink_to_fit_tests = [] {
+   "growing read shrinks"_test = [] {
+      shrink_counter v;
+      expect(not glz::read<shrink_opts{}>(v, std::string{"[1,2,3]"}));
+      expect(v == expected_123);
+      expect(v.shrink_calls == 1);
    };
-};*/
+
+   "read past existing size shrinks"_test = [] {
+      // starts smaller than the buffer, so the overwrite loop falls through into the growing loop
+      shrink_counter v{1};
+      expect(not glz::read<shrink_opts{}>(v, std::string{"[1,2,3]"}));
+      expect(v == expected_123);
+      expect(v.shrink_calls == 1);
+   };
+
+   "shrinking read shrinks"_test = [] {
+      shrink_counter v{1, 2, 3, 4, 5, 6};
+      expect(not glz::read<shrink_opts{}>(v, std::string{"[1,2,3]"}));
+      expect(v == expected_123);
+      expect(v.shrink_calls == 1);
+   };
+
+   "empty array shrinks"_test = [] {
+      shrink_counter v{1, 2, 3};
+      expect(not glz::read<shrink_opts{}>(v, std::string{"[]"}));
+      expect(v.empty());
+      expect(v.shrink_calls == 1);
+   };
+
+   "appended read shrinks"_test = [] {
+      struct append_shrink_opts : glz::opts
+      {
+         bool append_arrays = true;
+         bool shrink_to_fit = true;
+      };
+      shrink_counter v{1};
+      expect(not glz::read<append_shrink_opts{}>(v, std::string{"[2,3]"}));
+      expect(v == expected_123);
+      expect(v.shrink_calls == 1);
+   };
+
+   "no shrink by default"_test = [] {
+      shrink_counter v{1, 2, 3, 4, 5, 6};
+      expect(not glz::read_json(v, std::string{"[1,2,3]"}));
+      expect(v == expected_123);
+      expect(v.shrink_calls == 0);
+   };
+
+   // std::list and std::forward_list are resizable but have no shrink_to_fit member
+   "containers without shrink_to_fit still compile"_test = [] {
+      std::list<int> l{9, 9, 9, 9};
+      expect(not glz::read<shrink_opts{}>(l, std::string{"[1,2,3]"}));
+      expect(l == (std::list<int>{1, 2, 3}));
+
+      std::forward_list<int> fl{9, 9, 9, 9};
+      expect(not glz::read<shrink_opts{}>(fl, std::string{"[1,2,3]"}));
+      expect(fl == (std::forward_list<int>{1, 2, 3}));
+   };
+
+   "ndjson shrinking read shrinks"_test = [] {
+      shrink_counter v{1, 2, 3, 4, 5, 6};
+      expect(not glz::read<shrink_opts{{.format = glz::NDJSON}}>(v, std::string{"1\n2\n3"}));
+      expect(v == expected_123);
+      expect(v.shrink_calls == 1);
+   };
+
+   "ndjson growing read shrinks"_test = [] {
+      shrink_counter v;
+      expect(not glz::read<shrink_opts{{.format = glz::NDJSON}}>(v, std::string{"1\n2\n3"}));
+      expect(v == expected_123);
+      expect(v.shrink_calls == 1);
+   };
+
+   "ndjson containers without shrink_to_fit still compile"_test = [] {
+      std::list<int> l{9, 9, 9, 9};
+      expect(not glz::read<shrink_opts{{.format = glz::NDJSON}}>(l, std::string{"1\n2\n3"}));
+      expect(l == (std::list<int>{1, 2, 3}));
+   };
+};
 
 suite recorder_test = [] {
    "recorder_to_file"_test = [] {
@@ -12967,6 +13100,41 @@ suite directory_tests = [] {
       expect(input.contains("./dir/alpha.json"));
       expect(input.contains("./dir/beta.json"));
       expect(input["./dir/beta.json"].i == 0);
+   };
+
+   // read_directory must report a missing directory through its error_ctx rather
+   // than throwing a std::filesystem_error out of directory_to_buffers.
+   "read_directory nonexistent"_test = [] {
+      std::map<std::filesystem::path, my_struct> input{};
+      const auto ec = glz::read_directory(input, "./directory_that_does_not_exist_9f3a");
+      expect(bool(ec));
+      expect(input.empty());
+   };
+};
+
+suite buffer_to_file_tests = [] {
+   // buffer_to_file must write bytes verbatim: text-mode newline translation would
+   // corrupt binary formats on Windows (0x0A -> 0x0D 0x0A) and break byte-exact
+   // round-trips. On POSIX this passes regardless; it guards the Windows path.
+   "buffer_to_file byte-exact round trip"_test = [] {
+      const std::string path = "./verbatim_roundtrip.bin";
+      std::string payload{};
+      for (int rep = 0; rep < 4; ++rep) {
+         for (int b = 0; b < 256; ++b) {
+            payload.push_back(static_cast<char>(b)); // includes 0x0A and 0x0D
+         }
+      }
+      payload += "a\nb\r\nc\r"; // explicit newline combinations
+
+      expect(glz::buffer_to_file(payload, path) == glz::error_code::none);
+
+      std::string readback{};
+      expect(glz::file_to_buffer(readback, path) == glz::error_code::none);
+      expect(readback.size() == payload.size());
+      expect(readback == payload);
+
+      std::error_code fs_ec{};
+      std::filesystem::remove(path, fs_ec);
    };
 };
 

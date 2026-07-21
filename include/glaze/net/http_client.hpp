@@ -288,6 +288,9 @@ namespace glz
             request_str.append("\r\n");
          }
          for (const auto& [name, value] : headers) {
+            if (header_field_has_crlf(name, value)) [[unlikely]] {
+               continue;
+            }
             request_str.append(name);
             request_str.append(": ");
             request_str.append(value);
@@ -2732,27 +2735,42 @@ namespace glz
                [&, this](auto& sock) {
                   asio::async_read(
                      *sock, *buffer, asio::transfer_exactly(remaining_to_read),
-                     [this, socket_var, buffer, url, use_https, status_code = parsed_status->status_code,
-                      response_headers = std::move(response_headers),
+                     [this, socket_var, buffer, url, use_https, content_length,
+                      status_code = parsed_status->status_code, response_headers = std::move(response_headers),
                       handler = std::forward<CompletionHandler>(handler)](asio::error_code ec, std::size_t) mutable {
-                        // EOF is expected if the server closes the connection.
-                        if (ec && ec != asio::error::eof) {
+                        // transfer_exactly only completes without error once the full
+                        // Content-Length has been read, so any error here - including EOF - means
+                        // the peer closed before delivering the declared body. That is an
+                        // incomplete message (RFC 7230 §3.3.3), not a short success: close the
+                        // connection (with graceful SSL shutdown if configured; never pool a socket
+                        // the peer just closed) and surface the error. Matches the synchronous path.
+                        if (ec) {
+                           detail::close_socket(*socket_var, connection_pool->graceful_ssl_shutdown());
                            handler(std::unexpected(ec));
                            return;
                         }
 
-                        // Directly construct the string from the buffer's contiguous memory.
-                        std::string body(static_cast<const char*>(buffer->data().data()), buffer->size());
+                        // Full body received. A server can deliver more than content_length octets
+                        // in the same segment (a pipelined next response or trailing junk); clamp
+                        // so those bytes never leak into response_body. Matches the synchronous path.
+                        std::string body(static_cast<const char*>(buffer->data().data()),
+                                         (std::min)(content_length, buffer->size()));
 
                         response resp;
                         resp.status_code = status_code;
                         resp.response_headers = std::move(response_headers);
                         resp.response_body = std::move(body);
 
-                        // Return connection to pool if it's still usable
+                        // Pool the connection unless the server asked to close it. A truncated or
+                        // peer-closed connection already returned above, so anything reaching here
+                        // is a complete response on a still-open socket.
                         auto connection_header = resp.response_headers.find("connection");
-                        if (connection_header == resp.response_headers.end() ||
-                            connection_header->second.find("close") == std::string::npos) {
+                        const bool server_wants_close = connection_header != resp.response_headers.end() &&
+                                                        connection_header->second.find("close") != std::string::npos;
+                        if (server_wants_close) {
+                           detail::close_socket(*socket_var, connection_pool->graceful_ssl_shutdown());
+                        }
+                        else {
                            connection_pool->return_connection(url.host, url.port, use_https, std::move(*socket_var));
                         }
 

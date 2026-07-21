@@ -370,7 +370,12 @@ namespace glz
             return;
          }
 
-         for (size_t byte_i{}, i{}; byte_i < num_bytes && it < end; ++byte_i, ++it) {
+         if (static_cast<size_t>(end - it) < num_bytes) [[unlikely]] {
+            ctx.error = error_code::unexpected_end;
+            return;
+         }
+
+         for (size_t byte_i{}, i{}; byte_i < num_bytes; ++byte_i, ++it) {
             uint8_t byte = static_cast<uint8_t>(*it);
             for (size_t bit_i = 0; bit_i < 8 && i < value.size(); ++bit_i, ++i) {
                value[i] = (byte >> bit_i) & uint8_t(1);

@@ -74,6 +74,32 @@ suite repe_to_jsonrpc_request_tests = [] {
       expect(jsonrpc_str.find("Invalid request") != std::string::npos) << jsonrpc_str;
       expect(jsonrpc_str.find("REPE body must be JSON format") != std::string::npos) << jsonrpc_str;
    };
+
+   "method_with_quote_cannot_inject_members"_test = [] {
+      // The method comes verbatim from the untrusted REPE query. A method that
+      // contains a quote must stay inside the JSON string rather than break out
+      // and add sibling members to the emitted request.
+      repe::message msg{};
+      msg.query = R"(add","id":1337,"params":["INJECTED"],"x":")";
+      msg.body = R"([1,2,3])";
+      msg.header.id = 42;
+      msg.header.body_format = repe::body_format::JSON;
+      msg.header.notify = false;
+
+      auto jsonrpc_str = repe::to_jsonrpc_request(msg);
+      expect(
+         jsonrpc_str ==
+         R"({"jsonrpc":"2.0","method":"add\",\"id\":1337,\"params\":[\"INJECTED\"],\"x\":\"","params":[1,2,3],"id":42})")
+         << jsonrpc_str;
+
+      auto parsed = glz::read_json<glz::generic>(jsonrpc_str);
+      expect(parsed.has_value()) << jsonrpc_str;
+      if (parsed) {
+         auto& obj = parsed->get_object();
+         expect(obj.at("method").get<std::string>() == msg.query) << jsonrpc_str;
+         expect(not obj.contains("x")) << jsonrpc_str;
+      }
+   };
 };
 
 suite repe_to_jsonrpc_response_tests = [] {
