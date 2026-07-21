@@ -10,6 +10,7 @@
 #include <cstdint>
 #include <cstring>
 #include <iterator>
+#include <type_traits>
 
 #include "glaze/concepts/container_concepts.hpp"
 #include "glaze/core/chrono.hpp"
@@ -157,6 +158,16 @@ namespace glz
    // a numeric typed array of the rep -- byte-identical to an array of the rep itself, and
    // far more compact than a generic array (which writes a type tag per element). These
    // helpers map an element type to that wire `rep` type and convert between the two.
+   //
+   // The typed-array fast paths take that bit-compatibility literally: both sides bulk-memcpy
+   // between the element storage and the wire bytes, and the zero-copy span read aliases the
+   // buffer as an array of elements. Every implementation stores a duration as exactly one
+   // `rep` member, but the standard specifies that member as exposition-only, so the property
+   // is asserted rather than assumed -- a violation would silently emit corrupt bytes instead
+   // of failing to compile.
+   template <class T, class Rep>
+   concept beve_rep_layout_compatible = sizeof(T) == sizeof(Rep) && std::is_trivially_copyable_v<T>;
+
    template <class V>
    struct beve_num_array_value
    {
@@ -166,11 +177,17 @@ namespace glz
    struct beve_num_array_value<V>
    {
       using type = typename std::remove_cvref_t<V>::rep;
+      static_assert(beve_rep_layout_compatible<std::remove_cvref_t<V>, type>,
+                    "BEVE typed-array packing requires std::chrono::duration to be a trivially copyable "
+                    "wrapper the size of its rep");
    };
    template <is_count_time_point V>
    struct beve_num_array_value<V>
    {
       using type = typename std::remove_cvref_t<V>::rep;
+      static_assert(beve_rep_layout_compatible<std::remove_cvref_t<V>, type>,
+                    "BEVE typed-array packing requires std::chrono::time_point to be a trivially copyable "
+                    "wrapper the size of its rep");
    };
    template <class V>
    using beve_num_array_value_t = typename beve_num_array_value<V>::type;

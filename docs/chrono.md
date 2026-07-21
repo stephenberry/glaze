@@ -136,6 +136,24 @@ glz::read_json(parsed, json);
 // Exact roundtrip - no precision loss
 ```
 
+### High Resolution Clock Time Points
+
+`std::chrono::high_resolution_clock` is not a distinct clock in any mainstream standard library. It is an alias, and **which clock it aliases differs by implementation**:
+
+| Standard library | `high_resolution_clock` is | `high_resolution_clock::time_point` behaves as |
+|------------------|----------------------------|------------------------------------------------|
+| libc++ (Clang), MSVC STL | `steady_clock` | numeric count, supported by every format |
+| libstdc++ (GCC) | `system_clock` | ISO 8601 string, only in the formats that support `system_clock::time_point` |
+
+Because the alias makes the two types *identical*, Glaze cannot give them different behavior. The practical consequence is that a type containing an `hrc::time_point` can compile on one platform and fail on another: under libstdc++ it is a `system_clock::time_point`, which BEVE, YAML, CSV, and JSONB do not support (see [Format Support](#format-support)).
+
+Prefer naming the clock you actually mean:
+
+```cpp
+std::chrono::steady_clock::time_point t;  // portable: numeric count in every format
+std::chrono::system_clock::time_point w;  // portable: wall clock, format support varies
+```
+
 ## Epoch Time Wrappers
 
 For APIs that expect Unix timestamps (numeric epoch time) instead of ISO 8601 strings, Glaze provides `epoch_time<Duration>` wrappers:
@@ -343,6 +361,23 @@ Output:
 | `glz::epoch_millis` | Unix milliseconds | `1702481400123` |
 | `glz::epoch_micros` | Unix microseconds | `1702481400123456` |
 | `glz::epoch_nanos` | Unix nanoseconds | `1702481400123456789` |
+
+## Format Support
+
+Durations and count-based time points use one representation shared by every format, so they interchange freely: the same meta schema can target JSON and BEVE. Calendar types are format-specific, because a wall-clock instant has no single natural encoding across text and binary formats.
+
+| Type | JSON | BEVE | CBOR | MsgPack | BSON | TOML | YAML | CSV | JSONB |
+|------|:----:|:----:|:----:|:-------:|:----:|:----:|:----:|:---:|:-----:|
+| `std::chrono::duration<Rep, Period>` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| `steady_clock::time_point` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| `system_clock::time_point` | ✅ | — | ✅ | ✅ | ✅ | ✅ | — | — | — |
+| `sys_days` (`sys_time<days>`) | ✅ | — | ✅ | — | — | ✅ | — | — | — |
+| `year_month_day` | ✅ | — | — | — | — | ✅ | — | — | — |
+| `glz::epoch_time<D>` | ✅ | — | ✅ | — | — | — | — | — | — |
+
+`high_resolution_clock::time_point` is not listed because it is an alias: it follows the `steady_clock` row under libc++ and MSVC, and the `system_clock` row under libstdc++. See [High Resolution Clock Time Points](#high-resolution-clock-time-points).
+
+An unsupported combination is a compile-time error (`write_supported` / `read_supported` report `false`), never a silent fallback. To carry a wall-clock instant through a format that lacks calendar support, store it as a duration since a known epoch (for example a `std::chrono::milliseconds` field), which every format encodes identically.
 
 ## Notes
 
