@@ -39,6 +39,10 @@ namespace glz
    template <class T>
    concept erasable = requires(T v) { v.erase(v.cbegin(), v.cend()); };
 
+   // Not implied by `resizable`: std::list and std::forward_list are resizable but have no shrink_to_fit
+   template <class T>
+   concept has_shrink_to_fit = requires(T v) { v.shrink_to_fit(); };
+
    template <class T>
    concept has_size = requires(T v) { v.size(); };
 

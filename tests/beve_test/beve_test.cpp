@@ -7042,6 +7042,63 @@ suite beve_byte_and_char_array_tests = [] {
    };
 };
 
+struct beve_shrink_opts : glz::opts
+{
+   bool shrink_to_fit = true;
+};
+
+// shrink_to_fit() is a non-binding request, so track the call rather than the capacity
+struct shrink_counting_string : std::string
+{
+   using std::string::basic_string;
+   size_t shrink_calls{};
+   void shrink_to_fit()
+   {
+      ++shrink_calls;
+      std::string::shrink_to_fit();
+   }
+};
+
+suite beve_shrink_to_fit_tests = [] {
+   "string elements are shrunk, not the container"_test = [] {
+      const std::vector<std::string> src{"a", "b", "c"};
+      std::string buffer{};
+      expect(not glz::write_beve(src, buffer));
+
+      // each element starts long, so resizing it down leaves excess capacity to reclaim
+      std::vector<shrink_counting_string> dst(3, shrink_counting_string(256, 'x'));
+      expect(not glz::read<beve_shrink_opts{{.format = glz::BEVE}}>(dst, buffer));
+
+      expect(dst.size() == 3);
+      for (size_t i = 0; i < dst.size(); ++i) {
+         expect(dst[i] == src[i]);
+         expect(dst[i].shrink_calls == 1);
+      }
+   };
+
+   // the outer container is not resizable, so shrinking it was never guarded
+   "fixed size string containers still compile"_test = [] {
+      const std::array<std::string, 3> src{"a", "b", "c"};
+      std::string buffer{};
+      expect(not glz::write_beve(src, buffer));
+
+      std::array<std::string, 3> dst{};
+      expect(not glz::read<beve_shrink_opts{{.format = glz::BEVE}}>(dst, buffer));
+      expect(dst == src);
+   };
+
+   // std::list is resizable but has no shrink_to_fit member
+   "containers without shrink_to_fit still compile"_test = [] {
+      const std::vector<int> src{1, 2, 3};
+      std::string buffer{};
+      expect(not glz::write_beve(src, buffer));
+
+      std::list<int> dst{9, 9, 9, 9};
+      expect(not glz::read<beve_shrink_opts{{.format = glz::BEVE}}>(dst, buffer));
+      expect(dst == (std::list<int>{1, 2, 3}));
+   };
+};
+
 int main()
 {
    trace.begin("binary_test");

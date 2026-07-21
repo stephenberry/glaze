@@ -4432,23 +4432,106 @@ suite nested_file_include_test = [] {
    };
 };
 
-// Shrink to fit is nonbinding and cannot be properly tested
-/*suite shrink_to_fit = [] {
-   "shrink_to_fit"_test = [] {
-      std::vector<int> v = { 1, 2, 3, 4, 5, 6 };
-      std::string b = R"([1,2,3])";
-      expect(glz::read_json(v, b) == glz::error_code::none);
+struct shrink_opts : glz::opts
+{
+   bool shrink_to_fit = true;
+};
 
-      expect(v.size() == 3);
-      expect(v.capacity() > 3);
+// std::vector::shrink_to_fit() is a non-binding request, so capacity can't be asserted portably.
+// Track the call itself instead, which is what Glaze is responsible for.
+struct shrink_counter : std::vector<int>
+{
+   using std::vector<int>::vector;
+   size_t shrink_calls{};
+   void shrink_to_fit()
+   {
+      ++shrink_calls;
+      std::vector<int>::shrink_to_fit();
+   }
+};
 
-      v = { 1, 2, 3, 4, 5, 6 };
+const std::vector<int> expected_123{1, 2, 3};
 
-      expect(glz::read<glz::opts{.shrink_to_fit = true}>(v, b) == glz::error_code::none);
-      expect(v.size() == 3);
-      expect(v.capacity() == 3);
+suite shrink_to_fit_tests = [] {
+   "growing read shrinks"_test = [] {
+      shrink_counter v;
+      expect(not glz::read<shrink_opts{}>(v, std::string{"[1,2,3]"}));
+      expect(v == expected_123);
+      expect(v.shrink_calls == 1);
    };
-};*/
+
+   "read past existing size shrinks"_test = [] {
+      // starts smaller than the buffer, so the overwrite loop falls through into the growing loop
+      shrink_counter v{1};
+      expect(not glz::read<shrink_opts{}>(v, std::string{"[1,2,3]"}));
+      expect(v == expected_123);
+      expect(v.shrink_calls == 1);
+   };
+
+   "shrinking read shrinks"_test = [] {
+      shrink_counter v{1, 2, 3, 4, 5, 6};
+      expect(not glz::read<shrink_opts{}>(v, std::string{"[1,2,3]"}));
+      expect(v == expected_123);
+      expect(v.shrink_calls == 1);
+   };
+
+   "empty array shrinks"_test = [] {
+      shrink_counter v{1, 2, 3};
+      expect(not glz::read<shrink_opts{}>(v, std::string{"[]"}));
+      expect(v.empty());
+      expect(v.shrink_calls == 1);
+   };
+
+   "appended read shrinks"_test = [] {
+      struct append_shrink_opts : glz::opts
+      {
+         bool append_arrays = true;
+         bool shrink_to_fit = true;
+      };
+      shrink_counter v{1};
+      expect(not glz::read<append_shrink_opts{}>(v, std::string{"[2,3]"}));
+      expect(v == expected_123);
+      expect(v.shrink_calls == 1);
+   };
+
+   "no shrink by default"_test = [] {
+      shrink_counter v{1, 2, 3, 4, 5, 6};
+      expect(not glz::read_json(v, std::string{"[1,2,3]"}));
+      expect(v == expected_123);
+      expect(v.shrink_calls == 0);
+   };
+
+   // std::list and std::forward_list are resizable but have no shrink_to_fit member
+   "containers without shrink_to_fit still compile"_test = [] {
+      std::list<int> l{9, 9, 9, 9};
+      expect(not glz::read<shrink_opts{}>(l, std::string{"[1,2,3]"}));
+      expect(l == (std::list<int>{1, 2, 3}));
+
+      std::forward_list<int> fl{9, 9, 9, 9};
+      expect(not glz::read<shrink_opts{}>(fl, std::string{"[1,2,3]"}));
+      expect(fl == (std::forward_list<int>{1, 2, 3}));
+   };
+
+   "ndjson shrinking read shrinks"_test = [] {
+      shrink_counter v{1, 2, 3, 4, 5, 6};
+      expect(not glz::read<shrink_opts{{.format = glz::NDJSON}}>(v, std::string{"1\n2\n3"}));
+      expect(v == expected_123);
+      expect(v.shrink_calls == 1);
+   };
+
+   "ndjson growing read shrinks"_test = [] {
+      shrink_counter v;
+      expect(not glz::read<shrink_opts{{.format = glz::NDJSON}}>(v, std::string{"1\n2\n3"}));
+      expect(v == expected_123);
+      expect(v.shrink_calls == 1);
+   };
+
+   "ndjson containers without shrink_to_fit still compile"_test = [] {
+      std::list<int> l{9, 9, 9, 9};
+      expect(not glz::read<shrink_opts{{.format = glz::NDJSON}}>(l, std::string{"1\n2\n3"}));
+      expect(l == (std::list<int>{1, 2, 3}));
+   };
+};
 
 suite recorder_test = [] {
    "recorder_to_file"_test = [] {

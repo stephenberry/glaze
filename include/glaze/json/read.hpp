@@ -2283,7 +2283,7 @@ namespace glz
             if constexpr ((resizable<T> || is_inplace_vector<T>) && not check_append_arrays(Opts)) {
                value.clear();
 
-               if constexpr (check_shrink_to_fit(Opts)) {
+               if constexpr (check_shrink_to_fit(Opts) && has_shrink_to_fit<T>) {
                   value.shrink_to_fit();
                }
             }
@@ -2327,7 +2327,7 @@ namespace glz
                      value.erase(value_it,
                                  value.end()); // use erase rather than resize for non-default constructible elements
 
-                     if constexpr (check_shrink_to_fit(Opts)) {
+                     if constexpr (check_shrink_to_fit(Opts) && has_shrink_to_fit<T>) {
                         value.shrink_to_fit();
                      }
                   }
@@ -2419,6 +2419,9 @@ namespace glz
                         --ctx.depth;
                      }
                      ++it;
+                     if constexpr (check_shrink_to_fit(Opts) && has_shrink_to_fit<T>) {
+                        value.shrink_to_fit();
+                     }
                      return;
                   }
                   else [[unlikely]] {
