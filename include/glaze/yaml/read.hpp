@@ -1764,6 +1764,68 @@ namespace glz
       }
    };
 
+   // ============================================
+   // std::chrono calendar types
+   // ============================================
+   //
+   // Parsed from an ISO 8601 scalar using the shared chrono_detail parsers. Reading goes
+   // through the str_t reader above, so every YAML scalar style is accepted regardless of
+   // which one the writer emits: plain (what Glaze writes), single-quoted, double-quoted
+   // and block. That keeps hand-written and third-party YAML readable, since many
+   // generators quote timestamps.
+   //
+   // std::string rather than std::string_view is deliberate: YAML scalars can require
+   // unescaping and line folding, so the reader materializes them into an owning buffer.
+
+   // system_clock::time_point: parse from ISO 8601.
+   // Time points whose period is exactly `days` (e.g. std::chrono::sys_days) also accept
+   // the bare "YYYY-MM-DD" form; full datetimes remain accepted and are floored to days.
+   // Coarser periods fall through to the full parser so dates are not silently snapped to
+   // a multi-day boundary.
+   template <is_system_time_point T>
+      requires(not custom_read<T>)
+   struct from<YAML, T>
+   {
+      template <auto Opts, class It>
+      static void op(auto&& value, is_context auto&& ctx, It&& it, auto end) noexcept
+      {
+         std::string str;
+         from<YAML, std::string>::template op<Opts>(str, ctx, it, end);
+         if (bool(ctx.error)) [[unlikely]]
+            return;
+
+         using Duration = typename std::remove_cvref_t<T>::duration;
+         using Period = typename Duration::period;
+         if constexpr (std::ratio_equal_v<Period, std::ratio<86400>>) {
+            if (str.size() == 10) {
+               std::chrono::year_month_day ymd{};
+               chrono_detail::parse_ymd(str, ymd, ctx.error);
+               if (bool(ctx.error)) [[unlikely]]
+                  return;
+               value = std::chrono::time_point_cast<Duration>(std::chrono::sys_days{ymd});
+               return;
+            }
+         }
+         chrono_detail::parse_iso8601(str, value, ctx.error);
+      }
+   };
+
+   // year_month_day: parse from "YYYY-MM-DD"
+   template <is_year_month_day T>
+      requires(not custom_read<T>)
+   struct from<YAML, T>
+   {
+      template <auto Opts, class It>
+      static void op(auto&& value, is_context auto&& ctx, It&& it, auto end) noexcept
+      {
+         std::string str;
+         from<YAML, std::string>::template op<Opts>(str, ctx, it, end);
+         if (bool(ctx.error)) [[unlikely]]
+            return;
+         chrono_detail::parse_ymd(str, value, ctx.error);
+      }
+   };
+
    // Boolean types
    template <bool_t T>
    struct from<YAML, T>

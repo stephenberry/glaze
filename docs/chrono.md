@@ -145,7 +145,7 @@ glz::read_json(parsed, json);
 | libc++ (Clang), MSVC STL | `steady_clock` | numeric count, supported by every format |
 | libstdc++ (GCC) | `system_clock` | ISO 8601 string, only in the formats that support `system_clock::time_point` |
 
-Because the alias makes the two types *identical*, Glaze cannot give them different behavior. The practical consequence is that a type containing an `hrc::time_point` can compile on one platform and fail on another: under libstdc++ it is a `system_clock::time_point`, which BEVE, YAML, CSV, and JSONB do not support (see [Format Support](#format-support)).
+Because the alias makes the two types *identical*, Glaze cannot give them different behavior. The practical consequence is that a type containing an `hrc::time_point` can compile on one platform and fail on another: under libstdc++ it is a `system_clock::time_point`, which BEVE, CSV, and JSONB do not support (see [Format Support](#format-support)).
 
 Prefer naming the clock you actually mean:
 
@@ -370,9 +370,9 @@ Durations and count-based time points use one representation shared by every for
 |------|:----:|:----:|:----:|:-------:|:----:|:----:|:----:|:---:|:-----:|
 | `std::chrono::duration<Rep, Period>` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 | `steady_clock::time_point` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| `system_clock::time_point` | ✅ | — | ✅ | ✅ | ✅ | ✅ | — | — | — |
-| `sys_days` (`sys_time<days>`) | ✅ | — | ✅ | — | — | ✅ | — | — | — |
-| `year_month_day` | ✅ | — | — | — | — | ✅ | — | — | — |
+| `system_clock::time_point` | ✅ | — | ✅ | ✅ | ✅ | ✅ | ✅ | — | — |
+| `sys_days` (`sys_time<days>`) | ✅ | — | ✅ | — | — | ✅ | ✅ | — | — |
+| `year_month_day` | ✅ | — | — | — | — | ✅ | ✅ | — | — |
 | `glz::epoch_time<D>` | ✅ | — | ✅ | — | — | — | — | — | — |
 
 `high_resolution_clock::time_point` is not listed because it is an alias: it follows the `steady_clock` row under libc++ and MSVC, and the `system_clock` row under libstdc++. See [High Resolution Clock Time Points](#high-resolution-clock-time-points).

@@ -2440,12 +2440,9 @@ namespace glz
    // to<uint32_t Format, is_duration T> specialization in core/chrono.hpp.
 
    // system_clock::time_point: serialize as ISO 8601 string.
-   // Zero-allocation implementation writing directly to buffer.
-   // Time points whose Duration period is exactly `days` (e.g. std::chrono::sys_days)
-   // are written as date-only "YYYY-MM-DD" since the time-of-day is always zero at that
-   // precision and the calendar date is the meaningful payload. Coarser periods (weeks,
-   // months, years) fall through to the full ISO 8601 path; this avoids silently
-   // truncating an arbitrary date to a multi-day boundary on read.
+   // Zero-allocation implementation writing directly to buffer. The layout is shared with
+   // every other text format via chrono_detail::write_iso_time_point; JSON supplies the
+   // quoting (a JSON scalar is a quoted string unless the caller opted out via `unquoted`).
    template <is_system_time_point T>
       requires(not custom_write<T>)
    struct to<JSON, T>
@@ -2453,111 +2450,11 @@ namespace glz
       template <auto Opts, class B>
       static void op(auto&& value, is_context auto&& ctx, B&& b, auto& ix) noexcept
       {
-         using namespace std::chrono;
-         using TP = std::remove_cvref_t<T>;
-         using Duration = typename TP::duration;
-         using Period = typename Duration::period;
-
-         constexpr bool date_only = std::ratio_equal_v<Period, std::ratio<86400>>;
-
-         const auto dp = floor<days>(value);
-         const year_month_day ymd{dp};
-         const int yr = static_cast<int>(ymd.year());
-         const unsigned mo = static_cast<unsigned>(ymd.month());
-         const unsigned dy = static_cast<unsigned>(ymd.day());
-
-         // RFC 3339 requires a 4-digit year in [0000, 9999]. Reject anything else rather
-         // than silently corrupting the output via uint64_t wrap of a negative year.
-         if (yr < 0 || yr > 9999) [[unlikely]] {
-            ctx.error = error_code::constraint_violated;
+         using Period = typename std::remove_cvref_t<T>::duration::period;
+         if (!ensure_space(ctx, b, ix + chrono_detail::iso_time_point_max_size<Period>)) [[unlikely]] {
             return;
          }
-
-         if constexpr (date_only) {
-            // "YYYY-MM-DD" = 10 chars + optional quotes
-            constexpr size_t max_size = 12;
-            if (!ensure_space(ctx, b, ix + max_size)) [[unlikely]] {
-               return;
-            }
-
-            if constexpr (not check_unquoted(Opts)) {
-               b[ix++] = '"';
-            }
-            chrono_detail::write_digits<4>(b, ix, static_cast<uint64_t>(yr));
-            b[ix++] = '-';
-            chrono_detail::write_digits<2>(b, ix, mo);
-            b[ix++] = '-';
-            chrono_detail::write_digits<2>(b, ix, dy);
-            if constexpr (not check_unquoted(Opts)) {
-               b[ix++] = '"';
-            }
-         }
-         else {
-            const hh_mm_ss tod{floor<Duration>(value - dp)};
-            const auto hr = static_cast<unsigned>(tod.hours().count());
-            const auto mi = static_cast<unsigned>(tod.minutes().count());
-            const auto sc = static_cast<unsigned>(tod.seconds().count());
-
-            // Calculate fractional digits based on duration precision
-            constexpr size_t frac_digits = []() constexpr {
-               if constexpr (std::ratio_greater_equal_v<Period, std::ratio<1>>) {
-                  return 0; // seconds or coarser
-               }
-               else if constexpr (std::ratio_greater_equal_v<Period, std::milli>) {
-                  return 3; // milliseconds
-               }
-               else if constexpr (std::ratio_greater_equal_v<Period, std::micro>) {
-                  return 6; // microseconds
-               }
-               else {
-                  return 9; // nanoseconds or finer
-               }
-            }();
-
-            // Max size: "YYYY-MM-DDTHH:MM:SS.nnnnnnnnnZ" = 30 + quotes = 32
-            constexpr size_t max_size = 22 + (frac_digits > 0 ? 1 + frac_digits : 0);
-            if (!ensure_space(ctx, b, ix + max_size)) [[unlikely]] {
-               return;
-            }
-
-            if constexpr (not check_unquoted(Opts)) {
-               b[ix++] = '"';
-            }
-            chrono_detail::write_digits<4>(b, ix, static_cast<uint64_t>(yr));
-            b[ix++] = '-';
-            chrono_detail::write_digits<2>(b, ix, mo);
-            b[ix++] = '-';
-            chrono_detail::write_digits<2>(b, ix, dy);
-            b[ix++] = 'T';
-            chrono_detail::write_digits<2>(b, ix, hr);
-            b[ix++] = ':';
-            chrono_detail::write_digits<2>(b, ix, mi);
-            b[ix++] = ':';
-            chrono_detail::write_digits<2>(b, ix, sc);
-
-            // Write fractional seconds if duration is finer than seconds
-            if constexpr (frac_digits > 0) {
-               b[ix++] = '.';
-               const auto subsec = tod.subseconds();
-               if constexpr (frac_digits == 3) {
-                  chrono_detail::write_digits<3>(b, ix,
-                                                 static_cast<uint64_t>(duration_cast<milliseconds>(subsec).count()));
-               }
-               else if constexpr (frac_digits == 6) {
-                  chrono_detail::write_digits<6>(b, ix,
-                                                 static_cast<uint64_t>(duration_cast<microseconds>(subsec).count()));
-               }
-               else {
-                  chrono_detail::write_digits<9>(b, ix,
-                                                 static_cast<uint64_t>(duration_cast<nanoseconds>(subsec).count()));
-               }
-            }
-
-            b[ix++] = 'Z';
-            if constexpr (not check_unquoted(Opts)) {
-               b[ix++] = '"';
-            }
-         }
+         chrono_detail::write_iso_time_point<not check_unquoted(Opts)>(value, ctx, b, ix);
       }
    };
 
@@ -2569,34 +2466,15 @@ namespace glz
       template <auto Opts, class B>
       static void op(auto&& value, is_context auto&& ctx, B&& b, auto& ix) noexcept
       {
-         const int yr = static_cast<int>(value.year());
-         const unsigned mo = static_cast<unsigned>(value.month());
-         const unsigned dy = static_cast<unsigned>(value.day());
-
-         // std::chrono::year is a signed 16-bit-ish range, so users can construct dates
-         // outside [0000, 9999]. Reject those rather than emitting wrap-around digits.
-         if (yr < 0 || yr > 9999) [[unlikely]] {
-            ctx.error = error_code::constraint_violated;
+         if (!ensure_space(ctx, b, ix + chrono_detail::iso_date_max_size)) [[unlikely]] {
             return;
          }
-
-         // "YYYY-MM-DD" = 10 chars + optional quotes
-         constexpr size_t max_size = 12;
-         if (!ensure_space(ctx, b, ix + max_size)) [[unlikely]] {
-            return;
-         }
-
-         if constexpr (not check_unquoted(Opts)) {
-            b[ix++] = '"';
-         }
-         chrono_detail::write_digits<4>(b, ix, static_cast<uint64_t>(yr));
-         b[ix++] = '-';
-         chrono_detail::write_digits<2>(b, ix, mo);
-         b[ix++] = '-';
-         chrono_detail::write_digits<2>(b, ix, dy);
-         if constexpr (not check_unquoted(Opts)) {
-            b[ix++] = '"';
-         }
+         // std::chrono::year spans a signed 16-bit range, so users can construct dates
+         // outside [0000, 9999]; write_iso_date rejects those rather than emitting
+         // wrap-around digits.
+         chrono_detail::write_iso_date<not check_unquoted(Opts)>(static_cast<int>(value.year()),
+                                                                 static_cast<unsigned>(value.month()),
+                                                                 static_cast<unsigned>(value.day()), ctx, b, ix);
       }
    };
 
