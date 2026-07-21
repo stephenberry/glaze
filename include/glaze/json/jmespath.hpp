@@ -429,7 +429,13 @@ namespace glz
 
    namespace detail
    {
-      template <auto Opts = opts{}, class T>
+      // The slice/index helpers below intentionally do not default `Opts`. They must inherit the
+      // caller's parse options, and a defaulted `Opts` makes a call site that forgets `<Opts>`
+      // compile silently against `opts{}`, resetting every option. That is how #2710 read past the
+      // end of a non-null-terminated buffer: `null_terminated` reverted to true, so the end guards
+      // in `handle_slice` compiled out while the caller was parsing a buffer with no '\0' sentinel.
+      // Requiring an explicit `Opts` turns that mistake into a compile error.
+      template <auto Opts, class T>
          requires(Opts.format == JSON && not readable_array_t<T> &&
                   not(tuple_t<std::decay_t<T>> || is_std_tuple<std::decay_t<T>>))
       inline void handle_slice(const jmespath::ArrayParseResult&, T&&, context& ctx, auto&&, auto&&)
@@ -437,7 +443,7 @@ namespace glz
          ctx.error = error_code::syntax_error;
       }
 
-      template <auto Opts = opts{}, class T>
+      template <auto Opts, class T>
          requires(Opts.format == JSON && (tuple_t<std::decay_t<T>> || is_std_tuple<std::decay_t<T>>))
       inline void handle_slice(const jmespath::ArrayParseResult& decomposed_key, T&& value, context& ctx, auto&& it,
                                auto end)
@@ -558,7 +564,7 @@ namespace glz
       // against the array length per JMESPath (e.g. [-1] is the last element). On entry `it`
       // must point at the first element (just past '['), or at ']' for an empty array. On
       // success `it` is positioned at element `n`; otherwise ctx.error is set.
-      template <auto Opts = opts{}>
+      template <auto Opts>
       inline void seek_array_index(int32_t n, context& ctx, auto&& it, auto end)
       {
          const auto at_end = [&]() -> bool {
@@ -618,7 +624,7 @@ namespace glz
          }
       }
 
-      template <auto Opts = opts{}, class T>
+      template <auto Opts, class T>
          requires(Opts.format == JSON && readable_array_t<T>)
       inline void handle_slice(const jmespath::ArrayParseResult& decomposed_key, T&& value, context& ctx, auto&& it,
                                auto end)
