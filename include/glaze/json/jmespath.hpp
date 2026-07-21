@@ -1122,7 +1122,7 @@ namespace glz
 
                      if (decomposed_key.colon_count > 0) {
                         // Slice scenario
-                        detail::handle_slice(decomposed_key, value, ctx, it, end);
+                        detail::handle_slice<Opts>(decomposed_key, value, ctx, it, end);
                         return;
                      }
                      else {
@@ -1185,7 +1185,7 @@ namespace glz
 
                            if (decomposed_key.colon_count > 0) {
                               // Slice scenario
-                              detail::handle_slice(decomposed_key, value, ctx, it, end);
+                              detail::handle_slice<Opts>(decomposed_key, value, ctx, it, end);
                               return;
                            }
                            else {
