@@ -557,4 +557,63 @@ suite non_null_terminated_slice_bounds = [] {
    };
 };
 
+// A "key[...]" expression is tokenized as the key and the bracket separately ("a[1:3]" -> "a",
+// "[1:3]"), so the array-access token always has an empty key and object-member navigation is
+// handled by the preceding key token. The read paths rely on that invariant and carry no
+// "key[...]" branch. These cases pin the behavior that invariant produces, on both the
+// compile-time and runtime overloads.
+suite key_prefixed_array_access = [] {
+   "key-prefixed slice"_test = [] {
+      std::string buffer = R"({"a":[10,20,30,40,50],"b":[1,2]})";
+
+      std::vector<int> slice{};
+      expect(not glz::read_jmespath<"a[1:3]">(slice, buffer));
+      expect(slice == (std::vector<int>{20, 30}));
+
+      slice.clear();
+      expect(not glz::read_jmespath(glz::jmespath_expression{"a[1:3]"}, slice, buffer));
+      expect(slice == (std::vector<int>{20, 30}));
+
+      // Reverse slice behind a key.
+      std::vector<int> rev{};
+      expect(not glz::read_jmespath<"a[::-1]">(rev, buffer));
+      expect(rev == (std::vector<int>{50, 40, 30, 20, 10}));
+
+      // A later key is unaffected by the earlier one.
+      std::vector<int> b{};
+      expect(not glz::read_jmespath<"b[0:2]">(b, buffer));
+      expect(b == (std::vector<int>{1, 2}));
+   };
+
+   "key-prefixed index and nesting"_test = [] {
+      std::string buffer = R"({"a":{"b":{"c":[1,2,3,4]}},"list":[{"n":1},{"n":2},{"n":3}]})";
+
+      int n{};
+      expect(not glz::read_jmespath<"a.b.c[2]">(n, buffer));
+      expect(n == 3);
+      expect(not glz::read_jmespath(glz::jmespath_expression{"a.b.c[2]"}, n, buffer));
+      expect(n == 3);
+
+      std::vector<int> slice{};
+      expect(not glz::read_jmespath<"a.b.c[1:3]">(slice, buffer));
+      expect(slice == (std::vector<int>{2, 3}));
+
+      // Index into an array of objects, then navigate a key.
+      expect(not glz::read_jmespath<"list[1].n">(n, buffer));
+      expect(n == 2);
+      expect(not glz::read_jmespath(glz::jmespath_expression{"list[2].n"}, n, buffer));
+      expect(n == 3);
+   };
+
+   "key-prefixed access on missing key errors"_test = [] {
+      std::string buffer = R"({"a":[10,20,30]})";
+      std::vector<int> slice{};
+      expect(glz::read_jmespath<"missing[0:2]">(slice, buffer));
+      expect(glz::read_jmespath(glz::jmespath_expression{"missing[0:2]"}, slice, buffer));
+
+      int n{};
+      expect(glz::read_jmespath<"missing[0]">(n, buffer));
+   };
+};
+
 int main() { return 0; }

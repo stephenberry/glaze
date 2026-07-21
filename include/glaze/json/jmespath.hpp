@@ -858,125 +858,50 @@ namespace glz
             static_assert(not decomposed_key.error, "invalid JMESPath expression");
 
             if constexpr (decomposed_key.is_array_access) {
-               // If we have a key, that means we're looking into an object like: key[0:5]
-               if constexpr (key.empty()) {
-                  if (skip_ws<Opts>(ctx, it, end)) {
-                     return;
-                  }
-                  // We expect the JSON at this level to be an array
-                  if (match_invalid_end<'[', Opts>(ctx, it, end)) {
-                     return;
-                  }
+               // `finalize_tokens` splits every token at '[' and pushes any key prefix out as its
+               // own token, so a bracketed token always begins with '['. An array-access token
+               // therefore always has an empty key: "a[0]" tokenizes as "a" then "[0]", and the
+               // object-member step is handled by the preceding key token. The `key[...]` form is
+               // consequently unreachable, so there is no branch for it here. If tokenization ever
+               // stops splitting, this fires rather than silently taking an unexercised path.
+               static_assert(key.empty(), "array-access token carries a key; jmespath tokenization changed");
 
-                  // If this is a slice (colon_count > 0)
-                  if constexpr (decomposed_key.colon_count > 0) {
-                     detail::handle_slice<Opts>(decomposed_key, value, ctx, it, end);
-                  }
-                  else {
-                     // SINGLE INDEX SCENARIO (no slice, just an index)
-                     if constexpr (decomposed_key.start.has_value()) {
-                        constexpr auto n = decomposed_key.start.value();
-
-                        // Position `it` at element n (negative indices count from the back).
-                        detail::seek_array_index<Opts>(int32_t(n), ctx, it, end);
-                        if (bool(ctx.error)) [[unlikely]]
-                           return;
-
-                        // For the final token read the element into value; otherwise leave `it`
-                        // positioned so the next token can continue indexing into it.
-                        if constexpr (I == (N - 1)) {
-                           parse<Opts.format>::template op<Opts>(value, ctx, it, end);
-                        }
-                     }
-                     else {
-                        ctx.error = error_code::array_element_not_found;
-                        return;
-                     }
-                  }
-
-                  // After handling the array access, we're done for this token
+               if (skip_ws<Opts>(ctx, it, end)) {
                   return;
                }
+               // We expect the JSON at this level to be an array
+               if (match_invalid_end<'[', Opts>(ctx, it, end)) {
+                  return;
+               }
+
+               // If this is a slice (colon_count > 0)
+               if constexpr (decomposed_key.colon_count > 0) {
+                  detail::handle_slice<Opts>(decomposed_key, value, ctx, it, end);
+               }
                else {
-                  // Object scenario with a key, like: key[0:5]
-                  if (match_invalid_end<'{', Opts>(ctx, it, end)) {
-                     return;
-                  }
+                  // SINGLE INDEX SCENARIO (no slice, just an index)
+                  if constexpr (decomposed_key.start.has_value()) {
+                     constexpr auto n = decomposed_key.start.value();
 
-                  while (true) {
-                     if (skip_ws<Opts>(ctx, it, end)) {
-                        return;
-                     }
-                     if (match<'"'>(ctx, it)) {
-                        return;
-                     }
-
-                     auto* start = it;
-                     skip_string_view(ctx, it, end);
+                     // Position `it` at element n (negative indices count from the back).
+                     detail::seek_array_index<Opts>(int32_t(n), ctx, it, end);
                      if (bool(ctx.error)) [[unlikely]]
                         return;
-                     const sv k = {start, size_t(it - start)};
-                     ++it;
 
-                     if (key.size() == k.size() && comparitor<key>(k.data())) {
-                        if (skip_ws<Opts>(ctx, it, end)) {
-                           return;
-                        }
-                        if (match_invalid_end<':', Opts>(ctx, it, end)) {
-                           return;
-                        }
-                        if (skip_ws<Opts>(ctx, it, end)) {
-                           return;
-                        }
-                        if (match_invalid_end<'[', Opts>(ctx, it, end)) {
-                           return;
-                        }
-
-                        // Distinguish single index vs slice using colon_count
-                        if constexpr (decomposed_key.colon_count > 0) {
-                           detail::handle_slice<Opts, decomposed_key>(value, ctx, it, end);
-                        }
-                        else {
-                           // SINGLE INDEX SCENARIO (colon_count == 0)
-                           if constexpr (decomposed_key.start.has_value()) {
-                              constexpr auto n = decomposed_key.start.value();
-
-                              // Position `it` at element n (negative indices count from the back).
-                              detail::seek_array_index<Opts>(int32_t(n), ctx, it, end);
-                              if (bool(ctx.error)) [[unlikely]]
-                                 return;
-
-                              if (skip_ws<Opts>(ctx, it, end)) {
-                                 return;
-                              }
-
-                              if constexpr (I == (N - 1)) {
-                                 parse<Opts.format>::template op<Opts>(value, ctx, it, end);
-                              }
-                              return;
-                           }
-                           else {
-                              ctx.error = error_code::array_element_not_found;
-                              return;
-                           }
-                        }
-                     }
-                     else {
-                        skip_value<JSON>::op<Opts>(ctx, it, end);
-                        if (bool(ctx.error)) [[unlikely]] {
-                           return;
-                        }
-                        if (skip_ws<Opts>(ctx, it, end)) {
-                           return;
-                        }
-                        if (*it != ',') {
-                           ctx.error = error_code::key_not_found;
-                           return;
-                        }
-                        ++it;
+                     // For the final token read the element into value; otherwise leave `it`
+                     // positioned so the next token can continue indexing into it.
+                     if constexpr (I == (N - 1)) {
+                        parse<Opts.format>::template op<Opts>(value, ctx, it, end);
                      }
                   }
+                  else {
+                     ctx.error = error_code::array_element_not_found;
+                     return;
+                  }
                }
+
+               // After handling the array access, we're done for this token
+               return;
             }
             else {
                // If it's not array access, we are dealing with an object key
@@ -1117,123 +1042,48 @@ namespace glz
                }
 
                if (decomposed_key.is_array_access) {
-                  if (key.empty()) {
-                     // Top-level array scenario
-                     if (skip_ws<Opts>(ctx, it, end)) {
-                        return;
-                     }
-                     if (match_invalid_end<'[', Opts>(ctx, it, end)) {
-                        return;
-                     }
+                  // Unreachable by construction: `finalize_tokens` splits every token at '[', so an
+                  // array-access token always has an empty key (see the static_assert on the
+                  // compile-time path). Guard rather than silently mis-parse if that ever changes.
+                  if (not key.empty()) [[unlikely]] {
+                     ctx.error = error_code::syntax_error;
+                     return;
+                  }
 
-                     if (decomposed_key.colon_count > 0) {
-                        // Slice scenario
-                        detail::handle_slice<Opts>(decomposed_key, value, ctx, it, end);
-                        return;
-                     }
-                     else {
-                        // Single index scenario
-                        if (decomposed_key.start.has_value()) {
-                           const int32_t n = decomposed_key.start.value();
+                  // Top-level array scenario
+                  if (skip_ws<Opts>(ctx, it, end)) {
+                     return;
+                  }
+                  if (match_invalid_end<'[', Opts>(ctx, it, end)) {
+                     return;
+                  }
 
-                           // Position `it` at element n (negative indices count from the back).
-                           detail::seek_array_index<Opts>(n, ctx, it, end);
-                           if (bool(ctx.error)) [[unlikely]]
-                              return;
-
-                           // For the final token read the element into value; otherwise leave `it`
-                           // positioned so the next token can continue indexing into it.
-                           if (I == (N - 1)) {
-                              parse<Opts.format>::template op<Opts>(value, ctx, it, end);
-                           }
-                        }
-                        else {
-                           ctx.error = error_code::array_element_not_found;
-                           return;
-                        }
-                        return;
-                     }
+                  if (decomposed_key.colon_count > 0) {
+                     // Slice scenario
+                     detail::handle_slice<Opts>(decomposed_key, value, ctx, it, end);
+                     return;
                   }
                   else {
-                     // Object scenario: key[...]
-                     if (match_invalid_end<'{', Opts>(ctx, it, end)) {
-                        return;
-                     }
+                     // Single index scenario
+                     if (decomposed_key.start.has_value()) {
+                        const int32_t n = decomposed_key.start.value();
 
-                     while (true) {
-                        if (skip_ws<Opts>(ctx, it, end)) {
-                           return;
-                        }
-                        if (match<'"'>(ctx, it)) {
-                           return;
-                        }
-
-                        auto* start_pos = it;
-                        skip_string_view(ctx, it, end);
+                        // Position `it` at element n (negative indices count from the back).
+                        detail::seek_array_index<Opts>(n, ctx, it, end);
                         if (bool(ctx.error)) [[unlikely]]
                            return;
-                        const sv k = {start_pos, size_t(it - start_pos)};
-                        ++it;
 
-                        if (key.size() == k.size() && memcmp(key.data(), k.data(), key.size()) == 0) {
-                           if (skip_ws<Opts>(ctx, it, end)) {
-                              return;
-                           }
-                           if (match_invalid_end<':', Opts>(ctx, it, end)) {
-                              return;
-                           }
-                           if (skip_ws<Opts>(ctx, it, end)) {
-                              return;
-                           }
-                           if (match_invalid_end<'[', Opts>(ctx, it, end)) {
-                              return;
-                           }
-
-                           if (decomposed_key.colon_count > 0) {
-                              // Slice scenario
-                              detail::handle_slice<Opts>(decomposed_key, value, ctx, it, end);
-                              return;
-                           }
-                           else {
-                              // Single index scenario
-                              if (decomposed_key.start.has_value()) {
-                                 const int32_t n = decomposed_key.start.value();
-
-                                 // Position `it` at element n (negative indices count from the back).
-                                 detail::seek_array_index<Opts>(n, ctx, it, end);
-                                 if (bool(ctx.error)) [[unlikely]]
-                                    return;
-
-                                 if (skip_ws<Opts>(ctx, it, end)) {
-                                    return;
-                                 }
-
-                                 if (I == (N - 1)) {
-                                    parse<Opts.format>::template op<Opts>(value, ctx, it, end);
-                                 }
-                                 return;
-                              }
-                              else {
-                                 ctx.error = error_code::array_element_not_found;
-                                 return;
-                              }
-                           }
-                        }
-                        else {
-                           skip_value<JSON>::op<Opts>(ctx, it, end);
-                           if (bool(ctx.error)) [[unlikely]] {
-                              return;
-                           }
-                           if (skip_ws<Opts>(ctx, it, end)) {
-                              return;
-                           }
-                           if (*it != ',') {
-                              ctx.error = error_code::key_not_found;
-                              return;
-                           }
-                           ++it;
+                        // For the final token read the element into value; otherwise leave `it`
+                        // positioned so the next token can continue indexing into it.
+                        if (I == (N - 1)) {
+                           parse<Opts.format>::template op<Opts>(value, ctx, it, end);
                         }
                      }
+                     else {
+                        ctx.error = error_code::array_element_not_found;
+                        return;
+                     }
+                     return;
                   }
                }
                else {
