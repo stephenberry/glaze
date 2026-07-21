@@ -266,7 +266,7 @@ auto ec = glz::write<glz::yaml::yaml_opts{.flow_style = true}>(cfg, yaml);
 YAML support leverages the same type system as JSON. All types that work with `glz::read_json`/`glz::write_json` also work with YAML:
 
 - Arithmetic types (integers, floating-point)
-- `std::string`, `std::string_view`
+- `std::string` (read and write), `std::string_view` (write only, see below)
 - `std::vector`, `std::array`, `std::deque`, `std::list`
 - `std::map`, `std::unordered_map`
 - `std::optional`, `std::unique_ptr`, `std::shared_ptr`
@@ -319,6 +319,24 @@ RFC 3339 has no representation for a year outside `[0000, 9999]`, so writing one
 
 See [std::chrono Support](./chrono.md) for the full cross-format behavior.
 
+### Reading strings requires an owning target
+
+Unlike JSON, YAML cannot hand you a view into the input buffer. A double-quoted scalar may carry escape sequences, a plain scalar may fold across multiple lines, and a block scalar joins lines together, so the decoded value often does not appear contiguously in the source. The reader therefore decodes into an owning buffer and gives that buffer to your type.
+
+Read targets must be able to take ownership, so use `std::string` (or another owning string type) rather than `std::string_view`:
+
+```cpp
+struct config
+{
+   std::string name{};       // reads and writes
+   std::string_view label{}; // writes only
+};
+```
+
+A non-owning read target is rejected at compile time, and `glz::read_supported<std::string_view, glz::YAML>` is `false`. Writing is unaffected, since a view is a perfectly good source: `glz::write_supported<std::string_view, glz::YAML>` remains `true`. `std::array<char, N>` is likewise write-only for the same reason.
+
+This is a YAML-specific restriction. JSON views the input buffer directly and keeps zero-copy `std::string_view` reads.
+
 ## Tag Validation
 
 Glaze supports YAML Core Schema tags and validates them against the C++ types being parsed. This catches type mismatches at parse time.
@@ -327,7 +345,7 @@ Glaze supports YAML Core Schema tags and validates them against the C++ types be
 
 | Tag | Verbatim Form | Valid C++ Types |
 |-----|---------------|-----------------|
-| `!!str` | `!<tag:yaml.org,2002:str>` | `std::string`, `std::string_view` |
+| `!!str` | `!<tag:yaml.org,2002:str>` | `std::string` (`std::string_view` on write only) |
 | `!!int` | `!<tag:yaml.org,2002:int>` | `int`, `int64_t`, `uint32_t`, etc. |
 | `!!float` | `!<tag:yaml.org,2002:float>` | `float`, `double` |
 | `!!bool` | `!<tag:yaml.org,2002:bool>` | `bool` |

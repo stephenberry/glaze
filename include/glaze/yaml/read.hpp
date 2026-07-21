@@ -5,6 +5,8 @@
 
 #include <cctype>
 #include <charconv>
+#include <concepts>
+#include <string>
 
 #include "glaze/core/chrono.hpp"
 #include "glaze/core/common.hpp"
@@ -1704,10 +1706,27 @@ namespace glz
          return true;
       }
 
+      // A YAML scalar cannot generally be viewed in place in the input buffer: a
+      // double-quoted scalar may carry escapes, a plain scalar may fold across lines, and a
+      // block scalar joins them. The reader therefore decodes into an owning buffer and
+      // hands that buffer to the target, so the target must be able to take ownership of it.
+      //
+      // This is deliberately narrower than str_t. A std::string_view is assignable from the
+      // decoded buffer, so without this constraint it compiled and then pointed at freed
+      // memory once the buffer died. A std::array<char, N> is not assignable at all, so it
+      // reported as supported and then failed to compile deep inside the reader. Both are
+      // now reported unsupported by read_supported<T, YAML>, which is the honest answer.
+      //
+      // Writing is unaffected: a non-owning string is a perfectly good source, so
+      // write_supported<std::string_view, YAML> remains true.
+      template <class T>
+      concept owning_scalar_target = not string_view_t<T> && std::assignable_from<std::decay_t<T>&, std::string&&>;
+
    } // namespace yaml
 
    // String types
    template <str_t T>
+      requires(yaml::owning_scalar_target<T>)
    struct from<YAML, T>
    {
       template <auto Opts, class It>

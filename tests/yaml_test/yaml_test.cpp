@@ -10569,4 +10569,67 @@ suite yaml_chrono_calendar_tests = [] {
    };
 };
 
+struct yaml_sv_writable
+{
+   std::string_view a{};
+};
+
+struct yaml_string_holder
+{
+   std::string a{};
+};
+
+// A YAML scalar is decoded into an owning buffer before it reaches the target, so a
+// non-owning target cannot be supported: it would be left pointing at that buffer after it
+// died. These pin the contract, because the failure mode this replaced was silent (a
+// std::string_view target compiled and then read freed memory) rather than diagnosed.
+static_assert(not glz::read_supported<std::string_view, glz::YAML>,
+              "reading a YAML scalar into a non-owning view would dangle");
+static_assert(not glz::read_supported<std::u8string_view, glz::YAML>);
+
+// std::array<char, N> cannot take ownership of the buffer either. It previously reported as
+// supported and then failed to compile inside the reader.
+static_assert(not glz::read_supported<std::array<char, 16>, glz::YAML>);
+
+// Writing is unaffected: a non-owning string is a perfectly good source.
+static_assert(glz::write_supported<std::string_view, glz::YAML>);
+static_assert(glz::write_supported<std::u8string_view, glz::YAML>);
+
+// Owning targets are unaffected.
+static_assert(glz::read_supported<std::string, glz::YAML>);
+static_assert(glz::write_supported<std::string, glz::YAML>);
+
+// The restriction is YAML-specific. JSON views into the input buffer directly, so it keeps
+// zero-copy string_view reads.
+static_assert(glz::read_supported<std::string_view, glz::JSON>);
+
+suite yaml_string_target_tests = [] {
+   // Regression guard for the owning path the constraint now scopes: every scalar style must
+   // still decode correctly into a std::string.
+   "owning string targets read every scalar style"_test = [] {
+      const auto read_a = [](const std::string& yaml) {
+         yaml_string_holder v{};
+         const auto ec = glz::read_yaml(v, yaml);
+         expect(not ec) << glz::format_error(ec, yaml);
+         return v.a;
+      };
+      expect(read_a("a: hello") == "hello");
+      expect(read_a("a: 'hello'") == "hello");
+      expect(read_a("a: \"hello\"") == "hello");
+      expect(read_a("a: \"tab\\there\"") == "tab\there"); // escapes are decoded
+      expect(read_a("a: 'it''s'") == "it's"); // '' unescapes to '
+      expect(read_a("a: |\n  line1\n  line2\n") == "line1\nline2\n"); // literal block
+      expect(read_a("a: >\n  folded\n  onto one\n") == "folded onto one\n"); // folded block
+   };
+
+   // Writing a view remains supported, which is what makes the read-side restriction
+   // asymmetric rather than a blanket ban on std::string_view.
+   "string_view still writes"_test = [] {
+      yaml_sv_writable v{"hello"};
+      std::string out{};
+      expect(not glz::write_yaml(v, out));
+      expect(out == "a: hello\n") << out;
+   };
+};
+
 int main() { return 0; }
