@@ -4799,22 +4799,8 @@ namespace glz
    // std::chrono deserialization
    // ============================================
 
-   // Duration: parse from count
-   template <is_duration T>
-      requires(not custom_read<T>)
-   struct from<JSON, T>
-   {
-      template <auto Opts, class It0, class It1>
-      GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, It0&& it, It1 end) noexcept
-      {
-         using Rep = typename std::remove_cvref_t<T>::rep;
-         Rep count{};
-         from<JSON, Rep>::template op<Opts>(count, ctx, it, end);
-         if (bool(ctx.error)) [[unlikely]]
-            return;
-         value = std::remove_cvref_t<T>(count);
-      }
-   };
+   // Duration: parsed generically (from the bare rep count) by the
+   // from<uint32_t Format, is_duration T> specialization in core/chrono.hpp.
 
    // system_clock::time_point: parse from ISO 8601 string.
    // Time points whose Duration period is exactly `days` (e.g. std::chrono::sys_days)
@@ -4866,42 +4852,8 @@ namespace glz
       }
    };
 
-   // steady_clock::time_point: parse as count in the time_point's native duration
-   template <is_steady_time_point T>
-      requires(not custom_read<T>)
-   struct from<JSON, T>
-   {
-      template <auto Opts, class It0, class It1>
-      GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, It0&& it, It1 end) noexcept
-      {
-         using Duration = typename std::remove_cvref_t<T>::duration;
-         using Rep = typename Duration::rep;
-         Rep count{};
-         from<JSON, Rep>::template op<Opts>(count, ctx, it, end);
-         if (bool(ctx.error)) [[unlikely]]
-            return;
-         value = std::remove_cvref_t<T>(Duration(count));
-      }
-   };
-
-   // high_resolution_clock::time_point when it's a distinct type (rare)
-   template <is_high_res_time_point T>
-      requires(not custom_read<T>)
-   struct from<JSON, T>
-   {
-      template <auto Opts, class It0, class It1>
-      GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, It0&& it, It1 end) noexcept
-      {
-         // Treat like steady_clock - parse as count
-         using Duration = typename std::remove_cvref_t<T>::duration;
-         using Rep = typename Duration::rep;
-         Rep count{};
-         from<JSON, Rep>::template op<Opts>(count, ctx, it, end);
-         if (bool(ctx.error)) [[unlikely]]
-            return;
-         value = std::remove_cvref_t<T>(Duration(count));
-      }
-   };
+   // steady_clock / high_resolution_clock time_points: parsed generically (from the bare
+   // count) by the from<uint32_t Format, is_count_time_point T> specialization in core/chrono.hpp.
 
    // epoch_time wrapper: parse as numeric Unix timestamp
    template <class Duration>

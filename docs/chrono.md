@@ -6,7 +6,7 @@ Glaze provides first-class support for `std::chrono` types, enabling seamless se
 
 ### Durations
 
-All `std::chrono::duration` types are supported and serialize as their numeric count value:
+All `std::chrono::duration` types are supported and serialize as their numeric count value (the `rep`, expressed in the duration's own period). This representation is shared by every Glaze format (JSON, BEVE, CBOR, MsgPack, BSON, TOML, YAML, CSV, JSONB, EETF), so the same type round-trips between any of them interchangeably:
 
 ```cpp
 std::chrono::milliseconds ms{12345};
@@ -14,7 +14,16 @@ std::string json = glz::write_json(ms).value();  // "12345"
 
 std::chrono::milliseconds parsed{};
 glz::read_json(parsed, json);  // parsed.count() == 12345
+
+// The same value over a binary format: BEVE encodes the duration byte-for-byte
+// like its underlying integer rep.
+std::string beve{};
+glz::write_beve(ms, beve);
+std::chrono::milliseconds from_beve{};
+glz::read_beve(from_beve, beve);  // from_beve == ms
 ```
+
+> In BSON, whose document root cannot be a bare scalar, a duration is supported as a struct/map field (encoded as the rep's native BSON number type) rather than as a top-level value.
 
 This works with any duration type, including custom periods:
 
@@ -125,6 +134,24 @@ std::string json = glz::write_json(start).value();  // numeric count
 std::chrono::steady_clock::time_point parsed;
 glz::read_json(parsed, json);
 // Exact roundtrip - no precision loss
+```
+
+### High Resolution Clock Time Points
+
+`std::chrono::high_resolution_clock` is not a distinct clock in any mainstream standard library. It is an alias, and **which clock it aliases differs by implementation**:
+
+| Standard library | `high_resolution_clock` is | `high_resolution_clock::time_point` behaves as |
+|------------------|----------------------------|------------------------------------------------|
+| libc++ (Clang), MSVC STL | `steady_clock` | numeric count, supported by every format |
+| libstdc++ (GCC) | `system_clock` | ISO 8601 string, only in the formats that support `system_clock::time_point` |
+
+Because the alias makes the two types *identical*, Glaze cannot give them different behavior. The practical consequence is that a type containing an `hrc::time_point` can compile on one platform and fail on another: under libstdc++ it is a `system_clock::time_point`, which BEVE, YAML, CSV, and JSONB do not support (see [Format Support](#format-support)).
+
+Prefer naming the clock you actually mean:
+
+```cpp
+std::chrono::steady_clock::time_point t;  // portable: numeric count in every format
+std::chrono::system_clock::time_point w;  // portable: wall clock, format support varies
 ```
 
 ## Epoch Time Wrappers
@@ -334,6 +361,23 @@ Output:
 | `glz::epoch_millis` | Unix milliseconds | `1702481400123` |
 | `glz::epoch_micros` | Unix microseconds | `1702481400123456` |
 | `glz::epoch_nanos` | Unix nanoseconds | `1702481400123456789` |
+
+## Format Support
+
+Durations and count-based time points use one representation shared by every format, so they interchange freely: the same meta schema can target JSON and BEVE. Calendar types are format-specific, because a wall-clock instant has no single natural encoding across text and binary formats.
+
+| Type | JSON | BEVE | CBOR | MsgPack | BSON | TOML | YAML | CSV | JSONB |
+|------|:----:|:----:|:----:|:-------:|:----:|:----:|:----:|:---:|:-----:|
+| `std::chrono::duration<Rep, Period>` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| `steady_clock::time_point` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| `system_clock::time_point` | ✅ | — | ✅ | ✅ | ✅ | ✅ | — | — | — |
+| `sys_days` (`sys_time<days>`) | ✅ | — | ✅ | — | — | ✅ | — | — | — |
+| `year_month_day` | ✅ | — | — | — | — | ✅ | — | — | — |
+| `glz::epoch_time<D>` | ✅ | — | ✅ | — | — | — | — | — | — |
+
+`high_resolution_clock::time_point` is not listed because it is an alias: it follows the `steady_clock` row under libc++ and MSVC, and the `system_clock` row under libstdc++. See [High Resolution Clock Time Points](#high-resolution-clock-time-points).
+
+An unsupported combination is a compile-time error (`write_supported` / `read_supported` report `false`), never a silent fallback. To carry a wall-clock instant through a format that lacks calendar support, store it as a duration since a known epoch (for example a `std::chrono::milliseconds` field), which every format encodes identically.
 
 ## Notes
 

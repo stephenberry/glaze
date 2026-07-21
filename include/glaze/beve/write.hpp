@@ -8,6 +8,7 @@
 #include "glaze/beve/header.hpp"
 #include "glaze/beve/key_traits.hpp"
 #include "glaze/core/buffer_traits.hpp"
+#include "glaze/core/chrono.hpp"
 #include "glaze/core/opts.hpp"
 #include "glaze/core/reflect.hpp"
 #include "glaze/core/seek.hpp"
@@ -748,9 +749,12 @@ namespace glz
                static_assert(false_v<T>);
             }
          }
-         else if constexpr (beve_num_t<V>) {
-            constexpr uint8_t type = std::floating_point<V> ? 0 : (std::is_signed_v<V> ? 0b000'01'000 : 0b000'10'000);
-            constexpr uint8_t numeric_header = tag::typed_array | type | (byte_count<V> << 5);
+         else if constexpr (beve_num_array_t<V>) {
+            // NV is the arithmetic wire type: V for plain numbers, the rep for chrono
+            // durations / count-based time points (which are bit-compatible with it).
+            using NV = beve_num_array_value_t<V>;
+            constexpr uint8_t type = std::floating_point<NV> ? 0 : (std::is_signed_v<NV> ? 0b000'01'000 : 0b000'10'000);
+            constexpr uint8_t numeric_header = tag::typed_array | type | (byte_count<NV> << 5);
 
             if constexpr (check_aligned_arrays(Opts) && sizeof(V) > 1) {
                // Aligned typed array: ALIGNED_HEADER | NUMERIC_HEADER | SIZE | PADDING_LENGTH | PADDING | DATA
@@ -805,26 +809,28 @@ namespace glz
                if constexpr (is_volatile) {
                   const auto n_elements = value.size();
                   for (size_t i = 0; i < n_elements; ++i) {
-                     V temp = value[i];
+                     V elem = value[i]; // copy out of volatile storage first
+                     NV temp = beve_num_array_extract(elem);
                      if constexpr (std::endian::native == std::endian::big) {
                         byteswap_le(temp);
                      }
-                     std::memcpy(&b[ix], &temp, sizeof(V));
-                     ix += sizeof(V);
+                     std::memcpy(&b[ix], &temp, sizeof(NV));
+                     ix += sizeof(NV);
                   }
                }
                else if constexpr (std::endian::native == std::endian::big && sizeof(V) > 1) {
                   // On big endian, swap each element
                   const auto n_elements = static_cast<size_t>(value.size());
                   for (size_t i = 0; i < n_elements; ++i) {
-                     V temp = value[i];
+                     NV temp = beve_num_array_extract(value[i]);
                      byteswap_le(temp);
-                     std::memcpy(&b[ix], &temp, sizeof(V));
-                     ix += sizeof(V);
+                     std::memcpy(&b[ix], &temp, sizeof(NV));
+                     ix += sizeof(NV);
                   }
                }
                else {
-                  // Little endian or single-byte: bulk memcpy
+                  // Little endian or single-byte: bulk memcpy. A chrono element is
+                  // bit-identical to its rep, so the raw bytes are already the wire form.
                   if (n) {
                      std::memcpy(&b[ix], value.data(), n);
                      ix += n;
@@ -837,7 +843,7 @@ namespace glz
                   return;
                }
                for (auto& x : value) {
-                  dump_type(ctx, x, b, ix);
+                  dump_type(ctx, beve_num_array_extract(x), b, ix);
                }
             }
          }

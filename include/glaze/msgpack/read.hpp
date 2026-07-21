@@ -12,6 +12,7 @@
 #include <utility>
 #include <vector>
 
+#include "glaze/core/chrono.hpp"
 #include "glaze/core/common.hpp"
 #include "glaze/core/meta.hpp"
 #include "glaze/core/opts.hpp"

@@ -11,6 +11,7 @@
 #include <limits>
 
 #include "glaze/core/buffer_traits.hpp"
+#include "glaze/core/chrono.hpp"
 #include "glaze/core/opts.hpp"
 #include "glaze/core/reflect.hpp"
 #include "glaze/core/to.hpp"
@@ -112,7 +113,11 @@ namespace glz
       {
          // int64_t max is 20 chars including sign. uint64_t max is 20 chars.
          std::array<char, 32> tmp;
-         auto* end_ptr = glz::to_chars(tmp.data(), static_cast<T>(value));
+         // Normalize to a fixed-width integer so glz::to_chars (specialized on exact
+         // widths) accepts platform integer types such as `long` that are distinct from
+         // int32_t/int64_t. Mirrors the JSON number writer's sized_integer_conversion.
+         using X = std::decay_t<decltype(sized_integer_conversion<T>())>;
+         auto* end_ptr = glz::to_chars(tmp.data(), static_cast<X>(value));
          const size_t n = static_cast<size_t>(end_ptr - tmp.data());
          jsonb_detail::write_scalar(ctx, jsonb::type::int_, tmp.data(), n, b, ix);
       }

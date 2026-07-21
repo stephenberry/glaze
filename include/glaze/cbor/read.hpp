@@ -1958,21 +1958,8 @@ namespace glz
       }
    };
 
-   // std::chrono::duration - bare numeric count in the duration's native units
-   template <is_duration T>
-   struct from<CBOR, T>
-   {
-      template <auto Opts>
-      GLZ_ALWAYS_INLINE static void op(auto& value, is_context auto& ctx, auto& it, auto end) noexcept
-      {
-         using Rep = typename std::remove_cvref_t<T>::rep;
-         Rep count{};
-         from<CBOR, Rep>::template op<Opts>(count, ctx, it, end);
-         if (bool(ctx.error)) [[unlikely]]
-            return;
-         value = std::remove_cvref_t<T>(count);
-      }
-   };
+   // std::chrono::duration - parsed generically (from the bare rep count) by the
+   // from<uint32_t Format, is_duration T> specialization in core/chrono.hpp.
 
    namespace cbor_detail
    {
@@ -2127,39 +2114,8 @@ namespace glz
       }
    };
 
-   // steady_clock::time_point - bare count in native duration
-   template <is_steady_time_point T>
-   struct from<CBOR, T>
-   {
-      template <auto Opts>
-      GLZ_ALWAYS_INLINE static void op(auto& value, is_context auto& ctx, auto& it, auto end) noexcept
-      {
-         using Duration = typename std::remove_cvref_t<T>::duration;
-         using Rep = typename Duration::rep;
-         Rep count{};
-         from<CBOR, Rep>::template op<Opts>(count, ctx, it, end);
-         if (bool(ctx.error)) [[unlikely]]
-            return;
-         value = std::remove_cvref_t<T>(Duration(count));
-      }
-   };
-
-   // high_resolution_clock::time_point when it's a distinct type (rare)
-   template <is_high_res_time_point T>
-   struct from<CBOR, T>
-   {
-      template <auto Opts>
-      GLZ_ALWAYS_INLINE static void op(auto& value, is_context auto& ctx, auto& it, auto end) noexcept
-      {
-         using Duration = typename std::remove_cvref_t<T>::duration;
-         using Rep = typename Duration::rep;
-         Rep count{};
-         from<CBOR, Rep>::template op<Opts>(count, ctx, it, end);
-         if (bool(ctx.error)) [[unlikely]]
-            return;
-         value = std::remove_cvref_t<T>(Duration(count));
-      }
-   };
+   // steady_clock / high_resolution_clock time_points: parsed generically (from the bare
+   // count) by the from<uint32_t Format, is_count_time_point T> specialization in core/chrono.hpp.
 
    // epoch_time wrapper - decoder accepts:
    //   - tag 1 + integer seconds (RFC 8949 §3.4.2; what glaze writes for Period >= 1s)

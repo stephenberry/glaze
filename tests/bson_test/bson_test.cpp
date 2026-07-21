@@ -158,6 +158,18 @@ namespace bson_test
       bool operator==(const time_s&) const = default;
    };
 
+   struct duration_s
+   {
+      std::chrono::milliseconds ms{}; // int64 element
+      std::chrono::seconds s{}; // int64 element
+      std::chrono::nanoseconds ns{}; // int64 element
+      std::chrono::duration<double, std::milli> dms{}; // double element
+      std::chrono::duration<int32_t, std::milli> i32{}; // int32 element
+      std::chrono::duration<int16_t, std::ratio<1, 60>> i16{}; // int32 element (small signed)
+      std::chrono::duration<uint32_t, std::milli> u32{}; // int64 element (unsigned widened)
+      bool operator==(const duration_s&) const = default;
+   };
+
    struct oid_s
    {
       glz::bson::object_id id{};
@@ -631,6 +643,18 @@ namespace
       "roundtrip-chrono"_test = [] {
          using namespace std::chrono;
          time_s v{system_clock::time_point{milliseconds{1700000000000LL}}};
+         expect_roundtrip_equal(v);
+      };
+
+      "roundtrip-duration"_test = [] {
+         using namespace std::chrono;
+         duration_s v{milliseconds{12345},
+                      seconds{-42},
+                      nanoseconds{987654321},
+                      duration<double, std::milli>{123.5},
+                      duration<int32_t, std::milli>{-123456},
+                      duration<int16_t, std::ratio<1, 60>>{-3000},
+                      duration<uint32_t, std::milli>{4000000000u}};
          expect_roundtrip_equal(v);
       };
 

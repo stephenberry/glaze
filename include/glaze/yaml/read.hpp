@@ -6,6 +6,7 @@
 #include <cctype>
 #include <charconv>
 
+#include "glaze/core/chrono.hpp"
 #include "glaze/core/common.hpp"
 #include "glaze/core/read.hpp"
 #include "glaze/core/reflect.hpp"
