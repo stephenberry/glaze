@@ -507,6 +507,9 @@ namespace glz
    // alternative's own BEVE value. In every case the encoding is a plain BEVE value that maps 1:1
    // to JSON, and no 0x0E extension byte is emitted. The reader recovers the alternative from the
    // discriminator, the object's key set, or the value's self-describing type header.
+   //
+   // Version 1 data is still readable (the reader dispatches on the leading byte), but it is not
+   // writable: a process that must produce Version 1 output should pin an older Glaze.
    template <is_variant T>
       requires(not custom_write<T>)
    struct to<BEVE, T> final

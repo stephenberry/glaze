@@ -581,9 +581,10 @@ namespace glz
    {
       static constexpr size_t variant_size = std::variant_size_v<T>;
 
-      // Try each alternative in declaration order, rewinding the iterator on failure.
+      // Try each alternative in declaration order, rewinding the iterator on failure. Returns true
+      // when an alternative parsed cleanly, leaving `value` holding it.
       template <auto Opts>
-      static void try_each(auto&& value, is_context auto&& ctx, auto&& it, auto end) noexcept
+      static bool try_each_pass(auto&& value, is_context auto&& ctx, auto&& it, auto end) noexcept
       {
          bool matched = false;
          const auto start = it;
@@ -601,10 +602,35 @@ namespace glz
                matched = true;
             }
          });
-         if (!matched) [[unlikely]] {
+         if (!matched) {
             it = start;
-            ctx.error = error_code::no_matching_variant_type;
          }
+         return matched;
+      }
+
+      // Resolve a non-object alternative from the value's own self-describing type header.
+      //
+      // The first pass runs with allow_conversions off so an alternative is accepted only when its
+      // BEVE type header matches exactly. This is required for correctness, not just fidelity: the
+      // numeric and typed-array readers deliberately widen and narrow under allow_conversions (the
+      // default), so a lenient first pass would let variant<int32_t, int64_t> capture an i64 value
+      // in its int32_t alternative and silently truncate it. Only if nothing matches exactly do we
+      // retry leniently, which keeps reads of data whose numeric widths no longer match any
+      // alternative working.
+      template <auto Opts>
+      static void try_each(auto&& value, is_context auto&& ctx, auto&& it, auto end) noexcept
+      {
+         const auto start = it;
+         if constexpr (check_allow_conversions(Opts)) {
+            if (try_each_pass<opt_false<Opts, allow_conversions_opt_tag{}>>(value, ctx, it, end)) {
+               return;
+            }
+         }
+         if (try_each_pass<Opts>(value, ctx, it, end)) {
+            return;
+         }
+         it = start;
+         ctx.error = error_code::no_matching_variant_type;
       }
 
       // Object-category dispatch: single candidate is parsed directly; otherwise scan the keys once
@@ -654,7 +680,11 @@ namespace glz
                }
             });
 
-            size_t tag_index = variant_size; // sentinel: discriminator not yet resolved
+            // `tag_index` is whatever variant_id_to_index reported, which is ids_v<T>.size() when the
+            // id is unknown; `tag_decoded` records that an id was actually read, so an unknown id can
+            // be rejected instead of silently falling through to structural deduction.
+            size_t tag_index = ids_v<T>.size();
+            bool tag_decoded = false;
 
             for (size_t k = 0; k < n_keys; ++k) {
                const auto klen = int_from_compressed(ctx, scan, end);
@@ -668,7 +698,6 @@ namespace glz
                const sv key{scan, size_t(klen)};
                scan += klen;
 
-               bool consumed_value = false;
                if constexpr (tagged) {
                   if (key == tag_v<T>) {
                      using id_type = std::decay_t<decltype(ids_v<T>[0])>;
@@ -679,6 +708,7 @@ namespace glz
                            return;
                         }
                         tag_index = variant_id_to_index<T>::op(id);
+                        tag_decoded = true;
                      }
                      else {
                         // Read the string discriminator VALUE in place: [tag::string][len][bytes].
@@ -692,7 +722,6 @@ namespace glz
                            if (bool(ctx.error)) [[unlikely]] {
                               return;
                            }
-                           consumed_value = true;
                            continue;
                         }
                         ++scan;
@@ -708,33 +737,49 @@ namespace glz
                         scan += slen;
                         tag_index = variant_id_to_index<T>::op(id_view.data(), id_view.data() + id_view.size(),
                                                                id_view.size());
+                        tag_decoded = true;
                      }
-                     consumed_value = true;
+                     // The discriminator is authoritative, so the remaining keys carry no further
+                     // information; stop scanning and let pass 2 read the object in full.
+                     break;
                   }
                }
 
-               if (!consumed_value) {
-                  if constexpr (variant_deduction_key_count<T> > 0) {
-                     using dk = keys_wrapper<variant_deduction_keys<T>>;
-                     static constexpr auto& H = hash_info<dk>;
-                     const auto di =
-                        decode_hash_with_size<JSON, dk, H, H.type>::op(key.data(), key.data() + klen, size_t(klen));
-                     if (di < variant_deduction_key_count<T> && variant_deduction_keys<T>[di] == key) {
-                        possible = possible & variant_deduction_bits<T>[di];
-                     }
+               if constexpr (variant_deduction_key_count<T> > 0) {
+                  using dk = keys_wrapper<variant_deduction_keys<T>>;
+                  static constexpr auto& H = hash_info<dk>;
+                  const auto di =
+                     decode_hash_with_size<JSON, dk, H, H.type>::op(key.data(), key.data() + klen, size_t(klen));
+                  if (di < variant_deduction_key_count<T> && variant_deduction_keys<T>[di] == key) {
+                     possible = possible & variant_deduction_bits<T>[di];
                   }
-                  skip_value<BEVE>::op<Opts>(ctx, scan, end);
-                  if (bool(ctx.error)) [[unlikely]] {
-                     return;
-                  }
+               }
+               skip_value<BEVE>::op<Opts>(ctx, scan, end);
+               if (bool(ctx.error)) [[unlikely]] {
+                  return;
                }
             }
 
             // Resolve: an explicit discriminator wins; otherwise use the narrowed candidate set.
             size_t resolved = variant_size;
             if constexpr (tagged) {
-               if (tag_index < variant_size) {
-                  resolved = tag_index;
+               if (tag_decoded) {
+                  if (tag_index < ids_v<T>.size()) [[likely]] {
+                     resolved = tag_index;
+                  }
+                  else if constexpr (ids_v<T>.size() < variant_size) {
+                     // Fewer ids than alternatives: the first unlabeled alternative is the default
+                     // for an unrecognized id, matching the JSON reader.
+                     resolved = ids_v<T>.size();
+                  }
+                  else {
+                     // An id was present but names no alternative. Deducing from the keys instead
+                     // would silently produce a different type than the sender labeled, so reject it
+                     // exactly as the JSON reader does.
+                     ctx.error = error_code::no_matching_variant_type;
+                     ctx.custom_error_message = variant_ids_string_v<T>;
+                     return;
+                  }
                }
             }
             if (resolved >= variant_size) {
@@ -792,6 +837,9 @@ namespace glz
                   else if constexpr (tagged && struct_like && (not is_memory_object<V>)) {
                      // Thread the discriminator key into the object reader so it is skipped without
                      // disabling unknown-key checking for the alternative's real fields (JSON parity).
+                     // When the alternative genuinely declares a member of that name the reader keeps
+                     // treating it as a member instead (see from<BEVE, T>::op's Tag handling), so the
+                     // member still receives its value.
                      static constexpr auto tag_literal = string_literal_from_view<tag_v<T>.size()>(tag_v<T>);
                      from<BEVE, X>::template op<Opts, tag_literal>(std::get<I>(value), ctx, it, end);
                   }
@@ -840,22 +888,25 @@ namespace glz
          }
 
          // (B) Positional (structs-as-arrays) data carries no keys or discriminator.
+         // This must be an if/else: `if constexpr (...) { return; }` does not discard the statements
+         // that follow it, so without the `else` the (C) block below would still be instantiated in
+         // positional mode, where read_object's call into the keyed-object reader does not compile.
          if constexpr (check_structs_as_arrays(Opts)) {
             try_each<Opts>(value, ctx, it, end);
-            return;
-         }
-
-         // (C) Version 2: deduce from the value's self-describing category. Only a string-keyed
-         // object (header == tag::object exactly) carries the struct field names / string
-         // discriminator that read_object's key scan understands. A numeric-keyed object (a map or
-         // pair with a non-string key) writes its keys as raw fixed-width numbers with no length
-         // prefix, so it cannot be scanned as string keys; resolve it (and every non-object
-         // category) by trying each alternative, whose reader validates its own full header.
-         if (header == tag::object) {
-            read_object<Opts>(value, ctx, it, end);
          }
          else {
-            try_each<Opts>(value, ctx, it, end);
+            // (C) Version 2: deduce from the value's self-describing category. Only a string-keyed
+            // object (header == tag::object exactly) carries the struct field names / string
+            // discriminator that read_object's key scan understands. A numeric-keyed object (a map or
+            // pair with a non-string key) writes its keys as raw fixed-width numbers with no length
+            // prefix, so it cannot be scanned as string keys; resolve it (and every non-object
+            // category) by trying each alternative, whose reader validates its own full header.
+            if (header == tag::object) {
+               read_object<Opts>(value, ctx, it, end);
+            }
+            else {
+               try_each<Opts>(value, ctx, it, end);
+            }
          }
       }
    };
@@ -2259,6 +2310,10 @@ namespace glz
       // `Tag`, when non-empty, names a discriminator key to skip silently (used by the variant
       // reader so a merged discriminator is tolerated without disabling unknown-key checking for the
       // object's real fields). Default empty => no discriminator, unchanged behavior.
+      // The skip is suppressed when T declares a member of that name: the writer then emits the key
+      // twice (once as the discriminator, once as the member) and skipping both would drop the
+      // member's value, so it is read as an ordinary member and the real value wins. This mirrors
+      // the JSON reader's `contains_tag` guard.
       template <auto Opts, string_literal Tag = "">
          requires(check_structs_as_arrays(Opts) == false)
       static void op(auto&& value, is_context auto&& ctx, auto&& it, auto end)
@@ -2323,7 +2378,7 @@ namespace glz
                   return;
                }
 
-               if constexpr (not Tag.sv().empty()) {
+               if constexpr (not Tag.sv().empty() && not has_member_with_name<T>(Tag.sv())) {
                   // Discriminator key injected by the variant reader: skip it (and its value) without
                   // consulting error_on_unknown_keys, while the alternative's real keys stay checked.
                   if (sv{it, n} == Tag.sv()) {

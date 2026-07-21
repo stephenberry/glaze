@@ -160,7 +160,7 @@ struct beve_header {
 | ext_type | Name | `count` meaning | `header_size` |
 |----------|------|-----------------|---------------|
 | `glz::extension::delimiter` (0) | Delimiter | 0 | 1 |
-| `glz::extension::variant` (1) | Variant | Variant index | 1 + compressed_int size |
+| `glz::extension::variant` (1) | Variant (Version 1 only) | Variant index | 1 + compressed_int size |
 | `glz::extension::complex` (3) | Complex number | 2 (real + imag) | 2 |
 | `glz::extension::complex` (3) | Complex array | Element count | 2 + compressed_int size |
 
@@ -205,26 +205,33 @@ if (header->type == glz::tag::typed_array && header->count > max_elements) {
 return glz::read_beve<std::vector<int>>(buffer);
 ```
 
-**Variant Index Example**
+**Variant Example**
 
-For variants, `count` contains the variant index, allowing you to determine which type is stored before deserializing:
+A variant is written as an ordinary self-describing value (see [Variants](#variants) below), so peeking a
+variant returns the header of whatever the active alternative is, not a variant-specific header:
 
 ```c++
 using MyVariant = std::variant<int, std::string, double>;
 std::string buffer = receive_data();
 
 auto header = glz::beve_peek_header(buffer);
-if (header && header->type == glz::tag::extensions
-           && header->ext_type == glz::extension::variant) {
-   switch (header->count) {
-      case 0: std::cout << "Contains int\n"; break;
-      case 1: std::cout << "Contains string\n"; break;
-      case 2: std::cout << "Contains double\n"; break;
-   }
+if (header && header->type == glz::tag::string) {
+   std::cout << "Contains a string of " << header->count << " bytes\n";
 }
 
 MyVariant value;
 glz::read_beve(value, buffer);
+```
+
+Buffers written by Glaze prior to BEVE Version 2 instead begin with the `glz::extension::variant`
+header, where `count` is the positional variant index. Such buffers still read back normally:
+
+```c++
+auto header = glz::beve_peek_header(buffer);
+if (header && header->type == glz::tag::extensions
+           && header->ext_type == glz::extension::variant) {
+   // Version 1 encoding: header->count is the variant index
+}
 ```
 
 **Raw Pointer Overload**
@@ -395,6 +402,21 @@ The overhead is 2 extra bytes (numeric header + padding length) plus at most `al
 ## Untagged Binary
 
 By default Glaze will handle structs as tagged objects, meaning that keys will be written/read. However, structs can be written/read without tags by using the option `structs_as_arrays` or the functions `glz::write_beve_untagged` and `glz::read_beve_untagged`.
+
+## Variants
+
+BEVE Version 2 writes a `std::variant` as an ordinary, self-describing value. A variant with a `tag`/`ids` discriminator declared in `glz::meta` becomes an object with the discriminator merged in as the first member, exactly mirroring the JSON writer; every other variant is written as the active alternative's own value. Nothing variant-specific appears on the wire, so `glz::beve_to_json` of a variant produces the same JSON as `glz::write_json` of the same value.
+
+On read, the alternative is recovered from the discriminator when one is present, otherwise from the object's key set, otherwise from the value's own type header. Two consequences are worth knowing:
+
+- Alternatives are matched on their **exact** type header first, so `std::variant<int32_t, int64_t>` round-trips without narrowing. If no alternative matches exactly, a second pass allows numeric conversions.
+- Alternatives that are genuinely indistinguishable on the wire (two structs with identical field sets, or two empty structs) collapse to the first one. Declare a `tag` and `ids` discriminator to tell them apart. This matches how the JSON reader behaves for the same types.
+
+### Version 1 Compatibility
+
+Version 1 encoded a variant as a type-tag extension (header byte `0x0E`) followed by a compressed positional index. The reader dispatches on the leading byte and accepts both encodings, so **reading needs no option** and existing Version 1 buffers continue to work.
+
+Writing is Version 2 only. Version 2 output is not decodable as a variant by a Glaze release that predates Version 2, so if you have a peer pinned to such a release, either upgrade it or pin this side to a matching older Glaze until both ends move.
 
 ## BEVE to JSON Conversion
 
