@@ -839,7 +839,7 @@ namespace glz
 
                   if constexpr (resizable<T>) {
                      value.resize(count);
-                     if constexpr (check_shrink_to_fit(Opts)) {
+                     if constexpr (check_shrink_to_fit(Opts) && has_shrink_to_fit<T>) {
                         value.shrink_to_fit();
                      }
                   }
@@ -986,7 +986,7 @@ namespace glz
 
                   if constexpr (resizable<T>) {
                      value.resize(count);
-                     if constexpr (check_shrink_to_fit(Opts)) {
+                     if constexpr (check_shrink_to_fit(Opts) && has_shrink_to_fit<T>) {
                         value.shrink_to_fit();
                      }
                   }
@@ -1120,7 +1120,7 @@ namespace glz
             if constexpr (resizable<T>) {
                value.resize(static_cast<size_t>(count));
 
-               if constexpr (check_shrink_to_fit(Opts)) {
+               if constexpr (check_shrink_to_fit(Opts) && has_shrink_to_fit<T>) {
                   value.shrink_to_fit();
                }
             }

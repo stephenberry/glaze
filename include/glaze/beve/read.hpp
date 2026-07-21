@@ -991,7 +991,7 @@ namespace glz
             if constexpr (resizable<T>) {
                value.resize(n);
 
-               if constexpr (check_shrink_to_fit(Opts)) {
+               if constexpr (check_shrink_to_fit(Opts) && has_shrink_to_fit<T>) {
                   value.shrink_to_fit();
                }
             }
@@ -1034,7 +1034,7 @@ namespace glz
                if constexpr (resizable<T>) {
                   value.resize(n);
 
-                  if constexpr (check_shrink_to_fit(Opts)) {
+                  if constexpr (check_shrink_to_fit(Opts) && has_shrink_to_fit<T>) {
                      value.shrink_to_fit();
                   }
                }
@@ -1293,7 +1293,7 @@ namespace glz
             if constexpr (resizable<T>) {
                value.resize(n);
 
-               if constexpr (check_shrink_to_fit(Opts)) {
+               if constexpr (check_shrink_to_fit(Opts) && has_shrink_to_fit<T>) {
                   value.shrink_to_fit();
                }
             }
@@ -1322,8 +1322,8 @@ namespace glz
 
                x.resize(length);
 
-               if constexpr (check_shrink_to_fit(Opts)) {
-                  value.shrink_to_fit();
+               if constexpr (check_shrink_to_fit(Opts) && has_shrink_to_fit<decltype(x)>) {
+                  x.shrink_to_fit();
                }
 
                std::memcpy(x.data(), it, length);
@@ -1377,7 +1377,7 @@ namespace glz
             if constexpr (resizable<T>) {
                value.resize(n);
 
-               if constexpr (check_shrink_to_fit(Opts)) {
+               if constexpr (check_shrink_to_fit(Opts) && has_shrink_to_fit<T>) {
                   value.shrink_to_fit();
                }
             }
@@ -1459,7 +1459,7 @@ namespace glz
             if constexpr (resizable<T>) {
                value.resize(n);
 
-               if constexpr (check_shrink_to_fit(Opts)) {
+               if constexpr (check_shrink_to_fit(Opts) && has_shrink_to_fit<T>) {
                   value.shrink_to_fit();
                }
             }

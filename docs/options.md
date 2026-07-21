@@ -282,6 +282,10 @@ When reading into arrays, appends new elements instead of replacing existing con
 #### `shrink_to_fit`
 Calls `shrink_to_fit()` on dynamic containers after reading to minimize memory usage.
 
+Containers that have no `shrink_to_fit()` member (such as `std::list` and `std::forward_list`) are left alone rather than failing to compile. Note that `shrink_to_fit()` is a non-binding request in the standard library, so it is a hint rather than a guarantee.
+
+Honored by JSON, NDJSON, BEVE, CBOR, and EETF. Other formats currently ignore this option.
+
 ### Binary Size Options
 
 #### `linear_search`
