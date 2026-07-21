@@ -376,6 +376,55 @@ namespace glz
       }
    };
 
+   // ============================================
+   // std::chrono calendar types
+   // ============================================
+   //
+   // Written as plain (unquoted) ISO 8601 scalars, sharing the digit layout with JSON via
+   // chrono_detail. Plain is the idiomatic YAML form and matches how Glaze's TOML writer
+   // emits a native datetime. It is also unambiguously safe: ISO 8601 uses only digits,
+   // '-', ':', 'T' and 'Z', so it contains no character that requires quoting, none of the
+   // flow indicators (',' '[' ']' '{' '}'), and no ": " or " #" sequence that would end a
+   // plain scalar. Every ':' is followed by a digit, which keeps it a scalar rather than a
+   // mapping separator in both block and flow context.
+   //
+   // Durations and steady_clock / high_resolution_clock time points are numeric and are
+   // handled generically in core/chrono.hpp; only the calendar types need a format-specific
+   // representation.
+
+   // system_clock::time_point: plain ISO 8601 scalar (date-only for `days` precision)
+   template <is_system_time_point T>
+      requires(not custom_write<T>)
+   struct to<YAML, T>
+   {
+      template <auto Opts, class B>
+      static void op(auto&& value, is_context auto&& ctx, B&& b, auto& ix) noexcept
+      {
+         using Period = typename std::remove_cvref_t<T>::duration::period;
+         constexpr size_t max_size = chrono_detail::iso_time_point_max_size<Period> + write_padding_bytes;
+         if (!ensure_space(ctx, b, ix + max_size)) [[unlikely]] {
+            return;
+         }
+         chrono_detail::write_iso_time_point<false>(value, ctx, b, ix);
+      }
+   };
+
+   // year_month_day: plain "YYYY-MM-DD" scalar
+   template <is_year_month_day T>
+      requires(not custom_write<T>)
+   struct to<YAML, T>
+   {
+      template <auto Opts, class B>
+      static void op(auto&& value, is_context auto&& ctx, B&& b, auto& ix) noexcept
+      {
+         if (!ensure_space(ctx, b, ix + chrono_detail::iso_date_max_size + write_padding_bytes)) [[unlikely]] {
+            return;
+         }
+         chrono_detail::write_iso_date<false>(static_cast<int>(value.year()), static_cast<unsigned>(value.month()),
+                                              static_cast<unsigned>(value.day()), ctx, b, ix);
+      }
+   };
+
    // Enum with glz::meta - writes string representation
    template <class T>
       requires((glaze_enum_t<T> || (meta_keys<T> && std::is_enum_v<std::decay_t<T>>)) && not custom_write<T>)

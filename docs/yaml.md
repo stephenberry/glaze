@@ -274,6 +274,50 @@ YAML support leverages the same type system as JSON. All types that work with `g
 - `std::tuple`
 - User-defined types with `glz::meta` or pure reflection
 - Enums (as integers or strings with `glz::meta`)
+- `std::chrono` durations and time points (see below)
+
+## std::chrono Types
+
+Durations serialize as their bare numeric count, the same representation every Glaze format uses:
+
+```cpp
+std::chrono::milliseconds took{1500};  // took: 1500
+```
+
+Calendar types serialize as **plain (unquoted) ISO 8601 scalars**, which is the idiomatic YAML form and matches how Glaze's TOML writer emits a native datetime:
+
+```cpp
+struct event
+{
+   std::string name{};
+   std::chrono::sys_time<std::chrono::seconds> at{};
+   std::chrono::sys_days day{};
+   std::chrono::milliseconds took{};
+};
+```
+
+```yaml
+name: build
+at: 2024-12-13T15:30:45Z
+day: 2024-12-13
+took: 1500
+```
+
+Emitting these unquoted is safe: ISO 8601 uses only digits, `-`, `:`, `T` and `Z`, so it contains no character that requires quoting, none of the flow indicators (`,` `[` `]` `{` `}`), and no `: ` or ` #` sequence that would terminate a plain scalar. Every `:` is followed by a digit, which keeps it a scalar rather than a mapping separator in both block and flow context.
+
+Reading accepts any scalar style, so YAML from other generators (which commonly quote timestamps) parses without special handling:
+
+```yaml
+at: 2024-12-13T15:30:45Z      # plain
+at: '2024-12-13T15:30:45Z'    # single-quoted
+at: "2024-12-13T15:30:45Z"    # double-quoted
+```
+
+Timezone offsets are applied on read and normalized to UTC; `2024-12-13T10:30:45-05:00` and `2024-12-13T15:30:45Z` parse to the same instant. Fractional-second precision on write follows the time point's own duration, and a `sys_days` (days precision) is written date-only as `2024-12-13`.
+
+RFC 3339 has no representation for a year outside `[0000, 9999]`, so writing one fails with `constraint_violated` rather than emitting wrapped digits.
+
+See [std::chrono Support](./chrono.md) for the full cross-format behavior.
 
 ## Tag Validation
 

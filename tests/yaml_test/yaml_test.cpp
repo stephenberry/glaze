@@ -4,6 +4,7 @@
 #include "glaze/yaml.hpp"
 
 #include <array>
+#include <chrono>
 #include <cmath>
 #include <cstdio>
 #include <deque>
@@ -10401,6 +10402,170 @@ suite recursion_depth_tests = [] {
       skip_depth_probe value{};
       auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(value, yaml);
       expect(ec.ec == glz::error_code::exceeded_max_recursive_depth);
+   };
+};
+
+struct yaml_event
+{
+   std::string name{};
+   std::chrono::sys_time<std::chrono::seconds> at{};
+   std::chrono::sys_days day{};
+   std::chrono::year_month_day ymd{};
+   std::chrono::milliseconds took{};
+   bool operator==(const yaml_event&) const = default;
+};
+
+struct yaml_tp_holder
+{
+   std::chrono::sys_time<std::chrono::seconds> at{};
+};
+
+struct yaml_ymd_holder
+{
+   std::chrono::year_month_day d{};
+};
+
+suite yaml_chrono_calendar_tests = [] {
+   using namespace std::chrono;
+
+   static constexpr auto expected = sys_days{2024y / 12 / 13} + 15h + 30min + 45s;
+
+   // Glaze writes a plain (unquoted) ISO 8601 scalar, matching the TOML writer's native
+   // datetime and the idiomatic YAML form.
+   "time_point writes a plain ISO 8601 scalar"_test = [] {
+      yaml_tp_holder v{time_point_cast<seconds>(expected)};
+      std::string out{};
+      expect(not glz::write_yaml(v, out));
+      expect(out == "at: 2024-12-13T15:30:45Z\n") << out;
+   };
+
+   "struct round-trip with mixed chrono members"_test = [] {
+      yaml_event e{"build", time_point_cast<seconds>(expected), sys_days{2024y / 12 / 13}, 2024y / 12 / 13,
+                   milliseconds{1500}};
+      std::string out{};
+      expect(not glz::write_yaml(e, out));
+      yaml_event decoded{};
+      const auto ec = glz::read_yaml(decoded, out);
+      expect(not ec) << glz::format_error(ec, out);
+      expect(decoded == e);
+   };
+
+   // The writer emits plain scalars, but hand-written and third-party YAML routinely quotes
+   // timestamps, so every scalar style must read back.
+   "reads every scalar style"_test = [] {
+      const auto check = [](const std::string& yaml) {
+         yaml_tp_holder v{};
+         const auto ec = glz::read_yaml(v, yaml);
+         expect(not ec) << glz::format_error(ec, yaml);
+         expect(v.at == time_point_cast<seconds>(expected));
+      };
+      check("at: 2024-12-13T15:30:45Z");
+      check("at: '2024-12-13T15:30:45Z'");
+      check("at: \"2024-12-13T15:30:45Z\"");
+   };
+
+   // A plain scalar must survive flow context, where ',' '}' ']' would terminate it. ISO 8601
+   // contains none of them, and every ':' is followed by a digit so it cannot be mistaken for
+   // a mapping separator.
+   "plain scalar survives flow context"_test = [] {
+      const std::string yaml = "{at: 2024-12-13T15:30:45Z}";
+      yaml_tp_holder v{};
+      const auto ec = glz::read_yaml(v, yaml);
+      expect(not ec) << glz::format_error(ec, yaml);
+      expect(v.at == time_point_cast<seconds>(expected));
+   };
+
+   "timezone offsets are applied"_test = [] {
+      const auto check = [](const std::string& yaml) {
+         yaml_tp_holder v{};
+         const auto ec = glz::read_yaml(v, yaml);
+         expect(not ec) << glz::format_error(ec, yaml);
+         expect(v.at == time_point_cast<seconds>(expected));
+      };
+      check("at: 2024-12-13T15:30:45+00:00");
+      check("at: 2024-12-13T10:30:45-05:00");
+      check("at: 2024-12-13T21:00:45+05:30");
+   };
+
+   "fractional precision matches the time point"_test = [] {
+      const auto written = [](auto tp) {
+         std::string out{};
+         expect(not glz::write_yaml(tp, out));
+         return out;
+      };
+      expect(written(time_point_cast<seconds>(expected)) == "2024-12-13T15:30:45Z");
+      expect(written(time_point_cast<milliseconds>(expected + 123ms)) == "2024-12-13T15:30:45.123Z");
+      expect(written(time_point_cast<microseconds>(expected + 123456us)) == "2024-12-13T15:30:45.123456Z");
+      expect(written(time_point_cast<nanoseconds>(expected + 123456789ns)) == "2024-12-13T15:30:45.123456789Z");
+   };
+
+   // `days` precision carries no time of day, so it is written (and accepted) date-only.
+   "sys_days is date-only"_test = [] {
+      std::string out{};
+      expect(not glz::write_yaml(sys_days{2024y / 12 / 13}, out));
+      expect(out == "2024-12-13") << out;
+
+      sys_days decoded{};
+      expect(not glz::read_yaml(decoded, out));
+      expect(decoded == sys_days{2024y / 12 / 13});
+
+      // A full datetime is still accepted at days precision and floored.
+      sys_days floored{};
+      const std::string full = "2024-12-13T15:30:45Z";
+      expect(not glz::read_yaml(floored, full));
+      expect(floored == sys_days{2024y / 12 / 13});
+   };
+
+   "year_month_day round-trip"_test = [] {
+      yaml_ymd_holder v{2024y / 12 / 13};
+      std::string out{};
+      expect(not glz::write_yaml(v, out));
+      expect(out == "d: 2024-12-13\n") << out;
+      yaml_ymd_holder decoded{};
+      expect(not glz::read_yaml(decoded, out));
+      expect(decoded.d == v.d);
+   };
+
+   "sequences of time points"_test = [] {
+      std::vector<sys_time<seconds>> v{time_point_cast<seconds>(expected), time_point_cast<seconds>(expected + 1h)};
+      std::string out{};
+      expect(not glz::write_yaml(v, out));
+      std::vector<sys_time<seconds>> decoded{};
+      const auto ec = glz::read_yaml(decoded, out);
+      expect(not ec) << glz::format_error(ec, out);
+      expect(decoded == v);
+   };
+
+   "malformed input is rejected"_test = [] {
+      const auto rejects = [](const std::string& yaml) {
+         yaml_tp_holder v{};
+         return bool(glz::read_yaml(v, yaml));
+      };
+      expect(rejects("at: not-a-date"));
+      expect(rejects("at: 2024-13-45T99:99:99Z"));
+      expect(rejects("at: 2024-02-30T00:00:00Z")); // Feb 30 is not a real date
+      expect(rejects("at: 2024-12-13")); // date-only is not valid at seconds precision
+      expect(rejects("at: 2024-12-13T15:30:45Z trailing"));
+   };
+
+   // RFC 3339 has no representation for a year outside [0000, 9999], and the fixed-width
+   // parsers cannot read one back, so writing must fail rather than emit wrapped digits.
+   "years outside [0000, 9999] are rejected on write"_test = [] {
+      std::string out{};
+      expect(bool(glz::write_yaml(sys_days{year{10000} / 1 / 1}, out)));
+      out.clear();
+      expect(bool(glz::write_yaml(year_month_day{year{-1} / 1 / 1}, out)));
+   };
+
+   // Durations and steady_clock time points stay numeric; the calendar types above are the
+   // only ones with a YAML-specific representation.
+   "durations remain numeric"_test = [] {
+      std::string out{};
+      expect(not glz::write_yaml(milliseconds{1500}, out));
+      expect(out == "1500") << out;
+      milliseconds decoded{};
+      expect(not glz::read_yaml(decoded, out));
+      expect(decoded == milliseconds{1500});
    };
 };
 
