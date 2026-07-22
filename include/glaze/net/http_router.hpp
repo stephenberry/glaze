@@ -76,7 +76,7 @@ namespace glz
       };
 
       int status_code = 200;
-      std::unordered_map<std::string, std::string> response_headers{};
+      glz::http_headers response_headers{};
       std::string response_body{};
       uint8_t user_headers_set{};
 
@@ -100,21 +100,17 @@ namespace glz
             return *this;
          }
 
-         // Convert header name to lowercase for case-insensitive lookups (RFC 7230)
-         std::string key(name);
-         for (auto& c : key) c = ascii_tolower(c);
-
          // Track which default headers the user has set
-         if (key == "content-length")
+         if (glz::striequal(name, "content-length"))
             user_headers_set |= has_content_length;
-         else if (key == "date")
+         else if (glz::striequal(name, "date"))
             user_headers_set |= has_date;
-         else if (key == "server")
+         else if (glz::striequal(name, "server"))
             user_headers_set |= has_server;
-         else if (key == "connection")
+         else if (glz::striequal(name, "connection"))
             user_headers_set |= has_connection;
 
-         response_headers[std::move(key)] = std::string(value);
+         response_headers.set(std::string(name), std::string(value));
          return *this;
       }
 
@@ -169,7 +165,7 @@ namespace glz
          user_headers_set = 0;
       }
 
-      inline response& content_type(std::string_view type) { return header("content-type", type); }
+      inline response& content_type(std::string_view type) { return header("Content-Type", type); }
 
       // JSON response helper using Glaze
       template <class T = glz::generic>

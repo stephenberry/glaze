@@ -951,7 +951,7 @@ namespace glz
       virtual ~streaming_connection_interface() = default;
 
       // Send initial headers for streaming response
-      virtual void send_headers(int status_code, const std::unordered_map<std::string, std::string>& headers = {},
+      virtual void send_headers(int status_code, const glz::http_headers& headers = {},
                                 data_sent_handler handler = {}) = 0;
 
       // Send a chunk of data
@@ -1009,8 +1009,7 @@ namespace glz
       {}
 
       // Send initial headers for streaming response
-      void send_headers(int status_code, const std::unordered_map<std::string, std::string>& headers = {},
-                        data_sent_handler handler = {}) override
+      void send_headers(int status_code, const glz::http_headers& headers = {}, data_sent_handler handler = {}) override
       {
          if (is_headers_sent_) return;
          is_headers_sent_ = true;
@@ -1040,9 +1039,10 @@ namespace glz
          // dropped Transfer-Encoding/Connection would otherwise leave the stream
          // unframed (no chunked framing, no keep-alive signal). Treat a
          // present-but-invalid header as absent, matching what was written.
-         const auto present_and_valid = [&](const char* key) {
-            const auto it = headers.find(key);
-            return it != headers.end() && !header_field_has_crlf(it->first, it->second);
+         const auto present_and_valid = [&](std::string_view key) {
+            return std::ranges::any_of(headers.fields(key), [](const http_header& field) {
+               return !header_field_has_crlf(field.name, field.value);
+            });
          };
 
          if (!present_and_valid("transfer-encoding")) {
@@ -1284,8 +1284,7 @@ namespace glz
       streaming_response(std::shared_ptr<streaming_connection_interface> conn) : stream(std::move(conn)) {}
 
       // Send headers and start streaming
-      streaming_response& start_stream(int status_code = 200,
-                                       const std::unordered_map<std::string, std::string>& headers = {})
+      streaming_response& start_stream(int status_code = 200, const glz::http_headers& headers = {})
       {
          if (stream) {
             stream->send_headers(status_code, headers);

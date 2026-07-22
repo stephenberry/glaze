@@ -735,8 +735,8 @@ suite response_building_tests = [] {
 
       expect(&chained_res == &res) << "Response methods should return reference for chaining\n";
       expect(res.status_code == 201) << "Status should be set correctly\n";
-      expect(res.response_headers.at("x-custom") == "value") << "Custom header should be set\n";
-      expect(res.response_headers.at("content-type") == "application/json") << "Content-Type should be set\n";
+      expect(res.response_headers.first_value("x-custom") == "value") << "Custom header should be set\n";
+      expect(res.response_headers.first_value("content-type") == "application/json") << "Content-Type should be set\n";
       expect(res.response_body == "test body") << "Body should be set correctly\n";
    };
 
@@ -747,7 +747,7 @@ suite response_building_tests = [] {
       res.json(data);
 
       expect(!res.response_body.empty()) << "JSON serialization should produce content\n";
-      expect(res.response_headers.at("content-type") == "application/json") << "Should set JSON content type\n";
+      expect(res.response_headers.first_value("content-type") == "application/json") << "Should set JSON content type\n";
 
       // Verify serialization worked
       TestData deserialized;
@@ -882,7 +882,7 @@ suite response_middleware_tests = [] {
       auto response_hook = [&captured_content_type](const glz::request&, const glz::response& res) {
          auto it = res.response_headers.find("content-type");
          if (it != res.response_headers.end()) {
-            captured_content_type = it->second;
+            captured_content_type = it->value;
          }
       };
 
