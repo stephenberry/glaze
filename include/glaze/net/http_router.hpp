@@ -86,31 +86,32 @@ namespace glz
          return *this;
       }
 
+      // Replaces any existing field with this name.
       inline response& header(std::string_view name, std::string_view value)
       {
-         // RFC 7230 3.2: a field-name or field-value carrying CR or LF would
-         // terminate the field on the wire, letting attacker-influenced data
-         // inject extra headers or a body (CWE-113). Reject such a field where it
-         // is set so it never enters the map and, crucially, the default-header
-         // bookkeeping below is skipped: otherwise a dropped Content-Length or
-         // Connection would still suppress its auto-generated counterpart and
-         // leave the message unframed. The wire serializers keep an independent
-         // drop as a backstop for headers that bypass this setter.
-         if (header_field_has_crlf(name, value)) [[unlikely]] {
+         if (reject_unwritable_field(name, value)) [[unlikely]] {
             return *this;
          }
 
-         // Track which default headers the user has set
-         if (glz::striequal(name, "content-length"))
-            user_headers_set |= has_content_length;
-         else if (glz::striequal(name, "date"))
-            user_headers_set |= has_date;
-         else if (glz::striequal(name, "server"))
-            user_headers_set |= has_server;
-         else if (glz::striequal(name, "connection"))
-            user_headers_set |= has_connection;
-
          response_headers.set(std::string(name), std::string(value));
+         return *this;
+      }
+
+      // Appends instead of replacing, for names that can repeat like Set-Cookie.
+      // Content-Length and Transfer-Encoding are replaced regardless: a second one leaves
+      // the body length ambiguous and opens response smuggling (RFC 9112 6.3).
+      inline response& add_header(std::string_view name, std::string_view value)
+      {
+         if (reject_unwritable_field(name, value)) [[unlikely]] {
+            return *this;
+         }
+
+         if (frames_the_body(name)) [[unlikely]] {
+            response_headers.set(std::string(name), std::string(value));
+         }
+         else {
+            response_headers.add(std::string(name), std::string(value));
+         }
          return *this;
       }
 
@@ -177,6 +178,38 @@ namespace glz
             response_body = R"({"error":"glz::write_json error"})"; // rare that this would ever happen
          }
          return *this;
+      }
+
+     private:
+      [[nodiscard]] static bool frames_the_body(std::string_view name) noexcept
+      {
+         return glz::striequal(name, "content-length") || glz::striequal(name, "transfer-encoding");
+      }
+
+      // RFC 7230 3.2: a field-name or field-value carrying CR or LF would
+      // terminate the field on the wire, letting attacker-influenced data
+      // inject extra headers or a body (CWE-113). Reject such a field where it
+      // is set so it never enters the container and, crucially, the default-header
+      // bookkeeping is skipped: otherwise a dropped Content-Length or
+      // Connection would still suppress its auto-generated counterpart and
+      // leave the message unframed. The wire serializers keep an independent
+      // drop as a backstop for headers that bypass these setters.
+      [[nodiscard]] bool reject_unwritable_field(std::string_view name, std::string_view value) noexcept
+      {
+         if (header_field_has_crlf(name, value)) {
+            return true;
+         }
+
+         if (glz::striequal(name, "content-length"))
+            user_headers_set |= has_content_length;
+         else if (glz::striequal(name, "date"))
+            user_headers_set |= has_date;
+         else if (glz::striequal(name, "server"))
+            user_headers_set |= has_server;
+         else if (glz::striequal(name, "connection"))
+            user_headers_set |= has_connection;
+
+         return false;
       }
    };
 
