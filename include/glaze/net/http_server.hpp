@@ -2782,15 +2782,11 @@ namespace glz
             return false;
          }
 
-         // Check client's Connection header (case-insensitive)
-         const auto conn_header_it = headers.find("connection");
-         if (conn_header_it != headers.end()) {
-            if (conn_header_it->contains_token("close")) {
-               return false;
-            }
-            if (conn_header_it->contains_token("keep-alive")) {
-               return true;
-            }
+         if (headers.contains_token("connection", "close")) {
+            return false;
+         }
+         if (headers.contains_token("connection", "keep-alive")) {
+            return true;
          }
 
          // Default behavior based on HTTP version
@@ -3173,14 +3169,7 @@ namespace glz
 
       inline bool is_websocket_upgrade(const glz::http_headers& headers)
       {
-         auto upgrade_it = headers.find("upgrade");
-         if (upgrade_it == headers.end()) return false;
-
-         auto connection_it = headers.find("connection");
-         if (connection_it == headers.end()) return false;
-
-         if (!upgrade_it->contains_token("websocket")) return false;
-         return connection_it->contains_token("upgrade");
+         return headers.contains_token("upgrade", "websocket") && headers.contains_token("connection", "upgrade");
       }
 
       inline void handle_websocket_upgrade_with_conn(std::shared_ptr<connection_state> conn)
