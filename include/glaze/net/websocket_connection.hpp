@@ -252,40 +252,6 @@ namespace glz
          return glz::write_base64(std::string_view{reinterpret_cast<char*>(hash), sizeof(hash)});
       }
 
-      // Check if a string contains a value (case-insensitive, comma-separated)
-      inline bool header_contains(std::string_view header, std::string_view value)
-      {
-         while (!header.empty()) {
-            // Skip whitespace
-            while (!header.empty() && (header.front() == ' ' || header.front() == '\t')) {
-               header.remove_prefix(1);
-            }
-
-            if (header.empty()) break;
-
-            // Find the end of this token
-            auto comma_pos = header.find(',');
-            std::string_view token = header.substr(0, comma_pos);
-
-            // Remove trailing whitespace from token
-            while (!token.empty() && (token.back() == ' ' || token.back() == '\t')) {
-               token.remove_suffix(1);
-            }
-
-            // Case-insensitive comparison
-            if (token.size() == value.size() &&
-                std::equal(token.begin(), token.end(), value.begin(), value.end(), [](char a, char b) {
-                   return std::tolower(static_cast<unsigned char>(a)) == std::tolower(static_cast<unsigned char>(b));
-                })) {
-               return true;
-            }
-
-            if (comma_pos == std::string_view::npos) break;
-            header.remove_prefix(comma_pos + 1);
-         }
-
-         return false;
-      }
    }
 
    // Forward declarations

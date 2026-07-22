@@ -2756,18 +2756,6 @@ namespace glz
          }
       }
 
-      // Case-insensitive substring search
-      static bool ci_contains(std::string_view haystack, std::string_view needle)
-      {
-         if (needle.size() > haystack.size()) return false;
-         for (size_t i = 0; i <= haystack.size() - needle.size(); ++i) {
-            if (glz::striequal(haystack.substr(i, needle.size()), needle)) {
-               return true;
-            }
-         }
-         return false;
-      }
-
       inline bool determine_keep_alive(const glz::http_headers& headers, bool is_http_11,
                                        std::shared_ptr<connection_state> conn)
       {

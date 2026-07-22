@@ -14,6 +14,7 @@
 #include "glaze/net/http_client.hpp"
 #include "glaze/net/http_headers.hpp"
 #include "glaze/net/websocket_connection.hpp"
+#include "glaze/util/compare.hpp"
 #include "glaze/util/itoa.hpp"
 
 namespace glz
@@ -74,26 +75,16 @@ namespace glz
 
          explicit impl(std::shared_ptr<asio::io_context> context) : ctx(std::move(context)) {}
 
-         static bool header_name_equal(std::string_view lhs, std::string_view rhs)
-         {
-            if (lhs.size() != rhs.size()) return false;
-            return std::equal(lhs.begin(), lhs.end(), rhs.begin(), [](char a, char b) {
-               return std::tolower(static_cast<unsigned char>(a)) == std::tolower(static_cast<unsigned char>(b));
-            });
-         }
-
          static bool header_name_starts_with(std::string_view value, std::string_view prefix)
          {
             if (value.size() < prefix.size()) return false;
-            return std::equal(prefix.begin(), prefix.end(), value.begin(), [](char a, char b) {
-               return std::tolower(static_cast<unsigned char>(a)) == std::tolower(static_cast<unsigned char>(b));
-            });
+            return glz::striequal(value.substr(0, prefix.size()), prefix);
          }
 
          static bool is_reserved_handshake_header(std::string_view name)
          {
-            return header_name_equal(name, "Host") || header_name_equal(name, "Upgrade") ||
-                   header_name_equal(name, "Connection") || header_name_starts_with(name, "Sec-WebSocket-");
+            return glz::striequal(name, "Host") || glz::striequal(name, "Upgrade") ||
+                   glz::striequal(name, "Connection") || header_name_starts_with(name, "Sec-WebSocket-");
          }
 
          // Field-name and field-value validity (tchar names, no CR/LF/CTL/DEL
