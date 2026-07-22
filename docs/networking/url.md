@@ -247,9 +247,9 @@ For `application/x-www-form-urlencoded` POST requests, use `parse_urlencoded` on
 ```cpp
 server.post("/login", [](const glz::request& req, glz::response& res) {
     // Check content type
-    auto ct = req.headers.find("content-type");
-    if (ct == req.headers.end() ||
-        ct->second.find("application/x-www-form-urlencoded") == std::string::npos) {
+    // A media type can carry parameters like "; charset=utf-8", so match on the prefix.
+    auto ct = req.headers.first_value("content-type");
+    if (!ct || !ct->starts_with("application/x-www-form-urlencoded")) {
         res.status(415).json({{"error", "Unsupported content type"}});
         return;
     }

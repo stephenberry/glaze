@@ -590,9 +590,8 @@ int main() {
         std::string username = "User" + std::to_string(std::rand() % 1000);
         
         // In a real app, you'd extract this from authentication
-        auto auth_header = req.headers.find("x-username");
-        if (auth_header != req.headers.end()) {
-            username = auth_header->second;
+        if (auto name = req.headers.first_value("x-username")) {
+            username = *name;
         }
         
         std::cout << "WebSocket connection from " << conn->remote_address() << " (username: " << username << ")" << std::endl;
@@ -815,7 +814,7 @@ auto create_simple_auth_middleware(SimpleAuthService& auth_service) {
             return;
         }
         
-        std::string auth_value = auth_header->second;
+        std::string auth_value{auth_header->value};
         if (!auth_value.starts_with("Bearer ")) {
             res.status(401).json({{"error", "Bearer token required"}});
             return;
@@ -871,8 +870,8 @@ int main() {
     // Protected endpoints
     server.get("/api/profile", [](const glz::request& req, glz::response& res) {
         // User info is available from auth middleware
-        std::string username = res.response_headers["X-Username"];
-        std::string role = res.response_headers["X-User-Role"];
+        std::string username{res.response_headers.first_value("X-Username").value_or("")};
+        std::string role{res.response_headers.first_value("X-User-Role").value_or("")};
         
         res.json({
             {"username", username},
@@ -882,7 +881,7 @@ int main() {
     });
     
     server.get("/api/admin", [](const glz::request& req, glz::response& res) {
-        std::string role = res.response_headers["X-User-Role"];
+        std::string role{res.response_headers.first_value("X-User-Role").value_or("")};
         
         if (role != "admin") {
             res.status(403).json({{"error", "Admin access required"}});

@@ -74,7 +74,7 @@ server.use(custom_cors);
 server.get("/test-cors", [](const glz::request& req, glz::response& res) {
     res.json({
         {"message", "CORS test endpoint"},
-        {"origin", req.headers.count("Origin") ? req.headers.at("Origin") : "none"},
+        {"origin", std::string{req.headers.first_value("Origin").value_or("none")}},
         {"method", glz::to_string(req.method)},
         {"timestamp", std::time(nullptr)}
     });
@@ -207,12 +207,12 @@ secure_ws->on_validate([](const glz::request& req) -> bool {
         return false;
     }
     
-    return validate_jwt_token(auth_header->second);
+    return validate_jwt_token(auth_header->value);
 });
 
 secure_ws->on_open([](auto conn, const glz::request& req) {
     // Store user info from validated token
-    auto user_data = extract_user_from_token(req.headers.at("Authorization"));
+    auto user_data = extract_user_from_token(*req.headers.first_value("Authorization"));
     conn->set_user_data(std::make_shared<UserData>(user_data));
     
     conn->send_text("Authenticated successfully");
@@ -384,7 +384,7 @@ User new_user{0, "John Doe", "john@example.com"};
 auto create_response = client.post_json("https://api.example.com/users", new_user);
 
 // POST with custom headers
-std::unordered_map<std::string, std::string> headers = {
+glz::http_headers headers = {
     {"Authorization", "Bearer " + token},
     {"Content-Type", "application/json"}
 };
@@ -444,7 +444,7 @@ auto timing_middleware = [](const glz::request& req, glz::response& res) {
 auto response_time_middleware = [](const glz::request& req, glz::response& res) {
     auto start_header = res.response_headers.find("X-Request-Start");
     if (start_header != res.response_headers.end()) {
-        auto start_ms = std::stoll(start_header->second);
+        auto start_ms = std::stoll(start_header->value);
         auto now_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
             std::chrono::high_resolution_clock::now().time_since_epoch()).count();
         
