@@ -21,7 +21,7 @@ env:
 
 jobs:
   test-p2996:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     name: P2996 Reflection Tests
 
     steps:
