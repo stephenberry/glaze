@@ -26,6 +26,7 @@
 #include "glaze/ext/glaze_asio.hpp"
 #include "glaze/net/cors.hpp"
 #include "glaze/net/http.hpp"
+#include "glaze/net/http_headers.hpp"
 #include "glaze/net/http_router.hpp"
 #include "glaze/net/openapi.hpp"
 #include "glaze/net/websocket_connection.hpp"
@@ -2555,7 +2556,7 @@ namespace glz
          std::string_view data(conn->read_buf.data(), conn->buf_len);
          parse_result result;
 
-         // Clear headers for re-parse safety (preserves bucket allocation)
+         // Clear headers for re-parse safety (preserves capacity)
          conn->request_.headers.clear();
 
          // --- Parse request line ---
@@ -2650,15 +2651,13 @@ namespace glz
                if (const auto last = value_sv.find_last_not_of(" \t"); last != std::string_view::npos) {
                   value_sv.remove_suffix(value_sv.size() - (last + 1));
                }
-               std::string key(name_sv);
-               for (auto& c : key) c = ascii_tolower(c);
                // RFC 7230 3.3.2: multiple Content-Length fields with differing values make the
-               // body framing unrecoverable. The header map keeps last-wins, so a second
-               // Content-Length would silently override the first; a proxy that frames the body
-               // by the first value then desyncs from this server (CL.CL request smuggling).
+               // body framing unrecoverable. Lookups resolve to the first field, so a second
+               // Content-Length carrying another length would leave a proxy that frames the body
+               // by the later value desynced from this server (CL.CL request smuggling).
                // Reject with 400 and close. Identical repeats are tolerated.
-               if (key == "content-length") {
-                  if (auto existing = headers.find(key); existing != headers.end() && existing->second != value_sv) {
+               if (glz::striequal(name_sv, "content-length")) {
+                  if (auto existing = headers.find(name_sv); existing != headers.end() && existing->value != value_sv) {
                      result.status = parse_status::error;
                      send_error_response_with_close(conn, 400, "Bad Request");
                      return result;
@@ -2666,7 +2665,7 @@ namespace glz
                }
 
                // Duplicate or invalid Host fields are errors for any HTTP/1.x request
-               if (key == "host") {
+               if (glz::striequal(name_sv, "host")) {
                   if (host_header_parsed || !detail::is_valid_authority(value_sv)) {
                      result.status = parse_status::error;
                      send_error_response_with_close(conn, 400, "Bad Request");
@@ -2675,7 +2674,7 @@ namespace glz
                   host_header_parsed = true;
                }
 
-               headers[std::move(key)] = std::string(value_sv);
+               headers.add(std::string(name_sv), std::string(value_sv));
             }
 
             pos = line_end + 2;
@@ -2703,14 +2702,14 @@ namespace glz
          // keep-alive loop parses it as a second, smuggled request (TE/CL desync).
          // RFC 7230 3.3.1 requires answering an undecodable Transfer-Encoding with
          // 501 and closing the connection.
-         if (headers.find("transfer-encoding") != headers.end()) {
+         if (headers.contains("transfer-encoding")) {
             send_error_response_with_close(conn, 501, "Not Implemented");
             return;
          }
 
          std::size_t content_length = 0;
          if (auto it = headers.find("content-length"); it != headers.end()) {
-            const auto& cl = it->second;
+            const auto& cl = it->value;
             auto [ptr, ec] = std::from_chars(cl.data(), cl.data() + cl.size(), content_length);
             if (ec != std::errc{} || ptr != cl.data() + cl.size()) {
                send_error_response_with_close(conn, 400, "Bad Request");
@@ -2770,7 +2769,7 @@ namespace glz
          return false;
       }
 
-      inline bool determine_keep_alive(const std::unordered_map<std::string, std::string>& headers, bool is_http_11,
+      inline bool determine_keep_alive(const glz::http_headers& headers, bool is_http_11,
                                        std::shared_ptr<connection_state> conn)
       {
          // If server has keep-alive disabled, always close
@@ -2785,12 +2784,12 @@ namespace glz
          }
 
          // Check client's Connection header (case-insensitive)
-         auto conn_header_it = headers.find("connection");
+         const auto conn_header_it = headers.find("connection");
          if (conn_header_it != headers.end()) {
-            if (ci_contains(conn_header_it->second, "close")) {
+            if (conn_header_it->contains_token("close")) {
                return false;
             }
-            if (ci_contains(conn_header_it->second, "keep-alive")) {
+            if (conn_header_it->contains_token("keep-alive")) {
                return true;
             }
          }
@@ -2891,7 +2890,7 @@ namespace glz
                   if (auto request_method_it = request.headers.find("access-control-request-method");
                       request_method_it != request.headers.end()) {
                      has_request_method_header = true;
-                     std::string method_token{request_method_it->second};
+                     std::string method_token{request_method_it->value};
                      auto trim_pos = method_token.find_last_not_of(" \t\r\n");
                      if (trim_pos != std::string::npos) {
                         method_token.erase(trim_pos + 1);
@@ -3173,7 +3172,7 @@ namespace glz
          send_error_response_with_conn(conn, status_code, message);
       }
 
-      inline bool is_websocket_upgrade(const std::unordered_map<std::string, std::string>& headers)
+      inline bool is_websocket_upgrade(const glz::http_headers& headers)
       {
          auto upgrade_it = headers.find("upgrade");
          if (upgrade_it == headers.end()) return false;
@@ -3181,8 +3180,8 @@ namespace glz
          auto connection_it = headers.find("connection");
          if (connection_it == headers.end()) return false;
 
-         if (!ci_contains(upgrade_it->second, "websocket")) return false;
-         return ci_contains(connection_it->second, "upgrade");
+         if (!upgrade_it->contains_token("websocket")) return false;
+         return connection_it->contains_token("upgrade");
       }
 
       inline void handle_websocket_upgrade_with_conn(std::shared_ptr<connection_state> conn)

@@ -161,7 +161,7 @@ class working_test_server
          response_body.append(req.body);
          if (auto it = req.headers.find("x-test-header"); it != req.headers.end()) {
             response_body.append(":");
-            response_body.append(it->second);
+            response_body.append(it->value);
          }
          res.status(200).content_type("text/plain").body(response_body);
       });
@@ -174,7 +174,7 @@ class working_test_server
          }
 
          std::string response_body = "CT=";
-         response_body.append(content_type->second);
+         response_body.append(content_type->value);
          response_body.append(";BODY=");
          response_body.append(req.body);
          res.status(200).content_type("text/plain").body(response_body);

@@ -3,6 +3,7 @@
 
 #include "glaze/net/cors.hpp"
 
+#include "glaze/net/http_headers.hpp"
 #include "ut/ut.hpp"
 
 using namespace ut;
@@ -14,7 +15,7 @@ namespace
       auto middleware = glz::create_cors_middleware(config);
       glz::request req{};
       req.method = glz::http_method::GET;
-      req.headers["origin"] = std::string(origin);
+      req.headers.set("origin", std::string(origin));
       glz::response res{};
       middleware(req, res);
       return res;

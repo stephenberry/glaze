@@ -1153,7 +1153,7 @@ struct raw_http_client
    struct http_response
    {
       int status_code = 0;
-      std::unordered_map<std::string, std::string> headers;
+      glz::http_headers headers;
       std::string body;
    };
 
@@ -1218,11 +1218,10 @@ struct raw_http_client
             value.erase(0, value.find_first_not_of(" \t"));
             value.erase(value.find_last_not_of(" \t") + 1);
 
-            // Convert name to lowercase for easier lookup
-            std::transform(name.begin(), name.end(), name.begin(), [](unsigned char c) { return std::tolower(c); });
-            resp.headers[name] = value;
+            const bool is_content_length = glz::striequal(name, "content-length");
+            resp.headers.add(std::move(name), value);
 
-            if (name == "content-length") {
+            if (is_content_length) {
                content_length = std::stoul(value);
             }
          }
@@ -1322,7 +1321,7 @@ struct keepalive_test_server
       server_.get("/echo-connection", [](const glz::request& req, glz::response& res) {
          auto conn_it = req.headers.find("connection");
          if (conn_it != req.headers.end()) {
-            res.body("Connection: " + conn_it->second);
+            res.body("Connection: " + conn_it->value);
          }
          else {
             res.body("Connection: (none)");
@@ -1377,13 +1376,13 @@ suite keepalive_behavior_tests = [] {
          auto conn_header = resp->headers.find("connection");
          expect(conn_header != resp->headers.end()) << "Connection header should be present\n";
          if (conn_header != resp->headers.end()) {
-            expect(conn_header->second == "keep-alive") << "Connection should be keep-alive\n";
+            expect(conn_header->value == "keep-alive") << "Connection should be keep-alive\n";
          }
 
          auto ka_header = resp->headers.find("keep-alive");
          expect(ka_header != resp->headers.end()) << "Keep-Alive header should be present\n";
          if (ka_header != resp->headers.end()) {
-            expect(ka_header->second.find("timeout=30") != std::string::npos) << "Should contain timeout value\n";
+            expect(ka_header->value.find("timeout=30") != std::string::npos) << "Should contain timeout value\n";
          }
       }
 
@@ -1406,7 +1405,7 @@ suite keepalive_behavior_tests = [] {
          auto conn_header = resp->headers.find("connection");
          expect(conn_header != resp->headers.end()) << "Connection header should be present\n";
          if (conn_header != resp->headers.end()) {
-            expect(conn_header->second == "close") << "Connection should be close\n";
+            expect(conn_header->value == "close") << "Connection should be close\n";
          }
       }
 
@@ -1431,7 +1430,7 @@ suite keepalive_behavior_tests = [] {
          auto conn_header = resp->headers.find("connection");
          expect(conn_header != resp->headers.end()) << "Connection header should be present\n";
          if (conn_header != resp->headers.end()) {
-            expect(conn_header->second == "close") << "Server should respect client's close request\n";
+            expect(conn_header->value == "close") << "Server should respect client's close request\n";
          }
       }
 
@@ -1477,7 +1476,7 @@ suite keepalive_behavior_tests = [] {
       if (resp1.has_value()) {
          auto conn_header = resp1->headers.find("connection");
          if (conn_header != resp1->headers.end()) {
-            expect(conn_header->second == "keep-alive") << "First request should keep alive\n";
+            expect(conn_header->value == "keep-alive") << "First request should keep alive\n";
          }
       }
 
@@ -1487,7 +1486,7 @@ suite keepalive_behavior_tests = [] {
       if (resp2.has_value()) {
          auto conn_header = resp2->headers.find("connection");
          if (conn_header != resp2->headers.end()) {
-            expect(conn_header->second == "close") << "Second request should close (at limit)\n";
+            expect(conn_header->value == "close") << "Second request should close (at limit)\n";
          }
       }
 
@@ -1510,8 +1509,8 @@ suite keepalive_behavior_tests = [] {
          auto ka_header = resp->headers.find("keep-alive");
          expect(ka_header != resp->headers.end()) << "Keep-Alive header should be present\n";
          if (ka_header != resp->headers.end()) {
-            expect(ka_header->second.find("timeout=45") != std::string::npos) << "Should contain timeout\n";
-            expect(ka_header->second.find("max=100") != std::string::npos) << "Should contain max\n";
+            expect(ka_header->value.find("timeout=45") != std::string::npos) << "Should contain timeout\n";
+            expect(ka_header->value.find("max=100") != std::string::npos) << "Should contain max\n";
          }
       }
 

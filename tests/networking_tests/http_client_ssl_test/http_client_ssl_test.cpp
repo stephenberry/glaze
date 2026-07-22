@@ -456,7 +456,7 @@ suite https_client_tests = [] {
       expect(result.has_value()) << "HTTPS with custom headers should succeed";
       if (result.has_value()) {
          expect(result->status_code == 200);
-         expect(result->response_body.find("x-custom-header") != std::string::npos);
+         expect(result->response_body.find("X-Custom-Header") != std::string::npos);
       }
    };
 

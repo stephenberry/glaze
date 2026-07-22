@@ -18,6 +18,8 @@
 #include <utility>
 #include <vector>
 
+#include "glaze/util/compare.hpp"
+
 // Optional OpenSSL support - detected at compile time
 #if defined(GLZ_ENABLE_OPENSSL) && __has_include(<openssl/sha.h>)
 #include <openssl/sha.h>
@@ -613,24 +615,19 @@ namespace glz
       {
          // Validate WebSocket upgrade request
          auto it = req.headers.find("upgrade");
-         constexpr std::string_view websocket_str = "websocket";
-         if (it == req.headers.end() || !std::equal(it->second.begin(), it->second.end(), websocket_str.begin(),
-                                                    websocket_str.end(), [](char a, char b) {
-                                                       return std::tolower(static_cast<unsigned char>(a)) ==
-                                                              std::tolower(static_cast<unsigned char>(b));
-                                                    })) {
+         if (it == req.headers.end() || !glz::striequal(it->value, "websocket")) {
             do_close();
             return;
          }
 
          it = req.headers.find("connection");
-         if (it == req.headers.end() || !ws_util::header_contains(it->second, "upgrade")) {
+         if (it == req.headers.end() || !it->contains_token("upgrade")) {
             do_close();
             return;
          }
 
          it = req.headers.find("sec-websocket-version");
-         if (it == req.headers.end() || it->second != "13") {
+         if (it == req.headers.end() || it->value != "13") {
             do_close();
             return;
          }
@@ -649,8 +646,9 @@ namespace glz
             }
          }
 
-         // Generate accept key
-         std::string accept_key = ws_util::generate_accept_key(it->second);
+         std::string_view sec_websocket_key = it->value;
+
+         std::string accept_key = ws_util::generate_accept_key(sec_websocket_key);
 
          // Send handshake response
          std::string response_str =

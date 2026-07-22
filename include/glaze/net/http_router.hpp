@@ -17,6 +17,7 @@
 
 #include "glaze/json/generic.hpp"
 #include "glaze/net/http.hpp"
+#include "glaze/net/http_headers.hpp"
 #include "glaze/net/url.hpp"
 #include "glaze/util/key_transformers.hpp"
 
@@ -48,7 +49,7 @@ namespace glz
       std::string path{}; // Path component only (without query string)
       std::unordered_map<std::string, std::string> params{}; // Path parameters (e.g., :id)
       std::unordered_map<std::string, std::string> query{}; // Query parameters (e.g., ?limit=10)
-      std::unordered_map<std::string, std::string> headers{};
+      glz::http_headers headers{};
       std::string body{};
       std::string remote_ip{};
       uint16_t remote_port{};

@@ -496,8 +496,7 @@ void run_auth_websocket_server(std::atomic<bool>& server_ready, std::atomic<bool
    auto ws_server = std::make_shared<websocket_server>();
 
    ws_server->on_validate([expected_auth](const request& req) {
-      auto it = req.headers.find("authorization");
-      return it != req.headers.end() && it->second == expected_auth;
+      return req.headers.first_value("authorization") == expected_auth;
    });
 
    ws_server->on_open([](auto /*conn*/, const request&) {});
