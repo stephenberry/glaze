@@ -290,6 +290,27 @@ void run_lb_header_handshake_server(std::atomic<bool>& server_ready, std::atomic
    }
 }
 
+std::string send_raw_upgrade_request(uint16_t port, const std::string& request)
+{
+   try {
+      asio::io_context io_ctx;
+      asio::ip::tcp::socket socket(io_ctx);
+      asio::error_code ec;
+      socket.connect(asio::ip::tcp::endpoint(asio::ip::make_address("127.0.0.1"), port), ec);
+      if (ec) return "";
+
+      asio::write(socket, asio::buffer(request), ec);
+      if (ec) return "";
+
+      asio::streambuf response_buf;
+      asio::read_until(socket, response_buf, "\r\n\r\n", ec);
+      return {asio::buffers_begin(response_buf.data()), asio::buffers_end(response_buf.data())};
+   }
+   catch (const std::exception&) {
+      return "";
+   }
+}
+
 // Helper to run a server that sends WebSocket frames in the same TCP segment
 // as the handshake response
 void run_initial_data_handshake_server(std::atomic<bool>& server_ready, std::atomic<bool>& should_stop,
@@ -1381,6 +1402,38 @@ suite websocket_client_tests = [] {
       if (client_thread.joinable()) {
          client_thread.join();
       }
+
+      stop_server = true;
+      server_thread.join();
+   };
+
+   "upgrade_accepted_with_connection_split_over_two_fields_test"_test = [] {
+      std::atomic<bool> server_ready{false};
+      std::atomic<bool> stop_server{false};
+      std::atomic<uint16_t> port{0};
+
+      std::thread server_thread(run_echo_server, std::ref(server_ready), std::ref(stop_server), std::ref(port));
+
+      expect(wait_for_condition([&] { return server_ready.load() && port.load() != 0; })) << "Server failed to start";
+
+      const std::string request =
+         "GET /ws HTTP/1.1\r\n"
+         "Host: 127.0.0.1:" +
+         std::to_string(port.load()) +
+         "\r\n"
+         "Upgrade: websocket\r\n"
+         "Connection: keep-alive\r\n"
+         "Connection: Upgrade\r\n"
+         "Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\n"
+         "Sec-WebSocket-Version: 13\r\n"
+         "\r\n";
+
+      const std::string response = send_raw_upgrade_request(port.load(), request);
+
+      expect(response.find("101") != std::string::npos)
+         << "Split Connection options must still be recognized as an upgrade, got: " << response << "\n";
+      expect(response.find("s3pPLMBiTxaQ9kYGzzhZRbK+xOo=") != std::string::npos)
+         << "The RFC 6455 accept key for the sample nonce should come back\n";
 
       stop_server = true;
       server_thread.join();

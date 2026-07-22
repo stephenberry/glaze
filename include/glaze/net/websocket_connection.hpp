@@ -580,19 +580,17 @@ namespace glz
       inline void perform_handshake(const request& req)
       {
          // Validate WebSocket upgrade request
-         auto it = req.headers.find("upgrade");
-         if (it == req.headers.end() || !glz::striequal(it->value, "websocket")) {
+         if (!req.headers.contains_token("upgrade", "websocket")) {
             do_close();
             return;
          }
 
-         it = req.headers.find("connection");
-         if (it == req.headers.end() || !it->contains_token("upgrade")) {
+         if (!req.headers.contains_token("connection", "upgrade")) {
             do_close();
             return;
          }
 
-         it = req.headers.find("sec-websocket-version");
+         auto it = req.headers.find("sec-websocket-version");
          if (it == req.headers.end() || it->value != "13") {
             do_close();
             return;
