@@ -992,6 +992,32 @@ suite basic_types = [] {
       expect(glz::read_json(num, "0045") == glz::error_code::parse_number_failure);
    };
 
+   "unsigned exponent out of range"_test = [] {
+      // A three-digit exponent must be rejected as out of range, not wrapped into an accepted
+      // value. "1e256" denotes 10^256; the exponent accumulator used to overflow a uint8_t
+      // (256 & 0xFF == 0) and decode it as 1.
+      uint64_t u64{};
+      expect(glz::read_json(u64, "1e256") == glz::error_code::parse_number_failure);
+      expect(glz::read_json(u64, "5e256") == glz::error_code::parse_number_failure);
+      expect(glz::read_json(u64, "1e260") == glz::error_code::parse_number_failure);
+      expect(glz::read_json(u64, "1e275") == glz::error_code::parse_number_failure);
+      expect(glz::read_json(u64, "1e512") == glz::error_code::parse_number_failure);
+      expect(glz::read_json(u64, "1e100") == glz::error_code::parse_number_failure);
+
+      uint32_t u32{};
+      expect(glz::read_json(u32, "1e256") == glz::error_code::parse_number_failure);
+      uint16_t u16{};
+      expect(glz::read_json(u16, "7e256") == glz::error_code::parse_number_failure);
+      uint8_t u8{};
+      expect(glz::read_json(u8, "9e256") == glz::error_code::parse_number_failure);
+
+      // In-range exponents still parse correctly, including leading zeros in the exponent.
+      expect(glz::read_json(u64, "1e19") == glz::error_code::none);
+      expect(u64 == 10000000000000000000ull);
+      expect(glz::read_json(u64, "1e007") == glz::error_code::none);
+      expect(u64 == 10000000ull);
+   };
+
    "bool write"_test = [] {
       std::string buffer{};
       expect(not glz::write_json(true, buffer));
