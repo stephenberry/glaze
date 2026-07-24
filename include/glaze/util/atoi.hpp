@@ -102,6 +102,34 @@ namespace glz
 
    GLZ_ALWAYS_INLINE constexpr bool is_digit(const uint8_t c) noexcept { return c <= '9' && c >= '0'; }
 
+   // Exponents at or beyond this magnitude are out of range for every integer width, so the exponent
+   // accumulators clamp here rather than growing without bound. Sits far above the largest accepted
+   // exponent (19, for uint64_t) and low enough that a clamped value cannot overflow uint32_t.
+   inline constexpr uint32_t exponent_clamp = 1000;
+
+   // Consumes the run of exponent digits starting at `c` and returns its value, clamped at
+   // exponent_clamp. Clamping is what keeps the result meaningful: a narrow accumulator wraps mod its
+   // width, which aliases an out-of-range exponent onto an accepted one. Every digit is consumed so
+   // that leading zeros reach their true value -- JSON forbids a leading zero in the integer part but
+   // permits any run of digits in the exponent, making "1e007" a valid spelling of 10^7 -- and so the
+   // caller resumes past the whole exponent rather than mid-number.
+   //
+   // Requires *c to be a digit and the buffer to be terminated by a non-digit (the null terminator
+   // counts); this scan is bounded by the input, not by a digit count.
+   template <class Char>
+   GLZ_ALWAYS_INLINE constexpr uint32_t parse_exponent(Char*& c) noexcept
+   {
+      uint32_t exp = uint32_t(*c - '0');
+      ++c;
+      while (is_digit(*c)) {
+         // Written as a select rather than a branch: the clamp only ever engages on absurdly long
+         // exponents, so a branch here would be a mispredict risk on the path that matters.
+         exp = exp < exponent_clamp ? exp * 10 + uint32_t(*c - '0') : exp;
+         ++c;
+      }
+      return exp;
+   }
+
    // Computed overflow checks - used instead of lookup tables to save 4KB+ of binary size
    // Uses adjusted threshold for branch-free single comparison (7-12% faster than bitwise approach)
    template <class T>
@@ -381,19 +409,7 @@ namespace glz
          if (not is_digit(*c)) [[unlikely]] {
             return false;
          }
-         ++c;
-         // exp accumulates up to three digits, so it must be wider than uint8_t: a byte wraps
-         // mod 256, aliasing an out-of-range exponent onto an accepted one (e.g. "1e256" -> 0,
-         // decoded as 1 instead of being rejected as out of range).
-         uint32_t exp = c[-1] - '0';
-         if (is_digit(*c)) {
-            exp = exp * 10 + (*c - '0');
-            ++c;
-         }
-         if (is_digit(*c)) {
-            exp = exp * 10 + (*c - '0');
-            ++c;
-         }
+         const uint32_t exp = parse_exponent(c);
          if constexpr (sizeof(T) == 1) {
             if (exp > 2) [[unlikely]] {
                return false;
@@ -711,12 +727,7 @@ namespace glz
          if (not is_digit(*c)) [[unlikely]] {
             return false;
          }
-         ++c;
-         uint8_t exp = c[-1] - '0';
-         if (is_digit(*c)) {
-            exp = exp * 10 + (*c - '0');
-            ++c;
-         }
+         const uint32_t exp = parse_exponent(c);
          if constexpr (sizeof(T) == 1) {
             if (exp > 2) [[unlikely]] {
                return false;
@@ -757,12 +768,18 @@ namespace glz
             return (i - sign) <= static_cast<utype>((std::numeric_limits<T>::max)());
          }
          else {
+            // Scale the sign-stripped magnitude `i`, not the two's-complement bit pattern of `v`:
+            // for a negative value that pattern is a huge unsigned number, so every negative
+            // 64-bit integer written with an exponent ("-1e2") overflowed and was rejected. The
+            // narrower branches above already scale `i`.
 #if defined(__SIZEOF_INT128__)
-            const __uint128_t res = __uint128_t(std::bit_cast<utype>(v)) * powers_of_ten_int[exp];
+            const __uint128_t res = __uint128_t(i) * powers_of_ten_int[exp];
             v = T((uint64_t(res) ^ -sign) + sign);
-            return uint64_t(res) <= (9223372036854775807ull + sign);
+            // Compare the full 128-bit product. Narrowing it to 64 bits first would let an
+            // out-of-range magnitude alias onto an accepted one, e.g. 9e36 truncating into range.
+            return res <= __uint128_t(9223372036854775807ull + sign);
 #else
-            const auto res = full_multiplication(std::bit_cast<utype>(v), powers_of_ten_int[exp]);
+            const auto res = full_multiplication(i, powers_of_ten_int[exp]);
             v = T((uint64_t(res.low) ^ -sign) + sign);
             return res.high == 0 && (uint64_t(res.low) <= (9223372036854775807ull + sign));
 #endif
@@ -779,16 +796,15 @@ namespace glz
    {
       // The number of characters needed at most for each type, rounded to nearest 8 bytes
       constexpr auto buffer_length = int_buffer_lengths[std::bit_width(sizeof(T)) - 1];
-      // We copy the rest of the buffer or 64 bytes into a null terminated buffer
-      std::array<char, buffer_length> data{};
+      // We copy the rest of the buffer, or buffer_length bytes, into a null terminated buffer. The
+      // trailing byte is never written by the copy, so the null-terminated atoi below always halts
+      // inside the array even when the input fills it: the exponent scan stops at a non-digit rather
+      // than after a fixed digit count, and a value-initialized array alone would not terminate a
+      // copy that covers every byte.
+      std::array<char, buffer_length + 1> data{};
       const auto n = size_t(end - it);
       if (n > 0) [[likely]] {
-         if (n < buffer_length) {
-            std::memcpy(data.data(), it, n);
-         }
-         else {
-            std::memcpy(data.data(), it, buffer_length);
-         }
+         std::memcpy(data.data(), it, n < buffer_length ? n : buffer_length);
 
          const auto start = data.data();
          const auto* c = start;
@@ -868,9 +884,15 @@ namespace glz::detail
             negative = (*c == '-');
             ++c;
          }
-         uint8_t exp = 0;
-         while (digit_table[uint8_t(*c)] && exp < 128) {
-            exp = 10 * exp + (*c - '0');
+         // Clamp instead of wrapping: a uint8_t accumulator turns "1e256" into exponent 0, which
+         // aliases an out-of-range magnitude onto an accepted one ("1e256" decoding as 1). The old
+         // `exp < 128` guard could not catch that, since the wrap happened before the test, and it
+         // also left `c` parked mid-number once it did trip.
+         int32_t exp = 0;
+         while (digit_table[uint8_t(*c)]) {
+            if (exp < int32_t(exponent_clamp)) {
+               exp = 10 * exp + (*c - '0');
+            }
             ++c;
          }
          n += negative ? -exp : exp;
