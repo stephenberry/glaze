@@ -373,12 +373,15 @@ namespace glz
       }
 
       if (is_digit(*c)) {
-         v = v * 10 + (*c - '0');
-         constexpr auto split = (std::numeric_limits<T>::max)() / 10 - 10;
-         if (v < split) [[unlikely]] {
-            // due to overflow
+         // Test before multiplying. The previous guard multiplied first and then compared the
+         // already-wrapped value against max/10 - 10, which only caught wraps that happened to land
+         // below that threshold: "300" wraps to 44 for uint8_t and sailed through, as did most
+         // out-of-range values. would_overflow_positive is the same branch-free check the signed
+         // path above already uses, so the two paths now reject on the same rule.
+         if (would_overflow_positive<T>(v, *c)) [[unlikely]] {
             return {};
          }
+         v = v * 10 + (*c - '0');
          ++c;
          if (is_digit(*c)) [[unlikely]] {
             return {};
@@ -750,22 +753,19 @@ namespace glz
          }
 
          utype i = utype((utype(v) ^ -sign) + sign);
-         if constexpr (sizeof(T) == 1) {
-            static constexpr std::array<utype, 3> powers_of_ten{1, 10, 100};
-            i *= powers_of_ten[exp];
-            v = T((utype(i) ^ -sign) + sign);
-            return (i - sign) <= static_cast<utype>((std::numeric_limits<T>::max)());
-         }
-         else if constexpr (sizeof(T) == 2) {
-            static constexpr std::array<utype, 5> powers_of_ten{1, 10, 100, 1000, 10000};
-            i *= powers_of_ten[exp];
-            v = T((utype(i) ^ -sign) + sign);
-            return (i - sign) <= static_cast<utype>((std::numeric_limits<T>::max)());
-         }
-         else if constexpr (sizeof(T) == 4) {
-            i *= powers_of_ten_int[exp];
-            v = T((utype(i) ^ -sign) + sign);
-            return (i - sign) <= static_cast<utype>((std::numeric_limits<T>::max)());
+         if constexpr (sizeof(T) < 8) {
+            // Scale in a width the product cannot wrap, then range check before narrowing. Scaling
+            // inside `utype` truncated first and checked afterwards, so an out-of-range magnitude
+            // aliased onto an accepted one: "13e2" read as 20 for int8_t and "5e9" as 705032704 for
+            // int32_t. The widest case here is a 4-byte magnitude scaled by 10^9, which stays well
+            // inside uint64_t. The unsigned path already widens the same way.
+            const uint64_t scaled = uint64_t(i) * powers_of_ten_int[exp];
+            v = T((utype(scaled) ^ -sign) + sign);
+            // Bound the magnitude directly rather than subtracting the sign from it: a negative
+            // zero makes `scaled - sign` underflow, and the old narrow expression only survived
+            // that because it promoted to int. A negative value may reach one past the positive
+            // limit, which is exactly INT_MIN's magnitude.
+            return scaled <= uint64_t((std::numeric_limits<T>::max)()) + sign;
          }
          else {
             // Scale the sign-stripped magnitude `i`, not the two's-complement bit pattern of `v`:
