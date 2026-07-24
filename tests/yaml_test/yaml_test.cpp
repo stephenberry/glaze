@@ -3600,6 +3600,42 @@ name: test)";
       expect(bool(ec)) << "%YAML 3.0 should be rejected";
    };
 
+   // A long version number must not wrap past the major version check. The accumulator used to be
+   // an unbounded int, so a value congruent to 0 or 1 mod 2^32 overflowed -- undefined behavior --
+   // and came back inside the accepted range: "%YAML 4294967296.0" was read as major version 0.
+   "yaml_directive_major_version_overflow_error"_test = [] {
+      for (std::string_view version : {"4294967296", // 2^32, wrapped to 0
+                                       "4294967297", // 2^32 + 1, wrapped to 1
+                                       "8589934592", // 2^33, wrapped to 0
+                                       "2147483648", // 2^31
+                                       "99999999999999999999"}) {
+         const std::string yaml = "%YAML " + std::string{version} + ".0\n---\nx: 42\ny: 3.14\nname: test";
+         simple_struct obj{};
+         auto ec = glz::read_yaml(obj, yaml);
+         expect(bool(ec)) << "%YAML " << version << ".0 should be rejected";
+      }
+   };
+
+   // Clamping the accumulator must not disturb versions that are in range, including the zero
+   // padding the grammar allows (the version is digits '.' digits, with no leading-zero rule).
+   "yaml_directive_major_version_padded"_test = [] {
+      for (std::string_view version : {"01.2", "001.2", "00000000000000000001.2"}) {
+         const std::string yaml = "%YAML " + std::string{version} + "\n---\nx: 42\ny: 3.14\nname: test";
+         simple_struct obj{};
+         auto ec = glz::read_yaml(obj, yaml);
+         expect(!ec) << glz::format_error(ec, yaml);
+         expect(obj.x == 42);
+      }
+
+      // Multi-digit majors are still out of range, on both sides of the clamp.
+      for (std::string_view version : {"10.0", "11.0", "99.0", "100.0", "101.0"}) {
+         const std::string yaml = "%YAML " + std::string{version} + "\n---\nx: 42\ny: 3.14\nname: test";
+         simple_struct obj{};
+         auto ec = glz::read_yaml(obj, yaml);
+         expect(bool(ec)) << "%YAML " << version << " should be rejected";
+      }
+   };
+
    // Unknown directives should be silently ignored (per spec)
    "yaml_directive_unknown_ignored"_test = [] {
       std::string yaml = R"(%FOOBAR some params here

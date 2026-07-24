@@ -830,9 +830,18 @@ namespace glz::yaml
                ctx.error = error_code::syntax_error;
                return;
             }
+            // Clamp rather than accumulate without bound. The version is only ever compared
+            // against a small threshold below, while an int accumulator overflows on a long digit
+            // run -- undefined behavior, and in practice a wrap that carries a huge version back
+            // into the accepted range, so "%YAML 4294967296.0" was read as major version 0. The
+            // clamp sits above any threshold worth distinguishing, so a clamped value always
+            // compares greater.
+            constexpr int max_tracked_version = 100;
             int major_version = 0;
             while (it != end && *it >= '0' && *it <= '9') {
-               major_version = major_version * 10 + (*it - '0');
+               if (major_version < max_tracked_version) {
+                  major_version = major_version * 10 + (*it - '0');
+               }
                ++it;
             }
             if (it == end || *it != '.') {
