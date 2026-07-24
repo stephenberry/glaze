@@ -9117,6 +9117,216 @@ suite noexcept_mem_func_tests = [] {
    };
 };
 
+// Free function pointers (non-member) used with glz::custom
+// https://github.com/stephenberry/glaze/issues/2639
+// Free function parameters must match the exact struct type.
+
+struct ff_counter
+{
+   int count{};
+   std::string name{};
+};
+
+void ff_counter_read(ff_counter& obj, int val) { obj.count = val; }
+int ff_counter_write(const ff_counter& obj) { return obj.count; }
+
+template <>
+struct glz::meta<ff_counter>
+{
+   using T = ff_counter;
+   static constexpr auto value = object("count", custom<ff_counter_read, ff_counter_write>, "name", &T::name);
+};
+
+// Free function read with glz::context for custom error handling
+struct ff_safe
+{
+   int count{};
+   std::string name{};
+};
+
+void ff_safe_read(ff_safe& obj, int val, glz::context& ctx)
+{
+   if (val < 0) {
+      ctx.error = glz::error_code::constraint_violated;
+      ctx.custom_error_message = "count cannot be negative";
+   }
+   else {
+      obj.count = val;
+   }
+}
+
+int ff_safe_write(const ff_safe& obj) { return obj.count; }
+
+template <>
+struct glz::meta<ff_safe>
+{
+   using T = ff_safe;
+   static constexpr auto value = object("count", custom<ff_safe_read, ff_safe_write>, "name", &T::name);
+};
+
+// Free function read paired with a member pointer write
+struct ff_mixed
+{
+   int count{};
+   std::string name{};
+};
+
+void ff_mixed_read(ff_mixed& obj, int val) { obj.count = val; }
+
+template <>
+struct glz::meta<ff_mixed>
+{
+   using T = ff_mixed;
+   static constexpr auto value = object("count", custom<ff_mixed_read, &T::count>, "name", &T::name);
+};
+
+// Free function read + free function getter taking glz::context
+struct ff_ctx_getter
+{
+   int count{};
+   std::string name{};
+};
+
+void ff_ctx_getter_read(ff_ctx_getter& obj, int val) { obj.count = val; }
+int ff_ctx_getter_write(const ff_ctx_getter& obj, glz::context&) { return obj.count; }
+
+template <>
+struct glz::meta<ff_ctx_getter>
+{
+   using T = ff_ctx_getter;
+   static constexpr auto value = object("count", custom<ff_ctx_getter_read, ff_ctx_getter_write>, "name", &T::name);
+};
+
+// Free function setter with a string input and a const reference getter
+struct string_wrapper
+{
+   std::string data{};
+};
+
+void string_wrapper_read(string_wrapper& self, const std::string& input) { self.data = input; }
+const std::string& string_wrapper_write(const string_wrapper& self) { return self.data; }
+
+template <>
+struct glz::meta<string_wrapper>
+{
+   static constexpr auto value = object("d", custom<string_wrapper_read, string_wrapper_write>);
+};
+
+// Reference-returning free function: reading writes through the returned reference
+struct string_ref_holder
+{
+   std::string data{};
+};
+
+std::string& string_ref_access(string_ref_holder& self) { return self.data; }
+const std::string& string_ref_view(const string_ref_holder& self) { return self.data; }
+
+template <>
+struct glz::meta<string_ref_holder>
+{
+   static constexpr auto value = object("d", custom<string_ref_access, string_ref_view>);
+};
+
+suite free_function_custom_tests = [] {
+   // Free function read + free function write
+   "free_func_basic"_test = [] {
+      ff_counter obj{};
+      std::string s = R"({"count":42,"name":"hello"})";
+      expect(!glz::read_json(obj, s));
+      expect(obj.count == 42);
+      expect(obj.name == "hello");
+
+      s.clear();
+      expect(not glz::write_json(obj, s));
+      expect(s == R"({"count":42,"name":"hello"})");
+   };
+
+   // Free function read with context: valid value
+   "free_func_ctx_valid"_test = [] {
+      ff_safe obj{};
+      std::string s = R"({"count":10,"name":"test"})";
+      expect(!glz::read_json(obj, s));
+      expect(obj.count == 10);
+      expect(obj.name == "test");
+
+      s.clear();
+      expect(not glz::write_json(obj, s));
+      expect(s == R"({"count":10,"name":"test"})");
+   };
+
+   // Free function read with context: invalid value
+   "free_func_ctx_invalid"_test = [] {
+      ff_safe obj{};
+      std::string s = R"({"count":-5,"name":"test"})";
+      auto ec = glz::read_json(obj, s);
+      expect(bool(ec));
+      expect(obj.count == 0); // should not have been set
+      auto msg = glz::format_error(ec, s);
+      expect(msg.find("count cannot be negative") != std::string::npos);
+   };
+
+   // Mixed: free function read + member pointer write
+   "free_func_mixed"_test = [] {
+      ff_mixed obj{};
+      std::string s = R"({"count":7,"name":"mixed"})";
+      expect(!glz::read_json(obj, s));
+      expect(obj.count == 7);
+      expect(obj.name == "mixed");
+
+      s.clear();
+      expect(not glz::write_json(obj, s));
+      expect(s == R"({"count":7,"name":"mixed"})");
+   };
+
+   // Free function getter with context
+   "free_func_ctx_getter"_test = [] {
+      ff_ctx_getter obj{};
+      obj.count = 100;
+      std::string s;
+      expect(not glz::write_json(obj, s));
+      expect(s == R"({"count":100,"name":""})");
+
+      // Reading should still work
+      s = R"({"count":99,"name":"c"})";
+      obj = ff_ctx_getter{};
+      expect(!glz::read_json(obj, s));
+      expect(obj.count == 99);
+   };
+
+   // Free function read with a string input, including escape handling
+   "free_func_string_input"_test = [] {
+      string_wrapper obj{};
+      std::string json = R"({"d":"hello world"})";
+      expect(!glz::read_json(obj, json));
+      expect(obj.data == "hello world");
+
+      json.clear();
+      expect(not glz::write_json(obj, json));
+      expect(json == R"({"d":"hello world"})");
+
+      // escaped input must be unescaped on read and re-escaped on write
+      json = R"({"d":"line1\nline2"})";
+      expect(!glz::read_json(obj, json));
+      expect(obj.data == "line1\nline2");
+
+      json.clear();
+      expect(not glz::write_json(obj, json));
+      expect(json == R"({"d":"line1\nline2"})");
+   };
+
+   // A reference-returning free function reads into the returned reference
+   "free_func_ref_getter"_test = [] {
+      string_ref_holder obj{};
+      std::string json = R"({"d":"ref test"})";
+      expect(!glz::read_json(obj, json));
+      expect(obj.data == "ref test");
+
+      json.clear();
+      expect(not glz::write_json(obj, json));
+      expect(json == R"({"d":"ref test"})");
+   };
+};
+
 struct constrained_object
 {
    int age{};

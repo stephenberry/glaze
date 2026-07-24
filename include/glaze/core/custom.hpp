@@ -100,13 +100,15 @@ namespace glz
             }
          }
          else {
-            if constexpr (is_invocable_concrete<From>) {
+            // Concrete callables: lambdas/function objects with concrete arguments and
+            // free function pointers (e.g. void (*)(T&, int))
+            if constexpr (is_invocable_concrete<From> || is_function_ptr_invocable<From>) {
                using Ret = invocable_result_t<From>;
                if constexpr (std::is_void_v<Ret>) {
                   using Tuple = invocable_args_t<From>;
                   constexpr auto N = glz::tuple_size_v<Tuple>;
                   if constexpr (N == 0) {
-                     static_assert(false_v<T>, "lambda must take in the class as the first argument");
+                     static_assert(false_v<T>, "callable must take in the class as the first argument");
                   }
                   else if constexpr (N == 1) {
                      skip_array<Opts>(ctx, it, end);
@@ -134,8 +136,19 @@ namespace glz
                      }
                   }
                }
+               else if constexpr (std::invocable<From, decltype(value.val)>) {
+                  // A non-void return acts as a getter: read into the returned reference
+                  decltype(auto) ref = value.from(value.val);
+                  glz::from<Format, std::decay_t<decltype(ref)>>::template op<Opts>(ref, ctx, it, end);
+               }
+               else if constexpr (std::invocable<From, decltype(value.val), context&>) {
+                  decltype(auto) ref = value.from(value.val, ctx);
+                  glz::from<Format, std::decay_t<decltype(ref)>>::template op<Opts>(ref, ctx, it, end);
+               }
                else {
-                  static_assert(false_v<T>, "lambda must have void return");
+                  static_assert(false_v<T>,
+                                "a callable with a non-void return must return a reference to read into and take "
+                                "only the class (and optionally glz::context&) as arguments");
                }
             }
             else if constexpr (std::invocable<From, decltype(value.val)>) {
