@@ -448,15 +448,15 @@ suite https_client_tests = [] {
       glz::http_client client;
       client.set_ssl_verify_mode(asio::ssl::verify_none);
 
-      std::unordered_map<std::string, std::string> headers;
-      headers["X-Custom-Header"] = "CustomValue";
-      headers["Authorization"] = "Bearer test-token";
+      glz::http_headers headers;
+      headers.set("X-Custom-Header", "CustomValue");
+      headers.set("Authorization", "Bearer test-token");
 
       auto result = client.get(g_server.base_url() + "/headers", headers);
       expect(result.has_value()) << "HTTPS with custom headers should succeed";
       if (result.has_value()) {
          expect(result->status_code == 200);
-         expect(result->response_body.find("x-custom-header") != std::string::npos);
+         expect(result->response_body.find("X-Custom-Header") != std::string::npos);
       }
    };
 

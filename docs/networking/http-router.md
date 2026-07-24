@@ -355,7 +355,7 @@ router.use([](const glz::request& req, glz::response& res) {
             return;
         }
         
-        if (!validate_token(auth_header->second)) {
+        if (!validate_token(auth_header->value)) {
             res.status(403).json({{"error", "Invalid token"}});
             return;
         }

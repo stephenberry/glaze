@@ -23,6 +23,7 @@
 #include <vector>
 
 #include "glaze/ext/glaze_asio.hpp"
+#include "glaze/net/http_headers.hpp"
 #include "glaze/net/http_router.hpp"
 #include "glaze/util/env.hpp"
 #include "glaze/util/itoa.hpp"
@@ -260,8 +261,7 @@ namespace glz
       // body or re-iterating the headers map. For large idempotent PUT bodies this is
       // the difference between O(1) and O(N) body copies per request through the chain.
       inline std::string build_http_request_bytes(const std::string& method, const url_parts& url, bool use_https,
-                                                  const std::string& body,
-                                                  const std::unordered_map<std::string, std::string>& headers)
+                                                  const std::string& body, const glz::http_headers& headers)
       {
          const bool is_default_port = (!use_https && url.port == 80) || (use_https && url.port == 443);
 
@@ -937,7 +937,7 @@ namespace glz
       http_error_handler on_error;
       std::string method{"GET"};
       std::string body{};
-      std::unordered_map<std::string, std::string> headers{};
+      glz::http_headers headers{};
       http_connect_handler on_connect{};
       http_disconnect_handler on_disconnect{};
       std::chrono::seconds timeout{std::chrono::seconds{30}};
@@ -955,7 +955,7 @@ namespace glz
       stream_read_strategy strategy{stream_read_strategy::bulk_transfer};
       size_t max_buffer_size{1024 * 1024};
       std::string body;
-      std::unordered_map<std::string, std::string> headers;
+      glz::http_headers headers;
       http_connect_handler on_connect;
       http_disconnect_handler on_disconnect;
       http_data_handler on_data;
@@ -1097,8 +1097,7 @@ namespace glz
       void clear_connection_pool() { connection_pool->clear(); }
 
       // Synchronous GET request - truly synchronous, no promises/futures
-      std::expected<response, std::error_code> get(std::string_view url,
-                                                   const std::unordered_map<std::string, std::string>& headers = {})
+      std::expected<response, std::error_code> get(std::string_view url, const glz::http_headers& headers = {})
       {
          auto url_result = parse_url(url);
          if (!url_result) {
@@ -1110,7 +1109,7 @@ namespace glz
 
       // Synchronous POST request - truly synchronous, no promises/futures
       std::expected<response, std::error_code> post(std::string_view url, const std::string& body,
-                                                    const std::unordered_map<std::string, std::string>& headers = {})
+                                                    const glz::http_headers& headers = {})
       {
          auto url_result = parse_url(url);
          if (!url_result) {
@@ -1122,7 +1121,7 @@ namespace glz
 
       // Synchronous PUT request - truly synchronous, no promises/futures
       std::expected<response, std::error_code> put(std::string_view url, const std::string& body,
-                                                   const std::unordered_map<std::string, std::string>& headers = {})
+                                                   const glz::http_headers& headers = {})
       {
          auto url_result = parse_url(url);
          if (!url_result) {
@@ -1134,8 +1133,8 @@ namespace glz
 
       // Synchronous JSON POST request
       template <class T>
-      std::expected<response, std::error_code> post_json(
-         std::string_view url, const T& data, const std::unordered_map<std::string, std::string>& headers = {})
+      std::expected<response, std::error_code> post_json(std::string_view url, const T& data,
+                                                         const glz::http_headers& headers = {})
       {
          std::string json_str;
          auto ec = glz::write_json(data, json_str);
@@ -1144,15 +1143,15 @@ namespace glz
          }
 
          auto merged_headers = headers;
-         merged_headers["content-type"] = "application/json";
+         merged_headers.set("Content-Type", "application/json");
 
          return post(url, json_str, merged_headers);
       }
 
       // Synchronous JSON PUT request
       template <class T>
-      std::expected<response, std::error_code> put_json(
-         std::string_view url, const T& data, const std::unordered_map<std::string, std::string>& headers = {})
+      std::expected<response, std::error_code> put_json(std::string_view url, const T& data,
+                                                        const glz::http_headers& headers = {})
       {
          std::string json_str;
          auto ec = glz::write_json(data, json_str);
@@ -1161,7 +1160,7 @@ namespace glz
          }
 
          auto merged_headers = headers;
-         merged_headers["content-type"] = "application/json";
+         merged_headers.set("Content-Type", "application/json");
 
          return put(url, json_str, merged_headers);
       }
@@ -1195,8 +1194,7 @@ namespace glz
 
       // Asynchronous GET request
       template <typename CompletionHandler>
-      void get_async(std::string_view url, const std::unordered_map<std::string, std::string>& headers,
-                     CompletionHandler&& handler)
+      void get_async(std::string_view url, const glz::http_headers& headers, CompletionHandler&& handler)
       {
          auto url_result = parse_url(url);
          if (!url_result) {
@@ -1209,8 +1207,8 @@ namespace glz
       }
 
       // Overload for get_async without completion handler (returns future)
-      std::future<std::expected<response, std::error_code>> get_async(
-         std::string_view url, const std::unordered_map<std::string, std::string>& headers = {})
+      std::future<std::expected<response, std::error_code>> get_async(std::string_view url,
+                                                                      const glz::http_headers& headers = {})
       {
          std::promise<std::expected<response, std::error_code>> promise;
          auto future = promise.get_future();
@@ -1225,8 +1223,8 @@ namespace glz
 
       // Asynchronous POST request
       template <typename CompletionHandler>
-      void post_async(std::string_view url, const std::string& body,
-                      const std::unordered_map<std::string, std::string>& headers, CompletionHandler&& handler)
+      void post_async(std::string_view url, const std::string& body, const glz::http_headers& headers,
+                      CompletionHandler&& handler)
       {
          auto url_result = parse_url(url);
          if (!url_result) {
@@ -1239,9 +1237,8 @@ namespace glz
       }
 
       // Overload for post_async without completion handler (returns future)
-      std::future<std::expected<response, std::error_code>> post_async(
-         std::string_view url, const std::string& body,
-         const std::unordered_map<std::string, std::string>& headers = {})
+      std::future<std::expected<response, std::error_code>> post_async(std::string_view url, const std::string& body,
+                                                                       const glz::http_headers& headers = {})
       {
          std::promise<std::expected<response, std::error_code>> promise;
          auto future = promise.get_future();
@@ -1256,8 +1253,8 @@ namespace glz
 
       // Async JSON POST request
       template <class T, typename CompletionHandler>
-      void post_json_async(std::string_view url, const T& data,
-                           const std::unordered_map<std::string, std::string>& headers, CompletionHandler&& handler)
+      void post_json_async(std::string_view url, const T& data, const glz::http_headers& headers,
+                           CompletionHandler&& handler)
       {
          std::string json_str;
          auto ec = glz::write_json(data, json_str);
@@ -1269,15 +1266,15 @@ namespace glz
          }
 
          auto merged_headers = headers;
-         merged_headers["content-type"] = "application/json";
+         merged_headers.set("Content-Type", "application/json");
 
          post_async(url, json_str, merged_headers, std::forward<CompletionHandler>(handler));
       }
 
       // Overload for post_json_async without completion handler (returns future)
       template <class T>
-      std::future<std::expected<response, std::error_code>> post_json_async(
-         std::string_view url, const T& data, const std::unordered_map<std::string, std::string>& headers = {})
+      std::future<std::expected<response, std::error_code>> post_json_async(std::string_view url, const T& data,
+                                                                            const glz::http_headers& headers = {})
       {
          std::promise<std::expected<response, std::error_code>> promise;
          auto future = promise.get_future();
@@ -1354,9 +1351,9 @@ namespace glz
 
       std::shared_ptr<http_stream_connection> perform_stream_request(
          const std::string& method, const url_parts& url, const std::string& body, size_t max_buffer_size,
-         const std::unordered_map<std::string, std::string>& headers, std::chrono::seconds timeout,
-         stream_read_strategy strategy, std::function<bool(int)> status_is_error, http_data_handler on_data,
-         http_error_handler on_error, http_connect_handler on_connect, http_disconnect_handler on_disconnect)
+         const glz::http_headers& headers, std::chrono::seconds timeout, stream_read_strategy strategy,
+         std::function<bool(int)> status_is_error, http_data_handler on_data, http_error_handler on_error,
+         http_connect_handler on_connect, http_disconnect_handler on_disconnect)
       {
          const bool use_https = (url.protocol == "https");
 
@@ -1477,7 +1474,7 @@ namespace glz
 
 #ifdef GLZ_ENABLE_SSL
       void perform_stream_ssl_handshake(const url_parts& url, const std::string& method, const std::string& body,
-                                        const std::unordered_map<std::string, std::string>& headers,
+                                        const glz::http_headers& headers,
                                         std::shared_ptr<http_stream_connection> connection, http_data_handler on_data,
                                         http_error_handler on_error, http_connect_handler on_connect,
                                         http_disconnect_handler on_disconnect)
@@ -1509,9 +1506,8 @@ namespace glz
 
       // Needs to take the wrapped disconnect handler and use keep-alive
       void send_stream_request(const url_parts& url, const std::string& method, const std::string& body,
-                               const std::unordered_map<std::string, std::string>& headers,
-                               std::shared_ptr<http_stream_connection> connection, http_data_handler on_data,
-                               http_error_handler on_error, http_connect_handler on_connect,
+                               const glz::http_headers& headers, std::shared_ptr<http_stream_connection> connection,
+                               http_data_handler on_data, http_error_handler on_error, http_connect_handler on_connect,
                                http_disconnect_handler on_disconnect)
       {
          const bool use_https = url.protocol == "https";
@@ -1600,8 +1596,7 @@ namespace glz
                            std::string_view value =
                               (value_start != std::string::npos) ? header_line.substr(value_start) : "";
 
-                           // Convert header name to lowercase for case-insensitive lookups (RFC 7230)
-                           response_headers.response_headers[to_lower_case(name)] = std::string(value);
+                           response_headers.response_headers.add(std::string(name), std::string(value));
                         }
                      }
 
@@ -1626,15 +1621,7 @@ namespace glz
                         return;
                      }
 
-                     bool is_chunked = false;
-                     auto it = response_headers.response_headers.find("transfer-encoding");
-                     if (it != response_headers.response_headers.end()) {
-                        if (it->second.find("chunked") != std::string::npos) {
-                           is_chunked = true;
-                        }
-                     }
-
-                     if (is_chunked) {
+                     if (response_headers.response_headers.contains_token("transfer-encoding", "chunked")) {
                         start_chunked_reading(connection, std::move(on_data), std::move(on_error),
                                               std::move(on_disconnect));
                      }
@@ -1865,9 +1852,9 @@ namespace glz
             *connection->socket);
       }
 
-      std::expected<response, std::error_code> perform_sync_request(
-         const std::string& method, const url_parts& url, const std::string& body,
-         const std::unordered_map<std::string, std::string>& headers)
+      std::expected<response, std::error_code> perform_sync_request(const std::string& method, const url_parts& url,
+                                                                    const std::string& body,
+                                                                    const glz::http_headers& headers)
       {
          const bool use_https = (url.protocol == "https");
 
@@ -1987,11 +1974,7 @@ namespace glz
             }
 
             // Parse headers from the view
-            std::unordered_map<std::string, std::string> response_headers;
-            size_t content_length = 0;
-            bool has_content_length = false;
-            bool connection_close = false;
-            bool is_chunked = false;
+            glz::http_headers response_headers;
 
             while (!header_data.starts_with("\r\n")) {
                line_end = header_data.find("\r\n");
@@ -2008,25 +1991,19 @@ namespace glz
                   size_t value_start = header_line.find_first_not_of(" \t", colon_pos + 1);
                   std::string_view value = (value_start != std::string::npos) ? header_line.substr(value_start) : "";
 
-                  if (name.length() == 14 && glz::strncasecmp(name.data(), "Content-Length", 14) == 0) {
-                     std::from_chars(value.data(), value.data() + value.size(), content_length);
-                     has_content_length = true;
-                  }
-                  else if (name.length() == 17 && glz::strncasecmp(name.data(), "Transfer-Encoding", 17) == 0) {
-                     if (value.find("chunked") != std::string_view::npos) {
-                        is_chunked = true;
-                     }
-                  }
-                  else if (name.length() == 10 && glz::strncasecmp(name.data(), "Connection", 10) == 0) {
-                     if (value.find("close") != std::string_view::npos) {
-                        connection_close = true;
-                     }
-                  }
-
-                  // Convert header name to lowercase for case-insensitive lookups (RFC 7230)
-                  response_headers.emplace(to_lower_case(name), value);
+                  response_headers.add(std::string(name), std::string(value));
                }
             }
+
+            size_t content_length = 0;
+            const auto content_length_value = response_headers.first_value("Content-Length");
+            const bool has_content_length = content_length_value.has_value();
+            if (has_content_length) {
+               std::from_chars(content_length_value->data(),
+                               content_length_value->data() + content_length_value->size(), content_length);
+            }
+            const bool is_chunked = response_headers.contains_token("Transfer-Encoding", "chunked");
+            bool connection_close = response_headers.contains_token("Connection", "close");
 
             // Consume header data, leaving only the over-read body part.
             response_buffer.consume(header_bytes);
@@ -2212,8 +2189,7 @@ namespace glz
 
       template <typename CompletionHandler>
       void perform_request_async(const std::string& method, const url_parts& url, const std::string& body,
-                                 const std::unordered_map<std::string, std::string>& headers,
-                                 CompletionHandler&& handler)
+                                 const glz::http_headers& headers, CompletionHandler&& handler)
       {
          const bool use_https = (url.protocol == "https");
 
@@ -2424,8 +2400,7 @@ namespace glz
       template <typename CompletionHandler>
       void async_consume_trailers(std::shared_ptr<socket_variant> socket_var, std::shared_ptr<asio::streambuf> buffer,
                                   std::shared_ptr<std::string> body, const url_parts& url, bool use_https,
-                                  int status_code, std::unordered_map<std::string, std::string> response_headers,
-                                  CompletionHandler&& handler)
+                                  int status_code, glz::http_headers response_headers, CompletionHandler&& handler)
       {
          std::visit(
             [&, this](auto& sock) {
@@ -2454,9 +2429,7 @@ namespace glz
                         resp.response_headers = std::move(response_headers);
                         resp.response_body = std::move(*body);
 
-                        auto connection_header = resp.response_headers.find("connection");
-                        if (connection_header == resp.response_headers.end() ||
-                            connection_header->second.find("close") == std::string::npos) {
+                        if (!resp.response_headers.contains_token("connection", "close")) {
                            connection_pool->return_connection(url.host, url.port, use_https, std::move(*socket_var));
                         }
 
@@ -2476,8 +2449,7 @@ namespace glz
       template <typename CompletionHandler>
       void async_read_chunked_body(std::shared_ptr<socket_variant> socket_var, std::shared_ptr<asio::streambuf> buffer,
                                    std::shared_ptr<std::string> body, const url_parts& url, bool use_https,
-                                   int status_code, std::unordered_map<std::string, std::string> response_headers,
-                                   CompletionHandler&& handler)
+                                   int status_code, glz::http_headers response_headers, CompletionHandler&& handler)
       {
          // Read until we have the chunk size line
          std::visit(
@@ -2532,8 +2504,7 @@ namespace glz
       template <typename CompletionHandler>
       void async_read_chunk_data(std::shared_ptr<socket_variant> socket_var, std::shared_ptr<asio::streambuf> buffer,
                                  std::shared_ptr<std::string> body, size_t chunk_size, const url_parts& url,
-                                 bool use_https, int status_code,
-                                 std::unordered_map<std::string, std::string> response_headers,
+                                 bool use_https, int status_code, glz::http_headers response_headers,
                                  CompletionHandler&& handler)
       {
          // Check accumulated body size against limit before reading chunk data
@@ -2595,8 +2566,7 @@ namespace glz
       template <typename CompletionHandler>
       void async_read_eof_body(std::shared_ptr<socket_variant> socket_var, std::shared_ptr<asio::streambuf> buffer,
                                const url_parts& url, bool use_https, int status_code,
-                               std::unordered_map<std::string, std::string> response_headers,
-                               CompletionHandler&& handler)
+                               glz::http_headers response_headers, CompletionHandler&& handler)
       {
          std::visit(
             [&, this](auto& sock) {
@@ -2659,11 +2629,7 @@ namespace glz
          }
 
          // Parse all header fields from the view.
-         std::unordered_map<std::string, std::string> response_headers;
-         size_t content_length = 0;
-         bool has_content_length = false;
-         bool connection_close = false;
-         bool is_chunked = false;
+         glz::http_headers response_headers;
          // The header section ends with an empty line ("\r\n"), which means our view will start with it.
          while (!header_section.starts_with("\r\n")) {
             line_end = header_section.find("\r\n");
@@ -2681,28 +2647,19 @@ namespace glz
                size_t value_start = header_line.find_first_not_of(" \t", colon_pos + 1);
                std::string_view value = (value_start != std::string::npos) ? header_line.substr(value_start) : "";
 
-               // A case-insensitive comparison is more robust for header names.
-               if (name.size() == 14 && (name[0] == 'C' || name[0] == 'c') &&
-                   glz::strncasecmp(name.data(), "Content-Length", 14) == 0) {
-                  std::from_chars(value.data(), value.data() + value.size(), content_length);
-                  has_content_length = true;
-               }
-               else if (name.size() == 17 && (name[0] == 'T' || name[0] == 't') &&
-                        glz::strncasecmp(name.data(), "Transfer-Encoding", 17) == 0) {
-                  if (value.find("chunked") != std::string_view::npos) {
-                     is_chunked = true;
-                  }
-               }
-               else if (name.size() == 10 && (name[0] == 'C' || name[0] == 'c') &&
-                        glz::strncasecmp(name.data(), "Connection", 10) == 0) {
-                  if (value.find("close") != std::string_view::npos) {
-                     connection_close = true;
-                  }
-               }
-               // Convert header name to lowercase for case-insensitive lookups (RFC 7230)
-               response_headers.emplace(to_lower_case(name), value);
+               response_headers.add(std::string(name), std::string(value));
             }
          }
+
+         size_t content_length = 0;
+         const auto content_length_value = response_headers.first_value("Content-Length");
+         const bool has_content_length = content_length_value.has_value();
+         if (has_content_length) {
+            std::from_chars(content_length_value->data(), content_length_value->data() + content_length_value->size(),
+                            content_length);
+         }
+         const bool is_chunked = response_headers.contains_token("Transfer-Encoding", "chunked");
+         const bool connection_close = response_headers.contains_token("Connection", "close");
 
          // Consume the entire header block from the streambuf.
          // This efficiently discards the header data we've just parsed, leaving only body data.
@@ -2764,10 +2721,7 @@ namespace glz
                         // Pool the connection unless the server asked to close it. A truncated or
                         // peer-closed connection already returned above, so anything reaching here
                         // is a complete response on a still-open socket.
-                        auto connection_header = resp.response_headers.find("connection");
-                        const bool server_wants_close = connection_header != resp.response_headers.end() &&
-                                                        connection_header->second.find("close") != std::string::npos;
-                        if (server_wants_close) {
+                        if (resp.response_headers.contains_token("connection", "close")) {
                            detail::close_socket(*socket_var, connection_pool->graceful_ssl_shutdown());
                         }
                         else {

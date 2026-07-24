@@ -107,7 +107,7 @@ struct request {
     http_method method;                                    // GET, POST, etc.
     std::string target;                                    // "/users/123"
     std::unordered_map<std::string, std::string> params;   // Route parameters
-    std::unordered_map<std::string, std::string> headers;  // HTTP headers
+    glz::http_headers headers;                             // HTTP headers
     std::string body;                                      // Request body
     std::string remote_ip;                                 // Client IP
     uint16_t remote_port;                                  // Client port
@@ -119,12 +119,13 @@ struct request {
 ```cpp
 struct response {
     int status_code = 200;
-    std::unordered_map<std::string, std::string> response_headers;
+    glz::http_headers response_headers;
     std::string response_body;
     
     // Fluent interface
     response& status(int code);
-    response& header(std::string_view name, std::string_view value);
+    response& header(std::string_view name, std::string_view value);     // replaces any existing field
+    response& add_header(std::string_view name, std::string_view value); // appends, for Set-Cookie and friends
     response& body(std::string_view content);
     response& content_type(std::string_view type);
   

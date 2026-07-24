@@ -12,7 +12,9 @@
 #include <vector>
 
 #include "glaze/net/http_client.hpp"
+#include "glaze/net/http_headers.hpp"
 #include "glaze/net/websocket_connection.hpp"
+#include "glaze/util/compare.hpp"
 #include "glaze/util/itoa.hpp"
 
 namespace glz
@@ -63,7 +65,7 @@ namespace glz
          std::shared_ptr<ssl_socket> ssl_socket_;
 #endif
          mutable std::mutex request_headers_mutex_;
-         std::vector<std::pair<std::string, std::string>> request_headers_;
+         glz::http_headers request_headers_;
          std::atomic<header_validation_error> last_header_validation_error_{header_validation_error::none};
 
          size_t max_message_size{1024 * 1024 * 16}; // 16 MB limit
@@ -73,26 +75,16 @@ namespace glz
 
          explicit impl(std::shared_ptr<asio::io_context> context) : ctx(std::move(context)) {}
 
-         static bool header_name_equal(std::string_view lhs, std::string_view rhs)
-         {
-            if (lhs.size() != rhs.size()) return false;
-            return std::equal(lhs.begin(), lhs.end(), rhs.begin(), [](char a, char b) {
-               return std::tolower(static_cast<unsigned char>(a)) == std::tolower(static_cast<unsigned char>(b));
-            });
-         }
-
          static bool header_name_starts_with(std::string_view value, std::string_view prefix)
          {
             if (value.size() < prefix.size()) return false;
-            return std::equal(prefix.begin(), prefix.end(), value.begin(), [](char a, char b) {
-               return std::tolower(static_cast<unsigned char>(a)) == std::tolower(static_cast<unsigned char>(b));
-            });
+            return glz::striequal(value.substr(0, prefix.size()), prefix);
          }
 
          static bool is_reserved_handshake_header(std::string_view name)
          {
-            return header_name_equal(name, "Host") || header_name_equal(name, "Upgrade") ||
-                   header_name_equal(name, "Connection") || header_name_starts_with(name, "Sec-WebSocket-");
+            return glz::striequal(name, "Host") || glz::striequal(name, "Upgrade") ||
+                   glz::striequal(name, "Connection") || header_name_starts_with(name, "Sec-WebSocket-");
          }
 
          // Field-name and field-value validity (tchar names, no CR/LF/CTL/DEL
@@ -127,7 +119,7 @@ namespace glz
             return true;
          }
 
-         std::vector<std::pair<std::string, std::string>> request_headers_snapshot() const
+         glz::http_headers request_headers_snapshot() const
          {
             std::lock_guard<std::mutex> lock(request_headers_mutex_);
             return request_headers_;
@@ -142,14 +134,7 @@ namespace glz
             }
 
             std::lock_guard<std::mutex> lock(request_headers_mutex_);
-            for (auto& [existing_name, existing_value] : request_headers_) {
-               if (header_name_equal(existing_name, name)) {
-                  existing_value = std::string(value);
-                  last_header_validation_error_.store(header_validation_error::none, std::memory_order_relaxed);
-                  return true;
-               }
-            }
-            request_headers_.emplace_back(std::string(name), std::string(value));
+            request_headers_.set(std::string(name), std::string(value));
             last_header_validation_error_.store(header_validation_error::none, std::memory_order_relaxed);
             return true;
          }
@@ -363,95 +348,86 @@ namespace glz
             auto response_buf = std::make_shared<asio::streambuf>(max_handshake_size);
             std::weak_ptr<impl> weak_self = weak_from_this();
 
-            asio::async_read_until(*socket, *response_buf, "\r\n\r\n",
-                                   [weak_self, socket, response_buf, expected_key](std::error_code ec, std::size_t) {
-                                      auto self = weak_self.lock();
-                                      if (!self) return; // Client was destroyed
+            asio::async_read_until(
+               *socket, *response_buf, "\r\n\r\n",
+               [weak_self, socket, response_buf, expected_key](std::error_code ec, std::size_t) {
+                  auto self = weak_self.lock();
+                  if (!self) return; // Client was destroyed
 
-                                      if (ec) {
-                                         if (self->on_error && *self->on_error) (*self->on_error)(ec);
-                                         return;
-                                      }
+                  if (ec) {
+                     if (self->on_error && *self->on_error) (*self->on_error)(ec);
+                     return;
+                  }
 
-                                      std::istream response_stream(response_buf.get());
-                                      std::string http_version;
-                                      unsigned int status_code;
-                                      std::string status_message;
+                  std::istream response_stream(response_buf.get());
+                  std::string http_version;
+                  unsigned int status_code;
+                  std::string status_message;
 
-                                      response_stream >> http_version >> status_code;
-                                      std::getline(response_stream, status_message);
+                  response_stream >> http_version >> status_code;
+                  std::getline(response_stream, status_message);
 
-                                      if (!response_stream || status_code != 101) {
-                                         if (self->on_error && *self->on_error)
-                                            (*self->on_error)(std::make_error_code(std::errc::protocol_error));
-                                         return;
-                                      }
+                  if (!response_stream || status_code != 101) {
+                     if (self->on_error && *self->on_error)
+                        (*self->on_error)(std::make_error_code(std::errc::protocol_error));
+                     return;
+                  }
 
-                                      // Parse headers to verify upgrade and accept key
-                                      std::string header;
-                                      bool upgrade_websocket = false;
-                                      bool connection_upgrade = false;
-                                      bool accept_key_valid = false;
+                  // Parse headers to verify upgrade and accept key
+                  std::string header;
+                  glz::http_headers response_headers;
 
-                                      std::string expected_accept = ws_util::generate_accept_key(expected_key);
+                  std::string expected_accept = ws_util::generate_accept_key(expected_key);
 
-                                      while (std::getline(response_stream, header) && header != "\r") {
-                                         if (!header.empty() && header.back() == '\r') header.pop_back();
+                  while (std::getline(response_stream, header) && header != "\r") {
+                     if (!header.empty() && header.back() == '\r') header.pop_back();
 
-                                         auto colon = header.find(':');
-                                         if (colon != std::string::npos) {
-                                            std::string name = header.substr(0, colon);
-                                            std::string value = header.substr(colon + 1);
+                     auto colon = header.find(':');
+                     if (colon != std::string::npos) {
+                        std::string name = header.substr(0, colon);
+                        std::string value = header.substr(colon + 1);
 
-                                            while (!value.empty() && (value.front() == ' ' || value.front() == '\t'))
-                                               value.erase(0, 1);
-                                            while (!value.empty() && (value.back() == ' ' || value.back() == '\t'))
-                                               value.pop_back();
+                        while (!value.empty() && (value.front() == ' ' || value.front() == '\t')) value.erase(0, 1);
+                        while (!value.empty() && (value.back() == ' ' || value.back() == '\t')) value.pop_back();
 
-                                            if (strncasecmp(name.c_str(), "Upgrade", 7) == 0 &&
-                                                ws_util::header_contains(value, "websocket")) {
-                                               upgrade_websocket = true;
-                                            }
-                                            else if (strncasecmp(name.c_str(), "Connection", 10) == 0 &&
-                                                     ws_util::header_contains(value, "upgrade")) {
-                                               connection_upgrade = true;
-                                            }
-                                            else if (strncasecmp(name.c_str(), "Sec-WebSocket-Accept", 20) == 0) {
-                                               if (value == expected_accept) accept_key_valid = true;
-                                            }
-                                         }
-                                      }
+                        response_headers.add(std::move(name), std::move(value));
+                     }
+                  }
 
-                                      if (!upgrade_websocket || !connection_upgrade || !accept_key_valid) {
-                                         if (self->on_error && *self->on_error)
-                                            (*self->on_error)(std::make_error_code(std::errc::protocol_error));
-                                         return;
-                                      }
+                  const bool upgrade_websocket = response_headers.contains_token("Upgrade", "websocket");
+                  const bool connection_upgrade = response_headers.contains_token("Connection", "upgrade");
+                  const bool accept_key_valid = response_headers.first_value("Sec-WebSocket-Accept") == expected_accept;
 
-                                      // Handshake successful. Transfer socket to websocket_connection.
-                                      auto ws_conn = std::make_shared<websocket_connection<SocketType>>(socket);
-                                      ws_conn->set_client_mode(true);
-                                      ws_conn->set_max_message_size(self->max_message_size);
+                  if (!upgrade_websocket || !connection_upgrade || !accept_key_valid) {
+                     if (self->on_error && *self->on_error)
+                        (*self->on_error)(std::make_error_code(std::errc::protocol_error));
+                     return;
+                  }
 
-                                      if (self->on_message && *self->on_message) ws_conn->on_message(*self->on_message);
-                                      if (self->on_close && *self->on_close) ws_conn->on_close(*self->on_close);
-                                      if (self->on_error && *self->on_error) ws_conn->on_error(*self->on_error);
+                  // Handshake successful. Transfer socket to websocket_connection.
+                  auto ws_conn = std::make_shared<websocket_connection<SocketType>>(socket);
+                  ws_conn->set_client_mode(true);
+                  ws_conn->set_max_message_size(self->max_message_size);
 
-                                      {
-                                         std::lock_guard<std::mutex> lock(self->connection_mutex);
-                                         self->connection = ws_conn;
-                                      }
+                  if (self->on_message && *self->on_message) ws_conn->on_message(*self->on_message);
+                  if (self->on_close && *self->on_close) ws_conn->on_close(*self->on_close);
+                  if (self->on_error && *self->on_error) ws_conn->on_error(*self->on_error);
 
-                                      if (self->on_open && *self->on_open) (*self->on_open)();
+                  {
+                     std::lock_guard<std::mutex> lock(self->connection_mutex);
+                     self->connection = ws_conn;
+                  }
 
-                                      if (response_buf->size() > 0) {
-                                         std::vector<uint8_t> initial_data(response_buf->size());
-                                         asio::buffer_copy(asio::buffer(initial_data), response_buf->data());
-                                         ws_conn->set_initial_data(std::move(initial_data));
-                                      }
+                  if (self->on_open && *self->on_open) (*self->on_open)();
 
-                                      ws_conn->start_read();
-                                   });
+                  if (response_buf->size() > 0) {
+                     std::vector<uint8_t> initial_data(response_buf->size());
+                     asio::buffer_copy(asio::buffer(initial_data), response_buf->data());
+                     ws_conn->set_initial_data(std::move(initial_data));
+                  }
+
+                  ws_conn->start_read();
+               });
          }
 
          void send_text(std::string_view msg)
