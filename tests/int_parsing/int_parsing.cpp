@@ -561,6 +561,9 @@ suite u8_test = [] {
       expect(not glz::read_json(value, "[-32767, -32768]"));
       expect(value == std::array<V, 2>{-32767, -32768});
 
+      expect(not glz::read_json(value, "[-1e2, -3e4]"));
+      expect(value == std::array<V, 2>{-100, -30000});
+
       expect(not glz::read_json(value, "[1e3, 1e3]"));
       expect(value == std::array<V, 2>{1000, 1000});
 
@@ -632,6 +635,9 @@ suite u8_test = [] {
 
       expect(not glz::read_json(value, "[-2147483647, -2147483648]"));
       expect(value == std::array<V, 2>{-2147483647, -2147483648});
+
+      expect(not glz::read_json(value, "[-1e2, -21e8]"));
+      expect(value == std::array<V, 2>{-100, -2100000000});
 
       expect(not glz::read_json(value, "[1e7, 12e7]"));
       expect(value == std::array<V, 2>{10000000, 120000000});
@@ -725,6 +731,20 @@ suite u8_test = [] {
 
       expect(not glz::read_json(value, "[-5594732989048119398, -5594732989048119398]"));
       expect(value == std::array<V, 2>{-5594732989048119398, -5594732989048119398});
+
+      // The existing negative-with-exponent case above is -9223372036854775808e0, which passes
+      // even when the exponent scales the two's-complement bit pattern instead of the magnitude:
+      // INT64_MIN is the one negative value whose bit pattern equals its own magnitude, and e0
+      // makes the multiply an identity. Every other negative value exercises the scaling.
+      expect(not glz::read_json(value, "[-1e2, -1e18]"));
+      expect(value == std::array<V, 2>{-100, -1000000000000000000});
+
+      expect(not glz::read_json(value, "[-9e18, -9223372036854775807e0]"));
+      expect(value == std::array<V, 2>{-9000000000000000000, -9223372036854775807});
+
+      // Out of range once scaled, including from INT64_MIN, whose magnitude is already the limit.
+      expect(glz::read_json(value, "[-9223372036854775808e1]"));
+      expect(glz::read_json(value, "[-1e19]"));
 
       expect(not glz::read<glz::opts{.minified = true}>(value, "[337184269,337184283]"));
       expect(not glz::read<glz::opts{.minified = true}>(value, "[-5637358391044507426,-4563386007050245647]"));
