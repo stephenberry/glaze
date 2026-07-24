@@ -500,6 +500,17 @@ namespace glz
       return ((std::is_same_v<T, std::variant_alternative_t<I, V>> * I) + ...);
    }(std::make_index_sequence<std::variant_size_v<V>>{});
 
+   // BEVE Version 2 represents a std::variant as an ordinary self-describing value rather than the
+   // deprecated type-tag extension (extension id 1, header byte 0x0E). A tagged variant (tag_v<T>
+   // non-empty) is written as an object with the discriminator merged in as the first member,
+   // mirroring the JSON writer's internal/embedded tagging; an untagged variant (or a non-object
+   // alternative, or a positional structs-as-arrays write) is written directly as the active
+   // alternative's own BEVE value. In every case the encoding is a plain BEVE value that maps 1:1
+   // to JSON, and no 0x0E extension byte is emitted. The reader recovers the alternative from the
+   // discriminator, the object's key set, or the value's self-describing type header.
+   //
+   // Version 1 data is still readable (the reader dispatches on the leading byte), but it is not
+   // writable: a process that must produce Version 1 output should pin an older Glaze.
    template <is_variant T>
       requires(not custom_write<T>)
    struct to<BEVE, T> final
@@ -507,25 +518,64 @@ namespace glz
       template <auto Opts, class B>
       static void op(auto&& value, is_context auto&& ctx, B&& b, auto& ix)
       {
-         using Variant = std::decay_t<decltype(value)>;
-
          std::visit(
             [&](auto&& v) {
                using V = std::decay_t<decltype(v)>;
 
-               static constexpr uint64_t index = variant_index_v<V, Variant>;
+               if constexpr ((not check_structs_as_arrays(Opts)) && check_write_type_info(Opts) &&
+                             (not tag_v<T>.empty()) &&
+                             (glaze_object_t<V> || (reflectable<V> && not has_member_with_name<V>(tag_v<T>)) ||
+                              is_memory_object<V>)) {
+                  // Tagged object alternative: emit { tag_v : id, ...members } as one merged object.
+                  using X = std::conditional_t<is_memory_object<V>, memory_type<V>, V>;
 
-               constexpr uint8_t tag = tag::extensions | 0b00001'000;
+                  size_t body_count{};
+                  if constexpr (is_memory_object<V>) {
+                     if (!v) [[unlikely]] {
+                        ctx.error = error_code::invalid_variant_object;
+                        return;
+                     }
+                     body_count = to<BEVE, X>::template written_member_count<Opts>(*v, ctx);
+                  }
+                  else {
+                     body_count = to<BEVE, X>::template written_member_count<Opts>(v, ctx);
+                  }
 
-               dump_type(ctx, tag, b, ix);
-               if (bool(ctx.error)) [[unlikely]] {
-                  return;
+                  // object header (string keys) + merged member count (discriminator + body members)
+                  dump_type(ctx, uint8_t(tag::object | 0), b, ix);
+                  if (bool(ctx.error)) [[unlikely]] {
+                     return;
+                  }
+                  dump_compressed_int(ctx, body_count + 1, b, ix);
+                  if (bool(ctx.error)) [[unlikely]] {
+                     return;
+                  }
+
+                  // discriminator: headerless string key + id VALUE (string or integral, with header).
+                  // The key type is spelled through decltype(tag_v<T>) so lookup of the str_t writer
+                  // specialization (defined later in this file) is deferred to instantiation.
+                  to<BEVE, std::remove_cvref_t<decltype(tag_v<T>)>>::template no_header_cx<tag_v<T>.size()>(
+                     tag_v<T>, ctx, b, ix);
+                  if (bool(ctx.error)) [[unlikely]] {
+                     return;
+                  }
+                  serialize<BEVE>::op<Opts>(ids_v<T>[value.index()], ctx, b, ix);
+                  if (bool(ctx.error)) [[unlikely]] {
+                     return;
+                  }
+
+                  // alternative body: header suppressed so its members splice into this object
+                  if constexpr (is_memory_object<V>) {
+                     serialize<BEVE>::op<opening_handled<Opts>()>(*v, ctx, b, ix);
+                  }
+                  else {
+                     serialize<BEVE>::op<opening_handled<Opts>()>(v, ctx, b, ix);
+                  }
                }
-               dump_compressed_int<index>(ctx, b, ix);
-               if (bool(ctx.error)) [[unlikely]] {
-                  return;
+               else {
+                  // Untagged, non-object, or positional: write the active alternative directly.
+                  serialize<BEVE>::op<Opts>(v, ctx, b, ix);
                }
-               serialize<BEVE>::op<Opts>(v, ctx, b, ix);
             },
             value);
       }
@@ -1275,66 +1325,30 @@ namespace glz
          }(std::make_index_sequence<N>{});
       }
 
-      template <auto Opts, class B>
-         requires(check_structs_as_arrays(Opts) == true)
-      static void op(auto&& value, is_context auto&& ctx, B&& b, auto& ix)
+      // Number of members this object will actually write under Opts for the given value.
+      // Equals the compile-time count_to_write() unless runtime skipping (skip_null_members /
+      // skip_default_members / meta skip) is in play, in which case the members are counted at
+      // runtime exactly as the write pass decides. Shared by the object writer's dynamic header
+      // count, the merged-object variant writer, and size calculation, so all three agree.
+      template <auto Options>
+      static size_t written_member_count(auto&& value, is_context auto&& ctx)
       {
-         if (!ensure_space(ctx, b, ix + 1 + write_padding_bytes)) [[unlikely]] {
-            return;
+         if constexpr (!maybe_skipped<Options, T>) {
+            (void)value;
+            (void)ctx;
+            return count_to_write<Options>();
          }
-         dump<tag::generic_array>(b, ix);
-         dump_compressed_int<count_to_write<Opts>()>(ctx, b, ix);
-         if (bool(ctx.error)) [[unlikely]] {
-            return;
-         }
-
-         [[maybe_unused]] decltype(auto) t = [&]() -> decltype(auto) {
-            if constexpr (reflectable<T>) {
-               return to_tie(value);
-            }
-            else {
-               return nullptr;
-            }
-         }();
-
-         for_each<N>([&]<size_t I>() {
-            if (bool(ctx.error)) [[unlikely]] {
-               return;
-            }
-            if constexpr (should_skip_field<Opts, I>()) {
-               return;
-            }
-            else {
+         else {
+            [[maybe_unused]] decltype(auto) t = [&]() -> decltype(auto) {
                if constexpr (reflectable<T>) {
-                  serialize<BEVE>::op<Opts>(get_member(value, get<I>(t)), ctx, b, ix);
+                  return to_tie(value);
                }
                else {
-                  serialize<BEVE>::op<Opts>(get_member(value, get<I>(reflect<T>::values)), ctx, b, ix);
+                  return nullptr;
                }
-            }
-         });
-      }
+            }();
 
-      template <auto Options, class B>
-         requires(check_structs_as_arrays(Options) == false)
-      static void op(auto&& value, is_context auto&& ctx, B&& b, auto& ix)
-      {
-         constexpr auto Opts = opening_handled_off<Options>();
-
-         [[maybe_unused]] decltype(auto) t = [&]() -> decltype(auto) {
-            if constexpr (reflectable<T>) {
-               return to_tie(value);
-            }
-            else {
-               return nullptr;
-            }
-         }();
-
-         if constexpr (maybe_skipped<Options, T>) {
-            // Dynamic path: count members at runtime to handle skip_null_members
             size_t member_count = 0;
-
-            // First pass: count members that will be written
             for_each<N>([&]<size_t I>() {
                if constexpr (should_skip_field<Options, I>()) {
                   return;
@@ -1401,6 +1415,68 @@ namespace glz
                   }
                }
             });
+            return member_count;
+         }
+      }
+
+      template <auto Opts, class B>
+         requires(check_structs_as_arrays(Opts) == true)
+      static void op(auto&& value, is_context auto&& ctx, B&& b, auto& ix)
+      {
+         if (!ensure_space(ctx, b, ix + 1 + write_padding_bytes)) [[unlikely]] {
+            return;
+         }
+         dump<tag::generic_array>(b, ix);
+         dump_compressed_int<count_to_write<Opts>()>(ctx, b, ix);
+         if (bool(ctx.error)) [[unlikely]] {
+            return;
+         }
+
+         [[maybe_unused]] decltype(auto) t = [&]() -> decltype(auto) {
+            if constexpr (reflectable<T>) {
+               return to_tie(value);
+            }
+            else {
+               return nullptr;
+            }
+         }();
+
+         for_each<N>([&]<size_t I>() {
+            if (bool(ctx.error)) [[unlikely]] {
+               return;
+            }
+            if constexpr (should_skip_field<Opts, I>()) {
+               return;
+            }
+            else {
+               if constexpr (reflectable<T>) {
+                  serialize<BEVE>::op<Opts>(get_member(value, get<I>(t)), ctx, b, ix);
+               }
+               else {
+                  serialize<BEVE>::op<Opts>(get_member(value, get<I>(reflect<T>::values)), ctx, b, ix);
+               }
+            }
+         });
+      }
+
+      template <auto Options, class B>
+         requires(check_structs_as_arrays(Options) == false)
+      static void op(auto&& value, is_context auto&& ctx, B&& b, auto& ix)
+      {
+         constexpr auto Opts = opening_handled_off<Options>();
+
+         [[maybe_unused]] decltype(auto) t = [&]() -> decltype(auto) {
+            if constexpr (reflectable<T>) {
+               return to_tie(value);
+            }
+            else {
+               return nullptr;
+            }
+         }();
+
+         if constexpr (maybe_skipped<Options, T>) {
+            // Dynamic path: count members at runtime to handle skip_null_members
+            const size_t member_count = written_member_count<Options>(value, ctx);
 
             // Write header with dynamic count
             if constexpr (!check_opening_handled(Options)) {

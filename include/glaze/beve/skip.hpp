@@ -242,7 +242,8 @@ namespace glz
       switch (subtype) {
       case 0: // delimiter: no payload
          return;
-      case 1: { // variant: [compressed_int index] [value]
+      case 1: { // legacy (Version 1) type tag: [compressed_int index] [value]. Version 2 variants
+                // are ordinary objects/values and skip via the generic dispatch, never reaching here.
          skip_compressed_int(ctx, it, end);
          if (bool(ctx.error)) [[unlikely]] {
             return;
