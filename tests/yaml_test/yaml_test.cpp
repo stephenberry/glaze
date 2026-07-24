@@ -3608,6 +3608,8 @@ name: test)";
                                        "4294967297", // 2^32 + 1, wrapped to 1
                                        "8589934592", // 2^33, wrapped to 0
                                        "2147483648", // 2^31
+                                       "18446744073709551616", // 2^64, 20 digits, wrapped to 0
+                                       "18446744073709551617", // 2^64 + 1, wrapped to 1
                                        "99999999999999999999"}) {
          const std::string yaml = "%YAML " + std::string{version} + ".0\n---\nx: 42\ny: 3.14\nname: test";
          simple_struct obj{};
@@ -3627,12 +3629,40 @@ name: test)";
          expect(obj.x == 42);
       }
 
+      // Padding far longer than the clamp bound: the two are unrelated, since leading zeros never
+      // advance the accumulator. The matching out-of-range case must still be rejected.
+      {
+         const std::string yaml = "%YAML " + std::string(200, '0') + "1.2\n---\nx: 42\ny: 3.14\nname: test";
+         simple_struct obj{};
+         auto ec = glz::read_yaml(obj, yaml);
+         expect(!ec) << glz::format_error(ec, yaml);
+         expect(obj.x == 42);
+      }
+      {
+         const std::string yaml = "%YAML " + std::string(200, '0') + "2.0\n---\nx: 42\ny: 3.14\nname: test";
+         simple_struct obj{};
+         expect(bool(glz::read_yaml(obj, yaml))) << "padded major 2 should be rejected";
+      }
+
       // Multi-digit majors are still out of range, on both sides of the clamp.
       for (std::string_view version : {"10.0", "11.0", "99.0", "100.0", "101.0"}) {
          const std::string yaml = "%YAML " + std::string{version} + "\n---\nx: 42\ny: 3.14\nname: test";
          simple_struct obj{};
          auto ec = glz::read_yaml(obj, yaml);
          expect(bool(ec)) << "%YAML " << version << " should be rejected";
+      }
+   };
+
+   // Major version 0 is accepted: the spec only requires rejecting a version this parser is too
+   // old to understand, and 0 is not that. Pinned here because the all-zeros digit run is the one
+   // accepted input that reaches the clamped accumulator, so a change to the clamp would show up.
+   "yaml_directive_major_version_zero"_test = [] {
+      for (std::string_view version : {"0.1", "0.0", "00.1", "000.2"}) {
+         const std::string yaml = "%YAML " + std::string{version} + "\n---\nx: 42\ny: 3.14\nname: test";
+         simple_struct obj{};
+         auto ec = glz::read_yaml(obj, yaml);
+         expect(!ec) << glz::format_error(ec, yaml);
+         expect(obj.x == 42);
       }
    };
 
