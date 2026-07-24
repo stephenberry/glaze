@@ -774,4 +774,80 @@ suite u8_test = [] {
    "i64 array minified"_test = [] { test_struct_with_array_minified<int64_t>(); };
 };
 
+// An out-of-range integer must be rejected, never wrapped into an accepted value. Reading through a
+// vector forces the whole number to be consumed, since a top-level read ignores trailing content.
+template <class T>
+[[nodiscard]] bool rejects(const std::string& number)
+{
+   std::vector<T> v{};
+   return bool(glz::read_json(v, "[" + number + "]"));
+}
+
+template <class T>
+[[nodiscard]] bool reads_as(const std::string& number, T expected)
+{
+   std::vector<T> v{};
+   return !glz::read_json(v, "[" + number + "]") && v.size() == 1 && v[0] == expected;
+}
+
+suite overflow_rejection = [] {
+   // The unsigned guard used to multiply first and compare the already-wrapped value against
+   // max/10 - 10, so it only caught wraps that landed below that threshold. "300" wrapped to 44 for
+   // uint8_t and was accepted; so were 699 of the 744 out-of-range values below.
+   "unsigned plain integer overflow exhaustive"_test = [] {
+      size_t accepted = 0;
+      for (int i = 256; i <= 999; ++i) {
+         if (!rejects<uint8_t>(std::to_string(i))) ++accepted;
+      }
+      expect(accepted == 0) << accepted << " out-of-range uint8_t values were accepted";
+
+      for (long i = 65536; i <= 66600; ++i) {
+         if (!rejects<uint16_t>(std::to_string(i))) {
+            expect(false) << "uint16_t accepted " << i;
+            break;
+         }
+      }
+      // Every width, just past the limit and at a value that previously wrapped into range.
+      expect(rejects<uint8_t>("271") && rejects<uint8_t>("300") && rejects<uint8_t>("999"));
+      expect(rejects<uint16_t>("72079") && rejects<uint16_t>("75495"));
+      expect(rejects<uint32_t>("4294967296") && rejects<uint32_t>("5000000000"));
+      expect(rejects<uint64_t>("18446744073709551616") && rejects<uint64_t>("99999999999999999999"));
+
+      // The limit itself and the value below it still read correctly.
+      expect(reads_as<uint8_t>("255", 255) && reads_as<uint8_t>("254", 254));
+      expect(reads_as<uint16_t>("65535", 65535));
+      expect(reads_as<uint32_t>("4294967295", 4294967295u));
+      expect(reads_as<uint64_t>("18446744073709551615", 18446744073709551615ull));
+   };
+
+   // The signed exponent path scaled inside the narrow unsigned type, truncating the product before
+   // the range check, so an out-of-range magnitude aliased onto an accepted one.
+   "signed exponent overflow"_test = [] {
+      expect(rejects<int8_t>("13e2")); // was 20
+      expect(rejects<int8_t>("3e2")); // was 44
+      expect(rejects<int16_t>("9e4")); // was 24464
+      expect(rejects<int16_t>("7e4")); // was 4464
+      expect(rejects<int32_t>("5e9")); // was 705032704
+      expect(rejects<int32_t>("13e9")); // was 115098112
+      expect(rejects<int8_t>("-13e2") && rejects<int16_t>("-9e4") && rejects<int32_t>("-5e9"));
+
+      // In-range scaling is unchanged, at the limit and either side of zero.
+      expect(reads_as<int8_t>("12e1", int8_t(120)) && reads_as<int8_t>("-12e1", int8_t(-120)));
+      expect(reads_as<int16_t>("3e4", int16_t(30000)) && reads_as<int16_t>("-3e4", int16_t(-30000)));
+      expect(reads_as<int32_t>("2e9", 2000000000) && reads_as<int32_t>("-2e9", -2000000000));
+      expect(reads_as<int64_t>("9e18", 9000000000000000000ll));
+   };
+
+   // Negative zero is zero, and it must be accepted uniformly. Previously the range check subtracted
+   // the sign from the magnitude, which underflowed; the narrow widths only survived because they
+   // promoted to int, so int16_t accepted "-0e0" while int32_t rejected it.
+   "negative zero with exponent"_test = [] {
+      expect(reads_as<int8_t>("-0e0", int8_t(0)) && reads_as<int8_t>("-0e2", int8_t(0)));
+      expect(reads_as<int16_t>("-0e0", int16_t(0)) && reads_as<int16_t>("-0e4", int16_t(0)));
+      expect(reads_as<int32_t>("-0e0", 0) && reads_as<int32_t>("-0e9", 0));
+      expect(reads_as<int64_t>("-0e0", 0ll) && reads_as<int64_t>("-0e18", 0ll));
+      expect(reads_as<int8_t>("-0", int8_t(0)) && reads_as<int32_t>("-0", 0));
+   };
+};
+
 int main() { return 0; }
