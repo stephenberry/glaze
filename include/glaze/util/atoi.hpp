@@ -382,7 +382,10 @@ namespace glz
             return false;
          }
          ++c;
-         uint8_t exp = c[-1] - '0';
+         // exp accumulates up to three digits, so it must be wider than uint8_t: a byte wraps
+         // mod 256, aliasing an out-of-range exponent onto an accepted one (e.g. "1e256" -> 0,
+         // decoded as 1 instead of being rejected as out of range).
+         uint32_t exp = c[-1] - '0';
          if (is_digit(*c)) {
             exp = exp * 10 + (*c - '0');
             ++c;
