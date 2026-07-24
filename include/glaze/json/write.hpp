@@ -1022,7 +1022,7 @@ namespace glz
       requires((glaze_enum_t<T> || (meta_keys<T> && std::is_enum_v<std::decay_t<T>>)) && not custom_write<T>)
    struct to<JSON, T>
    {
-      static constexpr bool can_error = false;
+      // can_error defaults to true (no declaration) because the unmapped-value branch below errors.
 
       template <auto Opts, class... Args>
       GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, Args&&... args)
@@ -1040,8 +1040,17 @@ namespace glz
             }
          }
          else [[unlikely]] {
-            // Value doesn't have a mapped string, serialize as underlying number
-            serialize<JSON>::op<Opts>(static_cast<std::underlying_type_t<T>>(value), ctx, std::forward<Args>(args)...);
+            // The value is not in the enumerate map, so it has no string name. By default error rather
+            // than emitting the underlying integer, which the reader (requiring a known name) could not
+            // round-trip; writes are trusted, so this signals a producer bug (issue #2672). The
+            // enum_int_fallback option restores the old integer-fallback behavior.
+            if constexpr (check_enum_int_fallback(Opts)) {
+               serialize<JSON>::op<Opts>(static_cast<std::underlying_type_t<T>>(value), ctx,
+                                         std::forward<Args>(args)...);
+            }
+            else {
+               ctx.error = error_code::unexpected_enum;
+            }
          }
       }
    };

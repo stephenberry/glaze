@@ -64,6 +64,7 @@ These options are **not** in `glz::opts` by default. Add them to a custom option
 | `size_t max_map_size` | `0` | Maximum map size when reading (0 = no limit). See also [Runtime Constraints](security.md#runtime-limits-via-custom-context). |
 | `bool skip_default_members` | `false` | Skip writing members with default values (empty strings, empty containers, zero numbers, false bools) |
 | `bool allocate_raw_pointers` | `false` | Allocate memory for null raw pointers during deserialization. See also [Runtime Control](security.md#runtime-raw-pointer-allocation-control). |
+| `bool enum_int_fallback` | `false` | Emit the underlying integer instead of erroring when writing a named enum value that has no registered name |
 
 ### CSV Options (`glz::opts_csv`)
 
@@ -242,6 +243,24 @@ auto json = glz::write<my_opts{}>(p).value_or("error");
 ```
 
 See also [Skip Keys](skip-keys.md) for per-field skip control.
+
+#### `enum_int_fallback` (Inheritable)
+A named enum (registered via `glz::meta` with `enumerate(...)` or `keys`/`value` arrays) is normally written as its string name. A value that is not one of the enumerated values (for example a default-constructed sentinel) has no name. By default Glaze errors with `error_code::unexpected_enum` in that case, because the string formats (JSON, TOML, YAML, MessagePack) validate enum names on read and could not round-trip the value. Set this option to `true` to restore the previous behavior of emitting the underlying integer instead. Binary formats (BEVE, CBOR, BSON) always serialize the underlying integer and are unaffected.
+
+```cpp
+struct my_opts : glz::opts {
+   bool enum_int_fallback = true;
+};
+
+enum class color : uint8_t { red = 1, green = 2 };
+template <> struct glz::meta<color> {
+   using enum color;
+   static constexpr auto value = glz::enumerate("red", red, "green", green);
+};
+
+auto def = glz::write_json(color{}); // error: unexpected_enum (0 has no name)
+auto legacy = glz::write<my_opts{}>(color{}).value_or("error"); // "0"
+```
 
 #### `prettify`
 When `true`, outputs formatted JSON with indentation and newlines.
