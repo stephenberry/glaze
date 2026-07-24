@@ -486,6 +486,89 @@ User user{};
 
 Both `glz::read_json(value, view)` and `view.read_into(value)` are **~49% faster** than the older pattern of `glz::read_json(value, view.raw_json())`. The `raw_json()` approach requires scanning the value twice: once to find its extent, and once to parse it.
 
+## Streaming Cursor (opt-in)
+
+`lazy_streaming_cursor` is a compile-time option (default **`lazy_streaming_cursor_policy::disabled`**) for workloads that combine **sequential container iteration** with **`read_into()`** on each element — for example nested arrays of table rows where every cell is parsed with `read_into`.
+
+```cpp
+struct load_opts : glz::opts {
+   bool null_terminated = false;
+   glz::lazy_streaming_cursor_policy lazy_streaming_cursor =
+      glz::lazy_streaming_cursor_policy::enabled;
+};
+constexpr load_opts load{};
+auto doc = glz::lazy_json<load>(buffer);
+```
+
+Legacy `bool lazy_streaming_cursor` is still accepted: `true` maps to `packed_with_fallback`, `false` to `disabled`.
+
+### Policy enum
+
+All active policies share one implementation: **`lazy_streaming_extent<OffsetT, WithFallback>`** — two `OffsetT` offsets (`end_off == 0` means invalid). Jump logic is identical; only storage width and overflow handling differ.
+
+| Policy | `OffsetT` (64-bit) | `OffsetT` (32-bit) | Overflow |
+|--------|-------------------|-------------------|----------|
+| `disabled` | — (empty slot) | — | — |
+| `enabled` | `size_t` | `size_t` | none |
+| `packed` | `uint32_t` | `size_t` *(same as enabled)* | assert if offset > `UINT32_MAX` |
+| `packed_with_fallback` | `uint32_t` | `size_t` *(same as enabled)* | skip recording if offset > `UINT32_MAX` |
+
+On 32-bit platforms `packed` / `packed_with_fallback` are no-ops relative to `enabled` — `size_t` is already 32-bit, so there is nothing to pack.
+
+### Spans larger than 4 GiB (`packed_with_fallback`)
+
+Offsets are stored as **`uint32_t` byte indices** from the document base pointer. When either `start - base` or `end - base` exceeds `UINT32_MAX` (~4 GiB − 1), **`packed_with_fallback` clears the slot and does not record** — parsing continues, but `operator++` falls back to ordinary `skip_value_lazy` for that step. There is no silent truncation.
+
+Use `enabled` (`size_t` offsets) when the JSON buffer can exceed 4 GiB. Use `packed_with_fallback` when the span is known to fit in 32-bit byte indices and you want a smaller `lazy_document` slot on 64-bit.
+
+With `packed` (no fallback), overflow is a programmer error: debug builds assert; release clears the slot after the failed assert path.
+
+Glaze can expose any subset of these to end users depending on how much configurability vs. simplicity is desired.
+
+### What it does
+
+When not `disabled`, `lazy_document` stores the byte extent **`[start, end)`** of the most recently fully consumed value (from `read_into`, or from an iterator finishing a container). The next `lazy_iterator::operator++` can **jump** to `end` instead of re-scanning with `skip_value_lazy`.
+
+**Why store both start and end?** `operator++` must confirm the element being skipped is the **same value** whose extent was recorded — it checks that the current position equals **start** before jumping to **end**. End alone is insufficient: a stale end from a prior read could wrongly jump when advancing over a different element. Nested containers record `[container_start, close)` for parent iterators; start anchors depth-correct matching.
+
+### Document-backed vs detached views
+
+The streaming cursor stores its extent slot on **`lazy_document`** (`consumed_`). Views and iterators therefore need a non-null `doc_` pointer to record or jump.
+
+| Source | `doc_` | Streaming cursor |
+|--------|--------|------------------|
+| `lazy_json(buffer)` and all views/iterators derived from it | always set | works |
+| Detached subview `lazy_json_view{nullptr, data}` (null-terminated buffer) | null | silently skipped — parse/iterate still work, no jump |
+| Error / end iterators | null | never reached on live paths |
+
+Compile-time `lazy_streaming_cursor_policy != disabled` does **not** imply `doc_ != nullptr`; the runtime `if (doc_)` guard covers detached subviews only. On the intended `lazy_json` ingest path, `doc_` is always non-null when the cursor can do useful work.
+
+### When to enable
+
+| Pattern | Benefit |
+|---------|---------|
+| `for (auto& row : rows) { row.read_into(cell); }` | **High** — avoids re-scanning each parsed row |
+| `get()` / `operator[]` only | **None** — extra stores on container finish |
+| Indexed random `read_into` | **Low** — recording cost, no following `++` |
+| `raw_json()` + `read_json()` | **None** — double-pass path ignores the cursor |
+
+### Tradeoffs
+
+**Pros**
+
+- Large win on sequential `read_into` + iterator loops on warehouse-shaped multi‑MB fixtures (`lazy_load_benchmark`: streaming **on** vs **off** on a catalog-of-record-matrices dump; `read_into` stage in `lazy_benchmark`: ~2× throughput vs upstream on the official fixture).
+- No change to default `glz::opts` behavior or `lazy_document` layout when disabled.
+- `packed` / `packed_with_fallback` use compact `uint32_t` offsets on 64-bit when the document span fits in 4 GiB (on 32-bit, equivalent to `enabled`).
+
+**Cons (when enabled)**
+
+- One predictable branch in `operator++` when no extent is recorded.
+- Stores after each successful `read_into` and when iterators finish containers.
+- Single slot per document — only the **most recently recorded** extent is eligible for a jump. Any other `operator++` (stale extent, interleaved iterators, no prior `read_into`) falls back to `skip_value_lazy`; correctness is unchanged, only the fast path is skipped.
+- `packed_with_fallback`: not recorded when offsets exceed 32 bits (graceful fallback to byte skip — see **Spans larger than 4 GiB** above). `packed`: overflow is a programmer error (assert).
+
+See `benchmarks/lazy_load_benchmark.cpp` (warehouse-shaped ingest + flat smoke) and `benchmarks/lazy_benchmark.cpp` for micro-stages.
+
 ### The `raw_json()` Method
 
 Returns a `std::string_view` of the raw JSON bytes for any lazy view. Use this when you need the JSON text itself (for logging, forwarding, or storage):
@@ -641,6 +724,27 @@ See [Partial Read](./partial-read.md) for detailed documentation.
 | Best for | Full deser. | Known subset | Few accesses | Many accesses | Unknown structure |
 
 *k = bytes to skip to reach field
+
+## Slim view (opt-in): `lazy_slim_view`
+
+`lazy_json_view` is 48 bytes on 64-bit: three pointers plus a per-value object key
+(`std::string_view`, only meaningful during object iteration) and an `error_code` (only set
+on views returned by fallible lookups). Setting `lazy_slim_view = true` on your `opts` drops
+both from the value, shrinking it to **24 bytes** (the three pointers). The object key then
+comes from the iterator (`lazy_iterator::key()` / `indexed_lazy_iterator::key()`) instead of
+the element view, and error state is signalled by a null value pointer
+(`has_error() == (data() == nullptr)`; the specific `error_code` is not retained). Default is
+the full 48-byte layout, so existing code is unaffected.
+
+Use it for consumers that store or copy the value handle per element (a smaller handle is
+cheaper to move); a pure transient read sees little difference.
+
+> **Known limitation — `lazy_slim_view` + streaming cursor on Windows/clang-cl.** With the
+> streaming cursor enabled, the slim view is a win on Apple clang (arm64, ~+8%) and neutral
+> on Linux clang (x86), but **clang-cl (MSVC-mode) on x86 regresses ~26%** on cell-access-bound
+> streaming ingest — a clang-cl-specific codegen artifact (L1 store-ordering stalls; not
+> reproduced by Linux clang on the same hardware, and not a struct-layout issue). If you
+> target clang-cl with the streaming cursor on a cell-heavy read path, keep the full layout.
 
 ## See Also
 

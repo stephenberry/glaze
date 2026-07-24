@@ -3,23 +3,32 @@
 
 #pragma once
 
+#include <cassert>
+#include <cstdint>
+#include <cstring>
+#include <limits>
 #include <string_view>
+#include <type_traits>
+#include <utility>
 
+#include "glaze/core/lazy_streaming_cursor_policy.hpp"
 #include "glaze/json/read.hpp"
 #include "glaze/json/skip.hpp"
 #include "glaze/json/write.hpp"
+#include "glaze/util/bit.hpp"
 #include "glaze/util/expected.hpp"
+#include "glaze/tuplet/tuple.hpp"
 
 namespace glz
 {
    // Forward declarations (needed for circular references)
-   template <opts Opts>
+   template <auto Opts>
    struct lazy_document;
-   template <opts Opts>
+   template <auto Opts>
    class lazy_iterator;
-   template <opts Opts>
+   template <auto Opts>
    struct indexed_lazy_view;
-   template <opts Opts>
+   template <auto Opts>
    class indexed_lazy_iterator;
 
    // ============================================================================
@@ -29,7 +38,7 @@ namespace glz
    namespace detail
    {
       // Skip string - returns position after closing quote
-      template <opts Opts>
+      template <auto Opts>
       GLZ_ALWAYS_INLINE const char* skip_string_fast(const char* p, const char* end) noexcept
       {
          const char* const start = p;
@@ -59,19 +68,84 @@ namespace glz
          return p;
       }
 
+      // SWAR scan for the next quote or container bracket (end-bounded buffers only).
+      GLZ_GNU_CONST_LEAF inline uint64_t lazy_swar_any_bracket_mask(const uint64_t chunk) noexcept
+      {
+         return glz::has_quote(chunk) | glz::has_char<'['>(chunk) | glz::has_char<']'>(chunk) |
+                glz::has_char<'{'>(chunk) | glz::has_char<'}'>(chunk);
+      }
+
+      template <bool NullTerminated>
+      constexpr std::pair<const char*, const char*> lazy_swar_advance_any_bracket(const char* p,
+                                                                                   const char* end) noexcept
+      {
+         if constexpr (NullTerminated) {
+            return {p, end};
+         }
+#if defined(__clang__) || defined(__GNUC__)
+         // Wide portable SIMD via GCC/Clang vector extensions: the compiler lowers this
+         // to AVX2/SSE2 on x86 and NEON on ARM for the target arch, with no intrinsics.
+         // MSVC's cl.exe lacks vector extensions and falls through to the SWAR loop
+         // below (this project builds with clang-cl, which does support them).
+         if (!std::is_constant_evaluated()) {
+            using vbytes = unsigned char __attribute__((vector_size(32)));
+            while (p + 32 <= end) {
+               vbytes chunk;
+               std::memcpy(&chunk, p, sizeof(chunk));
+               const vbytes hits =
+                  (chunk == '"') | (chunk == '[') | (chunk == ']') | (chunk == '{') | (chunk == '}');
+               std::uint64_t words[4];
+               std::memcpy(words, &hits, sizeof(words));
+               for (int w = 0; w < 4; ++w) {
+                  std::uint64_t bits = words[w];
+                  if constexpr (std::endian::native == std::endian::big) {
+                     bits = std::byteswap(bits);
+                  }
+                  if (bits) {
+                     p += w * 8 + (glz::countr_zero(bits) >> 3);
+                     return {p, end};
+                  }
+               }
+               p += 32;
+            }
+         }
+#endif
+         while (p + 8 <= end) {
+            uint64_t chunk{};
+            std::memcpy(&chunk, p, 8);
+            if constexpr (std::endian::native == std::endian::big) {
+               chunk = std::byteswap(chunk);
+            }
+            const uint64_t test = lazy_swar_any_bracket_mask(chunk);
+            if (test) {
+               p += (glz::countr_zero(test) >> 3);
+               return {p, end};
+            }
+            p += 8;
+         }
+         return {p, end};
+      }
+
+      template <auto Opts>
+      GLZ_ALWAYS_INLINE const char* skip_value_lazy(const char* p, const char* end) noexcept;
+
       // Skip from current position to depth zero (end of enclosing container)
-      // Used after partial scanning to find container end efficiently
-      template <opts Opts>
+      template <auto Opts>
       GLZ_ALWAYS_INLINE const char* skip_to_depth_zero(const char* p, const char* end, int depth) noexcept
       {
          using enum lazy_char_type;
          while (depth > 0) {
+            if constexpr (!Opts.null_terminated && lazy_swar_skip_active(Opts)) {
+               std::tie(p, end) = lazy_swar_advance_any_bracket<false>(p, end);
+            }
+
             if constexpr (Opts.null_terminated) {
                if (*p == '\0') break;
             }
-            else {
-               if (p >= end) break;
+            else if (p >= end) {
+               break;
             }
+
             switch (lazy_char_class[uint8_t(*p)]) {
             case quote:
                p = skip_string_fast<Opts>(p, end);
@@ -101,9 +175,8 @@ namespace glz
          return p;
       }
 
-      // Skip any JSON value - optimized container skip
-      // Returns pointer after the value
-      template <opts Opts>
+      // Skip any JSON value - upstream depth logic + SWAR pre-scan on end-bounded buffers
+      template <auto Opts>
       GLZ_ALWAYS_INLINE const char* skip_value_lazy(const char* p, const char* end) noexcept
       {
          using enum lazy_char_type;
@@ -127,12 +200,17 @@ namespace glz
             ++p;
 
             while (depth > 0) {
+               if constexpr (!Opts.null_terminated && lazy_swar_skip_active(Opts)) {
+                  std::tie(p, end) = lazy_swar_advance_any_bracket<false>(p, end);
+               }
+
                if constexpr (Opts.null_terminated) {
                   if (*p == '\0') break;
                }
-               else {
-                  if (p >= end) break;
+               else if (p >= end) {
+                  break;
                }
+
                switch (lazy_char_class[uint8_t(*p)]) {
                case quote:
                   p = skip_string_fast<Opts>(p, end);
@@ -184,7 +262,144 @@ namespace glz
          }
          }
       }
+
+      // Opt-in streaming cursor storage (see lazy_streaming_cursor_policy).
+      struct lazy_streaming_extent_disabled
+      {
+         static constexpr void clear() noexcept {}
+         static constexpr void set(const char*, const char*, const char*) noexcept {}
+         [[nodiscard]] static constexpr bool try_jump(const char*, const char*, const char*&) noexcept
+         {
+            return false;
+         }
+      };
+
+      // Shared extent slot: two OffsetT offsets. end_off == 0 means invalid.
+      // enabled uses size_t;
+      // packed policies use uint32_t on 64-bit (noop alias of enabled on 32-bit).
+      template <typename OffsetT, bool WithFallback>
+      struct lazy_streaming_extent
+      {
+         static_assert(std::is_unsigned_v<OffsetT> && !std::is_same_v<OffsetT, bool>);
+
+         OffsetT start_off{};
+         OffsetT end_off{};
+
+         void clear() noexcept { end_off = 0; }
+
+         void set(const char* base, const char* start, const char* end) noexcept
+         {
+            if (!base || start < base || end < start) [[unlikely]] {
+               clear();
+               return;
+            }
+            const auto start_off_val = static_cast<std::size_t>(start - base);
+            const auto end_off_val = static_cast<std::size_t>(end - base);
+            if (end_off_val == 0) [[unlikely]] {
+               clear();
+               return;
+            }
+            if constexpr (sizeof(OffsetT) < sizeof(std::size_t)) {
+               static constexpr auto k_max_off = (std::numeric_limits<OffsetT>::max)();
+               if (start_off_val > k_max_off || end_off_val > k_max_off) [[unlikely]] {
+                  if constexpr (WithFallback) {
+                     clear();
+                     return;
+                  }
+                  else {
+                     assert(start_off_val <= k_max_off && end_off_val <= k_max_off);
+                     clear();
+                     return;
+                  }
+               }
+            }
+            start_off = static_cast<OffsetT>(start_off_val);
+            end_off = static_cast<OffsetT>(end_off_val);
+         }
+
+         [[nodiscard]] bool try_jump(const char* base, const char* pos, const char*& out) noexcept
+         {
+            if (end_off == 0 || !base) [[unlikely]] {
+               return false;
+            }
+            const char* const start = base + start_off;
+            if (pos != start) [[unlikely]] {
+               return false;
+            }
+            out = base + end_off;
+            clear();
+            return true;
+         }
+      };
+
+      using lazy_streaming_extent_enabled = lazy_streaming_extent<std::size_t, false>;
+
+      template <bool WithFallback>
+      using lazy_streaming_extent_packed =
+         std::conditional_t<lazy_streaming_packed_is_enabled, lazy_streaming_extent_enabled,
+                            lazy_streaming_extent<std::uint32_t, WithFallback>>;
+
+      template <auto Opts>
+      struct lazy_streaming_slot_for
+      {
+         using type = lazy_streaming_extent_disabled;
+      };
+
+      template <auto Opts>
+         requires(get_lazy_streaming_cursor_policy(Opts) == lazy_streaming_cursor_policy::enabled)
+      struct lazy_streaming_slot_for<Opts>
+      {
+         using type = lazy_streaming_extent_enabled;
+      };
+
+      template <auto Opts>
+         requires(get_lazy_streaming_cursor_policy(Opts) == lazy_streaming_cursor_policy::packed)
+      struct lazy_streaming_slot_for<Opts>
+      {
+         using type = lazy_streaming_extent_packed<false>;
+      };
+
+      template <auto Opts>
+         requires(get_lazy_streaming_cursor_policy(Opts) == lazy_streaming_cursor_policy::packed_with_fallback)
+      struct lazy_streaming_slot_for<Opts>
+      {
+         using type = lazy_streaming_extent_packed<true>;
+      };
+
+      // Pure storage (no behavior) for lazy_json_view's per-value key + error — the key is
+      // only meaningful while iterating an object, the error only tags views from fallible
+      // lookups. The full layout holds both; the slim policy (lazy_slim_view) drops them
+      // entirely: the key moves onto the iterator and error state is derived from a null
+      // value pointer. The empty slim specialization occupies no space via
+      // GLZ_NO_UNIQUE_ADDRESS. The view owns the accessor logic (key()/error()/has_error()),
+      // so neither specialization needs stub getters/setters.
+      template <bool Slim>
+      struct lazy_view_meta
+      {
+         std::string_view key{};
+         error_code error{error_code::none};
+      };
+
+      template <>
+      struct lazy_view_meta<true>
+      {};
+
+      // Iterator-side key storage: empty under the full layout (the key lives on the stored
+      // element view, GLZ_NO_UNIQUE_ADDRESS), a single string_view under the slim layout
+      // (the value carries no key, so the iterator retains it).
+      template <bool Slim>
+      struct lazy_iter_key
+      {};
+
+      template <>
+      struct lazy_iter_key<true>
+      {
+         std::string_view key{};
+      };
    } // namespace detail
+
+   template <auto Opts>
+   using lazy_streaming_slot = typename detail::lazy_streaming_slot_for<Opts>::type;
 
    // ============================================================================
    // lazy_json_view - Truly lazy view with on-demand scanning
@@ -193,30 +408,47 @@ namespace glz
    /**
     * @brief A truly lazy view into JSON data.
     *
-    * No upfront processing - all navigation uses SWAR-accelerated scanning.
+    * No upfront processing - all navigation uses on-demand scanning.
     *
     * For objects, parse_pos_ tracks the current scan position to enable
     * efficient sequential key access (O(n) total instead of O(n²)).
     *
-    * Memory layout (48 bytes on 64-bit, 24 bytes on 32-bit):
-    * - doc_: pointer to document (8/4 bytes)
+    * Memory layout (full: 48 bytes on 64-bit, 24 bytes on 32-bit):
+    * - doc_: pointer to owning lazy_document (8/4 bytes). Optional: may be null for
+    *   detached subviews constructed via lazy_json_view(nullptr, data) on null-terminated
+    *   buffers. Views from lazy_json() always set doc_ to the owning document.
+    *   The streaming cursor slot (consumed_) lives on lazy_document, so extent
+    *   record/jump is skipped when doc_ is null.
     * - data_: pointer to value start in JSON (8/4 bytes)
     * - parse_pos_: current scan position for progressive parsing (8/4 bytes)
-    * - key_: stored key for iteration (16/8 bytes - string_view)
-    * - error_: error code (4 bytes)
-    * - padding: 4/0 bytes
+    * - meta_: key (16/8-byte string_view) + error_code + padding (see lazy_view_meta).
+    *
+    * Under the slim policy (lazy_slim_view = true on the opts) meta_ is empty and the
+    * value shrinks to 24/12 bytes (the three pointers): the object key moves onto the
+    * iterator and errors are signalled by a null data_. See lazy_slim_view_active.
     */
-   template <opts Opts = opts{}>
+   template <auto Opts = opts{}>
    struct lazy_json_view
    {
      private:
+      static constexpr bool slim_ = lazy_slim_view_active(Opts);
+
       const lazy_document<Opts>* doc_{};
       const char* data_{};
       mutable const char* parse_pos_{}; // Current scan position (advances on key access)
-      std::string_view key_{};
-      error_code error_{error_code::none};
 
-      lazy_json_view(error_code ec) noexcept : error_(ec) {}
+      // Key + error channel. Full (default) layout carries both on the value; under the
+      // slim policy (lazy_slim_view) this is empty and the accessors below derive their
+      // answers instead — see lazy_view_meta.
+      GLZ_NO_UNIQUE_ADDRESS detail::lazy_view_meta<slim_> meta_{};
+
+      lazy_json_view(error_code ec) noexcept
+      {
+         // Slim: an error view is simply one with a null data_ (the default), nothing to store.
+         if constexpr (!slim_) {
+            meta_.error = ec;
+         }
+      }
 
      public:
       lazy_json_view() = default;
@@ -224,8 +456,24 @@ namespace glz
 
       [[nodiscard]] static lazy_json_view make_error(error_code ec) noexcept { return lazy_json_view{ec}; }
 
-      [[nodiscard]] bool has_error() const noexcept { return error_ != error_code::none; }
-      [[nodiscard]] error_code error() const noexcept { return error_; }
+      [[nodiscard]] bool has_error() const noexcept
+      {
+         if constexpr (slim_) {
+            return !data_;
+         }
+         else {
+            return meta_.error != error_code::none;
+         }
+      }
+      [[nodiscard]] error_code error() const noexcept
+      {
+         if constexpr (slim_) {
+            return data_ ? error_code::none : error_code::unexpected_end;
+         }
+         else {
+            return meta_.error;
+         }
+      }
 
       // Type checking - direct from JSON byte
       [[nodiscard]] bool is_null() const noexcept { return has_error() || !data_ || *data_ == 'n'; }
@@ -244,7 +492,14 @@ namespace glz
       explicit operator bool() const noexcept { return !has_error() && data_ && *data_ != 'n'; }
 
       [[nodiscard]] const char* data() const noexcept { return data_; }
+      [[nodiscard]] const lazy_document<Opts>* document() const noexcept { return doc_; }
       [[nodiscard]] const char* json_end() const noexcept;
+
+      // Progressive object-scan cursor accessors. Exposed so an external handle
+      // can persist/restore the in-order field-scan position across reconstructed
+      // views (keeps sequential key access O(n) total rather than O(n^2)).
+      [[nodiscard]] const char* parse_pos() const noexcept { return parse_pos_; }
+      void set_parse_pos(const char* p) const noexcept { parse_pos_ = p; }
 
       /// @brief Get the raw JSON bytes for this value
       /// @return string_view of the raw JSON, or empty if error
@@ -266,7 +521,7 @@ namespace glz
       [[nodiscard]] error_ctx read_into(T& value) const
       {
          if (has_error()) {
-            return error_ctx{0, error_};
+            return error_ctx{0, error()};
          }
          if (!data_) {
             return error_ctx{0, error_code::unexpected_end};
@@ -281,6 +536,15 @@ namespace glz
          if (bool(ctx.error)) {
             return error_ctx{static_cast<size_t>(it - data_), ctx.error};
          }
+         // Streaming cursor: the value spans [data_, it). Record it so a
+         // subsequent iterator advance over this element can jump instead of
+         // re-scanning. (parse<JSON>::op leaves `it` at the value end.)
+         if constexpr (lazy_streaming_cursor_active(Opts)) {
+            // doc_ is null only for detached subviews; lazy_json()-backed views always have doc_.
+            if (doc_) [[likely]] {
+               doc_->consumed_.set(doc_->json_data(), data_, it);
+            }
+         }
          return {};
       }
 
@@ -293,8 +557,17 @@ namespace glz
       [[nodiscard]] size_t size() const;
       [[nodiscard]] bool empty() const noexcept;
 
-      // Key access for object iteration
-      [[nodiscard]] std::string_view key() const noexcept { return key_; }
+      // Key access for object iteration. Under the slim policy the value does not carry
+      // its key (returns {}); use the iterator's key() during traversal instead.
+      [[nodiscard]] std::string_view key() const noexcept
+      {
+         if constexpr (slim_) {
+            return {};
+         }
+         else {
+            return meta_.key;
+         }
+      }
 
       [[nodiscard]] lazy_iterator<Opts> begin() const;
       [[nodiscard]] lazy_iterator<Opts> end() const;
@@ -309,10 +582,15 @@ namespace glz
       friend struct indexed_lazy_view<Opts>;
       friend class indexed_lazy_iterator<Opts>;
 
-      // Constructor with key for iteration
+      // Constructor with key for iteration. Under the slim policy the key is not stored on
+      // the value (it stays on the iterator).
       lazy_json_view(const lazy_document<Opts>* doc, const char* data, std::string_view key) noexcept
-         : doc_(doc), data_(data), key_(key)
-      {}
+         : doc_(doc), data_(data)
+      {
+         if constexpr (!slim_) {
+            meta_.key = key;
+         }
+      }
 
       // Skip whitespace helper
       // Note: The minified option is not used here because branch prediction
@@ -336,7 +614,7 @@ namespace glz
    // lazy_document - Minimal container, no upfront processing
    // ============================================================================
 
-   template <opts Opts = opts{}>
+   template <auto Opts = opts{}>
    struct lazy_document
    {
      private:
@@ -345,11 +623,14 @@ namespace glz
       const char* root_data_{};
       mutable lazy_json_view<Opts> root_view_{}; // Cached root view with parse_pos_
 
+      // Opt-in streaming cursor (see lazy_streaming_cursor_policy). Default off → empty disabled type.
+      GLZ_NO_UNIQUE_ADDRESS mutable lazy_streaming_slot<Opts> consumed_{};
+
       friend struct lazy_json_view<Opts>;
       friend class lazy_iterator<Opts>;
 
       // Factory method for lazy_json
-      template <opts O, class Buffer>
+      template <auto O, class Buffer>
       friend expected<lazy_document<O>, error_ctx> lazy_json(Buffer&&);
 
       // Helper to initialize root_view_ with correct doc_ pointer
@@ -359,7 +640,8 @@ namespace glz
       lazy_document() = default;
 
       // Copy constructor - fix doc_ pointer and preserve parse_pos_
-      lazy_document(const lazy_document& other) : json_(other.json_), len_(other.len_), root_data_(other.root_data_)
+      lazy_document(const lazy_document& other)
+         : json_(other.json_), len_(other.len_), root_data_(other.root_data_), consumed_(other.consumed_)
       {
          init_root_view();
          root_view_.parse_pos_ = other.root_view_.parse_pos_;
@@ -371,6 +653,7 @@ namespace glz
             json_ = other.json_;
             len_ = other.len_;
             root_data_ = other.root_data_;
+            consumed_ = other.consumed_;
             init_root_view();
             root_view_.parse_pos_ = other.root_view_.parse_pos_;
          }
@@ -378,7 +661,8 @@ namespace glz
       }
 
       // Move constructor - fix doc_ pointer and transfer parse_pos_
-      lazy_document(lazy_document&& other) noexcept : json_(other.json_), len_(other.len_), root_data_(other.root_data_)
+      lazy_document(lazy_document&& other) noexcept
+         : json_(other.json_), len_(other.len_), root_data_(other.root_data_), consumed_(other.consumed_)
       {
          init_root_view();
          root_view_.parse_pos_ = other.root_view_.parse_pos_;
@@ -390,6 +674,7 @@ namespace glz
             json_ = other.json_;
             len_ = other.len_;
             root_data_ = other.root_data_;
+            consumed_ = other.consumed_;
             init_root_view();
             root_view_.parse_pos_ = other.root_view_.parse_pos_;
          }
@@ -421,16 +706,21 @@ namespace glz
    // lazy_iterator - Forward iterator with lazy scanning
    // ============================================================================
 
-   template <opts Opts>
+   template <auto Opts>
    class lazy_iterator
    {
      private:
       const lazy_document<Opts>* doc_{};
       const char* json_end_{};
+      const char* container_start_{}; // '[' / '{' of the container being iterated
       char close_char_{};
       bool is_object_{};
       bool at_end_{true};
       lazy_json_view<Opts> current_view_{}; // Stored view for parse_pos_ optimization
+
+      // Slim policy only: the value no longer carries its key, so the iterator retains
+      // the current element's key here. Empty (zero-size) under the full layout.
+      GLZ_NO_UNIQUE_ADDRESS detail::lazy_iter_key<lazy_slim_view_active(Opts)> iter_key_{};
 
      public:
       using iterator_category = std::forward_iterator_tag;
@@ -446,6 +736,18 @@ namespace glz
       // Return reference to stored view - allows parse_pos_ optimization when user uses auto&
       reference operator*() { return current_view_; }
       const lazy_json_view<Opts>& operator*() const { return current_view_; }
+
+      // Current element's object key (empty for arrays). Works under both value layouts:
+      // the full layout reads it back from the stored view, the slim layout from iter_key_.
+      [[nodiscard]] std::string_view key() const noexcept
+      {
+         if constexpr (lazy_slim_view_active(Opts)) {
+            return iter_key_.key;
+         }
+         else {
+            return current_view_.key();
+         }
+      }
 
       lazy_iterator& operator++();
 
@@ -489,7 +791,7 @@ namespace glz
     *
     * Memory: Base view + 8 bytes per element (+ 16 bytes per element for objects with keys)
     */
-   template <opts Opts>
+   template <auto Opts>
    struct indexed_lazy_view
    {
      private:
@@ -582,7 +884,7 @@ namespace glz
    // indexed_lazy_iterator - O(1) advancement using pre-built index
    // ============================================================================
 
-   template <opts Opts>
+   template <auto Opts>
    class indexed_lazy_iterator
    {
      private:
@@ -611,6 +913,13 @@ namespace glz
       {
          operator*(); // Update current_view_
          return &current_view_;
+      }
+
+      // Current element's object key (empty for arrays). Read from the parent's key
+      // index, so it works under both value layouts (slim value carries no key).
+      [[nodiscard]] std::string_view key() const noexcept
+      {
+         return parent_->is_object_ ? parent_->keys_[index_] : std::string_view{};
       }
 
       indexed_lazy_iterator& operator++()
@@ -689,13 +998,13 @@ namespace glz
    // Implementation: lazy_json_view methods (truly lazy - no structural index)
    // ============================================================================
 
-   template <opts Opts>
+   template <auto Opts>
    inline const char* lazy_json_view<Opts>::json_end() const noexcept
    {
       return doc_ ? doc_->json_ + doc_->len_ : nullptr;
    }
 
-   template <opts Opts>
+   template <auto Opts>
    inline std::string_view lazy_json_view<Opts>::parse_key(const char*& p, const char* end) noexcept
    {
       // A non-null-terminated buffer has no '\0' sentinel, so a scan loop can reach the next
@@ -735,7 +1044,7 @@ namespace glz
       return std::string_view{key_start, static_cast<size_t>(p - key_start)};
    }
 
-   template <opts Opts>
+   template <auto Opts>
    inline lazy_json_view<Opts> lazy_json_view<Opts>::operator[](size_t index) const
    {
       if (has_error()) return *this;
@@ -769,7 +1078,7 @@ namespace glz
       return {doc_, p};
    }
 
-   template <opts Opts>
+   template <auto Opts>
    inline lazy_json_view<Opts> lazy_json_view<Opts>::operator[](std::string_view key) const
    {
       if (has_error()) return *this;
@@ -881,14 +1190,14 @@ namespace glz
       return make_error(error_code::key_not_found);
    }
 
-   template <opts Opts>
+   template <auto Opts>
    inline bool lazy_json_view<Opts>::contains(std::string_view key) const
    {
       auto result = (*this)[key];
       return !result.has_error();
    }
 
-   template <opts Opts>
+   template <auto Opts>
    inline size_t lazy_json_view<Opts>::size() const
    {
       if (has_error() || !data_) return 0;
@@ -940,7 +1249,7 @@ namespace glz
       }
    }
 
-   template <opts Opts>
+   template <auto Opts>
    inline bool lazy_json_view<Opts>::empty() const noexcept
    {
       if (has_error() || !data_) return true;
@@ -962,10 +1271,10 @@ namespace glz
    // lazy_iterator implementation (truly lazy)
    // ============================================================================
 
-   template <opts Opts>
+   template <auto Opts>
    inline lazy_iterator<Opts>::lazy_iterator(const lazy_document<Opts>* doc, const char* container_start,
                                              const char* end, bool is_object)
-      : doc_(doc), json_end_(end), is_object_(is_object), at_end_(false)
+      : doc_(doc), json_end_(end), container_start_(container_start), is_object_(is_object), at_end_(false)
    {
       close_char_ = is_object ? '}' : ']';
       const char* pos = container_start + 1; // skip '[' or '{'
@@ -975,12 +1284,23 @@ namespace glz
       if constexpr (Opts.null_terminated) {
          if (*pos == close_char_) {
             at_end_ = true;
+            if constexpr (lazy_streaming_cursor_active(Opts)) {
+               if (doc_) [[likely]] {
+                  doc_->consumed_.set(doc_->json_data(), container_start_, pos + 1);
+               }
+            }
             return;
          }
       }
       else {
          if (pos >= json_end_ || *pos == close_char_) {
             at_end_ = true;
+            if constexpr (lazy_streaming_cursor_active(Opts)) {
+               if (doc_) [[likely]] {
+                  doc_->consumed_.set(doc_->json_data(), container_start_,
+                                      (pos < json_end_) ? pos + 1 : pos);
+               }
+            }
             return;
          }
       }
@@ -989,7 +1309,7 @@ namespace glz
       advance_to_next_element(pos);
    }
 
-   template <opts Opts>
+   template <auto Opts>
    inline void lazy_iterator<Opts>::advance_to_next_element(const char*& pos)
    {
       std::string_view key{};
@@ -1015,44 +1335,67 @@ namespace glz
          at_end_ = true;
          return;
       }
-      // Store key in current_view_ (will be set properly after this call)
+      // Full layout stores the key on the view; slim layout keeps it on the iterator.
       current_view_ = lazy_json_view<Opts>{doc_, pos, key};
+      if constexpr (lazy_slim_view_active(Opts)) {
+         iter_key_.key = key;
+      }
    }
 
-   template <opts Opts>
+   template <auto Opts>
    inline lazy_iterator<Opts>& lazy_iterator<Opts>::operator++()
    {
       if (at_end_) return *this;
 
       const char* pos = current_view_.data();
 
-      // Optimization: if user accessed fields via operator[], parse_pos_ tells us how far we scanned
-      // We can skip from there instead of re-scanning the entire element
-      // Note: check current_view_.is_object(), not is_object_ (which is about the container)
-      if (current_view_.is_object() && current_view_.parse_pos_ && current_view_.parse_pos_ > pos) {
-         // Skip the last accessed value, then scan to end of object
-         pos = current_view_.parse_pos_;
-         pos = detail::skip_value_lazy<Opts>(pos, json_end_);
-         // Skip remaining content until we close this object (depth 1 -> 0)
-         pos = detail::skip_to_depth_zero<Opts>(pos, json_end_, 1);
+      bool jumped = false;
+      if constexpr (lazy_streaming_cursor_active(Opts)) {
+         if (doc_) [[likely]] {
+            jumped = doc_->consumed_.try_jump(doc_->json_data(), pos, pos);
+         }
       }
-      else {
-         // No optimization possible, skip entire value
-         pos = detail::skip_value_lazy<Opts>(pos, json_end_);
+      if (!jumped) {
+         // Optimization: if user accessed fields via operator[], parse_pos_ tells us how far we scanned
+         // We can skip from there instead of re-scanning the entire element
+         // Note: check current_view_.is_object(), not is_object_ (which is about the container)
+         if (current_view_.is_object() && current_view_.parse_pos_ && current_view_.parse_pos_ > pos) {
+            // Skip the last accessed value, then scan to end of object
+            pos = current_view_.parse_pos_;
+            pos = detail::skip_value_lazy<Opts>(pos, json_end_);
+            // Skip remaining content until we close this object (depth 1 -> 0)
+            pos = detail::skip_to_depth_zero<Opts>(pos, json_end_, 1);
+         }
+         else {
+            // No optimization possible, skip entire value
+            pos = detail::skip_value_lazy<Opts>(pos, json_end_);
+         }
       }
 
       skip_ws(pos);
 
-      // Check for end
+      // Check for end — and record this container's full extent so a parent
+      // iterator advancing over us can jump (self-composing streaming cursor).
       if constexpr (Opts.null_terminated) {
          if (*pos == close_char_) {
             at_end_ = true;
+            if constexpr (lazy_streaming_cursor_active(Opts)) {
+               if (doc_) [[likely]] {
+                  doc_->consumed_.set(doc_->json_data(), container_start_, pos + 1);
+               }
+            }
             return *this;
          }
       }
       else {
          if (pos >= json_end_ || *pos == close_char_) {
             at_end_ = true;
+            if constexpr (lazy_streaming_cursor_active(Opts)) {
+               if (doc_) [[likely]] {
+                  doc_->consumed_.set(doc_->json_data(), container_start_,
+                                      (pos < json_end_) ? pos + 1 : pos);
+               }
+            }
             return *this;
          }
       }
@@ -1069,7 +1412,7 @@ namespace glz
       return *this;
    }
 
-   template <opts Opts>
+   template <auto Opts>
    inline lazy_iterator<Opts> lazy_json_view<Opts>::begin() const
    {
       if (has_error() || !data_) return end();
@@ -1077,7 +1420,7 @@ namespace glz
       return lazy_iterator<Opts>{doc_, data_, json_end(), is_object()};
    }
 
-   template <opts Opts>
+   template <auto Opts>
    inline lazy_iterator<Opts> lazy_json_view<Opts>::end() const
    {
       return lazy_iterator<Opts>{};
@@ -1087,13 +1430,13 @@ namespace glz
    // indexed_lazy_view implementation
    // ============================================================================
 
-   template <opts Opts>
+   template <auto Opts>
    inline indexed_lazy_iterator<Opts> indexed_lazy_view<Opts>::begin() const
    {
       return indexed_lazy_iterator<Opts>{this, 0};
    }
 
-   template <opts Opts>
+   template <auto Opts>
    inline indexed_lazy_iterator<Opts> indexed_lazy_view<Opts>::end() const
    {
       return indexed_lazy_iterator<Opts>{this, value_starts_.size()};
@@ -1103,7 +1446,7 @@ namespace glz
    // lazy_json_view::index() implementation
    // ============================================================================
 
-   template <opts Opts>
+   template <auto Opts>
    inline indexed_lazy_view<Opts> lazy_json_view<Opts>::index() const
    {
       // Return empty indexed view for non-containers or errors
@@ -1172,12 +1515,12 @@ namespace glz
    // lazy_json_view::get<T>() implementation
    // ============================================================================
 
-   template <opts Opts>
+   template <auto Opts>
    template <class T>
    [[nodiscard]] inline expected<T, error_ctx> lazy_json_view<Opts>::get() const
    {
       if (has_error()) {
-         return unexpected(error_ctx{0, error_});
+         return unexpected(error_ctx{0, error()});
       }
 
       const char* end = json_end();
@@ -1282,7 +1625,7 @@ namespace glz
    // JSON writer for lazy_json_view
    // ============================================================================
 
-   template <opts Opts>
+   template <auto Opts>
    struct to<JSON, lazy_json_view<Opts>>
    {
       template <auto WriteOpts, class B>
@@ -1336,7 +1679,7 @@ namespace glz
     * @param buffer The JSON text buffer (must remain valid for document lifetime)
     * @return lazy_document on success, error_ctx on failure
     */
-   template <opts Opts = opts{}, class Buffer>
+   template <auto Opts = opts{}, class Buffer>
    [[nodiscard]] inline expected<lazy_document<Opts>, error_ctx> lazy_json(Buffer&& buffer)
    {
       lazy_document<Opts> doc;

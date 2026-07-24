@@ -2,6 +2,7 @@
 // For the license information refer to glaze.hpp
 
 #include "glaze/json.hpp"
+#include "glaze/core/lazy_streaming_cursor_policy.hpp"
 #include "ut/ut.hpp"
 
 using namespace ut;
@@ -30,6 +31,47 @@ struct Item
    int id{};
    std::string value{};
 };
+
+struct LazyRow
+{
+   int a{};
+   int b{};
+};
+
+struct LazyItem
+{
+   int id{};
+   std::string name{};
+};
+
+struct lazy_streaming_enabled_opts : glz::opts
+{
+   glz::lazy_streaming_cursor_policy lazy_streaming_cursor = glz::lazy_streaming_cursor_policy::enabled;
+};
+
+struct lazy_streaming_disabled_opts : glz::opts
+{
+   glz::lazy_streaming_cursor_policy lazy_streaming_cursor = glz::lazy_streaming_cursor_policy::disabled;
+};
+
+struct lazy_streaming_packed_opts : glz::opts
+{
+   glz::lazy_streaming_cursor_policy lazy_streaming_cursor =
+      glz::lazy_streaming_cursor_policy::packed_with_fallback;
+};
+
+// End-bounded (non-null-terminated) buffer + streaming cursor enabled — mirrors a
+// downstream consumer that feeds bounded string_views and opts in the cursor.
+struct lazy_end_bounded_cursor_opts : glz::opts
+{
+   bool null_terminated = false;
+   glz::lazy_streaming_cursor_policy lazy_streaming_cursor = glz::lazy_streaming_cursor_policy::enabled;
+};
+
+inline constexpr lazy_streaming_enabled_opts kLazyStreamingEnabled{};
+inline constexpr lazy_streaming_disabled_opts kLazyStreamingDisabled{};
+inline constexpr lazy_streaming_packed_opts kLazyStreamingPacked{};
+inline constexpr lazy_end_bounded_cursor_opts kLazyEndBoundedCursor{};
 
 struct MinimalUser
 {
@@ -1580,6 +1622,72 @@ suite dynamic_key_custom_tests = [] {
       expect((*result).root().size() == 1u); // '@' scalar, then bounded by json_end_
       expect((*result).root().index().size() == 1u);
       expect((*result).root()[1].has_error()); // nothing past the lone scalar
+   };
+
+   "lazy_streaming_cursor_read_into_row_loop"_test = [] {
+      std::string buffer = R"({"rows":[{"a":1,"b":2},{"a":3,"b":4},{"a":5,"b":6}]})";
+      auto result = glz::lazy_json<kLazyStreamingEnabled>(buffer);
+      expect(result.has_value());
+
+      std::int64_t sum{};
+      for (auto& row : (*result)["rows"]) {
+         LazyRow parsed{};
+         expect(not row.read_into(parsed));
+         sum += parsed.a + parsed.b;
+      }
+      expect(sum == 21);
+   };
+
+   "lazy_streaming_cursor_disabled_matches_default"_test = [] {
+      std::string buffer = R"({"rows":[{"a":1},{"a":2}]})";
+      auto result = glz::lazy_json<kLazyStreamingDisabled>(buffer);
+      expect(result.has_value());
+
+      std::int64_t sum{};
+      for (auto& row : (*result)["rows"]) {
+         expect(row["a"].get<int64_t>().value() == ++sum);
+      }
+      expect(sum == 2);
+   };
+
+   "lazy_streaming_packed_with_fallback_policy"_test = [] {
+      std::string buffer = R"({"items":[{"id":1,"name":"alpha"},{"id":2,"name":"beta"}]})";
+      auto result = glz::lazy_json<kLazyStreamingPacked>(buffer);
+      expect(result.has_value());
+
+      std::int64_t checksum{};
+      for (auto& item : (*result)["items"]) {
+         LazyItem row{};
+         expect(not item.read_into(row));
+         checksum += row.id + static_cast<std::int64_t>(row.name.size());
+      }
+      // (id 1 + "alpha" 5) + (id 2 + "beta" 4) = 12. This test previously never
+      // exercised the cursor (it was compiled out by opts NTTP slicing), so the
+      // stale expectation went unnoticed.
+      expect(checksum == 12);
+   };
+
+   "lazy_json_out_of_order_keys_end_bounded_cursor"_test = [] {
+      // Object field access must be order-independent (forward + wrap-around) and
+      // must never over-read a bounded (non-null-terminated) buffer regardless of
+      // the order keys are requested in. Exercises the end-bounded skip path with
+      // the streaming cursor enabled, and a trailing non-JSON tail after '}' to
+      // catch any read past json_end().
+      std::string backing = R"({"a":10,"b":20,"c":30,"d":40}TRAILING_NON_JSON_TAIL)";
+      const std::string_view json{backing.data(), backing.find('}') + 1};
+
+      auto result = glz::lazy_json<kLazyEndBoundedCursor>(json);
+      expect(result.has_value());
+      auto& doc = *result;
+
+      // Last field first forces the wrap-around pass; then earlier fields, a repeat,
+      // and an absent key.
+      expect(doc["d"].get<int64_t>().value() == 40);
+      expect(doc["a"].get<int64_t>().value() == 10);
+      expect(doc["c"].get<int64_t>().value() == 30);
+      expect(doc["b"].get<int64_t>().value() == 20);
+      expect(doc["a"].get<int64_t>().value() == 10); // repeat resolves the same value
+      expect(doc["missing_key"].has_error());        // absent key: reported, not a false hit
    };
 };
 

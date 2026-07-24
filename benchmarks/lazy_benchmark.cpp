@@ -4,6 +4,7 @@
 
 #include "bencher/bencher.hpp"
 #include "bencher/diagnostics.hpp"
+#include "glaze/core/lazy_streaming_cursor_policy.hpp"
 #include "glaze/json.hpp"
 
 // Struct for deserialization benchmarks
@@ -491,6 +492,68 @@ int main()
             if (!ec) sum += u.score;
          }
          if (sum != 45000) std::abort();
+         return large_json.size();
+      });
+
+      bencher::print_results(stage);
+   }
+
+   // ========================================================================
+   // Benchmark: streaming cursor enabled (read_into + forward iteration)
+   // ========================================================================
+   {
+      struct streaming_opts : glz::opts {
+         glz::lazy_streaming_cursor_policy lazy_streaming_cursor =
+            glz::lazy_streaming_cursor_policy::enabled;
+      };
+      static constexpr streaming_opts kStreaming{};
+
+      bencher::stage stage;
+      stage.name = "Streaming cursor ON (enabled) — read_into + iteration";
+
+      stage.run("read_into() streaming OFF (default opts)", [&] {
+         auto result = glz::lazy_json(large_json);
+         auto users = (*result)["users"];
+         int64_t sum = 0;
+         size_t count = 0;
+         for (auto& user : users) {
+            BenchUser u{};
+            auto ec = user.read_into(u);
+            if (!ec) {
+               sum += u.score;
+               ++count;
+            }
+         }
+         if (sum != 4995000 || count != 1000) std::abort();
+         return large_json.size();
+      });
+
+      stage.run("read_into() streaming ON (enabled)", [&] {
+         auto result = glz::lazy_json<kStreaming>(large_json);
+         auto users = (*result)["users"];
+         int64_t sum = 0;
+         size_t count = 0;
+         for (auto& user : users) {
+            BenchUser u{};
+            auto ec = user.read_into(u);
+            if (!ec) {
+               sum += u.score;
+               ++count;
+            }
+         }
+         if (sum != 4995000 || count != 1000) std::abort();
+         return large_json.size();
+      });
+
+      stage.run("Iterate All & Sum Scores (iterator)", [&] {
+         auto result = glz::lazy_json<kStreaming>(large_json);
+         auto users = (*result)["users"];
+         int64_t sum = 0;
+         for (auto& user : users) {
+            auto score = user["score"].get<int64_t>();
+            if (score) sum += *score;
+         }
+         if (sum != 4995000) std::abort();
          return large_json.size();
       });
 
