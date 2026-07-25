@@ -355,15 +355,30 @@ namespace glz
          requires(map_like_array && check_concatenate(Opts) == true)
       [[nodiscard]] static size_t op(auto&& value, size_t offset = 0)
       {
-         size_t result = 1; // tag byte
-         result += compressed_int_size(value.size()); // element count
+         using Key = typename range_value_t<std::decay_t<T>>::first_type;
+         if constexpr (beve_key_traits<Key>::native) {
+            size_t result = 1; // tag byte
+            result += compressed_int_size(value.size()); // element count
 
-         for (auto&& [k, v] : value) {
-            result += calculate_size<BEVE, void>::template no_header<Opts>(k, offset + result);
-            result += calculate_size<BEVE, void>::template op<Opts>(v, offset + result);
+            for (auto&& [k, v] : value) {
+               result += calculate_size<BEVE, void>::template no_header<Opts>(k, offset + result);
+               result += calculate_size<BEVE, void>::template op<Opts>(v, offset + result);
+            }
+
+            return result;
          }
+         else {
+            // Non-native key: sized as a generic array of [key, value] entries (each entry matches
+            // std::tuple<Key, Value>).
+            size_t result = 1; // generic_array tag
+            result += compressed_int_size(value.size()); // element count
 
-         return result;
+            for (auto&& entry : value) {
+               result += calculate_size<BEVE, void>::template op<Opts>(entry, offset + result);
+            }
+
+            return result;
+         }
       }
    };
 
@@ -373,14 +388,28 @@ namespace glz
       template <auto Opts>
       [[nodiscard]] GLZ_ALWAYS_INLINE static size_t op(auto&& value, size_t offset = 0)
       {
-         size_t result = 1; // tag byte
-         result += compressed_int_size<1>(); // count = 1
+         using Key = typename T::first_type;
+         if constexpr (beve_key_traits<Key>::native) {
+            size_t result = 1; // tag byte
+            result += compressed_int_size<1>(); // count = 1
 
-         const auto& [k, v] = value;
-         result += calculate_size<BEVE, void>::template no_header<Opts>(k, offset + result);
-         result += calculate_size<BEVE, void>::template op<Opts>(v, offset + result);
+            const auto& [k, v] = value;
+            result += calculate_size<BEVE, void>::template no_header<Opts>(k, offset + result);
+            result += calculate_size<BEVE, void>::template op<Opts>(v, offset + result);
 
-         return result;
+            return result;
+         }
+         else {
+            // Non-native key: sized as a generic array [key, value] (matches std::tuple<Key, Value>).
+            size_t result = 1; // generic_array tag
+            result += compressed_int_size<2>(); // count = 2
+
+            const auto& [k, v] = value;
+            result += calculate_size<BEVE, void>::template op<Opts>(k, offset + result);
+            result += calculate_size<BEVE, void>::template op<Opts>(v, offset + result);
+
+            return result;
+         }
       }
    };
 
@@ -390,15 +419,30 @@ namespace glz
       template <auto Opts>
       [[nodiscard]] static size_t op(auto&& value, size_t offset = 0)
       {
-         size_t result = 1; // tag byte
-         result += compressed_int_size(value.size()); // element count
+         using Key = typename T::key_type;
+         if constexpr (beve_key_traits<Key>::native) {
+            size_t result = 1; // tag byte
+            result += compressed_int_size(value.size()); // element count
 
-         for (auto&& [k, v] : value) {
-            result += calculate_size<BEVE, void>::template no_header<Opts>(k, offset + result);
-            result += calculate_size<BEVE, void>::template op<Opts>(v, offset + result);
+            for (auto&& [k, v] : value) {
+               result += calculate_size<BEVE, void>::template no_header<Opts>(k, offset + result);
+               result += calculate_size<BEVE, void>::template op<Opts>(v, offset + result);
+            }
+
+            return result;
          }
+         else {
+            // Non-native key: sized as a generic array of [key, value] entries (each entry matches
+            // std::tuple<Key, Value>).
+            size_t result = 1; // generic_array tag
+            result += compressed_int_size(value.size()); // element count
 
-         return result;
+            for (auto&& entry : value) {
+               result += calculate_size<BEVE, void>::template op<Opts>(entry, offset + result);
+            }
+
+            return result;
+         }
       }
    };
 
