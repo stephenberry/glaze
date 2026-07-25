@@ -1,3 +1,6 @@
+#include <cstdint>
+#include <cstring>
+#include <random>
 #include <string>
 #include <vector>
 
@@ -305,6 +308,107 @@ suite utf8_stream_validation_tests = [] {
 
       expect(validator.consume("ok", 2));
       expect(validator.complete());
+   };
+};
+
+// Independent scalar reference, intentionally unrelated to glz's implementations, used to
+// cross-check glz::validate_utf8 (which dispatches to the SIMD range validator for buffers
+// >= 512 bytes). Running this on CI verifies the NEON / AVX2 / SSSE3 / scalar paths agree.
+namespace
+{
+   bool reference_validate_utf8(const uint8_t* it, const uint8_t* end) noexcept
+   {
+      while (it < end) {
+         const uint8_t b = *it;
+         if (b < 0x80) {
+            ++it;
+         }
+         else if ((b & 0xE0) == 0xC0) {
+            if (it + 2 > end || (it[1] & 0xC0) != 0x80 || b < 0xC2) return false;
+            it += 2;
+         }
+         else if ((b & 0xF0) == 0xE0) {
+            if (it + 3 > end || (it[1] & 0xC0) != 0x80 || (it[2] & 0xC0) != 0x80) return false;
+            if (b == 0xE0 && it[1] < 0xA0) return false;
+            if (b == 0xED && it[1] >= 0xA0) return false;
+            it += 3;
+         }
+         else if ((b & 0xF8) == 0xF0) {
+            if (it + 4 > end || (it[1] & 0xC0) != 0x80 || (it[2] & 0xC0) != 0x80 || (it[3] & 0xC0) != 0x80)
+               return false;
+            if (b == 0xF0 && it[1] < 0x90) return false;
+            if (b == 0xF4 && it[1] >= 0x90) return false;
+            if (b > 0xF4) return false;
+            it += 4;
+         }
+         else {
+            return false;
+         }
+      }
+      return true;
+   }
+
+   void append_codepoint(std::vector<uint8_t>& v, uint32_t cp)
+   {
+      if (cp < 0x80) {
+         v.push_back(uint8_t(cp));
+      }
+      else if (cp < 0x800) {
+         v.push_back(uint8_t(0xC0 | (cp >> 6)));
+         v.push_back(uint8_t(0x80 | (cp & 0x3F)));
+      }
+      else if (cp < 0x10000) {
+         v.push_back(uint8_t(0xE0 | (cp >> 12)));
+         v.push_back(uint8_t(0x80 | ((cp >> 6) & 0x3F)));
+         v.push_back(uint8_t(0x80 | (cp & 0x3F)));
+      }
+      else {
+         v.push_back(uint8_t(0xF0 | (cp >> 18)));
+         v.push_back(uint8_t(0x80 | ((cp >> 12) & 0x3F)));
+         v.push_back(uint8_t(0x80 | ((cp >> 6) & 0x3F)));
+         v.push_back(uint8_t(0x80 | (cp & 0x3F)));
+      }
+   }
+}
+
+suite utf8_simd_differential_tests = [] {
+   // Cross-check the production validate_utf8 (SIMD-dispatched for >= 512 bytes) against the
+   // independent reference across many sizes, weighting the buffers around the 512-byte
+   // threshold and exercising valid multibyte text, truncated sequences, and invalid bytes.
+   "utf8_validate_matches_reference"_test = [] {
+      std::mt19937_64 rng(0x9E3779B97F4A7C15ull);
+      static constexpr uint8_t palette[] = {0x00, 0x41, 0x7F, 0x80, 0x9F, 0xA0, 0xBF, 0xC0, 0xC1, 0xC2, 0xDF,
+                                            0xE0, 0xED, 0xEE, 0xEF, 0xF0, 0xF4, 0xF5, 0xF7, 0xF8, 0xFF};
+      static constexpr uint32_t code_points[] = {0x24,   0xA2,   0x7F,    0x80,    0x7FF,   0x800,  0xD7FF,
+                                                 0xE000, 0xFFFD, 0x10000, 0x10FFFF, 0xD800, 0xDFFF, 0x110000};
+
+      std::vector<uint8_t> buf;
+      std::uint64_t mismatches = 0;
+      for (int i = 0; i < 300000; ++i) {
+         buf.clear();
+         // Sizes span the 512-byte SIMD threshold (mostly 0..1100, with some larger).
+         const size_t target = (i % 4 == 0) ? (rng() % 2200) : (350 + rng() % 400);
+         while (buf.size() < target) {
+            const uint32_t r = rng() % 16;
+            if (r < 2) {
+               append_codepoint(buf, code_points[rng() % (sizeof(code_points) / sizeof(code_points[0]))]);
+            }
+            else if (r < 3) {
+               buf.push_back(palette[rng() % sizeof(palette)]);
+            }
+            else {
+               buf.push_back(uint8_t('a' + (rng() % 26)));
+            }
+         }
+         buf.resize(target);
+         // Occasionally truncate the tail to land inside a multibyte sequence.
+         if ((rng() & 7) == 0 && !buf.empty()) buf.resize(rng() % buf.size());
+
+         const bool expected = reference_validate_utf8(buf.data(), buf.data() + buf.size());
+         const bool actual = glz::validate_utf8(buf.data(), buf.size());
+         if (expected != actual) ++mismatches;
+      }
+      expect(mismatches == 0u);
    };
 };
 

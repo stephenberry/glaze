@@ -995,15 +995,12 @@ namespace glz
                      }
                      utf8_validator_.reset();
                   }
-                  else {
-                     // Validate the complete payload with the faster streaming validator.
-                     // A local instance keeps utf8_validator_ reserved for multi-read and
-                     // fragmented text streams, so there is no shared state to reset here.
-                     utf8_stream_validator validator;
-                     if (!validator.consume(payload, length) || !validator.complete()) {
-                        fail_connection(ws_close_code::invalid_payload, "Invalid UTF-8");
-                        return false;
-                     }
+                  else if (!glz::validate_utf8(payload, length)) {
+                     // validate_utf8 wraps utf8_stream_validator, so a complete single-read
+                     // payload gets the same fast validation without touching the member
+                     // utf8_validator_ reserved for multi-read and fragmented text streams.
+                     fail_connection(ws_close_code::invalid_payload, "Invalid UTF-8");
+                     return false;
                   }
                }
 
