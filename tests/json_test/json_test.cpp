@@ -1096,10 +1096,9 @@ suite basic_types = [] {
       // read past the end. Values this long exceed the scratch buffer and so must error, but they
       // must error rather than over-read.
       static constexpr glz::opts options{.null_terminated = false};
-      for (std::string_view number : {"1e00000000000000000000000000000000000007",
-                                      "1e99999999999999999999999999999999999999",
-                                      "12345678901234567890123456789012345678901234567890",
-                                      "-1e00000000000000000000000000000000000007"}) {
+      for (std::string_view number :
+           {"1e00000000000000000000000000000000000007", "1e99999999999999999999999999999999999999",
+            "12345678901234567890123456789012345678901234567890", "-1e00000000000000000000000000000000000007"}) {
          const std::string complete = "[" + std::string{number} + "]";
          std::vector<char> buf{complete.begin(), complete.end()};
 
@@ -1108,6 +1107,46 @@ suite basic_types = [] {
 
          std::vector<int64_t> i64s{};
          expect(bool(glz::read<options>(i64s, std::string_view{buf.data(), buf.size()}))) << number;
+      }
+   };
+
+   "truncated number is rejected, not valued"_test = [] {
+      // A number longer than the scratch buffer is copied in as a prefix, and the prefix can parse
+      // cleanly on its own: "1e" followed by enough zeros reads as 1 once the copy cuts off the
+      // final digit. A caller that ignores trailing content -- a top level scalar read does, the
+      // same way "17abc" reads as 17 -- would then take that prefix's value as the answer. The
+      // number must be rejected instead. Padding is the only way to stretch a number this far,
+      // since no in-range integer needs that many characters.
+      // Both options are spelled out because this file is also built with GLZ_NULL_TERMINATED=false,
+      // which flips what the default would mean.
+      static constexpr glz::opts options{.null_terminated = false};
+      static constexpr glz::opts terminated{.null_terminated = true};
+      for (size_t zeros : {size_t(30), size_t(40), size_t(64)}) {
+         // 1e<zeros>5 is 100000 however long the padding is
+         const std::string number = "1e" + std::string(zeros, '0') + "5";
+         std::vector<char> buf{number.begin(), number.end()};
+         const std::string_view input{buf.data(), buf.size()};
+
+         uint64_t u64{};
+         expect(bool(glz::read<options>(u64, input))) << number;
+
+         int64_t i64{};
+         expect(bool(glz::read<options>(i64, input))) << number;
+
+         // Null terminated input has the whole number available and reads it exactly. std::string
+         // supplies the terminator this path relies on.
+         expect(glz::read<terminated>(u64, number) == glz::error_code::none) << number;
+         expect(u64 == 100000ull) << number;
+      }
+
+      // A number that fits is still read from a non-null-terminated buffer, padding and all. The
+      // second of these fills the scratch buffer exactly, which is not a truncation: every
+      // character of the input made it in.
+      for (std::string_view fits : {"1e0000000005", "1e000000000000000000000000000005"}) {
+         std::vector<char> buf{fits.begin(), fits.end()};
+         uint64_t u64{};
+         expect(glz::read<options>(u64, std::string_view{buf.data(), buf.size()}) == glz::error_code::none) << fits;
+         expect(u64 == 100000ull) << fits;
       }
    };
 

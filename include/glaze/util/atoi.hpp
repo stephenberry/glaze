@@ -804,13 +804,20 @@ namespace glz
       std::array<char, buffer_length + 1> data{};
       const auto n = size_t(end - it);
       if (n > 0) [[likely]] {
-         std::memcpy(data.data(), it, n < buffer_length ? n : buffer_length);
+         const auto truncated = n > buffer_length;
+         std::memcpy(data.data(), it, truncated ? buffer_length : n);
 
          const auto start = data.data();
          const auto* c = start;
          const auto valid = glz::atoi(v, c);
-         it += size_t(c - start);
-         return valid;
+         const auto consumed = size_t(c - start);
+         it += consumed;
+         // Reaching the end of a truncated copy means the number was cut off: parsing halted on the
+         // terminator this buffer supplies rather than on a character of the input, so what parsed is
+         // a prefix and its value is not the number's. Only zero padding can stretch a number this
+         // far -- no in-range integer needs buffer_length characters -- but a caller that ignores
+         // trailing content would otherwise take the prefix's value as the answer.
+         return valid && not(truncated && consumed == buffer_length);
       }
       else [[unlikely]] {
          return false;
