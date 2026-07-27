@@ -413,24 +413,28 @@ namespace glz
             return false;
          }
          const uint32_t exp = parse_exponent(c);
+         // An exponent past the width's limit overflows any non-zero magnitude, but zero stays zero
+         // however far it is scaled, so "0e19" is in range for every width. Testing the magnitude
+         // here rather than ahead of the dispatch keeps it off the hot path: it only runs once the
+         // exponent has already failed the range check.
          if constexpr (sizeof(T) == 1) {
             if (exp > 2) [[unlikely]] {
-               return false;
+               return v == 0;
             }
          }
          else if constexpr (sizeof(T) == 2) {
             if (exp > 4) [[unlikely]] {
-               return false;
+               return v == 0;
             }
          }
          else if constexpr (sizeof(T) == 4) {
             if (exp > 9) [[unlikely]] {
-               return false;
+               return v == 0;
             }
          }
          else {
             if (exp > 19) [[unlikely]] {
-               return false;
+               return v == 0;
             }
          }
 
@@ -731,24 +735,27 @@ namespace glz
             return false;
          }
          const uint32_t exp = parse_exponent(c);
+         // As in the unsigned overload: only a non-zero magnitude can overflow, so "0e19" and
+         // "-0e19" are in range for every width. `v` is already the signed mantissa, and negative
+         // zero compares equal to zero, so both spellings land here with the value they should keep.
          if constexpr (sizeof(T) == 1) {
             if (exp > 2) [[unlikely]] {
-               return false;
+               return v == 0;
             }
          }
          else if constexpr (sizeof(T) == 2) {
             if (exp > 4) [[unlikely]] {
-               return false;
+               return v == 0;
             }
          }
          else if constexpr (sizeof(T) == 4) {
             if (exp > 9) [[unlikely]] {
-               return false;
+               return v == 0;
             }
          }
          else {
             if (exp > 18) [[unlikely]] {
-               return false;
+               return v == 0;
             }
          }
 

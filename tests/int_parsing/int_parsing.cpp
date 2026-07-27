@@ -848,6 +848,26 @@ suite overflow_rejection = [] {
       expect(reads_as<int64_t>("-0e0", 0ll) && reads_as<int64_t>("-0e18", 0ll));
       expect(reads_as<int8_t>("-0", int8_t(0)) && reads_as<int32_t>("-0", 0));
    };
+
+   // Zero stays zero however far it is scaled, so a zero mantissa is in range whatever the exponent.
+   // The width limits reject on the exponent alone, which turned these valid inputs into errors.
+   "zero mantissa with out of range exponent"_test = [] {
+      expect(reads_as<uint8_t>("0e3", uint8_t(0)) && reads_as<uint8_t>("0e19", uint8_t(0)));
+      expect(reads_as<uint16_t>("0e5", uint16_t(0)) && reads_as<uint16_t>("0e19", uint16_t(0)));
+      expect(reads_as<uint32_t>("0e10", 0u) && reads_as<uint32_t>("0e19", 0u));
+      expect(reads_as<uint64_t>("0e20", 0ull) && reads_as<uint64_t>("0e999999", 0ull));
+
+      expect(reads_as<int8_t>("0e3", int8_t(0)) && reads_as<int8_t>("-0e3", int8_t(0)));
+      expect(reads_as<int16_t>("0e5", int16_t(0)) && reads_as<int16_t>("-0e5", int16_t(0)));
+      expect(reads_as<int32_t>("0e10", 0) && reads_as<int32_t>("-0e10", 0));
+      expect(reads_as<int64_t>("0e19", 0ll) && reads_as<int64_t>("-0e19", 0ll));
+      expect(reads_as<int64_t>("0e999999", 0ll) && reads_as<int64_t>("-0e999999", 0ll));
+
+      // A non-zero mantissa with the same exponent is still out of range, and the mantissa still
+      // has to be well formed: JSON forbids a leading zero in the integer part.
+      expect(rejects<uint8_t>("1e19") && rejects<int64_t>("1e19") && rejects<uint64_t>("1e20"));
+      expect(rejects<uint8_t>("00e19") && rejects<int32_t>("-00e19"));
+   };
 };
 
 int main() { return 0; }

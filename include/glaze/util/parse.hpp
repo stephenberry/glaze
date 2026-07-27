@@ -1254,6 +1254,14 @@ namespace glz
       ctx.error = error_code::unexpected_end;
    }
 
+   // Parses a JSON unsigned integer, returning nullopt if `s` does not start with one or if the
+   // value is out of range for uint64_t. Trailing content is ignored: "12abc" reads as 12.
+   //
+   // `s` must be null terminated. Scanning stops on the first non-digit rather than at s.size(), so
+   // without a terminator there is nothing to halt it inside the view: a std::string_view over a
+   // bare character array reads past its end, and a view of the first few digits of a longer run
+   // consumes the rest of them. String literals and std::string satisfy this; a subview of a larger
+   // buffer does not, unless the character just past it is a non-digit.
    inline constexpr std::optional<uint64_t> stoui(const std::string_view s) noexcept
    {
       if (s.empty()) {
