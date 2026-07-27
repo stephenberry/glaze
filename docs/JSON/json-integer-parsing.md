@@ -10,7 +10,10 @@ Valid examples for a `uint8_t`:
 255
 1e1
 1e+2
+1e002
 ```
+
+An exponent may carry leading zeros. JSON forbids them in the integer part but permits any run of digits in the exponent, so `1e002` is simply another spelling of `1e2`.
 
 Invalid examples for a `uint8_t`:
 
