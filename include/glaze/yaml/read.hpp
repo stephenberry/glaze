@@ -5645,7 +5645,7 @@ namespace glz
 
                // Anchor on alias (&anchor *alias) is invalid per YAML spec.
                // But alias-as-key (&anchor *alias : value) is valid.
-               if (*it == '*' && !yaml::alias_token_is_mapping_key(it, end)) {
+               if (it != end && *it == '*' && !yaml::alias_token_is_mapping_key(it, end)) {
                   ctx.error = error_code::syntax_error;
                   return;
                }
