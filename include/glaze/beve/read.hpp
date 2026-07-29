@@ -722,6 +722,60 @@ namespace glz
          }
       }
 
+      // Parse the object at `obj_start` as `resolved`; if that fails and `try_others` is set, rewind
+      // and try each of the remaining object alternatives. Returns true once one parses cleanly.
+      //
+      // Structural deduction is a guess, so a failure means "probably the wrong alternative" -- but
+      // only for failures that say the shape does not fit. A missing_key failure is the caller's own
+      // error_on_missing_keys strictness being enforced; retrying past it would answer a strict read
+      // with a different alternative instead of the error the caller asked for.
+      template <auto AltOpts, bool tagged, class It>
+      static bool attempt_object_alts(auto&& value, is_context auto&& ctx, auto&& it, auto end, const It& obj_start,
+                                      const size_t resolved, const bool try_others) noexcept
+      {
+         it = obj_start;
+         ctx.error = error_code::none;
+         ctx.custom_error_message = {};
+         if (value.index() != resolved) {
+            emplace_runtime_variant(value, resolved);
+         }
+         visit<variant_size>([&]<size_t I>() { parse_object_alt<AltOpts, tagged, I>(value, ctx, it, end); }, resolved);
+         if (!bool(ctx.error)) {
+            return true;
+         }
+         if (!try_others || ctx.error == error_code::missing_key) {
+            return false;
+         }
+
+         bool recovered = false;
+         for_each<variant_size>([&]<size_t I>() {
+            if constexpr (beve_variant_is_object_alt<std::variant_alternative_t<I, T>>) {
+               using V = std::variant_alternative_t<I, T>;
+               using X = std::conditional_t<is_memory_object<V>, memory_type<V>, V>;
+               // A tagged empty-struct alternative is read by skipping the whole object, so it
+               // "succeeds" on anything. As the deduced choice that is intended; as a fallback it
+               // would be a wildcard that silently discards the payload.
+               if constexpr (tagged && beve_is_empty_struct<X>) {
+                  return;
+               }
+               else {
+                  if (recovered || I == resolved) {
+                     return;
+                  }
+                  it = obj_start;
+                  ctx.error = error_code::none;
+                  ctx.custom_error_message = {};
+                  if (value.index() != I) {
+                     emplace_runtime_variant(value, I);
+                  }
+                  parse_object_alt<AltOpts, tagged, I>(value, ctx, it, end);
+                  recovered = !bool(ctx.error);
+               }
+            }
+         });
+         return recovered;
+      }
+
       // Object-category dispatch: single candidate is parsed directly; otherwise scan the keys once
       // to find the discriminator and/or narrow the candidate set, then rewind and parse in full.
       template <auto Opts>
@@ -963,45 +1017,44 @@ namespace glz
             }
 
             // Pass 2: parse the whole object (from the untouched `it`) as the resolved alternative.
+            //
+            // Like try_each, this runs strict first (allow_conversions off) so an alternative is
+            // taken only when its members' type headers match exactly. That is required for
+            // correctness, not fidelity: struct alternatives sharing a key set are separated by
+            // nothing but their member types, so a lenient-only pass lets
+            // variant<{int32_t a}, {int64_t a}> read its own output back into the int32_t
+            // alternative and silently truncate. Only if nothing matches exactly do we retry
+            // leniently, which keeps reading data whose numeric widths no longer match.
             const auto obj_start = it;
-            if (value.index() != resolved) {
-               emplace_runtime_variant(value, resolved);
-            }
-            visit<variant_size>([&]<size_t I>() { parse_object_alt<Opts, tagged, I>(value, ctx, it, end); }, resolved);
+            const bool authoritative = tagged && tag_decoded;
 
-            if (bool(ctx.error) && not(tagged && tag_decoded)) {
-               // Deduction picked an alternative that cannot actually read this object. Only an
-               // explicit discriminator is authoritative; a structural guess is not, so rewind and
-               // try the other object alternatives before giving up. Without this, a candidate set
-               // that deduction ordered badly turns a readable buffer into an error.
+            if constexpr (check_allow_conversions(Opts)) {
+               if (not authoritative) {
+                  if (attempt_object_alts<opt_false<Opts, allow_conversions_opt_tag{}>, tagged>(
+                         value, ctx, it, end, obj_start, resolved, true)) {
+                     return;
+                  }
+               }
+            }
+            if (attempt_object_alts<Opts, tagged>(value, ctx, it, end, obj_start, resolved, not authoritative)) {
+               return;
+            }
+
+            // The missing_key exclusion applies here too: the last resort must not answer a strict
+            // read with some other alternative that happens to tolerate the absent key.
+            if (not authoritative && ctx.error != error_code::missing_key) {
                const auto first_error = ctx.error;
                const auto first_error_it = it;
-               bool recovered = false;
-               for_each<variant_size>([&]<size_t I>() {
-                  if constexpr (beve_variant_is_object_alt<std::variant_alternative_t<I, T>>) {
-                     if (recovered || I == resolved) {
-                        return;
-                     }
-                     it = obj_start;
-                     ctx.error = error_code::none;
-                     if (value.index() != I) {
-                        emplace_runtime_variant(value, I);
-                     }
-                     parse_object_alt<Opts, tagged, I>(value, ctx, it, end);
-                     recovered = !bool(ctx.error);
-                  }
-               });
-               if (!recovered) {
-                  // Last resort: an alternative outside the recognized object categories (a custom
-                  // reader, say) may still consume this object.
-                  it = obj_start;
-                  ctx.error = error_code::none;
-                  try_each<Opts>(value, ctx, it, end);
-                  recovered = !bool(ctx.error);
-               }
-               if (!recovered) {
+               // Last resort: an alternative outside the recognized object categories (a custom
+               // reader, say) may still consume this object.
+               it = obj_start;
+               ctx.error = error_code::none;
+               ctx.custom_error_message = {};
+               try_each<Opts>(value, ctx, it, end);
+               if (bool(ctx.error)) {
                   // Report the deduced alternative's failure: it is the most specific diagnosis.
                   ctx.error = first_error;
+                  ctx.custom_error_message = {};
                   it = first_error_it;
                }
             }

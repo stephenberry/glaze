@@ -559,6 +559,16 @@ namespace glz
                      return;
                   }
 
+                  // `ids` may declare fewer entries than there are alternatives -- the reader treats
+                  // the first unlabeled alternative as the default for an id it does not recognize.
+                  // Writing such an alternative has no id to emit, and indexing ids_v past its end
+                  // reads out of bounds, so reject it rather than emitting garbage.
+                  if (value.index() >= ids_v<T>.size()) [[unlikely]] {
+                     ctx.error = error_code::no_matching_variant_type;
+                     ctx.custom_error_message = variant_ids_string_v<T>;
+                     return;
+                  }
+
                   // discriminator: headerless string key + id VALUE (string or integral, with header).
                   // The key type is spelled through decltype(tag_v<T>) so lookup of the str_t writer
                   // specialization (defined later in this file) is deferred to instantiation.
@@ -585,6 +595,13 @@ namespace glz
                   // Positional tagged variant: adjacent form [id, value]. Unlike the merged-object
                   // form this works for every alternative type, object or not, because the id sits
                   // beside the value rather than inside it.
+                  if (value.index() >= ids_v<T>.size()) [[unlikely]] {
+                     // See the merged-object branch: an alternative with no declared id cannot be
+                     // written, and indexing ids_v past its end reads out of bounds.
+                     ctx.error = error_code::no_matching_variant_type;
+                     ctx.custom_error_message = variant_ids_string_v<T>;
+                     return;
+                  }
                   if (!ensure_space(ctx, b, ix + 1 + write_padding_bytes)) [[unlikely]] {
                      return;
                   }

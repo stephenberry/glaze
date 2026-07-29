@@ -4287,6 +4287,59 @@ namespace beve_v2_resolution_test
    };
    using opaque_nested3_v = std::variant<opaque_inner, opaque_c, opaque_d>;
 
+   // Two struct alternatives separated by nothing but their member types. Deduction cannot tell
+   // them apart, so resolution must match on exact type headers before allowing conversions --
+   // otherwise the wider alternative reads back into the narrower one and truncates.
+   struct narrow_i32
+   {
+      int32_t a{};
+   };
+   struct narrow_i64
+   {
+      int64_t a{};
+   };
+   using narrow_v = std::variant<narrow_i32, narrow_i64>;
+   struct narrow_f
+   {
+      float a{};
+   };
+   struct narrow_d
+   {
+      double a{};
+   };
+   using narrow_fd_v = std::variant<narrow_f, narrow_d>;
+
+   // `ids` deliberately shorter than the alternative list: the reader treats the first unlabeled
+   // alternative as the default for an unrecognized id, so this meta is supported on read. Writing
+   // an unlabeled alternative has no id to emit and must not index ids_v out of bounds.
+   struct fewid_a
+   {
+      int a{};
+   };
+   struct fewid_b
+   {
+      int b{};
+   };
+   struct fewid_c
+   {
+      int c{};
+   };
+   using fewid_v = std::variant<fewid_a, fewid_b, fewid_c>;
+
+   // An empty struct alternative is read by skipping the whole object, so it matches anything. It
+   // must not be reachable as a recovery fallback or it silently swallows another alternative's data.
+   struct wild_empty
+   {};
+   struct wild_int
+   {
+      int32_t x{};
+   };
+   struct wild_str
+   {
+      std::string x{};
+   };
+   using wild_v = std::variant<wild_empty, wild_int, wild_str>;
+
    // Two alternatives sharing a key name but not its type. Structural deduction cannot separate
    // them -- only attempting the parse can.
    struct dedup_int
@@ -4390,6 +4443,20 @@ struct glz::meta<beve_v2_resolution_test::pos_v>
 {
    static constexpr std::string_view tag = "t";
    static constexpr std::array<std::string_view, 2> ids{"a", "b"};
+};
+
+template <>
+struct glz::meta<beve_v2_resolution_test::fewid_v>
+{
+   static constexpr std::string_view tag = "t";
+   static constexpr std::array<std::string_view, 2> ids{"a", "b"};
+};
+
+template <>
+struct glz::meta<beve_v2_resolution_test::wild_v>
+{
+   static constexpr std::string_view tag = "t";
+   static constexpr std::array<std::string_view, 3> ids{"e", "i", "s"};
 };
 
 template <>
@@ -4685,6 +4752,104 @@ suite beve_v2_variant_resolution = [] {
       expect(not glz::read_beve(out, *encoded));
       expect(out.index() == 1);
       expect(std::get<1>(out).a == "hi");
+   };
+
+   "alternatives separated only by member type round-trip exactly"_test = [] {
+      // Both alternatives declare the same key, so only the member's type header distinguishes
+      // them. Resolving with conversions enabled would read the int64 back into the int32
+      // alternative and truncate -- silently, on Glaze's own output.
+      {
+         narrow_v in{narrow_i64{int64_t(1) << 40}};
+         auto encoded = glz::write_beve(in);
+         expect(encoded.has_value());
+         narrow_v out{};
+         expect(not glz::read_beve(out, *encoded));
+         expect(out.index() == 1);
+         expect(std::get<1>(out).a == (int64_t(1) << 40));
+      }
+      {
+         // Small value: still the int64 alternative, even though it would fit in the int32 one.
+         narrow_v in{narrow_i64{5}};
+         auto encoded = glz::write_beve(in);
+         narrow_v out{};
+         expect(not glz::read_beve(out, *encoded));
+         expect(out.index() == 1);
+      }
+      {
+         narrow_v in{narrow_i32{5}};
+         auto encoded = glz::write_beve(in);
+         narrow_v out{};
+         expect(not glz::read_beve(out, *encoded));
+         expect(out.index() == 0);
+      }
+      {
+         narrow_fd_v in{narrow_d{3.141592653589793}};
+         auto encoded = glz::write_beve(in);
+         narrow_fd_v out{};
+         expect(not glz::read_beve(out, *encoded));
+         expect(out.index() == 1);
+         expect(std::get<1>(out).a == 3.141592653589793);
+      }
+   };
+
+   "writing an alternative with no declared id errors instead of reading out of bounds"_test = [] {
+      // `ids` is shorter than the alternative list, which the reader supports. The writer has no id
+      // to emit for the unlabeled alternative and must not index ids_v past its end.
+      fewid_v in{fewid_c{7}};
+      std::string buffer{};
+      expect(bool(glz::write_beve(in, buffer)));
+      std::string positional{};
+      expect(bool(glz::write_beve_untagged(in, positional)));
+      // The labeled alternatives still write and round-trip normally.
+      fewid_v labeled{fewid_b{3}};
+      auto ok = glz::write_beve(labeled);
+      expect(ok.has_value());
+      fewid_v out{};
+      expect(not glz::read_beve(out, *ok));
+      expect(out.index() == 1);
+   };
+
+   "an empty-struct alternative is not a recovery wildcard"_test = [] {
+      // Reading an object with no discriminator: deduction picks wild_int, which fails on the
+      // string. Recovery must not reach wild_empty, whose read skips the whole object and would
+      // therefore "succeed" while discarding the payload.
+      const auto untagged_bytes = glz::write_beve(wild_str{"str"});
+      expect(untagged_bytes.has_value());
+      wild_v out{};
+      expect(not glz::read_beve(out, *untagged_bytes));
+      expect(out.index() == 2);
+      expect(std::get<2>(out).x == "str");
+   };
+
+   "recovery does not defeat error_on_missing_keys"_test = [] {
+      // A missing key is the caller's requested strictness, not evidence of the wrong alternative.
+      // Retrying past it would answer a strict read with a different alternative.
+      constexpr auto strict = glz::opts{.format = glz::BEVE, .error_on_missing_keys = true};
+      const auto partial = glz::write_beve(std::map<std::string, int32_t>{{"x", 5}});
+      expect(partial.has_value());
+      std::variant<opaque_c, std::map<std::string, int32_t>> out{};
+      expect(bool(glz::read<strict>(out, *partial)));
+   };
+
+   "a malformed array count fails fast instead of spinning"_test = [] {
+      // The element count is attacker-controlled and capped only at 2^48. Skipping a value inside
+      // the key scan must stop at the first error, or a 14 byte buffer pegs a core for days.
+      std::string buffer{};
+      buffer.push_back(char(glz::tag::object));
+      buffer.push_back(char(1 << 2)); // one key
+      buffer.push_back(char(2 << 2)); // key length 2
+      buffer += "zz";
+      buffer.push_back(char(glz::tag::generic_array));
+      const uint64_t header = (uint64_t(281474976710655ull) << 2) | 3ull; // 2^48-1 elements
+      for (int i = 0; i < 8; ++i) {
+         buffer.push_back(char((header >> (8 * i)) & 0xff));
+      }
+      expect(buffer.size() == 14);
+      std::variant<opaque_a, opaque_c> out{};
+      const auto t0 = std::chrono::steady_clock::now();
+      expect(bool(glz::read_beve(out, buffer)));
+      const auto elapsed = std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
+      expect(elapsed < 1.0) << "malformed count took " << elapsed << " s";
    };
 
    "untagged positional alternatives sharing a shape collapse to the first"_test = [] {

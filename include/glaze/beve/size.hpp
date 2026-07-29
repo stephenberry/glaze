@@ -198,6 +198,10 @@ namespace glz
                      }
                   }
 
+                  if (value.index() >= ids_v<T>.size()) {
+                     return size_t(0); // writer errors and emits nothing; mirror it
+                  }
+
                   size_t result = 1; // object tag (string keys)
 
                   const size_t body_count = [&]() -> size_t {
@@ -229,6 +233,9 @@ namespace glz
                else if constexpr (check_structs_as_arrays(Opts) && check_write_type_info(Opts) &&
                                   (not tag_v<T>.empty())) {
                   // Positional tagged variant: adjacent form [id, value].
+                  if (value.index() >= ids_v<T>.size()) {
+                     return size_t(0); // writer errors and emits nothing; mirror it
+                  }
                   size_t result = 1; // generic array tag
                   result += compressed_int_size(2); // element count
                   result += calculate_size<BEVE, void>::template op<Opts>(ids_v<T>[value.index()], offset + result);
