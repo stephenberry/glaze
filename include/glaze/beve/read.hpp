@@ -554,6 +554,21 @@ namespace glz
       return glaze_object_t<X> || reflectable<X> || is_memory_object<X> || readable_map_t<X> || pair_t<X>;
    }();
 
+   // An object alternative with no compile-time key set: a map or pair accepts *any* keys, so it can
+   // neither be confirmed nor eliminated by structural deduction. `variant_deduction_bits` only sets
+   // bits for struct-like alternatives, so these must be excluded from key narrowing explicitly or a
+   // single recognized key would wrongly rule them out.
+   template <class V>
+   inline constexpr bool beve_variant_is_open_ended_object_alt = [] {
+      using X = std::decay_t<V>;
+      if constexpr (glaze_object_t<X> || reflectable<X> || is_memory_object<X>) {
+         return false;
+      }
+      else {
+         return readable_map_t<X> || pair_t<X>;
+      }
+   }();
+
    // True when X is a reflectable struct with no members. reflect<X>::size may only be named for
    // struct-like X, so the check is guarded here at namespace scope (naming reflect<X>::size from a
    // nested lambda inside the variant reader would force a capture of the enclosing constexpr flags
@@ -583,9 +598,11 @@ namespace glz
       static constexpr size_t variant_size = std::variant_size_v<T>;
 
       // Try each alternative in declaration order, rewinding the iterator on failure. Returns true
-      // when an alternative parsed cleanly, leaving `value` holding it.
+      // when an alternative parsed cleanly, leaving `value` holding it. `truncated` is set when any
+      // alternative ran off the end of the buffer, which says the input is incomplete rather than
+      // that it matched no alternative.
       template <auto Opts>
-      static bool try_each_pass(auto&& value, is_context auto&& ctx, auto&& it, auto end) noexcept
+      static bool try_each_pass(auto&& value, is_context auto&& ctx, auto&& it, auto end, bool& truncated) noexcept
       {
          bool matched = false;
          const auto start = it;
@@ -601,6 +618,9 @@ namespace glz
             parse<BEVE>::op<Opts>(std::get<I>(value), ctx, it, end);
             if (!bool(ctx.error)) {
                matched = true;
+            }
+            else if (ctx.error == error_code::unexpected_end) {
+               truncated = true;
             }
          });
          if (!matched) {
@@ -622,16 +642,59 @@ namespace glz
       static void try_each(auto&& value, is_context auto&& ctx, auto&& it, auto end) noexcept
       {
          const auto start = it;
+         bool truncated = false;
          if constexpr (check_allow_conversions(Opts)) {
-            if (try_each_pass<opt_false<Opts, allow_conversions_opt_tag{}>>(value, ctx, it, end)) {
+            if (try_each_pass<opt_false<Opts, allow_conversions_opt_tag{}>>(value, ctx, it, end, truncated)) {
                return;
             }
          }
-         if (try_each_pass<Opts>(value, ctx, it, end)) {
+         if (try_each_pass<Opts>(value, ctx, it, end, truncated)) {
             return;
          }
          it = start;
-         ctx.error = error_code::no_matching_variant_type;
+         // An incomplete buffer is a property of the input, not of the alternative set, so report it
+         // as such instead of blaming variant resolution.
+         ctx.error = truncated ? error_code::unexpected_end : error_code::no_matching_variant_type;
+      }
+
+      // Parse the object at `it` as alternative I, handling the merged discriminator key when the
+      // variant is tagged. `value` must already hold alternative I.
+      template <auto Opts, bool tagged, size_t I>
+      static void parse_object_alt(auto&& value, is_context auto&& ctx, auto&& it, auto end) noexcept
+      {
+         using V = std::variant_alternative_t<I, T>;
+         using X = std::conditional_t<is_memory_object<V>, memory_type<V>, V>;
+
+         // reflect<X>::size may only be named for struct-like X (a std::pair/map alternative has no
+         // reflect specialization); beve_is_empty_struct<X> guards that at namespace scope.
+         constexpr bool struct_like = glaze_object_t<X> || reflectable<X>;
+         constexpr bool empty_tagged_struct = tagged && beve_is_empty_struct<X>;
+
+         if constexpr (empty_tagged_struct) {
+            // Empty struct carrying only the discriminator: skip the whole {tag:id} object.
+            skip_value<BEVE>::op<Opts>(ctx, it, end);
+         }
+         else if constexpr (tagged && struct_like && (not is_memory_object<V>)) {
+            // Thread the discriminator key into the object reader so it is skipped without
+            // disabling unknown-key checking for the alternative's real fields (JSON parity).
+            // When the alternative genuinely declares a member of that name the reader keeps
+            // treating it as a member instead (see from<BEVE, T>::op's Tag handling), so the
+            // member still receives its value.
+            static constexpr auto tag_literal = string_literal_from_view<tag_v<T>.size()>(tag_v<T>);
+            from<BEVE, X>::template op<Opts, tag_literal>(std::get<I>(value), ctx, it, end);
+         }
+         else if constexpr (tagged && (requires { Opts.error_on_unknown_keys; })) {
+            // memory_object / map / pair alternative: tolerate the discriminator key here.
+            static constexpr auto AltOpts = [] {
+               auto o = Opts;
+               o.error_on_unknown_keys = false;
+               return o;
+            }();
+            parse<BEVE>::op<AltOpts>(std::get<I>(value), ctx, it, end);
+         }
+         else {
+            parse<BEVE>::op<Opts>(std::get<I>(value), ctx, it, end);
+         }
       }
 
       // Object-category dispatch: single candidate is parsed directly; otherwise scan the keys once
@@ -644,7 +707,9 @@ namespace glz
          }(std::make_index_sequence<variant_size>{});
 
          if constexpr (n_obj == 0) {
-            ctx.error = error_code::no_matching_variant_type;
+            // No alternative is a recognized object category, but one may still read an object
+            // through a custom reader, so try each rather than rejecting outright.
+            try_each<Opts>(value, ctx, it, end);
             return;
          }
          else if constexpr (n_obj == 1 && tag_v<T>.empty()) {
@@ -680,6 +745,33 @@ namespace glz
                   possible[I] = true;
                }
             });
+
+            // Open-ended (map/pair) alternatives accept any key set, so they must survive key
+            // narrowing. Pre-setting their bits in a copy of the deduction table keeps the scan loop
+            // a single AND and confines the adjustment to compile time.
+            static constexpr auto open_ended = [] {
+               auto m = bit_array<variant_size>{};
+               [&]<size_t... I>(std::index_sequence<I...>) {
+                  ((m[I] = beve_variant_is_open_ended_object_alt<std::variant_alternative_t<I, T>>), ...);
+               }(std::make_index_sequence<variant_size>{});
+               return m;
+            }();
+            static constexpr auto narrowing_bits = [] {
+               auto b = variant_deduction_bits<T>;
+               for (size_t k = 0; k < b.size(); ++k) {
+                  for (size_t i = 0; i < variant_size; ++i) {
+                     if (open_ended[i]) {
+                        b[k][i] = true;
+                     }
+                  }
+               }
+               return b;
+            }();
+
+            // Set when a key belongs to no alternative's declared field set. No struct alternative
+            // can have written such a key, so an open-ended alternative is the better explanation of
+            // the data even though the struct might tolerate the key under error_on_unknown_keys.
+            bool foreign_key = false;
 
             // `tag_index` is whatever variant_id_to_index reported, which is ids_v<T>.size() when the
             // id is unknown; `tag_decoded` records that an id was actually read, so an unknown id can
@@ -752,8 +844,15 @@ namespace glz
                   const auto di =
                      decode_hash_with_size<JSON, dk, H, H.type>::op(key.data(), key.data() + klen, size_t(klen));
                   if (di < variant_deduction_key_count<T> && variant_deduction_keys<T>[di] == key) {
-                     possible = possible & variant_deduction_bits<T>[di];
+                     possible = possible & narrowing_bits[di];
                   }
+                  else {
+                     foreign_key = true;
+                  }
+               }
+               else {
+                  // No alternative declares any field, so every key is foreign.
+                  foreign_key = true;
                }
                skip_value<BEVE>::op<Opts>(ctx, scan, end);
                if (bool(ctx.error)) [[unlikely]] {
@@ -784,6 +883,14 @@ namespace glz
                }
             }
             if (resolved >= variant_size) {
+               if (foreign_key) {
+                  // Restrict to the open-ended alternatives when there are any: a key outside every
+                  // declared field set rules out the struct alternatives as the writer of this data.
+                  auto open_possible = possible & open_ended;
+                  if (open_possible.popcount() > 0) {
+                     possible = open_possible;
+                  }
+               }
                const auto pc = possible.popcount();
                if (pc == 0) [[unlikely]] {
                   ctx.error = error_code::no_matching_variant_type;
@@ -817,47 +924,48 @@ namespace glz
             }
 
             // Pass 2: parse the whole object (from the untouched `it`) as the resolved alternative.
+            const auto obj_start = it;
             if (value.index() != resolved) {
                emplace_runtime_variant(value, resolved);
             }
-            visit<variant_size>(
-               [&]<size_t I>() {
-                  using V = std::variant_alternative_t<I, T>;
-                  using X = std::conditional_t<is_memory_object<V>, memory_type<V>, V>;
+            visit<variant_size>([&]<size_t I>() { parse_object_alt<Opts, tagged, I>(value, ctx, it, end); }, resolved);
 
-                  // reflect<X>::size may only be named for struct-like X (a std::pair/map alternative
-                  // has no reflect specialization); beve_is_empty_struct<X> guards that at namespace
-                  // scope. Both flags are constant-expression uses here, so no lambda capture occurs.
-                  constexpr bool struct_like = glaze_object_t<X> || reflectable<X>;
-                  constexpr bool empty_tagged_struct = tagged && beve_is_empty_struct<X>;
-
-                  if constexpr (empty_tagged_struct) {
-                     // Empty struct carrying only the discriminator: skip the whole {tag:id} object.
-                     skip_value<BEVE>::op<Opts>(ctx, it, end);
+            if (bool(ctx.error) && not(tagged && tag_decoded)) {
+               // Deduction picked an alternative that cannot actually read this object. Only an
+               // explicit discriminator is authoritative; a structural guess is not, so rewind and
+               // try the other object alternatives before giving up. Without this, a candidate set
+               // that deduction ordered badly turns a readable buffer into an error.
+               const auto first_error = ctx.error;
+               const auto first_error_it = it;
+               bool recovered = false;
+               for_each<variant_size>([&]<size_t I>() {
+                  if constexpr (beve_variant_is_object_alt<std::variant_alternative_t<I, T>>) {
+                     if (recovered || I == resolved) {
+                        return;
+                     }
+                     it = obj_start;
+                     ctx.error = error_code::none;
+                     if (value.index() != I) {
+                        emplace_runtime_variant(value, I);
+                     }
+                     parse_object_alt<Opts, tagged, I>(value, ctx, it, end);
+                     recovered = !bool(ctx.error);
                   }
-                  else if constexpr (tagged && struct_like && (not is_memory_object<V>)) {
-                     // Thread the discriminator key into the object reader so it is skipped without
-                     // disabling unknown-key checking for the alternative's real fields (JSON parity).
-                     // When the alternative genuinely declares a member of that name the reader keeps
-                     // treating it as a member instead (see from<BEVE, T>::op's Tag handling), so the
-                     // member still receives its value.
-                     static constexpr auto tag_literal = string_literal_from_view<tag_v<T>.size()>(tag_v<T>);
-                     from<BEVE, X>::template op<Opts, tag_literal>(std::get<I>(value), ctx, it, end);
-                  }
-                  else if constexpr (tagged && (requires { Opts.error_on_unknown_keys; })) {
-                     // memory_object / map / pair alternative: tolerate the discriminator key here.
-                     static constexpr auto AltOpts = [] {
-                        auto o = Opts;
-                        o.error_on_unknown_keys = false;
-                        return o;
-                     }();
-                     parse<BEVE>::op<AltOpts>(std::get<I>(value), ctx, it, end);
-                  }
-                  else {
-                     parse<BEVE>::op<Opts>(std::get<I>(value), ctx, it, end);
-                  }
-               },
-               resolved);
+               });
+               if (!recovered) {
+                  // Last resort: an alternative outside the recognized object categories (a custom
+                  // reader, say) may still consume this object.
+                  it = obj_start;
+                  ctx.error = error_code::none;
+                  try_each<Opts>(value, ctx, it, end);
+                  recovered = !bool(ctx.error);
+               }
+               if (!recovered) {
+                  // Report the deduced alternative's failure: it is the most specific diagnosis.
+                  ctx.error = first_error;
+                  it = first_error_it;
+               }
+            }
          }
       }
 

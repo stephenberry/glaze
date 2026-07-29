@@ -3905,6 +3905,14 @@ namespace beve_v2_variant_test
    using v_map = std::variant<u_dog, std::map<uint32_t, int>>;
    using v_pair = std::variant<u_dog, std::pair<uint32_t, std::string>>;
 
+   // String-keyed map / pair alternatives DO go through the key scan, competing with the struct
+   // alternatives for the same wire shape. A map accepts any key set, so it must never be eliminated
+   // by key narrowing nor lose the tiebreak to a struct that cannot account for the keys present.
+   using v_smap = std::variant<std::map<std::string, int>, u_dog>;
+   using v_smap_rev = std::variant<u_dog, std::map<std::string, int>>;
+   using v_umap = std::variant<std::unordered_map<std::string, int>, u_dog>;
+   using v_spair = std::variant<std::pair<std::string, int>, u_dog>;
+
    // Serializes to {"type":"circle","radius":R,"extra":E}: a tagged shape with an extra key that is
    // genuinely unknown to the `circle` alternative (used to test error_on_unknown_keys parity).
    struct circle_with_extra
@@ -4086,6 +4094,81 @@ suite beve_v2_variants = [] {
          expect(out.index() == 1);
          expect(std::get<1>(out) == (std::pair<uint32_t, std::string>{3, "x"}));
       }
+   };
+
+   "string-keyed map and pair alternatives round-trip alongside a struct"_test = [] {
+      // Keys that belong to no alternative's field set: only the map can have written them.
+      {
+         v_smap in{std::map<std::string, int>{{"zzz", 1}}};
+         auto beve = glz::write_beve(in);
+         expect(beve.has_value());
+         v_smap out{};
+         expect(not glz::read_beve(out, *beve));
+         expect(out.index() == 0);
+         expect(std::get<0>(out) == (std::map<std::string, int>{{"zzz", 1}}));
+      }
+      // Same, with the map declared second: declaration order must not decide this.
+      {
+         v_smap_rev in{std::map<std::string, int>{{"zzz", 1}}};
+         auto beve = glz::write_beve(in);
+         v_smap_rev out{};
+         expect(not glz::read_beve(out, *beve));
+         expect(out.index() == 1);
+         expect(std::get<1>(out) == (std::map<std::string, int>{{"zzz", 1}}));
+      }
+      // A map that *shares* a key with the struct but also carries a foreign key. The shared key
+      // must not narrow the map away, otherwise the struct wins and silently drops "other".
+      {
+         v_smap in{std::map<std::string, int>{{"legs", 4}, {"other", 2}}};
+         auto beve = glz::write_beve(in);
+         v_smap out{};
+         expect(not glz::read_beve(out, *beve));
+         expect(out.index() == 0);
+         expect(std::get<0>(out).size() == 2);
+      }
+      // ...and with unknown-key checking off, where a wrong resolution would not even error.
+      {
+         v_smap in{std::map<std::string, int>{{"legs", 4}, {"other", 2}}};
+         auto beve = glz::write_beve(in);
+         v_smap out{};
+         expect(not glz::read<glz::opts{.format = glz::BEVE, .error_on_unknown_keys = false}>(out, *beve));
+         expect(out.index() == 0);
+         expect(std::get<0>(out).size() == 2);
+      }
+      {
+         v_umap in{std::unordered_map<std::string, int>{{"zzz", 1}}};
+         auto beve = glz::write_beve(in);
+         v_umap out{};
+         expect(not glz::read_beve(out, *beve));
+         expect(out.index() == 0);
+      }
+      {
+         v_spair in{std::pair<std::string, int>{"zzz", 1}};
+         auto beve = glz::write_beve(in);
+         v_spair out{};
+         expect(not glz::read_beve(out, *beve));
+         expect(out.index() == 0);
+         expect(std::get<0>(out) == (std::pair<std::string, int>{"zzz", 1}));
+      }
+      // The struct alternative must still resolve when a string-keyed map competes with it.
+      {
+         v_smap in{u_dog{"woof", 4}};
+         auto beve = glz::write_beve(in);
+         v_smap out{};
+         expect(not glz::read_beve(out, *beve));
+         expect(out.index() == 1);
+         expect(std::get<1>(out).bark == "woof");
+      }
+   };
+
+   "a truncated variant buffer reports unexpected_end"_test = [] {
+      std::variant<int32_t, std::string> in{std::string{"hello world"}};
+      auto beve = glz::write_beve(in);
+      expect(beve.has_value());
+      std::string truncated = beve->substr(0, beve->size() - 4);
+      std::variant<int32_t, std::string> out{};
+      const auto ec = glz::read_beve(out, truncated);
+      expect(ec.ec == glz::error_code::unexpected_end) << glz::format_error(ec, truncated);
    };
 
    "beve_size matches the written size for a tagged variant"_test = [] {

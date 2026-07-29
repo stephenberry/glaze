@@ -425,7 +425,9 @@ BEVE Version 2 writes a `std::variant` as an ordinary, self-describing value. A 
 On read, the alternative is recovered from the discriminator when one is present, otherwise from the object's key set, otherwise from the value's own type header. Two consequences are worth knowing:
 
 - Alternatives are matched on their **exact** type header first, so `std::variant<int32_t, int64_t>` round-trips without narrowing. If no alternative matches exactly, a second pass allows numeric conversions.
-- Alternatives that are genuinely indistinguishable on the wire (two structs with identical field sets, or two empty structs) collapse to the first one. Declare a `tag` and `ids` discriminator to tell them apart. This matches how the JSON reader behaves for the same types.
+- Alternatives that are genuinely indistinguishable on the wire collapse to the first one. This covers two structs with identical field sets, two empty structs, and containers with the same encoding (`std::vector<int>` and `std::deque<int>` are byte-identical, so the value survives but the alternative index may not). Declare a `tag` and `ids` discriminator to tell them apart. This matches how the JSON reader behaves for the same types.
+- A map or pair alternative accepts any key set, so it competes with the struct alternatives for the same wire shape. It wins whenever the object carries a key that no struct alternative declares, and loses otherwise. A map whose keys are all field names of some struct alternative is therefore indistinguishable from that struct, and resolves to the struct.
+- Deduction from keys is a guess, not a guarantee: if the deduced alternative fails to parse, the remaining alternatives are tried before the read is reported as an error. An explicit discriminator is authoritative and is never second-guessed this way.
 
 ### Version 1 Compatibility
 
