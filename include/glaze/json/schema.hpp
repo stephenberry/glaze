@@ -820,12 +820,17 @@ namespace glz
             s.type = sv{"object"};
             s.oneOf = std::vector<schema>(N);
 
+            // Spelled from ids_v<T> rather than as decltype(ids[I]) inside the lambda: indexing a
+            // captured reference with the lambda's own template parameter inside decltype is an
+            // internal compiler error on gcc 15 and 16 (mark_use, cp/expr.cc:187).
+            using id_t = std::decay_t<decltype(ids_v<T>[0])>;
+
             for_each<N>([&]<auto I>() {
                using V = std::decay_t<std::variant_alternative_t<I, T>>;
                auto& alt = (*s.oneOf)[I];
 
                alt.type = sv{"object"};
-               if constexpr (std::is_convertible_v<std::decay_t<decltype(ids[I])>, sv>) {
+               if constexpr (std::is_convertible_v<id_t, sv>) {
                   alt.title = sv{ids[I]}; // integral ids have no name to title the branch with
                }
                alt.required = std::vector<sv>{tag_v<T>, content_v<T>};
@@ -893,6 +898,9 @@ namespace glz
 
             const auto& ids = ids_v<T>;
 
+            // See op_adjacent: decltype(ids[I]) inside the lambda ICEs gcc 15 and 16.
+            using unit_id_t = std::decay_t<decltype(ids_v<T>[0])>;
+
             for_each<N>([&]<auto I>() {
                using V = std::decay_t<std::variant_alternative_t<I, T>>;
                auto& schema_val = (*s.oneOf)[I];
@@ -905,7 +913,7 @@ namespace glz
                   schema_val.required = std::vector<sv>{tag_v<T>};
                   // Matches the sibling object branches, which the object schema marks closed.
                   schema_val.additionalProperties = false;
-                  if constexpr (std::is_convertible_v<std::decay_t<decltype(ids[I])>, sv>) {
+                  if constexpr (std::is_convertible_v<unit_id_t, sv>) {
                      schema_val.title = sv{ids[I]};
                   }
                   return;
