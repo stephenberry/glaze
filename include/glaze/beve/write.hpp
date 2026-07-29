@@ -504,10 +504,17 @@ namespace glz
    // deprecated type-tag extension (extension id 1, header byte 0x0E). A tagged variant (tag_v<T>
    // non-empty) is written as an object with the discriminator merged in as the first member,
    // mirroring the JSON writer's internal/embedded tagging; an untagged variant (or a non-object
-   // alternative, or a positional structs-as-arrays write) is written directly as the active
-   // alternative's own BEVE value. In every case the encoding is a plain BEVE value that maps 1:1
-   // to JSON, and no 0x0E extension byte is emitted. The reader recovers the alternative from the
-   // discriminator, the object's key set, or the value's self-describing type header.
+   // alternative) is written directly as the active alternative's own BEVE value. In every case the
+   // encoding is a plain BEVE value that maps 1:1 to JSON, and no 0x0E extension byte is emitted.
+   // The reader recovers the alternative from the discriminator, the object's key set, or the
+   // value's self-describing type header.
+   //
+   // Positional (structs_as_arrays) writes have no keys to merge a discriminator into, so a tagged
+   // variant uses the *adjacent* form instead: a two element generic array [id, value]. This is an
+   // ordinary BEVE array, not a reinstatement of the extension, and it keeps the discriminator
+   // available in the one mode where structural deduction cannot work. An untagged positional
+   // variant is still written bare, and alternatives that share a positional shape are then
+   // indistinguishable on read.
    //
    // Version 1 data is still readable (the reader dispatches on the leading byte), but it is not
    // writable: a process that must produce Version 1 output should pin an older Glaze.
@@ -572,8 +579,27 @@ namespace glz
                      serialize<BEVE>::op<opening_handled<Opts>()>(v, ctx, b, ix);
                   }
                }
+               else if constexpr (check_structs_as_arrays(Opts) && check_write_type_info(Opts) &&
+                                  (not tag_v<T>.empty())) {
+                  // Positional tagged variant: adjacent form [id, value]. Unlike the merged-object
+                  // form this works for every alternative type, object or not, because the id sits
+                  // beside the value rather than inside it.
+                  if (!ensure_space(ctx, b, ix + 1 + write_padding_bytes)) [[unlikely]] {
+                     return;
+                  }
+                  dump<tag::generic_array>(b, ix);
+                  dump_compressed_int<2>(ctx, b, ix);
+                  if (bool(ctx.error)) [[unlikely]] {
+                     return;
+                  }
+                  serialize<BEVE>::op<Opts>(ids_v<T>[value.index()], ctx, b, ix);
+                  if (bool(ctx.error)) [[unlikely]] {
+                     return;
+                  }
+                  serialize<BEVE>::op<Opts>(v, ctx, b, ix);
+               }
                else {
-                  // Untagged, non-object, or positional: write the active alternative directly.
+                  // Untagged or non-object: write the active alternative directly.
                   serialize<BEVE>::op<Opts>(v, ctx, b, ix);
                }
             },

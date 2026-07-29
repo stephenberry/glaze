@@ -969,6 +969,83 @@ namespace glz
          }
       }
 
+      // Read the adjacent form [id, value] that the writer emits for a tagged variant under
+      // structs_as_arrays. Positional data has no keys, so there is nothing to deduce from if the
+      // discriminator does not resolve: a bad id is an error rather than a fallback to try_each,
+      // which would be free to pick a same-shaped alternative and silently return the wrong type.
+      template <auto Opts>
+      static void read_positional_tagged(auto&& value, is_context auto&& ctx, auto&& it, auto end) noexcept
+      {
+         if (invalid_end(ctx, it, end)) {
+            return;
+         }
+         if (uint8_t(*it) != tag::generic_array) [[unlikely]] {
+            ctx.error = error_code::syntax_error;
+            return;
+         }
+         ++it;
+         const auto n = int_from_compressed(ctx, it, end);
+         if (bool(ctx.error)) [[unlikely]] {
+            return;
+         }
+         if (n != 2) [[unlikely]] {
+            ctx.error = error_code::syntax_error;
+            return;
+         }
+
+         using id_type = std::decay_t<decltype(ids_v<T>[0])>;
+         size_t index = ids_v<T>.size();
+         if constexpr (std::integral<id_type>) {
+            id_type id{};
+            from<BEVE, id_type>::template op<Opts>(id, ctx, it, end);
+            if (bool(ctx.error)) [[unlikely]] {
+               return;
+            }
+            index = variant_id_to_index<T>::op(id);
+         }
+         else {
+            if (invalid_end(ctx, it, end)) {
+               return;
+            }
+            if (uint8_t(*it) != tag::string) [[unlikely]] {
+               ctx.error = error_code::syntax_error;
+               return;
+            }
+            ++it;
+            const auto slen = int_from_compressed(ctx, it, end);
+            if (bool(ctx.error)) [[unlikely]] {
+               return;
+            }
+            if (uint64_t(end - it) < slen) [[unlikely]] {
+               ctx.error = error_code::unexpected_end;
+               return;
+            }
+            const sv id_view{it, size_t(slen)};
+            it += slen;
+            index = variant_id_to_index<T>::op(id_view.data(), id_view.data() + id_view.size(), id_view.size());
+         }
+
+         size_t resolved = variant_size;
+         if (index < ids_v<T>.size()) [[likely]] {
+            resolved = index;
+         }
+         else if constexpr (ids_v<T>.size() < variant_size) {
+            // Fewer ids than alternatives: the first unlabeled alternative is the default for an
+            // unrecognized id, matching the keyed reader.
+            resolved = ids_v<T>.size();
+         }
+         if (resolved >= variant_size) [[unlikely]] {
+            ctx.error = error_code::no_matching_variant_type;
+            ctx.custom_error_message = variant_ids_string_v<T>;
+            return;
+         }
+
+         if (value.index() != resolved) {
+            emplace_runtime_variant(value, resolved);
+         }
+         std::visit([&](auto&& v) { parse<BEVE>::op<Opts>(v, ctx, it, end); }, value);
+      }
+
       template <auto Opts>
       GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&& it, auto end) noexcept
       {
@@ -996,12 +1073,18 @@ namespace glz
             return;
          }
 
-         // (B) Positional (structs-as-arrays) data carries no keys or discriminator.
+         // (B) Positional (structs-as-arrays) data carries no keys, so a tagged variant is written in
+         // the adjacent [id, value] form and an untagged one is resolved by trying alternatives.
          // This must be an if/else: `if constexpr (...) { return; }` does not discard the statements
          // that follow it, so without the `else` the (C) block below would still be instantiated in
          // positional mode, where read_object's call into the keyed-object reader does not compile.
          if constexpr (check_structs_as_arrays(Opts)) {
-            try_each<Opts>(value, ctx, it, end);
+            if constexpr (check_write_type_info(Opts) && (not tag_v<T>.empty())) {
+               read_positional_tagged<Opts>(value, ctx, it, end);
+            }
+            else {
+               try_each<Opts>(value, ctx, it, end);
+            }
          }
          else {
             // (C) Version 2: deduce from the value's self-describing category. Only a string-keyed

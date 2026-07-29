@@ -4199,8 +4199,8 @@ suite beve_v2_variants = [] {
 // carried for free, and must not diverge from the JSON reader.
 namespace beve_v2_resolution_test
 {
-   // A tagged variant read positionally (structs_as_arrays): the discriminator is not written in that
-   // mode, so the reader falls back to trying each alternative.
+   // A tagged variant read positionally (structs_as_arrays): there are no keys to merge the
+   // discriminator into, so it is carried in the adjacent [id, value] form instead.
    struct pos_a
    {
       int x{};
@@ -4211,6 +4211,57 @@ namespace beve_v2_resolution_test
       std::string s{};
    };
    using pos_v = std::variant<pos_a, pos_b>;
+
+   // Two alternatives with an identical positional wire shape. Without a discriminator these are
+   // indistinguishable once written as bare arrays; the adjacent form is what keeps them apart.
+   struct same_shape_a
+   {
+      std::string s{};
+      int n{};
+   };
+   struct same_shape_b
+   {
+      std::string s{};
+      int n{};
+   };
+   using same_shape_v = std::variant<same_shape_a, same_shape_b>;
+
+   // The same pair with no discriminator declared: documents that they collapse to the first
+   // alternative, which is the known limitation the adjacent form exists to work around.
+   struct bare_shape_a
+   {
+      std::string s{};
+      int n{};
+   };
+   struct bare_shape_b
+   {
+      std::string s{};
+      int n{};
+   };
+   using bare_shape_v = std::variant<bare_shape_a, bare_shape_b>;
+
+   // A positional variant nested inside a positional struct, with a member after it: the adjacent
+   // array must be consumed exactly so the trailing member still lines up.
+   struct pos_holder
+   {
+      same_shape_v v{};
+      int trailing{};
+   };
+
+   // Non-object alternatives cannot carry a merged discriminator, but the adjacent form works for
+   // any alternative type.
+   using pos_scalar_v = std::variant<int32_t, std::string, std::vector<double>>;
+
+   // Integral ids in the adjacent form.
+   struct int_id_a
+   {
+      int x{};
+   };
+   struct int_id_b
+   {
+      int x{};
+   };
+   using pos_int_id_v = std::variant<int_id_a, int_id_b>;
 
    // The discriminator name is also a real member of one alternative. Both writers emit the key
    // twice; both readers must end up with the member's own value, not the id.
@@ -4279,6 +4330,27 @@ struct glz::meta<beve_v2_resolution_test::pos_v>
 };
 
 template <>
+struct glz::meta<beve_v2_resolution_test::same_shape_v>
+{
+   static constexpr std::string_view tag = "t";
+   static constexpr std::array<std::string_view, 2> ids{"a", "b"};
+};
+
+template <>
+struct glz::meta<beve_v2_resolution_test::pos_scalar_v>
+{
+   static constexpr std::string_view tag = "t";
+   static constexpr std::array<std::string_view, 3> ids{"i", "s", "v"};
+};
+
+template <>
+struct glz::meta<beve_v2_resolution_test::pos_int_id_v>
+{
+   static constexpr std::string_view tag = "k";
+   static constexpr std::array<int, 2> ids{7, 9};
+};
+
+template <>
 struct glz::meta<beve_v2_resolution_test::named_v>
 {
    static constexpr std::string_view tag = "kind";
@@ -4307,6 +4379,113 @@ suite beve_v2_variant_resolution = [] {
       expect(decoded->index() == 1);
       expect(std::get<1>(*decoded).z == 2.5);
       expect(std::get<1>(*decoded).s == "s");
+   };
+
+   "positional discriminator distinguishes identically shaped alternatives"_test = [] {
+      // Both alternatives write as a 2-element array of [string, int]. Trying each alternative can
+      // only ever pick the first, so the adjacent [id, value] form is what makes this round-trip.
+      {
+         same_shape_v in{same_shape_a{"x", 1}};
+         auto encoded = glz::write_beve_untagged(in);
+         expect(encoded.has_value());
+         same_shape_v out{};
+         expect(not glz::read_beve_untagged(out, *encoded));
+         expect(out.index() == 0);
+         expect(std::get<0>(out).s == "x");
+      }
+      {
+         same_shape_v in{same_shape_b{"y", 2}};
+         auto encoded = glz::write_beve_untagged(in);
+         same_shape_v out{};
+         expect(not glz::read_beve_untagged(out, *encoded));
+         expect(out.index() == 1);
+         expect(std::get<1>(out).s == "y");
+         expect(std::get<1>(out).n == 2);
+      }
+   };
+
+   "positional adjacent form carries non-object alternatives"_test = [] {
+      // A merged discriminator needs an object to merge into; the adjacent form does not, so scalars
+      // and arrays keep their discriminator too.
+      {
+         pos_scalar_v in{std::vector<double>{1.5, 2.5}};
+         auto encoded = glz::write_beve_untagged(in);
+         expect(encoded.has_value());
+         pos_scalar_v out{};
+         expect(not glz::read_beve_untagged(out, *encoded));
+         expect(out.index() == 2);
+         expect(std::get<2>(out).size() == 2);
+      }
+      {
+         pos_scalar_v in{std::string{"hi"}};
+         auto encoded = glz::write_beve_untagged(in);
+         pos_scalar_v out{};
+         expect(not glz::read_beve_untagged(out, *encoded));
+         expect(out.index() == 1);
+         expect(std::get<1>(out) == "hi");
+      }
+   };
+
+   "positional adjacent form supports integral ids"_test = [] {
+      pos_int_id_v in{int_id_b{5}};
+      auto encoded = glz::write_beve_untagged(in);
+      expect(encoded.has_value());
+      pos_int_id_v out{};
+      expect(not glz::read_beve_untagged(out, *encoded));
+      expect(out.index() == 1);
+      expect(std::get<1>(out).x == 5);
+   };
+
+   "positional adjacent form is consumed exactly"_test = [] {
+      // The trailing member only decodes correctly if the [id, value] array left the cursor in the
+      // right place.
+      pos_holder in{same_shape_v{same_shape_b{"z", 3}}, 42};
+      auto encoded = glz::write_beve_untagged(in);
+      expect(encoded.has_value());
+      pos_holder out{};
+      expect(not glz::read_beve_untagged(out, *encoded));
+      expect(out.v.index() == 1);
+      expect(out.trailing == 42);
+   };
+
+   "beve_size_untagged matches the positional adjacent form"_test = [] {
+      {
+         same_shape_v in{same_shape_b{"y", 2}};
+         expect(glz::beve_size_untagged(in) == glz::write_beve_untagged(in)->size());
+      }
+      {
+         pos_scalar_v in{std::vector<double>{1.5, 2.5}};
+         expect(glz::beve_size_untagged(in) == glz::write_beve_untagged(in)->size());
+      }
+      {
+         pos_int_id_v in{int_id_b{5}};
+         expect(glz::beve_size_untagged(in) == glz::write_beve_untagged(in)->size());
+      }
+   };
+
+   "untagged positional alternatives sharing a shape collapse to the first"_test = [] {
+      // Known limitation, locked in deliberately: with no discriminator there is nothing on the wire
+      // to tell these apart. Declaring tag/ids is the documented remedy.
+      bare_shape_v in{bare_shape_b{"y", 2}};
+      auto encoded = glz::write_beve_untagged(in);
+      expect(encoded.has_value());
+      bare_shape_v out{};
+      expect(not glz::read_beve_untagged(out, *encoded));
+      expect(out.index() == 0); // not 1
+      expect(std::get<0>(out).s == "y"); // the value survives, the alternative does not
+   };
+
+   "an unresolvable positional id errors rather than guessing"_test = [] {
+      // Positional data has no keys to deduce from, so a bad id must fail loudly instead of falling
+      // back to try-each and returning a same-shaped alternative.
+      same_shape_v in{same_shape_a{"x", 1}};
+      auto encoded = glz::write_beve_untagged(in);
+      expect(encoded.has_value());
+      const auto pos = encoded->find('a');
+      expect(pos != std::string::npos);
+      (*encoded)[pos] = 'z'; // "a" -> "z", an id naming no alternative
+      same_shape_v out{};
+      expect(bool(glz::read_beve_untagged(out, *encoded)));
    };
 
    "numeric alternatives resolve on the exact type header"_test = [] {

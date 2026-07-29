@@ -225,6 +225,15 @@ namespace glz
                   }
                   return result;
                }
+               else if constexpr (check_structs_as_arrays(Opts) && check_write_type_info(Opts) &&
+                                  (not tag_v<T>.empty())) {
+                  // Positional tagged variant: adjacent form [id, value].
+                  size_t result = 1; // generic array tag
+                  result += compressed_int_size(2); // element count
+                  result += calculate_size<BEVE, void>::template op<Opts>(ids_v<T>[value.index()], offset + result);
+                  result += calculate_size<BEVE, void>::template op<Opts>(v, offset + result);
+                  return result;
+               }
                else {
                   return calculate_size<BEVE, void>::template op<Opts>(v, offset);
                }

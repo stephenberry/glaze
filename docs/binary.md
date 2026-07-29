@@ -429,6 +429,21 @@ On read, the alternative is recovered from the discriminator when one is present
 - A map or pair alternative accepts any key set, so it competes with the struct alternatives for the same wire shape. It wins whenever the object carries a key that no struct alternative declares, and loses otherwise. A map whose keys are all field names of some struct alternative is therefore indistinguishable from that struct, and resolves to the struct.
 - Deduction from keys is a guess, not a guarantee: if the deduced alternative fails to parse, the remaining alternatives are tried before the read is reported as an error. An explicit discriminator is authoritative and is never second-guessed this way.
 
+### Variants Under `structs_as_arrays`
+
+Positional writes (`structs_as_arrays`, `glz::write_beve_untagged`) have no keys, so there is nothing for a discriminator to merge into and no key set to deduce from. A variant that declares a `tag` and `ids` is therefore written in the **adjacent** form: a two element array holding the id and the value.
+
+```c++
+using shape = std::variant<circle, rectangle>;   // meta: tag = "type", ids = {"circle", "rectangle"}
+
+glz::write_beve_untagged(shape{rectangle{2.0, 3.0}});
+// ["rectangle", [2.0, 3.0]]
+```
+
+This is an ordinary BEVE generic array, not the deprecated type tag extension. Unlike the merged-object form it works for every alternative type, including scalars and arrays, since the id sits beside the value rather than inside it. The discriminator is authoritative here: an id that names no alternative is an error rather than a fallback to structural guessing, because positional data carries nothing to guess from.
+
+A variant with no discriminator is still written bare. Alternatives with distinguishable positional shapes round-trip by trying each in turn, but alternatives that share a shape (same arity and same element types) collapse to the first one — the value survives, the alternative index does not. Declare a `tag` and `ids` if that distinction matters.
+
 ### Version 1 Compatibility
 
 Version 1 encoded a variant as a type-tag extension (header byte `0x0E`) followed by a compressed positional index. The reader dispatches on the leading byte and accepts both encodings, so **reading needs no option** and existing Version 1 buffers continue to work.
