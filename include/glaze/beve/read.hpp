@@ -547,11 +547,35 @@ namespace glz
       }
    };
 
-   // A variant alternative whose BEVE wire form is an object (used to constrain V2 object deduction).
+   // An alternative that may encode as an object but exposes no key set the deducer can use: a
+   // nested variant (its wire shape depends on its own active alternative), a nullable wrapping an
+   // object, or a type with a custom reader. These behave like maps for deduction purposes -- they
+   // can neither be confirmed nor eliminated by the keys present.
+   template <class V>
+   inline constexpr bool beve_variant_is_opaque_object_alt = [] {
+      using X = std::decay_t<V>;
+      if constexpr (glaze_object_t<X> || reflectable<X> || is_memory_object<X> || readable_map_t<X> || pair_t<X>) {
+         return false; // has a usable key set, or is already a recognized object category
+      }
+      else if constexpr (is_variant<X> || custom_read<X>) {
+         return true;
+      }
+      else if constexpr (nullable_t<X>) {
+         using E = std::decay_t<decltype(*std::declval<X&>())>;
+         return glaze_object_t<E> || reflectable<E> || readable_map_t<E> || pair_t<E> || is_variant<E>;
+      }
+      else {
+         return false;
+      }
+   }();
+
+   // A variant alternative whose BEVE wire form is (or may be) an object. Used to constrain V2
+   // object deduction: an alternative outside this set is never considered for object data.
    template <class V>
    inline constexpr bool beve_variant_is_object_alt = [] {
       using X = std::decay_t<V>;
-      return glaze_object_t<X> || reflectable<X> || is_memory_object<X> || readable_map_t<X> || pair_t<X>;
+      return glaze_object_t<X> || reflectable<X> || is_memory_object<X> || readable_map_t<X> || pair_t<X> ||
+             beve_variant_is_opaque_object_alt<X>;
    }();
 
    // An object alternative with no compile-time key set: a map or pair accepts *any* keys, so it can
@@ -565,7 +589,7 @@ namespace glz
          return false;
       }
       else {
-         return readable_map_t<X> || pair_t<X>;
+         return readable_map_t<X> || pair_t<X> || beve_variant_is_opaque_object_alt<X>;
       }
    }();
 
@@ -615,6 +639,7 @@ namespace glz
                emplace_runtime_variant(value, I);
             }
             ctx.error = error_code::none;
+            ctx.custom_error_message = {}; // else a rejected alternative's message outlives its error
             parse<BEVE>::op<Opts>(std::get<I>(value), ctx, it, end);
             if (!bool(ctx.error)) {
                matched = true;
@@ -667,7 +692,7 @@ namespace glz
 
          // reflect<X>::size may only be named for struct-like X (a std::pair/map alternative has no
          // reflect specialization); beve_is_empty_struct<X> guards that at namespace scope.
-         constexpr bool struct_like = glaze_object_t<X> || reflectable<X>;
+         constexpr bool struct_like = (glaze_object_t<X> || reflectable<X>) && (not custom_read<X>);
          constexpr bool empty_tagged_struct = tagged && beve_is_empty_struct<X>;
 
          if constexpr (empty_tagged_struct) {
@@ -845,6 +870,20 @@ namespace glz
                      decode_hash_with_size<JSON, dk, H, H.type>::op(key.data(), key.data() + klen, size_t(klen));
                   if (di < variant_deduction_key_count<T> && variant_deduction_keys<T>[di] == key) {
                      possible = possible & narrowing_bits[di];
+                     if constexpr (not tagged) {
+                        // Once a single candidate remains there is nothing left to learn, and the
+                        // remaining values do not need to be skipped -- pass 2 re-reads the object
+                        // from the untouched cursor. Without this the scan walks every nested
+                        // subtree, making a variant nested N deep cost O(N^2) to read.
+                        //
+                        // Safe with respect to foreign_key: open-ended alternatives are pre-set in
+                        // narrowing_bits and so are never narrowed away. A lone survivor therefore
+                        // means either no open-ended candidate existed (foreign_key could not have
+                        // changed the outcome) or the survivor is itself the open-ended one.
+                        if (possible.popcount() == 1) {
+                           break;
+                        }
+                     }
                   }
                   else {
                      foreign_key = true;

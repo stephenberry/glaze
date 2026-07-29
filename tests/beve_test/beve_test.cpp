@@ -4263,6 +4263,69 @@ namespace beve_v2_resolution_test
    };
    using pos_int_id_v = std::variant<int_id_a, int_id_b>;
 
+   // Alternatives that encode as objects but expose no key set the deducer can use: a nested
+   // variant, and a nullable wrapping an object. These must not be excluded from object deduction,
+   // or the sibling struct is chosen instead -- an error under default options, and silently the
+   // wrong alternative with fully defaulted fields when unknown keys are tolerated.
+   struct opaque_a
+   {
+      int a{};
+      int b{};
+   };
+   struct opaque_c
+   {
+      int x{};
+      int y{};
+   };
+   using opaque_inner = std::variant<opaque_a, opaque_c>;
+   using opaque_nested_v = std::variant<opaque_inner, opaque_c>; // one plain object alternative
+   using opaque_opt_v = std::variant<std::optional<opaque_a>, opaque_c>;
+   struct opaque_d
+   {
+      int p{};
+      int q{};
+   };
+   using opaque_nested3_v = std::variant<opaque_inner, opaque_c, opaque_d>;
+
+   // Two alternatives sharing a key name but not its type. Structural deduction cannot separate
+   // them -- only attempting the parse can.
+   struct dedup_int
+   {
+      int a{};
+   };
+   struct dedup_str
+   {
+      std::string a{};
+   };
+   using dedup_v = std::variant<dedup_int, dedup_str>;
+
+   // A custom-serialized alternative inside a *tagged* variant. The merged-object writer must not
+   // reach for written_member_count on a custom writer, and the tag-threading reader must not pass
+   // a Tag template argument to a custom reader -- neither extension point has those.
+   struct custom_alt
+   {
+      int v{};
+   };
+   struct plain_alt
+   {
+      double d{};
+   };
+   using custom_tagged_v = std::variant<custom_alt, plain_alt>;
+
+   // A variant nested deeply enough that an O(N^2) key scan is visible as a hang rather than a
+   // slowdown. Reading must stay linear in the buffer size.
+   struct deep_leaf
+   {
+      int v{};
+   };
+   struct deep_node;
+   using deep_v = std::variant<deep_leaf, std::unique_ptr<deep_node>>;
+   struct deep_node
+   {
+      deep_v child{};
+      int n{};
+   };
+
    // The discriminator name is also a real member of one alternative. Both writers emit the key
    // twice; both readers must end up with the member's own value, not the id.
    struct named_like_tag
@@ -4327,6 +4390,43 @@ struct glz::meta<beve_v2_resolution_test::pos_v>
 {
    static constexpr std::string_view tag = "t";
    static constexpr std::array<std::string_view, 2> ids{"a", "b"};
+};
+
+template <>
+struct glz::meta<beve_v2_resolution_test::custom_alt>
+{
+   static constexpr bool custom_write = true;
+   static constexpr bool custom_read = true;
+};
+
+namespace glz
+{
+   template <>
+   struct to<BEVE, beve_v2_resolution_test::custom_alt>
+   {
+      template <auto Opts, class B>
+      static void op(auto&& value, is_context auto&& ctx, B&& b, auto& ix)
+      {
+         serialize<BEVE>::op<Opts>(value.v, ctx, b, ix);
+      }
+   };
+
+   template <>
+   struct from<BEVE, beve_v2_resolution_test::custom_alt>
+   {
+      template <auto Opts>
+      static void op(auto&& value, is_context auto&& ctx, auto&& it, auto end)
+      {
+         parse<BEVE>::op<Opts>(value.v, ctx, it, end);
+      }
+   };
+}
+
+template <>
+struct glz::meta<beve_v2_resolution_test::custom_tagged_v>
+{
+   static constexpr std::string_view tag = "type";
+   static constexpr std::array<std::string_view, 2> ids{"custom", "plain"};
 };
 
 template <>
@@ -4461,6 +4561,130 @@ suite beve_v2_variant_resolution = [] {
          pos_int_id_v in{int_id_b{5}};
          expect(glz::beve_size_untagged(in) == glz::write_beve_untagged(in)->size());
       }
+   };
+
+   "object-shaped alternatives without a usable key set still resolve"_test = [] {
+      // A nested variant and an optional<Struct> encode as objects but expose no key set, so key
+      // narrowing can neither confirm nor eliminate them. Excluding them leaves the sibling struct
+      // as the only candidate, which cannot read this object.
+      constexpr auto lax = glz::opts{.format = glz::BEVE, .error_on_unknown_keys = false};
+      {
+         opaque_nested_v in{opaque_inner{opaque_a{1, 2}}};
+         auto encoded = glz::write_beve(in);
+         expect(encoded.has_value());
+         opaque_nested_v out{};
+         expect(not glz::read_beve(out, *encoded));
+         expect(out.index() == 0);
+         expect(std::get<0>(out).index() == 0);
+         expect(std::get<0>(std::get<0>(out)).a == 1);
+         // Tolerating unknown keys must not turn this into a silently wrong alternative.
+         opaque_nested_v lax_out{};
+         expect(not glz::read<lax>(lax_out, *encoded));
+         expect(lax_out.index() == 0);
+      }
+      {
+         opaque_opt_v in{std::optional<opaque_a>{opaque_a{1, 2}}};
+         auto encoded = glz::write_beve(in);
+         opaque_opt_v out{};
+         expect(not glz::read_beve(out, *encoded));
+         expect(out.index() == 0);
+         expect(std::get<0>(out).has_value());
+         expect(std::get<0>(out)->b == 2);
+         opaque_opt_v lax_out{};
+         expect(not glz::read<lax>(lax_out, *encoded));
+         expect(lax_out.index() == 0);
+      }
+      {
+         // Two plain object alternatives alongside: exercises the deduction path rather than the
+         // single-candidate one, which resolves differently.
+         opaque_nested3_v in{opaque_inner{opaque_a{3, 4}}};
+         auto encoded = glz::write_beve(in);
+         opaque_nested3_v out{};
+         expect(not glz::read_beve(out, *encoded));
+         expect(out.index() == 0);
+         opaque_nested3_v lax_out{};
+         expect(not glz::read<lax>(lax_out, *encoded));
+         expect(lax_out.index() == 0);
+      }
+      {
+         // The plain struct alternative must still resolve when opaque siblings are present.
+         opaque_nested_v in{opaque_c{7, 8}};
+         auto encoded = glz::write_beve(in);
+         opaque_nested_v out{};
+         expect(not glz::read_beve(out, *encoded));
+         expect(out.index() == 1);
+         expect(std::get<1>(out).x == 7);
+      }
+   };
+
+   "a custom-serialized alternative works inside a tagged variant"_test = [] {
+      // Regression: the merged-object writer/sizer must not require written_member_count from a
+      // custom writer, and the tag-threading reader must not pass a Tag argument to a custom reader.
+      // Both are compile failures, so merely instantiating this is most of the test.
+      custom_tagged_v in{custom_alt{7}};
+      auto encoded = glz::write_beve(in);
+      expect(encoded.has_value());
+      // Not asserting beve_size here: calculate_size has no specialization for custom-serialized
+      // types at all, so beve_size does not support them regardless of this change.
+      custom_tagged_v out{};
+      expect(not glz::read_beve(out, *encoded));
+      expect(out.index() == 0);
+      expect(std::get<0>(out).v == 7);
+      {
+         custom_tagged_v plain_in{plain_alt{2.5}};
+         auto plain_encoded = glz::write_beve(plain_in);
+         custom_tagged_v plain_out{};
+         expect(not glz::read_beve(plain_out, *plain_encoded));
+         expect(plain_out.index() == 1);
+         expect(std::get<1>(plain_out).d == 2.5);
+      }
+   };
+
+   "deeply nested variants read in linear time"_test = [] {
+      // The key scan must stop once a single candidate remains. Without that it skips every nested
+      // subtree, making the read quadratic in depth -- at depth 1600 that was ~300x slower than the
+      // whole buffer deserves. Assert on the shape of the growth, not on absolute time.
+      auto build = [](int depth) {
+         deep_v v{deep_leaf{1}};
+         for (int i = 0; i < depth; ++i) {
+            auto node = std::make_unique<deep_node>();
+            node->child = std::move(v);
+            node->n = i;
+            v = std::move(node);
+         }
+         return glz::write_beve(v).value();
+      };
+      auto read_ns = [](const std::string& buf) {
+         deep_v out{};
+         const auto t0 = std::chrono::steady_clock::now();
+         const auto ec = glz::read_beve(out, buf);
+         const auto t1 = std::chrono::steady_clock::now();
+         expect(not ec);
+         return std::chrono::duration<double, std::nano>(t1 - t0).count();
+      };
+      const auto shallow = build(200);
+      const auto deep = build(800); // 4x the depth
+      // Warm both paths before timing so allocator/branch-predictor warmup is not attributed to one.
+      (void)read_ns(shallow);
+      (void)read_ns(deep);
+      const auto t_shallow = read_ns(shallow);
+      const auto t_deep = read_ns(deep);
+      // Linear would be ~4x; quadratic would be ~16x. A generous 10x bound catches the regression
+      // without being flaky on a loaded machine.
+      expect(t_deep < t_shallow * 10.0) << "read time grew " << (t_deep / t_shallow) << "x for 4x the depth";
+   };
+
+   "a failed deduction falls back to the other object alternatives"_test = [] {
+      // Both alternatives declare the same key, so the key set cannot separate them and the
+      // fewest-fields tiebreak (equal here) picks the first. Only the value's type tells them apart,
+      // which deduction never sees. The read must retry the other candidate rather than fail.
+      dedup_v in{dedup_str{"hi"}};
+      auto encoded = glz::write_beve(in);
+      expect(encoded.has_value());
+      dedup_v out{};
+      expect(not glz::read_beve(out, *encoded));
+      expect(out.index() == 1);
+      expect(std::get<1>(out).a == "hi");
    };
 
    "untagged positional alternatives sharing a shape collapse to the first"_test = [] {

@@ -531,6 +531,7 @@ namespace glz
 
                if constexpr ((not check_structs_as_arrays(Opts)) && check_write_type_info(Opts) &&
                              (not tag_v<T>.empty()) &&
+                             (not custom_write<V>) &&
                              (glaze_object_t<V> || (reflectable<V> && not has_member_with_name<V>(tag_v<T>)) ||
                               is_memory_object<V>)) {
                   // Tagged object alternative: emit { tag_v : id, ...members } as one merged object.
