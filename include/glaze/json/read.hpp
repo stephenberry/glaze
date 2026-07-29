@@ -3782,11 +3782,16 @@ namespace glz
          }
 
          // Adjacent values nest (the content of one variant may be another), so this reader has to
-         // count depth itself rather than leaning on the object parser it never calls.
-         depth_guard guard{ctx};
-         if (!guard) [[unlikely]] {
+         // count depth itself rather than leaning on the object parser it never calls. Counted by
+         // hand rather than with depth_guard: the non-null-terminated readers rely on depth staying
+         // elevated when a read bails out, because finalize_read_context only downgrades
+         // `end_reached` to success at depth 0. An RAII restore turns a truncated stream into a
+         // silent success with the destination untouched. Only the success path below decrements.
+         if (ctx.depth >= max_recursive_depth_limit) [[unlikely]] {
+            ctx.error = error_code::exceeded_max_recursive_depth;
             return;
          }
+         ++ctx.depth;
 
          const auto obj_start = it;
 
@@ -3838,6 +3843,7 @@ namespace glz
          using id_type = std::decay_t<decltype(ids_v<T>[0])>;
          size_t type_index = ids_v<T>.size();
          bool tag_seen = false;
+         bool content_scanned = false;
 
          if (!walk([&](const sv key) {
                 if (!tag_seen && key == tag_v<T>) {
@@ -3861,13 +3867,16 @@ namespace glz
                    tag_seen = true;
                    return true;
                 }
+                if (!content_scanned && key == content_v<T>) {
+                   content_scanned = true;
+                   skip_value<JSON>::op<Opts>(ctx, it, end);
+                   return !bool(ctx.error);
+                }
                 if constexpr (Opts.error_on_unknown_keys) {
-                   // Only the two declared keys belong in an adjacently tagged object. Anything else
-                   // is the caller reading data this variant did not describe.
-                   if (key != content_v<T>) [[unlikely]] {
-                      ctx.error = error_code::unknown_key;
-                      return false;
-                   }
+                   // Only the two declared keys belong in an adjacently tagged object, and each only
+                   // once. Anything else is the caller reading data this variant did not describe.
+                   ctx.error = error_code::unknown_key;
+                   return false;
                 }
                 skip_value<JSON>::op<Opts>(ctx, it, end);
                 return !bool(ctx.error);
@@ -3915,7 +3924,10 @@ namespace glz
 
          if (!content_seen) [[unlikely]] {
             ctx.error = error_code::missing_key;
+            ctx.custom_error_message = content_v<T>;
+            return;
          }
+         --ctx.depth;
       }
 
       // Note that items in the variant are required to be default constructable for us to switch types

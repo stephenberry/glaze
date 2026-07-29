@@ -1168,6 +1168,7 @@ namespace glz
 
          size_t resolved = variant_size;
          bool tag_seen = false;
+         bool content_scanned = false;
 
          if (!walk([&](const sv key) {
                 if (!tag_seen && key == tag_v<T>) {
@@ -1175,13 +1176,17 @@ namespace glz
                    tag_seen = true;
                    return !bool(ctx.error);
                 }
+                if (!content_scanned && key == content_v<T>) {
+                   content_scanned = true;
+                   skip_value<BEVE>::op<Opts>(ctx, it, end);
+                   return !bool(ctx.error);
+                }
                 if constexpr (requires { Opts.error_on_unknown_keys; }) {
                    if constexpr (Opts.error_on_unknown_keys) {
-                      // Only the two declared keys belong in an adjacently tagged object.
-                      if (key != content_v<T>) [[unlikely]] {
-                         ctx.error = error_code::unknown_key;
-                         return false;
-                      }
+                      // Only the two declared keys belong in an adjacently tagged object, and each
+                      // only once.
+                      ctx.error = error_code::unknown_key;
+                      return false;
                    }
                 }
                 skip_value<BEVE>::op<Opts>(ctx, it, end);
@@ -1220,6 +1225,7 @@ namespace glz
 
          if (!content_seen) [[unlikely]] {
             ctx.error = error_code::missing_key;
+            ctx.custom_error_message = content_v<T>;
          }
       }
 

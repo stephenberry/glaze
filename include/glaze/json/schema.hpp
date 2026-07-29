@@ -829,6 +829,8 @@ namespace glz
                   alt.title = sv{ids[I]}; // integral ids have no name to title the branch with
                }
                alt.required = std::vector<sv>{tag_v<T>, content_v<T>};
+               // The reader rejects anything but these two keys under default options.
+               alt.additionalProperties = false;
                alt.properties = std::map<sv, schema, std::less<>>();
 
                (*alt.properties)[tag_v<T>].constant = ids[I];
@@ -901,6 +903,8 @@ namespace glz
                   schema_val.properties = std::map<sv, schema, std::less<>>();
                   (*schema_val.properties)[tag_v<T>].constant = ids[I];
                   schema_val.required = std::vector<sv>{tag_v<T>};
+                  // Matches the sibling object branches, which the object schema marks closed.
+                  schema_val.additionalProperties = false;
                   if constexpr (std::is_convertible_v<std::decay_t<decltype(ids[I])>, sv>) {
                      schema_val.title = sv{ids[I]};
                   }

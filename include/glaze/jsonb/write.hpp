@@ -594,15 +594,16 @@ namespace glz
    template <is_variant T>
    struct to<JSONB, T> final
    {
-      static_assert(content_v<T>.empty(),
-                    "Adjacent variant tagging (glz::meta `content`) is implemented for JSON and BEVE "
-                    "but not yet for JSONB. Writing this variant as JSONB would silently fall back to "
-                    "internal tagging and produce a different shape than the other formats, so it is "
-                    "rejected here instead.");
-
       template <auto Opts>
       static void op(auto&& value, is_context auto&& ctx, auto&& b, auto& ix)
       {
+         // Inside op() rather than at class scope: write_supported is `requires { to<Format, T>{}; }`,
+         // so a class-scope assert turns that feature probe into a hard error instead of `false`.
+         static_assert(content_v<T>.empty(),
+                       "Adjacent variant tagging (glz::meta `content`) is implemented for JSON and "
+                       "BEVE but not yet for JSONB. Writing this variant as JSONB would silently fall "
+                       "back to internal tagging and produce a different shape than the other "
+                       "formats, so it is rejected here instead.");
          std::visit(
             [&](auto&& v) {
                using V = std::decay_t<decltype(v)>;

@@ -211,10 +211,10 @@ suite tagged_variant_tests = [] {
       // P2996 reflection: Bloomberg Clang returns unqualified names, GCC returns qualified names
       // Accept both forms for the title
       auto expected_qualified =
-         R"({"type":["object","null"],"$defs":{"int32_t":{"type":"integer","minimum":-2147483648,"maximum":2147483647}},"oneOf":[{"type":"object","properties":{"data":{"type":"object","additionalProperties":{"$ref":"#/$defs/int32_t"}},"type":{"const":"put_action"}},"additionalProperties":false,"required":["type"],"title":"put_action"},{"type":"object","properties":{"data":{"type":"string"},"type":{"const":"delete_action"}},"additionalProperties":false,"required":["type"],"title":"delete_action"},{"type":"object","properties":{"type":{"const":"std::monostate"}},"required":["type"],"title":"std::monostate"}],"title":"std::shared_ptr<std::variant<put_action, delete_action, std::monostate>>"})";
+         R"({"type":["object","null"],"$defs":{"int32_t":{"type":"integer","minimum":-2147483648,"maximum":2147483647}},"oneOf":[{"type":"object","properties":{"data":{"type":"object","additionalProperties":{"$ref":"#/$defs/int32_t"}},"type":{"const":"put_action"}},"additionalProperties":false,"required":["type"],"title":"put_action"},{"type":"object","properties":{"data":{"type":"string"},"type":{"const":"delete_action"}},"additionalProperties":false,"required":["type"],"title":"delete_action"},{"type":"object","properties":{"type":{"const":"std::monostate"}},"additionalProperties":false,"required":["type"],"title":"std::monostate"}],"title":"std::shared_ptr<std::variant<put_action, delete_action, std::monostate>>"})";
 #if GLZ_REFLECTION26
       auto expected_unqualified =
-         R"({"type":["object","null"],"$defs":{"int32_t":{"type":"integer","minimum":-2147483648,"maximum":2147483647}},"oneOf":[{"type":"object","properties":{"data":{"type":"object","additionalProperties":{"$ref":"#/$defs/int32_t"}},"type":{"const":"put_action"}},"additionalProperties":false,"required":["type"],"title":"put_action"},{"type":"object","properties":{"data":{"type":"string"},"type":{"const":"delete_action"}},"additionalProperties":false,"required":["type"],"title":"delete_action"},{"type":"object","properties":{"type":{"const":"std::monostate"}},"required":["type"],"title":"std::monostate"}],"title":"std::shared_ptr<variant<put_action, delete_action, monostate>>"})";
+         R"({"type":["object","null"],"$defs":{"int32_t":{"type":"integer","minimum":-2147483648,"maximum":2147483647}},"oneOf":[{"type":"object","properties":{"data":{"type":"object","additionalProperties":{"$ref":"#/$defs/int32_t"}},"type":{"const":"put_action"}},"additionalProperties":false,"required":["type"],"title":"put_action"},{"type":"object","properties":{"data":{"type":"string"},"type":{"const":"delete_action"}},"additionalProperties":false,"required":["type"],"title":"delete_action"},{"type":"object","properties":{"type":{"const":"std::monostate"}},"additionalProperties":false,"required":["type"],"title":"std::monostate"}],"title":"std::shared_ptr<variant<put_action, delete_action, monostate>>"})";
       expect(schema == expected_qualified || schema == expected_unqualified) << schema;
 #else
       expect(schema == expected_qualified) << schema;
@@ -2441,10 +2441,46 @@ suite adjacent_tagging_tests = [] {
       expect(glz::read_json(out, R"({"value":[1]})")); // no discriminator
       expect(glz::read_json(out, R"([1,2,3])")); // not the adjacent shape at all
 
+      // Each declared key may appear once. Both duplicates report the same error; the content key
+      // used to slip through the unknown-key check and be silently first-wins.
+      expect(glz::read_json(out, R"({"type":"deq","value":[1],"value":[2]})") == glz::error_code::unknown_key);
+      expect(glz::read_json(out, R"({"type":"deq","type":"vec","value":[1]})") == glz::error_code::unknown_key);
+
       // Unknown keys are tolerated when the caller asks for that.
       same_shape lax{};
       expect(not glz::read<glz::opts{.error_on_unknown_keys = false}>(lax, R"({"type":"deq","value":[1],"x":1})"));
       expect(lax.index() == 1);
+   };
+
+   "a truncated adjacent object is reported, not silently accepted"_test = [] {
+      // Non-null-terminated reads (glz::read_streaming, and anything with null_terminated = false)
+      // depend on ctx.depth staying elevated when a read bails out: finalize_read_context only
+      // downgrades end_reached to success at depth 0. Restoring depth on the error path turned a
+      // truncated stream into ec == none with the destination untouched.
+      constexpr glz::opts streaming{.null_terminated = false};
+      const std::string_view complete = R"({"type":"circle","value":{"radius":1}})";
+      for (size_t n = 1; n < complete.size(); ++n) {
+         mixed out{};
+         const std::string prefix{complete.substr(0, n)};
+         expect(bool(glz::read<streaming>(out, prefix))) << "accepted truncated prefix: " << prefix;
+      }
+      mixed whole{};
+      expect(not glz::read<streaming>(whole, std::string{complete}));
+      expect(whole.index() == 0);
+   };
+
+   "reading many adjacent variants does not leak depth"_test = [] {
+      // Counting depth by hand (rather than with an RAII guard) must still balance on success, or a
+      // long sequence of adjacent variants would falsely trip max_recursive_depth_limit.
+      const std::vector<same_shape> many(400, same_shape{std::vector<double>{1}});
+      const auto json = glz::write_json(many);
+      expect(json.has_value());
+      std::vector<same_shape> out{};
+      expect(not glz::read_json(out, *json));
+      expect(out.size() == 400);
+      std::vector<same_shape> out_streaming{};
+      expect(not glz::read<glz::opts{.null_terminated = false}>(out_streaming, *json));
+      expect(out_streaming.size() == 400);
    };
 
    "an unlabeled alternative is the read default and is not writable"_test = [] {
@@ -2563,6 +2599,34 @@ suite ids_bounds_tests = [] {
       v_t unlabeled{c_t{7}};
       std::string arr{};
       expect(bool(glz::write_json(glz::array_variant_wrapper<v_t>{unlabeled}, arr)));
+   };
+};
+
+suite adjacent_schema_tests = [] {
+   using namespace tagging_repr;
+
+   "the schema describes the adjacent shape as a discriminated union"_test = [] {
+      // The point of the representation is that a consumer can dispatch on the tag, so the schema
+      // has to say so: one branch per alternative, each a closed object with a const discriminator
+      // and the alternative's own schema nested under the content key.
+      const auto schema = glz::write_json_schema<same_shape>();
+      expect(schema.has_value());
+      expect(
+         *schema ==
+         R"({"type":"object","$defs":{"double":{"type":"number","minimum":-1.7976931348623157E308,"maximum":1.7976931348623157E308}},"oneOf":[{"type":"object","properties":{"type":{"const":"vec"},"value":{"type":"array","items":{"$ref":"#/$defs/double"}}},"additionalProperties":false,"required":["type","value"],"title":"vec"},{"type":"object","properties":{"type":{"const":"deq"},"value":{"type":"array","items":{"$ref":"#/$defs/double"}}},"additionalProperties":false,"required":["type","value"],"title":"deq"}],"title":"std::variant<std::vector<double>, std::deque<double>>"})")
+         << *schema;
+   };
+
+   "a unit alternative is described as a discriminator-only object"_test = [] {
+      const auto schema = glz::write_json_schema<with_none>();
+      expect(schema.has_value());
+      // Not `{"type":"null"}`: internal tagging writes the unit alternative as {tag: id}.
+      expect(
+         schema->find(
+            R"({"type":"object","properties":{"type":{"const":"NONE"}},"additionalProperties":false,"required":["type"],"title":"NONE"})") !=
+         std::string::npos)
+         << *schema;
+      expect(schema->find(R"("type":"null")") == std::string::npos) << *schema;
    };
 };
 

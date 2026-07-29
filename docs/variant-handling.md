@@ -456,8 +456,8 @@ Notes:
 - `tag` and `content` must differ, and `content` requires `tag`.
 - Both representations are identical in JSON and BEVE, so `glz::beve_to_json(glz::write_beve(v))` matches `glz::write_json(v)`.
 - Under BEVE's `structs_as_arrays`, adjacent tagging projects to the two element array `[id, value]`. Internal tagging has nothing to project there — its whole mechanism is a key — so `tag` without `content` is a compile error in that mode.
-- `glz::json_schema` describes an adjacently tagged variant as a `oneOf` of two-property objects with a `const` discriminator. Unlike the internally tagged case, each alternative's own schema is nested rather than merged, so complex alternatives are emitted through `$defs` by reference.
-- Adjacent tagging is not yet implemented for YAML or JSONB, which support internal tagging only. Declaring `content` and then using one of those formats is a compile error rather than a silent fallback to a different shape. MsgPack and CBOR are unaffected: they already encode every variant as a two element array (`[id, value]` and `[index, value]` respectively), which is the adjacent form.
+- `glz::json_schema` describes an adjacently tagged variant as a `oneOf` of two-property objects with a `const` discriminator. Unlike the internally tagged case, each alternative's own schema is nested under the content key rather than merged with the discriminator, so an alternative reached through `$defs` no longer needs its `additionalProperties: false` relaxed. (Whether a given definition ends up as a `$ref` or inlined is decided afterwards by the usual single-use inlining.)
+- Adjacent tagging is not yet implemented for YAML or JSONB, which support internal tagging only. Declaring `content` and then writing or reading one of those formats is a compile error rather than a silent fallback to a different shape. MsgPack and CBOR are unaffected: they already encode every variant as a two element array (`[id, value]` and `[index, value]` respectively), which is the adjacent form. TOML has no discriminator support in either representation and writes the active alternative bare.
 
 ### Tagged Variants with Embedded Tags
 
@@ -777,7 +777,8 @@ Because the two formats agree, `glz::beve_to_json` is a faithful transcode of a 
 
 ```c++
 auto beve = glz::write_beve(v).value();
-glz::beve_to_json(beve).value() == glz::write_json(v).value();  // true
+std::string json{};
+glz::beve_to_json(beve, json);          // json == glz::write_json(v).value()
 ```
 
 Version 1 buffers, which did carry the type-tag extension, are still readable. See [Binary Format](./binary.md#variants).

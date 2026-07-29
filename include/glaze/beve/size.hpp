@@ -194,7 +194,14 @@ namespace glz
          constexpr bool tagged = check_write_type_info(Opts) && tagging != variant_tagging_kind::none;
 
          if constexpr (tagged && check_structs_as_arrays(Opts)) {
-            // Positional projection of adjacent tagging: [id, value].
+            // Positional projection of adjacent tagging: [id, value]. Mirrors the writer's guard, or
+            // beve_size_untagged would hand back a byte count for a value that cannot be written.
+            static_assert(
+               tagging == variant_tagging_kind::adjacent || detail::beve_positional_tagging_needs_content<T>::value,
+               "Positional writes (structs_as_arrays) have no keys, so there is nothing for "
+               "internal tagging to merge a discriminator into. Declare `content` beside "
+               "`tag` in glz::meta to select adjacent tagging, which projects positionally "
+               "to the two element array [id, value].");
             if (value.index() >= ids_v<T>.size()) {
                return size_t(0); // writer errors and emits nothing; mirror it
             }

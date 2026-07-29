@@ -1625,16 +1625,17 @@ namespace glz
       requires(not custom_write<T>)
    struct to<YAML, T>
    {
-      static_assert(content_v<std::remove_cvref_t<T>>.empty(),
-                    "Adjacent variant tagging (glz::meta `content`) is implemented for JSON and BEVE "
-                    "but not yet for YAML. Writing this variant as YAML would silently fall back to "
-                    "internal tagging and produce a different shape than the other formats, so it is "
-                    "rejected here instead.");
-
       template <auto Opts, class B>
       static void op(auto&& value, is_context auto&& ctx, B&& b, auto& ix)
       {
          using V = std::remove_cvref_t<T>;
+         // Inside op() rather than at class scope: write_supported is `requires { to<Format, T>{}; }`,
+         // so a class-scope assert turns that feature probe into a hard error instead of `false`.
+         static_assert(content_v<V>.empty(),
+                       "Adjacent variant tagging (glz::meta `content`) is implemented for JSON and "
+                       "BEVE but not yet for YAML. Writing this variant as YAML would silently fall "
+                       "back to internal tagging and produce a different shape than the other "
+                       "formats, so it is rejected here instead.");
          // Tagged variants emit a discriminator entry (meta::tag) when holding an object, so the
          // output names which alternative it is and round-trips through the reader.
          if constexpr (check_write_type_info(Opts) && not tag_v<V>.empty()) {

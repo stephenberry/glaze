@@ -127,7 +127,7 @@ Auto-deduction requires that the variant has **at most one alternative per JSONB
 
 ### Tagged variants
 
-When the variant has a `tag_v<T>` (set via `glz::meta<T>::tag`) and the active alternative is a reflected struct, the writer emits an OBJECT with the tag pair prepended:
+JSONB supports internal tagging only. When the variant declares `tag` (via `glz::meta<T>::tag`), the writer emits an OBJECT with the tag pair prepended. Adjacent tagging (`content`) is not implemented for JSONB and is rejected at compile time — see [Variant Handling](./variant-handling.md#choosing-a-tagging-representation).
 
 ```c++
 struct put_op { std::string path; int value; };
