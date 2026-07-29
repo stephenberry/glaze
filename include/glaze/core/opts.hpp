@@ -307,6 +307,9 @@ namespace glz
    struct structs_as_arrays_opt_tag
    {};
 
+   struct allow_conversions_opt_tag
+   {};
+
    // Helper for deprecated option static_asserts (dependent false pattern)
    template <class>
    inline constexpr bool deprecated_opts_raw = false;
@@ -337,6 +340,9 @@ namespace glz
 
    template <auto member_ptr>
    concept is_structs_as_arrays_tag = std::same_as<std::decay_t<decltype(member_ptr)>, structs_as_arrays_opt_tag>;
+
+   template <auto member_ptr>
+   concept is_allow_conversions_tag = std::same_as<std::decay_t<decltype(member_ptr)>, allow_conversions_opt_tag>;
 
    consteval bool check_validate_skipped(auto&& Opts)
    {
@@ -1254,6 +1260,20 @@ namespace glz
             return opts_structs_as_arrays{{Opts}};
          }
       }
+      else if constexpr (is_allow_conversions_tag<member_ptr>) {
+         if constexpr (requires { Opts.allow_conversions; }) {
+            auto ret = Opts;
+            ret.allow_conversions = true;
+            return ret;
+         }
+         else {
+            struct opts_allow_conversions : std::decay_t<decltype(Opts)>
+            {
+               bool allow_conversions = true;
+            };
+            return opts_allow_conversions{{Opts}};
+         }
+      }
       else {
          auto ret = Opts;
          ret.*member_ptr = true;
@@ -1365,6 +1385,22 @@ namespace glz
          }
          else {
             return Opts;
+         }
+      }
+      else if constexpr (is_allow_conversions_tag<member_ptr>) {
+         if constexpr (requires { Opts.allow_conversions; }) {
+            auto ret = Opts;
+            ret.allow_conversions = false;
+            return ret;
+         }
+         else {
+            // `allow_conversions` defaults to true when absent, so turning it off must materialize
+            // the field rather than return Opts unchanged.
+            struct opts_allow_conversions : std::decay_t<decltype(Opts)>
+            {
+               bool allow_conversions = false;
+            };
+            return opts_allow_conversions{{Opts}};
          }
       }
       else {

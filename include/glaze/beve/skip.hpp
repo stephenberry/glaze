@@ -209,8 +209,15 @@ namespace glz
          return;
       }
 
+      // The element count is attacker-controlled and only bounded by int_from_compressed's 2^48 cap,
+      // so a malformed header can name far more elements than the buffer holds. Every sibling skip
+      // loop already bails on error; without the same check here each of those iterations errors
+      // instantly and is ignored, turning a 14 byte buffer into hours of spinning.
       for (size_t i = 0; i < n; ++i) {
          skip_value<BEVE>::op<Opts>(ctx, it, end);
+         if (bool(ctx.error)) [[unlikely]] {
+            return;
+         }
       }
    }
 
@@ -242,7 +249,8 @@ namespace glz
       switch (subtype) {
       case 0: // delimiter: no payload
          return;
-      case 1: { // variant: [compressed_int index] [value]
+      case 1: { // legacy (Version 1) type tag: [compressed_int index] [value]. Version 2 variants
+                // are ordinary objects/values and skip via the generic dispatch, never reaching here.
          skip_compressed_int(ctx, it, end);
          if (bool(ctx.error)) [[unlikely]] {
             return;
