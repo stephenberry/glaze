@@ -530,8 +530,7 @@ namespace glz
                using V = std::decay_t<decltype(v)>;
 
                if constexpr ((not check_structs_as_arrays(Opts)) && check_write_type_info(Opts) &&
-                             (not tag_v<T>.empty()) &&
-                             (not custom_write<V>) &&
+                             (not tag_v<T>.empty()) && (not custom_write<V>) &&
                              (glaze_object_t<V> || (reflectable<V> && not has_member_with_name<V>(tag_v<T>)) ||
                               is_memory_object<V>)) {
                   // Tagged object alternative: emit { tag_v : id, ...members } as one merged object.
@@ -572,8 +571,8 @@ namespace glz
                   // discriminator: headerless string key + id VALUE (string or integral, with header).
                   // The key type is spelled through decltype(tag_v<T>) so lookup of the str_t writer
                   // specialization (defined later in this file) is deferred to instantiation.
-                  to<BEVE, std::remove_cvref_t<decltype(tag_v<T>)>>::template no_header_cx<tag_v<T>.size()>(
-                     tag_v<T>, ctx, b, ix);
+                  to<BEVE, std::remove_cvref_t<decltype(tag_v<T>)>>::template no_header_cx<tag_v<T>.size()>(tag_v<T>,
+                                                                                                            ctx, b, ix);
                   if (bool(ctx.error)) [[unlikely]] {
                      return;
                   }

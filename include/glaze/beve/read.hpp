@@ -795,9 +795,8 @@ namespace glz
             constexpr size_t I = [] {
                size_t r = variant_size;
                [&]<size_t... J>(std::index_sequence<J...>) {
-                  ((beve_variant_is_object_alt<std::variant_alternative_t<J, T>> && r == variant_size
-                       ? (void)(r = J)
-                       : (void)0),
+                  ((beve_variant_is_object_alt<std::variant_alternative_t<J, T>> && r == variant_size ? (void)(r = J)
+                                                                                                      : (void)0),
                    ...);
                }(std::make_index_sequence<variant_size>{});
                return r;
@@ -907,8 +906,8 @@ namespace glz
                         }
                         const sv id_view{scan, size_t(slen)};
                         scan += slen;
-                        tag_index = variant_id_to_index<T>::op(id_view.data(), id_view.data() + id_view.size(),
-                                                               id_view.size());
+                        tag_index =
+                           variant_id_to_index<T>::op(id_view.data(), id_view.data() + id_view.size(), id_view.size());
                         tag_decoded = true;
                      }
                      // The discriminator is authoritative, so the remaining keys carry no further
