@@ -64,6 +64,7 @@ target_sources(glaze_glaze
     FILES
     modules/glaze/json/escape_unicode.ixx
     modules/glaze/json/float_format.ixx
+    modules/glaze/json/generic_fwd.ixx
     modules/glaze/json/generic.ixx
     modules/glaze/json/invoke.ixx
     modules/glaze/json/jmespath.ixx

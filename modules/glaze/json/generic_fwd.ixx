@@ -1,7 +1,28 @@
 // Glaze Library
-// For the license information refer to glaze.hpp
+// For the license information refer to glaze.ixx
+// glz:header path="glaze/json/generic_fwd.hpp"
+// glz:header std=<concepts>
+// glz:header std=<cstddef>
+// glz:header std=<cstdint>
+// glz:header std=<cstdlib>
+// glz:header std=<initializer_list>
+// glz:header std=<map>
+// glz:header std=<stdexcept>
+// glz:header std=<string>
+// glz:header std=<string_view>
+// glz:header std=<type_traits>
+// glz:header std=<utility>
+// glz:header std=<variant>
+// glz:header std=<vector>
+// glz:header include="glaze/forward.hpp"
+export module glaze.json.generic:fwd;
 
-#pragma once
+import std;
+
+import glaze.containers.ordered_small_map;
+import glaze.core.context;
+import glaze.core.meta_fwd;
+import glaze.util.expected;
 
 #ifndef GLZ_THROW_OR_ABORT
 #if __cpp_exceptions
@@ -19,11 +40,11 @@
 #endif
 #endif
 
-#if __cpp_exceptions
-#include <stdexcept>
-#endif
+using std::int64_t;
+using std::uint64_t;
+using std::size_t;
 
-namespace glz
+export namespace glz
 {
    inline void glaze_error([[maybe_unused]] const char* msg) GLZ_NOEXCEPT
    {
@@ -31,23 +52,13 @@ namespace glz
    }
 }
 
-#include <cstddef>
-#include <map>
-#include <variant>
-#include <vector>
-
-#include "glaze/containers/ordered_small_map.hpp"
-#include "glaze/core/context.hpp"
-#include "glaze/forward.hpp"
-#include "glaze/util/expected.hpp"
-
 #if defined(_MSC_VER) && !defined(__clang__)
 // Turn off broken MSVC warning for "declaration of 'v' hides previous local declaration"
 #pragma warning(push)
 #pragma warning(disable : 4456)
 #endif
 
-namespace glz
+export namespace glz
 {
    // Number storage mode for generic JSON types
    enum class num_mode {

@@ -95,7 +95,7 @@ def parse_manifest(path: Path | None) -> Manifest:
             continue
         if section != "import_overrides":
             continue
-        match = re.match(r"\s*([A-Za-z_][\w.]*)\s*:\s*(.+?)\s*$", line)
+        match = re.match(r"\s*([A-Za-z_][\w.:]*)\s*:\s*(.+?)\s*$", line)
         if not match:
             raise HeaderGenerationError(f"{path}:{line_number}: invalid import_overrides entry")
         import_overrides[match.group(1)] = strip_yaml_scalar(match.group(2))
@@ -172,20 +172,41 @@ def normalize_project_include(value: str) -> str:
 
 def discover_module_name(lines: list[str]) -> str | None:
     for line in lines:
-        match = re.match(r"^\s*(?:export\s+)?module\s+([A-Za-z_][\w.]*)\s*;", line)
+        match = re.match(r"^\s*(?:export\s+)?module\s+([A-Za-z_][\w.:]*)\s*;", line)
         if match:
             return match.group(1)
     return None
 
 
-def module_import_to_include(module_name: str, manifest: Manifest, source_path: Path) -> str:
-    if module_name in manifest.import_overrides:
-        return normalize_project_include(manifest.import_overrides[module_name])
-    if module_name == "glaze":
+def module_import_to_include(
+    imported_name: str, current_module_name: str | None, manifest: Manifest, source_path: Path
+) -> str:
+    resolved_name = imported_name
+    if imported_name.startswith(":"):
+        if current_module_name is None:
+            raise HeaderGenerationError(
+                f"{source_path}: cannot resolve local partition import {imported_name!r} without a module declaration"
+            )
+        partition_name = imported_name[1:]
+        if not re.fullmatch(r"[A-Za-z_][\w.]*", partition_name):
+            raise HeaderGenerationError(f"{source_path}: invalid local partition import {imported_name!r}")
+        owning_module = current_module_name.partition(":")[0]
+        resolved_name = f"{owning_module}:{partition_name}"
+
+    if resolved_name in manifest.import_overrides:
+        return normalize_project_include(manifest.import_overrides[resolved_name])
+    if resolved_name == "glaze":
         return '"glaze/glaze.hpp"'
-    if module_name.startswith("glaze."):
-        return f'"{module_name.replace(".", "/")}.hpp"'
-    raise HeaderGenerationError(f"{source_path}: unsupported import {module_name!r}; add an import_overrides entry")
+    if imported_name.startswith(":") and resolved_name.startswith("glaze."):
+        # Keep partition headers beside their owning module header:
+        #   import :fwd; in glaze.json.generic -> glaze/json/generic_fwd.hpp
+        owning_module, partition_name = resolved_name.split(":", maxsplit=1)
+        header_stem = owning_module.replace(".", "/")
+        partition_suffix = partition_name.replace(".", "_")
+        return f'"{header_stem}_{partition_suffix}.hpp"'
+    if resolved_name.startswith("glaze."):
+        return f'"{resolved_name.replace(".", "/")}.hpp"'
+    raise HeaderGenerationError(f"{source_path}: unsupported import {imported_name!r}; add an import_overrides entry")
 
 
 def dedupe(items: list[str]) -> list[str]:
@@ -223,7 +244,7 @@ def transform_source(
         if re.match(r"^\s*module\s*;\s*(?://.*)?$", line):
             in_global_fragment = True
             continue
-        if in_global_fragment and re.match(r"^\s*export\s+module\s+[A-Za-z_][\w.]*\s*;\s*(?://.*)?$", line):
+        if in_global_fragment and re.match(r"^\s*export\s+module\s+[A-Za-z_][\w.:]*\s*;\s*(?://.*)?$", line):
             in_global_fragment = False
             continue
         if MODULE_RE.match(line):
@@ -237,7 +258,7 @@ def transform_source(
             if target == "std":
                 import_std_seen = True
             elif metadata.project_imports == "include":
-                project_includes.append(module_import_to_include(target, manifest, source_path))
+                project_includes.append(module_import_to_include(target, module_name, manifest, source_path))
             continue
         transformed_lines.append(line)
 
@@ -501,7 +522,10 @@ def copy_support_headers(
 def matches_selection(header: GeneratedHeader, selected: set[str]) -> bool:
     source = header.source_path.as_posix()
     destination = header.header_path.as_posix()
-    return any(item == header.module_name or item in source or item in destination for item in selected)
+    owning_module = header.module_name.partition(":")[0] if header.module_name else None
+    return any(
+        item == header.module_name or item == owning_module or item in source or item in destination for item in selected
+    )
 
 
 def write_or_check(headers: list[GeneratedHeader], check: bool, dry_run: bool) -> int:

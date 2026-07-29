@@ -1,13 +1,38 @@
 // Glaze Library
-// For the license information refer to glaze.hpp
+// For the license information refer to glaze.ixx
+// glz:header path="glaze/json/generic.hpp"
+// glz:header std=<charconv>
+// glz:header std=<concepts>
+// glz:header std=<cstddef>
+// glz:header std=<cstdint>
+// glz:header std=<string>
+// glz:header std=<string_view>
+// glz:header std=<type_traits>
+// glz:header std=<utility>
+// glz:header std=<variant>
+export module glaze.json.generic;
 
-#pragma once
+import std;
 
-#include "glaze/core/common.hpp"
-#include "glaze/json/generic_fwd.hpp"
-#include "glaze/json/write.hpp"
+export import :fwd;
+export import glaze.json.read;
+export import glaze.json.write;
 
-namespace glz
+import glaze.api.std.string;
+import glaze.api.std.variant;
+import glaze.concepts.container_concepts;
+import glaze.core.common;
+import glaze.core.context;
+import glaze.core.opts;
+import glaze.core.seek;
+import glaze.util.expected;
+import glaze.util.string_literal;
+
+using std::int64_t;
+using std::uint64_t;
+using std::size_t;
+
+export namespace glz
 {
 
    template <num_mode Mode, template <class> class MapType>
@@ -127,9 +152,7 @@ namespace glz
    }
 }
 
-#include "glaze/core/seek.hpp"
-
-namespace glz
+export namespace glz
 {
    // Specialization for glz::generic_json in all number handling modes and map types
    template <glz::num_mode Mode, template <class> class MapType>
