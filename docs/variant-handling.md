@@ -395,6 +395,70 @@ suite tagged_variant_tests = [] {
 };
 ```
 
+### Choosing a Tagging Representation
+
+How a discriminated variant is laid out on the wire is a property of the **variant type**, not of whichever alternative happens to be active. Glaze decides it once, from `glz::meta`, and every alternative obeys it.
+
+| `glz::meta` declares | Representation | Wire shape |
+|---|---|---|
+| nothing | none | the alternative's own value, deduced on read |
+| `tag` | internal | `{"type":"circle","radius":5}` |
+| `tag` and `content` | adjacent | `{"type":"circle","value":{"radius":5}}` |
+
+**Internal tagging** merges the discriminator into the alternative's own object. It produces the nicest shape and is the right default, but it only exists for alternatives that *are* objects — there is nowhere to put a key in `[1,2]` or `42`.
+
+Declaring `tag` alone for a variant that has a non-object alternative is a compile error:
+
+```c++
+using Mixed = std::variant<Circle, std::vector<double>, int>;
+
+template <> struct glz::meta<Mixed> {
+   static constexpr std::string_view tag = "type";           // ❌ static_assert
+   static constexpr auto ids = std::array{"circle", "vec", "num"};
+};
+```
+
+Earlier versions accepted this and silently wrote the non-object alternatives with no discriminator at all, so one variant had several unrelated shapes (`{"type":"circle",…}`, `[1,2]`, `42`) that no schema could describe, and any two tag-less alternatives sharing a shape were indistinguishable on read. Declare `content` instead.
+
+**Adjacent tagging** puts the discriminator beside the value under a second key, which works for every alternative type at the cost of one nesting level:
+
+```c++
+template <> struct glz::meta<Mixed> {
+   static constexpr std::string_view tag = "type";
+   static constexpr std::string_view content = "value";
+   static constexpr auto ids = std::array{"circle", "vec", "num"};
+};
+
+glz::write_json(Mixed{Circle{5}});                 // {"type":"circle","value":{"radius":5}}
+glz::write_json(Mixed{std::vector<double>{1,2}});  // {"type":"vec","value":[1,2]}
+glz::write_json(Mixed{42});                        // {"type":"num","value":42}
+```
+
+Because the discriminator no longer depends on the alternative's shape, alternatives that share a shape round-trip correctly:
+
+```c++
+using AV = std::variant<std::vector<double>, std::deque<double>>;
+
+template <> struct glz::meta<AV> {
+   static constexpr std::string_view tag = "type";
+   static constexpr std::string_view content = "value";
+   static constexpr auto ids = std::array{"vec", "deq"};
+};
+
+AV v = std::deque<double>{1, 2, 3};
+auto s = glz::write_json(v).value();          // {"type":"deq","value":[1,2,3]}
+glz::read_json<AV>(s)->index();               // 1 -- the deque, as written
+```
+
+Notes:
+
+- The two keys may appear in either order on read. Any other key is an `unknown_key` error under the default options.
+- `tag` and `content` must differ, and `content` requires `tag`.
+- Both representations are identical in JSON and BEVE, so `glz::beve_to_json(glz::write_beve(v))` matches `glz::write_json(v)`.
+- Under BEVE's `structs_as_arrays`, adjacent tagging projects to the two element array `[id, value]`. Internal tagging has nothing to project there — its whole mechanism is a key — so `tag` without `content` is a compile error in that mode.
+- `glz::json_schema` describes an adjacently tagged variant as a `oneOf` of two-property objects with a `const` discriminator. Unlike the internally tagged case, each alternative's own schema is nested rather than merged, so complex alternatives are emitted through `$defs` by reference.
+- Adjacent tagging is not yet implemented for YAML or JSONB, which support internal tagging only. Declaring `content` and then using one of those formats is a compile error rather than a silent fallback to a different shape. MsgPack and CBOR are unaffected: they already encode every variant as a two element array (`[id, value]` and `[index, value]` respectively), which is the adjacent form.
+
 ### Tagged Variants with Embedded Tags
 
 Variant tags may be embedded within the structs themselves, making the discriminator accessible at runtime without using `std::visit`. This provides cleaner, more maintainable code:
@@ -707,13 +771,13 @@ glz::read_json(parsed, R"({"type":"DerivedSite","message":"Warning","severity":2
 
 ## BEVE to JSON
 
-BEVE uses the variant index to denote the type in a variant. When calling `glz::beve_to_json`, variants will be written in JSON with `"index"` and `"value"` keys. The index indicates the type, which would correspond to a `std::variant` `index()` method.
+BEVE Version 2 writes a variant as an ordinary, self-describing value in exactly the same shape as JSON — a merged object for internal tagging, a two-member object for adjacent tagging, and the bare alternative when untagged. There is no `{"index":…,"value":…}` wrapper and no type-tag extension byte.
 
-```json
-{
-  "index": 1,
-  "value": "my value"
-}
+Because the two formats agree, `glz::beve_to_json` is a faithful transcode of a variant:
+
+```c++
+auto beve = glz::write_beve(v).value();
+glz::beve_to_json(beve).value() == glz::write_json(v).value();  // true
 ```
 
-> BEVE conversion to JSON does not support `string` tags, to simplify the specification and avoid bifurcation of variant handling. Using the index is more efficient in binary and more directly translated to `std::variant`.
+Version 1 buffers, which did carry the type-tag extension, are still readable. See [Binary Format](./binary.md#variants).

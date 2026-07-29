@@ -1674,14 +1674,105 @@ namespace glz
       requires(not custom_write<T>)
    struct to<JSON, T>
    {
+      // The tagging representation is a property of the variant, decided once for every alternative.
+      static constexpr auto tagging = variant_tagging_v<T>;
+
+      // Every tagged form indexes ids_v by the active alternative. `ids` may legally declare fewer
+      // entries than the variant has alternatives -- the readers treat the first unlabeled
+      // alternative as the default for an id they do not recognize, which is a deliberate
+      // forward-compatibility feature -- so an alternative past the end of `ids` has no id to write.
+      // Indexing ids_v there reads past the end of a static array, which without a sanitizer silently
+      // emits whatever data follows it as the tag value. Reject the write instead.
+      static bool missing_id(auto&& value, is_context auto&& ctx)
+      {
+         if (value.index() >= ids_v<T>.size()) [[unlikely]] {
+            ctx.error = error_code::no_matching_variant_type;
+            ctx.custom_error_message = variant_ids_string_v<T>;
+            return true;
+         }
+         return false;
+      }
+
+      // The discriminator VALUE: string ids are quoted, integral ids are written bare.
+      template <auto Opts, class B>
+      static void write_id(auto&& value, is_context auto&& ctx, B&& b, auto& ix)
+      {
+         using id_type = std::decay_t<decltype(ids_v<T>[0])>;
+         if constexpr (std::integral<id_type>) {
+            serialize<JSON>::op<Opts>(ids_v<T>[value.index()], ctx, b, ix);
+         }
+         else {
+            dump('"', b, ix);
+            dump_maybe_empty(ids_v<T>[value.index()], b, ix);
+            dump('"', b, ix);
+         }
+      }
+
+      // Adjacent tagging: {tag: id, content: value}. The discriminator sits beside the value rather
+      // than inside it, so this form is identical for every alternative -- object, array, map,
+      // scalar, or null -- which is what makes the variant describable by a single schema and its
+      // alternatives distinguishable on read regardless of their shapes.
+      template <auto Opts, class B>
+      static void write_adjacent(auto&& value, is_context auto&& ctx, B&& b, auto& ix)
+      {
+         if (missing_id(value, ctx)) {
+            return;
+         }
+         if constexpr (Opts.prettify) {
+            dump("{\n", b, ix);
+            ctx.depth += check_indentation_width(Opts);
+            dumpn(check_indentation_char(Opts), ctx.depth, b, ix);
+            dump('"', b, ix);
+            dump_maybe_empty(tag_v<T>, b, ix);
+            dump("\": ", b, ix);
+            write_id<Opts>(value, ctx, b, ix);
+            dump(",\n", b, ix);
+            dumpn(check_indentation_char(Opts), ctx.depth, b, ix);
+            dump('"', b, ix);
+            dump_maybe_empty(content_v<T>, b, ix);
+            dump("\": ", b, ix);
+            std::visit([&](auto&& v) { serialize<JSON>::op<Opts>(v, ctx, b, ix); }, value);
+            ctx.depth -= check_indentation_width(Opts);
+            if (!ensure_space(ctx, b, ix + ctx.depth + write_padding_bytes)) [[unlikely]] {
+               return;
+            }
+            std::memcpy(&b[ix], "\n", 1);
+            ++ix;
+            std::memset(&b[ix], check_indentation_char(Opts), ctx.depth);
+            ix += ctx.depth;
+            std::memcpy(&b[ix], "}", 1);
+            ++ix;
+         }
+         else {
+            dump("{\"", b, ix);
+            dump_maybe_empty(tag_v<T>, b, ix);
+            dump("\":", b, ix);
+            write_id<Opts>(value, ctx, b, ix);
+            dump(",\"", b, ix);
+            dump_maybe_empty(content_v<T>, b, ix);
+            dump("\":", b, ix);
+            std::visit([&](auto&& v) { serialize<JSON>::op<Opts>(v, ctx, b, ix); }, value);
+            dump('}', b, ix);
+         }
+      }
+
       template <auto Opts, class B>
       static void op(auto&& value, is_context auto&& ctx, B&& b, auto& ix)
       {
+         // Adjacent tagging needs no per-alternative dispatch: the discriminator and the value are
+         // written side by side whatever the alternative is. The visit below still instantiates in
+         // that mode (`if constexpr` does not discard the statements after it), but both of its
+         // tagged branches are compile-time dead there and the runtime `return` keeps it unreached.
+         if constexpr (check_write_type_info(Opts) && tagging == variant_tagging_kind::adjacent) {
+            write_adjacent<Opts>(value, ctx, b, ix);
+            return;
+         }
          std::visit(
             [&](auto&& val) {
                using V = std::decay_t<decltype(val)>;
 
-               if constexpr (check_write_type_info(Opts) && not tag_v<T>.empty() && custom_write<V>) {
+               if constexpr (check_write_type_info(Opts) && tagging == variant_tagging_kind::internal &&
+                             custom_write<V>) {
                   // Custom alternative: the user's serializer emits the object body, into which we
                   // merge the variant tag. For this to produce valid JSON the custom to<> must (1)
                   // write an object body and (2) honor opening_and_closing_handled (suppress its own
@@ -1691,6 +1782,9 @@ namespace glz
                   // The tag-emission below mirrors the reflected-object branch that follows; keep the
                   // two in sync. The body size is not known at compile time, so we always write the
                   // tag separator and then drop it at runtime if the body turned out empty.
+                  if (missing_id(value, ctx)) {
+                     return;
+                  }
                   using id_type = std::decay_t<decltype(ids_v<T>[value.index()])>;
                   if constexpr (Opts.prettify) {
                      dump("{\n", b, ix);
@@ -1748,9 +1842,50 @@ namespace glz
                      dump('}', b, ix);
                   }
                }
-               else if constexpr (check_write_type_info(Opts) && not tag_v<T>.empty() &&
-                                  (glaze_object_t<V> || (reflectable<V> && !has_member_with_name<V>(tag_v<T>)) ||
-                                   is_memory_object<V>)) {
+               else if constexpr (check_write_type_info(Opts) && tagging == variant_tagging_kind::internal &&
+                                  variant_unit_alternative<V>) {
+                  // A unit alternative carries no data, so internal tagging renders it as the
+                  // discriminator alone -- the same object an empty struct alternative produces.
+                  if (missing_id(value, ctx)) {
+                     return;
+                  }
+                  if constexpr (Opts.prettify) {
+                     dump("{\n", b, ix);
+                     ctx.depth += check_indentation_width(Opts);
+                     dumpn(check_indentation_char(Opts), ctx.depth, b, ix);
+                     dump('"', b, ix);
+                     dump_maybe_empty(tag_v<T>, b, ix);
+                     dump("\": ", b, ix);
+                     write_id<Opts>(value, ctx, b, ix);
+                     ctx.depth -= check_indentation_width(Opts);
+                     if (!ensure_space(ctx, b, ix + ctx.depth + write_padding_bytes)) [[unlikely]] {
+                        return;
+                     }
+                     std::memcpy(&b[ix], "\n", 1);
+                     ++ix;
+                     std::memset(&b[ix], check_indentation_char(Opts), ctx.depth);
+                     ix += ctx.depth;
+                     std::memcpy(&b[ix], "}", 1);
+                     ++ix;
+                  }
+                  else {
+                     dump("{\"", b, ix);
+                     dump_maybe_empty(tag_v<T>, b, ix);
+                     dump("\":", b, ix);
+                     write_id<Opts>(value, ctx, b, ix);
+                     dump('}', b, ix);
+                  }
+               }
+               else if constexpr (check_write_type_info(Opts) && tagging == variant_tagging_kind::internal &&
+                                  (glaze_object_t<V> || reflectable<V> || is_memory_object<V>) &&
+                                  (not alternative_declares_key<V>(tag_v<T>))) {
+                  // An alternative that declares a member named like the discriminator carries the
+                  // discriminator itself, so no tag is merged here and the bare-write branch below
+                  // handles it. Previously only `reflectable` alternatives were excluded; a
+                  // `glaze_object_t` one fell through to this branch and emitted the key twice.
+                  if (missing_id(value, ctx)) {
+                     return;
+                  }
                   constexpr auto N = []() {
                      if constexpr (is_memory_object<V>) {
                         return reflect<memory_type<V>>::size;
@@ -1862,6 +1997,13 @@ namespace glz
       static void op(auto&& wrapper, is_context auto&& ctx, Args&&... args)
       {
          auto& value = wrapper.value;
+         // `ids` may declare fewer entries than the variant has alternatives; indexing past the end
+         // reads static data beyond the array and emits it as the id. See to<JSON, is_variant>.
+         if (value.index() >= ids_v<T>.size()) [[unlikely]] {
+            ctx.error = error_code::no_matching_variant_type;
+            ctx.custom_error_message = variant_ids_string_v<T>;
+            return;
+         }
          dump('[', args...);
          if constexpr (Opts.prettify) {
             ctx.depth += check_indentation_width(Opts);

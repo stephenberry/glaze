@@ -501,19 +501,22 @@ namespace glz
    }(std::make_index_sequence<std::variant_size_v<V>>{});
 
    // BEVE Version 2 represents a std::variant as an ordinary self-describing value rather than the
-   // deprecated type-tag extension (extension id 1, header byte 0x0E). A tagged variant (tag_v<T>
-   // non-empty) is written as an object with the discriminator merged in as the first member,
-   // mirroring the JSON writer's internal/embedded tagging; an untagged variant (or a non-object
-   // alternative) is written directly as the active alternative's own BEVE value. In every case the
-   // encoding is a plain BEVE value that maps 1:1 to JSON, and no 0x0E extension byte is emitted.
-   // The reader recovers the alternative from the discriminator, the object's key set, or the
-   // value's self-describing type header.
+   // deprecated type-tag extension (extension id 1, header byte 0x0E). Which shape it takes is fixed
+   // by the variant's tagging representation (see glz::variant_tagging), not by whichever alternative
+   // is active, so a given variant type has exactly one wire shape:
    //
-   // Positional (structs_as_arrays) writes have no keys to merge a discriminator into, so a tagged
-   // variant uses the *adjacent* form instead: a two element generic array [id, value]. This is an
-   // ordinary BEVE array, not a reinstatement of the extension, and it keeps the discriminator
-   // available in the one mode where structural deduction cannot work. An untagged positional
-   // variant is still written bare, and alternatives that share a positional shape are then
+   //   internal   { tag : id, ...members }   the discriminator merged into the alternative's object
+   //   adjacent   { tag : id, content : value }   the discriminator beside a value of any shape
+   //   none       the active alternative's own BEVE value, bare
+   //
+   // In every case the encoding is a plain BEVE value that maps 1:1 to the JSON writer's output, and
+   // no 0x0E extension byte is emitted. The reader recovers the alternative from the discriminator,
+   // the object's key set, or the value's self-describing type header.
+   //
+   // Positional (structs_as_arrays) writes have no keys at all, so adjacent tagging projects to the
+   // two element generic array [id, value] -- an ordinary BEVE array, not a reinstatement of the
+   // extension. Internal tagging has nothing to project: its whole mechanism is a key. An untagged
+   // positional variant is written bare, and alternatives that share a positional shape are then
    // indistinguishable on read.
    //
    // Version 1 data is still readable (the reader dispatches on the leading byte), but it is not
@@ -522,105 +525,204 @@ namespace glz
       requires(not custom_write<T>)
    struct to<BEVE, T> final
    {
+      // The tagging representation is a property of the variant, decided once for every alternative.
+      static constexpr auto tagging = variant_tagging_v<T>;
+
+      // `ids` may legally declare fewer entries than the variant has alternatives -- the readers
+      // treat the first unlabeled alternative as the default for an id they do not recognize, which
+      // is a deliberate forward-compatibility feature -- so an alternative past the end of `ids` has
+      // no id to write. Indexing ids_v there reads past the end of a static array, so reject the
+      // write rather than emitting whatever data follows it.
+      static bool missing_id(auto&& value, is_context auto&& ctx)
+      {
+         if (value.index() >= ids_v<T>.size()) [[unlikely]] {
+            ctx.error = error_code::no_matching_variant_type;
+            ctx.custom_error_message = variant_ids_string_v<T>;
+            return true;
+         }
+         return false;
+      }
+
+      // A headerless string key. The key type is spelled through decltype(tag_v<T>) so lookup of the
+      // str_t writer specialization (defined later in this file) is deferred to instantiation.
+      template <const sv& Key, class B>
+      static void write_key(is_context auto&& ctx, B&& b, auto& ix)
+      {
+         to<BEVE, std::remove_cvref_t<decltype(tag_v<T>)>>::template no_header_cx<Key.size()>(Key, ctx, b, ix);
+      }
+
+      // Adjacent tagging: an object of exactly two members, { tag : id, content : value }. Because
+      // the discriminator sits beside the value rather than inside it, this shape is the same for
+      // every alternative -- object, array, map, scalar, or null.
+      template <auto Opts, class B>
+      static void write_adjacent(auto&& value, is_context auto&& ctx, B&& b, auto& ix)
+      {
+         if (missing_id(value, ctx)) {
+            return;
+         }
+         dump_type(ctx, uint8_t(tag::object | 0), b, ix); // string keys
+         if (bool(ctx.error)) [[unlikely]] {
+            return;
+         }
+         dump_compressed_int<2>(ctx, b, ix);
+         if (bool(ctx.error)) [[unlikely]] {
+            return;
+         }
+         write_key<tag_v<T>>(ctx, b, ix);
+         if (bool(ctx.error)) [[unlikely]] {
+            return;
+         }
+         serialize<BEVE>::op<Opts>(ids_v<T>[value.index()], ctx, b, ix);
+         if (bool(ctx.error)) [[unlikely]] {
+            return;
+         }
+         write_key<content_v<T>>(ctx, b, ix);
+         if (bool(ctx.error)) [[unlikely]] {
+            return;
+         }
+         std::visit([&](auto&& v) { serialize<BEVE>::op<Opts>(v, ctx, b, ix); }, value);
+      }
+
+      // The positional projection of adjacent tagging: the two element array [id, value].
+      template <auto Opts, class B>
+      static void write_positional(auto&& value, is_context auto&& ctx, B&& b, auto& ix)
+      {
+         if (missing_id(value, ctx)) {
+            return;
+         }
+         if (!ensure_space(ctx, b, ix + 1 + write_padding_bytes)) [[unlikely]] {
+            return;
+         }
+         dump<tag::generic_array>(b, ix);
+         dump_compressed_int<2>(ctx, b, ix);
+         if (bool(ctx.error)) [[unlikely]] {
+            return;
+         }
+         serialize<BEVE>::op<Opts>(ids_v<T>[value.index()], ctx, b, ix);
+         if (bool(ctx.error)) [[unlikely]] {
+            return;
+         }
+         std::visit([&](auto&& v) { serialize<BEVE>::op<Opts>(v, ctx, b, ix); }, value);
+      }
+
       template <auto Opts, class B>
       static void op(auto&& value, is_context auto&& ctx, B&& b, auto& ix)
       {
-         std::visit(
-            [&](auto&& v) {
-               using V = std::decay_t<decltype(v)>;
+         constexpr bool tagged = check_write_type_info(Opts) && tagging != variant_tagging_kind::none;
 
-               if constexpr ((not check_structs_as_arrays(Opts)) && check_write_type_info(Opts) &&
-                             (not tag_v<T>.empty()) && (not custom_write<V>) &&
-                             (glaze_object_t<V> || (reflectable<V> && not has_member_with_name<V>(tag_v<T>)) ||
-                              is_memory_object<V>)) {
-                  // Tagged object alternative: emit { tag_v : id, ...members } as one merged object.
-                  using X = std::conditional_t<is_memory_object<V>, memory_type<V>, V>;
+         if constexpr (tagged && check_structs_as_arrays(Opts)) {
+            static_assert(
+               tagging == variant_tagging_kind::adjacent || detail::beve_positional_tagging_needs_content<T>::value,
+               "Positional writes (structs_as_arrays) have no keys, so there is nothing for "
+               "internal tagging to merge a discriminator into. Declare `content` beside "
+               "`tag` in glz::meta to select adjacent tagging, which projects positionally "
+               "to the two element array [id, value].");
+            write_positional<Opts>(value, ctx, b, ix);
+         }
+         else if constexpr (tagged && tagging == variant_tagging_kind::adjacent) {
+            write_adjacent<Opts>(value, ctx, b, ix);
+         }
+         else {
+            std::visit(
+               [&](auto&& v) {
+                  using V = std::decay_t<decltype(v)>;
+                  using X = variant_alternative_object_t<V>;
 
-                  size_t body_count{};
-                  if constexpr (is_memory_object<V>) {
-                     if (!v) [[unlikely]] {
-                        ctx.error = error_code::invalid_variant_object;
+                  if constexpr (tagged && variant_unit_alternative<V>) {
+                     // A unit alternative carries no data, so internal tagging renders it as the
+                     // discriminator alone -- the same one-member object an empty struct produces.
+                     if (missing_id(value, ctx)) {
                         return;
                      }
-                     body_count = to<BEVE, X>::template written_member_count<Opts>(*v, ctx);
+                     dump_type(ctx, uint8_t(tag::object | 0), b, ix); // string keys
+                     if (bool(ctx.error)) [[unlikely]] {
+                        return;
+                     }
+                     dump_compressed_int<1>(ctx, b, ix);
+                     if (bool(ctx.error)) [[unlikely]] {
+                        return;
+                     }
+                     write_key<tag_v<T>>(ctx, b, ix);
+                     if (bool(ctx.error)) [[unlikely]] {
+                        return;
+                     }
+                     serialize<BEVE>::op<Opts>(ids_v<T>[value.index()], ctx, b, ix);
+                  }
+                  // `not custom_write<V>`: a custom alternative that also happens to be reflectable
+                  // still has no reflected members to count, so it must reach the static_assert below
+                  // rather than this branch's written_member_count.
+                  else if constexpr (tagged && (glaze_object_t<X> || reflectable<X>) && (not custom_write<V>) &&
+                                     (not alternative_declares_key<V>(tag_v<T>))) {
+                     // Internal tagging: emit { tag_v : id, ...members } as one merged object. An
+                     // alternative that declares a member named like the discriminator carries it
+                     // itself and falls through to the bare write below.
+                     size_t body_count{};
+                     if constexpr (is_memory_object<V>) {
+                        if (!v) [[unlikely]] {
+                           ctx.error = error_code::invalid_variant_object;
+                           return;
+                        }
+                        body_count = to<BEVE, X>::template written_member_count<Opts>(*v, ctx);
+                     }
+                     else {
+                        body_count = to<BEVE, X>::template written_member_count<Opts>(v, ctx);
+                     }
+
+                     if (missing_id(value, ctx)) {
+                        return;
+                     }
+
+                     // object header (string keys) + merged count (discriminator + body members)
+                     dump_type(ctx, uint8_t(tag::object | 0), b, ix);
+                     if (bool(ctx.error)) [[unlikely]] {
+                        return;
+                     }
+                     dump_compressed_int(ctx, body_count + 1, b, ix);
+                     if (bool(ctx.error)) [[unlikely]] {
+                        return;
+                     }
+
+                     // discriminator: headerless string key + id VALUE (string or integral)
+                     write_key<tag_v<T>>(ctx, b, ix);
+                     if (bool(ctx.error)) [[unlikely]] {
+                        return;
+                     }
+                     serialize<BEVE>::op<Opts>(ids_v<T>[value.index()], ctx, b, ix);
+                     if (bool(ctx.error)) [[unlikely]] {
+                        return;
+                     }
+
+                     // alternative body: header suppressed so its members splice into this object
+                     if constexpr (is_memory_object<V>) {
+                        serialize<BEVE>::op<opening_handled<Opts>()>(*v, ctx, b, ix);
+                     }
+                     else {
+                        serialize<BEVE>::op<opening_handled<Opts>()>(v, ctx, b, ix);
+                     }
                   }
                   else {
-                     body_count = to<BEVE, X>::template written_member_count<Opts>(v, ctx);
+                     // A custom-serialized alternative is the one shape internal tagging promises but
+                     // BEVE cannot deliver: a BEVE object is length-prefixed, and the member count of
+                     // a body written by someone else's serializer is not knowable in advance. The
+                     // JSON writer merges into such a body because JSON objects are not counted.
+                     // Emitting this bare would silently drop the discriminator that JSON keeps, so
+                     // say so instead.
+                     static_assert(not(tagged && custom_write<V>) ||
+                                      detail::beve_internal_tagging_needs_reflected_alternative<T, V>::value,
+                                   "Internal tagging (glz::meta `tag` without `content`) cannot be "
+                                   "written to BEVE for a custom-serialized alternative: BEVE objects "
+                                   "are length-prefixed and the member count of a custom body is not "
+                                   "knowable in advance. Declare `content` beside `tag` to select "
+                                   "adjacent tagging, which nests the custom value instead of merging "
+                                   "into it. The offending alternative is the second template argument "
+                                   "of beve_internal_tagging_needs_reflected_alternative in the "
+                                   "instantiation backtrace.");
+                     // Untagged, or an alternative that carries the discriminator in its own member.
+                     serialize<BEVE>::op<Opts>(v, ctx, b, ix);
                   }
-
-                  // object header (string keys) + merged member count (discriminator + body members)
-                  dump_type(ctx, uint8_t(tag::object | 0), b, ix);
-                  if (bool(ctx.error)) [[unlikely]] {
-                     return;
-                  }
-                  dump_compressed_int(ctx, body_count + 1, b, ix);
-                  if (bool(ctx.error)) [[unlikely]] {
-                     return;
-                  }
-
-                  // `ids` may declare fewer entries than there are alternatives -- the reader treats
-                  // the first unlabeled alternative as the default for an id it does not recognize.
-                  // Writing such an alternative has no id to emit, and indexing ids_v past its end
-                  // reads out of bounds, so reject it rather than emitting garbage.
-                  if (value.index() >= ids_v<T>.size()) [[unlikely]] {
-                     ctx.error = error_code::no_matching_variant_type;
-                     ctx.custom_error_message = variant_ids_string_v<T>;
-                     return;
-                  }
-
-                  // discriminator: headerless string key + id VALUE (string or integral, with header).
-                  // The key type is spelled through decltype(tag_v<T>) so lookup of the str_t writer
-                  // specialization (defined later in this file) is deferred to instantiation.
-                  to<BEVE, std::remove_cvref_t<decltype(tag_v<T>)>>::template no_header_cx<tag_v<T>.size()>(tag_v<T>,
-                                                                                                            ctx, b, ix);
-                  if (bool(ctx.error)) [[unlikely]] {
-                     return;
-                  }
-                  serialize<BEVE>::op<Opts>(ids_v<T>[value.index()], ctx, b, ix);
-                  if (bool(ctx.error)) [[unlikely]] {
-                     return;
-                  }
-
-                  // alternative body: header suppressed so its members splice into this object
-                  if constexpr (is_memory_object<V>) {
-                     serialize<BEVE>::op<opening_handled<Opts>()>(*v, ctx, b, ix);
-                  }
-                  else {
-                     serialize<BEVE>::op<opening_handled<Opts>()>(v, ctx, b, ix);
-                  }
-               }
-               else if constexpr (check_structs_as_arrays(Opts) && check_write_type_info(Opts) &&
-                                  (not tag_v<T>.empty())) {
-                  // Positional tagged variant: adjacent form [id, value]. Unlike the merged-object
-                  // form this works for every alternative type, object or not, because the id sits
-                  // beside the value rather than inside it.
-                  if (value.index() >= ids_v<T>.size()) [[unlikely]] {
-                     // See the merged-object branch: an alternative with no declared id cannot be
-                     // written, and indexing ids_v past its end reads out of bounds.
-                     ctx.error = error_code::no_matching_variant_type;
-                     ctx.custom_error_message = variant_ids_string_v<T>;
-                     return;
-                  }
-                  if (!ensure_space(ctx, b, ix + 1 + write_padding_bytes)) [[unlikely]] {
-                     return;
-                  }
-                  dump<tag::generic_array>(b, ix);
-                  dump_compressed_int<2>(ctx, b, ix);
-                  if (bool(ctx.error)) [[unlikely]] {
-                     return;
-                  }
-                  serialize<BEVE>::op<Opts>(ids_v<T>[value.index()], ctx, b, ix);
-                  if (bool(ctx.error)) [[unlikely]] {
-                     return;
-                  }
-                  serialize<BEVE>::op<Opts>(v, ctx, b, ix);
-               }
-               else {
-                  // Untagged or non-object: write the active alternative directly.
-                  serialize<BEVE>::op<Opts>(v, ctx, b, ix);
-               }
-            },
-            value);
+               },
+               value);
+         }
       }
    };
 

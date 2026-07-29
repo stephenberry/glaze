@@ -5347,6 +5347,11 @@ namespace glz
       requires(not custom_read<T>)
    struct from<YAML, T>
    {
+      static_assert(content_v<std::remove_cvref_t<T>>.empty(),
+                    "Adjacent variant tagging (glz::meta `content`) is implemented for JSON and BEVE "
+                    "but not yet for YAML. Reading this variant as YAML would silently expect the "
+                    "internally tagged shape, so it is rejected here instead.");
+
       template <auto Opts, class It>
       static void op(auto&& value, is_context auto&& ctx, It&& it, auto end) noexcept
       {

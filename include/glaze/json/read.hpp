@@ -3754,9 +3754,184 @@ namespace glz
       requires(not custom_read<T>)
    struct from<JSON, T>
    {
+      static constexpr size_t variant_size = std::variant_size_v<T>;
+
+      // The tagging representation is a property of the variant, decided once for every alternative.
+      static constexpr auto tagging = variant_tagging_v<T>;
+
+      // Adjacent tagging: {tag: id, content: value}. Nothing needs to be deduced here -- the
+      // discriminator names the alternative outright -- so this path is wholly independent of the
+      // structural deduction machinery below and works for alternatives of any shape, including
+      // several that share one. That is the point of the form: `variant<vector<double>,
+      // deque<double>>` round-trips under it, where internal tagging cannot even represent it.
+      //
+      // The two keys may arrive in either order, so the object is walked twice: once to find the
+      // discriminator, once to read the content into the alternative it named. Both walks are over
+      // an object that in practice has exactly two members, so the second costs one extra skip.
+      template <auto Options>
+      static void read_adjacent(auto&& value, is_context auto&& ctx, auto&& it, auto end)
+      {
+         constexpr auto Opts = ws_handled_off<Options>();
+         if constexpr (not check_ws_handled(Options)) {
+            if (skip_ws<Opts>(ctx, it, end)) {
+               return;
+            }
+         }
+         if (match_invalid_end<'{', Opts>(ctx, it, end)) {
+            return;
+         }
+
+         // Adjacent values nest (the content of one variant may be another), so this reader has to
+         // count depth itself rather than leaning on the object parser it never calls.
+         depth_guard guard{ctx};
+         if (!guard) [[unlikely]] {
+            return;
+         }
+
+         const auto obj_start = it;
+
+         // Walk the members, handing each key to `on_key`, which must consume that key's value.
+         // Leaves `it` just past the closing brace. Returns false once an error has been set.
+         const auto walk = [&](auto&& on_key) {
+            it = obj_start;
+            if (skip_ws<Opts>(ctx, it, end)) {
+               return false;
+            }
+            const auto first = it;
+            while (*it != '}') {
+               if (it != first) {
+                  if (match_invalid_end<',', Opts>(ctx, it, end)) {
+                     return false;
+                  }
+                  if (skip_ws<Opts>(ctx, it, end)) {
+                     return false;
+                  }
+               }
+               if (match_invalid_end<'"', Opts>(ctx, it, end)) {
+                  return false;
+               }
+               auto* key_start = it;
+               skip_string_view(ctx, it, end);
+               if (bool(ctx.error)) [[unlikely]] {
+                  return false;
+               }
+               const sv key{key_start, size_t(it - key_start)};
+               if (match_invalid_end<'"', Opts>(ctx, it, end)) {
+                  return false;
+               }
+               if (parse_ws_colon<Opts>(ctx, it, end)) {
+                  return false;
+               }
+               if (!on_key(key)) {
+                  return false;
+               }
+               if (skip_ws<Opts>(ctx, it, end)) {
+                  return false;
+               }
+            }
+            if (match<'}'>(ctx, it)) {
+               return false;
+            }
+            return true;
+         };
+
+         using id_type = std::decay_t<decltype(ids_v<T>[0])>;
+         size_t type_index = ids_v<T>.size();
+         bool tag_seen = false;
+
+         if (!walk([&](const sv key) {
+                if (!tag_seen && key == tag_v<T>) {
+                   std::conditional_t<std::integral<id_type>, id_type, sv> type_id{};
+                   if constexpr (std::integral<id_type>) {
+                      from<JSON, id_type>::template op<ws_handled<Opts>()>(type_id, ctx, it, end);
+                   }
+                   else {
+                      from<JSON, sv>::template op<ws_handled<Opts>()>(type_id, ctx, it, end);
+                   }
+                   if (bool(ctx.error)) [[unlikely]] {
+                      return false;
+                   }
+                   if constexpr (std::integral<id_type>) {
+                      type_index = variant_id_to_index<T>::op(type_id);
+                   }
+                   else {
+                      type_index =
+                         variant_id_to_index<T>::op(type_id.data(), type_id.data() + type_id.size(), type_id.size());
+                   }
+                   tag_seen = true;
+                   return true;
+                }
+                if constexpr (Opts.error_on_unknown_keys) {
+                   // Only the two declared keys belong in an adjacently tagged object. Anything else
+                   // is the caller reading data this variant did not describe.
+                   if (key != content_v<T>) [[unlikely]] {
+                      ctx.error = error_code::unknown_key;
+                      return false;
+                   }
+                }
+                skip_value<JSON>::op<Opts>(ctx, it, end);
+                return !bool(ctx.error);
+             })) {
+            return;
+         }
+
+         if (!tag_seen) [[unlikely]] {
+            ctx.error = error_code::missing_key;
+            ctx.custom_error_message = variant_ids_string_v<T>;
+            return;
+         }
+
+         size_t resolved = variant_size;
+         if (type_index < ids_v<T>.size()) [[likely]] {
+            resolved = type_index;
+         }
+         else if constexpr (ids_v<T>.size() < variant_size) {
+            // Fewer ids than alternatives: the first unlabeled alternative is the default for an
+            // unrecognized id, matching the internally tagged reader.
+            resolved = ids_v<T>.size();
+         }
+         if (resolved >= variant_size) [[unlikely]] {
+            ctx.error = error_code::no_matching_variant_type;
+            ctx.custom_error_message = variant_ids_string_v<T>;
+            return;
+         }
+
+         if (value.index() != resolved) {
+            emplace_runtime_variant(value, resolved);
+         }
+
+         bool content_seen = false;
+         if (!walk([&](const sv key) {
+                if (!content_seen && key == content_v<T>) {
+                   content_seen = true;
+                   std::visit([&](auto&& v) { parse<JSON>::op<ws_handled<Opts>()>(v, ctx, it, end); }, value);
+                   return !bool(ctx.error);
+                }
+                skip_value<JSON>::op<Opts>(ctx, it, end);
+                return !bool(ctx.error);
+             })) {
+            return;
+         }
+
+         if (!content_seen) [[unlikely]] {
+            ctx.error = error_code::missing_key;
+         }
+      }
+
       // Note that items in the variant are required to be default constructable for us to switch types
       template <auto Options>
       static void op(auto&& value, is_context auto&& ctx, auto&& it, auto end)
+      {
+         if constexpr (tagging == variant_tagging_kind::adjacent) {
+            read_adjacent<Options>(value, ctx, it, end);
+         }
+         else {
+            read_deduced<Options>(value, ctx, it, end);
+         }
+      }
+
+      template <auto Options>
+      static void read_deduced(auto&& value, is_context auto&& ctx, auto&& it, auto end)
       {
          constexpr auto Opts = ws_handled_off<Options>();
          if constexpr (variant_is_auto_deducible<T>()) {
@@ -3921,7 +4096,16 @@ namespace glz
                                        using V = std::decay_t<decltype(v)>;
                                        constexpr bool is_object =
                                           (glaze_object_t<V> || reflectable<V>) && not custom_read<V>;
-                                       if constexpr (is_object) {
+                                       if constexpr (variant_unit_alternative<V>) {
+                                          // A unit alternative carries no data; its object holds only the
+                                          // discriminator. Consume that body through an empty reflected object so
+                                          // unknown-key policy and terminator handling match every other alternative.
+                                          detail::variant_unit_body unit_body{};
+                                          from<JSON, detail::variant_unit_body>::template op<opening_handled<Opts>(),
+                                                                                             tag_literal>(unit_body,
+                                                                                                          ctx, it, end);
+                                       }
+                                       else if constexpr (is_object) {
                                           if constexpr (contains_tag<V, tag_literal>()) {
                                              it = start; // tag is a struct field, must re-parse
                                           }
@@ -4006,7 +4190,17 @@ namespace glz
                                           using V = std::decay_t<decltype(v)>;
                                           constexpr bool is_object =
                                              (glaze_object_t<V> || reflectable<V>) && not custom_read<V>;
-                                          if constexpr (is_object) {
+                                          if constexpr (variant_unit_alternative<V>) {
+                                             // A unit alternative carries no data; its object holds only the
+                                             // discriminator. Consume that body through an empty reflected object so
+                                             // unknown-key policy and terminator handling match every other
+                                             // alternative.
+                                             detail::variant_unit_body unit_body{};
+                                             from<JSON, detail::variant_unit_body>::template op<opening_handled<Opts>(),
+                                                                                                tag_literal>(
+                                                unit_body, ctx, it, end);
+                                          }
+                                          else if constexpr (is_object) {
                                              if constexpr (contains_tag<V, tag_literal>()) {
                                                 it = start; // tag is a struct field, must re-parse
                                              }
@@ -4203,7 +4397,16 @@ namespace glz
                               [&](auto&& v) {
                                  using V = std::decay_t<decltype(v)>;
                                  constexpr bool is_object = (glaze_object_t<V> || reflectable<V>) && not custom_read<V>;
-                                 if constexpr (is_object) {
+                                 if constexpr (variant_unit_alternative<V>) {
+                                    // A unit alternative carries no data; its object holds only the discriminator.
+                                    // Consume that body through an empty reflected object so unknown-key policy and
+                                    // terminator handling match every other alternative.
+                                    detail::variant_unit_body unit_body{};
+                                    from<JSON, detail::variant_unit_body>::template op<opening_handled<Opts>(),
+                                                                                       tag_literal>(unit_body, ctx, it,
+                                                                                                    end);
+                                 }
+                                 else if constexpr (is_object) {
                                     from<JSON, V>::template op<opening_handled<Opts>(), tag_literal>(v, ctx, it, end);
                                  }
                                  else if constexpr (is_memory_object<V>) {
@@ -4292,7 +4495,16 @@ namespace glz
                            [&](auto&& v) {
                               using V = std::decay_t<decltype(v)>;
                               constexpr bool is_object = (glaze_object_t<V> || reflectable<V>) && not custom_read<V>;
-                              if constexpr (is_object) {
+                              if constexpr (variant_unit_alternative<V>) {
+                                 // A unit alternative carries no data; its object holds only the discriminator.
+                                 // Consume that body through an empty reflected object so unknown-key policy and
+                                 // terminator handling match every other alternative.
+                                 detail::variant_unit_body unit_body{};
+                                 from<JSON, detail::variant_unit_body>::template op<opening_handled<Opts>(),
+                                                                                    tag_literal>(unit_body, ctx, it,
+                                                                                                 end);
+                              }
+                              else if constexpr (is_object) {
                                  from<JSON, V>::template op<opening_handled<Opts>(), tag_literal>(v, ctx, it, end);
                               }
                               else if constexpr (is_memory_object<V>) {
@@ -4342,26 +4554,24 @@ namespace glz
 
                         // Compile-time array of field counts for each variant type
                         constexpr auto field_counts = []<size_t... I>(std::index_sequence<I...>) {
-                           return std::array<size_t, N> {
-                              ([]<size_t J = I>() -> size_t {
-                                 using V = std::decay_t<std::variant_alternative_t<J, T>>;
-                                 if constexpr (glaze_object_t<V> || reflectable<V>) {
-                                    return reflect<V>::size;
-                                 }
-                                 else if constexpr (is_memory_object<V>) {
-                                    using X = memory_type<V>;
-                                    if constexpr (glaze_object_t<X> || reflectable<X>) {
-                                       return reflect<X>::size;
-                                    }
-                                    else {
-                                       return (std::numeric_limits<size_t>::max)();
-                                    }
+                           return std::array<size_t, N>{([]<size_t J = I>() -> size_t {
+                              using V = std::decay_t<std::variant_alternative_t<J, T>>;
+                              if constexpr (glaze_object_t<V> || reflectable<V>) {
+                                 return reflect<V>::size;
+                              }
+                              else if constexpr (is_memory_object<V>) {
+                                 using X = memory_type<V>;
+                                 if constexpr (glaze_object_t<X> || reflectable<X>) {
+                                    return reflect<X>::size;
                                  }
                                  else {
                                     return (std::numeric_limits<size_t>::max)();
                                  }
-                              }.template operator()<I>())...
-                           };
+                              }
+                              else {
+                                 return (std::numeric_limits<size_t>::max)();
+                              }
+                           }.template operator()<I>())...};
                         }(std::make_index_sequence<N>{});
 
                         // Find the type with minimum field count among the possible types
@@ -4388,7 +4598,16 @@ namespace glz
                               [&](auto&& v) {
                                  using V = std::decay_t<decltype(v)>;
                                  constexpr bool is_object = (glaze_object_t<V> || reflectable<V>) && not custom_read<V>;
-                                 if constexpr (is_object) {
+                                 if constexpr (variant_unit_alternative<V>) {
+                                    // A unit alternative carries no data; its object holds only the discriminator.
+                                    // Consume that body through an empty reflected object so unknown-key policy and
+                                    // terminator handling match every other alternative.
+                                    detail::variant_unit_body unit_body{};
+                                    from<JSON, detail::variant_unit_body>::template op<opening_handled<Opts>(),
+                                                                                       tag_literal>(unit_body, ctx, it,
+                                                                                                    end);
+                                 }
+                                 else if constexpr (is_object) {
                                     from<JSON, V>::template op<opening_handled<Opts>(), tag_literal>(v, ctx, it, end);
                                  }
                                  else if constexpr (is_memory_object<V>) {
