@@ -9,6 +9,7 @@
 #include <type_traits>
 
 #include "glaze/core/context.hpp"
+#include "glaze/core/meta.hpp"
 #include "glaze/core/traits.hpp"
 
 namespace glz
@@ -48,6 +49,14 @@ namespace glz
    concept is_high_res_time_point =
       is_time_point<T> && std::is_same_v<typename std::remove_cvref_t<T>::clock, std::chrono::high_resolution_clock> &&
       !hrc_is_system && !hrc_is_steady;
+
+   // Concept for time points that serialize as a bare numeric count: steady_clock and a
+   // distinct high_resolution_clock. Their epochs are implementation-defined, so (unlike
+   // system_clock) there is no portable calendar representation -- the count in the time
+   // point's own duration period is the payload. The two clocks are mutually exclusive and
+   // both disjoint from system_clock.
+   template <class T>
+   concept is_count_time_point = is_steady_time_point<T> || is_high_res_time_point<T>;
 
    // ============================================
    // epoch_time wrapper for Unix timestamp format
@@ -126,6 +135,138 @@ namespace glz
    struct specified<epoch_time<Duration>> : std::true_type
    {};
 
+   // ============================================
+   // std::chrono::duration generic serialization
+   // ============================================
+   //
+   // A duration carries no calendar semantics, so every format serializes it as
+   // the bare numeric `rep` count expressed in the duration's own period. The
+   // conversion is identical across formats, so it is defined once here generically
+   // (parameterized over Format) rather than repeated per format. Round-trips are
+   // exact: the count is read and written at the duration's native precision with
+   // no unit conversion.
+   //
+   // Every format's read/write header includes this file, so the generic applies
+   // uniformly: a duration round-trips identically through every Glaze format. BSON
+   // is the one exception: it overrides this generic with a more specialized
+   // to<BSON, T>/from<BSON, T> (which wins under partial ordering) because its
+   // element model requires a per-type `type_code`, so it delegates to the rep
+   // type's writer itself.
+
+   template <uint32_t Format, is_duration T>
+      requires(not custom_write<T>)
+   struct to<Format, T>
+   {
+      template <auto Opts, class... Args>
+      static void op(auto&& value, is_context auto&& ctx, Args&&... args) noexcept
+      {
+         using Rep = typename std::remove_cvref_t<T>::rep;
+         to<Format, Rep>::template op<Opts>(value.count(), ctx, std::forward<Args>(args)...);
+      }
+
+      // Used by binary formats (e.g. BEVE) that elide the per-value type tag in
+      // certain contexts, such as numeric map keys. Only instantiated when such a
+      // context applies, so formats without a no_header concept (e.g. JSON, CBOR,
+      // MsgPack) never require to<Format, Rep>::no_header to exist.
+      template <auto Opts, class... Args>
+      static void no_header(auto&& value, is_context auto&& ctx, Args&&... args) noexcept
+      {
+         using Rep = typename std::remove_cvref_t<T>::rep;
+         to<Format, Rep>::template no_header<Opts>(value.count(), ctx, std::forward<Args>(args)...);
+      }
+   };
+
+   template <uint32_t Format, is_duration T>
+      requires(not custom_read<T>)
+   struct from<Format, T>
+   {
+      // Standard path: the type tag (if any) is still in the stream. Used by text
+      // formats (JSON, CBOR) and by tagged binary formats reading with the header
+      // present (e.g. BEVE outside a no_header context).
+      template <auto Opts, class... Args>
+      static void op(auto&& value, is_context auto&& ctx, Args&&... args) noexcept
+      {
+         using V = std::remove_cvref_t<T>;
+         typename V::rep count{};
+         from<Format, typename V::rep>::template op<Opts>(count, ctx, std::forward<Args>(args)...);
+         if (bool(ctx.error)) [[unlikely]]
+            return;
+         value = V(count);
+      }
+
+      // Pre-read-tag path: the caller has already consumed the type tag and passes
+      // it through. MsgPack uses this for every value; BEVE uses it inside
+      // no_header contexts. Selected unambiguously over the overload above because
+      // its second parameter is the tag byte rather than the context.
+      template <auto Opts, class... Args>
+      static void op(auto&& value, const uint8_t tag, is_context auto&& ctx, Args&&... args) noexcept
+      {
+         using V = std::remove_cvref_t<T>;
+         typename V::rep count{};
+         from<Format, typename V::rep>::template op<Opts>(count, tag, ctx, std::forward<Args>(args)...);
+         if (bool(ctx.error)) [[unlikely]]
+            return;
+         value = V(count);
+      }
+   };
+
+   // ============================================
+   // steady_clock / high_resolution_clock time_point generic serialization
+   // ============================================
+   //
+   // These clocks have implementation-defined epochs, so they serialize as the bare count
+   // of their duration since epoch -- the same numeric form as a duration. The conversion
+   // is format-agnostic and defined once here. As with durations, BSON overrides it with a
+   // type_code-bearing specialization; every other format uses this generic.
+
+   template <uint32_t Format, is_count_time_point T>
+      requires(not custom_write<T>)
+   struct to<Format, T>
+   {
+      template <auto Opts, class... Args>
+      static void op(auto&& value, is_context auto&& ctx, Args&&... args) noexcept
+      {
+         using Rep = typename std::remove_cvref_t<T>::rep;
+         to<Format, Rep>::template op<Opts>(value.time_since_epoch().count(), ctx, std::forward<Args>(args)...);
+      }
+
+      template <auto Opts, class... Args>
+      static void no_header(auto&& value, is_context auto&& ctx, Args&&... args) noexcept
+      {
+         using Rep = typename std::remove_cvref_t<T>::rep;
+         to<Format, Rep>::template no_header<Opts>(value.time_since_epoch().count(), ctx, std::forward<Args>(args)...);
+      }
+   };
+
+   template <uint32_t Format, is_count_time_point T>
+      requires(not custom_read<T>)
+   struct from<Format, T>
+   {
+      template <auto Opts, class... Args>
+      static void op(auto&& value, is_context auto&& ctx, Args&&... args) noexcept
+      {
+         using V = std::remove_cvref_t<T>;
+         using Duration = typename V::duration;
+         typename V::rep count{};
+         from<Format, typename V::rep>::template op<Opts>(count, ctx, std::forward<Args>(args)...);
+         if (bool(ctx.error)) [[unlikely]]
+            return;
+         value = V(Duration(count));
+      }
+
+      template <auto Opts, class... Args>
+      static void op(auto&& value, const uint8_t tag, is_context auto&& ctx, Args&&... args) noexcept
+      {
+         using V = std::remove_cvref_t<T>;
+         using Duration = typename V::duration;
+         typename V::rep count{};
+         from<Format, typename V::rep>::template op<Opts>(count, tag, ctx, std::forward<Args>(args)...);
+         if (bool(ctx.error)) [[unlikely]]
+            return;
+         value = V(Duration(count));
+      }
+   };
+
    namespace chrono_detail
    {
       // Parse `count` decimal digits starting at s[start]. Returns -1 if any character
@@ -152,6 +293,142 @@ namespace glz
             val /= 10;
          }
          ix += N;
+      }
+
+      // ============================================
+      // Shared ISO 8601 / RFC 3339 writers
+      // ============================================
+      //
+      // The digit layout of an ISO 8601 date or timestamp is identical in every text
+      // format; the only thing that varies is whether the scalar is wrapped in quotes.
+      // JSON emits a quoted string (unless the caller opted out via `unquoted`), while
+      // YAML emits a plain scalar, so the writers below take `Quote` as a parameter and
+      // are shared rather than duplicated per format.
+      //
+      // Like write_digits, these do not grow the buffer: the caller reserves capacity
+      // using the iso_*_max_size constants below and the writers then dump unchecked.
+
+      // Fractional-second digits implied by a time point's period. Anything finer than
+      // nanoseconds is still rendered at nanosecond precision, matching RFC 3339's
+      // practical limit.
+      template <class Period>
+      inline constexpr size_t iso_frac_digits = [] {
+         if constexpr (std::ratio_greater_equal_v<Period, std::ratio<1>>) {
+            return 0; // seconds or coarser
+         }
+         else if constexpr (std::ratio_greater_equal_v<Period, std::milli>) {
+            return 3;
+         }
+         else if constexpr (std::ratio_greater_equal_v<Period, std::micro>) {
+            return 6;
+         }
+         else {
+            return 9;
+         }
+      }();
+
+      // "YYYY-MM-DD" plus both quotes.
+      inline constexpr size_t iso_date_max_size = 12;
+
+      // "YYYY-MM-DDTHH:MM:SSZ" (20) plus both quotes, plus '.' and the fraction.
+      template <class Period>
+      inline constexpr size_t iso_time_point_max_size =
+         22 + (iso_frac_digits<Period> > 0 ? 1 + iso_frac_digits<Period> : 0);
+
+      // Write "YYYY-MM-DD". RFC 3339 requires a 4-digit year, and the fixed-width parsers
+      // on the read side cannot represent anything else, so a year outside [0000, 9999] is
+      // rejected rather than silently emitted as wrapped digits.
+      template <bool Quote, class B>
+      inline void write_iso_date(int yr, unsigned mo, unsigned dy, is_context auto&& ctx, B&& b, auto& ix) noexcept
+      {
+         if (yr < 0 || yr > 9999) [[unlikely]] {
+            ctx.error = error_code::constraint_violated;
+            return;
+         }
+
+         if constexpr (Quote) {
+            b[ix++] = '"';
+         }
+         write_digits<4>(b, ix, static_cast<uint64_t>(yr));
+         b[ix++] = '-';
+         write_digits<2>(b, ix, mo);
+         b[ix++] = '-';
+         write_digits<2>(b, ix, dy);
+         if constexpr (Quote) {
+            b[ix++] = '"';
+         }
+      }
+
+      // Write a system_clock time point as ISO 8601 in UTC.
+      //
+      // Time points whose period is exactly `days` (e.g. std::chrono::sys_days) are written
+      // as a date-only "YYYY-MM-DD": the time of day is always zero at that precision and
+      // the calendar date is the meaningful payload. Coarser periods (weeks, months, years)
+      // fall through to the full timestamp path, which avoids silently truncating an
+      // arbitrary date to a multi-day boundary on read.
+      template <bool Quote, class TP, class B>
+      inline void write_iso_time_point(const TP& value, is_context auto&& ctx, B&& b, auto& ix) noexcept
+      {
+         using namespace std::chrono;
+         using Duration = typename std::remove_cvref_t<TP>::duration;
+         using Period = typename Duration::period;
+
+         const auto dp = floor<days>(value);
+         const year_month_day ymd{dp};
+         const int yr = static_cast<int>(ymd.year());
+         const auto mo = static_cast<unsigned>(ymd.month());
+         const auto dy = static_cast<unsigned>(ymd.day());
+
+         if constexpr (std::ratio_equal_v<Period, std::ratio<86400>>) {
+            write_iso_date<Quote>(yr, mo, dy, ctx, b, ix);
+            return;
+         }
+         else {
+            if (yr < 0 || yr > 9999) [[unlikely]] {
+               ctx.error = error_code::constraint_violated;
+               return;
+            }
+
+            const hh_mm_ss tod{floor<Duration>(value - dp)};
+            const auto hr = static_cast<unsigned>(tod.hours().count());
+            const auto mi = static_cast<unsigned>(tod.minutes().count());
+            const auto sc = static_cast<unsigned>(tod.seconds().count());
+
+            if constexpr (Quote) {
+               b[ix++] = '"';
+            }
+            write_digits<4>(b, ix, static_cast<uint64_t>(yr));
+            b[ix++] = '-';
+            write_digits<2>(b, ix, mo);
+            b[ix++] = '-';
+            write_digits<2>(b, ix, dy);
+            b[ix++] = 'T';
+            write_digits<2>(b, ix, hr);
+            b[ix++] = ':';
+            write_digits<2>(b, ix, mi);
+            b[ix++] = ':';
+            write_digits<2>(b, ix, sc);
+
+            constexpr size_t frac_digits = iso_frac_digits<Period>;
+            if constexpr (frac_digits > 0) {
+               b[ix++] = '.';
+               const auto subsec = tod.subseconds();
+               if constexpr (frac_digits == 3) {
+                  write_digits<3>(b, ix, static_cast<uint64_t>(duration_cast<milliseconds>(subsec).count()));
+               }
+               else if constexpr (frac_digits == 6) {
+                  write_digits<6>(b, ix, static_cast<uint64_t>(duration_cast<microseconds>(subsec).count()));
+               }
+               else {
+                  write_digits<9>(b, ix, static_cast<uint64_t>(duration_cast<nanoseconds>(subsec).count()));
+               }
+            }
+
+            b[ix++] = 'Z';
+            if constexpr (Quote) {
+               b[ix++] = '"';
+            }
+         }
       }
 
       // Parse exactly "YYYY-MM-DD" (10 chars) into a year_month_day.

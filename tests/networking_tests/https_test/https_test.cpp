@@ -336,6 +336,7 @@ class HTTPSTestServer
    std::future<void> server_future_;
    std::chrono::steady_clock::time_point start_time_;
    std::atomic<bool> running_{false};
+   uint16_t port_{};
    std::vector<TestUser> users_;
    int next_user_id_;
 
@@ -361,13 +362,14 @@ class HTTPSTestServer
 
    ~HTTPSTestServer() { stop(); }
 
-   bool start(uint16_t port = 8443)
+   bool start()
    {
       try {
          server_.load_certificate("test_cert.pem", "test_key.pem");
          server_.set_ssl_verify_mode(0);
          server_.enable_cors();
-         server_.bind("127.0.0.1", port);
+         server_.bind("127.0.0.1", 0);
+         port_ = server_.port();
 
          running_ = true;
          server_future_ = std::async(std::launch::async, [this]() { server_.start(2); });
@@ -380,6 +382,8 @@ class HTTPSTestServer
          return false;
       }
    }
+
+   uint16_t port() const { return port_; }
 
    void stop()
    {
@@ -532,16 +536,6 @@ bool file_exists(const std::string& filename)
 
 bool certificates_exist() { return file_exists("test_cert.pem") && file_exists("test_key.pem"); }
 
-void wait_for_port_free(int port, int max_attempts = 20)
-{
-   for (int i = 0; i < max_attempts; ++i) {
-      if (system(("lsof -ti:" + std::to_string(port) + " >/dev/null 2>&1").c_str()) != 0) {
-         return; // Port is free
-      }
-      std::this_thread::sleep_for(std::chrono::milliseconds(100));
-   }
-}
-
 // Test suites (unchanged)
 suite certificate_tests = [] {
    "certificate_generation"_test = [] {
@@ -584,10 +578,8 @@ suite server_lifecycle_tests = [] {
          CertificateGenerator::generate_test_certificates();
       }
 
-      wait_for_port_free(8444);
-
       HTTPSTestServer test_server;
-      expect(test_server.start(8444)) << "HTTPS server should start successfully\n";
+      expect(test_server.start()) << "HTTPS server should start successfully\n";
 
       std::this_thread::sleep_for(std::chrono::milliseconds(200));
 
@@ -609,27 +601,26 @@ class ExternalIOContextServer
       if (!certificates_exist()) {
          CertificateGenerator::generate_test_certificates();
       }
-
-      wait_for_port_free(8443);
    }
 
    ~ExternalIOContextServer() { stop_io_thread(); }
 
    void start_io_thread()
    {
-      io_thread = std::thread([this]() {
-         setup_routes();
-         server_.load_certificate("test_cert.pem", "test_key.pem");
-         server_.set_ssl_verify_mode(0);
-         server_.enable_cors();
-         server_.bind("127.0.0.1", 8443);
-         // Start the server accepting connections without creating worker threads (0)
-         // We'll run the io_context manually in this thread
-         server_.start(0);
-         // Run the io_context event loop in this thread
-         io_context->run();
-      });
+      setup_routes();
+      server_.load_certificate("test_cert.pem", "test_key.pem");
+      server_.set_ssl_verify_mode(0);
+      server_.enable_cors();
+      server_.bind("127.0.0.1", 0);
+      port_ = server_.port();
+      // Start the server accepting connections without creating worker threads (0)
+      // We'll run the io_context manually in this thread
+      server_.start(0);
+      // Run the io_context event loop in a separate thread
+      io_thread = std::thread([this]() { io_context->run(); });
    }
+
+   uint16_t port() const { return port_; }
 
    void stop_io_thread()
    {
@@ -650,6 +641,7 @@ class ExternalIOContextServer
   private:
    std::shared_ptr<asio::io_context> io_context;
    glz::https_server server_;
+   uint16_t port_{};
    std::thread io_thread;
    asio::executor_work_guard<asio::io_context::executor_type> work_guard;
 };
@@ -679,6 +671,7 @@ suite server_lifecycle_external_context_tests = [] {
       ExternalIOContextServer server;
       std::cout << "Starting HTTPS server with external io_context thread...\n";
       server.start_io_thread();
+      const uint16_t port = server.port();
 
       // Wait for server to be ready
       std::this_thread::sleep_for(std::chrono::milliseconds(500));
@@ -688,7 +681,7 @@ suite server_lifecycle_external_context_tests = [] {
       try {
          asio::io_context client_io;
          asio::ip::tcp::socket socket(client_io);
-         asio::ip::tcp::endpoint endpoint(asio::ip::make_address("127.0.0.1"), 8443);
+         asio::ip::tcp::endpoint endpoint(asio::ip::make_address("127.0.0.1"), port);
 
          asio::error_code ec;
          socket.connect(endpoint, ec);
@@ -715,7 +708,7 @@ suite server_lifecycle_external_context_tests = [] {
       try {
          asio::io_context client_io;
          asio::ip::tcp::socket socket(client_io);
-         asio::ip::tcp::endpoint endpoint(asio::ip::make_address("127.0.0.1"), 8443);
+         asio::ip::tcp::endpoint endpoint(asio::ip::make_address("127.0.0.1"), port);
 
          asio::error_code ec;
          socket.connect(endpoint, ec);
@@ -739,23 +732,21 @@ suite api_functionality_tests = [] {
          CertificateGenerator::generate_test_certificates();
       }
 
-      wait_for_port_free(8445);
-
       HTTPSTestServer test_server;
-      if (!test_server.start(8445)) {
+      if (!test_server.start()) {
          std::cout << "❌ Failed to start server for API test\n";
          return;
       }
 
       std::this_thread::sleep_for(std::chrono::milliseconds(300));
 
-      std::cout << "HTTPS server started on port 8445 with API endpoints:\n";
+      std::cout << "HTTPS server started on port " << test_server.port() << " with API endpoints:\n";
       std::cout << "  /health - Health check\n";
       std::cout << "  /status - Server status\n";
       std::cout << "  /echo - JSON echo service\n";
       std::cout << "  /users - User management API\n";
       std::cout << "  /large - Large response test\n";
-      std::cout << "Manual test: curl -k https://localhost:8445/health\n";
+      std::cout << "Manual test: curl -k https://localhost:" << test_server.port() << "/health\n";
 
       test_server.stop();
       expect(true) << "API endpoints configured successfully\n";
@@ -769,16 +760,14 @@ suite concurrent_tests = [] {
          CertificateGenerator::generate_test_certificates();
       }
 
-      wait_for_port_free(8446);
-      wait_for_port_free(8447);
-
       HTTPSTestServer server1;
       HTTPSTestServer server2;
 
-      expect(server1.start(8446)) << "First server should start successfully\n";
+      expect(server1.start()) << "First server should start successfully\n";
       std::this_thread::sleep_for(std::chrono::milliseconds(200));
 
-      expect(server2.start(8447)) << "Second server should start on different port\n";
+      expect(server2.start()) << "Second server should start on different port\n";
+      expect(server1.port() != server2.port()) << "Concurrent servers should use different ephemeral ports\n";
       std::this_thread::sleep_for(std::chrono::milliseconds(200));
 
       server1.stop();
@@ -793,11 +782,9 @@ suite concurrent_tests = [] {
          CertificateGenerator::generate_test_certificates();
       }
 
-      wait_for_port_free(8448);
-
       for (int i = 0; i < 3; ++i) {
          HTTPSTestServer server;
-         expect(server.start(8448)) << "Server " << i << " should start\n";
+         expect(server.start()) << "Server " << i << " should start\n";
          std::this_thread::sleep_for(std::chrono::milliseconds(100));
          server.stop();
          std::this_thread::sleep_for(std::chrono::milliseconds(100));
@@ -814,12 +801,10 @@ suite performance_tests = [] {
          CertificateGenerator::generate_test_certificates();
       }
 
-      wait_for_port_free(8449);
-
       auto start_time = std::chrono::high_resolution_clock::now();
 
       HTTPSTestServer server;
-      bool started = server.start(8449);
+      bool started = server.start();
 
       auto end_time = std::chrono::high_resolution_clock::now();
       auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time);
@@ -901,12 +886,7 @@ int main()
 
    // Tests run automatically through the ut library
 
-   std::cout << "\n🔍 Manual Testing Commands:\n";
-   std::cout << "  curl -k https://localhost:8443/health\n";
-   std::cout << "  curl -k https://localhost:8443/status\n";
-   std::cout << "  curl -k -X POST https://localhost:8443/echo -H 'Content-Type: application/json' -d "
-                "'{\"message\":\"test\",\"echo_count\":3}'\n";
-   std::cout << "  openssl s_client -connect localhost:8443 -servername localhost\n\n";
+   std::cout << "\nHTTPS integration servers used ephemeral ports and have been stopped.\n\n";
 
    return 0;
 }

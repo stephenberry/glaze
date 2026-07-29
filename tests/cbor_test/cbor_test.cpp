@@ -3556,6 +3556,44 @@ suite cbor_byte_uint8_unify_tests = [] {
    };
 };
 
+struct cbor_shrink_opts : glz::opts
+{
+   bool shrink_to_fit = true;
+};
+
+// Resizable but deliberately without a shrink_to_fit member, like std::list.
+// std::list itself can't be used here: CBOR's array reader subscripts its target.
+// String elements keep this on the generic array path rather than the typed-array path.
+struct no_shrink_strings
+{
+   using value_type = std::string;
+   std::vector<std::string> data{};
+
+   auto begin() { return data.begin(); }
+   auto end() { return data.end(); }
+   auto begin() const { return data.begin(); }
+   auto end() const { return data.end(); }
+   size_t size() const { return data.size(); }
+   void resize(size_t n) { data.resize(n); }
+   void clear() { data.clear(); }
+   std::string& emplace_back() { return data.emplace_back(); }
+   std::string& back() { return data.back(); }
+   std::string& operator[](size_t i) { return data[i]; }
+   const std::string& operator[](size_t i) const { return data[i]; }
+};
+
+suite cbor_shrink_to_fit_tests = [] {
+   "containers without shrink_to_fit still compile"_test = [] {
+      const std::vector<std::string> src{"a", "b", "c"};
+      std::string buffer{};
+      expect(not glz::write_cbor(src, buffer));
+
+      no_shrink_strings dst{{"x", "x", "x", "x"}};
+      expect(not glz::read<cbor_shrink_opts{{.format = glz::CBOR}}>(dst, buffer));
+      expect(dst.data == src);
+   };
+};
+
 int main()
 {
    custom_variant_ambiguity_tests();

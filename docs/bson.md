@@ -120,6 +120,21 @@ event e{"login", std::chrono::system_clock::now()};
 auto encoded = glz::write_bson(e);
 ```
 
+## `std::chrono::duration`
+
+A duration is **not** a datetime. It encodes as its bare numeric count (the `rep`) using the BSON number element that matches the rep type: `int32` (0x10) for reps up to 32 signed bits, `int64` (0x12) for wider or unsigned reps, and `double` (0x01) for floating-point reps. Because BSON's root is always a document, durations are supported as struct/map fields rather than as a bare top-level value. See [std::chrono Support](./chrono.md#durations).
+
+```cpp
+struct timings
+{
+   std::chrono::milliseconds elapsed{};   // int64 element
+   std::chrono::duration<int32_t, std::milli> budget{}; // int32 element
+};
+
+timings t{std::chrono::milliseconds{1500}, std::chrono::duration<int32_t, std::milli>{200}};
+auto encoded = glz::write_bson(t);
+```
+
 ## `glz::bson::timestamp`
 
 MongoDB-internal timestamp used for replication and sharding. Distinct from `datetime`: the wire format is a uint64 with the low 32 bits holding an increment counter and the high 32 bits seconds since epoch.

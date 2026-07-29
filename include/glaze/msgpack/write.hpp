@@ -9,6 +9,7 @@
 #include <utility>
 
 #include "glaze/core/buffer_traits.hpp"
+#include "glaze/core/chrono.hpp"
 #include "glaze/core/opts.hpp"
 #include "glaze/core/reflect.hpp"
 #include "glaze/core/seek.hpp"

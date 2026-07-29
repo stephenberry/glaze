@@ -19,28 +19,7 @@ using namespace ut;
 using namespace std::chrono_literals;
 using glz::detail::is_valid_authority;
 
-constexpr int test_port = 8899;
 constexpr char test_host[] = "127.0.0.1";
-
-void wait_for_server_ready(int port, int max_tries = 50)
-{
-   for (int tries = 0; tries < max_tries; ++tries) {
-      try {
-         asio::io_context io_ctx;
-         asio::ip::tcp::socket sock(io_ctx);
-         asio::ip::tcp::endpoint endpoint(asio::ip::make_address(test_host), uint16_t(port));
-         asio::error_code ec;
-         sock.connect(endpoint, ec);
-         if (ec != asio::error::connection_refused) {
-            return;
-         }
-      }
-      catch (...) {
-      }
-      std::this_thread::sleep_for(40ms);
-   }
-   throw std::runtime_error("Server did not start in time");
-}
 
 std::string read_response(asio::ip::tcp::socket& socket)
 {
@@ -55,12 +34,11 @@ std::string read_response(asio::ip::tcp::socket& socket)
    return resp;
 }
 
-std::string send_raw(const std::string& request)
+std::string send_raw(uint16_t port, const std::string& request)
 {
-   wait_for_server_ready(test_port);
    asio::io_context io_ctx;
    asio::ip::tcp::socket socket(io_ctx);
-   asio::ip::tcp::endpoint endpoint(asio::ip::make_address(test_host), uint16_t(test_port));
+   asio::ip::tcp::endpoint endpoint(asio::ip::make_address(test_host), port);
    asio::error_code ec;
    socket.connect(endpoint, ec);
    if (ec) {
@@ -262,12 +240,13 @@ suite http_server_host_header_value_validation_suite = [] {
 suite http_server_headers_validation_suite = [] {
    auto io_ctx = std::make_shared<asio::io_context>();
    glz::http_server<> server(io_ctx, error_handler);
+   server.get("/http10-host-validation", [](const glz::request&, glz::response& response) { response.body("ok"); });
 
-   std::thread server_thr([&] {
-      server.bind("0.0.0.0", test_port);
-      server.start(0);
-      io_ctx->run();
-   });
+   server.bind(test_host, 0);
+   const uint16_t test_port = server.port();
+   server.start(0);
+
+   std::thread server_thr([&] { io_ctx->run(); });
 
    "request with missing Host header is rejected with 400 bad request"_test = [&] {
       std::string payload =
@@ -275,7 +254,7 @@ suite http_server_headers_validation_suite = [] {
          "Connection: close\r\n"
          "\r\n";
 
-      std::future<std::string> f = std::async(std::launch::async, [&] { return send_raw(payload); });
+      std::future<std::string> f = std::async(std::launch::async, [&] { return send_raw(test_port, payload); });
 
       std::string response;
       if (f.wait_for(5s) == std::future_status::ready) {
@@ -293,7 +272,7 @@ suite http_server_headers_validation_suite = [] {
          "Connection: close\r\n"
          "\r\n";
 
-      std::future<std::string> f = std::async(std::launch::async, [&] { return send_raw(payload); });
+      std::future<std::string> f = std::async(std::launch::async, [&] { return send_raw(test_port, payload); });
 
       std::string response;
       if (f.wait_for(5s) == std::future_status::ready) {
@@ -311,7 +290,7 @@ suite http_server_headers_validation_suite = [] {
          "Connection: close\r\n"
          "\r\n";
 
-      std::future<std::string> f = std::async(std::launch::async, [&] { return send_raw(payload); });
+      std::future<std::string> f = std::async(std::launch::async, [&] { return send_raw(test_port, payload); });
 
       std::string response;
       if (f.wait_for(5s) == std::future_status::ready) {
@@ -321,6 +300,77 @@ suite http_server_headers_validation_suite = [] {
       expect(response.contains("HTTP/1.1 400")) << "Expected 400 for multiple Host headers";
    };
 
+   "HTTP/1.0 request without Host header reaches handler"_test = [&] {
+      // RFC 9112 Section 3.2 only requires Host to be present in HTTP/1.1 requests
+      std::string payload =
+         "GET /http10-host-validation HTTP/1.0\r\n"
+         "Connection: close\r\n"
+         "\r\n";
+
+      std::future<std::string> f = std::async(std::launch::async, [&] { return send_raw(test_port, payload); });
+
+      std::string response;
+      if (f.wait_for(5s) == std::future_status::ready) {
+         response = f.get();
+      }
+
+      expect(response.contains("HTTP/1.1 200"))
+         << "Expected HTTP/1.0 request without Host to pass validation and reach its handler";
+   };
+
+   "HTTP/1.0 request with valid Host header reaches handler"_test = [&] {
+      std::string payload =
+         "GET /http10-host-validation HTTP/1.0\r\n"
+         "Host: example.com\r\n"
+         "Connection: close\r\n"
+         "\r\n";
+
+      std::future<std::string> f = std::async(std::launch::async, [&] { return send_raw(test_port, payload); });
+
+      std::string response;
+      if (f.wait_for(5s) == std::future_status::ready) {
+         response = f.get();
+      }
+
+      expect(response.contains("HTTP/1.1 200"))
+         << "Expected valid Host in HTTP/1.0 request to pass validation and reach its handler";
+   };
+
+   "HTTP/1.0 request with multiple Host headers is rejected with 400 bad request"_test = [&] {
+      std::string payload =
+         "GET /front HTTP/1.0\r\n"
+         "Host: first\r\n"
+         "hoST: second\r\n"
+         "Connection: close\r\n"
+         "\r\n";
+
+      std::future<std::string> f = std::async(std::launch::async, [&] { return send_raw(test_port, payload); });
+
+      std::string response;
+      if (f.wait_for(5s) == std::future_status::ready) {
+         response = f.get();
+      }
+
+      expect(response.contains("HTTP/1.1 400")) << "Expected 400 for multiple Host headers in HTTP/1.0 request";
+   };
+
+   "HTTP/1.0 request with invalid Host header is rejected with 400 bad request"_test = [&] {
+      std::string payload =
+         "GET /front HTTP/1.0\r\n"
+         "Host: user@example.com\r\n"
+         "Connection: close\r\n"
+         "\r\n";
+
+      std::future<std::string> f = std::async(std::launch::async, [&] { return send_raw(test_port, payload); });
+
+      std::string response;
+      if (f.wait_for(5s) == std::future_status::ready) {
+         response = f.get();
+      }
+
+      expect(response.contains("HTTP/1.1 400")) << "Expected 400 for invalid Host header in HTTP/1.0 request";
+   };
+
    "request with empty Host header value is rejected with 400 bad request"_test = [&] {
       std::string payload =
          "GET /front HTTP/1.1\r\n"
@@ -328,7 +378,7 @@ suite http_server_headers_validation_suite = [] {
          "Connection: close\r\n"
          "\r\n";
 
-      std::future<std::string> f = std::async(std::launch::async, [&] { return send_raw(payload); });
+      std::future<std::string> f = std::async(std::launch::async, [&] { return send_raw(test_port, payload); });
 
       std::string response;
       if (f.wait_for(5s) == std::future_status::ready) {
@@ -345,7 +395,7 @@ suite http_server_headers_validation_suite = [] {
          "Connection: close\r\n"
          "\r\n";
 
-      std::future<std::string> f = std::async(std::launch::async, [&] { return send_raw(payload); });
+      std::future<std::string> f = std::async(std::launch::async, [&] { return send_raw(test_port, payload); });
 
       std::string response;
       if (f.wait_for(5s) == std::future_status::ready) {
@@ -362,7 +412,7 @@ suite http_server_headers_validation_suite = [] {
          "Connection: close\r\n"
          "\r\n";
 
-      std::future<std::string> f = std::async(std::launch::async, [&] { return send_raw(payload); });
+      std::future<std::string> f = std::async(std::launch::async, [&] { return send_raw(test_port, payload); });
 
       std::string response;
       if (f.wait_for(5s) == std::future_status::ready) {
@@ -379,7 +429,7 @@ suite http_server_headers_validation_suite = [] {
          "Connection: close\r\n"
          "\r\n";
 
-      std::future<std::string> f = std::async(std::launch::async, [&] { return send_raw(payload); });
+      std::future<std::string> f = std::async(std::launch::async, [&] { return send_raw(test_port, payload); });
 
       std::string response;
       if (f.wait_for(5s) == std::future_status::ready) {
@@ -396,7 +446,7 @@ suite http_server_headers_validation_suite = [] {
          "Connection: close\r\n"
          "\r\n";
 
-      std::future<std::string> f = std::async(std::launch::async, [&] { return send_raw(payload); });
+      std::future<std::string> f = std::async(std::launch::async, [&] { return send_raw(test_port, payload); });
 
       std::string response;
       if (f.wait_for(5s) == std::future_status::ready) {
@@ -413,7 +463,7 @@ suite http_server_headers_validation_suite = [] {
          "Connection: close\r\n"
          "\r\n";
 
-      std::future<std::string> f = std::async(std::launch::async, [&] { return send_raw(payload); });
+      std::future<std::string> f = std::async(std::launch::async, [&] { return send_raw(test_port, payload); });
 
       std::string response;
       if (f.wait_for(5s) == std::future_status::ready) {
@@ -430,7 +480,7 @@ suite http_server_headers_validation_suite = [] {
          "Connection: close\r\n"
          "\r\n";
 
-      std::future<std::string> f = std::async(std::launch::async, [&] { return send_raw(payload); });
+      std::future<std::string> f = std::async(std::launch::async, [&] { return send_raw(test_port, payload); });
 
       std::string response;
       if (f.wait_for(5s) == std::future_status::ready) {
@@ -447,7 +497,7 @@ suite http_server_headers_validation_suite = [] {
          "Connection: close\r\n"
          "\r\n";
 
-      std::future<std::string> f = std::async(std::launch::async, [&] { return send_raw(payload); });
+      std::future<std::string> f = std::async(std::launch::async, [&] { return send_raw(test_port, payload); });
 
       std::string response;
       if (f.wait_for(5s) == std::future_status::ready) {
@@ -470,7 +520,7 @@ suite http_server_headers_validation_suite = [] {
       for (const std::string& host_line : {"Host: example.com \r\n", "Host: example.com\t\r\n"}) {
          std::string payload = "GET /front HTTP/1.1\r\n" + host_line + "Connection: close\r\n\r\n";
 
-         std::future<std::string> f = std::async(std::launch::async, [&] { return send_raw(payload); });
+         std::future<std::string> f = std::async(std::launch::async, [&] { return send_raw(test_port, payload); });
 
          std::string response;
          if (f.wait_for(5s) == std::future_status::ready) {
@@ -492,7 +542,7 @@ suite http_server_headers_validation_suite = [] {
          "Connection: close\r\n"
          "\r\n";
 
-      std::future<std::string> f = std::async(std::launch::async, [&] { return send_raw(payload); });
+      std::future<std::string> f = std::async(std::launch::async, [&] { return send_raw(test_port, payload); });
 
       std::string response;
       if (f.wait_for(5s) == std::future_status::ready) {
@@ -509,7 +559,7 @@ suite http_server_headers_validation_suite = [] {
          "Connection: close\r\n"
          "\r\n";
 
-      std::future<std::string> f = std::async(std::launch::async, [&] { return send_raw(payload); });
+      std::future<std::string> f = std::async(std::launch::async, [&] { return send_raw(test_port, payload); });
 
       std::string response;
       if (f.wait_for(5s) == std::future_status::ready) {
@@ -526,7 +576,7 @@ suite http_server_headers_validation_suite = [] {
          "Connection: close\r\n"
          "\r\n";
 
-      std::future<std::string> f = std::async(std::launch::async, [&] { return send_raw(payload); });
+      std::future<std::string> f = std::async(std::launch::async, [&] { return send_raw(test_port, payload); });
 
       std::string response;
       if (f.wait_for(5s) == std::future_status::ready) {
@@ -543,7 +593,7 @@ suite http_server_headers_validation_suite = [] {
          "Connection: close\r\n"
          "\r\n";
 
-      std::future<std::string> f = std::async(std::launch::async, [&] { return send_raw(payload); });
+      std::future<std::string> f = std::async(std::launch::async, [&] { return send_raw(test_port, payload); });
 
       std::string response;
       if (f.wait_for(5s) == std::future_status::ready) {
@@ -560,7 +610,7 @@ suite http_server_headers_validation_suite = [] {
          "Connection: close\r\n"
          "\r\n";
 
-      std::future<std::string> f = std::async(std::launch::async, [&] { return send_raw(payload); });
+      std::future<std::string> f = std::async(std::launch::async, [&] { return send_raw(test_port, payload); });
 
       std::string response;
       if (f.wait_for(5s) == std::future_status::ready) {
@@ -577,7 +627,7 @@ suite http_server_headers_validation_suite = [] {
          "Connection: close\r\n"
          "\r\n";
 
-      std::future<std::string> f = std::async(std::launch::async, [&] { return send_raw(payload); });
+      std::future<std::string> f = std::async(std::launch::async, [&] { return send_raw(test_port, payload); });
 
       std::string response;
       if (f.wait_for(5s) == std::future_status::ready) {
@@ -594,7 +644,7 @@ suite http_server_headers_validation_suite = [] {
          "Connection: close\r\n"
          "\r\n";
 
-      std::future<std::string> f = std::async(std::launch::async, [&] { return send_raw(payload); });
+      std::future<std::string> f = std::async(std::launch::async, [&] { return send_raw(test_port, payload); });
 
       std::string response;
       if (f.wait_for(5s) == std::future_status::ready) {
@@ -611,7 +661,7 @@ suite http_server_headers_validation_suite = [] {
          "Connection: close\r\n"
          "\r\n";
 
-      std::future<std::string> f = std::async(std::launch::async, [&] { return send_raw(payload); });
+      std::future<std::string> f = std::async(std::launch::async, [&] { return send_raw(test_port, payload); });
 
       std::string response;
       if (f.wait_for(5s) == std::future_status::ready) {
@@ -628,7 +678,7 @@ suite http_server_headers_validation_suite = [] {
          "Connection: close\r\n"
          "\r\n";
 
-      std::future<std::string> f = std::async(std::launch::async, [&] { return send_raw(payload); });
+      std::future<std::string> f = std::async(std::launch::async, [&] { return send_raw(test_port, payload); });
 
       std::string response;
       if (f.wait_for(5s) == std::future_status::ready) {

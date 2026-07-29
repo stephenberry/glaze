@@ -944,6 +944,24 @@ int main()
       expect_roundtrip_equal(mask);
    };
 
+   "msgpack bitset rejects truncated payload"_test = [] {
+      // The bin header declares num_bytes of packed bits, but the buffer is cut
+      // short so fewer payload bytes are present. The reader must report
+      // unexpected_end rather than silently leaving the missing bits at zero.
+      std::bitset<16> mask{0b10101010'01010101};
+      std::string buffer;
+      expect(!glz::write_msgpack(mask, buffer));
+
+      std::bitset<16> out{};
+      const auto ec = glz::read_msgpack(out, std::string_view{buffer}.substr(0, buffer.size() - 1));
+      expect(ec.ec == glz::error_code::unexpected_end)
+         << "expected unexpected_end on truncated bitset payload, got: " << glz::format_error(ec, buffer);
+
+      std::bitset<16> out2{};
+      const auto ec2 = glz::read_msgpack(out2, std::string_view{buffer}.substr(0, buffer.size() - 2));
+      expect(ec2.ec == glz::error_code::unexpected_end) << "expected unexpected_end on missing bitset payload";
+   };
+
    "msgpack ext container roundtrip"_test = [] {
       std::vector<glz::msgpack::ext> payloads{
          glz::msgpack::ext{1, {std::byte{0x01}, std::byte{0x02}}},
@@ -1040,6 +1058,23 @@ int main()
       ec = glz::read_msgpack(decoded, buffer);
       expect(!ec);
       expect(decoded == epoch);
+   };
+
+   "chrono duration roundtrip"_test = [] {
+      using namespace std::chrono;
+      auto check = [](auto v) {
+         std::string buffer{};
+         expect(not glz::write_msgpack(v, buffer));
+         decltype(v) decoded{};
+         expect(not glz::read_msgpack(decoded, buffer));
+         expect(decoded == v);
+      };
+      check(seconds{3600});
+      check(milliseconds{12345});
+      check(seconds{-42});
+      check(nanoseconds{987654321});
+      check(duration<double, std::milli>{123.5});
+      check(duration<int64_t, std::ratio<1, 60>>{90});
    };
 
    "timestamp in struct"_test = [] {

@@ -102,6 +102,34 @@ namespace glz
 
    GLZ_ALWAYS_INLINE constexpr bool is_digit(const uint8_t c) noexcept { return c <= '9' && c >= '0'; }
 
+   // Exponents at or beyond this magnitude are out of range for every integer width, so the exponent
+   // accumulators clamp here rather than growing without bound. Sits far above the largest accepted
+   // exponent (19, for uint64_t) and low enough that a clamped value cannot overflow uint32_t.
+   inline constexpr uint32_t exponent_clamp = 1000;
+
+   // Consumes the run of exponent digits starting at `c` and returns its value, clamped at
+   // exponent_clamp. Clamping is what keeps the result meaningful: a narrow accumulator wraps mod its
+   // width, which aliases an out-of-range exponent onto an accepted one. Every digit is consumed so
+   // that leading zeros reach their true value -- JSON forbids a leading zero in the integer part but
+   // permits any run of digits in the exponent, making "1e007" a valid spelling of 10^7 -- and so the
+   // caller resumes past the whole exponent rather than mid-number.
+   //
+   // Requires *c to be a digit and the buffer to be terminated by a non-digit (the null terminator
+   // counts); this scan is bounded by the input, not by a digit count.
+   template <class Char>
+   GLZ_ALWAYS_INLINE constexpr uint32_t parse_exponent(Char*& c) noexcept
+   {
+      uint32_t exp = uint32_t(*c - '0');
+      ++c;
+      while (is_digit(*c)) {
+         // Written as a select rather than a branch: the clamp only ever engages on absurdly long
+         // exponents, so a branch here would be a mispredict risk on the path that matters.
+         exp = exp < exponent_clamp ? exp * 10 + uint32_t(*c - '0') : exp;
+         ++c;
+      }
+      return exp;
+   }
+
    // Computed overflow checks - used instead of lookup tables to save 4KB+ of binary size
    // Uses adjusted threshold for branch-free single comparison (7-12% faster than bitwise approach)
    template <class T>
@@ -345,12 +373,15 @@ namespace glz
       }
 
       if (is_digit(*c)) {
-         v = v * 10 + (*c - '0');
-         constexpr auto split = (std::numeric_limits<T>::max)() / 10 - 10;
-         if (v < split) [[unlikely]] {
-            // due to overflow
+         // Test before multiplying. The previous guard multiplied first and then compared the
+         // already-wrapped value against max/10 - 10, which only caught wraps that happened to land
+         // below that threshold: "300" wraps to 44 for uint8_t and sailed through, as did most
+         // out-of-range values. would_overflow_positive is the same branch-free check the signed
+         // path above already uses, so the two paths now reject on the same rule.
+         if (would_overflow_positive<T>(v, *c)) [[unlikely]] {
             return {};
          }
+         v = v * 10 + (*c - '0');
          ++c;
          if (is_digit(*c)) [[unlikely]] {
             return {};
@@ -381,34 +412,29 @@ namespace glz
          if (not is_digit(*c)) [[unlikely]] {
             return false;
          }
-         ++c;
-         uint8_t exp = c[-1] - '0';
-         if (is_digit(*c)) {
-            exp = exp * 10 + (*c - '0');
-            ++c;
-         }
-         if (is_digit(*c)) {
-            exp = exp * 10 + (*c - '0');
-            ++c;
-         }
+         const uint32_t exp = parse_exponent(c);
+         // An exponent past the width's limit overflows any non-zero magnitude, but zero stays zero
+         // however far it is scaled, so "0e19" is in range for every width. Testing the magnitude
+         // here rather than ahead of the dispatch keeps it off the hot path: it only runs once the
+         // exponent has already failed the range check.
          if constexpr (sizeof(T) == 1) {
             if (exp > 2) [[unlikely]] {
-               return false;
+               return v == 0;
             }
          }
          else if constexpr (sizeof(T) == 2) {
             if (exp > 4) [[unlikely]] {
-               return false;
+               return v == 0;
             }
          }
          else if constexpr (sizeof(T) == 4) {
             if (exp > 9) [[unlikely]] {
-               return false;
+               return v == 0;
             }
          }
          else {
             if (exp > 19) [[unlikely]] {
-               return false;
+               return v == 0;
             }
          }
 
@@ -708,58 +734,59 @@ namespace glz
          if (not is_digit(*c)) [[unlikely]] {
             return false;
          }
-         ++c;
-         uint8_t exp = c[-1] - '0';
-         if (is_digit(*c)) {
-            exp = exp * 10 + (*c - '0');
-            ++c;
-         }
+         const uint32_t exp = parse_exponent(c);
+         // As in the unsigned overload: only a non-zero magnitude can overflow, so "0e19" and
+         // "-0e19" are in range for every width. `v` is already the signed mantissa, and negative
+         // zero compares equal to zero, so both spellings land here with the value they should keep.
          if constexpr (sizeof(T) == 1) {
             if (exp > 2) [[unlikely]] {
-               return false;
+               return v == 0;
             }
          }
          else if constexpr (sizeof(T) == 2) {
             if (exp > 4) [[unlikely]] {
-               return false;
+               return v == 0;
             }
          }
          else if constexpr (sizeof(T) == 4) {
             if (exp > 9) [[unlikely]] {
-               return false;
+               return v == 0;
             }
          }
          else {
             if (exp > 18) [[unlikely]] {
-               return false;
+               return v == 0;
             }
          }
 
          utype i = utype((utype(v) ^ -sign) + sign);
-         if constexpr (sizeof(T) == 1) {
-            static constexpr std::array<utype, 3> powers_of_ten{1, 10, 100};
-            i *= powers_of_ten[exp];
-            v = T((utype(i) ^ -sign) + sign);
-            return (i - sign) <= static_cast<utype>((std::numeric_limits<T>::max)());
-         }
-         else if constexpr (sizeof(T) == 2) {
-            static constexpr std::array<utype, 5> powers_of_ten{1, 10, 100, 1000, 10000};
-            i *= powers_of_ten[exp];
-            v = T((utype(i) ^ -sign) + sign);
-            return (i - sign) <= static_cast<utype>((std::numeric_limits<T>::max)());
-         }
-         else if constexpr (sizeof(T) == 4) {
-            i *= powers_of_ten_int[exp];
-            v = T((utype(i) ^ -sign) + sign);
-            return (i - sign) <= static_cast<utype>((std::numeric_limits<T>::max)());
+         if constexpr (sizeof(T) < 8) {
+            // Scale in a width the product cannot wrap, then range check before narrowing. Scaling
+            // inside `utype` truncated first and checked afterwards, so an out-of-range magnitude
+            // aliased onto an accepted one: "13e2" read as 20 for int8_t and "5e9" as 705032704 for
+            // int32_t. The widest case here is a 4-byte magnitude scaled by 10^9, which stays well
+            // inside uint64_t. The unsigned path already widens the same way.
+            const uint64_t scaled = uint64_t(i) * powers_of_ten_int[exp];
+            v = T((utype(scaled) ^ -sign) + sign);
+            // Bound the magnitude directly rather than subtracting the sign from it: a negative
+            // zero makes `scaled - sign` underflow, and the old narrow expression only survived
+            // that because it promoted to int. A negative value may reach one past the positive
+            // limit, which is exactly INT_MIN's magnitude.
+            return scaled <= uint64_t((std::numeric_limits<T>::max)()) + sign;
          }
          else {
+            // Scale the sign-stripped magnitude `i`, not the two's-complement bit pattern of `v`:
+            // for a negative value that pattern is a huge unsigned number, so every negative
+            // 64-bit integer written with an exponent ("-1e2") overflowed and was rejected. The
+            // narrower branches above already scale `i`.
 #if defined(__SIZEOF_INT128__)
-            const __uint128_t res = __uint128_t(std::bit_cast<utype>(v)) * powers_of_ten_int[exp];
+            const __uint128_t res = __uint128_t(i) * powers_of_ten_int[exp];
             v = T((uint64_t(res) ^ -sign) + sign);
-            return uint64_t(res) <= (9223372036854775807ull + sign);
+            // Compare the full 128-bit product. Narrowing it to 64 bits first would let an
+            // out-of-range magnitude alias onto an accepted one, e.g. 9e36 truncating into range.
+            return res <= __uint128_t(9223372036854775807ull + sign);
 #else
-            const auto res = full_multiplication(std::bit_cast<utype>(v), powers_of_ten_int[exp]);
+            const auto res = full_multiplication(i, powers_of_ten_int[exp]);
             v = T((uint64_t(res.low) ^ -sign) + sign);
             return res.high == 0 && (uint64_t(res.low) <= (9223372036854775807ull + sign));
 #endif
@@ -776,22 +803,28 @@ namespace glz
    {
       // The number of characters needed at most for each type, rounded to nearest 8 bytes
       constexpr auto buffer_length = int_buffer_lengths[std::bit_width(sizeof(T)) - 1];
-      // We copy the rest of the buffer or 64 bytes into a null terminated buffer
-      std::array<char, buffer_length> data{};
+      // We copy the rest of the buffer, or buffer_length bytes, into a null terminated buffer. The
+      // trailing byte is never written by the copy, so the null-terminated atoi below always halts
+      // inside the array even when the input fills it: the exponent scan stops at a non-digit rather
+      // than after a fixed digit count, and a value-initialized array alone would not terminate a
+      // copy that covers every byte.
+      std::array<char, buffer_length + 1> data{};
       const auto n = size_t(end - it);
       if (n > 0) [[likely]] {
-         if (n < buffer_length) {
-            std::memcpy(data.data(), it, n);
-         }
-         else {
-            std::memcpy(data.data(), it, buffer_length);
-         }
+         const auto truncated = n > buffer_length;
+         std::memcpy(data.data(), it, truncated ? buffer_length : n);
 
          const auto start = data.data();
          const auto* c = start;
          const auto valid = glz::atoi(v, c);
-         it += size_t(c - start);
-         return valid;
+         const auto consumed = size_t(c - start);
+         it += consumed;
+         // Reaching the end of a truncated copy means the number was cut off: parsing halted on the
+         // terminator this buffer supplies rather than on a character of the input, so what parsed is
+         // a prefix and its value is not the number's. Only zero padding can stretch a number this
+         // far -- no in-range integer needs buffer_length characters -- but a caller that ignores
+         // trailing content would otherwise take the prefix's value as the answer.
+         return valid && not(truncated && consumed == buffer_length);
       }
       else [[unlikely]] {
          return false;
@@ -865,9 +898,15 @@ namespace glz::detail
             negative = (*c == '-');
             ++c;
          }
-         uint8_t exp = 0;
-         while (digit_table[uint8_t(*c)] && exp < 128) {
-            exp = 10 * exp + (*c - '0');
+         // Clamp instead of wrapping: a uint8_t accumulator turns "1e256" into exponent 0, which
+         // aliases an out-of-range magnitude onto an accepted one ("1e256" decoding as 1). The old
+         // `exp < 128` guard could not catch that, since the wrap happened before the test, and it
+         // also left `c` parked mid-number once it did trip.
+         int32_t exp = 0;
+         while (digit_table[uint8_t(*c)]) {
+            if (exp < int32_t(exponent_clamp)) {
+               exp = 10 * exp + (*c - '0');
+            }
             ++c;
          }
          n += negative ? -exp : exp;

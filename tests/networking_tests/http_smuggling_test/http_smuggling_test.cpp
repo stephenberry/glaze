@@ -19,28 +19,7 @@ namespace
 {
    using namespace ut;
 
-   constexpr int test_port = 8899;
    constexpr char test_host[] = "127.0.0.1";
-
-   void wait_for_server_ready(int port, int max_tries = 50)
-   {
-      for (int tries = 0; tries < max_tries; ++tries) {
-         try {
-            asio::io_context io_ctx;
-            asio::ip::tcp::socket sock(io_ctx);
-            asio::ip::tcp::endpoint endpoint(asio::ip::make_address(test_host), uint16_t(port));
-            asio::error_code ec;
-            sock.connect(endpoint, ec);
-            if (ec != asio::error::connection_refused) {
-               return;
-            }
-         }
-         catch (...) {
-         }
-         std::this_thread::sleep_for(std::chrono::milliseconds(40));
-      }
-      throw std::runtime_error("Server did not start in time");
-   }
 
    std::string read_response(asio::ip::tcp::socket& socket)
    {
@@ -55,12 +34,11 @@ namespace
       return resp;
    }
 
-   std::string send_raw(const std::string& request)
+   std::string send_raw(uint16_t port, const std::string& request)
    {
-      wait_for_server_ready(test_port);
       asio::io_context io_ctx;
       asio::ip::tcp::socket socket(io_ctx);
-      asio::ip::tcp::endpoint endpoint(asio::ip::make_address(test_host), uint16_t(test_port));
+      asio::ip::tcp::endpoint endpoint(asio::ip::make_address(test_host), port);
       asio::error_code ec;
       socket.connect(endpoint, ec);
       if (ec) {
@@ -80,21 +58,20 @@ suite http_smuggling_suite = [] {
 
    std::atomic<int> smuggled_hits{0};
 
-   std::thread server_thr([&] {
-      server.post("/front", [&](const glz::request&, glz::response& res) {
-         res.status(200);
-         res.body("front");
-      });
-      server.get("/smuggled", [&](const glz::request&, glz::response& res) {
-         smuggled_hits.fetch_add(1, std::memory_order_relaxed);
-         res.status(200);
-         res.body("smuggled");
-      });
-
-      server.bind("0.0.0.0", test_port);
-      server.start(0);
-      io_ctx->run();
+   server.post("/front", [&](const glz::request&, glz::response& res) {
+      res.status(200);
+      res.body("front");
    });
+   server.get("/smuggled", [&](const glz::request&, glz::response& res) {
+      smuggled_hits.fetch_add(1, std::memory_order_relaxed);
+      res.status(200);
+      res.body("smuggled");
+   });
+   server.bind(test_host, 0);
+   const uint16_t test_port = server.port();
+   server.start(0);
+
+   std::thread server_thr([&] { io_ctx->run(); });
 
    "Transfer-Encoding request is refused, not desynced"_test = [&] {
       // The bytes after the blank line are a complete second request. With a
@@ -112,7 +89,7 @@ suite http_smuggling_suite = [] {
          "Connection: close\r\n"
          "\r\n";
 
-      std::future<std::string> f = std::async(std::launch::async, [&] { return send_raw(payload); });
+      std::future<std::string> f = std::async(std::launch::async, [&] { return send_raw(test_port, payload); });
 
       auto future_timeout = std::chrono::system_clock::now() + std::chrono::seconds(5);
       std::string response;
@@ -144,7 +121,7 @@ suite http_smuggling_suite = [] {
          "Connection: close\r\n"
          "\r\n";
 
-      std::future<std::string> f = std::async(std::launch::async, [&] { return send_raw(payload); });
+      std::future<std::string> f = std::async(std::launch::async, [&] { return send_raw(test_port, payload); });
 
       auto future_timeout = std::chrono::system_clock::now() + std::chrono::seconds(5);
       std::string response;
@@ -174,7 +151,7 @@ suite http_smuggling_suite = [] {
          "\r\n"
          "HELLO";
 
-      std::future<std::string> f = std::async(std::launch::async, [&] { return send_raw(payload); });
+      std::future<std::string> f = std::async(std::launch::async, [&] { return send_raw(test_port, payload); });
 
       auto future_timeout = std::chrono::system_clock::now() + std::chrono::seconds(5);
       std::string response;
@@ -204,7 +181,7 @@ suite http_smuggling_suite = [] {
          "Connection: close\r\n"
          "\r\n";
 
-      std::future<std::string> f = std::async(std::launch::async, [&] { return send_raw(payload); });
+      std::future<std::string> f = std::async(std::launch::async, [&] { return send_raw(test_port, payload); });
 
       auto future_timeout = std::chrono::system_clock::now() + std::chrono::seconds(5);
       std::string response;

@@ -4,6 +4,7 @@
 #pragma once
 
 #include "glaze/beve/header.hpp"
+#include "glaze/core/chrono.hpp"
 #include "glaze/core/common.hpp"
 
 namespace glz
@@ -21,16 +22,35 @@ namespace glz
       using type = std::remove_cvref_t<typename cast_member::cast_type>;
    };
 
-   template <class T, bool = std::is_enum_v<std::remove_cvref_t<T>>>
+   // Resolves a BEVE map key to the arithmetic type that drives its numeric header
+   // and key tag. Enums unwrap to their underlying integer; durations and count-based
+   // time points (steady_clock / high_resolution_clock) unwrap to their `rep` so such a
+   // key encodes (and round-trips) as a plain numeric key, matching the bare-count
+   // encoding the generic to/from<Format, is_duration / is_count_time_point> emits for the
+   // key bytes. Without these cases the header would advertise a string key while the key
+   // bytes are numeric, producing an unreadable buffer.
+   template <class T, class = void>
    struct beve_numeric_type
    {
       using type = std::remove_cvref_t<T>;
    };
 
    template <class T>
-   struct beve_numeric_type<T, true>
+   struct beve_numeric_type<T, std::enable_if_t<std::is_enum_v<std::remove_cvref_t<T>>>>
    {
       using type = std::underlying_type_t<std::remove_cvref_t<T>>;
+   };
+
+   template <class T>
+   struct beve_numeric_type<T, std::enable_if_t<is_duration<std::remove_cvref_t<T>>>>
+   {
+      using type = typename std::remove_cvref_t<T>::rep;
+   };
+
+   template <class T>
+   struct beve_numeric_type<T, std::enable_if_t<is_count_time_point<std::remove_cvref_t<T>>>>
+   {
+      using type = typename std::remove_cvref_t<T>::rep;
    };
 
    template <class T, class = void>
