@@ -4709,8 +4709,13 @@ suite beve_v2_variant_resolution = [] {
 
    "deeply nested variants read in linear time"_test = [] {
       // The key scan must stop once a single candidate remains. Without that it skips every nested
-      // subtree, making the read quadratic in depth -- at depth 1600 that was ~300x slower than the
-      // whole buffer deserves. Assert on the shape of the growth, not on absolute time.
+      // subtree, making the read quadratic in depth. Assert on the shape of the growth rather than
+      // absolute time, which varies far too much across CI machines.
+      //
+      // Depth is capped at 200 (~230 KB of stack): reading recurses once per level, and Windows
+      // gives the main thread 1 MB by default, so a deeper tree overflows the stack in a Debug
+      // build rather than measuring anything. Each buffer is read many times so the ratio does not
+      // rest on a single sub-millisecond sample.
       auto build = [](int depth) {
          deep_v v{deep_leaf{1}};
          for (int i = 0; i < depth; ++i) {
@@ -4721,24 +4726,28 @@ suite beve_v2_variant_resolution = [] {
          }
          return glz::write_beve(v).value();
       };
-      auto read_ns = [](const std::string& buf) {
-         deep_v out{};
+      constexpr int reps = 200;
+      auto bench_ms = [](const std::string& buf, int n) {
          const auto t0 = std::chrono::steady_clock::now();
-         const auto ec = glz::read_beve(out, buf);
-         const auto t1 = std::chrono::steady_clock::now();
-         expect(not ec);
-         return std::chrono::duration<double, std::nano>(t1 - t0).count();
+         for (int i = 0; i < n; ++i) {
+            deep_v out{};
+            (void)glz::read_beve(out, buf);
+         }
+         return std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
       };
-      const auto shallow = build(200);
-      const auto deep = build(800); // 4x the depth
-      // Warm both paths before timing so allocator/branch-predictor warmup is not attributed to one.
-      (void)read_ns(shallow);
-      (void)read_ns(deep);
-      const auto t_shallow = read_ns(shallow);
-      const auto t_deep = read_ns(deep);
-      // Linear would be ~4x; quadratic would be ~16x. A generous 10x bound catches the regression
-      // without being flaky on a loaded machine.
-      expect(t_deep < t_shallow * 10.0) << "read time grew " << (t_deep / t_shallow) << "x for 4x the depth";
+      const auto shallow = build(50);
+      const auto deep = build(200); // 4x the depth
+      {
+         // Correctness of the read itself, separately from the timing.
+         deep_v out{};
+         expect(not glz::read_beve(out, deep));
+      }
+      bench_ms(shallow, reps / 4); // warm both paths before timing
+      bench_ms(deep, reps / 4);
+      const auto t_shallow = bench_ms(shallow, reps);
+      const auto t_deep = bench_ms(deep, reps);
+      // Measured 3.9-4.1x linear against 13.3-14.2x quadratic, so 8x separates them with margin.
+      expect(t_deep < t_shallow * 8.0) << "read time grew " << (t_deep / t_shallow) << "x for 4x the depth";
    };
 
    "a failed deduction falls back to the other object alternatives"_test = [] {
@@ -5021,8 +5030,12 @@ suite beve_v1_variant_reads = [] {
       };
       const auto push_f64 = [&](double d) {
          legacy.push_back(static_cast<char>(glz::tag::f64));
-         const auto bytes = std::bit_cast<std::array<char, 8>>(d);
-         legacy.append(bytes.data(), bytes.size());
+         // BEVE numbers are little-endian on the wire. bit_cast alone emits *native* order, which
+         // the reader then byte-swaps into garbage on a big-endian host, so spell the order out.
+         const auto bits = std::bit_cast<std::uint64_t>(d);
+         for (int i = 0; i < 8; ++i) {
+            legacy.push_back(static_cast<char>((bits >> (8 * i)) & 0xff));
+         }
       };
       push_key("width");
       push_f64(2.0);
