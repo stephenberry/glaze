@@ -9,6 +9,8 @@ import glaze.compare.approx;
 import glaze.core.meta;
 import glaze.core.common;
 
+import glaze.util.compare;
+
 import ut;
 
 using namespace ut;

@@ -24,6 +24,7 @@ import glaze.concepts.container_concepts;
 import glaze.core.common;
 import glaze.core.context;
 import glaze.core.opts;
+import glaze.core.reflect;
 import glaze.core.seek;
 import glaze.util.expected;
 import glaze.util.string_literal;

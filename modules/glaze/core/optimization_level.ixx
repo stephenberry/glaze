@@ -95,6 +95,6 @@ namespace glz
 #endif
 #endif
 
-   inline constexpr optimization_level default_optimization_level = GLZ_DEFAULT_OPTIMIZATION_LEVEL;
+   export inline constexpr optimization_level default_optimization_level = GLZ_DEFAULT_OPTIMIZATION_LEVEL;
 
 } // namespace glz

@@ -2711,7 +2711,7 @@ namespace glz
    // not be hashed, so rejecting it here bounds every reader's key access in one place. This is why
    // the individual readers carry no per-read bounds checks; the sole exception is unique_per_length,
    // whose length-indexed table yields 255 for absent lengths and so keeps its own end check.
-   template <uint32_t Format, class T, auto HashInfo, hash_type Type>
+   export template <uint32_t Format, class T, auto HashInfo, hash_type Type>
    struct decode_hash_with_size
    {
       static constexpr auto N = reflect<T>::size;

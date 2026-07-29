@@ -36,6 +36,7 @@ target_sources(glaze_glaze
       modules/glaze/core/convert_struct.ixx
       modules/glaze/core/custom.ixx
       modules/glaze/core/custom_meta.ixx
+      modules/glaze/core/format_str.ixx
       modules/glaze/core/istream_buffer.ixx
       modules/glaze/core/manage.ixx
       modules/glaze/core/meta.ixx

@@ -16,6 +16,7 @@ import glaze.json.read;
 import glaze.json.write;
 
 import glaze.core.meta;
+import glaze.core.format_str;
 import glaze.core.opts;
 import glaze.core.write_chars;
 import glaze.core.context;
@@ -28,8 +29,6 @@ using std::size_t;
 
 export namespace glz
 {
-   // format_str (compile-time format string NTTP) lives in glaze/core/format_str.hpp
-
    // Wrapper for formatting floats with a specific format string
    template <format_str Fmt, class T>
    struct float_format_t

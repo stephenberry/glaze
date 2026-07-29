@@ -14,6 +14,7 @@ export module glaze.beve.header;
 import std;
 
 import glaze.core.context;
+import glaze.concepts.container_concepts;
 
 #include "glaze/util/inline.hpp"
 
@@ -48,7 +49,7 @@ namespace glz
    // overflows size_t -- wrapping small so an oversized array would slip past the check -- so there
    // the fit is tested as count > (remaining - padding) / element_size, a division that cannot
    // overflow.
-   [[nodiscard]] GLZ_ALWAYS_INLINE bool typed_array_out_of_bounds(is_context auto& ctx, auto&& it, auto&& end,
+   export [[nodiscard]] GLZ_ALWAYS_INLINE bool typed_array_out_of_bounds(is_context auto& ctx, auto&& it, auto&& end,
                                                                   size_t count, size_t element_size,
                                                                   size_t padding = 0) noexcept
    {
@@ -156,10 +157,10 @@ namespace glz
    // code paths must opt it in explicitly. This keeps an array of std::byte compact (a
    // typed u8 array) and consistent with how a scalar std::byte is encoded (a u8 number),
    // instead of an inflated generic array that stores a type header per element.
-   template <class T>
+   export template <class T>
    concept beve_num_t = num_t<T> || std::same_as<std::remove_cvref_t<T>, std::byte>;
 
-   [[nodiscard]] GLZ_ALWAYS_INLINE constexpr size_t int_from_compressed(auto&& ctx, auto&& it, auto end) noexcept
+   export [[nodiscard]] GLZ_ALWAYS_INLINE constexpr size_t int_from_compressed(auto&& ctx, auto&& it, auto end) noexcept
    {
       if (it >= end) [[unlikely]] {
          ctx.error = error_code::unexpected_end;
