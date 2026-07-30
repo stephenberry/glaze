@@ -15336,19 +15336,18 @@ suite json_recursion_depth_limit = [] {
    "std::expected does not spend a level per value"_test = [] {
       // The wrapper reader holds a level while it scans for the "unexpected" key, and every path has
       // to give it back -- the two that rewind and re-read the object through a counting reader
-      // included. Leaking it capped a flat array at 256 elements.
-      std::string buffer = "[";
-      for (size_t i = 0; i < 2 * glz::max_recursive_depth_limit; ++i) {
-         if (i) buffer += ',';
-         buffer += R"({"a":1})";
-      }
-      buffer += "]";
-
-      std::vector<std::expected<one_field, std::string>> out{};
+      // included. Leaking it capped a run of wrappers at 256.
+      //
+      // Reads share one context rather than filling a std::vector<std::expected<...>>, which is the
+      // same test but instantiates vector's iterator comparison against std::expected; libc++ on the
+      // P2996 clang recurses into its own operator== constraint there and fails to compile.
       glz::context ctx{};
-      const auto ec = glz::read<glz::opts{}>(out, buffer, ctx);
-      expect(not ec) << glz::format_error(ec, buffer);
-      expect(out.size() == 2 * glz::max_recursive_depth_limit);
+      for (size_t i = 0; i < 2 * glz::max_recursive_depth_limit; ++i) {
+         std::expected<one_field, std::string> out{};
+         const auto ec = glz::read<glz::opts{}>(out, R"({"a":1})", ctx);
+         expect(not ec) << "read " << i << ": " << glz::format_error(ec);
+         if (ec) break;
+      }
       expect(ctx.depth == 0) << "the reader must leave the depth balanced: " << ctx.depth;
 
       // Holding the level on the error paths is what still catches a truncated wrapper when the
