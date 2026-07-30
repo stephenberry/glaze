@@ -605,6 +605,51 @@ suite short_ids_write_guard = [] {
    };
 };
 
+namespace msgpack_depth
+{
+   struct tree_node
+   {
+      std::vector<tree_node> children{};
+   };
+
+   // Structs are written as arrays, so every level is fixarray(1) for the struct plus fixarray(1)
+   // for its member: two bytes of input per level of nesting.
+   inline std::string nested_tree(size_t levels)
+   {
+      std::string b;
+      for (size_t i = 0; i < levels; ++i) {
+         b.push_back(char(0x91));
+         b.push_back(char(0x91));
+      }
+      b.push_back(char(0x91));
+      b.push_back(char(0x90)); // innermost node, no children
+      return b;
+   }
+}
+
+suite msgpack_recursion_depth_limit = [] {
+   using namespace msgpack_depth;
+
+   "a hostile nest is rejected rather than overflowing the stack"_test = [] {
+      // 100k levels is 200 KB of input against a default 8 MB stack (1 MB on Windows).
+      tree_node deep_out{};
+      expect(glz::read_msgpack(deep_out, nested_tree(100'000)) == glz::error_code::exceeded_max_recursive_depth);
+   };
+
+   "nesting within the limit still reads"_test = [] {
+      tree_node shallow_out{};
+      expect(not glz::read_msgpack(shallow_out, nested_tree(100)));
+
+      tree_node* cur = &shallow_out;
+      size_t levels = 0;
+      while (not cur->children.empty()) {
+         cur = &cur->children.front();
+         ++levels;
+      }
+      expect(levels == 100) << levels;
+   };
+};
+
 int main()
 {
    // Only the write side is exercised here: MessagePack passes its type-tag byte

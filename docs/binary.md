@@ -29,6 +29,10 @@ if (!ec) {
 >
 > Reading binary is safe for invalid input and does not require null terminated buffers.
 
+**Recursion depth**
+
+BEVE spends as little as two bytes per nesting level, so a small hostile buffer could otherwise drive the reader deep enough to overflow the stack. The readers, the value skipper, and `glz::beve_to_json` all cap nesting at `max_recursive_depth_limit` (256 wire levels) and return `error_code::exceeded_max_recursive_depth` beyond it. Each object and each array counts as a level, so a struct holding a vector of itself reaches the cap at 128 struct levels.
+
 ## Calculate BEVE Size
 
 The `glz::beve_size` function calculates the exact number of bytes needed to serialize a value to BEVE format, without actually performing the serialization. This is useful when you need to pre-allocate a buffer of the exact size, such as when writing to shared memory for inter-process communication.

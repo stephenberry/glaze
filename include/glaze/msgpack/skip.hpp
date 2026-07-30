@@ -3,6 +3,7 @@
 
 #pragma once
 
+#include "glaze/core/context.hpp"
 #include "glaze/core/opts.hpp"
 #include "glaze/msgpack/common.hpp"
 
@@ -36,6 +37,14 @@ namespace glz
       static void skip_with_tag(is_context auto& ctx, const uint8_t tag, It& it, const End& end) noexcept
       {
          if (msgpack::is_positive_fixint(tag) || msgpack::is_negative_fixint(tag)) {
+            return;
+         }
+
+         // Arrays and maps skip their children by calling back into op, so this one guard bounds every
+         // recursive skip path. A fixarray nesting level costs a single byte, so without it a tiny
+         // hostile buffer overflows the stack before it runs out of items to skip.
+         depth_guard guard{ctx};
+         if (!guard) [[unlikely]] {
             return;
          }
 

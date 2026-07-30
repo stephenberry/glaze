@@ -9,6 +9,7 @@
 #include <chrono>
 #include <complex>
 #include <deque>
+#include <expected>
 #include <forward_list>
 #include <initializer_list>
 #include <iostream>
@@ -15209,6 +15210,209 @@ suite bounded_buffer_overflow_tests = [] {
       auto ec = glz::write<opts>(w, buffer);
       expect(not ec) << "prettify with many fields should not crash";
       expect(buffer.size() > 0) << "output should not be empty";
+   };
+};
+
+namespace json_depth
+{
+   struct list_node
+   {
+      std::unique_ptr<list_node> next{};
+      int n{};
+   };
+
+   struct one_field
+   {
+      int a{};
+   };
+
+   struct alt_a
+   {
+      int a{};
+   };
+   struct alt_b
+   {
+      int b{};
+   };
+
+   inline std::string nested_objects(size_t levels, std::string_view key = "next")
+   {
+      std::string b;
+      for (size_t i = 0; i < levels; ++i) {
+         b += "{\"";
+         b += key;
+         b += "\":";
+      }
+      b += "null";
+      b.append(levels, '}');
+      return b;
+   }
+
+   // Two array alternatives, so the variant is not auto-deducible and each level tries both.
+   struct node;
+   using two_arrays = std::variant<std::vector<node>, std::list<node>>;
+   struct node
+   {
+      two_arrays child{};
+   };
+
+   inline std::string nested_arrays(size_t levels)
+   {
+      std::string b;
+      b.append(levels, '[');
+      b.append(levels, ']');
+      return b;
+   }
+}
+
+suite json_recursion_depth_limit = [] {
+   using namespace json_depth;
+
+   "a recursive type is bounded by the depth limit, not by the stack"_test = [] {
+      // Nesting is driven by the input, not by the type, so the readers have to count it. 100k levels
+      // of "{\"next\":" is 900 KB against a default 8 MB stack (1 MB on Windows).
+      list_node deep_out{};
+      expect(glz::read_json(deep_out, nested_objects(100'000)) == glz::error_code::exceeded_max_recursive_depth);
+
+      list_node ok_out{};
+      expect(not glz::read_json(ok_out, nested_objects(100))) << "nesting within the limit must still read";
+   };
+
+   "the limit binds at max_recursive_depth_limit levels"_test = [] {
+      list_node at_limit{};
+      expect(not glz::read_json(at_limit, nested_objects(glz::max_recursive_depth_limit)));
+
+      list_node past_limit{};
+      expect(glz::read_json(past_limit, nested_objects(glz::max_recursive_depth_limit + 1)) ==
+             glz::error_code::exceeded_max_recursive_depth);
+   };
+
+   "untyped reads are bounded too"_test = [] {
+      glz::generic out{};
+      expect(glz::read_json(out, nested_arrays(100'000)) == glz::error_code::exceeded_max_recursive_depth);
+   };
+
+   "a validated skip of an unknown key is bounded"_test = [] {
+      // The default skip walks the nest iteratively; validate_skipped parses it, which recurses.
+      struct validating : glz::opts
+      {
+         bool validate_skipped = true;
+      };
+      static constexpr validating opts{{glz::opts{.error_on_unknown_keys = false}}};
+
+      std::string buffer = R"({"zz":)";
+      buffer += nested_arrays(100'000);
+      buffer += "}";
+
+      one_field out{};
+      expect(glz::read<opts>(out, buffer) == glz::error_code::exceeded_max_recursive_depth);
+   };
+
+   "an over-nested variant errors instead of retrying every alternative"_test = [] {
+      // Two array alternatives make this variant non-auto-deducible, so each level tries both. Past
+      // the limit every level fails identically, and a retry that rewound the depth handed the next
+      // alternative a fresh budget to re-descend on: N^depth work for a 1.5 KB buffer. The limit is
+      // reached at 128 levels here because the array and the object each count. This must error
+      // immediately, so a regression shows up as a hung test rather than a failed assertion.
+      const auto build = [](size_t levels) {
+         std::string b;
+         for (size_t i = 0; i < levels; ++i) b += R"([{"child":)";
+         b += "[]";
+         for (size_t i = 0; i < levels; ++i) b += "}]";
+         return b;
+      };
+
+      two_arrays under{};
+      expect(not glz::read_json(under, build(glz::max_recursive_depth_limit / 2 - 1)));
+
+      two_arrays over{};
+      expect(glz::read_json(over, build(glz::max_recursive_depth_limit / 2)) ==
+             glz::error_code::exceeded_max_recursive_depth);
+
+      two_arrays far_over{};
+      expect(glz::read_json(far_over, build(5000)) == glz::error_code::exceeded_max_recursive_depth);
+   };
+
+   "std::expected does not spend a level per value"_test = [] {
+      // The wrapper reader holds a level while it scans for the "unexpected" key, and every path has
+      // to give it back -- the two that rewind and re-read the object through a counting reader
+      // included. Leaking it capped a run of wrappers at 256.
+      //
+      // Reads share one context rather than filling a std::vector<std::expected<...>>, which is the
+      // same test but instantiates vector's iterator comparison against std::expected; libc++ on the
+      // P2996 clang recurses into its own operator== constraint there and fails to compile.
+      glz::context ctx{};
+      for (size_t i = 0; i < 2 * glz::max_recursive_depth_limit; ++i) {
+         std::expected<one_field, std::string> out{};
+         const auto ec = glz::read<glz::opts{}>(out, R"({"a":1})", ctx);
+         expect(not ec) << "read " << i << ": " << glz::format_error(ec);
+         if (ec) break;
+      }
+      expect(ctx.depth == 0) << "the reader must leave the depth balanced: " << ctx.depth;
+
+      // Holding the level on the error paths is what still catches a truncated wrapper when the
+      // buffer is not null terminated.
+      static constexpr glz::opts nnt{.null_terminated = false};
+      for (const std::string_view prefix : {R"({"unexpected")", R"({"unexpected":"boom")"}) {
+         std::vector<char> buf{prefix.begin(), prefix.end()};
+         const std::string_view view{buf.data(), buf.data() + buf.size()};
+         std::expected<one_field, std::string> trunc{};
+         expect(bool(glz::read<nnt>(trunc, view))) << "truncated wrapper must not succeed: " << prefix;
+      }
+   };
+
+   "partial_read leaves the depth balanced"_test = [] {
+      // A partial read stops on a success path, so it has to close its level like any other exit;
+      // otherwise the count creeps up across reads that share a context.
+      static constexpr glz::opts partial{.partial_read = true};
+
+      glz::context ctx{};
+      for (size_t i = 0; i < 2 * glz::max_recursive_depth_limit; ++i) {
+         one_field out{};
+         const auto ec = glz::read<partial>(out, R"({"a":1,"zz":2})", ctx);
+         expect(not ec) << "read " << i << ": " << glz::format_error(ec);
+         if (ec) break;
+      }
+      expect(ctx.depth == 0) << ctx.depth;
+   };
+
+   "an ambiguous nest cannot multiply the work of resolving it"_test = [] {
+      // The JSON analogue of the BEVE cascade: two array alternatives, so every level tries both,
+      // with a malformed leaf at the bottom that every level retries. 339 bytes took 40 seconds
+      // before the speculation budget capped the total re-parsed bytes; the cost no longer grows
+      // with depth.
+      const auto build = [](size_t levels) {
+         std::string b;
+         for (size_t i = 0; i < levels; ++i) b += R"([{"child":)";
+         b += "[{]"; // malformed leaf
+         for (size_t i = 0; i < levels; ++i) b += "}]";
+         return b;
+      };
+
+      const auto start = std::chrono::steady_clock::now();
+      for (size_t levels : {8u, 16u, 28u, 36u}) {
+         two_arrays out{};
+         expect(bool(glz::read_json(out, build(levels)))) << "levels=" << levels;
+      }
+      const auto ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count();
+      expect(ms < 5000.0) << "resolving ambiguous nests took " << ms << " ms";
+   };
+
+   "rejected variant alternatives do not spend the depth budget"_test = [] {
+      // Each element tries alt_a first and fails inside its object, which leaves that level counted
+      // until the alternative is rewound. Without the rewind this errors once 256 elements have been
+      // attempted, even though the document is two levels deep.
+      std::string buffer = "[";
+      for (size_t i = 0; i < 2 * glz::max_recursive_depth_limit; ++i) {
+         if (i) buffer += ',';
+         buffer += R"({"b":1})";
+      }
+      buffer += "]";
+
+      std::vector<std::variant<alt_a, alt_b>> out{};
+      const auto ec = glz::read<glz::opts{.error_on_unknown_keys = false}>(out, buffer);
+      expect(not ec) << glz::format_error(ec, buffer);
+      expect(out.size() == 2 * glz::max_recursive_depth_limit);
    };
 };
 

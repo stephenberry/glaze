@@ -635,8 +635,10 @@ namespace glz
          if (match_invalid_end<'[', Opts>(ctx, it, end)) {
             return;
          }
-         if constexpr (not Opts.null_terminated) {
-            ++ctx.depth;
+         // one nesting level (see enter_depth): counted in both modes so the limit binds,
+         // released at each syntactic close below
+         if (enter_depth(ctx)) [[unlikely]] {
+            return;
          }
 
          auto* ptr = reinterpret_cast<typename T::value_type*>(&v);
@@ -661,9 +663,7 @@ namespace glz
             return;
          }
          match<']'>(ctx, it);
-         if constexpr (not Opts.null_terminated) {
-            --ctx.depth;
-         }
+         --ctx.depth;
       }
    };
 
@@ -2205,8 +2205,10 @@ namespace glz
          if (match_invalid_end<'[', Opts>(ctx, it, end)) {
             return;
          }
-         if constexpr (not Opts.null_terminated) {
-            ++ctx.depth;
+         // one nesting level (see enter_depth): counted in both modes so the limit binds,
+         // released at each syntactic close below
+         if (enter_depth(ctx)) [[unlikely]] {
+            return;
          }
          if (skip_ws<Opts>(ctx, it, end)) {
             return;
@@ -2214,9 +2216,7 @@ namespace glz
 
          value.clear();
          if (*it == ']') [[unlikely]] {
-            if constexpr (not Opts.null_terminated) {
-               --ctx.depth;
-            }
+            --ctx.depth;
             ++it;
             return;
          }
@@ -2232,9 +2232,7 @@ namespace glz
                return;
             }
             if (*it == ']') {
-               if constexpr (not Opts.null_terminated) {
-                  --ctx.depth;
-               }
+               --ctx.depth;
                ++it;
                return;
             }
@@ -2266,8 +2264,10 @@ namespace glz
          if (match_invalid_end<'[', Opts>(ctx, it, end)) {
             return;
          }
-         if constexpr (not Opts.null_terminated) {
-            ++ctx.depth;
+         // one nesting level (see enter_depth): counted in both modes so the limit binds,
+         // released at each syntactic close below
+         if (enter_depth(ctx)) [[unlikely]] {
+            return;
          }
 
          const auto ws_start = it;
@@ -2276,9 +2276,7 @@ namespace glz
          }
 
          if (*it == ']') {
-            if constexpr (not Opts.null_terminated) {
-               --ctx.depth;
-            }
+            --ctx.depth;
             ++it;
             if constexpr ((resizable<T> || is_inplace_vector<T>) && not check_append_arrays(Opts)) {
                value.clear();
@@ -2319,9 +2317,7 @@ namespace glz
                   }
                }
                else if (*it == ']') {
-                  if constexpr (not Opts.null_terminated) {
-                     --ctx.depth;
-                  }
+                  --ctx.depth;
                   ++it;
                   if constexpr (erasable<T>) {
                      value.erase(value_it,
@@ -2341,6 +2337,9 @@ namespace glz
          }
 
          if constexpr (Opts.partial_read) {
+            // partial_read stops early on a success path, so give the level back like the
+            // syntactic-close paths do; otherwise it accumulates across reads sharing a context.
+            --ctx.depth;
             return;
          }
          else {
@@ -2415,9 +2414,7 @@ namespace glz
                      }
                   }
                   else if (*it == ']') {
-                     if constexpr (not Opts.null_terminated) {
-                        --ctx.depth;
-                     }
+                     --ctx.depth;
                      ++it;
                      if constexpr (check_shrink_to_fit(Opts) && has_shrink_to_fit<T>) {
                         value.shrink_to_fit();
@@ -2469,8 +2466,10 @@ namespace glz
                   return;
                }
             }
-            if constexpr (not Opts.null_terminated) {
-               ++ctx.depth;
+            // one nesting level (see enter_depth): counted in both modes so the limit binds,
+            // released at each syntactic close below
+            if (enter_depth(ctx)) [[unlikely]] {
+               return;
             }
          }
 
@@ -2484,9 +2483,7 @@ namespace glz
 
             if (*it == '}') {
                ++it;
-               if constexpr (not Opts.null_terminated) {
-                  --ctx.depth;
-               }
+               --ctx.depth;
                if constexpr (not Opts.null_terminated) {
                   if (it == end) {
                      ctx.error = error_code::end_reached;
@@ -2656,8 +2653,10 @@ namespace glz
          if (match_invalid_end<'[', Opts>(ctx, it, end)) {
             return;
          }
-         if constexpr (not Opts.null_terminated) {
-            ++ctx.depth;
+         // one nesting level (see enter_depth): counted in both modes so the limit binds,
+         // released at each syntactic close below
+         if (enter_depth(ctx)) [[unlikely]] {
+            return;
          }
          const auto n = number_of_array_elements<Opts>(ctx, it, end);
          if (bool(ctx.error)) [[unlikely]]
@@ -2680,9 +2679,7 @@ namespace glz
             ++i;
          }
          match<']'>(ctx, it);
-         if constexpr (not Opts.null_terminated) {
-            --ctx.depth;
-         }
+         --ctx.depth;
       }
    };
 
@@ -2711,8 +2708,10 @@ namespace glz
          if (match_invalid_end<'[', Opts>(ctx, it, end)) {
             return;
          }
-         if constexpr (not Opts.null_terminated) {
-            ++ctx.depth;
+         // one nesting level (see enter_depth): counted in both modes so the limit binds,
+         // released at each syntactic close below
+         if (enter_depth(ctx)) [[unlikely]] {
+            return;
          }
          if (skip_ws<Opts>(ctx, it, end)) {
             return;
@@ -2758,15 +2757,14 @@ namespace glz
          });
 
          if constexpr (Opts.partial_read) {
+            --ctx.depth; // as above: an early success still closes this level
             return;
          }
          else {
             if (bool(ctx.error)) [[unlikely]]
                return;
             match<']'>(ctx, it);
-            if constexpr (not Opts.null_terminated) {
-               --ctx.depth;
-            }
+            --ctx.depth;
             if constexpr (not Opts.null_terminated) {
                if (it == end) {
                   ctx.error = error_code::end_reached;
@@ -2792,8 +2790,10 @@ namespace glz
          if (match_invalid_end<'[', Opts>(ctx, it, end)) {
             return;
          }
-         if constexpr (not Opts.null_terminated) {
-            ++ctx.depth;
+         // one nesting level (see enter_depth): counted in both modes so the limit binds,
+         // released at each syntactic close below
+         if (enter_depth(ctx)) [[unlikely]] {
+            return;
          }
 
          constexpr auto& HashInfo = hash_info<T>;
@@ -2820,9 +2820,7 @@ namespace glz
                return;
             }
             if (*it == ']') {
-               if constexpr (not Opts.null_terminated) {
-                  --ctx.depth;
-               }
+               --ctx.depth;
                ++it;
                if constexpr (not Opts.null_terminated) {
                   if (it == end) {
@@ -2900,8 +2898,10 @@ namespace glz
             if (match_invalid_end<'{', Opts>(ctx, it, end)) {
                return;
             }
-            if constexpr (not Opts.null_terminated) {
-               ++ctx.depth;
+            // one nesting level (see enter_depth): counted in both modes so the limit binds,
+            // released at each syntactic close below
+            if (enter_depth(ctx)) [[unlikely]] {
+               return;
             }
          }
          if (skip_ws<Opts>(ctx, it, end)) {
@@ -2909,9 +2909,7 @@ namespace glz
          }
 
          if (*it == '}') {
-            if constexpr (not Opts.null_terminated) {
-               --ctx.depth;
-            }
+            --ctx.depth;
             if constexpr (Opts.error_on_missing_keys) {
                ctx.error = error_code::missing_key;
             }
@@ -2958,9 +2956,7 @@ namespace glz
          }
 
          match<'}'>(ctx, it);
-         if constexpr (not Opts.null_terminated) {
-            --ctx.depth;
-         }
+         --ctx.depth;
          if constexpr (not Opts.null_terminated) {
             if (it == end) {
                ctx.error = error_code::end_reached;
@@ -3012,8 +3008,10 @@ namespace glz
                   return;
                }
             }
-            if constexpr (not Opts.null_terminated) {
-               ++ctx.depth;
+            // one nesting level (see enter_depth): counted in both modes so the limit binds,
+            // released at each syntactic close below
+            if (enter_depth(ctx)) [[unlikely]] {
+               return;
             }
          }
          const auto ws_start = it;
@@ -3067,9 +3065,7 @@ namespace glz
             }
 
             if (*it == '}') [[likely]] {
-               if constexpr (not Opts.null_terminated) {
-                  --ctx.depth;
-               }
+               --ctx.depth;
                if constexpr (glaze_object_t<T> || reflectable<T>) {
                   if constexpr (has_self_constraint_v<T> && !check_skip_self_constraint(Opts)) {
                      auto wrapper = self_constraint_v<T>(value);
@@ -3120,6 +3116,7 @@ namespace glz
 
                   if ((all_fields & fields) == all_fields) {
                      ctx.error = error_code::partial_read_complete;
+                     --ctx.depth; // as above: an early success still closes this level
                      return;
                   }
                }
@@ -3145,9 +3142,7 @@ namespace glz
                }
 
                if (*it == '}') {
-                  if constexpr (not Opts.null_terminated) {
-                     --ctx.depth;
-                  }
+                  --ctx.depth;
                   if constexpr ((glaze_object_t<T> || reflectable<T>) && Opts.error_on_missing_keys) {
                      constexpr auto req_fields = required_fields<T, Opts>();
                      if ((req_fields & fields) != req_fields) {
@@ -3625,6 +3620,42 @@ namespace glz
          return std::variant_npos;
    }();
 
+   // Restores a nesting-depth snapshot after a rejected variant alternative, alongside the iterator
+   // rewind. A rejected alternative that bailed out inside a container left its level counted (see
+   // enter_depth), and without this, trying N alternatives could spend N levels of the recursion
+   // budget -- a long array of variants would eventually report exceeded_max_recursive_depth.
+   //
+   // The exception is a truncation signal on a non-null-terminated buffer: there ctx.depth is also
+   // the completion counter, and leaving that level counted is precisely what tells
+   // finalize_read_context the buffer ended mid-value rather than exactly at a clean close.
+   //
+   // Nesting past the limit is excluded in both modes, and for a third reason: handing the next
+   // alternative a fresh budget lets it re-descend to the limit and fail identically, so the retry
+   // re-parses the whole subtree once per alternative at every level of the nest, which is
+   // exponential. `variant_alternative_exhausted` below stops the retry outright.
+   template <auto Opts>
+   GLZ_ALWAYS_INLINE void rewind_depth(is_context auto& ctx, const uint32_t depth) noexcept
+   {
+      if (ctx.error == error_code::exceeded_max_recursive_depth) [[unlikely]] {
+         return;
+      }
+      if constexpr (Opts.null_terminated) {
+         ctx.depth = depth;
+      }
+      else {
+         if (ctx.error != error_code::end_reached && ctx.error != error_code::unexpected_end) {
+            ctx.depth = depth;
+         }
+      }
+   }
+
+   // True once a failure means no further alternative is worth trying: nesting past the depth limit
+   // is a property of the input rather than of the alternative, so retrying only multiplies the work.
+   GLZ_ALWAYS_INLINE bool variant_alternative_exhausted(is_context auto& ctx) noexcept
+   {
+      return ctx.error == error_code::exceeded_max_recursive_depth;
+   }
+
    // Process variant alternatives by iterating directly over variant indices
    // (replaces tuple_cat + tuple iteration approach)
    template <class Variant, template <class> class Trait>
@@ -3644,11 +3675,15 @@ namespace glz
             constexpr auto non_const_count = variant_filtered_count_v<Variant, Trait, false>;
 
             bool found_match{};
+            // Set when the speculative parsing budget runs out; see charge_speculation. An ambiguous
+            // nest re-parses the same subtree per alternative at every level, which is exponential,
+            // so the budget stops it and the failure already in hand is reported.
+            bool exhausted{};
 
             // First pass: const glaze types in this category
             if constexpr (const_count > 0) {
                for_each<N>([&]<size_t I>() {
-                  if (found_match) {
+                  if (found_match || exhausted || variant_alternative_exhausted(ctx)) {
                      return;
                   }
                   using V = std::variant_alternative_t<I, Variant>;
@@ -3656,6 +3691,10 @@ namespace glz
                      // run time substitute to compare to const value
                      std::remove_const_t<std::remove_pointer_t<std::remove_const_t<meta_wrapper_t<V>>>> substitute{};
                      auto copy_it{it};
+                     // A rejected alternative may have bailed out inside a container, which leaves its
+                     // nesting level counted (see enter_depth). Rewind the depth with the iterator so
+                     // trying N alternatives cannot spend N levels of the recursion budget.
+                     const auto copy_depth{ctx.depth};
                      parse<JSON>::op<ws_handled<Options>()>(substitute, ctx, it, end);
                      static constexpr auto const_value{*meta_wrapper_v<V>};
                      if (substitute == const_value) {
@@ -3665,12 +3704,17 @@ namespace glz
                         }
                      }
                      else {
+                        // Rejected: charge the bytes it parsed before we rewind. See charge_speculation.
+                        if (!charge_speculation(ctx, size_t(it - copy_it))) {
+                           exhausted = true;
+                        }
                         if constexpr (not Options.null_terminated) {
-                           if (ctx.error == error_code::end_reached) {
+                           if (ctx.error == error_code::end_reached && not exhausted) {
                               ctx.error = error_code::none;
                            }
                         }
                         it = copy_it;
+                        rewind_depth<Options>(ctx, copy_depth);
                      }
                   }
                });
@@ -3689,16 +3733,20 @@ namespace glz
                size_t non_const_idx = 0;
 
                for_each<N>([&]<size_t I>() {
-                  if (found_match) {
+                  if (found_match || exhausted || variant_alternative_exhausted(ctx)) {
                      return;
                   }
                   using V = std::variant_alternative_t<I, Variant>;
                   if constexpr (Trait<V>::value && !glaze_const_value_t<V>) {
                      auto copy_it{it};
+                     const auto copy_depth{ctx.depth}; // rewound with `it`; see the note above
                      if (!std::holds_alternative<V>(value)) {
                         value = V{};
                      }
                      parse<JSON>::op<ws_handled<Options>()>(std::get<V>(value), ctx, it, end);
+                     if (bool(ctx.error) && !charge_speculation(ctx, size_t(it - copy_it))) {
+                        exhausted = true; // only rejected attempts are charged; see charge_speculation
+                     }
                      if (!bool(ctx.error)) {
                         found_match = true;
                      }
@@ -3707,27 +3755,33 @@ namespace glz
                            num_t<V> || bool_t<V> || string_t<V> || std::is_enum_v<V> || tuple_t<V> || is_std_tuple<V>;
 
                         if constexpr (is_complete_type) {
-                           if (ctx.error == error_code::end_reached && it > copy_it) {
+                           if (ctx.error == error_code::end_reached && it > copy_it && not speculation_exhausted(ctx)) {
                               found_match = true;
                               ctx.error = error_code::none;
                            }
                            else {
                               it = copy_it;
-                              if (non_const_idx + 1 < non_const_count) {
+                              rewind_depth<Options>(ctx, copy_depth);
+                              if (non_const_idx + 1 < non_const_count && not exhausted &&
+                                  not variant_alternative_exhausted(ctx)) {
                                  ctx.error = error_code::none;
                               }
                            }
                         }
                         else {
                            it = copy_it;
-                           if (non_const_idx + 1 < non_const_count) {
+                           rewind_depth<Options>(ctx, copy_depth);
+                           if (non_const_idx + 1 < non_const_count && not exhausted &&
+                               not variant_alternative_exhausted(ctx)) {
                               ctx.error = error_code::none;
                            }
                         }
                      }
                      else {
                         it = copy_it;
-                        if (non_const_idx + 1 < non_const_count) {
+                        rewind_depth<Options>(ctx, copy_depth);
+                        if (non_const_idx + 1 < non_const_count && not exhausted &&
+                            not variant_alternative_exhausted(ctx)) {
                            ctx.error = error_code::none;
                         }
                      }
@@ -3738,7 +3792,8 @@ namespace glz
                   if constexpr (non_const_count == 1) {
                      // Keep the specific error from the single type we tried
                   }
-                  else {
+                  else if (not exhausted && not variant_alternative_exhausted(ctx)) {
+                     // Over-nested input is not a failure of the alternative set; keep saying so.
                      ctx.error = error_code::no_matching_variant_type;
                   }
                }
@@ -3958,13 +4013,13 @@ namespace glz
                ctx.error = error_code::unexpected_end;
                return;
             case '{': {
-               if (ctx.depth >= max_recursive_depth_limit) {
-                  ctx.error = error_code::exceeded_max_recursive_depth;
+               // This branch consumes the brace itself and hands the object to a reader with
+               // `opening_handled`, which therefore does not count the level -- but does release it at
+               // the closing brace. So the level is taken here, in both buffer modes, and paid back by
+               // the reader below.
+               if (enter_depth(ctx)) [[unlikely]] {
                   return;
                }
-               // In the null terminated case this guards for stack overflow
-               // Depth counting is done at the object level when not null terminated
-               ++ctx.depth;
 
                ++it;
                if constexpr (not Opts.null_terminated) {
@@ -3984,11 +4039,6 @@ namespace glz
                   using V = std::variant_alternative_t<first_idx, T>;
                   if (!std::holds_alternative<V>(value)) value = V{};
                   parse<JSON>::op<opening_handled<Opts>()>(std::get<V>(value), ctx, it, end);
-                  if constexpr (Opts.null_terminated) {
-                     // In the null terminated case this guards for stack overflow
-                     // Depth counting is done at the object level when not null terminated
-                     --ctx.depth;
-                  }
                   return;
                }
                else {
@@ -4178,11 +4228,6 @@ namespace glz
                                     },
                                     value);
 
-                                 if constexpr (Opts.null_terminated) {
-                                    // In the null terminated case this guards for stack overflow
-                                    // Depth counting is done at the object level when not null terminated
-                                    --ctx.depth;
-                                 }
                                  return; // we've decoded our target type
                               }
                               else [[unlikely]] {
@@ -4269,9 +4314,6 @@ namespace glz
                                        },
                                        value);
 
-                                    if constexpr (Opts.null_terminated) {
-                                       --ctx.depth;
-                                    }
                                     return;
                                  }
                                  else {
@@ -4364,9 +4406,6 @@ namespace glz
                                  }
                               },
                               value);
-                           if constexpr (Opts.null_terminated) {
-                              --ctx.depth;
-                           }
                            return;
                         }
                         else if constexpr (Opts.error_on_unknown_keys) {
@@ -4461,11 +4500,6 @@ namespace glz
                               },
                               value);
 
-                           if constexpr (Opts.null_terminated) {
-                              // In the null terminated case this guards for stack overflow
-                              // Depth counting is done at the object level when not null terminated
-                              --ctx.depth;
-                           }
                            return; // we've decoded our target type
                         }
                      }
@@ -4556,36 +4590,30 @@ namespace glz
                               }
                            },
                            value);
-
-                        if constexpr (Opts.null_terminated) {
-                           --ctx.depth;
-                        }
                      }
                      else if (final_matching > 1) {
                         constexpr auto N = std::variant_size_v<T>;
 
                         // Compile-time array of field counts for each variant type
                         constexpr auto field_counts = []<size_t... I>(std::index_sequence<I...>) {
-                           return std::array<size_t, N> {
-                              ([]<size_t J = I>() -> size_t {
-                                 using V = std::decay_t<std::variant_alternative_t<J, T>>;
-                                 if constexpr (glaze_object_t<V> || reflectable<V>) {
-                                    return reflect<V>::size;
-                                 }
-                                 else if constexpr (is_memory_object<V>) {
-                                    using X = memory_type<V>;
-                                    if constexpr (glaze_object_t<X> || reflectable<X>) {
-                                       return reflect<X>::size;
-                                    }
-                                    else {
-                                       return (std::numeric_limits<size_t>::max)();
-                                    }
+                           return std::array<size_t, N>{([]<size_t J = I>() -> size_t {
+                              using V = std::decay_t<std::variant_alternative_t<J, T>>;
+                              if constexpr (glaze_object_t<V> || reflectable<V>) {
+                                 return reflect<V>::size;
+                              }
+                              else if constexpr (is_memory_object<V>) {
+                                 using X = memory_type<V>;
+                                 if constexpr (glaze_object_t<X> || reflectable<X>) {
+                                    return reflect<X>::size;
                                  }
                                  else {
                                     return (std::numeric_limits<size_t>::max)();
                                  }
-                              }.template operator()<I>())...
-                           };
+                              }
+                              else {
+                                 return (std::numeric_limits<size_t>::max)();
+                              }
+                           }.template operator()<I>())...};
                         }(std::make_index_sequence<N>{});
 
                         // Find the type with minimum field count among the possible types
@@ -4661,10 +4689,6 @@ namespace glz
                                  }
                               },
                               value);
-
-                           if constexpr (Opts.null_terminated) {
-                              --ctx.depth;
-                           }
                         }
                         else {
                            ctx.error = error_code::no_matching_variant_type;
@@ -4679,19 +4703,8 @@ namespace glz
                break;
             }
             case '[':
-               if (ctx.depth >= max_recursive_depth_limit) {
-                  ctx.error = error_code::exceeded_max_recursive_depth;
-                  return;
-               }
-               if constexpr (Opts.null_terminated) {
-                  // In the null terminated case this guards for stack overflow
-                  // Depth counting is done at the object level when not null terminated
-                  ++ctx.depth;
-               }
+               // As with '{' above: the array reader each alternative goes through counts the level.
                process_variant_alternatives<T, is_variant_array>::template op<Opts>(value, ctx, it, end);
-               if constexpr (Opts.null_terminated) {
-                  --ctx.depth;
-               }
                break;
             case '"': {
                process_variant_alternatives<T, is_variant_str>::template op<Opts>(value, ctx, it, end);
@@ -4723,11 +4736,15 @@ namespace glz
             // For non-auto-deducible variants, try each type until one succeeds
             constexpr auto N = std::variant_size_v<T>;
             bool parsed = false;
+            bool exhausted = false; // speculation budget spent; see charge_speculation
 
             for_each<N>([&]<size_t I>() {
-               if (parsed) return;
+               if (parsed || exhausted || variant_alternative_exhausted(ctx)) return;
 
                auto copy_it = it;
+               // A rejected alternative may have bailed out inside a container, which leaves its
+               // nesting level counted (see enter_depth), so the depth rewinds with the iterator.
+               const auto copy_depth = ctx.depth;
 
                // Try parsing as this type
                if (value.index() != I) {
@@ -4735,6 +4752,9 @@ namespace glz
                }
 
                std::visit([&](auto&& v) { parse<JSON>::op<Options>(v, ctx, it, end); }, value);
+               if (bool(ctx.error) && !charge_speculation(ctx, size_t(it - copy_it))) {
+                  exhausted = true; // only rejected attempts are charged; see charge_speculation
+               }
 
                if (!bool(ctx.error)) {
                   parsed = true;
@@ -4742,24 +4762,31 @@ namespace glz
                else if constexpr (not Options.null_terminated) {
                   // In non-null-terminated mode, if we hit end_reached after advancing the iterator,
                   // it means we successfully parsed the value but couldn't skip trailing whitespace
-                  if (ctx.error == error_code::end_reached && it > copy_it) {
-                     // We advanced the iterator, so we did parse something
+                  if (ctx.error == error_code::end_reached && it > copy_it && not speculation_exhausted(ctx)) {
+                     // We advanced the iterator, so we did parse something -- unless what advanced it
+                     // was an abandoned attempt, which is what a spent speculation budget means.
                      parsed = true;
                      ctx.error = error_code::none;
                   }
                   else {
                      // Reset for next attempt (unless this is the last type)
                      it = copy_it;
+                     rewind_depth<Options>(ctx, copy_depth);
                      if constexpr (I + 1 < N) {
-                        ctx.error = error_code::none; // Clear error for next attempt
+                        if (not exhausted && not variant_alternative_exhausted(ctx)) {
+                           ctx.error = error_code::none; // Clear error for next attempt
+                        }
                      }
                   }
                }
                else {
                   // Reset for next attempt (unless this is the last type)
                   it = copy_it;
+                  rewind_depth<Options>(ctx, copy_depth);
                   if constexpr (I + 1 < N) {
-                     ctx.error = error_code::none; // Clear error for next attempt
+                     if (not exhausted && not variant_alternative_exhausted(ctx)) {
+                        ctx.error = error_code::none; // Clear error for next attempt
+                     }
                   }
                }
             });
@@ -4785,8 +4812,10 @@ namespace glz
          if (match_invalid_end<'[', Opts>(ctx, it, end)) {
             return;
          }
-         if constexpr (not Opts.null_terminated) {
-            ++ctx.depth;
+         // one nesting level (see enter_depth): counted in both modes so the limit binds,
+         // released at each syntactic close below
+         if (enter_depth(ctx)) [[unlikely]] {
+            return;
          }
          if (skip_ws<Opts>(ctx, it, end)) {
             return;
@@ -4834,9 +4863,7 @@ namespace glz
             return;
          }
          match<']'>(ctx, it);
-         if constexpr (not Opts.null_terminated) {
-            --ctx.depth;
-         }
+         --ctx.depth;
       }
    };
 
@@ -4868,8 +4895,15 @@ namespace glz
          };
 
          if (*it == '{') {
-            if constexpr (not Opts.null_terminated) {
-               ++ctx.depth;
+            // One level, held only while this reader scans the wrapper. Every path below releases it:
+            // the two that rewind to `start` do so before delegating, since the reader they hand the
+            // object to counts the level itself, and the {"unexpected": value} branch releases at the
+            // closing brace. Releasing on all three matters because this is the ordinary path -- a
+            // flat array of a few hundred expected values would otherwise spend the whole budget --
+            // and holding it on the error paths is what keeps a truncated wrapper from finalizing as
+            // success on a non-null-terminated buffer.
+            if (enter_depth(ctx)) [[unlikely]] {
+               return;
             }
             auto start = it;
             ++it;
@@ -4883,6 +4917,7 @@ namespace glz
                return;
             }
             if (*it == '}') {
+               --ctx.depth; // released before delegating; parse_val re-reads the object and counts it
                it = start;
                // empty object
                parse_val();
@@ -4919,11 +4954,10 @@ namespace glz
                      return;
                   }
                   match<'}'>(ctx, it);
-                  if constexpr (not Opts.null_terminated) {
-                     --ctx.depth;
-                  }
+                  --ctx.depth;
                }
                else {
+                  --ctx.depth; // as above: released before delegating
                   it = start;
                   parse_val();
                }

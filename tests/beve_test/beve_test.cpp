@@ -4752,9 +4752,8 @@ suite beve_v2_variant_resolution = [] {
       // subtree, making the read quadratic in depth. Assert on the shape of the growth rather than
       // absolute time, which varies far too much across CI machines.
       //
-      // Depth is capped at 200 (~230 KB of stack): reading recurses once per level, and Windows
-      // gives the main thread 1 MB by default, so a deeper tree overflows the stack in a Debug
-      // build rather than measuring anything. Each buffer is read many times so the ratio does not
+      // Depth is capped at 200 because the reader rejects anything past max_recursive_depth_limit
+      // (256), one level per nested object. Each buffer is read many times so the ratio does not
       // rest on a single sub-millisecond sample.
       auto build = [](int depth) {
          deep_v v{deep_leaf{1}};
@@ -4788,6 +4787,16 @@ suite beve_v2_variant_resolution = [] {
       const auto t_deep = bench_ms(deep, reps);
       // Measured 3.9-4.1x linear against 13.3-14.2x quadratic, so 8x separates them with margin.
       expect(t_deep < t_shallow * 8.0) << "read time grew " << (t_deep / t_shallow) << "x for 4x the depth";
+
+      // Past the limit, every level fails identically. Each of the variant reader's recovery paths
+      // -- the other object alternatives, the lenient conversion pass, the last-resort try_each --
+      // would re-parse the whole subtree for a failure no alternative can fix, once per level, which
+      // is exponential rather than merely wasteful: 300 levels did not finish in over an hour. This
+      // must error immediately, so a regression shows up as a hung test rather than a failed
+      // assertion.
+      deep_v past_limit{};
+      expect(glz::read_beve(past_limit, build(glz::max_recursive_depth_limit + 50)) ==
+             glz::error_code::exceeded_max_recursive_depth);
    };
 
    "a failed deduction falls back to the other object alternatives"_test = [] {
@@ -8841,6 +8850,217 @@ suite beve_variant_tagging_representation = [] {
       // nests them rather than merging, so the pointee's own object is untouched.
       tagging_round_trip(smart_v{std::make_unique<circle>(circle{2})}, R"({"k":"circle","c":{"radius":2}})");
       tagging_round_trip(smart_v{del{"z"}}, R"({"k":"del","c":{"id":"z"}})");
+   };
+};
+
+namespace beve_depth
+{
+   struct alt_a
+   {
+      int a{};
+   };
+   struct alt_b
+   {
+      int b{};
+   };
+   using two_object_v = std::variant<alt_a, alt_b>;
+
+   struct one_field
+   {
+      int a{};
+   };
+
+   // Recursive types: input alone decides how deep the reader descends.
+   struct list_node
+   {
+      std::unique_ptr<list_node> next{};
+      int n{};
+   };
+   struct tree_node
+   {
+      std::vector<tree_node> children{};
+   };
+
+   // { "zz": [[[[ ... ]]]] } -- two bytes per nesting level, and "zz" belongs to no alternative, so a
+   // variant's key scan skips the whole nest and a lax struct read skips it as an unknown key.
+   inline std::string nested_arrays(size_t levels)
+   {
+      std::string b;
+      b.push_back(char(glz::tag::object));
+      b.push_back(char(1 << 2)); // one key
+      b.push_back(char(2 << 2)); // key length
+      b += "zz";
+      for (size_t i = 0; i < levels; ++i) {
+         b.push_back(char(glz::tag::generic_array));
+         b.push_back(char(1 << 2)); // one element
+      }
+      b.push_back(char(glz::tag::null));
+      return b;
+   }
+
+   inline std::string nested_list(size_t levels)
+   {
+      list_node root{};
+      auto* cur = &root;
+      for (size_t i = 0; i < levels; ++i) {
+         cur->next = std::make_unique<list_node>();
+         cur = cur->next.get();
+      }
+      return glz::write_beve(root).value();
+   }
+
+   inline std::string nested_tree(size_t levels)
+   {
+      tree_node root{};
+      auto* cur = &root;
+      for (size_t i = 0; i < levels; ++i) {
+         cur->children.emplace_back();
+         cur = &cur->children.front();
+      }
+      return glz::write_beve(root).value();
+   }
+
+   // Two object alternatives with identical key sets, so deduction never narrows to one candidate
+   // and resolution has to try them. Recursive, so the retries nest.
+   struct amb_node_a;
+   struct amb_node_b;
+   struct amb_leaf
+   {
+      int v{};
+   };
+   using amb_v = std::variant<amb_leaf, std::shared_ptr<amb_node_a>, std::shared_ptr<amb_node_b>>;
+   struct amb_node_a
+   {
+      amb_v child{};
+      int n{};
+   };
+   struct amb_node_b
+   {
+      amb_v child{};
+      int n{};
+   };
+
+   inline std::string ambiguous_nest(size_t levels)
+   {
+      amb_v v{amb_leaf{1}};
+      for (size_t i = 0; i < levels; ++i) {
+         auto n = std::make_shared<amb_node_b>();
+         n->child = std::move(v);
+         n->n = int(i);
+         v = std::move(n);
+      }
+      auto buffer = glz::write_beve(v).value();
+      // Rename the innermost leaf's only key so the bottom of the nest fails with unknown_key. Its
+      // key is the last "v" written, and no later byte can be one: what follows is the leaf's
+      // numeric value and then each enclosing node's "n" key and value.
+      buffer[buffer.rfind('v')] = 'q';
+      return buffer;
+   }
+}
+
+suite beve_recursion_depth_limit = [] {
+   using namespace beve_depth;
+
+   "a hostile nest of arrays is rejected rather than overflowing the stack"_test = [] {
+      // Two bytes per level: 200k levels is 400 KB of input against a default 8 MB stack (1 MB on
+      // Windows). The read must stop at max_recursive_depth_limit instead of recursing to a crash.
+      const auto buffer = nested_arrays(200'000);
+
+      two_object_v variant_out{};
+      expect(glz::read_beve(variant_out, buffer) == glz::error_code::exceeded_max_recursive_depth);
+
+      // error_on_unknown_keys off is what lets a plain struct reach the same skip path.
+      constexpr glz::opts lax{.format = glz::BEVE, .error_on_unknown_keys = false};
+      one_field struct_out{};
+      expect(glz::read<lax>(struct_out, buffer) == glz::error_code::exceeded_max_recursive_depth);
+
+      // The transcoder has always been guarded; the reader now agrees with it.
+      std::string json{};
+      expect(glz::beve_to_json(buffer, json) == glz::error_code::exceeded_max_recursive_depth);
+   };
+
+   "the limit binds the typed readers, not just skipping"_test = [] {
+      // A recursive struct nests once per input object, so the object reader has to count the levels
+      // itself -- nothing is skipped along the way.
+      list_node shallow_out{};
+      expect(not glz::read_beve(shallow_out, nested_list(100))) << "a list within the limit must read";
+
+      list_node deep_out{};
+      expect(glz::read_beve(deep_out, nested_list(glz::max_recursive_depth_limit + 50)) ==
+             glz::error_code::exceeded_max_recursive_depth);
+   };
+
+   "nested generic arrays are bounded for typed containers too"_test = [] {
+      // Each tree_node level is two wire levels, the object and the array its member holds, so the
+      // limit is reached at half the struct depth. That is the accounting the JSON reader uses.
+      tree_node shallow_out{};
+      expect(not glz::read_beve(shallow_out, nested_tree(100)));
+
+      tree_node deep_out{};
+      expect(glz::read_beve(deep_out, nested_tree(glz::max_recursive_depth_limit)) ==
+             glz::error_code::exceeded_max_recursive_depth);
+   };
+
+   "an over-nested buffer is reported as such, not as a failed variant match"_test = [] {
+      // Every alternative of a variant (glz::generic among them) fails on input this deep, and the
+      // depth is the honest diagnosis, so it has to survive the resolution loop rather than be
+      // reported as no_matching_variant_type.
+      std::string nest;
+      for (size_t i = 0; i < glz::max_recursive_depth_limit + 50; ++i) {
+         nest.push_back(char(glz::tag::generic_array));
+         nest.push_back(char(1 << 2));
+      }
+      nest.push_back(char(glz::tag::null));
+
+      glz::generic out{};
+      expect(glz::read_beve(out, nest) == glz::error_code::exceeded_max_recursive_depth);
+   };
+
+   "an ambiguous nest cannot multiply the work of resolving it"_test = [] {
+      // Resolution is speculative: an alternative is parsed to find out whether it fits, and a
+      // rejected one is rewound and the next tried. Nest that and the re-parses multiply -- measured
+      // at ~4.3x per level, so 189 bytes took 55 seconds and 256 levels would never return. The
+      // speculation budget caps the total re-parsed bytes, so the cost stops growing with depth
+      // (~8 ms here, whatever the nesting). Timed rather than asserted on the error alone: a
+      // reversion is a hang, and a hung suite is a worse signal than a failed expectation.
+      const auto start = std::chrono::steady_clock::now();
+      for (size_t levels : {4u, 8u, 16u, 32u}) {
+         amb_v out{};
+         expect(bool(glz::read_beve(out, ambiguous_nest(levels)))) << "levels=" << levels;
+      }
+      const auto ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count();
+      expect(ms < 5000.0) << "resolving ambiguous nests took " << ms << " ms";
+   };
+
+   "the budget does not penalise many variants side by side"_test = [] {
+      // The bound is on re-parsed bytes relative to the input, so width costs the same per element
+      // however wide the document is: each element rejects the first alternative once.
+      std::string buffer = "[";
+      for (size_t i = 0; i < 50'000; ++i) {
+         if (i) buffer += ',';
+         buffer += R"({"b":1})";
+      }
+      buffer += "]";
+
+      std::vector<std::variant<beve_depth::alt_a, beve_depth::alt_b>> out{};
+      const auto ec = glz::read_json(out, buffer); // JSON: same resolution machinery, readable inline
+      expect(not ec) << glz::format_error(ec, buffer);
+      expect(out.size() == 50'000);
+   };
+
+   "a bogus element count cannot spin a set read"_test = [] {
+      // The count is attacker controlled and capped only at 2^48; without a bound against the
+      // remaining input the loop errors on every element and keeps going for hours.
+      std::string buffer;
+      buffer.push_back(char(glz::tag::generic_array));
+      const uint64_t count = (uint64_t{1} << 48) - 1;
+      const uint64_t compressed = (count << 2) | 0b11; // 8 byte compressed count
+      for (int i = 0; i < 8; ++i) {
+         buffer.push_back(char(uint8_t(compressed >> (8 * i))));
+      }
+
+      std::set<std::vector<int>> out{};
+      expect(glz::read_beve(out, buffer) == glz::error_code::invalid_length);
    };
 };
 

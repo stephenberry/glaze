@@ -3594,6 +3594,72 @@ suite cbor_shrink_to_fit_tests = [] {
    };
 };
 
+namespace cbor_depth
+{
+   struct one_field
+   {
+      int a{};
+   };
+
+   struct tree_node
+   {
+      std::vector<tree_node> children{};
+   };
+
+   // { "zz": [[[ ... ]]] } with indefinite-length arrays: one byte per nesting level, and "zz" is not
+   // a member of the target struct, so a lax read skips the whole nest.
+   inline std::string nested_arrays(size_t levels)
+   {
+      std::string b;
+      b.push_back(char(0xA1)); // map(1)
+      b.push_back(char(0x62)); // text(2)
+      b += "zz";
+      for (size_t i = 0; i < levels; ++i) {
+         b.push_back(char(0x9F)); // indefinite array
+      }
+      b.push_back(char(0xF6)); // null
+      for (size_t i = 0; i < levels; ++i) {
+         b.push_back(char(0xFF)); // break
+      }
+      return b;
+   }
+
+   inline std::string nested_tree(size_t levels)
+   {
+      tree_node root{};
+      auto* cur = &root;
+      for (size_t i = 0; i < levels; ++i) {
+         cur->children.emplace_back();
+         cur = &cur->children.front();
+      }
+      return glz::write_cbor(root).value();
+   }
+}
+
+suite cbor_recursion_depth_limit = [] {
+   using namespace cbor_depth;
+
+   "a hostile nest of arrays is rejected rather than overflowing the stack"_test = [] {
+      // One byte per level: 200k levels is 400 KB of input against a default 8 MB stack (1 MB on
+      // Windows). The skip must stop at max_recursive_depth_limit instead of recursing to a crash.
+      const auto buffer = nested_arrays(200'000);
+
+      constexpr glz::opts lax{.format = glz::CBOR, .error_on_unknown_keys = false};
+      one_field out{};
+      expect(glz::read<lax>(out, buffer) == glz::error_code::exceeded_max_recursive_depth);
+   };
+
+   "the limit binds the typed readers, not just skipping"_test = [] {
+      // Each tree_node level is two wire levels, the map and the array its member holds.
+      tree_node shallow_out{};
+      expect(not glz::read_cbor(shallow_out, nested_tree(100)));
+
+      tree_node deep_out{};
+      expect(glz::read_cbor(deep_out, nested_tree(glz::max_recursive_depth_limit)) ==
+             glz::error_code::exceeded_max_recursive_depth);
+   };
+};
+
 int main()
 {
    custom_variant_ambiguity_tests();
