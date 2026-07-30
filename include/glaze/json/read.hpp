@@ -2337,6 +2337,9 @@ namespace glz
          }
 
          if constexpr (Opts.partial_read) {
+            // partial_read stops early on a success path, so give the level back like the
+            // syntactic-close paths do; otherwise it accumulates across reads sharing a context.
+            --ctx.depth;
             return;
          }
          else {
@@ -2754,6 +2757,7 @@ namespace glz
          });
 
          if constexpr (Opts.partial_read) {
+            --ctx.depth; // as above: an early success still closes this level
             return;
          }
          else {
@@ -3112,6 +3116,7 @@ namespace glz
 
                   if ((all_fields & fields) == all_fields) {
                      ctx.error = error_code::partial_read_complete;
+                     --ctx.depth; // as above: an early success still closes this level
                      return;
                   }
                }
@@ -3623,9 +3628,17 @@ namespace glz
    // The exception is a truncation signal on a non-null-terminated buffer: there ctx.depth is also
    // the completion counter, and leaving that level counted is precisely what tells
    // finalize_read_context the buffer ended mid-value rather than exactly at a clean close.
+   //
+   // Nesting past the limit is excluded in both modes, and for a third reason: handing the next
+   // alternative a fresh budget lets it re-descend to the limit and fail identically, so the retry
+   // re-parses the whole subtree once per alternative at every level of the nest, which is
+   // exponential. `variant_alternative_exhausted` below stops the retry outright.
    template <auto Opts>
    GLZ_ALWAYS_INLINE void rewind_depth(is_context auto& ctx, const uint32_t depth) noexcept
    {
+      if (ctx.error == error_code::exceeded_max_recursive_depth) [[unlikely]] {
+         return;
+      }
       if constexpr (Opts.null_terminated) {
          ctx.depth = depth;
       }
@@ -3634,6 +3647,13 @@ namespace glz
             ctx.depth = depth;
          }
       }
+   }
+
+   // True once a failure means no further alternative is worth trying: nesting past the depth limit
+   // is a property of the input rather than of the alternative, so retrying only multiplies the work.
+   GLZ_ALWAYS_INLINE bool variant_alternative_exhausted(is_context auto& ctx) noexcept
+   {
+      return ctx.error == error_code::exceeded_max_recursive_depth;
    }
 
    // Process variant alternatives by iterating directly over variant indices
@@ -3659,7 +3679,7 @@ namespace glz
             // First pass: const glaze types in this category
             if constexpr (const_count > 0) {
                for_each<N>([&]<size_t I>() {
-                  if (found_match) {
+                  if (found_match || variant_alternative_exhausted(ctx)) {
                      return;
                   }
                   using V = std::variant_alternative_t<I, Variant>;
@@ -3705,7 +3725,7 @@ namespace glz
                size_t non_const_idx = 0;
 
                for_each<N>([&]<size_t I>() {
-                  if (found_match) {
+                  if (found_match || variant_alternative_exhausted(ctx)) {
                      return;
                   }
                   using V = std::variant_alternative_t<I, Variant>;
@@ -3731,7 +3751,7 @@ namespace glz
                            else {
                               it = copy_it;
                               rewind_depth<Options>(ctx, copy_depth);
-                              if (non_const_idx + 1 < non_const_count) {
+                              if (non_const_idx + 1 < non_const_count && not variant_alternative_exhausted(ctx)) {
                                  ctx.error = error_code::none;
                               }
                            }
@@ -3739,7 +3759,7 @@ namespace glz
                         else {
                            it = copy_it;
                            rewind_depth<Options>(ctx, copy_depth);
-                           if (non_const_idx + 1 < non_const_count) {
+                           if (non_const_idx + 1 < non_const_count && not variant_alternative_exhausted(ctx)) {
                               ctx.error = error_code::none;
                            }
                         }
@@ -3747,7 +3767,7 @@ namespace glz
                      else {
                         it = copy_it;
                         rewind_depth<Options>(ctx, copy_depth);
-                        if (non_const_idx + 1 < non_const_count) {
+                        if (non_const_idx + 1 < non_const_count && not variant_alternative_exhausted(ctx)) {
                            ctx.error = error_code::none;
                         }
                      }
@@ -3758,7 +3778,8 @@ namespace glz
                   if constexpr (non_const_count == 1) {
                      // Keep the specific error from the single type we tried
                   }
-                  else {
+                  else if (not variant_alternative_exhausted(ctx)) {
+                     // Over-nested input is not a failure of the alternative set; keep saying so.
                      ctx.error = error_code::no_matching_variant_type;
                   }
                }
@@ -4703,7 +4724,7 @@ namespace glz
             bool parsed = false;
 
             for_each<N>([&]<size_t I>() {
-               if (parsed) return;
+               if (parsed || variant_alternative_exhausted(ctx)) return;
 
                auto copy_it = it;
                // A rejected alternative may have bailed out inside a container, which leaves its
@@ -4733,7 +4754,9 @@ namespace glz
                      it = copy_it;
                      rewind_depth<Options>(ctx, copy_depth);
                      if constexpr (I + 1 < N) {
-                        ctx.error = error_code::none; // Clear error for next attempt
+                        if (not variant_alternative_exhausted(ctx)) {
+                           ctx.error = error_code::none; // Clear error for next attempt
+                        }
                      }
                   }
                }
@@ -4742,7 +4765,9 @@ namespace glz
                   it = copy_it;
                   rewind_depth<Options>(ctx, copy_depth);
                   if constexpr (I + 1 < N) {
-                     ctx.error = error_code::none; // Clear error for next attempt
+                     if (not variant_alternative_exhausted(ctx)) {
+                        ctx.error = error_code::none; // Clear error for next attempt
+                     }
                   }
                }
             });
@@ -4851,8 +4876,13 @@ namespace glz
          };
 
          if (*it == '{') {
-            // one nesting level (see enter_depth): counted in both modes so the limit binds,
-            // released at each syntactic close below
+            // One level, held only while this reader scans the wrapper. Every path below releases it:
+            // the two that rewind to `start` do so before delegating, since the reader they hand the
+            // object to counts the level itself, and the {"unexpected": value} branch releases at the
+            // closing brace. Releasing on all three matters because this is the ordinary path -- a
+            // flat array of a few hundred expected values would otherwise spend the whole budget --
+            // and holding it on the error paths is what keeps a truncated wrapper from finalizing as
+            // success on a non-null-terminated buffer.
             if (enter_depth(ctx)) [[unlikely]] {
                return;
             }
@@ -4868,6 +4898,7 @@ namespace glz
                return;
             }
             if (*it == '}') {
+               --ctx.depth; // released before delegating; parse_val re-reads the object and counts it
                it = start;
                // empty object
                parse_val();
@@ -4907,6 +4938,7 @@ namespace glz
                   --ctx.depth;
                }
                else {
+                  --ctx.depth; // as above: released before delegating
                   it = start;
                   parse_val();
                }

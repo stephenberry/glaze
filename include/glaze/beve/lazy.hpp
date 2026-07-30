@@ -29,7 +29,16 @@ namespace glz
 
    namespace detail
    {
-      // Skip a BEVE value and return the new position (no context needed for position tracking)
+      // Skip a BEVE value and return the new position (no context needed for position tracking).
+      //
+      // A failed skip leaves `it` part way through the value, and every caller here treats the
+      // returned pointer as the start of the next one, so handing that position back would resolve
+      // later lookups against the middle of a value. Return `end` instead: the caller's scan stops
+      // and reports nothing found rather than something wrong. Nesting deeper than
+      // max_recursive_depth_limit is the reachable case -- skip_value<BEVE> refuses it, which is what
+      // keeps this from being a stack overflow -- so a lazy view over such a value can no longer
+      // reach the members past it. Distinguishing "too deep" from "absent" needs an error channel
+      // through the lazy API, which these accessors do not have.
       template <opts Opts>
       GLZ_ALWAYS_INLINE const char* skip_value_beve_lazy(const char* p, const char* end) noexcept
       {
@@ -38,6 +47,9 @@ namespace glz
          context ctx{};
          auto it = p;
          skip_value<BEVE>::op<Opts>(ctx, it, end);
+         if (bool(ctx.error)) [[unlikely]] {
+            return end;
+         }
          return it;
       }
 
