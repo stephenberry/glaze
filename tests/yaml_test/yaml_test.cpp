@@ -4276,6 +4276,31 @@ ship-to: *id001)";
          R"({"bill-to":{"given":"Chris","family":"Dumars"},"ship-to":{"given":"Chris","family":"Dumars"}})";
       expect(json == expected) << json;
    };
+
+   "anchor_trailing_blank_line_stays_in_bounds"_test = [] {
+      static constexpr glz::opts options{.format = glz::YAML, .null_terminated = false};
+      // An anchor whose value is on the next line, where that line holds only whitespace the
+      // indent scan does not measure (a tab), leaves the cursor at the end of the buffer.
+      // A non-null-terminated buffer has no sentinel there, so the anchor scan must stop
+      // rather than read the byte past the end.
+      for (const std::string_view s : {"&a\n\t", "&a\n\t\t", "&a\n \t", "&a\n\t \t"}) {
+         std::vector<char> buf{s.begin(), s.end()};
+         const std::string_view view{buf.data(), buf.data() + buf.size()};
+         glz::generic parsed{};
+         const auto ec = glz::read<options>(parsed, view);
+         expect(ec.ec == glz::error_code::unexpected_end) << s;
+         expect(ec.count <= view.size()) << s;
+      }
+
+      // An anchor with real content on the next line still parses.
+      const std::string_view valid = "&a\n  x";
+      std::vector<char> buf{valid.begin(), valid.end()};
+      const std::string_view view{buf.data(), buf.data() + buf.size()};
+      glz::generic parsed{};
+      const auto ec = glz::read<options>(parsed, view);
+      expect(!ec) << glz::format_error(ec, view);
+      expect(glz::write_json(parsed).value_or("WRITE_ERR") == R"("x")");
+   };
 };
 
 // ============================================================
