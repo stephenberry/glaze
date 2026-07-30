@@ -4,6 +4,7 @@
 #pragma once
 
 #include "glaze/beve/header.hpp"
+#include "glaze/core/context.hpp"
 #include "glaze/core/opts.hpp"
 #include "glaze/core/read.hpp"
 #include "glaze/file/file_ops.hpp"
@@ -310,6 +311,16 @@ namespace glz
       if (invalid_end(ctx, it, end)) {
          return;
       }
+
+      // Every recursive skip path -- object members, generic array elements, the matrix and legacy
+      // type-tag extensions -- descends by calling back into here, so this one guard bounds them all.
+      // Two bytes of input buy a nesting level, so without it a tiny hostile buffer (a few hundred KB
+      // of nested empty arrays) overflows the stack before it runs out of tags to skip.
+      depth_guard guard{ctx};
+      if (!guard) [[unlikely]] {
+         return;
+      }
+
       switch (uint8_t(*it) & 0b00000'111) {
       case tag::null: {
          ++it;

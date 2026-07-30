@@ -18,6 +18,14 @@
 // If we know the first function called has an end check, we don't need a guard at the top of the function
 // Also, after almost every function call we need to check if an error was produced
 
+// Recursion depth: BEVE spends two bytes per nesting level, so input alone can drive the reader
+// arbitrarily deep and overflow the stack. Every reader that consumes an object or generic-array
+// header and then descends into the members takes one level with glz::depth_guard, and
+// skip_value<BEVE> does the same, which bounds the descent at max_recursive_depth_limit and reports
+// exceeded_max_recursive_depth instead of crashing. A reader that hands its header off to another
+// reader (a reflectable struct read positionally defers to the tuple reader) leaves the level to that
+// reader, so one wire level is counted once.
+
 namespace glz
 {
    template <>
@@ -625,11 +633,13 @@ namespace glz
       static constexpr auto tagging = variant_tagging_v<T>;
 
       // Try each alternative in declaration order, rewinding the iterator on failure. Returns true
-      // when an alternative parsed cleanly, leaving `value` holding it. `truncated` is set when any
-      // alternative ran off the end of the buffer, which says the input is incomplete rather than
-      // that it matched no alternative.
+      // when an alternative parsed cleanly, leaving `value` holding it. `input_error` records a
+      // failure that is a property of the input rather than of the alternative set -- a buffer that
+      // ran out or nesting past the depth limit -- which no other alternative could have done better
+      // with.
       template <auto Opts>
-      static bool try_each_pass(auto&& value, is_context auto&& ctx, auto&& it, auto end, bool& truncated) noexcept
+      static bool try_each_pass(auto&& value, is_context auto&& ctx, auto&& it, auto end,
+                                error_code& input_error) noexcept
       {
          bool matched = false;
          const auto start = it;
@@ -647,8 +657,8 @@ namespace glz
             if (!bool(ctx.error)) {
                matched = true;
             }
-            else if (ctx.error == error_code::unexpected_end) {
-               truncated = true;
+            else if (ctx.error == error_code::unexpected_end || ctx.error == error_code::exceeded_max_recursive_depth) {
+               input_error = ctx.error;
             }
          });
          if (!matched) {
@@ -670,19 +680,19 @@ namespace glz
       static void try_each(auto&& value, is_context auto&& ctx, auto&& it, auto end) noexcept
       {
          const auto start = it;
-         bool truncated = false;
+         error_code input_error{};
          if constexpr (check_allow_conversions(Opts)) {
-            if (try_each_pass<opt_false<Opts, allow_conversions_opt_tag{}>>(value, ctx, it, end, truncated)) {
+            if (try_each_pass<opt_false<Opts, allow_conversions_opt_tag{}>>(value, ctx, it, end, input_error)) {
                return;
             }
          }
-         if (try_each_pass<Opts>(value, ctx, it, end, truncated)) {
+         if (try_each_pass<Opts>(value, ctx, it, end, input_error)) {
             return;
          }
          it = start;
-         // An incomplete buffer is a property of the input, not of the alternative set, so report it
-         // as such instead of blaming variant resolution.
-         ctx.error = truncated ? error_code::unexpected_end : error_code::no_matching_variant_type;
+         // An incomplete or over-nested buffer is a property of the input, not of the alternative set,
+         // so report it as such instead of blaming variant resolution.
+         ctx.error = input_error != error_code::none ? input_error : error_code::no_matching_variant_type;
       }
 
       // Parse the object at `it` as alternative I, handling the merged discriminator key when the
@@ -1243,6 +1253,14 @@ namespace glz
             ctx.error = error_code::syntax_error;
             return;
          }
+
+         // As with read_adjacent: the value of one positionally tagged variant may be another, and
+         // this reader consumes the [id, value] array itself rather than through a guarded reader.
+         depth_guard guard{ctx};
+         if (!guard) [[unlikely]] {
+            return;
+         }
+
          ++it;
          const auto n = int_from_compressed(ctx, it, end);
          if (bool(ctx.error)) [[unlikely]] {
@@ -1575,9 +1593,22 @@ namespace glz
                return;
             }
 
+            depth_guard guard{ctx};
+            if (!guard) [[unlikely]] {
+               return;
+            }
+
             ++it;
             const auto n = int_from_compressed(ctx, it, end);
             if (bool(ctx.error)) [[unlikely]] {
+               return;
+            }
+
+            // Each element needs at least 1 byte for its tag, so a count larger than the remaining
+            // input cannot be honored. Without this (and the error check in the loop) an element count
+            // of 2^48 in a 3 byte buffer spins for hours on reads that error instantly.
+            if (uint64_t(end - it) < n) [[unlikely]] {
+               ctx.error = error_code::invalid_length;
                return;
             }
 
@@ -1586,6 +1617,9 @@ namespace glz
             for (size_t i = 0; i < n; ++i) {
                V v;
                parse<BEVE>::op<Opts>(v, ctx, it, end);
+               if (bool(ctx.error)) [[unlikely]] {
+                  return;
+               }
                value.emplace(std::move(v));
             }
          }
@@ -2202,6 +2236,12 @@ namespace glz
                ctx.error = error_code::syntax_error;
                return;
             }
+
+            depth_guard guard{ctx};
+            if (!guard) [[unlikely]] {
+               return;
+            }
+
             ++it;
             std::conditional_t<check_partial_read(Opts), size_t, const size_t> n = int_from_compressed(ctx, it, end);
             if (bool(ctx.error)) [[unlikely]] {
@@ -2288,9 +2328,23 @@ namespace glz
             }
          }
 
+         depth_guard guard{ctx};
+         if (!guard) [[unlikely]] {
+            return;
+         }
+
          ++it;
          const size_t n = int_from_compressed(ctx, it, end);
          if (bool(ctx.error)) [[unlikely]] {
+            return;
+         }
+
+         // A pair costs at least one byte of input, so a count exceeding what remains cannot be
+         // honored -- the same bound the map reader applies. Bailing here (and on error in the loop)
+         // keeps a bogus count from emplacing its way through memory on a read that errors on the
+         // first element.
+         if (n > size_t(end - it)) [[unlikely]] {
+            ctx.error = error_code::unexpected_end;
             return;
          }
 
@@ -2300,7 +2354,13 @@ namespace glz
          for (size_t i = 0; i < n; ++i) {
             auto& item = value.emplace_back();
             parse<BEVE>::op<no_header_on<Opts>()>(item.first, key_tag, ctx, it, end);
+            if (bool(ctx.error)) [[unlikely]] {
+               return;
+            }
             parse<BEVE>::op<Opts>(item.second, ctx, it, end);
+            if (bool(ctx.error)) [[unlikely]] {
+               return;
+            }
          }
       }
    };
@@ -2321,6 +2381,11 @@ namespace glz
          const auto tag = uint8_t(*it);
          if (tag != header) [[unlikely]] {
             ctx.error = error_code::syntax_error;
+            return;
+         }
+
+         depth_guard guard{ctx};
+         if (!guard) [[unlikely]] {
             return;
          }
 
@@ -2382,6 +2447,11 @@ namespace glz
                ctx.error = error_code::syntax_error;
                return;
             }
+         }
+
+         depth_guard guard{ctx};
+         if (!guard) [[unlikely]] {
+            return;
          }
 
          ++it;
@@ -2728,6 +2798,13 @@ namespace glz
                ctx.error = error_code::syntax_error;
                return;
             }
+
+            // The reflectable branch above delegates to the tuple reader, which takes the level there.
+            depth_guard guard{ctx};
+            if (!guard) [[unlikely]] {
+               return;
+            }
+
             ++it;
             using V = std::decay_t<T>;
             constexpr auto N = reflect<V>::size;
@@ -2771,6 +2848,11 @@ namespace glz
          const auto tag = uint8_t(*it);
          if (tag != header) [[unlikely]] {
             ctx.error = error_code::syntax_error;
+            return;
+         }
+
+         depth_guard guard{ctx};
+         if (!guard) [[unlikely]] {
             return;
          }
 
@@ -2944,6 +3026,12 @@ namespace glz
             ctx.error = error_code::syntax_error;
             return;
          }
+
+         depth_guard guard{ctx};
+         if (!guard) [[unlikely]] {
+            return;
+         }
+
          ++it;
 
          constexpr auto N = reflect<T>::size;
@@ -2976,6 +3064,12 @@ namespace glz
             ctx.error = error_code::syntax_error;
             return;
          }
+
+         depth_guard guard{ctx};
+         if (!guard) [[unlikely]] {
+            return;
+         }
+
          ++it;
 
          using V = std::decay_t<T>;
