@@ -3,6 +3,7 @@
 
 #include <cstring>
 #include <string>
+#include <vector>
 
 #include "glaze/rpc/registry.hpp"
 #include "ut/ut.hpp"
@@ -286,6 +287,55 @@ suite registry_span_call_tests = [] {
 
       auto result = glz::repe::parse_request({response_buf.data(), response_buf.size()});
       expect(result.request.id() == 12345) << "Response ID should match request ID";
+   };
+};
+
+struct vec2
+{
+   int x{};
+   int y{};
+};
+
+struct object_api
+{
+   vec2 position{};
+};
+
+suite span_call_unterminated_buffer_tests = [] {
+   // make_request hands back a std::string, whose data()[size()] is a '\0' the reader
+   // can stop on. Off the wire the body ends where the buffer ends, so copy the message
+   // into an exactly sized vector to reproduce that.
+   auto exact_buffer = [](std::string_view message) { return std::vector<char>(message.begin(), message.end()); };
+
+   "scalar_body_ending_at_buffer_end"_test = [&] {
+      glz::registry<> registry;
+      test_api api{};
+      registry.on(api);
+
+      const auto request = exact_buffer(make_request("/value", "7"));
+      std::string response_buf;
+      registry.call(std::span<const char>{request.data(), request.size()}, response_buf);
+
+      expect(api.value == 7) << "Scalar body should be applied";
+      auto result = glz::repe::parse_request({response_buf.data(), response_buf.size()});
+      expect(bool(result)) << "Response should be parseable";
+      expect(result.request.error() == glz::error_code::none) << "No error expected";
+   };
+
+   "object_body_ending_at_buffer_end"_test = [&] {
+      glz::registry<> registry;
+      object_api api{};
+      registry.on(api);
+
+      const auto request = exact_buffer(make_request("/position", R"({"x":3,"y":4})"));
+      std::string response_buf;
+      registry.call(std::span<const char>{request.data(), request.size()}, response_buf);
+
+      expect(api.position.x == 3) << "Object body should be applied";
+      expect(api.position.y == 4) << "Object body should be applied";
+      auto result = glz::repe::parse_request({response_buf.data(), response_buf.size()});
+      expect(bool(result)) << "Response should be parseable";
+      expect(result.request.error() == glz::error_code::none) << "No error expected";
    };
 };
 

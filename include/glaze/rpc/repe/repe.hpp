@@ -554,7 +554,17 @@ namespace glz::repe
       }
       auto start = b;
 
-      glz::parse<Opts.format>::template op<Opts>(std::forward<Value>(value), ctx, b, e);
+      // The body is a view into the request span, so nothing is guaranteed to follow it.
+      // A null_terminated read drops its end checks and scans for the '\0' sentinel that
+      // only a std::string body would supply, so read the view as unterminated input and
+      // clear the end_reached a value finishing at the span end reports, matching what
+      // finalize_read_context does for glz::read.
+      static constexpr auto BodyOpts = opt_false<Opts, &opts::null_terminated>;
+
+      glz::parse<Opts.format>::template op<BodyOpts>(std::forward<Value>(value), ctx, b, e);
+      if (ctx.error == error_code::end_reached && ctx.depth == 0) {
+         ctx.error = error_code::none;
+      }
 
       if (bool(ctx.error)) {
          error_ctx ec{size_t(b - start), ctx.error, ctx.custom_error_message};
