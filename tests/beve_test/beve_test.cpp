@@ -8919,6 +8919,43 @@ namespace beve_depth
       }
       return glz::write_beve(root).value();
    }
+
+   // Two object alternatives with identical key sets, so deduction never narrows to one candidate
+   // and resolution has to try them. Recursive, so the retries nest.
+   struct amb_node_a;
+   struct amb_node_b;
+   struct amb_leaf
+   {
+      int v{};
+   };
+   using amb_v = std::variant<amb_leaf, std::shared_ptr<amb_node_a>, std::shared_ptr<amb_node_b>>;
+   struct amb_node_a
+   {
+      amb_v child{};
+      int n{};
+   };
+   struct amb_node_b
+   {
+      amb_v child{};
+      int n{};
+   };
+
+   inline std::string ambiguous_nest(size_t levels)
+   {
+      amb_v v{amb_leaf{1}};
+      for (size_t i = 0; i < levels; ++i) {
+         auto n = std::make_shared<amb_node_b>();
+         n->child = std::move(v);
+         n->n = int(i);
+         v = std::move(n);
+      }
+      auto buffer = glz::write_beve(v).value();
+      // Rename the innermost leaf's only key so the bottom of the nest fails with unknown_key. Its
+      // key is the last "v" written, and no later byte can be one: what follows is the leaf's
+      // numeric value and then each enclosing node's "n" key and value.
+      buffer[buffer.rfind('v')] = 'q';
+      return buffer;
+   }
 }
 
 suite beve_recursion_depth_limit = [] {
@@ -8977,6 +9014,38 @@ suite beve_recursion_depth_limit = [] {
 
       glz::generic out{};
       expect(glz::read_beve(out, nest) == glz::error_code::exceeded_max_recursive_depth);
+   };
+
+   "an ambiguous nest cannot multiply the work of resolving it"_test = [] {
+      // Resolution is speculative: an alternative is parsed to find out whether it fits, and a
+      // rejected one is rewound and the next tried. Nest that and the re-parses multiply -- measured
+      // at ~4.3x per level, so 189 bytes took 55 seconds and 256 levels would never return. The
+      // speculation budget caps the total re-parsed bytes, so the cost stops growing with depth
+      // (~8 ms here, whatever the nesting). Timed rather than asserted on the error alone: a
+      // reversion is a hang, and a hung suite is a worse signal than a failed expectation.
+      const auto start = std::chrono::steady_clock::now();
+      for (size_t levels : {4u, 8u, 16u, 32u}) {
+         amb_v out{};
+         expect(bool(glz::read_beve(out, ambiguous_nest(levels)))) << "levels=" << levels;
+      }
+      const auto ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count();
+      expect(ms < 5000.0) << "resolving ambiguous nests took " << ms << " ms";
+   };
+
+   "the budget does not penalise many variants side by side"_test = [] {
+      // The bound is on re-parsed bytes relative to the input, so width costs the same per element
+      // however wide the document is: each element rejects the first alternative once.
+      std::string buffer = "[";
+      for (size_t i = 0; i < 50'000; ++i) {
+         if (i) buffer += ',';
+         buffer += R"({"b":1})";
+      }
+      buffer += "]";
+
+      std::vector<std::variant<beve_depth::alt_a, beve_depth::alt_b>> out{};
+      const auto ec = glz::read_json(out, buffer); // JSON: same resolution machinery, readable inline
+      expect(not ec) << glz::format_error(ec, buffer);
+      expect(out.size() == 50'000);
    };
 
    "a bogus element count cannot spin a set read"_test = [] {

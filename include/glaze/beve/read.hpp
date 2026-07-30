@@ -642,9 +642,10 @@ namespace glz
                                 error_code& input_error) noexcept
       {
          bool matched = false;
+         bool exhausted = false;
          const auto start = it;
          for_each<variant_size>([&]<size_t I>() {
-            if (matched || input_error == error_code::exceeded_max_recursive_depth) {
+            if (matched || exhausted || input_error == error_code::exceeded_max_recursive_depth) {
                // Nesting past the limit is a property of the input: no other alternative can read it,
                // and re-parsing the subtree per alternative at every level is exponential.
                return;
@@ -656,11 +657,19 @@ namespace glz
             ctx.error = error_code::none;
             ctx.custom_error_message = {}; // else a rejected alternative's message outlives its error
             parse<BEVE>::op<Opts>(std::get<I>(value), ctx, it, end);
+            // Charge only what a REJECTED attempt parsed. That is the wasted work the bound is
+            // about; charging the successful alternative too would bill every enclosing level for
+            // the same bytes and make a valid nest look exponential.
+            const bool budget_left = bool(ctx.error) ? charge_speculation(ctx, size_t(it - start)) : true;
             if (!bool(ctx.error)) {
                matched = true;
             }
             else if (ctx.error == error_code::unexpected_end || ctx.error == error_code::exceeded_max_recursive_depth) {
                input_error = ctx.error;
+            }
+            if (!budget_left) {
+               // Out of speculation budget: keep this alternative's error and stop.
+               exhausted = true;
             }
          });
          if (!matched) {
@@ -774,7 +783,11 @@ namespace glz
          }
 
          bool recovered = false;
+         bool exhausted = false;
          for_each<variant_size>([&]<size_t I>() {
+            if (exhausted) {
+               return;
+            }
             if constexpr (beve_variant_is_object_alt<std::variant_alternative_t<I, T>>) {
                using V = std::variant_alternative_t<I, T>;
                using X = std::conditional_t<is_memory_object<V>, memory_type<V>, V>;
@@ -785,7 +798,7 @@ namespace glz
                   return;
                }
                else {
-                  if (recovered || I == resolved) {
+                  if (recovered || exhausted || I == resolved) {
                      return;
                   }
                   it = obj_start;
@@ -796,6 +809,11 @@ namespace glz
                   }
                   parse_object_alt<AltOpts, tagged, I>(value, ctx, it, end);
                   recovered = !bool(ctx.error);
+                  if (!recovered && !charge_speculation(ctx, size_t(it - obj_start))) {
+                     // Out of budget: an ambiguous nest re-parses the same subtree per alternative at
+                     // every level, which is exponential. Keep this error and stop retrying.
+                     exhausted = true;
+                  }
                }
             }
          });

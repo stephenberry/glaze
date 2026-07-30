@@ -15377,6 +15377,28 @@ suite json_recursion_depth_limit = [] {
       expect(ctx.depth == 0) << ctx.depth;
    };
 
+   "an ambiguous nest cannot multiply the work of resolving it"_test = [] {
+      // The JSON analogue of the BEVE cascade: two array alternatives, so every level tries both,
+      // with a malformed leaf at the bottom that every level retries. 339 bytes took 40 seconds
+      // before the speculation budget capped the total re-parsed bytes; the cost no longer grows
+      // with depth.
+      const auto build = [](size_t levels) {
+         std::string b;
+         for (size_t i = 0; i < levels; ++i) b += R"([{"child":)";
+         b += "[{]"; // malformed leaf
+         for (size_t i = 0; i < levels; ++i) b += "}]";
+         return b;
+      };
+
+      const auto start = std::chrono::steady_clock::now();
+      for (size_t levels : {8u, 16u, 28u, 36u}) {
+         two_arrays out{};
+         expect(bool(glz::read_json(out, build(levels)))) << "levels=" << levels;
+      }
+      const auto ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count();
+      expect(ms < 5000.0) << "resolving ambiguous nests took " << ms << " ms";
+   };
+
    "rejected variant alternatives do not spend the depth budget"_test = [] {
       // Each element tries alt_a first and fails inside its object, which leaves that level counted
       // until the alternative is rewound. Without the rewind this errors once 256 elements have been

@@ -3675,11 +3675,15 @@ namespace glz
             constexpr auto non_const_count = variant_filtered_count_v<Variant, Trait, false>;
 
             bool found_match{};
+            // Set when the speculative parsing budget runs out; see charge_speculation. An ambiguous
+            // nest re-parses the same subtree per alternative at every level, which is exponential,
+            // so the budget stops it and the failure already in hand is reported.
+            bool exhausted{};
 
             // First pass: const glaze types in this category
             if constexpr (const_count > 0) {
                for_each<N>([&]<size_t I>() {
-                  if (found_match || variant_alternative_exhausted(ctx)) {
+                  if (found_match || exhausted || variant_alternative_exhausted(ctx)) {
                      return;
                   }
                   using V = std::variant_alternative_t<I, Variant>;
@@ -3700,8 +3704,12 @@ namespace glz
                         }
                      }
                      else {
+                        // Rejected: charge the bytes it parsed before we rewind. See charge_speculation.
+                        if (!charge_speculation(ctx, size_t(it - copy_it))) {
+                           exhausted = true;
+                        }
                         if constexpr (not Options.null_terminated) {
-                           if (ctx.error == error_code::end_reached) {
+                           if (ctx.error == error_code::end_reached && not exhausted) {
                               ctx.error = error_code::none;
                            }
                         }
@@ -3725,7 +3733,7 @@ namespace glz
                size_t non_const_idx = 0;
 
                for_each<N>([&]<size_t I>() {
-                  if (found_match || variant_alternative_exhausted(ctx)) {
+                  if (found_match || exhausted || variant_alternative_exhausted(ctx)) {
                      return;
                   }
                   using V = std::variant_alternative_t<I, Variant>;
@@ -3736,6 +3744,9 @@ namespace glz
                         value = V{};
                      }
                      parse<JSON>::op<ws_handled<Options>()>(std::get<V>(value), ctx, it, end);
+                     if (bool(ctx.error) && !charge_speculation(ctx, size_t(it - copy_it))) {
+                        exhausted = true; // only rejected attempts are charged; see charge_speculation
+                     }
                      if (!bool(ctx.error)) {
                         found_match = true;
                      }
@@ -3744,14 +3755,15 @@ namespace glz
                            num_t<V> || bool_t<V> || string_t<V> || std::is_enum_v<V> || tuple_t<V> || is_std_tuple<V>;
 
                         if constexpr (is_complete_type) {
-                           if (ctx.error == error_code::end_reached && it > copy_it) {
+                           if (ctx.error == error_code::end_reached && it > copy_it && not speculation_exhausted(ctx)) {
                               found_match = true;
                               ctx.error = error_code::none;
                            }
                            else {
                               it = copy_it;
                               rewind_depth<Options>(ctx, copy_depth);
-                              if (non_const_idx + 1 < non_const_count && not variant_alternative_exhausted(ctx)) {
+                              if (non_const_idx + 1 < non_const_count && not exhausted &&
+                                  not variant_alternative_exhausted(ctx)) {
                                  ctx.error = error_code::none;
                               }
                            }
@@ -3759,7 +3771,8 @@ namespace glz
                         else {
                            it = copy_it;
                            rewind_depth<Options>(ctx, copy_depth);
-                           if (non_const_idx + 1 < non_const_count && not variant_alternative_exhausted(ctx)) {
+                           if (non_const_idx + 1 < non_const_count && not exhausted &&
+                               not variant_alternative_exhausted(ctx)) {
                               ctx.error = error_code::none;
                            }
                         }
@@ -3767,7 +3780,8 @@ namespace glz
                      else {
                         it = copy_it;
                         rewind_depth<Options>(ctx, copy_depth);
-                        if (non_const_idx + 1 < non_const_count && not variant_alternative_exhausted(ctx)) {
+                        if (non_const_idx + 1 < non_const_count && not exhausted &&
+                            not variant_alternative_exhausted(ctx)) {
                            ctx.error = error_code::none;
                         }
                      }
@@ -3778,7 +3792,7 @@ namespace glz
                   if constexpr (non_const_count == 1) {
                      // Keep the specific error from the single type we tried
                   }
-                  else if (not variant_alternative_exhausted(ctx)) {
+                  else if (not exhausted && not variant_alternative_exhausted(ctx)) {
                      // Over-nested input is not a failure of the alternative set; keep saying so.
                      ctx.error = error_code::no_matching_variant_type;
                   }
@@ -4722,9 +4736,10 @@ namespace glz
             // For non-auto-deducible variants, try each type until one succeeds
             constexpr auto N = std::variant_size_v<T>;
             bool parsed = false;
+            bool exhausted = false; // speculation budget spent; see charge_speculation
 
             for_each<N>([&]<size_t I>() {
-               if (parsed || variant_alternative_exhausted(ctx)) return;
+               if (parsed || exhausted || variant_alternative_exhausted(ctx)) return;
 
                auto copy_it = it;
                // A rejected alternative may have bailed out inside a container, which leaves its
@@ -4737,6 +4752,9 @@ namespace glz
                }
 
                std::visit([&](auto&& v) { parse<JSON>::op<Options>(v, ctx, it, end); }, value);
+               if (bool(ctx.error) && !charge_speculation(ctx, size_t(it - copy_it))) {
+                  exhausted = true; // only rejected attempts are charged; see charge_speculation
+               }
 
                if (!bool(ctx.error)) {
                   parsed = true;
@@ -4744,8 +4762,9 @@ namespace glz
                else if constexpr (not Options.null_terminated) {
                   // In non-null-terminated mode, if we hit end_reached after advancing the iterator,
                   // it means we successfully parsed the value but couldn't skip trailing whitespace
-                  if (ctx.error == error_code::end_reached && it > copy_it) {
-                     // We advanced the iterator, so we did parse something
+                  if (ctx.error == error_code::end_reached && it > copy_it && not speculation_exhausted(ctx)) {
+                     // We advanced the iterator, so we did parse something -- unless what advanced it
+                     // was an abandoned attempt, which is what a spent speculation budget means.
                      parsed = true;
                      ctx.error = error_code::none;
                   }
@@ -4754,7 +4773,7 @@ namespace glz
                      it = copy_it;
                      rewind_depth<Options>(ctx, copy_depth);
                      if constexpr (I + 1 < N) {
-                        if (not variant_alternative_exhausted(ctx)) {
+                        if (not exhausted && not variant_alternative_exhausted(ctx)) {
                            ctx.error = error_code::none; // Clear error for next attempt
                         }
                      }
@@ -4765,7 +4784,7 @@ namespace glz
                   it = copy_it;
                   rewind_depth<Options>(ctx, copy_depth);
                   if constexpr (I + 1 < N) {
-                     if (not variant_alternative_exhausted(ctx)) {
+                     if (not exhausted && not variant_alternative_exhausted(ctx)) {
                         ctx.error = error_code::none; // Clear error for next attempt
                      }
                   }

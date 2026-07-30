@@ -119,6 +119,8 @@ namespace glz
       error_code error{};
       std::string_view custom_error_message;
       // INTERNAL USE:
+      size_t speculation_budget{}; // Bytes of speculative (variant alternative) re-parsing left;
+      // seeded per read from the input size, 0 means unlimited. See charge_speculation below.
       uint32_t depth{}; // Nesting depth of structures (objects/arrays)
       // Used for indentation when writing and for stack overflow protection when reading
       std::string current_file; // top level file path
@@ -164,6 +166,60 @@ namespace glz
       }
       explicit operator bool() const noexcept { return entered; }
    };
+
+   // A variant read is speculative: an alternative is parsed to find out whether it fits, and a
+   // rejected one is rewound and the next tried. Nest that -- a variant whose alternatives contain
+   // variants -- and the re-parses multiply, so a failure at the bottom of an ambiguous nest costs
+   // branching^depth. Measured at ~4.3x per level, which turns 189 bytes into 55 seconds.
+   //
+   // The bound is on total work rather than on nesting or attempts, because the honest measure is
+   // how many bytes get parsed more than once. A wide document (many variants side by side, each
+   // rejecting an alternative first) re-parses each element once and stays near 1x its own size,
+   // while the exponential case blows through any multiple of the input immediately. Reads that
+   // exhaust the budget stop speculating and report the failure they already have -- which is the
+   // outcome of a cascade anyway, since it only runs when nothing fits.
+   inline constexpr size_t max_speculative_parse_factor = 8;
+
+   // ...plus a floor, because the factor alone is the wrong shape for small inputs. Resolving a
+   // genuinely ambiguous NESTED variant -- alternatives that differ only in a late member, so the
+   // rejected one parses most of the subtree before failing -- costs exponentially more per level
+   // even when the document is valid and the read ultimately succeeds. Glaze has always been like
+   // this; the bound only decides where it stops. Without a floor, a 265 byte document that read
+   // correctly in 9 ms would now fail, which is not an improvement. A megabyte of speculative bytes
+   // covers that shape to 18 levels, and gives up at 20, which is where the unbounded behavior was
+   // already taking a quarter of a second and doubling every two levels. The adversarial case costs
+   // a constant ~8 ms at any depth instead of 55 seconds at depth 12 and forever beyond that.
+   inline constexpr size_t min_speculative_parse_bytes = 1 << 20;
+
+   // Charge `consumed` bytes of speculative parsing. Returns false once the budget is spent, at which
+   // point the caller must stop trying alternatives. A zero budget means unlimited: a context that
+   // never went through glz::read (a nested or hand-rolled parse) is not policed.
+   [[nodiscard]] GLZ_ALWAYS_INLINE bool charge_speculation(is_context auto& ctx, const size_t consumed) noexcept
+   {
+      if constexpr (requires { ctx.speculation_budget; }) {
+         if (ctx.speculation_budget == 0) {
+            return true;
+         }
+         ctx.speculation_budget = consumed >= ctx.speculation_budget ? 1 : ctx.speculation_budget - consumed;
+         return ctx.speculation_budget > 1;
+      }
+      else {
+         return true;
+      }
+   }
+
+   // True once this read has spent its speculation budget. A stopped resolution must not then be
+   // reinterpreted as success by the non-null-terminated readers' "the iterator advanced, so
+   // something parsed" heuristic: what advanced it was an attempt that was abandoned, not accepted.
+   [[nodiscard]] GLZ_ALWAYS_INLINE bool speculation_exhausted(is_context auto& ctx) noexcept
+   {
+      if constexpr (requires { ctx.speculation_budget; }) {
+         return ctx.speculation_budget == 1; // the latched floor; 0 means unbudgeted
+      }
+      else {
+         return false;
+      }
+   }
 
    // Manual counterpart of depth_guard for the JSON/NDJSON readers described above: counts one
    // nesting level and returns true when the limit is reached, in which case the caller must return
