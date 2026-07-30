@@ -26,6 +26,13 @@
 #include "glaze/util/string_literal.hpp"
 #include "glaze/util/variant.hpp"
 
+// Recursion depth: a fixarray or fixmap nesting level costs a single byte, so input alone can drive
+// the reader arbitrarily deep and overflow the stack. Every reader that reads an array or map length
+// and then descends into the entries takes one level with glz::depth_guard, and skip_value<MSGPACK>
+// does the same, which bounds the descent at max_recursive_depth_limit and reports
+// exceeded_max_recursive_depth instead of crashing. A reader that delegates to another reader (a
+// reflectable struct defers to the tuple reader) leaves the level to that reader.
+
 namespace glz::msgpack::detail
 {
    template <class It>
@@ -598,6 +605,11 @@ namespace glz
       template <auto Opts, class Value, is_context Ctx, class It, class End>
       GLZ_ALWAYS_INLINE static void op(Value&& value, uint8_t tag, Ctx&& ctx, It& it, const End& end) noexcept
       {
+         depth_guard guard{ctx};
+         if (!guard) [[unlikely]] {
+            return;
+         }
+
          if constexpr (check_structs_as_arrays(Opts)) {
             size_t len{};
             if (!msgpack::read_array_length(ctx, tag, it, end, len)) {
@@ -738,6 +750,11 @@ namespace glz
       template <auto Opts, class Value, is_context Ctx, class It, class End>
       GLZ_ALWAYS_INLINE static void op(Value&& value, uint8_t tag, Ctx&& ctx, It& it, const End& end) noexcept
       {
+         depth_guard guard{ctx};
+         if (!guard) [[unlikely]] {
+            return;
+         }
+
          size_t len{};
          if (!msgpack::read_map_length(ctx, tag, it, end, len)) {
             return;
@@ -791,6 +808,11 @@ namespace glz
       template <auto Opts, class Value, is_context Ctx, class It, class End>
       GLZ_ALWAYS_INLINE static void op(Value&& value, uint8_t tag, Ctx&& ctx, It& it, const End& end) noexcept
       {
+         depth_guard guard{ctx};
+         if (!guard) [[unlikely]] {
+            return;
+         }
+
          size_t len{};
          if (!msgpack::read_array_length(ctx, tag, it, end, len)) {
             return;
@@ -851,6 +873,12 @@ namespace glz
                   return;
                }
             }
+         }
+
+         // Placed after the binary-range branch above, which is flat and returns before this point.
+         depth_guard guard{ctx};
+         if (!guard) [[unlikely]] {
+            return;
          }
 
          size_t len{};
@@ -1008,6 +1036,11 @@ namespace glz
       template <auto Opts, class Value, is_context Ctx, class It, class End>
       GLZ_ALWAYS_INLINE static void op(Value&& value, uint8_t tag, Ctx&& ctx, It& it, const End& end) noexcept
       {
+         depth_guard guard{ctx};
+         if (!guard) [[unlikely]] {
+            return;
+         }
+
          size_t len{};
          if (!msgpack::read_array_length(ctx, tag, it, end, len)) {
             return;
@@ -1032,6 +1065,11 @@ namespace glz
       template <auto Opts, class Value, is_context Ctx, class It, class End>
       GLZ_ALWAYS_INLINE static void op(Value&& value, uint8_t tag, Ctx&& ctx, It& it, const End& end) noexcept
       {
+         depth_guard guard{ctx};
+         if (!guard) [[unlikely]] {
+            return;
+         }
+
          size_t len{};
          if (!msgpack::read_array_length(ctx, tag, it, end, len)) {
             return;
@@ -1061,6 +1099,11 @@ namespace glz
       template <auto Opts, class Value, is_context Ctx, class It, class End>
       GLZ_ALWAYS_INLINE static void op(Value&& value, uint8_t tag, Ctx&& ctx, It& it, const End& end) noexcept
       {
+         depth_guard guard{ctx};
+         if (!guard) [[unlikely]] {
+            return;
+         }
+
          size_t len{};
          if (!msgpack::read_array_length(ctx, tag, it, end, len)) {
             return;
@@ -1124,6 +1167,11 @@ namespace glz
       template <auto Opts, class Value, is_context Ctx, class It, class End>
       GLZ_ALWAYS_INLINE static void op(Value&& value, uint8_t tag, Ctx&& ctx, It& it, const End& end) noexcept
       {
+         depth_guard guard{ctx};
+         if (!guard) [[unlikely]] {
+            return;
+         }
+
          size_t len{};
          if (!msgpack::read_array_length(ctx, tag, it, end, len)) {
             return;
@@ -1149,6 +1197,11 @@ namespace glz
       template <auto Opts, class Value, is_context Ctx, class It, class End>
       GLZ_ALWAYS_INLINE static void op(Value&& value, uint8_t tag, Ctx&& ctx, It& it, const End& end) noexcept
       {
+         depth_guard guard{ctx};
+         if (!guard) [[unlikely]] {
+            return;
+         }
+
          size_t len{};
          if (!msgpack::read_array_length(ctx, tag, it, end, len)) {
             return;
@@ -1174,6 +1227,11 @@ namespace glz
       template <auto Opts, class Value, is_context Ctx, class It, class End>
       GLZ_ALWAYS_INLINE static void op(Value&& value, uint8_t tag, Ctx&& ctx, It& it, const End& end) noexcept
       {
+         depth_guard guard{ctx};
+         if (!guard) [[unlikely]] {
+            return;
+         }
+
          size_t len{};
          if (!msgpack::read_map_length(ctx, tag, it, end, len)) {
             return;
@@ -1202,6 +1260,11 @@ namespace glz
       template <auto Opts, class Value, is_context Ctx, class It, class End>
       GLZ_ALWAYS_INLINE static void op(Value&& value, uint8_t tag, Ctx&& ctx, It& it, const End& end) noexcept
       {
+         depth_guard guard{ctx};
+         if (!guard) [[unlikely]] {
+            return;
+         }
+
          size_t len{};
          if (!msgpack::read_map_length(ctx, tag, it, end, len)) {
             return;

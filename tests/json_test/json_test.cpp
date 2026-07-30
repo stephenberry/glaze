@@ -15212,6 +15212,111 @@ suite bounded_buffer_overflow_tests = [] {
    };
 };
 
+namespace json_depth
+{
+   struct list_node
+   {
+      std::unique_ptr<list_node> next{};
+      int n{};
+   };
+
+   struct one_field
+   {
+      int a{};
+   };
+
+   struct alt_a
+   {
+      int a{};
+   };
+   struct alt_b
+   {
+      int b{};
+   };
+
+   inline std::string nested_objects(size_t levels, std::string_view key = "next")
+   {
+      std::string b;
+      for (size_t i = 0; i < levels; ++i) {
+         b += "{\"";
+         b += key;
+         b += "\":";
+      }
+      b += "null";
+      b.append(levels, '}');
+      return b;
+   }
+
+   inline std::string nested_arrays(size_t levels)
+   {
+      std::string b;
+      b.append(levels, '[');
+      b.append(levels, ']');
+      return b;
+   }
+}
+
+suite json_recursion_depth_limit = [] {
+   using namespace json_depth;
+
+   "a recursive type is bounded by the depth limit, not by the stack"_test = [] {
+      // Nesting is driven by the input, not by the type, so the readers have to count it. 100k levels
+      // of "{\"next\":" is 900 KB against a default 8 MB stack (1 MB on Windows).
+      list_node deep_out{};
+      expect(glz::read_json(deep_out, nested_objects(100'000)) == glz::error_code::exceeded_max_recursive_depth);
+
+      list_node ok_out{};
+      expect(not glz::read_json(ok_out, nested_objects(100))) << "nesting within the limit must still read";
+   };
+
+   "the limit binds at max_recursive_depth_limit levels"_test = [] {
+      list_node at_limit{};
+      expect(not glz::read_json(at_limit, nested_objects(glz::max_recursive_depth_limit)));
+
+      list_node past_limit{};
+      expect(glz::read_json(past_limit, nested_objects(glz::max_recursive_depth_limit + 1)) ==
+             glz::error_code::exceeded_max_recursive_depth);
+   };
+
+   "untyped reads are bounded too"_test = [] {
+      glz::generic out{};
+      expect(glz::read_json(out, nested_arrays(100'000)) == glz::error_code::exceeded_max_recursive_depth);
+   };
+
+   "a validated skip of an unknown key is bounded"_test = [] {
+      // The default skip walks the nest iteratively; validate_skipped parses it, which recurses.
+      struct validating : glz::opts
+      {
+         bool validate_skipped = true;
+      };
+      static constexpr validating opts{{glz::opts{.error_on_unknown_keys = false}}};
+
+      std::string buffer = R"({"zz":)";
+      buffer += nested_arrays(100'000);
+      buffer += "}";
+
+      one_field out{};
+      expect(glz::read<opts>(out, buffer) == glz::error_code::exceeded_max_recursive_depth);
+   };
+
+   "rejected variant alternatives do not spend the depth budget"_test = [] {
+      // Each element tries alt_a first and fails inside its object, which leaves that level counted
+      // until the alternative is rewound. Without the rewind this errors once 256 elements have been
+      // attempted, even though the document is two levels deep.
+      std::string buffer = "[";
+      for (size_t i = 0; i < 2 * glz::max_recursive_depth_limit; ++i) {
+         if (i) buffer += ',';
+         buffer += R"({"b":1})";
+      }
+      buffer += "]";
+
+      std::vector<std::variant<alt_a, alt_b>> out{};
+      const auto ec = glz::read<glz::opts{.error_on_unknown_keys = false}>(out, buffer);
+      expect(not ec) << glz::format_error(ec, buffer);
+      expect(out.size() == 2 * glz::max_recursive_depth_limit);
+   };
+};
+
 int main()
 {
    trace.end("json_test");

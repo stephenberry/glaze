@@ -13,6 +13,12 @@
 #include "glaze/util/dump.hpp"
 #include "glaze/util/for_each.hpp"
 
+// Recursion depth: a CBOR nesting level costs a single byte, so input alone can drive the reader
+// arbitrarily deep and overflow the stack. Every reader that consumes an array or map head and then
+// descends into the items takes one level with glz::depth_guard, and skip_value<CBOR> does the same,
+// which bounds the descent at max_recursive_depth_limit and reports exceeded_max_recursive_depth
+// instead of crashing.
+
 namespace glz
 {
    namespace cbor_detail
@@ -1054,6 +1060,12 @@ namespace glz
             return;
          }
 
+         // The typed and complex array forms above are flat; only this branch descends into elements.
+         depth_guard guard{ctx};
+         if (!guard) [[unlikely]] {
+            return;
+         }
+
          if (additional_info == info::indefinite) {
             // Indefinite-length array
             if constexpr (resizable<T>) {
@@ -1167,6 +1179,11 @@ namespace glz
             return;
          }
 
+         depth_guard guard{ctx};
+         if (!guard) [[unlikely]] {
+            return;
+         }
+
          value.clear();
 
          if (additional_info == info::indefinite) {
@@ -1263,6 +1280,11 @@ namespace glz
             return;
          }
 
+         depth_guard guard{ctx};
+         if (!guard) [[unlikely]] {
+            return;
+         }
+
          uint64_t count = cbor_detail::decode_arg(ctx, it, end, additional_info);
          if (bool(ctx.error)) [[unlikely]]
             return;
@@ -1307,6 +1329,11 @@ namespace glz
 
          if (major_type != major::map) [[unlikely]] {
             ctx.error = error_code::syntax_error;
+            return;
+         }
+
+         depth_guard guard{ctx};
+         if (!guard) [[unlikely]] {
             return;
          }
 
@@ -1461,6 +1488,11 @@ namespace glz
             return;
          }
 
+         depth_guard guard{ctx};
+         if (!guard) [[unlikely]] {
+            return;
+         }
+
          using V = std::decay_t<T>;
          static constexpr auto N = glz::tuple_size_v<V>;
 
@@ -1519,6 +1551,11 @@ namespace glz
                ctx.error = error_code::syntax_error;
                return;
             }
+         }
+
+         depth_guard guard{ctx};
+         if (!guard) [[unlikely]] {
+            return;
          }
 
          for_each<reflect<T>::size>(
@@ -1740,6 +1777,12 @@ namespace glz
          // Expect array of [index, value]
          if (major_type != major::array) [[unlikely]] {
             ctx.error = error_code::syntax_error;
+            return;
+         }
+
+         // This reader consumes the [index, value] array itself, so the level is its to count.
+         depth_guard guard{ctx};
+         if (!guard) [[unlikely]] {
             return;
          }
 

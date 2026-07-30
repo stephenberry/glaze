@@ -150,6 +150,10 @@ std::chrono::milliseconds decoded{};
 glz::read_msgpack(decoded, buffer); // decoded.count() == 12345
 ```
 
+## Recursion Depth
+
+A `fixarray` or `fixmap` nesting level costs a single byte, so a small hostile buffer could otherwise drive the reader deep enough to overflow the stack. The readers and the value skipper cap nesting at `max_recursive_depth_limit` (256 levels) and return `error_code::exceeded_max_recursive_depth` beyond it. Structs are written as arrays, so a struct holding a vector of itself counts two levels per struct and reaches the cap at 128 struct levels.
+
 ## Binary Buffers
 
 Glaze automatically emits the compact MessagePack `bin*` tags for contiguous byte buffers such as

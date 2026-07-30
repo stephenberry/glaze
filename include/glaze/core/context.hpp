@@ -8,6 +8,8 @@
 #include <string>
 #include <string_view>
 
+#include "glaze/util/inline.hpp"
+
 namespace glz
 {
    inline constexpr size_t max_recursive_depth_limit = 256;
@@ -136,6 +138,11 @@ namespace glz
    // erroring out before the nesting reaches max_recursive_depth_limit so adversarial deeply
    // nested input can't overflow the stack. Mirrors the per-reader guards already used by the
    // BSON and JSONB binary readers; placed here so the text-format readers can share one copy.
+   //
+   // The JSON/NDJSON readers cannot use this: with a non-null-terminated buffer they overload
+   // ctx.depth as a completion counter (a value that closed cleanly ends at depth 0, which is how
+   // finalize_read_context tells "the buffer ended exactly here" from "the buffer was truncated"),
+   // so they count by hand and enforce the same limit inline.
    template <class Ctx>
    struct depth_guard
    {
@@ -157,6 +164,21 @@ namespace glz
       }
       explicit operator bool() const noexcept { return entered; }
    };
+
+   // Manual counterpart of depth_guard for the JSON/NDJSON readers described above: counts one
+   // nesting level and returns true when the limit is reached, in which case the caller must return
+   // immediately. The level is given back with a plain `--ctx.depth` at each syntactic close, so a
+   // bail-out leaves it counted, which is what keeps a truncated buffer from finalizing as success.
+   // Readers that rewind and retry (variant alternatives) must restore ctx.depth with the iterator.
+   [[nodiscard]] GLZ_ALWAYS_INLINE bool enter_depth(is_context auto& ctx) noexcept
+   {
+      if (ctx.depth >= max_recursive_depth_limit) [[unlikely]] {
+         ctx.error = error_code::exceeded_max_recursive_depth;
+         return true;
+      }
+      ++ctx.depth;
+      return false;
+   }
 
    // Runtime constraint concepts
    // These detect if a user-defined context has runtime constraint fields.
