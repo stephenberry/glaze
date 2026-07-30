@@ -4199,6 +4199,16 @@ suite beve_v2_variants = [] {
 // carried for free, and must not diverge from the JSON reader.
 namespace beve_v2_resolution_test
 {
+   inline size_t count_occurrences(std::string_view haystack, std::string_view needle)
+   {
+      size_t n = 0;
+      for (size_t pos = haystack.find(needle); pos != std::string_view::npos;
+           pos = haystack.find(needle, pos + needle.size())) {
+         ++n;
+      }
+      return n;
+   }
+
    // A tagged variant read positionally (structs_as_arrays): there are no keys to merge the
    // discriminator into, so it is carried in the adjacent [id, value] form instead.
    struct pos_a
@@ -4326,6 +4336,18 @@ namespace beve_v2_resolution_test
    };
    using fewid_v = std::variant<fewid_a, fewid_b, fewid_c>;
 
+   // The same short-`ids` configuration under adjacent tagging, which reaches the guard through a
+   // different writer branch (and through the positional projection).
+   struct adj_few_a
+   {
+      int a{};
+   };
+   struct adj_few_b
+   {
+      int b{};
+   };
+   using adj_fewid_v = std::variant<adj_few_a, adj_few_b>;
+
    // An empty struct alternative is read by skipping the whole object, so it matches anything. It
    // must not be reachable as a recovery fallback or it silently swallows another alternative's data.
    struct wild_empty
@@ -4442,6 +4464,7 @@ template <>
 struct glz::meta<beve_v2_resolution_test::pos_v>
 {
    static constexpr std::string_view tag = "t";
+   static constexpr std::string_view content = "c";
    static constexpr std::array<std::string_view, 2> ids{"a", "b"};
 };
 
@@ -4450,6 +4473,14 @@ struct glz::meta<beve_v2_resolution_test::fewid_v>
 {
    static constexpr std::string_view tag = "t";
    static constexpr std::array<std::string_view, 2> ids{"a", "b"};
+};
+
+template <>
+struct glz::meta<beve_v2_resolution_test::adj_fewid_v>
+{
+   static constexpr std::string_view tag = "t";
+   static constexpr std::string_view content = "c";
+   static constexpr std::array<std::string_view, 1> ids{"a"};
 };
 
 template <>
@@ -4492,7 +4523,10 @@ namespace glz
 template <>
 struct glz::meta<beve_v2_resolution_test::custom_tagged_v>
 {
+   // Adjacent: BEVE cannot merge a discriminator into a custom body, since its objects are
+   // length-prefixed and the member count of that body is not knowable in advance.
    static constexpr std::string_view tag = "type";
+   static constexpr std::string_view content = "value";
    static constexpr std::array<std::string_view, 2> ids{"custom", "plain"};
 };
 
@@ -4500,6 +4534,7 @@ template <>
 struct glz::meta<beve_v2_resolution_test::same_shape_v>
 {
    static constexpr std::string_view tag = "t";
+   static constexpr std::string_view content = "c";
    static constexpr std::array<std::string_view, 2> ids{"a", "b"};
 };
 
@@ -4507,6 +4542,7 @@ template <>
 struct glz::meta<beve_v2_resolution_test::pos_scalar_v>
 {
    static constexpr std::string_view tag = "t";
+   static constexpr std::string_view content = "c";
    static constexpr std::array<std::string_view, 3> ids{"i", "s", "v"};
 };
 
@@ -4514,6 +4550,7 @@ template <>
 struct glz::meta<beve_v2_resolution_test::pos_int_id_v>
 {
    static constexpr std::string_view tag = "k";
+   static constexpr std::string_view content = "c";
    static constexpr std::array<int, 2> ids{7, 9};
 };
 
@@ -4684,15 +4721,18 @@ suite beve_v2_variant_resolution = [] {
       }
    };
 
-   "a custom-serialized alternative works inside a tagged variant"_test = [] {
-      // Regression: the merged-object writer/sizer must not require written_member_count from a
-      // custom writer, and the tag-threading reader must not pass a Tag argument to a custom reader.
-      // Both are compile failures, so merely instantiating this is most of the test.
+   "a custom-serialized alternative works inside an adjacently tagged variant"_test = [] {
+      // BEVE cannot merge a discriminator into a custom body -- its objects are length-prefixed and
+      // the member count of that body is not knowable in advance -- so internal tagging with a custom
+      // alternative is a static_assert here and this variant declares `content` instead. Adjacent
+      // tagging nests the custom value rather than merging into it, which works for any body shape.
+      // (JSON does merge into a custom body; that path is covered by
+      // json_variant_support_test's custom_alternative_variant_tests.)
       custom_tagged_v in{custom_alt{7}};
       auto encoded = glz::write_beve(in);
       expect(encoded.has_value());
       // Not asserting beve_size here: calculate_size has no specialization for custom-serialized
-      // types at all, so beve_size does not support them regardless of this change.
+      // types, so beve_size rejects them at compile time regardless of the tagging representation.
       custom_tagged_v out{};
       expect(not glz::read_beve(out, *encoded));
       expect(out.index() == 0);
@@ -4807,8 +4847,6 @@ suite beve_v2_variant_resolution = [] {
       fewid_v in{fewid_c{7}};
       std::string buffer{};
       expect(bool(glz::write_beve(in, buffer)));
-      std::string positional{};
-      expect(bool(glz::write_beve_untagged(in, positional)));
       // The labeled alternatives still write and round-trip normally.
       fewid_v labeled{fewid_b{3}};
       auto ok = glz::write_beve(labeled);
@@ -4816,6 +4854,20 @@ suite beve_v2_variant_resolution = [] {
       fewid_v out{};
       expect(not glz::read_beve(out, *ok));
       expect(out.index() == 1);
+
+      // The same guard in the adjacent form, keyed and positional.
+      adj_fewid_v adj{adj_few_b{7}};
+      std::string adj_buffer{};
+      expect(bool(glz::write_beve(adj, adj_buffer)));
+      std::string positional{};
+      expect(bool(glz::write_beve_untagged(adj, positional)));
+
+      adj_fewid_v adj_labeled{adj_few_a{3}};
+      auto adj_ok = glz::write_beve(adj_labeled);
+      expect(adj_ok.has_value());
+      adj_fewid_v adj_out{};
+      expect(not glz::read_beve(adj_out, *adj_ok));
+      expect(adj_out.index() == 0);
    };
 
    "an empty-struct alternative is not a recovery wildcard"_test = [] {
@@ -4948,29 +5000,60 @@ suite beve_v2_variant_resolution = [] {
       expect(out.trailer == "tail"); // the following member still parses
    };
 
-   "a discriminator that names a real member keeps the member's value (JSON parity)"_test = [] {
-      named_v in{named_like_tag{"user-data", 42}};
+   "an alternative that declares the discriminator carries it, and it is written once"_test = [] {
+      // `named_like_tag` declares a member called "kind", which is also the variant's tag. Such an
+      // alternative supplies the discriminator itself: no second one is merged in. Previously the
+      // glaze_object_t half of the writer's guard was missing, so the key was emitted twice --
+      // {"kind":"named","kind":"named","x":42} -- and the readers relied on the later duplicate
+      // winning. The member must hold a declared id for this to round-trip, which is the cost of
+      // owning the discriminator field.
+      named_v in{named_like_tag{"named", 42}};
 
-      // Both writers emit "kind" twice: once as the discriminator, once as the member.
       auto json = glz::write_json(in);
       expect(json.has_value());
+      expect(*json == R"({"kind":"named","x":42})") << *json;
+      // The regression guard: exactly one discriminator key, not two.
+      expect(count_occurrences(*json, R"("kind")") == 1) << *json;
+
       named_v json_out{};
       expect(not glz::read_json(json_out, *json));
       expect(json_out.index() == 0);
-      expect(std::get<0>(json_out).kind == "user-data");
+      expect(std::get<0>(json_out).kind == "named");
       expect(std::get<0>(json_out).x == 42);
 
       auto beve = glz::write_beve(in);
       expect(beve.has_value());
+      expect(glz::beve_size(in) == beve->size());
       std::string transcoded{};
       expect(not glz::beve_to_json(*beve, transcoded));
       expect(transcoded == *json);
+      expect(count_occurrences(transcoded, R"("kind")") == 1) << transcoded;
 
       named_v beve_out{};
       expect(not glz::read_beve(beve_out, *beve));
       expect(beve_out.index() == 0);
-      expect(std::get<0>(beve_out).kind == "user-data"); // not the id, and not empty
+      expect(std::get<0>(beve_out).kind == "named");
       expect(std::get<0>(beve_out).x == 42);
+   };
+
+   "an alternative that owns the discriminator must store a declared id"_test = [] {
+      // The cost of owning the discriminator field: the writer emits whatever the member holds, so a
+      // value that is not a declared id produces a document this variant cannot read back. This is
+      // the long-standing contract for embedded tags -- it already behaved this way for reflectable
+      // alternatives before glaze_object_t ones stopped emitting the key twice -- and it is pinned
+      // here because the write side reports no error.
+      named_v in{named_like_tag{"user-data", 42}};
+
+      auto json = glz::write_json(in);
+      expect(json.has_value());
+      expect(*json == R"({"kind":"user-data","x":42})") << *json;
+      named_v json_out{};
+      expect(bool(glz::read_json(json_out, *json))); // no id named "user-data"
+
+      auto beve = glz::write_beve(in);
+      expect(beve.has_value());
+      named_v beve_out{};
+      expect(bool(glz::read_beve(beve_out, *beve)));
    };
 
    "an unrecognized discriminator id is rejected (JSON parity)"_test = [] {
@@ -8505,6 +8588,259 @@ suite beve_shrink_to_fit_tests = [] {
       std::list<int> dst{9, 9, 9, 9};
       expect(not glz::read<beve_shrink_opts{{.format = glz::BEVE}}>(dst, buffer));
       expect(dst == (std::list<int>{1, 2, 3}));
+   };
+};
+
+// -------------------------------------------------------------------------------------------------
+// Variant tagging representation. The shape is fixed per variant, and BEVE agrees with JSON on it
+// byte for byte after transcoding -- that equivalence is what most of these assert.
+// -------------------------------------------------------------------------------------------------
+
+namespace beve_tagging_repr
+{
+   struct circle
+   {
+      double radius{};
+   };
+   using mixed = std::variant<circle, std::vector<double>, std::map<std::string, int>, int, std::monostate>;
+
+   using same_shape = std::variant<std::vector<double>, std::deque<double>>;
+
+   struct put
+   {
+      int x{};
+   };
+   struct del
+   {
+      std::string id{};
+   };
+   using with_none = std::variant<put, del, std::monostate>;
+
+   struct adj_a
+   {
+      int a{};
+   };
+   struct adj_b
+   {
+      int b{};
+   };
+   using integral_ids = std::variant<adj_a, adj_b>;
+
+   using smart_v = std::variant<std::unique_ptr<circle>, del>;
+
+   // Fewer ids than alternatives: an unrecognized id selects the first unlabeled one. Both
+   // alternatives share a field name so either can read the payload, isolating the id rule from
+   // whether the content happens to fit.
+   struct few_labeled
+   {
+      int n{};
+   };
+   struct few_default
+   {
+      int n{};
+   };
+   using few_ids = std::variant<few_labeled, few_default>;
+}
+
+template <>
+struct glz::meta<beve_tagging_repr::few_ids>
+{
+   static constexpr std::string_view tag = "t";
+   static constexpr std::string_view content = "c";
+   static constexpr std::array<std::string_view, 1> ids{"lab"};
+};
+
+template <>
+struct glz::meta<beve_tagging_repr::smart_v>
+{
+   static constexpr std::string_view tag = "k";
+   static constexpr std::string_view content = "c";
+   static constexpr std::array<std::string_view, 2> ids{"circle", "del"};
+};
+
+template <>
+struct glz::meta<beve_tagging_repr::mixed>
+{
+   static constexpr std::string_view tag = "type";
+   static constexpr std::string_view content = "value";
+   static constexpr std::array<std::string_view, 5> ids{"circle", "vec", "map", "num", "none"};
+};
+
+template <>
+struct glz::meta<beve_tagging_repr::same_shape>
+{
+   static constexpr std::string_view tag = "type";
+   static constexpr std::string_view content = "value";
+   static constexpr std::array<std::string_view, 2> ids{"vec", "deq"};
+};
+
+template <>
+struct glz::meta<beve_tagging_repr::with_none>
+{
+   static constexpr std::string_view tag = "type";
+   static constexpr std::array<std::string_view, 3> ids{"PUT", "DELETE", "NONE"};
+};
+
+template <>
+struct glz::meta<beve_tagging_repr::integral_ids>
+{
+   static constexpr std::string_view tag = "t";
+   static constexpr std::string_view content = "c";
+   static constexpr std::array<int, 2> ids{7, 9};
+};
+
+// Writes, sizes, reads, and transcodes one value, asserting BEVE and JSON describe it identically.
+template <class V>
+void tagging_round_trip(V value, std::string_view expected_json)
+{
+   auto json = glz::write_json(value);
+   expect(json.has_value());
+   expect(*json == expected_json) << *json;
+
+   auto beve = glz::write_beve(value);
+   expect(beve.has_value());
+   expect(glz::beve_size(value) == beve->size());
+
+   std::string transcoded{};
+   expect(not glz::beve_to_json(*beve, transcoded));
+   expect(transcoded == *json) << transcoded;
+
+   V out{};
+   const auto ec = glz::read_beve(out, *beve);
+   expect(not ec);
+   expect(out.index() == value.index());
+}
+
+suite beve_variant_tagging_representation = [] {
+   using namespace beve_tagging_repr;
+
+   "adjacent tagging carries every alternative shape through BEVE"_test = [] {
+      tagging_round_trip(mixed{circle{5}}, R"({"type":"circle","value":{"radius":5}})");
+      tagging_round_trip(mixed{std::vector<double>{1, 2}}, R"({"type":"vec","value":[1,2]})");
+      tagging_round_trip(mixed{std::map<std::string, int>{{"k", 1}}}, R"({"type":"map","value":{"k":1}})");
+      tagging_round_trip(mixed{42}, R"({"type":"num","value":42})");
+      tagging_round_trip(mixed{std::monostate{}}, R"({"type":"none","value":null})");
+   };
+
+   "adjacent tagging separates alternatives that share a wire shape"_test = [] {
+      // Under internal tagging both alternatives encode as a bare typed array and the read returns
+      // the first one with no error. The discriminator is what makes this recoverable.
+      same_shape in{std::deque<double>{1, 2, 3}};
+      auto beve = glz::write_beve(in);
+      expect(beve.has_value());
+      same_shape out{};
+      expect(not glz::read_beve(out, *beve));
+      expect(out.index() == 1);
+      expect(std::get<1>(out) == std::deque<double>{1, 2, 3});
+   };
+
+   "adjacent tagging round-trips integral ids"_test = [] {
+      tagging_round_trip(integral_ids{adj_b{5}}, R"({"t":9,"c":{"b":5}})");
+   };
+
+   "adjacent tagging rejects a malformed object"_test = [] {
+      same_shape out{};
+      // A bare array is not the adjacent shape.
+      auto bare = glz::write_beve(std::vector<double>{1, 2});
+      expect(bool(glz::read_beve(out, *bare)));
+
+      // An id naming no alternative is an error, not a guess.
+      auto ok = glz::write_beve(same_shape{std::deque<double>{1}});
+      auto corrupted = *ok;
+      const auto pos = corrupted.find("deq");
+      expect(pos != std::string::npos);
+      corrupted[pos] = 'z';
+      expect(bool(glz::read_beve(out, corrupted)));
+   };
+
+   "a unit alternative is written as the discriminator alone"_test = [] {
+      tagging_round_trip(with_none{std::monostate{}}, R"({"type":"NONE"})");
+      tagging_round_trip(with_none{del{"abc"}}, R"({"type":"DELETE","id":"abc"})");
+   };
+
+   "a bare null still reads as the unit alternative"_test = [] {
+      // Data written before the unit alternative carried a discriminator must keep parsing.
+      const std::string null_value(1, char(glz::tag::null));
+      with_none out{put{1}};
+      expect(not glz::read_beve(out, null_value));
+      expect(out.index() == 2);
+   };
+
+   "the adjacent reader accepts either key order and rejects a malformed body"_test = [] {
+      // The writer always emits the discriminator first, so the reader's second pass is only
+      // exercised by data from elsewhere. Build the reversed and malformed forms by hand.
+      // `parts` is a flat key, value, key, value ... sequence; the header counts pairs.
+      const auto obj = [](std::initializer_list<std::string> parts) {
+         std::string s(1, char(glz::tag::object));
+         s += char((parts.size() / 2) << 2);
+         for (const auto& p : parts) s += p;
+         return s;
+      };
+      const auto key = [](std::string_view k) { return std::string(1, char(k.size() << 2)) + std::string{k}; };
+      const auto str = [](std::string_view v) {
+         return std::string(1, char(glz::tag::string)) + std::string(1, char(v.size() << 2)) + std::string{v};
+      };
+      const auto vec = [] { return glz::write_beve(std::vector<double>{1.5, 2.5}).value(); };
+
+      { // content before tag
+         same_shape out{};
+         expect(not glz::read_beve(out, obj({key("value"), vec(), key("type"), str("deq")})));
+         expect(out.index() == 1);
+         expect(std::get<1>(out) == std::deque<double>{1.5, 2.5});
+      }
+      { // an extra key is rejected under default options and skipped when tolerated
+         const auto extra = obj({key("type"), str("deq"), key("value"), vec(), key("junk"), str("x")});
+         same_shape strict{};
+         expect(bool(glz::read_beve(strict, extra)));
+         same_shape lax{};
+         expect(not glz::read<glz::opts{.format = glz::BEVE, .error_on_unknown_keys = false}>(lax, extra));
+         expect(lax.index() == 1);
+      }
+      { // missing content, and missing discriminator
+         same_shape out{};
+         expect(bool(glz::read_beve(out, obj({key("type"), str("deq")}))));
+         expect(bool(glz::read_beve(out, obj({key("value"), vec()}))));
+      }
+   };
+
+   "an unrecognized id falls back to the unlabeled alternative in both adjacent forms"_test = [] {
+      // The id is a headered string value, [tag::string][len][bytes]; rewriting its bytes in place
+      // keeps the rest of the buffer valid.
+      const std::string labeled_id{char(glz::tag::string), char(3 << 2), 'l', 'a', 'b'};
+
+      { // keyed
+         auto ok = glz::write_beve(few_ids{few_labeled{5}});
+         expect(ok.has_value());
+         auto unknown = *ok;
+         const auto pos = unknown.find(labeled_id);
+         expect(pos != std::string::npos);
+         unknown.replace(pos + 2, 3, "zzz");
+
+         few_ids out{};
+         expect(not glz::read_beve(out, unknown));
+         expect(out.index() == 1); // the unlabeled default, not an error
+         expect(std::get<1>(out).n == 5);
+      }
+      { // positional, through the [id, value] projection
+         auto ok = glz::write_beve_untagged(few_ids{few_labeled{5}});
+         expect(ok.has_value());
+         auto unknown = *ok;
+         const auto pos = unknown.find(labeled_id);
+         expect(pos != std::string::npos);
+         unknown.replace(pos + 2, 3, "zzz");
+
+         few_ids out{};
+         expect(not glz::read_beve_untagged(out, unknown));
+         expect(out.index() == 1);
+         expect(std::get<1>(out).n == 5);
+      }
+   };
+
+   "adjacent tagging carries smart-pointer alternatives"_test = [] {
+      // variant_alternative_object_t maps memory objects through to the pointee; adjacent tagging
+      // nests them rather than merging, so the pointee's own object is untouched.
+      tagging_round_trip(smart_v{std::make_unique<circle>(circle{2})}, R"({"k":"circle","c":{"radius":2}})");
+      tagging_round_trip(smart_v{del{"z"}}, R"({"k":"del","c":{"id":"z"}})");
    };
 };
 

@@ -1429,6 +1429,14 @@ namespace glz
       inline void write_variant_tag_id(size_t index, is_context auto&& ctx, B&& b, auto& ix, int32_t indent_level)
       {
          using id_type = std::decay_t<decltype(ids_v<Variant>[0])>;
+         // `ids` may declare fewer entries than the variant has alternatives -- the readers treat the
+         // first unlabeled alternative as the default for an unrecognized id -- so an alternative past
+         // the end of `ids` has no id to write. Indexing there reads past a static array.
+         if (index >= ids_v<Variant>.size()) [[unlikely]] {
+            ctx.error = error_code::no_matching_variant_type;
+            ctx.custom_error_message = variant_ids_string_v<Variant>;
+            return;
+         }
          if constexpr (std::integral<id_type>) {
             serialize<YAML>::op<Opts>(ids_v<Variant>[index], ctx, b, ix);
          }
@@ -1621,6 +1629,13 @@ namespace glz
       static void op(auto&& value, is_context auto&& ctx, B&& b, auto& ix)
       {
          using V = std::remove_cvref_t<T>;
+         // Inside op() rather than at class scope: write_supported is `requires { to<Format, T>{}; }`,
+         // so a class-scope assert turns that feature probe into a hard error instead of `false`.
+         static_assert(content_v<V>.empty(),
+                       "Adjacent variant tagging (glz::meta `content`) is implemented for JSON and "
+                       "BEVE but not yet for YAML. Writing this variant as YAML would silently fall "
+                       "back to internal tagging and produce a different shape than the other "
+                       "formats, so it is rejected here instead.");
          // Tagged variants emit a discriminator entry (meta::tag) when holding an object, so the
          // output names which alternative it is and round-trips through the reader.
          if constexpr (check_write_type_info(Opts) && not tag_v<V>.empty()) {

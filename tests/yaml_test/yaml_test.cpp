@@ -10698,4 +10698,39 @@ suite yaml_string_target_tests = [] {
    };
 };
 
+// A variant whose `ids` array is shorter than its alternative list. That is a supported read-side
+// feature -- the first unlabeled alternative is the default for an unrecognized id -- so it is
+// reachable from a legal glz::meta. Writing the unlabeled alternative has no id to emit; indexing
+// ids_v there read past the end of a static array and emitted the adjacent static data as the tag
+// value (~4 GB read under ASan). The writer must report an error instead.
+namespace short_ids_guard
+{
+   struct labeled
+   {
+      int a{};
+   };
+   struct unlabeled
+   {
+      int b{};
+   };
+   using v_t = std::variant<labeled, unlabeled>;
+}
+
+template <>
+struct glz::meta<short_ids_guard::v_t>
+{
+   static constexpr std::string_view tag = "t";
+   static constexpr std::array<std::string_view, 1> ids{"a"}; // 1 id, 2 alternatives
+};
+
+suite short_ids_write_guard = [] {
+   "writing an alternative with no declared id errors instead of reading out of bounds"_test = [] {
+      using namespace short_ids_guard;
+      std::string buffer{};
+      expect(bool(glz::write_yaml(v_t{unlabeled{7}}, buffer)));
+      buffer.clear();
+      expect(not glz::write_yaml(v_t{labeled{3}}, buffer)); // the labeled alternative is unaffected
+   };
+};
+
 int main() { return 0; }

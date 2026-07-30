@@ -597,11 +597,27 @@ namespace glz
       template <auto Opts>
       static void op(auto&& value, is_context auto&& ctx, auto&& b, auto& ix)
       {
+         // Inside op() rather than at class scope: write_supported is `requires { to<Format, T>{}; }`,
+         // so a class-scope assert turns that feature probe into a hard error instead of `false`.
+         static_assert(content_v<T>.empty(),
+                       "Adjacent variant tagging (glz::meta `content`) is implemented for JSON and "
+                       "BEVE but not yet for JSONB. Writing this variant as JSONB would silently fall "
+                       "back to internal tagging and produce a different shape than the other "
+                       "formats, so it is rejected here instead.");
          std::visit(
             [&](auto&& v) {
                using V = std::decay_t<decltype(v)>;
                constexpr bool is_reflected_object = glaze_object_t<V> || reflectable<V>;
                if constexpr (check_write_type_info(Opts) && not tag_v<T>.empty() && is_reflected_object) {
+                  // `ids` may declare fewer entries than the variant has alternatives -- the readers
+                  // treat the first unlabeled alternative as the default for an unrecognized id -- so
+                  // an alternative past the end of `ids` has no id to write. Indexing there reads past
+                  // a static array.
+                  if (value.index() >= ids_v<T>.size()) [[unlikely]] {
+                     ctx.error = error_code::no_matching_variant_type;
+                     ctx.custom_error_message = variant_ids_string_v<T>;
+                     return;
+                  }
                   size_t header_pos{};
                   if (!jsonb_detail::reserve_container_header(ctx, b, ix, header_pos)) [[unlikely]] {
                      return;

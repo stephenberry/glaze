@@ -621,6 +621,9 @@ namespace glz
    {
       static constexpr size_t variant_size = std::variant_size_v<T>;
 
+      // The tagging representation is a property of the variant, decided once for every alternative.
+      static constexpr auto tagging = variant_tagging_v<T>;
+
       // Try each alternative in declaration order, rewinding the iterator on failure. Returns true
       // when an alternative parsed cleanly, leaving `value` holding it. `truncated` is set when any
       // alternative ran off the end of the buffer, which says the input is incomplete rather than
@@ -693,10 +696,13 @@ namespace glz
          // reflect<X>::size may only be named for struct-like X (a std::pair/map alternative has no
          // reflect specialization); beve_is_empty_struct<X> guards that at namespace scope.
          constexpr bool struct_like = (glaze_object_t<X> || reflectable<X>) && (not custom_read<X>);
-         constexpr bool empty_tagged_struct = tagged && beve_is_empty_struct<X>;
+         // A unit alternative reads the same way an empty struct does: the object it was written as
+         // holds nothing but the discriminator. (A bare `null`, which is how untagged variants and
+         // pre-Version-2 data spell it, never reaches here -- it is not an object.)
+         constexpr bool empty_tagged_struct = tagged && (beve_is_empty_struct<X> || variant_unit_alternative<V>);
 
          if constexpr (empty_tagged_struct) {
-            // Empty struct carrying only the discriminator: skip the whole {tag:id} object.
+            // Carries only the discriminator: skip the whole {tag:id} object.
             skip_value<BEVE>::op<Opts>(ctx, it, end);
          }
          else if constexpr (tagged && struct_like && (not is_memory_object<V>)) {
@@ -752,10 +758,10 @@ namespace glz
             if constexpr (beve_variant_is_object_alt<std::variant_alternative_t<I, T>>) {
                using V = std::variant_alternative_t<I, T>;
                using X = std::conditional_t<is_memory_object<V>, memory_type<V>, V>;
-               // A tagged empty-struct alternative is read by skipping the whole object, so it
-               // "succeeds" on anything. As the deduced choice that is intended; as a fallback it
+               // A tagged empty-struct or unit alternative is read by skipping the whole object, so
+               // it "succeeds" on anything. As the deduced choice that is intended; as a fallback it
                // would be a wildcard that silently discards the payload.
-               if constexpr (tagged && beve_is_empty_struct<X>) {
+               if constexpr (tagged && (beve_is_empty_struct<X> || variant_unit_alternative<V>)) {
                   return;
                }
                else {
@@ -1060,10 +1066,173 @@ namespace glz
          }
       }
 
-      // Read the adjacent form [id, value] that the writer emits for a tagged variant under
-      // structs_as_arrays. Positional data has no keys, so there is nothing to deduce from if the
-      // discriminator does not resolve: a bad id is an error rather than a fallback to try_each,
-      // which would be free to pick a same-shaped alternative and silently return the wrong type.
+      // Decode the discriminator VALUE at `it` and map it to an alternative index, advancing past the
+      // value. Returns variant_size when the id names no alternative and there is no unlabeled
+      // default, having set no error; the caller decides whether that is fatal.
+      template <auto Opts>
+      static size_t resolve_id(is_context auto&& ctx, auto&& it, auto end) noexcept
+      {
+         using id_type = std::decay_t<decltype(ids_v<T>[0])>;
+         size_t index = ids_v<T>.size();
+         if constexpr (std::integral<id_type>) {
+            id_type id{};
+            from<BEVE, id_type>::template op<Opts>(id, ctx, it, end);
+            if (bool(ctx.error)) [[unlikely]] {
+               return variant_size;
+            }
+            index = variant_id_to_index<T>::op(id);
+         }
+         else {
+            if (invalid_end(ctx, it, end)) {
+               return variant_size;
+            }
+            if (uint8_t(*it) != tag::string) [[unlikely]] {
+               ctx.error = error_code::syntax_error;
+               return variant_size;
+            }
+            ++it;
+            const auto slen = int_from_compressed(ctx, it, end);
+            if (bool(ctx.error)) [[unlikely]] {
+               return variant_size;
+            }
+            if (uint64_t(end - it) < slen) [[unlikely]] {
+               ctx.error = error_code::unexpected_end;
+               return variant_size;
+            }
+            const sv id_view{it, size_t(slen)};
+            it += slen;
+            index = variant_id_to_index<T>::op(id_view.data(), id_view.data() + id_view.size(), id_view.size());
+         }
+
+         if (index < ids_v<T>.size()) [[likely]] {
+            return index;
+         }
+         if constexpr (ids_v<T>.size() < variant_size) {
+            // Fewer ids than alternatives: the first unlabeled alternative is the default for an
+            // unrecognized id, matching the keyed reader.
+            return ids_v<T>.size();
+         }
+         return variant_size;
+      }
+
+      // Read the keyed adjacent form { tag : id, content : value }. The discriminator names the
+      // alternative outright, so no structural deduction is involved and alternatives of any shape --
+      // including several sharing one -- are separated cleanly.
+      template <auto Opts>
+      static void read_adjacent(auto&& value, is_context auto&& ctx, auto&& it, auto end) noexcept
+      {
+         if (invalid_end(ctx, it, end)) {
+            return;
+         }
+         if (uint8_t(*it) != tag::object) [[unlikely]] {
+            // Adjacent tagging has exactly one wire shape; anything else is not this variant's data.
+            ctx.error = error_code::syntax_error;
+            return;
+         }
+
+         // The content of one adjacently tagged variant may be another, and this reader recurses
+         // without going through an object reader that would count the nesting for it.
+         depth_guard guard{ctx};
+         if (!guard) [[unlikely]] {
+            return;
+         }
+
+         const auto obj_start = it;
+
+         // Walk the members, handing each key to `on_key`, which must consume that key's value.
+         // Returns false once an error has been set.
+         const auto walk = [&](auto&& on_key) {
+            it = obj_start;
+            ++it; // object tag byte
+            const auto n_keys = int_from_compressed(ctx, it, end);
+            if (bool(ctx.error)) [[unlikely]] {
+               return false;
+            }
+            for (size_t k = 0; k < n_keys; ++k) {
+               const auto klen = int_from_compressed(ctx, it, end);
+               if (bool(ctx.error)) [[unlikely]] {
+                  return false;
+               }
+               if (uint64_t(end - it) < klen) [[unlikely]] {
+                  ctx.error = error_code::unexpected_end;
+                  return false;
+               }
+               const sv key{it, size_t(klen)};
+               it += klen;
+               if (!on_key(key)) {
+                  return false;
+               }
+            }
+            return true;
+         };
+
+         size_t resolved = variant_size;
+         bool tag_seen = false;
+         bool content_scanned = false;
+
+         if (!walk([&](const sv key) {
+                if (!tag_seen && key == tag_v<T>) {
+                   resolved = resolve_id<Opts>(ctx, it, end);
+                   tag_seen = true;
+                   return !bool(ctx.error);
+                }
+                if (!content_scanned && key == content_v<T>) {
+                   content_scanned = true;
+                   skip_value<BEVE>::op<Opts>(ctx, it, end);
+                   return !bool(ctx.error);
+                }
+                if constexpr (requires { Opts.error_on_unknown_keys; }) {
+                   if constexpr (Opts.error_on_unknown_keys) {
+                      // Only the two declared keys belong in an adjacently tagged object, and each
+                      // only once.
+                      ctx.error = error_code::unknown_key;
+                      return false;
+                   }
+                }
+                skip_value<BEVE>::op<Opts>(ctx, it, end);
+                return !bool(ctx.error);
+             })) {
+            return;
+         }
+
+         if (!tag_seen) [[unlikely]] {
+            ctx.error = error_code::missing_key;
+            ctx.custom_error_message = variant_ids_string_v<T>;
+            return;
+         }
+         if (resolved >= variant_size) [[unlikely]] {
+            ctx.error = error_code::no_matching_variant_type;
+            ctx.custom_error_message = variant_ids_string_v<T>;
+            return;
+         }
+
+         if (value.index() != resolved) {
+            emplace_runtime_variant(value, resolved);
+         }
+
+         bool content_seen = false;
+         if (!walk([&](const sv key) {
+                if (!content_seen && key == content_v<T>) {
+                   content_seen = true;
+                   std::visit([&](auto&& v) { parse<BEVE>::op<Opts>(v, ctx, it, end); }, value);
+                   return !bool(ctx.error);
+                }
+                skip_value<BEVE>::op<Opts>(ctx, it, end);
+                return !bool(ctx.error);
+             })) {
+            return;
+         }
+
+         if (!content_seen) [[unlikely]] {
+            ctx.error = error_code::missing_key;
+            ctx.custom_error_message = content_v<T>;
+         }
+      }
+
+      // Read the positional projection of adjacent tagging, the two element array [id, value].
+      // Positional data has no keys, so there is nothing to deduce from if the discriminator does not
+      // resolve: a bad id is an error rather than a fallback to try_each, which would be free to pick
+      // a same-shaped alternative and silently return the wrong type.
       template <auto Opts>
       static void read_positional_tagged(auto&& value, is_context auto&& ctx, auto&& it, auto end) noexcept
       {
@@ -1084,46 +1253,9 @@ namespace glz
             return;
          }
 
-         using id_type = std::decay_t<decltype(ids_v<T>[0])>;
-         size_t index = ids_v<T>.size();
-         if constexpr (std::integral<id_type>) {
-            id_type id{};
-            from<BEVE, id_type>::template op<Opts>(id, ctx, it, end);
-            if (bool(ctx.error)) [[unlikely]] {
-               return;
-            }
-            index = variant_id_to_index<T>::op(id);
-         }
-         else {
-            if (invalid_end(ctx, it, end)) {
-               return;
-            }
-            if (uint8_t(*it) != tag::string) [[unlikely]] {
-               ctx.error = error_code::syntax_error;
-               return;
-            }
-            ++it;
-            const auto slen = int_from_compressed(ctx, it, end);
-            if (bool(ctx.error)) [[unlikely]] {
-               return;
-            }
-            if (uint64_t(end - it) < slen) [[unlikely]] {
-               ctx.error = error_code::unexpected_end;
-               return;
-            }
-            const sv id_view{it, size_t(slen)};
-            it += slen;
-            index = variant_id_to_index<T>::op(id_view.data(), id_view.data() + id_view.size(), id_view.size());
-         }
-
-         size_t resolved = variant_size;
-         if (index < ids_v<T>.size()) [[likely]] {
-            resolved = index;
-         }
-         else if constexpr (ids_v<T>.size() < variant_size) {
-            // Fewer ids than alternatives: the first unlabeled alternative is the default for an
-            // unrecognized id, matching the keyed reader.
-            resolved = ids_v<T>.size();
+         const size_t resolved = resolve_id<Opts>(ctx, it, end);
+         if (bool(ctx.error)) [[unlikely]] {
+            return;
          }
          if (resolved >= variant_size) [[unlikely]] {
             ctx.error = error_code::no_matching_variant_type;
@@ -1164,18 +1296,30 @@ namespace glz
             return;
          }
 
-         // (B) Positional (structs-as-arrays) data carries no keys, so a tagged variant is written in
-         // the adjacent [id, value] form and an untagged one is resolved by trying alternatives.
+         constexpr bool tagged = check_write_type_info(Opts) && tagging != variant_tagging_kind::none;
+
+         // (B) Positional (structs-as-arrays) data carries no keys, so an adjacently tagged variant
+         // is written as [id, value] and an untagged one is resolved by trying alternatives.
          // This must be an if/else: `if constexpr (...) { return; }` does not discard the statements
          // that follow it, so without the `else` the (C) block below would still be instantiated in
          // positional mode, where read_object's call into the keyed-object reader does not compile.
          if constexpr (check_structs_as_arrays(Opts)) {
-            if constexpr (check_write_type_info(Opts) && (not tag_v<T>.empty())) {
+            if constexpr (tagged) {
+               static_assert(
+                  tagging == variant_tagging_kind::adjacent || detail::beve_positional_tagging_needs_content<T>::value,
+                  "Positional reads (structs_as_arrays) have no keys, so there is nothing "
+                  "for internal tagging to have merged a discriminator into. Declare "
+                  "`content` beside `tag` in glz::meta to select adjacent tagging, which "
+                  "projects positionally to the two element array [id, value].");
                read_positional_tagged<Opts>(value, ctx, it, end);
             }
             else {
                try_each<Opts>(value, ctx, it, end);
             }
+         }
+         else if constexpr (tagged && tagging == variant_tagging_kind::adjacent) {
+            // (B2) Adjacent tagging has a single, fully determined shape -- no deduction needed.
+            read_adjacent<Opts>(value, ctx, it, end);
          }
          else {
             // (C) Version 2: deduce from the value's self-describing category. Only a string-keyed

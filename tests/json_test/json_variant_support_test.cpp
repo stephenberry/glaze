@@ -211,10 +211,10 @@ suite tagged_variant_tests = [] {
       // P2996 reflection: Bloomberg Clang returns unqualified names, GCC returns qualified names
       // Accept both forms for the title
       auto expected_qualified =
-         R"({"type":["object","null"],"$defs":{"int32_t":{"type":"integer","minimum":-2147483648,"maximum":2147483647}},"oneOf":[{"type":"object","properties":{"data":{"type":"object","additionalProperties":{"$ref":"#/$defs/int32_t"}},"type":{"const":"put_action"}},"additionalProperties":false,"required":["type"],"title":"put_action"},{"type":"object","properties":{"data":{"type":"string"},"type":{"const":"delete_action"}},"additionalProperties":false,"required":["type"],"title":"delete_action"},{"type":"null","title":"std::monostate","const":null}],"title":"std::shared_ptr<std::variant<put_action, delete_action, std::monostate>>"})";
+         R"({"type":["object","null"],"$defs":{"int32_t":{"type":"integer","minimum":-2147483648,"maximum":2147483647}},"oneOf":[{"type":"object","properties":{"data":{"type":"object","additionalProperties":{"$ref":"#/$defs/int32_t"}},"type":{"const":"put_action"}},"additionalProperties":false,"required":["type"],"title":"put_action"},{"type":"object","properties":{"data":{"type":"string"},"type":{"const":"delete_action"}},"additionalProperties":false,"required":["type"],"title":"delete_action"},{"type":"object","properties":{"type":{"const":"std::monostate"}},"additionalProperties":false,"required":["type"],"title":"std::monostate"}],"title":"std::shared_ptr<std::variant<put_action, delete_action, std::monostate>>"})";
 #if GLZ_REFLECTION26
       auto expected_unqualified =
-         R"({"type":["object","null"],"$defs":{"int32_t":{"type":"integer","minimum":-2147483648,"maximum":2147483647}},"oneOf":[{"type":"object","properties":{"data":{"type":"object","additionalProperties":{"$ref":"#/$defs/int32_t"}},"type":{"const":"put_action"}},"additionalProperties":false,"required":["type"],"title":"put_action"},{"type":"object","properties":{"data":{"type":"string"},"type":{"const":"delete_action"}},"additionalProperties":false,"required":["type"],"title":"delete_action"},{"type":"null","title":"std::monostate","const":null}],"title":"std::shared_ptr<variant<put_action, delete_action, monostate>>"})";
+         R"({"type":["object","null"],"$defs":{"int32_t":{"type":"integer","minimum":-2147483648,"maximum":2147483647}},"oneOf":[{"type":"object","properties":{"data":{"type":"object","additionalProperties":{"$ref":"#/$defs/int32_t"}},"type":{"const":"put_action"}},"additionalProperties":false,"required":["type"],"title":"put_action"},{"type":"object","properties":{"data":{"type":"string"},"type":{"const":"delete_action"}},"additionalProperties":false,"required":["type"],"title":"delete_action"},{"type":"object","properties":{"type":{"const":"std::monostate"}},"additionalProperties":false,"required":["type"],"title":"std::monostate"}],"title":"std::shared_ptr<variant<put_action, delete_action, monostate>>"})";
       expect(schema == expected_qualified || schema == expected_unqualified) << schema;
 #else
       expect(schema == expected_qualified) << schema;
@@ -2247,6 +2247,395 @@ suite fully_custom_variant_tests = [] {
       std::string s{};
       expect(not glz::write_json(v, s));
       expect(s == R"("custom")") << s;
+   };
+};
+
+// ---------------------------------------------------------------------------------------------
+// Variant tagging representation: the wire shape is chosen per variant, not per active alternative.
+// ---------------------------------------------------------------------------------------------
+
+namespace tagging_repr
+{
+   struct circle
+   {
+      double radius{};
+   };
+
+   // Every JSON shape in one variant. Internal tagging cannot represent this -- there is nowhere to
+   // merge a key into an array, a scalar, or null -- so it declares `content`.
+   using mixed = std::variant<circle, std::vector<double>, std::map<std::string, int>, int, std::monostate>;
+
+   // Two alternatives with the same wire shape. Under internal tagging the discriminator is dropped
+   // for both and the read silently returns the first; adjacent tagging separates them.
+   using same_shape = std::variant<std::vector<double>, std::deque<double>>;
+
+   struct int_a
+   {
+      int a{};
+   };
+   struct int_b
+   {
+      int b{};
+   };
+   using integral_ids = std::variant<int_a, int_b, double>;
+
+   // Fewer ids than alternatives: the first unlabeled alternative is the read-side default, and the
+   // writer has no id to emit for it.
+   struct few_a
+   {
+      int a{};
+   };
+   struct few_b
+   {
+      int b{};
+   };
+   struct few_c
+   {
+      int c{};
+   };
+   using few_ids = std::variant<few_a, few_b, few_c>;
+
+   // A unit alternative under *internal* tagging: written as the discriminator alone.
+   struct put
+   {
+      int x{};
+   };
+   struct del
+   {
+      std::string id{};
+   };
+   using with_none = std::variant<put, del, std::monostate>;
+
+   // A glaze_object_t alternative that declares a member named like the discriminator.
+   struct owns_tag
+   {
+      std::string kind{};
+      int x{};
+   };
+   struct plain
+   {
+      double y{};
+   };
+   using declares_tag = std::variant<owns_tag, plain>;
+}
+
+template <>
+struct glz::meta<tagging_repr::mixed>
+{
+   static constexpr std::string_view tag = "type";
+   static constexpr std::string_view content = "value";
+   static constexpr auto ids = std::array{"circle", "vec", "map", "num", "none"};
+};
+
+template <>
+struct glz::meta<tagging_repr::same_shape>
+{
+   static constexpr std::string_view tag = "type";
+   static constexpr std::string_view content = "value";
+   static constexpr auto ids = std::array{"vec", "deq"};
+};
+
+template <>
+struct glz::meta<tagging_repr::integral_ids>
+{
+   static constexpr std::string_view tag = "t";
+   static constexpr std::string_view content = "c";
+   static constexpr auto ids = std::array{10, 20, 30};
+};
+
+template <>
+struct glz::meta<tagging_repr::few_ids>
+{
+   static constexpr std::string_view tag = "t";
+   static constexpr std::string_view content = "c";
+   static constexpr auto ids = std::array{"a", "b"};
+};
+
+template <>
+struct glz::meta<tagging_repr::with_none>
+{
+   static constexpr std::string_view tag = "type";
+   static constexpr auto ids = std::array{"PUT", "DELETE", "NONE"};
+};
+
+template <>
+struct glz::meta<tagging_repr::owns_tag>
+{
+   using T = tagging_repr::owns_tag;
+   static constexpr auto value = glz::object("kind", &T::kind, "x", &T::x);
+};
+
+template <>
+struct glz::meta<tagging_repr::declares_tag>
+{
+   static constexpr std::string_view tag = "kind";
+   static constexpr auto ids = std::array{"owns", "plain"};
+};
+
+suite adjacent_tagging_tests = [] {
+   using namespace tagging_repr;
+
+   "adjacent tagging gives every alternative the same shape"_test = [] {
+      const auto shape = [](auto alt, std::string_view expected) {
+         mixed v{alt};
+         auto s = glz::write_json(v);
+         expect(s.has_value());
+         expect(*s == expected) << *s;
+         mixed out{};
+         const auto ec = glz::read_json(out, *s);
+         expect(!ec) << glz::format_error(ec, *s);
+         expect(out.index() == v.index());
+      };
+      shape(circle{5}, R"({"type":"circle","value":{"radius":5}})");
+      shape(std::vector<double>{1, 2}, R"({"type":"vec","value":[1,2]})");
+      shape(std::map<std::string, int>{{"k", 1}}, R"({"type":"map","value":{"k":1}})");
+      shape(42, R"({"type":"num","value":42})");
+      shape(std::monostate{}, R"({"type":"none","value":null})");
+   };
+
+   "adjacent tagging separates alternatives that share a wire shape"_test = [] {
+      // The defect this representation exists for: under internal tagging both alternatives write a
+      // bare array, and the read always returns the first one with no error reported.
+      same_shape v = std::deque<double>{1, 2, 3};
+      auto s = glz::write_json(v);
+      expect(s.has_value());
+      expect(*s == R"({"type":"deq","value":[1,2,3]})") << *s;
+
+      same_shape out{};
+      expect(not glz::read_json(out, *s));
+      expect(out.index() == 1);
+      expect(std::get<1>(out) == std::deque<double>{1, 2, 3});
+   };
+
+   "adjacent tagging round-trips integral ids"_test = [] {
+      integral_ids v{3.5};
+      auto s = glz::write_json(v);
+      expect(s.has_value());
+      expect(*s == R"({"t":30,"c":3.5})") << *s;
+      integral_ids out{};
+      expect(not glz::read_json(out, *s));
+      expect(out.index() == 2);
+      expect(std::get<2>(out) == 3.5);
+   };
+
+   "adjacent tagging accepts either key order"_test = [] {
+      same_shape out{};
+      expect(not glz::read_json(out, R"({"value":[1,2,3],"type":"deq"})"));
+      expect(out.index() == 1);
+   };
+
+   "adjacent tagging prettifies"_test = [] {
+      std::string s{};
+      expect(not glz::write<glz::opts{.prettify = true}>(mixed{circle{5}}, s));
+      expect(s == "{\n   \"type\": \"circle\",\n   \"value\": {\n      \"radius\": 5\n   }\n}") << s;
+      mixed out{};
+      expect(not glz::read_json(out, s));
+      expect(out.index() == 0);
+   };
+
+   "adjacent tagging rejects malformed objects"_test = [] {
+      same_shape out{};
+      expect(glz::read_json(out, R"({"type":"deq","value":[1],"extra":1})")); // unknown key
+      expect(glz::read_json(out, R"({"type":"nope","value":[1]})")); // id names no alternative
+      expect(glz::read_json(out, R"({"type":"deq"})")); // no content
+      expect(glz::read_json(out, R"({"value":[1]})")); // no discriminator
+      expect(glz::read_json(out, R"([1,2,3])")); // not the adjacent shape at all
+
+      // Each declared key may appear once. Both duplicates report the same error; the content key
+      // used to slip through the unknown-key check and be silently first-wins.
+      expect(glz::read_json(out, R"({"type":"deq","value":[1],"value":[2]})") == glz::error_code::unknown_key);
+      expect(glz::read_json(out, R"({"type":"deq","type":"vec","value":[1]})") == glz::error_code::unknown_key);
+
+      // Unknown keys are tolerated when the caller asks for that.
+      same_shape lax{};
+      expect(not glz::read<glz::opts{.error_on_unknown_keys = false}>(lax, R"({"type":"deq","value":[1],"x":1})"));
+      expect(lax.index() == 1);
+   };
+
+   "a truncated adjacent object is reported, not silently accepted"_test = [] {
+      // Non-null-terminated reads (glz::read_streaming, and anything with null_terminated = false)
+      // depend on ctx.depth staying elevated when a read bails out: finalize_read_context only
+      // downgrades end_reached to success at depth 0. Restoring depth on the error path turned a
+      // truncated stream into ec == none with the destination untouched.
+      constexpr glz::opts streaming{.null_terminated = false};
+      const std::string_view complete = R"({"type":"circle","value":{"radius":1}})";
+      for (size_t n = 1; n < complete.size(); ++n) {
+         mixed out{};
+         const std::string prefix{complete.substr(0, n)};
+         expect(bool(glz::read<streaming>(out, prefix))) << "accepted truncated prefix: " << prefix;
+      }
+      mixed whole{};
+      expect(not glz::read<streaming>(whole, std::string{complete}));
+      expect(whole.index() == 0);
+   };
+
+   "reading many adjacent variants does not leak depth"_test = [] {
+      // Counting depth by hand (rather than with an RAII guard) must still balance on success, or a
+      // long sequence of adjacent variants would falsely trip max_recursive_depth_limit.
+      const std::vector<same_shape> many(400, same_shape{std::vector<double>{1}});
+      const auto json = glz::write_json(many);
+      expect(json.has_value());
+      std::vector<same_shape> out{};
+      expect(not glz::read_json(out, *json));
+      expect(out.size() == 400);
+      std::vector<same_shape> out_streaming{};
+      expect(not glz::read<glz::opts{.null_terminated = false}>(out_streaming, *json));
+      expect(out_streaming.size() == 400);
+   };
+
+   "an unlabeled alternative is the read default and is not writable"_test = [] {
+      // `ids` is shorter than the alternative list. Reading an unrecognized id selects few_c; writing
+      // few_c has no id to emit and must error rather than index ids_v past its end.
+      few_ids out{};
+      expect(not glz::read_json(out, R"({"t":"zzz","c":{"c":7}})"));
+      expect(out.index() == 2);
+      expect(std::get<2>(out).c == 7);
+
+      std::string s{};
+      expect(bool(glz::write_json(few_ids{few_c{7}}, s)));
+   };
+};
+
+suite unit_alternative_tests = [] {
+   using namespace tagging_repr;
+
+   "a unit alternative is written as the discriminator alone"_test = [] {
+      // std::monostate carries no data, so internal tagging renders it as the same
+      // discriminator-only object an empty struct alternative produces. Writing it as a bare `null`
+      // would leave one alternative of the union with no discriminator on it.
+      with_none v{std::monostate{}};
+      auto s = glz::write_json(v);
+      expect(s.has_value());
+      expect(*s == R"({"type":"NONE"})") << *s;
+
+      with_none out{};
+      expect(not glz::read_json(out, *s));
+      expect(out.index() == 2);
+
+      std::string pretty{};
+      expect(not glz::write<glz::opts{.prettify = true}>(v, pretty));
+      expect(pretty == "{\n   \"type\": \"NONE\"\n}") << pretty;
+   };
+
+   "a bare null still reads as the unit alternative"_test = [] {
+      // Data written before the unit alternative had a discriminator must keep parsing.
+      with_none out{put{1}};
+      expect(not glz::read_json(out, "null"));
+      expect(out.index() == 2);
+   };
+
+   "the object alternatives are unaffected"_test = [] {
+      with_none v{del{"abc"}};
+      auto s = glz::write_json(v);
+      expect(s.has_value());
+      expect(*s == R"({"type":"DELETE","id":"abc"})") << *s;
+      with_none out{};
+      expect(not glz::read_json(out, *s));
+      expect(out.index() == 1);
+   };
+};
+
+suite tag_owning_alternative_tests = [] {
+   using namespace tagging_repr;
+
+   "an alternative declaring the discriminator emits it once"_test = [] {
+      // `owns_tag` has a member named "kind", which is the variant's tag, so it supplies the
+      // discriminator itself. Previously a glaze_object_t alternative also had one merged in,
+      // producing {"kind":"owns","kind":"owns","x":1} -- a duplicate key.
+      declares_tag v{owns_tag{"owns", 1}};
+      auto s = glz::write_json(v);
+      expect(s.has_value());
+      expect(*s == R"({"kind":"owns","x":1})") << *s;
+
+      declares_tag out{};
+      expect(not glz::read_json(out, *s));
+      expect(out.index() == 0);
+      expect(std::get<0>(out).kind == "owns");
+      expect(std::get<0>(out).x == 1);
+   };
+};
+
+namespace short_ids_oob
+{
+   struct a_t
+   {
+      int a{};
+   };
+   struct b_t
+   {
+      int b{};
+   };
+   struct c_t
+   {
+      int c{};
+   };
+   using v_t = std::variant<a_t, b_t, c_t>;
+}
+
+template <>
+struct glz::meta<short_ids_oob::v_t>
+{
+   static constexpr std::string_view tag = "t";
+   static constexpr auto ids = std::array{"a", "b"}; // 2 ids, 3 alternatives
+};
+
+suite ids_bounds_tests = [] {
+   using namespace short_ids_oob;
+
+   "writing an alternative with no declared id errors instead of reading out of bounds"_test = [] {
+      // `ids` shorter than the variant is a supported read-side feature (c_t is the default for an
+      // unrecognized id), so it is reachable from a legal glz::meta. Writing c_t has no id to emit;
+      // indexing ids_v there read past the end of a static array and emitted whatever followed it as
+      // the tag value -- observed as {"t":"supported types: a, b","c":7}, and ~4 GB under ASan.
+      std::string s{};
+      expect(bool(glz::write_json(v_t{c_t{7}}, s)));
+
+      // The labeled alternatives are unaffected.
+      s.clear();
+      expect(not glz::write_json(v_t{b_t{3}}, s));
+      expect(s == R"({"t":"b","b":3})") << s;
+
+      // Same guard on the array-variant wrapper, which indexes ids_v the same way.
+      v_t unlabeled{c_t{7}};
+      std::string arr{};
+      expect(bool(glz::write_json(glz::array_variant_wrapper<v_t>{unlabeled}, arr)));
+   };
+};
+
+suite adjacent_schema_tests = [] {
+   using namespace tagging_repr;
+
+   "the schema describes the adjacent shape as a discriminated union"_test = [] {
+      // The point of the representation is that a consumer can dispatch on the tag, so the schema
+      // has to say so: one branch per alternative, each a closed object with a const discriminator
+      // and the alternative's own schema nested under the content key.
+      //
+      // Asserted as fragments rather than as one whole-document match, because the outer title
+      // embeds the compiler's spelling of the type name and standard libraries disagree about it.
+      const auto schema = glz::write_json_schema<same_shape>();
+      expect(schema.has_value());
+      expect(schema->find(R"("oneOf")") != std::string::npos) << *schema;
+      for (const std::string id : {"vec", "deq"}) {
+         // The discriminator is a const, and the alternative's own schema is nested beneath the
+         // content key rather than merged alongside it.
+         const auto nested = R"("properties":{"type":{"const":")" + id + R"("},"value":{)";
+         expect(schema->find(nested) != std::string::npos) << id << " branch: " << *schema;
+         // The branch is a closed object requiring exactly the two declared keys.
+         const auto closed = R"("additionalProperties":false,"required":["type","value"],"title":")" + id + R"("})";
+         expect(schema->find(closed) != std::string::npos) << id << " branch: " << *schema;
+      }
+   };
+
+   "a unit alternative is described as a discriminator-only object"_test = [] {
+      const auto schema = glz::write_json_schema<with_none>();
+      expect(schema.has_value());
+      // Not `{"type":"null"}`: internal tagging writes the unit alternative as {tag: id}.
+      expect(
+         schema->find(
+            R"({"type":"object","properties":{"type":{"const":"NONE"}},"additionalProperties":false,"required":["type"],"title":"NONE"})") !=
+         std::string::npos)
+         << *schema;
+      expect(schema->find(R"("type":"null")") == std::string::npos) << *schema;
    };
 };
 

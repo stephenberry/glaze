@@ -170,82 +170,127 @@ namespace glz
       }
    };
 
-   // BEVE Version 2 variant size, mirroring the writer byte-for-byte (see to<BEVE, is_variant>):
-   // a tagged object alternative is sized as the merged { tag : id, ...members } object; every other
-   // case is sized as the active alternative's own value. No type-tag extension bytes are counted.
+   // BEVE Version 2 variant size, mirroring the writer byte-for-byte (see to<BEVE, is_variant>).
+   // The tagging representation is fixed per variant, so the shape sized here is too: the merged
+   // { tag : id, ...members } object for internal tagging, the two member { tag : id, content : value }
+   // object for adjacent tagging (the two element array [id, value] positionally), and the bare value
+   // otherwise. No type-tag extension bytes are counted.
    template <is_variant T>
    struct calculate_size<BEVE, T>
    {
+      static constexpr auto tagging = variant_tagging_v<T>;
+
+      // Sizes a headerless string key, matching to<BEVE, is_variant>::write_key.
+      template <const sv& Key, auto Opts>
+      [[nodiscard]] static size_t key_size()
+      {
+         return calculate_size<BEVE, std::remove_cvref_t<decltype(tag_v<T>)>>::template no_header_cx<Key.size(),
+                                                                                                     Opts>();
+      }
+
       template <auto Opts>
       [[nodiscard]] static size_t op(auto&& value, size_t offset = 0)
       {
-         return std::visit(
-            [&](auto&& v) -> size_t {
-               using V = std::decay_t<decltype(v)>;
+         constexpr bool tagged = check_write_type_info(Opts) && tagging != variant_tagging_kind::none;
 
-               if constexpr ((not check_structs_as_arrays(Opts)) && check_write_type_info(Opts) &&
-                             (not tag_v<T>.empty()) && (not custom_write<V>) &&
-                             (glaze_object_t<V> || (reflectable<V> && not has_member_with_name<V>(tag_v<T>)) ||
-                              is_memory_object<V>)) {
-                  using X = std::conditional_t<is_memory_object<V>, memory_type<V>, V>;
+         if constexpr (tagged && check_structs_as_arrays(Opts)) {
+            // Positional projection of adjacent tagging: [id, value]. Mirrors the writer's guard, or
+            // beve_size_untagged would hand back a byte count for a value that cannot be written.
+            static_assert(
+               tagging == variant_tagging_kind::adjacent || detail::beve_positional_tagging_needs_content<T>::value,
+               "Positional writes (structs_as_arrays) have no keys, so there is nothing for "
+               "internal tagging to merge a discriminator into. Declare `content` beside "
+               "`tag` in glz::meta to select adjacent tagging, which projects positionally "
+               "to the two element array [id, value].");
+            if (value.index() >= ids_v<T>.size()) {
+               return size_t(0); // writer errors and emits nothing; mirror it
+            }
+            size_t result = 1; // generic array tag
+            result += compressed_int_size(2); // element count
+            result += calculate_size<BEVE, void>::template op<Opts>(ids_v<T>[value.index()], offset + result);
+            result += std::visit(
+               [&](auto&& v) { return calculate_size<BEVE, void>::template op<Opts>(v, offset + result); }, value);
+            return result;
+         }
+         else if constexpr (tagged && tagging == variant_tagging_kind::adjacent) {
+            if (value.index() >= ids_v<T>.size()) {
+               return size_t(0); // writer errors and emits nothing; mirror it
+            }
+            size_t result = 1; // object tag (string keys)
+            result += compressed_int_size(2); // member count
+            result += key_size<tag_v<T>, Opts>();
+            result += calculate_size<BEVE, void>::template op<Opts>(ids_v<T>[value.index()], offset + result);
+            result += key_size<content_v<T>, Opts>();
+            result += std::visit(
+               [&](auto&& v) { return calculate_size<BEVE, void>::template op<Opts>(v, offset + result); }, value);
+            return result;
+         }
+         else {
+            return std::visit(
+               [&](auto&& v) -> size_t {
+                  using V = std::decay_t<decltype(v)>;
+                  using X = variant_alternative_object_t<V>;
 
-                  if constexpr (is_memory_object<V>) {
-                     // A null memory_object makes the writer error (invalid_variant_object) and emit
-                     // nothing; mirror that so beve_size never under-counts what is actually written.
-                     if (!v) {
-                        return size_t(0);
+                  if constexpr (tagged && variant_unit_alternative<V>) {
+                     // Discriminator-only object: tag byte + member count + key + id.
+                     if (value.index() >= ids_v<T>.size()) {
+                        return size_t(0); // writer errors and emits nothing; mirror it
                      }
+                     size_t result = 1;
+                     result += compressed_int_size(1);
+                     result += key_size<tag_v<T>, Opts>();
+                     result += calculate_size<BEVE, void>::template op<Opts>(ids_v<T>[value.index()], offset + result);
+                     return result;
                   }
-
-                  if (value.index() >= ids_v<T>.size()) {
-                     return size_t(0); // writer errors and emits nothing; mirror it
-                  }
-
-                  size_t result = 1; // object tag (string keys)
-
-                  const size_t body_count = [&]() -> size_t {
+                  // `not custom_write<V>`: mirrors the writer, whose merged branch excludes custom
+                  // alternatives because they have no reflected members to count.
+                  else if constexpr (tagged && (glaze_object_t<X> || reflectable<X>) && (not custom_write<V>) &&
+                                     (not alternative_declares_key<V>(tag_v<T>))) {
                      if constexpr (is_memory_object<V>) {
-                        return calculate_size<BEVE, X>::template written_member_count<Opts>(*v);
+                        // A null memory_object makes the writer error (invalid_variant_object) and
+                        // emit nothing; mirror that so beve_size never under-counts what is written.
+                        if (!v) {
+                           return size_t(0);
+                        }
+                     }
+
+                     if (value.index() >= ids_v<T>.size()) {
+                        return size_t(0); // writer errors and emits nothing; mirror it
+                     }
+
+                     size_t result = 1; // object tag (string keys)
+
+                     const size_t body_count = [&]() -> size_t {
+                        if constexpr (is_memory_object<V>) {
+                           return calculate_size<BEVE, X>::template written_member_count<Opts>(*v);
+                        }
+                        else {
+                           return calculate_size<BEVE, X>::template written_member_count<Opts>(v);
+                        }
+                     }();
+                     result += compressed_int_size(body_count + 1); // merged member count
+
+                     // discriminator: headerless string key + id VALUE (string or integral)
+                     result += key_size<tag_v<T>, Opts>();
+                     result += calculate_size<BEVE, void>::template op<Opts>(ids_v<T>[value.index()], offset + result);
+
+                     // alternative body, header suppressed (members spliced into the merged object)
+                     if constexpr (is_memory_object<V>) {
+                        if (v) {
+                           result += calculate_size<BEVE, X>::template op<opening_handled<Opts>()>(*v, offset + result);
+                        }
                      }
                      else {
-                        return calculate_size<BEVE, X>::template written_member_count<Opts>(v);
+                        result += calculate_size<BEVE, X>::template op<opening_handled<Opts>()>(v, offset + result);
                      }
-                  }();
-                  result += compressed_int_size(body_count + 1); // merged member count
-
-                  // discriminator: headerless string key + id VALUE (string or integral, with header)
-                  result += calculate_size<BEVE, std::remove_cvref_t<decltype(tag_v<T>)>>::template no_header_cx<
-                     tag_v<T>.size(), Opts>();
-                  result += calculate_size<BEVE, void>::template op<Opts>(ids_v<T>[value.index()], offset + result);
-
-                  // alternative body, header suppressed (members spliced into the merged object)
-                  if constexpr (is_memory_object<V>) {
-                     if (v) {
-                        result += calculate_size<BEVE, X>::template op<opening_handled<Opts>()>(*v, offset + result);
-                     }
+                     return result;
                   }
                   else {
-                     result += calculate_size<BEVE, X>::template op<opening_handled<Opts>()>(v, offset + result);
+                     return calculate_size<BEVE, void>::template op<Opts>(v, offset);
                   }
-                  return result;
-               }
-               else if constexpr (check_structs_as_arrays(Opts) && check_write_type_info(Opts) &&
-                                  (not tag_v<T>.empty())) {
-                  // Positional tagged variant: adjacent form [id, value].
-                  if (value.index() >= ids_v<T>.size()) {
-                     return size_t(0); // writer errors and emits nothing; mirror it
-                  }
-                  size_t result = 1; // generic array tag
-                  result += compressed_int_size(2); // element count
-                  result += calculate_size<BEVE, void>::template op<Opts>(ids_v<T>[value.index()], offset + result);
-                  result += calculate_size<BEVE, void>::template op<Opts>(v, offset + result);
-                  return result;
-               }
-               else {
-                  return calculate_size<BEVE, void>::template op<Opts>(v, offset);
-               }
-            },
-            value);
+               },
+               value);
+         }
       }
    };
 
@@ -592,6 +637,36 @@ namespace glz
          }(std::make_index_sequence<N>{});
 
          return result;
+      }
+   };
+
+   namespace detail
+   {
+      // Instantiated only to fail, so the diagnostic names the type that needs the specialization.
+      template <class T>
+      struct beve_size_needs_calculate_size_specialization : std::false_type
+      {};
+   }
+
+   // A custom-serialized type is written by code Glaze cannot inspect, so its encoded length cannot
+   // be derived from reflection the way every other size specialization does. Without this
+   // specialization the reflected one above is excluded by `not custom_write<T>` and nothing else
+   // matches, leaving glz::beve_size to fail on an incomplete type; say what is actually missing.
+   template <class T>
+      requires((glaze_object_t<T> || reflectable<T>) && custom_write<T>)
+   struct calculate_size<BEVE, T>
+   {
+      template <auto Opts>
+      [[nodiscard]] static size_t op(auto&&, size_t = 0)
+      {
+         static_assert(detail::beve_size_needs_calculate_size_specialization<T>::value,
+                       "glz::beve_size cannot size a custom-serialized type: only your to<BEVE, T> "
+                       "knows how many bytes it writes. Specialize glz::calculate_size<glz::BEVE, T> "
+                       "beside to<BEVE, T> with an `op<Opts>(value, offset)` returning that byte "
+                       "count, or size the value by writing it (write_beve(value)->size()). The type "
+                       "is the template argument of beve_size_needs_calculate_size_specialization in "
+                       "the instantiation backtrace.");
+         return 0;
       }
    };
 

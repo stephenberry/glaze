@@ -420,14 +420,27 @@ By default Glaze will handle structs as tagged objects, meaning that keys will b
 
 ## Variants
 
-BEVE Version 2 writes a `std::variant` as an ordinary, self-describing value. A variant with a `tag`/`ids` discriminator declared in `glz::meta` becomes an object with the discriminator merged in as the first member, mirroring the JSON writer; every other variant is written as the active alternative's own value. Nothing variant-specific appears on the wire, so `glz::beve_to_json` of a variant produces the same JSON as `glz::write_json` of the same value.
+BEVE Version 2 writes a `std::variant` as an ordinary, self-describing value. Which shape it takes is fixed by the variant's tagging representation, declared once in `glz::meta` and applied to every alternative — see [Choosing a Tagging Representation](./variant-handling.md#choosing-a-tagging-representation) for the full rules:
 
-> **The discriminator is only merged for object-shaped alternatives.** A tagged variant whose active alternative is a scalar, an array, or a map has nowhere to merge the tag into, so in keyed mode it is written bare and the discriminator is lost. Such an alternative is then resolved like an untagged one, and may come back as a different alternative with the same wire shape — `std::variant<std::vector<double>, std::deque<double>>` with a `tag` still resolves to the first of the two. Glaze's JSON writer has the identical limitation. Positional mode does *not* have it: the adjacent form described below carries the discriminator for every alternative type. This asymmetry is tracked for a future release, where a `content` key will select adjacent tagging in both formats.
+| `glz::meta` declares | Representation | BEVE shape |
+|---|---|---|
+| nothing | none | the alternative's own value, bare |
+| `tag` | internal | object with the discriminator merged in as the first member |
+| `tag` and `content` | adjacent | object of exactly two members, `{tag: id, content: value}` |
 
-On read, the alternative is recovered from the discriminator when one is present, otherwise from the object's key set, otherwise from the value's own type header. Two consequences are worth knowing:
+Nothing variant-specific appears on the wire, so `glz::beve_to_json` of a variant produces the same JSON as `glz::write_json` of the same value, for every representation.
+
+Internal tagging requires every alternative to be object-shaped, since there is nowhere to merge a key into `[1, 2]` or `42`; declaring `tag` alone for a variant with a scalar, array, map, or pair alternative is a compile error directing you to `content`. Adjacent tagging carries the discriminator for every alternative type, so alternatives that share a wire shape — `std::variant<std::vector<double>, std::deque<double>>` — round-trip under it.
+
+Two BEVE-specific limits, both compile errors rather than silent divergence from JSON:
+
+- **Internal tagging cannot be written for a custom-serialized alternative.** BEVE objects are length-prefixed, and the member count of a body produced by someone else's `to<BEVE, T>` is not knowable in advance. (JSON merges into such a body because JSON objects are not counted.) Declare `content`, which nests the custom value rather than merging into it.
+- **`glz::beve_size` cannot size a custom-serialized type**, for the same reason: only your `to<BEVE, T>` knows its length. Specialize `glz::calculate_size<glz::BEVE, T>` beside it, or size the value by writing it.
+
+On read, the alternative is recovered from the discriminator when one is present, otherwise from the object's key set, otherwise from the value's own type header. Adjacent tagging skips all of that: the discriminator names the alternative outright, so nothing is deduced. For the other representations, several consequences are worth knowing:
 
 - Alternatives are matched on their **exact** type header first, so `std::variant<int32_t, int64_t>` round-trips without narrowing. If no alternative matches exactly, a second pass allows numeric conversions.
-- Alternatives that are genuinely indistinguishable on the wire collapse to the first one. This covers two structs with identical field sets, two empty structs, and containers with the same encoding (`std::vector<int>` and `std::deque<int>` are byte-identical, so the value survives but the alternative index may not). Declare a `tag` and `ids` discriminator to tell them apart, subject to the object-shape caveat above.
+- Alternatives that are genuinely indistinguishable on the wire collapse to the first one. This covers two structs with identical field sets, two empty structs, and containers with the same encoding (`std::vector<int>` and `std::deque<int>` are byte-identical, so the value survives but the alternative index may not). To tell them apart, declare a discriminator: `tag` and `ids` for two structs, or `tag`, `content` and `ids` when any of the colliding alternatives is not an object (two containers, for instance, which internal tagging cannot represent at all).
 - A map or pair alternative accepts any key set, so it competes with the struct alternatives for the same wire shape. It wins whenever the object carries a key that no struct alternative declares, and loses otherwise. A map whose keys are all field names of some struct alternative is therefore indistinguishable from that struct, and resolves to the struct — an empty map being the degenerate case. The same rule applies to alternatives that encode as objects but expose no key set at all: a nested `std::variant`, an `std::optional<Struct>`, or a type with a custom reader.
 
 - Where BEVE and the JSON reader disagree, BEVE is the stricter of the two: it prefers a map alternative on a foreign key where JSON prefers the struct, it treats an explicit discriminator as authoritative rather than cross-checking it against the keys seen so far, and it retries other candidates when a deduction fails. The two agree on the collapse rules above. One consequence to know: adding a map or pair alternative to a variant changes how struct data carrying an unknown key decodes, and `error_on_unknown_keys = false` no longer makes such data read as the struct, because the foreign key is taken as evidence the map wrote it.
@@ -437,18 +450,21 @@ On read, the alternative is recovered from the discriminator when one is present
 
 ### Variants Under `structs_as_arrays`
 
-Positional writes (`structs_as_arrays`, `glz::write_beve_untagged`) have no keys, so there is nothing for a discriminator to merge into and no key set to deduce from. A variant that declares a `tag` and `ids` is therefore written in the **adjacent** form: a two element array holding the id and the value.
+Positional writes (`structs_as_arrays`, `glz::write_beve_untagged`) have no keys, so there is nothing for a discriminator to merge into and no key set to deduce from. Adjacent tagging projects here to a two element array holding the id and the value:
 
 ```c++
-using shape = std::variant<circle, rectangle>;   // meta: tag = "type", ids = {"circle", "rectangle"}
+using shape = std::variant<circle, rectangle>;
+// meta: tag = "type", content = "value", ids = {"circle", "rectangle"}
 
 glz::write_beve_untagged(shape{rectangle{2.0, 3.0}});
 // ["rectangle", [2.0, 3.0]]
 ```
 
-This is an ordinary BEVE generic array, not the deprecated type tag extension. Unlike the merged-object form it works for every alternative type, including scalars and arrays, since the id sits beside the value rather than inside it. The discriminator is authoritative here: an id that names no alternative is an error rather than a fallback to structural guessing, because positional data carries nothing to guess from.
+This is an ordinary BEVE generic array, not the deprecated type tag extension. Since the id sits beside the value rather than inside it, it works for every alternative type including scalars and arrays. The discriminator is authoritative here: an id that names no alternative is an error rather than a fallback to structural guessing, because positional data carries nothing to guess from.
 
-A variant with no discriminator is still written bare. Alternatives with distinguishable positional shapes round-trip by trying each in turn, but alternatives that share a shape (same arity and same element types) collapse to the first one — the value survives, the alternative index does not. Declare a `tag` and `ids` if that distinction matters.
+Internal tagging has nothing to project in this mode — its entire mechanism is a key, and there are none — so declaring `tag` without `content` and then writing or reading positionally is a compile error. Add `content` to get the array form above.
+
+A variant with no discriminator is still written bare. Alternatives with distinguishable positional shapes round-trip by trying each in turn, but alternatives that share a shape (same arity and same element types) collapse to the first one — the value survives, the alternative index does not. Declare `tag`, `content` and `ids` if that distinction matters.
 
 ### Version 1 Compatibility
 

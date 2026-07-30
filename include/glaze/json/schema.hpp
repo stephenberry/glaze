@@ -803,11 +803,72 @@ namespace glz
       template <is_variant T>
       struct to_json_schema<T>
       {
+         // Adjacent tagging gives the variant a single, fully determined shape: an object of exactly
+         // two members whatever the alternative is. That is the whole point of the representation, so
+         // the schema says it directly -- one `oneOf` branch per alternative, each an object with a
+         // const discriminator and the alternative's own schema under the content key.
+         //
+         // Unlike the internally tagged case, the alternative's schema is *nested* rather than merged
+         // with the discriminator, so complex alternatives can go through $defs by reference without
+         // an additionalProperties:false there rejecting the tag.
+         template <auto Opts>
+         static void op_adjacent(auto& s, auto& defs)
+         {
+            static constexpr auto N = std::variant_size_v<T>;
+            const auto& ids = ids_v<T>;
+
+            s.type = sv{"object"};
+            s.oneOf = std::vector<schema>(N);
+
+            // Spelled from ids_v<T> rather than as decltype(ids[I]) inside the lambda: indexing a
+            // captured reference with the lambda's own template parameter inside decltype is an
+            // internal compiler error on gcc 15 and 16 (mark_use, cp/expr.cc:187).
+            using id_t = std::decay_t<decltype(ids_v<T>[0])>;
+
+            for_each<N>([&]<auto I>() {
+               using V = std::decay_t<std::variant_alternative_t<I, T>>;
+               auto& alt = (*s.oneOf)[I];
+
+               alt.type = sv{"object"};
+               if constexpr (std::is_convertible_v<id_t, sv>) {
+                  alt.title = sv{ids[I]}; // integral ids have no name to title the branch with
+               }
+               alt.required = std::vector<sv>{tag_v<T>, content_v<T>};
+               // The reader rejects anything but these two keys under default options.
+               alt.additionalProperties = false;
+               alt.properties = std::map<sv, schema, std::less<>>();
+
+               (*alt.properties)[tag_v<T>].constant = ids[I];
+
+               auto& content = (*alt.properties)[content_v<T>];
+               constexpr bool is_complex = glaze_object_t<V> || reflectable<V> || array_t<V> || writable_map_t<V>;
+               if constexpr (is_complex) {
+                  auto& def = defs[name_v<V>];
+                  if (!def.type) {
+                     to_json_schema<V>::template op<Opts>(def, defs);
+                  }
+                  content.ref = join_v<chars<"#/$defs/">, name_v<V>>;
+               }
+               else {
+                  to_json_schema<V>::template op<Opts>(content, defs);
+               }
+            });
+         }
+
          template <auto Opts>
          static void op(auto& s, auto& defs)
          {
+            if constexpr (adjacently_tagged_v<T>) {
+               op_adjacent<Opts>(s, defs);
+               return;
+            }
             static constexpr auto N = std::variant_size_v<T>;
             using type_counts = variant_type_count<T>;
+
+            // Under internal tagging a unit alternative is written as a discriminator-only object,
+            // so it contributes "object" to the union's type list rather than "null".
+            static constexpr bool units_are_objects = internally_tagged_v<T> && (type_counts::n_null > 0);
+
             std::vector<sv> type_vec{};
             if constexpr (type_counts::n_number) {
                type_vec.emplace_back("number");
@@ -818,13 +879,13 @@ namespace glz
             if constexpr (type_counts::n_bool) {
                type_vec.emplace_back("boolean");
             }
-            if constexpr (type_counts::n_object) {
+            if constexpr (type_counts::n_object || units_are_objects) {
                type_vec.emplace_back("object");
             }
             if constexpr (type_counts::n_array) {
                type_vec.emplace_back("array");
             }
-            if constexpr (type_counts::n_null) {
+            if constexpr (type_counts::n_null && not units_are_objects) {
                type_vec.emplace_back("null");
             }
             if (type_vec.size() == 1) {
@@ -837,9 +898,26 @@ namespace glz
 
             const auto& ids = ids_v<T>;
 
+            // See op_adjacent: decltype(ids[I]) inside the lambda ICEs gcc 15 and 16.
+            using unit_id_t = std::decay_t<decltype(ids_v<T>[0])>;
+
             for_each<N>([&]<auto I>() {
                using V = std::decay_t<std::variant_alternative_t<I, T>>;
                auto& schema_val = (*s.oneOf)[I];
+
+               if constexpr (internally_tagged_v<T> && variant_unit_alternative<V>) {
+                  // Written as the discriminator alone, so describe that object rather than `null`.
+                  schema_val.type = sv{"object"};
+                  schema_val.properties = std::map<sv, schema, std::less<>>();
+                  (*schema_val.properties)[tag_v<T>].constant = ids[I];
+                  schema_val.required = std::vector<sv>{tag_v<T>};
+                  // Matches the sibling object branches, which the object schema marks closed.
+                  schema_val.additionalProperties = false;
+                  if constexpr (std::is_convertible_v<unit_id_t, sv>) {
+                     schema_val.title = sv{ids[I]};
+                  }
+                  return;
+               }
 
                // Use $ref for complex types to avoid duplicating large definitions in oneOf.
                // Exception: tagged variant object alternatives must remain inline because the tag

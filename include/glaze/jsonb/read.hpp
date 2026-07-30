@@ -1078,6 +1078,12 @@ namespace glz
       template <auto Opts>
       static void op(auto& value, is_context auto& ctx, auto& it, auto end)
       {
+         // Inside op() rather than at class scope: read_supported is `requires { from<Format, T>{}; }`,
+         // so a class-scope assert turns that feature probe into a hard error instead of `false`.
+         static_assert(content_v<T>.empty(),
+                       "Adjacent variant tagging (glz::meta `content`) is implemented for JSON and "
+                       "BEVE but not yet for JSONB. Reading this variant as JSONB would silently "
+                       "expect the internally tagged shape, so it is rejected here instead.");
          depth_guard g{ctx};
          if (!g) return;
 
