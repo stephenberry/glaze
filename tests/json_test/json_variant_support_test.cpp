@@ -2609,12 +2609,21 @@ suite adjacent_schema_tests = [] {
       // The point of the representation is that a consumer can dispatch on the tag, so the schema
       // has to say so: one branch per alternative, each a closed object with a const discriminator
       // and the alternative's own schema nested under the content key.
+      //
+      // Asserted as fragments rather than as one whole-document match, because the outer title
+      // embeds the compiler's spelling of the type name and standard libraries disagree about it.
       const auto schema = glz::write_json_schema<same_shape>();
       expect(schema.has_value());
-      expect(
-         *schema ==
-         R"({"type":"object","$defs":{"double":{"type":"number","minimum":-1.7976931348623157E308,"maximum":1.7976931348623157E308}},"oneOf":[{"type":"object","properties":{"type":{"const":"vec"},"value":{"type":"array","items":{"$ref":"#/$defs/double"}}},"additionalProperties":false,"required":["type","value"],"title":"vec"},{"type":"object","properties":{"type":{"const":"deq"},"value":{"type":"array","items":{"$ref":"#/$defs/double"}}},"additionalProperties":false,"required":["type","value"],"title":"deq"}],"title":"std::variant<std::vector<double>, std::deque<double>>"})")
-         << *schema;
+      expect(schema->find(R"("oneOf")") != std::string::npos) << *schema;
+      for (const std::string id : {"vec", "deq"}) {
+         // The discriminator is a const, and the alternative's own schema is nested beneath the
+         // content key rather than merged alongside it.
+         const auto nested = R"("properties":{"type":{"const":")" + id + R"("},"value":{)";
+         expect(schema->find(nested) != std::string::npos) << id << " branch: " << *schema;
+         // The branch is a closed object requiring exactly the two declared keys.
+         const auto closed = R"("additionalProperties":false,"required":["type","value"],"title":")" + id + R"("})";
+         expect(schema->find(closed) != std::string::npos) << id << " branch: " << *schema;
+      }
    };
 
    "a unit alternative is described as a discriminator-only object"_test = [] {
