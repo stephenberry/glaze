@@ -207,9 +207,14 @@ namespace glz
    template <class T, string_literal Str, auto Opts = opts{}>
    [[nodiscard]] inline expected<T, error_ctx> get_as_json(contiguous auto&& buffer)
    {
-      const auto str = glz::get_view_json<Str>(buffer);
+      const auto str = glz::get_view_json<Str, Opts>(buffer);
       if (str) {
-         return glz::read_json<T>(*str);
+         T value{};
+         context ctx{};
+         if (const auto ec = glz::read<Opts>(value, *str, ctx); ec) {
+            return unexpected(ec);
+         }
+         return value;
       }
       return unexpected(str.error());
    }
@@ -217,7 +222,7 @@ namespace glz
    template <string_literal Str, auto Opts = opts{}>
    [[nodiscard]] inline expected<sv, error_ctx> get_sv_json(contiguous auto&& buffer)
    {
-      const auto s = glz::get_view_json<Str>(buffer);
+      const auto s = glz::get_view_json<Str, Opts>(buffer);
       if (s) {
          return sv{reinterpret_cast<const char*>(s->data()), s->size()};
       }

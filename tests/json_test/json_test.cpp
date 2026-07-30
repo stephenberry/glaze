@@ -1111,6 +1111,29 @@ suite basic_types = [] {
       }
    };
 
+   "whitespace only input holds no value"_test = [] {
+      // Without a terminator the reader runs out of input looking for a value and reports
+      // end_reached, which at the top level otherwise means "the value ended with the buffer".
+      // A buffer that never held a value must be rejected the way an empty one is, rather than
+      // leaving the destination untouched and reporting success.
+      // Both options are spelled out because this file is also built with GLZ_NULL_TERMINATED=false.
+      static constexpr glz::opts options{.null_terminated = false};
+      for (std::string_view blank : {" ", "   ", "\t\n\r "}) {
+         const std::vector<char> buf{blank.begin(), blank.end()};
+         const std::string_view input{buf.data(), buf.size()};
+
+         int i{42};
+         expect(glz::read<options>(i, input) == glz::error_code::no_read_input) << blank;
+         expect(i == 42) << "destination must be left alone";
+
+         std::vector<int> v{};
+         expect(glz::read<options>(v, input) == glz::error_code::no_read_input) << blank;
+
+         std::map<std::string, int> m{};
+         expect(glz::read<options>(m, input) == glz::error_code::no_read_input) << blank;
+      }
+   };
+
    "truncated number is rejected, not valued"_test = [] {
       // A number longer than the scratch buffer is copied in as a prefix, and the prefix can parse
       // cleanly on its own: "1e" followed by enough zeros reads as 1 once the copy cuts off the

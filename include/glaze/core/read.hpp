@@ -31,6 +31,25 @@ namespace glz
       return std::pair{it, end};
    }
 
+   // Whitespace ahead of a value is not a value. Without a '\0' sentinel the reader reports
+   // end_reached when it runs out of input looking for one, and that is indistinguishable from a
+   // value that ended with the buffer unless we look at what was actually consumed.
+   [[nodiscard]] GLZ_ALWAYS_INLINE bool consumed_only_whitespace(const char* start, const char* it) noexcept
+   {
+      for (; start < it; ++start) {
+         switch (*start) {
+         case ' ':
+         case '\t':
+         case '\n':
+         case '\r':
+            break;
+         default:
+            return false;
+         }
+      }
+      return true;
+   }
+
    template <auto Opts, is_context Ctx>
    GLZ_ALWAYS_INLINE void finalize_read_context(Ctx&& ctx) noexcept
    {
@@ -114,6 +133,15 @@ namespace glz
       }
 
    finish:
+      if constexpr (Opts.format != NDJSON) {
+         // NDJSON treats an empty document as valid; every other format needs a value.
+         // `it == end` distinguishes "ran off the end looking for a value" from a reader that
+         // rewound its iterator after resolving a value (variant alternatives do this).
+         if (ctx.error == error_code::end_reached && ctx.depth == 0 && it == end && consumed_only_whitespace(start, it))
+            [[unlikely]] {
+            ctx.error = error_code::no_read_input;
+         }
+      }
       finalize_read_context<Opts>(ctx);
 
       if constexpr (use_padded) {

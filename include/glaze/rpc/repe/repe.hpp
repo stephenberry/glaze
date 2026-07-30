@@ -109,9 +109,11 @@ namespace glz::repe
       }
    }
 
-   // returns 0 on error
+   // Returns false on error. The byte count the reader reports cannot stand in for success here:
+   // without a null terminator a variant alternative that resolves at the end of the buffer rewinds
+   // its iterator, so a completed read can report zero bytes consumed.
    template <auto Opts, class Value>
-   size_t read_params(Value&& value, auto&& state)
+   bool read_params(Value&& value, auto&& state)
    {
       glz::context ctx{};
       auto [b, e] = read_iterators<Opts>(state.in.body);
@@ -119,11 +121,18 @@ namespace glz::repe
          ctx.error = error_code::no_read_input;
       }
       if (bool(ctx.error)) [[unlikely]] {
-         return 0;
+         return false;
       }
       auto start = b;
 
       glz::parse<Opts.format>::template op<Opts>(std::forward<Value>(value), ctx, b, e);
+      // These parse calls bypass glz::read, so the end-of-buffer bookkeeping it performs has to be
+      // done here: a value that finishes exactly at the end of the body reports end_reached, which
+      // is a completed read rather than an error, while a body that held no value at all is not.
+      if (ctx.error == error_code::end_reached && ctx.depth == 0 && b == e && consumed_only_whitespace(start, b)) {
+         ctx.error = error_code::no_read_input;
+      }
+      finalize_read_context<Opts>(ctx);
 
       if (bool(ctx.error)) {
          state.out.header.ec = ctx.error;
@@ -138,10 +147,10 @@ namespace glz::repe
          out.body = error_message;
 
          write_response<Opts>(state);
-         return 0;
+         return false;
       }
 
-      return size_t(b - start);
+      return true;
    }
 
    namespace detail
@@ -537,9 +546,10 @@ namespace glz::repe
    concept is_state_view = std::same_as<std::decay_t<T>, state_view>;
 
    /// Read parameters from state_view (zero-copy from input buffer)
-   /// Returns number of bytes read, or 0 on error (error set in state.out)
+   /// Returns false on error (error set in state.out); see the note on the overload above for why
+   /// this is not a byte count.
    template <auto Opts, class Value>
-   size_t read_params(Value&& value, state_view& state)
+   bool read_params(Value&& value, state_view& state)
    {
       glz::context ctx{};
       auto body = state.in.body;
@@ -550,21 +560,27 @@ namespace glz::repe
          ctx.error = error_code::no_read_input;
       }
       if (bool(ctx.error)) [[unlikely]] {
-         return 0;
+         return false;
       }
       auto start = b;
 
       glz::parse<Opts.format>::template op<Opts>(std::forward<Value>(value), ctx, b, e);
+      // See the note in the message overload above: end_reached at the top level means the value
+      // ended with the body, not that the read failed.
+      if (ctx.error == error_code::end_reached && ctx.depth == 0 && b == e && consumed_only_whitespace(start, b)) {
+         ctx.error = error_code::no_read_input;
+      }
+      finalize_read_context<Opts>(ctx);
 
       if (bool(ctx.error)) {
          error_ctx ec{size_t(b - start), ctx.error, ctx.custom_error_message};
          std::string error_message = format_error(ec, body);
          state.out.reset(state.in);
          state.out.set_error(ctx.error, error_message);
-         return 0;
+         return false;
       }
 
-      return size_t(b - start);
+      return true;
    }
 
    /// Write response with a value (zero-copy to output buffer)

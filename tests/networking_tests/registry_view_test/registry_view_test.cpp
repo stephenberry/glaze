@@ -3,6 +3,8 @@
 
 #include <cstring>
 #include <string>
+#include <variant>
+#include <vector>
 
 #include "glaze/rpc/registry.hpp"
 #include "ut/ut.hpp"
@@ -286,6 +288,136 @@ suite registry_span_call_tests = [] {
 
       auto result = glz::repe::parse_request({response_buf.data(), response_buf.size()});
       expect(result.request.id() == 12345) << "Response ID should match request ID";
+   };
+};
+
+// Requests arriving off the wire end where the buffer ends: there is no '\0' after the body for a
+// reader to stop on. make_request returns a std::string, whose data()[size()] is a terminator, so
+// these tests copy the message into an exactly sized vector to reproduce the wire shape.
+namespace
+{
+   std::vector<char> exact_buffer(std::string_view message) { return {message.begin(), message.end()}; }
+}
+
+struct vec2
+{
+   int x{};
+   int y{};
+};
+
+struct unterminated_api
+{
+   int value{};
+   vec2 position{};
+   std::variant<double, std::string> choice{};
+};
+
+// A type deduced by shape rather than by a tag: resolving it walks to the end of the buffer.
+struct amount
+{
+   double value{};
+};
+
+template <>
+struct glz::meta<amount>
+{
+   static constexpr auto value = &amount::value;
+};
+
+struct inferred_api
+{
+   std::variant<std::string, amount> measure{};
+};
+
+suite unterminated_buffer_tests = [] {
+   "scalar_body_ending_at_buffer_end"_test = [] {
+      glz::registry<> registry;
+      unterminated_api api{};
+      registry.on(api);
+
+      const auto request = exact_buffer(make_request("/value", "7"));
+      std::string response_buf;
+      registry.call(std::span<const char>{request.data(), request.size()}, response_buf);
+
+      expect(api.value == 7) << "Scalar body should be applied";
+      auto result = glz::repe::parse_request({response_buf.data(), response_buf.size()});
+      expect(bool(result)) << "Response should be parseable";
+      expect(result.request.error() == glz::error_code::none) << "No error expected";
+   };
+
+   "object_body_ending_at_buffer_end"_test = [] {
+      glz::registry<> registry;
+      unterminated_api api{};
+      registry.on(api);
+
+      const auto request = exact_buffer(make_request("/position", R"({"x":3,"y":4})"));
+      std::string response_buf;
+      registry.call(std::span<const char>{request.data(), request.size()}, response_buf);
+
+      expect(api.position.x == 3) << "Object body should be applied";
+      expect(api.position.y == 4) << "Object body should be applied";
+      auto result = glz::repe::parse_request({response_buf.data(), response_buf.size()});
+      expect(result.request.error() == glz::error_code::none) << "No error expected";
+   };
+
+   "truncated_body_is_an_error"_test = [] {
+      glz::registry<> registry;
+      unterminated_api api{};
+      registry.on(api);
+
+      const auto request = exact_buffer(make_request("/position", R"({"x":3,"y":4)"));
+      std::string response_buf;
+      registry.call(std::span<const char>{request.data(), request.size()}, response_buf);
+
+      auto result = glz::repe::parse_request({response_buf.data(), response_buf.size()});
+      expect(result.request.error() != glz::error_code::none) << "Truncated body should not report success";
+   };
+
+   "whitespace_only_body_is_an_error"_test = [] {
+      glz::registry<> registry;
+      unterminated_api api{};
+      api.value = 99;
+      registry.on(api);
+
+      const auto request = exact_buffer(make_request("/value", "   "));
+      std::string response_buf;
+      registry.call(std::span<const char>{request.data(), request.size()}, response_buf);
+
+      expect(api.value == 99) << "A body holding no value must not be applied";
+      auto result = glz::repe::parse_request({response_buf.data(), response_buf.size()});
+      expect(result.request.error() == glz::error_code::no_read_input) << "Expected no_read_input";
+   };
+
+   // A variant alternative that resolves at the end of the buffer rewinds its iterator, so the
+   // read completes having reported zero bytes consumed. read_params must report that as success.
+   "variant_body_ending_at_buffer_end_gets_a_response"_test = [] {
+      glz::registry<> registry;
+      inferred_api api{};
+      registry.on(api);
+
+      const auto request = exact_buffer(make_request("/measure", "42.5"));
+      std::string response_buf;
+      registry.call(std::span<const char>{request.data(), request.size()}, response_buf);
+
+      expect(!response_buf.empty()) << "A non-notify request must always get a response";
+      expect(api.measure.index() == 1) << "Deduced alternative should be applied";
+      expect(std::get<amount>(api.measure).value == 42.5);
+      auto result = glz::repe::parse_request({response_buf.data(), response_buf.size()});
+      expect(result.request.error() == glz::error_code::none) << "No error expected";
+   };
+
+   "tagless_variant_body_ending_at_buffer_end"_test = [] {
+      glz::registry<> registry;
+      unterminated_api api{};
+      registry.on(api);
+
+      const auto request = exact_buffer(make_request("/choice", "42.5"));
+      std::string response_buf;
+      registry.call(std::span<const char>{request.data(), request.size()}, response_buf);
+
+      expect(!response_buf.empty()) << "A non-notify request must always get a response";
+      expect(api.choice.index() == 0);
+      expect(std::get<double>(api.choice) == 42.5);
    };
 };
 
