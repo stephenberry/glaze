@@ -4787,6 +4787,16 @@ suite beve_v2_variant_resolution = [] {
       const auto t_deep = bench_ms(deep, reps);
       // Measured 3.9-4.1x linear against 13.3-14.2x quadratic, so 8x separates them with margin.
       expect(t_deep < t_shallow * 8.0) << "read time grew " << (t_deep / t_shallow) << "x for 4x the depth";
+
+      // Past the limit, every level fails identically. Each of the variant reader's recovery paths
+      // -- the other object alternatives, the lenient conversion pass, the last-resort try_each --
+      // would re-parse the whole subtree for a failure no alternative can fix, once per level, which
+      // is exponential rather than merely wasteful: 300 levels did not finish in over an hour. This
+      // must error immediately, so a regression shows up as a hung test rather than a failed
+      // assertion.
+      deep_v past_limit{};
+      expect(glz::read_beve(past_limit, build(glz::max_recursive_depth_limit + 50)) ==
+             glz::error_code::exceeded_max_recursive_depth);
    };
 
    "a failed deduction falls back to the other object alternatives"_test = [] {

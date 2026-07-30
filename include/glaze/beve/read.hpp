@@ -644,7 +644,9 @@ namespace glz
          bool matched = false;
          const auto start = it;
          for_each<variant_size>([&]<size_t I>() {
-            if (matched) {
+            if (matched || input_error == error_code::exceeded_max_recursive_depth) {
+               // Nesting past the limit is a property of the input: no other alternative can read it,
+               // and re-parsing the subtree per alternative at every level is exponential.
                return;
             }
             it = start;
@@ -686,7 +688,10 @@ namespace glz
                return;
             }
          }
-         if (try_each_pass<Opts>(value, ctx, it, end, input_error)) {
+         // A lenient retry cannot make over-nested input readable, and running it doubles the work at
+         // every level of a deep nest.
+         if (input_error != error_code::exceeded_max_recursive_depth &&
+             try_each_pass<Opts>(value, ctx, it, end, input_error)) {
             return;
          }
          it = start;
@@ -759,7 +764,12 @@ namespace glz
          if (!bool(ctx.error)) {
             return true;
          }
-         if (!try_others || ctx.error == error_code::missing_key) {
+         // The missing_key exclusion is the caller's own strictness (see below). Nesting past the depth
+         // limit is excluded for a different reason: it is a property of the input rather than of the
+         // alternative, so retrying re-parses the whole subtree for nothing -- once per alternative,
+         // at every level of the nest, which is exponential in the depth.
+         if (!try_others || ctx.error == error_code::missing_key ||
+             ctx.error == error_code::exceeded_max_recursive_depth) {
             return false;
          }
 
@@ -1056,8 +1066,10 @@ namespace glz
             }
 
             // The missing_key exclusion applies here too: the last resort must not answer a strict
-            // read with some other alternative that happens to tolerate the absent key.
-            if (not authoritative && ctx.error != error_code::missing_key) {
+            // read with some other alternative that happens to tolerate the absent key. Over-nested
+            // input is likewise not worth another parse of the whole subtree.
+            if (not authoritative && ctx.error != error_code::missing_key &&
+                ctx.error != error_code::exceeded_max_recursive_depth) {
                const auto first_error = ctx.error;
                const auto first_error_it = it;
                // Last resort: an alternative outside the recognized object categories (a custom
