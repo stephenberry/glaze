@@ -35,6 +35,8 @@ env:
 jobs:
   x86-backends:
     runs-on: ubuntu-24.04
+    # force_sde targets the AVX-512 job, so skip the jobs a dispatch run would only repeat.
+    if: ${{ !inputs.force_sde }}
     name: ${{ matrix.name }}
     strategy:
       fail-fast: false
@@ -184,6 +186,8 @@ jobs:
 
   wasm:
     runs-on: ubuntu-24.04
+    # force_sde targets the AVX-512 job, so skip the jobs a dispatch run would only repeat.
+    if: ${{ !inputs.force_sde }}
     name: WebAssembly SIMD128
     steps:
       - uses: actions/checkout@v6
@@ -233,6 +237,8 @@ jobs:
 
   generic-widths:
     runs-on: ubuntu-24.04
+    # force_sde targets the AVX-512 job, so skip the jobs a dispatch run would only repeat.
+    if: ${{ !inputs.force_sde }}
     name: Portable backend (widths 16/32/64)
     # Runs the width-generic algorithm at every register size in plain C++. This is what makes a
     # 64 byte backend testable on hosts that cannot execute AVX-512 at all.
