@@ -79,7 +79,10 @@ namespace glz
       if constexpr (Opts.format == JSON && !check_null_terminated(Opts)) {
          // Not unlikely: a scalar or object body that ends with the buffer lands here on every
          // successful read, which is the ordinary case for a registry parsing a wire span.
-         if (ctx.error == error_code::end_reached && ctx.depth == 0 && it == end) {
+         // The span must be non-empty and must run forwards. A streaming read hands in a window
+         // origin that consumed its value in an earlier window, or that overshoots on an error
+         // path; neither is an absent value.
+         if (ctx.error == error_code::end_reached && ctx.depth == 0 && it == end && start < it) {
             context ws_ctx{}; // only written to when skip_ws parses a comment; the result is unused
             const char* consumed = start;
             skip_ws<Opts>(ws_ctx, consumed, it);
@@ -237,16 +240,31 @@ namespace glz
       // Calculate final consumed bytes
       // Note: During streaming, the buffer may have been refilled multiple times,
       // so we use bytes_consumed() which tracks total consumption
-      const size_t final_consumed = static_cast<size_t>(it - ctx.stream.data());
+      const char* const window = ctx.stream.data();
+      const size_t final_consumed = static_cast<size_t>(it - window);
       consume_buffer(buffer, final_consumed);
 
-      // Not finalize_top_level_read: StreamingOpts forces null_terminated off, so a stream holding
-      // nothing but whitespace ends in the same end_reached this clears to success, but the span it
-      // would have to inspect is not this buffer. Refills relocate and consume it, so the bytes the
-      // parse walked are no longer addressable as [start, it) by the time we get here. Bounding
-      // this case needs the streaming state to carry the answer out of the parse; until it does,
-      // read_streaming keeps the behavior it has always had.
-      finalize_read_context<StreamingOpts>(ctx);
+      // Settle end_reached the same way a buffered read does. StreamingOpts forces null_terminated
+      // off, so a stream that held no value ends in the same end_reached a value ending with the
+      // buffer does, and telling them apart means looking at what the parse walked.
+      //
+      // Only an exhausted stream can be said to have held no value, which is why this waits until
+      // after consume_buffer: at_eof also requires the window to be drained. A stream that still
+      // has data instead ran out of window -- nothing refills while the top level skips leading
+      // whitespace, so whitespace wider than the window stops the parse short of a value that is
+      // really there. That is a separate limitation of streaming, and it keeps the behavior it has
+      // always had rather than being reported as an absent value.
+      //
+      // `window` still addresses the bytes the parse walked: consume only advances the buffer's
+      // read position, it does not move or release them. It is taken from the streaming state
+      // rather than from an iterator captured before the parse because a refill relocates the
+      // buffer, and it can overshoot `it` on an error path, which is why the helper compares.
+      if (ctx.stream.at_eof()) {
+         finalize_top_level_read<StreamingOpts>(ctx, window, it, end);
+      }
+      else {
+         finalize_read_context<StreamingOpts>(ctx);
+      }
 
       if (bool(ctx.error)) {
          return {buffer.bytes_consumed(), ctx.error, ctx.custom_error_message};

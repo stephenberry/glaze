@@ -4079,6 +4079,69 @@ suite additional_edge_cases = [] {
       expect(r.id == 42);
       expect(r.name == "test");
    };
+
+   // A stream is read without a terminator, so running out of input while looking for a value
+   // reports the same end_reached a value ending with the buffer does. A stream that never held a
+   // value has to be rejected the way an empty one is, rather than reporting success over an
+   // untouched destination.
+   "stream holding no value"_test = [] {
+      for (std::string_view blank : {" ", "   ", "\t\n\r "}) {
+         std::istringstream iss{std::string{blank}};
+         glz::istream_buffer<> buffer(iss);
+
+         int i{42};
+         expect(glz::read_json(i, buffer) == glz::error_code::no_read_input) << blank;
+         expect(i == 42) << "destination must be left alone";
+      }
+
+      // read_streaming directly: read_jsonc has no streaming overload, so it would take the
+      // buffered path and never reach the code under test.
+      for (std::string_view commented : {"// hi\n", " /* block */ "}) {
+         std::istringstream iss{std::string{commented}};
+         glz::istream_buffer<> buffer(iss);
+
+         int i{42};
+         expect(glz::read_streaming<glz::opts{.comments = true}>(i, buffer) == glz::error_code::no_read_input)
+            << commented;
+         expect(i == 42) << "destination must be left alone";
+      }
+   };
+
+   // Nothing refills while the top level skips leading whitespace, so whitespace wider than the
+   // window stops the parse short of a value that is really there. Only an exhausted stream can be
+   // said to have held no value, so this case must not be reported as one. The read is left as it
+   // has always been -- the destination is untouched and no error is raised -- which is a known
+   // limitation of streaming rather than something this test endorses. It is pinned so that a
+   // change to either half is deliberate.
+   "leading whitespace wider than the window is not an absent value"_test = [] {
+      std::istringstream iss{std::string(600, ' ') + "7"};
+      glz::basic_istream_buffer<std::istringstream, 512> buffer(iss);
+
+      int i{42};
+      expect(glz::read_streaming<glz::opts{}>(i, buffer) != glz::error_code::no_read_input)
+         << "the stream has input; it is the window that ran out";
+      expect(i == 42) << "the value is past the window and is not reached";
+   };
+
+   // The absent-value check looks at the window the parse ended in. A read that refilled consumed
+   // its value in an earlier window, so the check must not mistake a short final span for one.
+   "value read across refills is not mistaken for an absent value"_test = [] {
+      std::string json = "[";
+      for (int i = 0; i < 400; ++i) {
+         if (i) json += ',';
+         json += std::to_string(i);
+      }
+      json += "]";
+      json += std::string(600, ' '); // trailing whitespace outlasting the window
+
+      std::istringstream iss{json};
+      glz::basic_istream_buffer<std::istringstream, 512> buffer(iss); // forces many refills
+
+      std::vector<int> v{};
+      expect(!glz::read_json(v, buffer));
+      expect(v.size() == 400u);
+      expect(v[399] == 399);
+   };
 };
 
 int main() { return 0; }
