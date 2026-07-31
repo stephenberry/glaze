@@ -134,6 +134,14 @@ target_link_libraries(u8string_test PRIVATE glz_test_common)
 
 add_test(NAME u8string_test COMMAND u8string_test)
 
+## UTF-8 validation test - exercises whichever SIMD backend the build selected
+
+add_executable(utf8_validation_test utf8_validation_test.cpp)
+
+target_link_libraries(utf8_validation_test PRIVATE glz_test_common)
+
+add_test(NAME utf8_validation_test COMMAND utf8_validation_test)
+
 ## JSON Patch test - RFC 6902
 
 add_executable(json_patch_test json_patch_test.cpp)

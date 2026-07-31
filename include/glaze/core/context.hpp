@@ -94,7 +94,9 @@ namespace glz
       patch_test_failed, // Test operation value mismatch (unique to RFC 6902 test op)
       // Buffer errors
       buffer_overflow, // Write would exceed fixed buffer capacity
-      invalid_length // Length exceeds allowed limit (buffer size or user-configured max)
+      invalid_length, // Length exceeds allowed limit (buffer size or user-configured max)
+      // Encoding errors
+      invalid_utf8 // Malformed UTF-8 in a string (only reported when validate_utf8 is enabled)
    };
 
    // Unified error context for all read/write operations

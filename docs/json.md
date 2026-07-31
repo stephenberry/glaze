@@ -736,7 +736,7 @@ auto ec = glz::write_json(large_object, buffer);
 
 ## JSON Conformance
 
-Glaze is fully RFC 8259 compliant with UTF-8 validation. By default, it uses two optimizations:
+Glaze is RFC 8259 compliant. UTF-8 encoding is always validated when reading. Two further checks are off by default for performance:
 
 - `validate_skipped = false`: Faster parsing by not fully validating skipped values (does not affect resulting C++ objects)
 - `validate_trailing_whitespace = false`: Stops parsing after the target object
@@ -749,8 +749,25 @@ struct strict_opts : glz::opts {
     bool validate_trailing_whitespace = true;
 };
 
-auto ec = glz::read<strict_opts>(obj, json_data);
+auto ec = glz::read<strict_opts{}>(obj, json_data);
 ```
+
+`glz::validate_json` and `glz::validate_jsonc` enable both, so a document that passes them is fully RFC 8259 conformant.
+
+### UTF-8 Validation
+
+RFC 8259 section 8.1 requires JSON text to be encoded in UTF-8, and Glaze enforces it on every read. There is no option to disable it: read input is by definition someone else's data, and accepting malformed encodings silently propagates them into your program.
+
+```cpp
+std::vector<std::string> v{};
+auto ec = glz::read_json(v, "[\"a\xFF\"]"); // ec == glz::error_code::invalid_utf8
+```
+
+This rejects lone continuation bytes, overlong encodings, truncated sequences, encoded UTF-16 surrogate halves, and code points above U+10FFFF. Escape sequences are validated separately, so `"\ud800"` without a matching low surrogate is rejected as well.
+
+Validation uses the Lemire & Keiser vector algorithm (SSSE3 or AArch64 NEON, with a scalar fallback). Pure ASCII strings skip it entirely, because the scan that finds the closing quote also detects that no byte has its high bit set. On real-world corpora the cost ranges from nothing for ASCII documents to roughly 8% for heavily non-ASCII text.
+
+Writing is **not** validated. Data you serialize is your own, so Glaze does not pay to re-check it; validate before writing if you have a specific reason to. Note that this makes round-tripping asymmetric: a `std::string` holding non-UTF-8 bytes will write successfully and then fail to read back.
 
 ## See Also
 

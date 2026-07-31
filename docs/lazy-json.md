@@ -44,12 +44,12 @@ if (result) {
 
 ## UTF-8 Validation
 
-To maximize performance, `lazy_json` does not validate UTF-8 encoding during initial parsing or field scanning. Validation only occurs when you extract string values:
+To maximize performance, `lazy_json` does no validation during initial parsing or field scanning. Validation happens when you extract a string value:
 
-- **`get<std::string>()`**: Processes escape sequences (`\n`, `\uXXXX`, etc.) and validates UTF-8 encoding
+- **`get<std::string>()`**: Processes escape sequences (`\n`, `\uXXXX`, etc.) and validates UTF-8 encoding, failing with `error_code::invalid_utf8` on malformed input
 - **`get<std::string_view>()`**: Returns a raw view into the JSON buffer with no validation or processing
 
-If you need validated UTF-8 strings and unescaping, use `get<std::string>()`.  Otherwise, `get<std::string_view>()` is faster.
+If you need validated UTF-8 strings and unescaping, use `get<std::string>()`. Otherwise `get<std::string_view>()` is faster, but the bytes it returns are unchecked. To validate a whole document up front, run `glz::validate_json` over the buffer. See [Reading](./json.md#utf-8-validation).
 
 > glz::lazy_json will ensure that any instantiated C++ values are valid JSON (except for std::string_view), but it doesn't validate the entire document, because this is often not a requirement for lazy parsing. If you want high performance full validation it is best to use C++ structs. Or, use glz::validate_json for pure validation passes.
 
