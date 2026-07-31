@@ -1112,6 +1112,7 @@ namespace glz
 
                if (size_t(end - it) >= 8) {
                   auto start = it;
+                  uint64_t ascii_acc{};
                   const auto end8 = end - 8;
                   while (true) {
                      if (it >= end8) [[unlikely]] {
@@ -1123,6 +1124,7 @@ namespace glz
                      if constexpr (std::endian::native == std::endian::big) {
                         chunk = std::byteswap(chunk);
                      }
+                     ascii_acc |= chunk;
                      const uint64_t test_chars = has_quote(chunk);
                      if (test_chars) {
                         it += (countr_zero(test_chars) >> 3);
@@ -1147,7 +1149,10 @@ namespace glz
                      --it;
                   }
 
+                  // The byte-wise tail keeps feeding the accumulator: it has to cover every byte of
+                  // the string, or a non-ASCII byte reached here would be waved through unvalidated.
                   for (; it < end; ++it) {
+                     ascii_acc |= uint8_t(*it);
                      if (*it == '"') {
                         auto* prev = it - 1;
                         while (*prev == '\\') {
@@ -1164,7 +1169,7 @@ namespace glz
 
                continue_decode:
 
-                  if (validate_utf8_span(ctx, start, it)) [[unlikely]] {
+                  if (validate_utf8_span(ctx, start, it, ascii_acc)) [[unlikely]] {
                      return;
                   }
 
@@ -1568,6 +1573,7 @@ namespace glz
 
                if (size_t(end - it) >= 8) {
                   auto start = it;
+                  uint64_t ascii_acc{};
                   const auto end8 = end - 8;
                   while (true) {
                      if (it >= end8) [[unlikely]] {
@@ -1579,6 +1585,7 @@ namespace glz
                      if constexpr (std::endian::native == std::endian::big) {
                         chunk = std::byteswap(chunk);
                      }
+                     ascii_acc |= chunk;
                      const uint64_t test_chars = has_quote(chunk);
                      if (test_chars) {
                         it += (countr_zero(test_chars) >> 3);
@@ -1603,7 +1610,10 @@ namespace glz
                      --it;
                   }
 
+                  // The byte-wise tail keeps feeding the accumulator: it has to cover every byte of
+                  // the string, or a non-ASCII byte reached here would be waved through unvalidated.
                   for (; it < end; ++it) {
+                     ascii_acc |= uint8_t(*it);
                      if (*it == '"') {
                         auto* prev = it - 1;
                         while (*prev == '\\') {
@@ -1620,7 +1630,7 @@ namespace glz
 
                continue_decode_u8:
 
-                  if (validate_utf8_span(ctx, start, it)) [[unlikely]] {
+                  if (validate_utf8_span(ctx, start, it, ascii_acc)) [[unlikely]] {
                      return;
                   }
 
