@@ -99,8 +99,19 @@ The zero-copy API uses these types:
 - **`glz::repe::parse_request(span)`**: Parses a request with zero-copy. Returns a `parse_result` containing a `request_view`.
 - **`glz::repe::request_view`**: Views into the original request buffer (query and body are `std::string_view`).
 - **`glz::repe::response_builder`**: Writes responses directly to a buffer without intermediate copies.
+- **`glz::repe::read_params<Opts>(value, state)`**: Reads a request body into `value`. Returns `true` on success; on failure it has already written the error response, so a custom handler should just return.
 
 See [REPE Buffer Handling](repe-buffer.md) for detailed documentation of these types.
+
+#### `read_params` returns `bool`
+
+```cpp
+if (!glz::repe::read_params<Opts>(params, state)) {
+   return; // the error response is already written
+}
+```
+
+Through v7.9.1 it returned the number of bytes consumed and callers tested that count for zero. That test is wrong on a buffer with no null terminator, which is every buffer the registry reads: a variant alternative that resolves at the end of the buffer rewinds its iterator, so a completed read can report zero bytes consumed. The registry took that for a failure and sent no response at all, leaving a non-notify request unanswered. Testing the returned `bool` is correct in every case; the count was never used for anything else.
 
 ## Registering Multiple Objects with `glz::merge`
 
