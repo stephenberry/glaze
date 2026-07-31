@@ -4218,4 +4218,103 @@ suite streaming_buffer_dispatch_tests = [] {
    };
 };
 
+// Routing every format to read_streaming only removes the overrun; it does not give a reader
+// refill points it never had. JSON is the only reader that has them, so for the rest a document
+// longer than the window used to end in an answer that blamed the document: NDJSON reported
+// success carrying the elements that fit, BEVE reported unexpected_end. Both now say which it was.
+suite non_streaming_format_reporting = [] {
+   static_assert(glz::format_supports_streaming<glz::JSON>);
+   static_assert(!glz::format_supports_streaming<glz::NDJSON>,
+                 "NDJSON's line loop cannot refill between lines, whatever its per-line values do");
+   static_assert(!glz::format_supports_streaming<glz::BEVE>);
+
+   "NDJSON larger than the window does not silently truncate"_test = [] {
+      std::vector<int> src{};
+      for (int i = 0; i < 400; ++i) src.push_back(i);
+      std::string doc{};
+      expect(!glz::write_ndjson(src, doc));
+      expect(doc.size() > narrow_window) << "the document has to outrun the window to test anything";
+
+      std::istringstream iss{doc};
+      glz::basic_istream_buffer<std::istringstream, narrow_window> buffer(iss);
+
+      std::vector<int> v{};
+      const auto ec = glz::read_streaming<glz::opts{.format = glz::NDJSON}>(v, buffer);
+      expect(ec == glz::error_code::streaming_unsupported) << "a short read must be reported, not returned as success";
+   };
+
+   "BEVE larger than the window names the window"_test = [] {
+      std::vector<int> src{};
+      for (int i = 0; i < 400; ++i) src.push_back(i);
+      std::string doc{};
+      expect(!glz::write_beve(src, doc));
+      expect(doc.size() > narrow_window);
+
+      std::istringstream iss{doc};
+      glz::basic_istream_buffer<std::istringstream, narrow_window> buffer(iss);
+
+      std::vector<int> v{};
+      const auto ec = glz::read_streaming<glz::opts{.format = glz::BEVE}>(v, buffer);
+      expect(ec == glz::error_code::streaming_unsupported)
+         << "unexpected_end would blame the document for a window that was too small";
+   };
+
+   // The three ways a non-streaming read is legitimate. Each one must keep its own answer, because
+   // the check keys on whether the source was exhausted rather than on whether the window was.
+   "a document that fits still reads"_test = [] {
+      std::vector<int> src{1, 2, 3, 4, 5};
+      std::string doc{};
+      expect(!glz::write_beve(src, doc));
+      expect(doc.size() < narrow_window);
+
+      std::istringstream iss{doc};
+      glz::basic_istream_buffer<std::istringstream, narrow_window> buffer(iss);
+
+      std::vector<int> v{};
+      expect(!glz::read_streaming<glz::opts{.format = glz::BEVE}>(v, buffer));
+      expect(v.size() == 5u);
+   };
+
+   "a value followed by trailing bytes is not a short read"_test = [] {
+      std::vector<int> src{1, 2, 3, 4, 5};
+      std::string doc{};
+      expect(!glz::write_beve(src, doc));
+      const std::string two = doc + doc; // second document left unread in the same window
+      expect(two.size() < narrow_window);
+
+      std::istringstream iss{two};
+      glz::basic_istream_buffer<std::istringstream, narrow_window> buffer(iss);
+
+      std::vector<int> v{};
+      expect(!glz::read_streaming<glz::opts{.format = glz::BEVE}>(v, buffer))
+         << "the window is undrained but the source is exhausted, so the read saw everything it needed";
+      expect(v.size() == 5u);
+   };
+
+   "genuinely malformed input keeps its own error"_test = [] {
+      std::vector<int> src{1, 2, 3, 4, 5};
+      std::string doc{};
+      expect(!glz::write_beve(src, doc));
+      const std::string truncated = doc.substr(0, doc.size() - 3);
+
+      std::istringstream iss{truncated};
+      glz::basic_istream_buffer<std::istringstream, narrow_window> buffer(iss);
+
+      std::vector<int> v{};
+      const auto ec = glz::read_streaming<glz::opts{.format = glz::BEVE}>(v, buffer);
+      expect(ec == glz::error_code::unexpected_end)
+         << "the whole source fit in the window, so the document really is truncated";
+   };
+
+   // The trait is what exempts JSON, so pin that the exemption is live.
+   "JSON larger than the window still streams to completion"_test = [] {
+      std::istringstream iss{oversized_array()};
+      glz::basic_istream_buffer<std::istringstream, narrow_window> buffer(iss);
+
+      std::vector<int> v{};
+      expect(!glz::read_streaming<glz::opts{}>(v, buffer));
+      expect(v.size() == 400u);
+   };
+};
+
 int main() { return 0; }

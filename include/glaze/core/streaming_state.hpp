@@ -35,6 +35,7 @@ namespace glz
       void (*consume)(void*, size_t) = nullptr;
       bool (*refill)(void*) = nullptr;
       bool (*eof)(void*) = nullptr;
+      bool (*source_eof)(void*) = nullptr;
 
       // Check if streaming is enabled
       bool enabled() const noexcept { return buffer_ptr != nullptr; }
@@ -53,6 +54,11 @@ namespace glz
 
       // Check if at end of stream
       bool at_eof() const noexcept { return eof(buffer_ptr); }
+
+      // Whether the source has been read to its end, whether or not the window is drained.
+      // at_eof() requires both; this asks only the first, which is how a reader tells input it has
+      // seen in full from input the window cut short.
+      bool source_at_eof() const noexcept { return source_eof(buffer_ptr); }
 
       // Consume up to current position and refill
       // Returns new iterators via out parameters
@@ -78,6 +84,17 @@ namespace glz
       state.consume = [](void* p, size_t n) { static_cast<Buffer*>(p)->consume(n); };
       state.refill = [](void* p) -> bool { return static_cast<Buffer*>(p)->refill(); };
       state.eof = [](void* p) -> bool { return static_cast<Buffer*>(p)->eof(); };
+      if constexpr (requires(Buffer& b) {
+                       { b.source_exhausted() } -> std::convertible_to<bool>;
+                    }) {
+         state.source_eof = [](void* p) -> bool { return static_cast<Buffer*>(p)->source_exhausted(); };
+      }
+      else {
+         // A buffer that does not distinguish the two can only offer the stricter answer. That is
+         // safe in the direction that matters: it never claims the source is exhausted when it is
+         // not, so nothing concludes it has seen input it has not.
+         state.source_eof = [](void* p) -> bool { return static_cast<Buffer*>(p)->eof(); };
+      }
       return state;
    }
 

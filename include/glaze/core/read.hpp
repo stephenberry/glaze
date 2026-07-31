@@ -257,6 +257,33 @@ namespace glz
          finalize_read_context<StreamingOpts>(ctx);
       }
 
+      // Only the JSON reader has refill points (see format_supports_streaming). Every other reader
+      // parses whatever the first window happens to hold and stops at its edge, and what it reports
+      // there does not name the window as the cause: NDJSON returns success carrying only the
+      // elements that fit, which is silent data loss, and BEVE returns unexpected_end, which reads
+      // as malformed input. Say what actually happened instead.
+      //
+      // The question is whether the reader was shown the whole document, so it asks source_at_eof
+      // rather than at_eof: at_eof also demands a drained window, which would call a value that
+      // legitimately left trailing bytes behind a truncated read. Once the source is exhausted the
+      // window holds everything there will ever be, so whatever the reader concluded, it concluded
+      // on the full input and stands.
+      //
+      // With input still pending, two outcomes are the window's doing rather than the document's:
+      //   - an error, because a reader that cannot refill has no way to distinguish input that is
+      //     malformed from input it simply has not been shown. Its own code would assert the first.
+      //   - success with it == end, which is the reader having run out of window and called that
+      //     the end. A parse that stopped short of the edge found a real end and is left alone.
+      // `end` is still the window's edge to compare against: a reader with no refill points never
+      // moved it.
+      if constexpr (!format_supports_streaming<Opts.format>) {
+         if (!ctx.stream.source_at_eof() && (bool(ctx.error) || it == end)) {
+            ctx.error = error_code::streaming_unsupported;
+            ctx.custom_error_message =
+               "the document is larger than the buffer window and this format's reader cannot refill";
+         }
+      }
+
       if (bool(ctx.error)) {
          return {buffer.bytes_consumed(), ctx.error, ctx.custom_error_message};
       }

@@ -150,6 +150,12 @@ namespace glz
       // Check if stream is exhausted and buffer is empty
       bool eof() const noexcept { return eof_reached_ && empty(); }
 
+      // Whether the underlying stream has been read to its end, regardless of how much of the
+      // current window is still unread. Distinct from eof(): once this is true every byte the
+      // stream will ever produce is already in the buffer, which is what a reader needs to know
+      // to tell "this input is malformed" from "I have not been shown all of it yet".
+      bool source_exhausted() const noexcept { return eof_reached_; }
+
       // Reset for reuse with same stream
       void reset()
       {
