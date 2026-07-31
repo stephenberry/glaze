@@ -59,7 +59,13 @@ namespace jsonrpc_fuzz
       std::optional<double> maybe{};
       std::variant<std::string, amount> measure{};
 
-      std::function<int32_t(int32_t)> doubled = [](int32_t v) { return v * 2; };
+      // The fuzzer supplies these arguments, so every one of them arrives at its own extremes.
+      // Signed overflow in the body of a target is undefined behavior in the target, not a finding
+      // about the registry, and UBSan stops the run on it either way -- so the arithmetic here goes
+      // through unsigned, where wrapping is defined and the result is still a function of the input.
+      std::function<int32_t(int32_t)> doubled = [](int32_t v) {
+         return int32_t(uint32_t(v) * 2u);
+      };
       std::function<std::string(const std::string&)> greet = [](const std::string& who) { return "hi " + who; };
       std::function<point(const point&)> midpoint = [](const point& p) -> point { return {p.x / 2, p.y / 2}; };
       std::function<double(std::vector<double>&)> total = [](std::vector<double>& v) {
@@ -79,12 +85,14 @@ namespace jsonrpc_fuzz
    {
       int32_t counter{};
 
+      // Wraps rather than overflows, for the reason given on `doubled` above. `counter` accumulates
+      // across inputs, so it reaches its extremes on its own even when no single argument is large.
       int32_t scale(int32_t v)
       {
-         counter += v;
-         return v * 3;
+         counter = int32_t(uint32_t(counter) + uint32_t(v));
+         return int32_t(uint32_t(v) * 3u);
       }
-      void bump() { ++counter; }
+      void bump() { counter = int32_t(uint32_t(counter) + 1u); }
       point shift(const point& p) { return {p.x + 1, p.y + 1}; }
    };
 }
