@@ -4142,6 +4142,41 @@ suite additional_edge_cases = [] {
       expect(v.size() == 400u);
       expect(v[399] == 399);
    };
+
+   // A stream that ends with containers still open is truncated input. end_reached is documented as
+   // a non-error code, so surfacing it here would tell the caller the read succeeded and merely
+   // stopped early -- exactly the wrong reading of a stream that was cut off.
+   "a truncated stream reports unexpected_end"_test = [] {
+      for (std::string_view truncated : {"[1,2", "[[1,2],[3", "{\"a\":1", "[{\"a\":1}"}) {
+         std::istringstream iss{std::string{truncated}};
+         glz::istream_buffer<> buffer(iss);
+
+         glz::generic j{};
+         const auto ec = glz::read_json(j, buffer);
+         expect(ec == glz::error_code::unexpected_end) << truncated;
+         expect(ec != glz::error_code::end_reached) << truncated;
+      }
+   };
+
+   // The same input, but long enough that the reader refills its way through several windows before
+   // the source runs dry. The truncation is then many windows away from where the parse started,
+   // which is the case a check written against the first window would miss.
+   "a truncation found after refills reports unexpected_end"_test = [] {
+      std::string json = "[";
+      for (int i = 0; i < 400; ++i) {
+         if (i) json += ',';
+         json += std::to_string(i);
+      }
+      // no closing bracket
+
+      std::istringstream iss{json};
+      glz::basic_istream_buffer<std::istringstream, 512> buffer(iss);
+
+      std::vector<int> v{};
+      const auto ec = glz::read_json(v, buffer);
+      expect(ec == glz::error_code::unexpected_end);
+      expect(ec != glz::error_code::end_reached);
+   };
 };
 
 // A streaming buffer satisfies `contiguous`, so before these entry points routed to read_streaming

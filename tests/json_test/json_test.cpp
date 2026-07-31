@@ -1214,6 +1214,31 @@ suite basic_types = [] {
       }
    };
 
+   "truncated input reports unexpected_end"_test = [] {
+      // A non-null-terminated buffer that runs out with containers still open is truncated input.
+      // end_reached is how the reader says "the buffer ran out here" and is documented as a
+      // non-error code, so it must not be what the caller sees: read that way it labels a partial
+      // parse a success that stopped early.
+      static constexpr glz::opts options{.null_terminated = false};
+      for (std::string_view truncated : {"[1,2", "[[1,2],[3", "[1,2,", "{\"a\":1", "[{\"a\":1}", "[ "}) {
+         const std::vector<char> buf{truncated.begin(), truncated.end()};
+         const std::string_view input{buf.data(), buf.size()};
+
+         glz::generic j{};
+         const auto ec = glz::read<options>(j, input);
+         expect(ec == glz::error_code::unexpected_end) << truncated;
+         expect(ec != glz::error_code::end_reached) << truncated;
+      }
+
+      // The other half of the same condition: a value whose last byte is the buffer's last byte
+      // also ends in end_reached, and there it means the read completed.
+      for (std::string_view complete : {"[1,2,3]", "[[1,2],[3]]", "{\"a\":1}", "42", "\"abc\"", "null"}) {
+         const std::vector<char> buf{complete.begin(), complete.end()};
+         glz::generic j{};
+         expect(glz::read<options>(j, std::string_view{buf.data(), buf.size()}) == glz::error_code::none) << complete;
+      }
+   };
+
    "bool write"_test = [] {
       std::string buffer{};
       expect(not glz::write_json(true, buffer));

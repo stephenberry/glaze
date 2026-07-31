@@ -27,7 +27,11 @@ namespace glz
       send_error,
       connection_failure,
       // Other errors
-      end_reached, // A non-error code for non-null terminated input buffers
+      // Internal to a non-null-terminated read: "the buffer ran out here", which is a completed
+      // read or a truncated one depending on the nesting depth. settle_end_reached decides which
+      // at the top level and replaces it with none or unexpected_end, so a read never returns it.
+      // json_stream_reader is the exception: it raises this itself to signal end of stream.
+      end_reached,
       partial_read_complete, // A non-error code for short circuiting partial reads
       no_read_input, //
       data_must_be_null_terminated, //

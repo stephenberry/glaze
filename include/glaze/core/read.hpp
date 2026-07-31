@@ -31,6 +31,24 @@ namespace glz
       return std::pair{it, end};
    }
 
+   // Only a non-null-terminated read produces end_reached, and only ever to say "the buffer ran
+   // out here"; whether that is an outcome or a failure is settled at the top level and nowhere
+   // else. ctx.depth carries the answer: a value that closed cleanly leaves it at zero, so the
+   // buffer ended exactly where the value did and the read succeeded. Any other depth means the
+   // buffer ran out with containers still open, which is truncated input.
+   //
+   // Both halves have to be handled here. end_reached is documented as a non-error code and
+   // callers are entitled to read it that way, so letting it escape hands them a truncated parse
+   // labeled as a success that happened to stop early. It reached the wire that way: since #2732
+   // every registry read runs non-null-terminated, so a truncated REPE body answered its client
+   // with end_reached in the response header.
+   GLZ_ALWAYS_INLINE void settle_end_reached(is_context auto&& ctx) noexcept
+   {
+      if (ctx.error == error_code::end_reached) {
+         ctx.error = (ctx.depth == 0) ? error_code::none : error_code::unexpected_end;
+      }
+   }
+
    template <auto Opts, is_context Ctx>
    GLZ_ALWAYS_INLINE void finalize_read_context(Ctx&& ctx) noexcept
    {
@@ -38,16 +56,10 @@ namespace glz
       if constexpr (check_partial_read(Opts)) {
          if (ctx.error == error_code::partial_read_complete) [[likely]] {
             ctx.error = error_code::none;
-         }
-         else if (ctx.error == error_code::end_reached && ctx.depth == 0) {
-            ctx.error = error_code::none;
+            return;
          }
       }
-      else {
-         if (ctx.error == error_code::end_reached && ctx.depth == 0) {
-            ctx.error = error_code::none;
-         }
-      }
+      settle_end_reached(ctx);
    }
 
    // Settle what a read that ran to the end of the buffer means, then finalize the context.
