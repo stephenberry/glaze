@@ -85,9 +85,9 @@ namespace glz
       finalize_read_context<Opts>(ctx);
    }
 
-   template <auto Opts, class T>
-      requires read_supported<T, Opts.format>
-   [[nodiscard]] error_ctx read(T& value, contiguous auto&& buffer, is_context auto&& ctx)
+   template <auto Opts, class T, contiguous Buf>
+      requires read_supported<T, Opts.format> && (!is_input_streaming<Buf>)
+   [[nodiscard]] error_ctx read(T& value, Buf&& buffer, is_context auto&& ctx)
    {
       static_assert(sizeof(decltype(*buffer.data())) == 1);
       using Buffer = std::remove_reference_t<decltype(buffer)>;
@@ -159,9 +159,9 @@ namespace glz
       return {size_t(it - start), ctx.error, ctx.custom_error_message};
    }
 
-   template <auto Opts, class T>
-      requires read_supported<T, Opts.format>
-   [[nodiscard]] error_ctx read(T& value, contiguous auto&& buffer)
+   template <auto Opts, class T, contiguous Buf>
+      requires read_supported<T, Opts.format> && (!is_input_streaming<Buf>)
+   [[nodiscard]] error_ctx read(T& value, Buf&& buffer)
    {
       format_context_t<Opts.format> ctx{};
       return read<Opts>(value, buffer, ctx);
@@ -257,6 +257,33 @@ namespace glz
          finalize_read_context<StreamingOpts>(ctx);
       }
 
+      // Only the JSON reader has refill points (see format_supports_streaming). Every other reader
+      // parses whatever the first window happens to hold and stops at its edge, and what it reports
+      // there does not name the window as the cause: NDJSON returns success carrying only the
+      // elements that fit, which is silent data loss, and BEVE returns unexpected_end, which reads
+      // as malformed input. Say what actually happened instead.
+      //
+      // The question is whether the reader was shown the whole document, so it asks source_at_eof
+      // rather than at_eof: at_eof also demands a drained window, which would call a value that
+      // legitimately left trailing bytes behind a truncated read. Once the source is exhausted the
+      // window holds everything there will ever be, so whatever the reader concluded, it concluded
+      // on the full input and stands.
+      //
+      // With input still pending, two outcomes are the window's doing rather than the document's:
+      //   - an error, because a reader that cannot refill has no way to distinguish input that is
+      //     malformed from input it simply has not been shown. Its own code would assert the first.
+      //   - success with it == end, which is the reader having run out of window and called that
+      //     the end. A parse that stopped short of the edge found a real end and is left alone.
+      // `end` is still the window's edge to compare against: a reader with no refill points never
+      // moved it.
+      if constexpr (!format_supports_streaming<Opts.format>) {
+         if (!ctx.stream.source_at_eof() && (bool(ctx.error) || it == end)) {
+            ctx.error = error_code::streaming_unsupported;
+            ctx.custom_error_message =
+               "the document is larger than the buffer window and this format's reader cannot refill";
+         }
+      }
+
       if (bool(ctx.error)) {
          return {buffer.bytes_consumed(), ctx.error, ctx.custom_error_message};
       }
@@ -270,5 +297,36 @@ namespace glz
    {
       streaming_context ctx{};
       return read_streaming<Opts>(value, std::forward<Buffer>(buffer), ctx);
+   }
+
+   // A streaming buffer satisfies `contiguous`, but the span it exposes is one window of a larger
+   // stream: it ends wherever the last fill stopped, it carries no terminator, and reading it as a
+   // flat buffer parses that window alone. Route it to read_streaming rather than let it bind to
+   // the overloads above, which would run with null_terminated on and read past the window's end.
+   // Doing this here rather than per format is what keeps read_jsonc, read_beve and every other
+   // helper that funnels through `read` from having to remember on its own.
+   template <auto Opts, class T, class Buffer>
+      requires read_supported<T, Opts.format> && is_input_streaming<std::remove_reference_t<Buffer>>
+   [[nodiscard]] error_ctx read(T& value, Buffer&& buffer, is_context auto&& ctx)
+   {
+      if constexpr (has_streaming_state<decltype(ctx)>) {
+         return read_streaming<Opts>(value, std::forward<Buffer>(buffer), ctx);
+      }
+      else {
+         // The caller's context has nowhere to hold the streaming state the parsers refill
+         // through, so the read runs on one that does and reports back through theirs.
+         streaming_context stream_ctx{};
+         const error_ctx ec = read_streaming<Opts>(value, std::forward<Buffer>(buffer), stream_ctx);
+         ctx.error = stream_ctx.error;
+         ctx.custom_error_message = stream_ctx.custom_error_message;
+         return ec;
+      }
+   }
+
+   template <auto Opts, class T, class Buffer>
+      requires read_supported<T, Opts.format> && is_input_streaming<std::remove_reference_t<Buffer>>
+   [[nodiscard]] error_ctx read(T& value, Buffer&& buffer)
+   {
+      return read_streaming<Opts>(value, std::forward<Buffer>(buffer));
    }
 }

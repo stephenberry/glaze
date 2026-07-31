@@ -80,7 +80,8 @@ struct glz::meta<glz::error_code>
                                     "patch_test_failed",
                                     "buffer_overflow",
                                     "invalid_length",
-                                    "invalid_utf8"};
+                                    "invalid_utf8",
+                                    "streaming_unsupported"};
    static constexpr std::array value{none, //
                                      version_mismatch, //
                                      invalid_header, //
@@ -159,5 +160,7 @@ struct glz::meta<glz::error_code>
                                      buffer_overflow, //
                                      invalid_length, //
                                      // Encoding errors
-                                     invalid_utf8};
+                                     invalid_utf8, //
+                                     // Streaming errors
+                                     streaming_unsupported};
 };
