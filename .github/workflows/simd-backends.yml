@@ -22,6 +22,11 @@ on:
       - '**/*.md'
       - 'docs/**'
   workflow_dispatch:
+    inputs:
+      force_sde:
+        description: 'Run the AVX-512 job under Intel SDE even when the runner supports AVX-512 natively'
+        type: boolean
+        default: false
 
 env:
   # Suites that exercise UTF-8 validation. Kept narrow so the emulated job stays quick.
@@ -96,7 +101,12 @@ jobs:
       - name: Decide between native AVX-512 and Intel SDE
         id: mode
         run: |
-          if grep -qw avx512bw /proc/cpuinfo; then
+          # GitHub's fleet mixes Intel parts that have AVX-512 with AMD parts that do not, so which
+          # branch runs is not up to us. force_sde exercises the emulated branch deliberately.
+          if [ "${{ inputs.force_sde }}" = "true" ]; then
+            echo "Intel SDE requested explicitly."
+            echo "emulator=sde" >> "$GITHUB_OUTPUT"
+          elif grep -qw avx512bw /proc/cpuinfo; then
             echo "Runner supports AVX-512BW natively."
             echo "emulator=" >> "$GITHUB_OUTPUT"
           else
@@ -108,11 +118,14 @@ jobs:
         if: steps.mode.outputs.emulator == 'sde'
         run: |
           set -euo pipefail
-          # Pinned so a silent upstream change cannot alter what is being tested. If Intel moves the
-          # download, this step fails loudly rather than skipping AVX-512 coverage.
-          SDE_TARBALL="sde-external-9.53.0-2025-03-16-lin.tar.xz"
-          SDE_URL="https://downloadmirror.intel.com/843185/${SDE_TARBALL}"
+          # Pinned by version and checksum so a moved or altered download fails loudly rather than
+          # silently changing what AVX-512 coverage means. Intel rotates the numeric mirror ID on
+          # every release, so bumping the version means bumping all three lines together.
+          SDE_TARBALL="sde-external-10.8.0-2026-03-15-lin.tar.xz"
+          SDE_URL="https://downloadmirror.intel.com/915934/${SDE_TARBALL}"
+          SDE_SHA256="50b320cd226acef7a491f5b321fc1be3c3c7984f9e27a456e64894b5b0979dd3"
           curl -fsSL --retry 3 "$SDE_URL" -o /tmp/sde.tar.xz
+          echo "${SDE_SHA256}  /tmp/sde.tar.xz" | sha256sum -c -
           mkdir -p /tmp/sde
           tar -xf /tmp/sde.tar.xz -C /tmp/sde --strip-components=1
           /tmp/sde/sde64 -version | head -3
