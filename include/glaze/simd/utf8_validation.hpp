@@ -25,9 +25,11 @@
 // GLZ_UTF8_GENERIC_WIDTH selects the portable backend below, which needs no target support, so it
 // enables the vector path on its own. Without it here the whole file would compile away on a host
 // with no usable backend, and the width-generic tests would silently degrade to testing the scalar
-// validator against itself.
+// validator against itself. It still defers to GLZ_DISABLE_SIMD: the GLZ_USE_* macros are already
+// suppressed by it, and a build asking for no vector path should get none regardless of which macro
+// would have selected one.
 #if defined(GLZ_USE_AVX512BW) || defined(GLZ_USE_AVX2) || defined(GLZ_USE_SSSE3) || defined(GLZ_USE_NEON64) || \
-   defined(GLZ_USE_WASM_SIMD128) || defined(GLZ_UTF8_GENERIC_WIDTH)
+   defined(GLZ_USE_WASM_SIMD128) || (defined(GLZ_UTF8_GENERIC_WIDTH) && !defined(GLZ_DISABLE_SIMD))
 #define GLZ_UTF8_SIMD
 #endif
 
