@@ -63,9 +63,7 @@ namespace jsonrpc_fuzz
       // Signed overflow in the body of a target is undefined behavior in the target, not a finding
       // about the registry, and UBSan stops the run on it either way -- so the arithmetic here goes
       // through unsigned, where wrapping is defined and the result is still a function of the input.
-      std::function<int32_t(int32_t)> doubled = [](int32_t v) {
-         return int32_t(uint32_t(v) * 2u);
-      };
+      std::function<int32_t(int32_t)> doubled = [](int32_t v) { return int32_t(uint32_t(v) * 2u); };
       std::function<std::string(const std::string&)> greet = [](const std::string& who) { return "hi " + who; };
       std::function<point(const point&)> midpoint = [](const point& p) -> point { return {p.x / 2, p.y / 2}; };
       std::function<double(std::vector<double>&)> total = [](std::vector<double>& v) {
