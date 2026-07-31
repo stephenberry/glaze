@@ -109,9 +109,14 @@ namespace glz::repe
       }
    }
 
-   // Returns false on error. The byte count the reader reports cannot stand in for success here:
-   // without a null terminator a variant alternative that resolves at the end of the buffer rewinds
-   // its iterator, so a completed read can report zero bytes consumed.
+   // Returns false on error, having written the error response -- unless the request is a
+   // notification, which is answered by silence whether the read succeeds or fails. A caller that
+   // returns immediately on false is correct in both cases; one that inspects state.out afterwards
+   // has to allow for it being untouched.
+   //
+   // The byte count the reader reports cannot stand in for success here: without a null terminator
+   // a variant alternative that resolves at the end of the buffer rewinds its iterator, so a
+   // completed read can report zero bytes consumed.
    template <auto Opts, class Value>
    bool read_params(Value&& value, auto&& state)
    {
@@ -555,8 +560,9 @@ namespace glz::repe
    concept is_state_view = std::same_as<std::decay_t<T>, state_view>;
 
    /// Read parameters from state_view (zero-copy from input buffer)
-   /// Returns false on error (error set in state.out); see the note on the overload above for why
-   /// this is not a byte count.
+   /// Returns false on error, with the error set in state.out -- except for a notification, which
+   /// is left unanswered and so leaves state.out untouched. See the note on the overload above for
+   /// why this is not a byte count.
    template <auto Opts, class Value>
    bool read_params(Value&& value, state_view& state)
    {
