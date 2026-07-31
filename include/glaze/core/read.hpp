@@ -31,25 +31,6 @@ namespace glz
       return std::pair{it, end};
    }
 
-   // Whitespace ahead of a value is not a value. Without a '\0' sentinel the reader reports
-   // end_reached when it runs out of input looking for one, and that is indistinguishable from a
-   // value that ended with the buffer unless we look at what was actually consumed.
-   [[nodiscard]] GLZ_ALWAYS_INLINE bool consumed_only_whitespace(const char* start, const char* it) noexcept
-   {
-      for (; start < it; ++start) {
-         switch (*start) {
-         case ' ':
-         case '\t':
-         case '\n':
-         case '\r':
-            break;
-         default:
-            return false;
-         }
-      }
-      return true;
-   }
-
    template <auto Opts, is_context Ctx>
    GLZ_ALWAYS_INLINE void finalize_read_context(Ctx&& ctx) noexcept
    {
@@ -67,6 +48,47 @@ namespace glz
             ctx.error = error_code::none;
          }
       }
+   }
+
+   // Settle what a read that ran to the end of the buffer means, then finalize the context.
+   //
+   // Without a '\0' sentinel the reader reports end_reached both when a value ended with the buffer
+   // and when it ran out of input still looking for one. The first is a completed read, which
+   // finalize_read_context clears; the second is not, and the two are told apart by what was
+   // consumed. A span holding only whitespace and comments held no value, and has to be rejected
+   // the way an empty buffer is. skip_ws answers that exactly, comments included, so the question
+   // is put to the same code that produced the end_reached rather than to a second opinion about
+   // which bytes count as whitespace. Because it == end here, replaying it over the consumed span
+   // is an exact re-run of the parse's own leading skip_ws over the same bytes under the same
+   // options, not a truncated variant of it, so it cannot manufacture an answer the parse did not
+   // already reach.
+   //
+   // The it == end guard is load-bearing: a variant alternative resolved by shape rewinds its
+   // iterator once it settles, so a completed read can end with end_reached, depth 0, and a
+   // consumed span that is nothing but the whitespace ahead of the value it did apply.
+   //
+   // This runs after the parse rather than before it so that readers which take the buffer verbatim
+   // (glz::text, glz::raw_json) still see every byte the caller passed: they complete without
+   // error, so they never reach this. Only JSON produces end_reached, and only a read without a
+   // terminator can reach the end with no sentinel to stop on; every other configuration compiles
+   // this away.
+   template <auto Opts>
+   GLZ_ALWAYS_INLINE void finalize_top_level_read(is_context auto&& ctx, const char* start, const char* it,
+                                                  const char* end) noexcept
+   {
+      if constexpr (Opts.format == JSON && !check_null_terminated(Opts)) {
+         // Not unlikely: a scalar or object body that ends with the buffer lands here on every
+         // successful read, which is the ordinary case for a registry parsing a wire span.
+         if (ctx.error == error_code::end_reached && ctx.depth == 0 && it == end) {
+            context ws_ctx{}; // only written to when skip_ws parses a comment; the result is unused
+            const char* consumed = start;
+            skip_ws<Opts>(ws_ctx, consumed, it);
+            if (consumed == it) {
+               ctx.error = error_code::no_read_input;
+            }
+         }
+      }
+      finalize_read_context<Opts>(ctx);
    }
 
    template <auto Opts, class T>
@@ -133,16 +155,7 @@ namespace glz
       }
 
    finish:
-      if constexpr (Opts.format != NDJSON) {
-         // NDJSON treats an empty document as valid; every other format needs a value.
-         // `it == end` distinguishes "ran off the end looking for a value" from a reader that
-         // rewound its iterator after resolving a value (variant alternatives do this).
-         if (ctx.error == error_code::end_reached && ctx.depth == 0 && it == end && consumed_only_whitespace(start, it))
-            [[unlikely]] {
-            ctx.error = error_code::no_read_input;
-         }
-      }
-      finalize_read_context<Opts>(ctx);
+      finalize_top_level_read<Opts>(ctx, start, it, end);
 
       if constexpr (use_padded) {
          // Restore the original buffer state
@@ -227,6 +240,12 @@ namespace glz
       const size_t final_consumed = static_cast<size_t>(it - ctx.stream.data());
       consume_buffer(buffer, final_consumed);
 
+      // Not finalize_top_level_read: StreamingOpts forces null_terminated off, so a stream holding
+      // nothing but whitespace ends in the same end_reached this clears to success, but the span it
+      // would have to inspect is not this buffer. Refills relocate and consume it, so the bytes the
+      // parse walked are no longer addressable as [start, it) by the time we get here. Bounding
+      // this case needs the streaming state to carry the answer out of the parse; until it does,
+      // read_streaming keeps the behavior it has always had.
       finalize_read_context<StreamingOpts>(ctx);
 
       if (bool(ctx.error)) {

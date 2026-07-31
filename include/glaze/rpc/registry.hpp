@@ -126,6 +126,16 @@ namespace glz
       return o;
    }();
 
+   // The syntax check that decides between a parse error and an invalid request has to run under
+   // the same rules as the read that failed, so it extends the registry's options rather than
+   // falling back to the defaults glz::validate_json is fixed to.
+   template <auto Opts>
+   struct registry_validate_opts : std::decay_t<decltype(Opts)>
+   {
+      bool validate_skipped = true;
+      bool validate_trailing_whitespace = true;
+   };
+
    // This registry does not support adding methods from RPC calls or adding methods once RPC calls can be made.
    template <auto Opts = opts{}, uint32_t Proto = REPE>
    struct registry
@@ -134,6 +144,11 @@ namespace glz
       using procedure = std::function<void(repe::state_view&)>; // RPC method
 
       static constexpr auto read_opts = registry_read_opts<Opts>;
+      static_assert(!check_null_terminated(read_opts),
+                    "The registry parses buffers it does not own and cannot assume a '\\0' follows "
+                    "them, so its options must allow null_terminated to be turned off. An options "
+                    "struct that fixes it (static constexpr bool null_terminated = true) would "
+                    "leave the registry reading past the caller's buffer.");
 
       static constexpr auto protocol = Proto;
 
@@ -508,7 +523,7 @@ namespace glz
          rpc::generic_request_t request{};
          if (const auto read_ec = glz::read<read_opts>(request, json_request); read_ec) {
             // Check if it's a JSON syntax error vs schema error
-            static constexpr opts_validate validate_opts{{opts{.null_terminated = false}}};
+            static constexpr registry_validate_opts<read_opts> validate_opts{{read_opts}};
             glz::skip skip_value{};
             context validate_ctx{};
             if (glz::read<validate_opts>(skip_value, json_request, validate_ctx)) {

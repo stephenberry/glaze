@@ -7,6 +7,7 @@
 #include <vector>
 
 #include "glaze/rpc/registry.hpp"
+#include "glaze/rpc/repe/plugin_helper.hpp"
 #include "ut/ut.hpp"
 
 using namespace ut;
@@ -403,6 +404,40 @@ suite unterminated_buffer_tests = [] {
       expect(api.measure.index() == 1) << "Deduced alternative should be applied";
       expect(std::get<amount>(api.measure).value == 42.5);
       auto result = glz::repe::parse_request({response_buf.data(), response_buf.size()});
+      expect(result.request.error() == glz::error_code::none) << "No error expected";
+   };
+
+   // A registry that accepts comments must reject a body that holds nothing but one, for the same
+   // reason it rejects a body that holds nothing but whitespace.
+   "comment_only_body_is_an_error"_test = [] {
+      glz::registry<glz::opts{.comments = true}> registry;
+      unterminated_api api{};
+      api.value = 99;
+      registry.on(api);
+
+      const auto request = exact_buffer(make_request("/value", "// nothing here\n"));
+      std::string response_buf;
+      registry.call(std::span<const char>{request.data(), request.size()}, response_buf);
+
+      expect(api.value == 99) << "A body holding no value must not be applied";
+      auto result = glz::repe::parse_request({response_buf.data(), response_buf.size()});
+      expect(result.request.error() == glz::error_code::no_read_input) << "Expected no_read_input";
+   };
+
+   // plugin_call hands the registry a raw pointer and length across an FFI boundary, so its bytes
+   // carry no terminator either.
+   "plugin_call_body_ending_at_buffer_end"_test = [] {
+      glz::registry<> registry;
+      unterminated_api api{};
+      registry.on(api);
+
+      const auto request = exact_buffer(make_request("/position", R"({"x":5,"y":6})"));
+      const auto response = glz::repe::plugin_call(registry, request.data(), request.size());
+
+      expect(api.position.x == 5) << "Object body should be applied";
+      expect(api.position.y == 6) << "Object body should be applied";
+      expect(response.size > 0) << "A non-notify request must always get a response";
+      auto result = glz::repe::parse_request({response.data, response.size});
       expect(result.request.error() == glz::error_code::none) << "No error expected";
    };
 

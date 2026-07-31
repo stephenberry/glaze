@@ -125,14 +125,12 @@ namespace glz::repe
       }
       auto start = b;
 
-      glz::parse<Opts.format>::template op<Opts>(std::forward<Value>(value), ctx, b, e);
-      // These parse calls bypass glz::read, so the end-of-buffer bookkeeping it performs has to be
-      // done here: a value that finishes exactly at the end of the body reports end_reached, which
-      // is a completed read rather than an error, while a body that held no value at all is not.
-      if (ctx.error == error_code::end_reached && ctx.depth == 0 && b == e && consumed_only_whitespace(start, b)) {
-         ctx.error = error_code::no_read_input;
-      }
-      finalize_read_context<Opts>(ctx);
+      glz::parse<Opts.format>::template op<is_padded_off<Opts>()>(std::forward<Value>(value), ctx, b, e);
+      // This bypasses glz::read, so the bookkeeping glz::read performs after the parse has to be
+      // repeated here: a value that finishes exactly at the end of the body reports end_reached,
+      // which is a completed read rather than an error, while a body that held no value at all is
+      // not. finalize_top_level_read draws that line.
+      finalize_top_level_read<Opts>(ctx, start, b, e);
 
       if (bool(ctx.error)) {
          state.out.header.ec = ctx.error;
@@ -564,13 +562,9 @@ namespace glz::repe
       }
       auto start = b;
 
-      glz::parse<Opts.format>::template op<Opts>(std::forward<Value>(value), ctx, b, e);
-      // See the note in the message overload above: end_reached at the top level means the value
-      // ended with the body, not that the read failed.
-      if (ctx.error == error_code::end_reached && ctx.depth == 0 && b == e && consumed_only_whitespace(start, b)) {
-         ctx.error = error_code::no_read_input;
-      }
-      finalize_read_context<Opts>(ctx);
+      glz::parse<Opts.format>::template op<is_padded_off<Opts>()>(std::forward<Value>(value), ctx, b, e);
+      // See the note in the message overload above for why glz::read's bookkeeping is repeated.
+      finalize_top_level_read<Opts>(ctx, start, b, e);
 
       if (bool(ctx.error)) {
          error_ctx ec{size_t(b - start), ctx.error, ctx.custom_error_message};
