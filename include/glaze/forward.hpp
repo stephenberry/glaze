@@ -49,18 +49,22 @@ namespace glz
    inline constexpr std::uint32_t JSONRPC = 30200;
 
    // Whether a format's reader can refill from an input stream mid-parse, and so read a document
-   // larger than the buffer window. Only the JSON reader has refill points today; every other
-   // reader sees one window and stops at its edge. Reading a longer document through such a format
-   // fails with error_code::streaming_unsupported rather than silently returning what fit.
+   // larger than the buffer window. The binary readers cannot: each sees one window and stops at
+   // its edge. Reading a longer document through such a format fails with
+   // error_code::streaming_unsupported rather than silently returning what fit.
    //
-   // This is a property of the reader, not of the format's grammar: NDJSON is false because its
-   // line loop cannot refill between lines, even though the per-line values it delegates to the
-   // JSON reader can. A user-defined format that gives its reader refill points specializes this.
+   // This is a property of the reader, not of the format's grammar. A user-defined format that
+   // gives its reader refill points specializes this.
    template <std::uint32_t Format>
    inline constexpr bool format_supports_streaming = false;
 
    template <>
    inline constexpr bool format_supports_streaming<JSON> = true;
+
+   // The NDJSON reader refills between records. A single record still has to fit in the window,
+   // since nothing refills inside one; a record that does not reports streaming_unsupported.
+   template <>
+   inline constexpr bool format_supports_streaming<NDJSON> = true;
 
    // Reflection metadata customization point.
    template <class T>

@@ -111,6 +111,53 @@ namespace glz
    concept has_streaming_state = is_context<std::remove_cvref_t<T>> && requires(std::remove_cvref_t<T>& ctx) {
       { ctx.stream } -> std::same_as<streaming_state&>;
    };
+
+   // Re-derive the window's edge after handing the input to another reader.
+   //
+   // parse<Format>::op takes `end` by value, so a reader that refills partway through leaves the
+   // caller holding an edge from the window the parse started in. `it` moved with the refill, and
+   // the two stop describing the same span -- offsets taken from them then run past the buffer.
+   template <class Ctx, class End>
+   GLZ_ALWAYS_INLINE void resync_window_end(Ctx& ctx, End& end) noexcept
+   {
+      if constexpr (has_streaming_state<Ctx>) {
+         if (ctx.stream.enabled()) {
+            end = ctx.stream.data() + ctx.stream.size();
+         }
+      }
+   }
+
+   // Release everything up to `it` and pull more input into the space behind it. Both iterators
+   // move, since a refill relocates the window.
+   //
+   // This is mechanism only: when to refill is the calling reader's decision, because only it knows
+   // where one value ends and the next begins. Calling this anywhere else -- in the middle of a
+   // value -- invalidates every pointer the reader is holding into the window.
+   //
+   // `it` is clamped to the window rather than trusted. A reader can leave it past `end` on an
+   // error path, and a variant alternative resolved by shape rewinds it, so an unclamped
+   // subtraction underflows the byte count handed to consume(); the buffer's size then wraps and
+   // the next refill memmoves a garbage length.
+   //
+   // A context with no streaming state -- every buffered read -- compiles this away to nothing.
+   template <class Ctx, class It, class End>
+   GLZ_ALWAYS_INLINE void refill_window(Ctx& ctx, It& it, End& end) noexcept
+   {
+      if constexpr (has_streaming_state<Ctx>) {
+         if (ctx.stream.enabled()) {
+            const char* const window = ctx.stream.data();
+            const size_t size = ctx.stream.size();
+            const size_t offset = (it > window) ? size_t(it - window) : 0;
+            const size_t consumed = (offset < size) ? offset : size;
+
+            const char* new_it;
+            const char* new_end;
+            ctx.stream.consume_and_refill(consumed, new_it, new_end);
+            it = new_it;
+            end = new_end;
+         }
+      }
+   }
 }
 
 // A streaming read advances by refilling its window in place, so a view pointed into that window
