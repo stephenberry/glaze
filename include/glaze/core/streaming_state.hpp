@@ -111,4 +111,47 @@ namespace glz
    concept has_streaming_state = is_context<std::remove_cvref_t<T>> && requires(std::remove_cvref_t<T>& ctx) {
       { ctx.stream } -> std::same_as<streaming_state&>;
    };
+
+   // Re-derive the window's edge after handing the input to another reader.
+   //
+   // parse<Format>::op takes `end` by value, so a reader that refills partway through leaves the
+   // caller holding an edge from the window the parse started in. `it` moved with the refill, and
+   // the two stop describing the same span -- offsets taken from them then run past the buffer.
+   template <class Ctx, class End>
+   GLZ_ALWAYS_INLINE void resync_window_end(Ctx& ctx, End& end) noexcept
+   {
+      if constexpr (has_streaming_state<Ctx>) {
+         if (ctx.stream.enabled()) {
+            end = ctx.stream.data() + ctx.stream.size();
+         }
+      }
+   }
+
+   // A refill point for a reader parsing a sequence of independent values: called between two of
+   // them, it releases what has been parsed and pulls more input into the space behind it. Both
+   // iterators move, since a refill relocates the window.
+   //
+   // Refilling once the window is half spent rather than only once it is drained is what keeps
+   // whole values inside it. A reader can refill between values but not inside one, so the next
+   // value has to fit in what is left; leaving half the window is the margin that buys. A value
+   // wider than that margin still runs out of window, which is the standing limit of streaming.
+   //
+   // A context with no streaming state -- every buffered read -- compiles this away to nothing.
+   template <class Ctx, class It, class End>
+   GLZ_ALWAYS_INLINE void refill_between_values(Ctx& ctx, It& it, End& end) noexcept
+   {
+      if constexpr (has_streaming_state<Ctx>) {
+         if (ctx.stream.enabled()) {
+            const size_t window = ctx.stream.size();
+            const size_t consumed = size_t(it - ctx.stream.data());
+            if (it >= end || (window - consumed) <= window / 2) {
+               const char* new_it;
+               const char* new_end;
+               ctx.stream.consume_and_refill(consumed, new_it, new_end);
+               it = new_it;
+               end = new_end;
+            }
+         }
+      }
+   }
 }
