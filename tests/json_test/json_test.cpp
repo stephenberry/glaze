@@ -1111,6 +1111,69 @@ suite basic_types = [] {
       }
    };
 
+   "whitespace only input holds no value"_test = [] {
+      // Without a terminator the reader runs out of input looking for a value and reports
+      // end_reached, which at the top level otherwise means "the value ended with the buffer".
+      // A buffer that never held a value must be rejected the way an empty one is, rather than
+      // leaving the destination untouched and reporting success.
+      // Both options are spelled out because this file is also built with GLZ_NULL_TERMINATED=false.
+      static constexpr glz::opts options{.null_terminated = false};
+      for (std::string_view blank : {" ", "   ", "\t\n\r "}) {
+         const std::vector<char> buf{blank.begin(), blank.end()};
+         const std::string_view input{buf.data(), buf.size()};
+
+         int i{42};
+         expect(glz::read<options>(i, input) == glz::error_code::no_read_input) << blank;
+         expect(i == 42) << "destination must be left alone";
+
+         std::vector<int> v{};
+         expect(glz::read<options>(v, input) == glz::error_code::no_read_input) << blank;
+
+         std::map<std::string, int> m{};
+         expect(glz::read<options>(m, input) == glz::error_code::no_read_input) << blank;
+      }
+   };
+
+   "comment only input holds no value"_test = [] {
+      // A comment is no more a value than whitespace is. With comments enabled the reader consumes
+      // one and then runs out of input the same way, so it has to reach the same answer.
+      static constexpr glz::opts options{.null_terminated = false, .comments = true};
+      for (std::string_view commented : {"// hi\n", " //x\n", "/* block */", "\t/*a*/ // b\n "}) {
+         const std::vector<char> buf{commented.begin(), commented.end()};
+         const std::string_view input{buf.data(), buf.size()};
+
+         int i{42};
+         expect(glz::read<options>(i, input) == glz::error_code::no_read_input) << commented;
+         expect(i == 42) << "destination must be left alone";
+
+         std::vector<int> v{};
+         expect(glz::read<options>(v, input) == glz::error_code::no_read_input) << commented;
+      }
+
+      // An unterminated block comment runs to the end of the buffer without skip_comment flagging
+      // it, so it arrives here as an input that held no value. That is the same answer as an empty
+      // buffer, which is a coarse diagnosis but a true one.
+      {
+         const std::string_view unterminated{"/* never closed"};
+         const std::vector<char> buf{unterminated.begin(), unterminated.end()};
+         const std::string_view input{buf.data(), buf.size()};
+         int i{42};
+         expect(glz::read<options>(i, input) == glz::error_code::no_read_input);
+         expect(i == 42) << "destination must be left alone";
+      }
+
+      // A comment malformed in a way skip_comment does detect keeps its own error, rather than
+      // being flattened into the absent-value answer.
+      for (std::string_view malformed : {"/", "/x"}) {
+         const std::vector<char> buf{malformed.begin(), malformed.end()};
+         int i{42};
+         const auto ec = glz::read<options>(i, std::string_view{buf.data(), buf.size()});
+         expect(ec != glz::error_code::none) << malformed;
+         expect(ec != glz::error_code::no_read_input) << malformed;
+         expect(i == 42) << "destination must be left alone";
+      }
+   };
+
    "truncated number is rejected, not valued"_test = [] {
       // A number longer than the scratch buffer is copied in as a prefix, and the prefix can parse
       // cleanly on its own: "1e" followed by enough zeros reads as 1 once the copy cuts off the

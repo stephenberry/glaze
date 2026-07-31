@@ -1,6 +1,9 @@
 // Glaze Library
 // For the license information refer to glaze.hpp
 
+#include <string_view>
+#include <vector>
+
 #include "glaze/glaze.hpp"
 #include "glaze/rpc/registry.hpp"
 #include "ut/ut.hpp"
@@ -494,6 +497,58 @@ suite jsonrpc_function_pointer_tests = [] {
       // Test function with int param returning int
       response = server.call(R"({"jsonrpc":"2.0","method":"add","params":5,"id":3})");
       expect(response.find(R"("result":15)") != std::string::npos) << response;
+   };
+};
+
+// A request read off a socket ends where the buffer ends. The registry parses the caller's bytes in
+// place, so every parse it performs has to stop at that end rather than scan for a '\0' terminator.
+// Exactly sized copies reproduce the wire shape; run under a sanitizer these fail loudly otherwise.
+struct scalar_api
+{
+   int value{};
+};
+
+suite unterminated_request_tests = [] {
+   auto call_exact = [](auto& server, std::string_view request) {
+      const std::vector<char> exact{request.begin(), request.end()};
+      return server.call(std::string_view{exact.data(), exact.size()});
+   };
+
+   "valid_request_ending_at_buffer_end"_test = [&] {
+      glz::registry<glz::opts{}, glz::JSONRPC> server{};
+      scalar_api api{};
+      server.on(api);
+
+      const auto response = call_exact(server, R"({"jsonrpc":"2.0","method":"/value","params":7,"id":1})");
+      expect(api.value == 7) << "Params should be applied";
+      expect(response.find(R"("result":null)") != std::string::npos) << response;
+   };
+
+   "truncated_batch_ending_at_buffer_end"_test = [&] {
+      glz::registry<glz::opts{}, glz::JSONRPC> server{};
+      scalar_api api{};
+      server.on(api);
+
+      const auto response = call_exact(server, "[7");
+      expect(response.find(R"("code":-32700)") != std::string::npos) << response;
+   };
+
+   "truncated_object_ending_at_buffer_end"_test = [&] {
+      glz::registry<glz::opts{}, glz::JSONRPC> server{};
+      scalar_api api{};
+      server.on(api);
+
+      const auto response = call_exact(server, R"({"jsonrpc":"2.0","method":"/value","id":1,"params":7)");
+      expect(response.find(R"("error")") != std::string::npos) << response;
+   };
+
+   "bare_scalar_ending_at_buffer_end"_test = [&] {
+      glz::registry<glz::opts{}, glz::JSONRPC> server{};
+      scalar_api api{};
+      server.on(api);
+
+      const auto response = call_exact(server, "7");
+      expect(response.find(R"("code":-32600)") != std::string::npos) << response;
    };
 };
 

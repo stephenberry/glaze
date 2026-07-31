@@ -112,12 +112,43 @@ namespace glz
 
 namespace glz
 {
+   // Every buffer the registry parses comes from a caller: a wire span, an FFI pointer, or a view
+   // into the caller's string. None of them can be assumed to carry the '\0' sentinel a
+   // null_terminated read relies on when it drops its end checks, so the registry reads with that
+   // option off no matter what the user asked for. The bound belongs here, where the buffer shape
+   // is known, rather than in every caller that hands the registry bytes it does not own.
+   template <auto Opts>
+   inline constexpr auto registry_read_opts = [] {
+      auto o = Opts;
+      if constexpr (requires { o.null_terminated = false; }) {
+         o.null_terminated = false;
+      }
+      return o;
+   }();
+
+   // The syntax check that decides between a parse error and an invalid request has to run under
+   // the same rules as the read that failed, so it extends the registry's options rather than
+   // falling back to the defaults glz::validate_json is fixed to.
+   template <auto Opts>
+   struct registry_validate_opts : std::decay_t<decltype(Opts)>
+   {
+      bool validate_skipped = true;
+      bool validate_trailing_whitespace = true;
+   };
+
    // This registry does not support adding methods from RPC calls or adding methods once RPC calls can be made.
    template <auto Opts = opts{}, uint32_t Proto = REPE>
    struct registry
    {
       // procedure for REPE protocol (zero-copy state_view)
       using procedure = std::function<void(repe::state_view&)>; // RPC method
+
+      static constexpr auto read_opts = registry_read_opts<Opts>;
+      static_assert(!check_null_terminated(read_opts),
+                    "The registry parses buffers it does not own and cannot assume a '\\0' follows "
+                    "them, so its options must allow null_terminated to be turned off. An options "
+                    "struct that fixes it (static constexpr bool null_terminated = true) would "
+                    "leave the registry reading past the caller's buffer.");
 
       static constexpr auto protocol = Proto;
 
@@ -143,7 +174,7 @@ namespace glz
             }
          }();
 
-         using impl = registry_impl<Opts, Proto>;
+         using impl = registry_impl<read_opts, Proto>;
 
          for_each<N>([&]<auto I>() {
             decltype(auto) func = [&]() -> decltype(auto) {
@@ -262,7 +293,7 @@ namespace glz
          requires(glaze_object_t<T> || reflectable<T>)
       void on(T& value)
       {
-         using impl = registry_impl<Opts, Proto>;
+         using impl = registry_impl<read_opts, Proto>;
 
          if constexpr (parent == root && (glaze_object_t<T> || reflectable<T>)) {
             impl::register_endpoint(root, value, *this);
@@ -276,7 +307,7 @@ namespace glz
          requires(sizeof...(Ts) > 0 && (... && (glaze_object_t<Ts> || reflectable<Ts>)))
       void on(glz::merge<Ts...>& merged)
       {
-         using impl = registry_impl<Opts, Proto>;
+         using impl = registry_impl<read_opts, Proto>;
 
          // Register root endpoint with the merged object - this handles ""
          impl::register_merge_endpoint(root, merged, *this);
@@ -468,16 +499,15 @@ namespace glz
 
          if (it != json_request.end() && *it == '[') {
             // Batch request
-            auto batch_requests = glz::read_json<std::vector<glz::raw_json_view>>(json_request);
-            if (!batch_requests) {
+            std::vector<glz::raw_json_view> batch_requests{};
+            if (const auto ec = glz::read<read_opts>(batch_requests, json_request); ec) {
                return R"({"jsonrpc":"2.0","error":{"code":-32700,"message":"Parse error","data":)" +
-                      write_json(format_error(batch_requests.error(), json_request)).value_or("null") +
-                      R"(},"id":null})";
+                      write_json(format_error(ec, json_request)).value_or("null") + R"(},"id":null})";
             }
-            if (batch_requests->empty()) {
+            if (batch_requests.empty()) {
                return R"({"jsonrpc":"2.0","error":{"code":-32600,"message":"Invalid Request","data":"Empty batch"},"id":null})";
             }
-            return process_batch(*batch_requests);
+            return process_batch(batch_requests);
          }
 
          // Single request
@@ -490,23 +520,25 @@ namespace glz
       std::optional<std::string> process_single_request(std::string_view json_request)
          requires(Proto == JSONRPC)
       {
-         auto request = glz::read_json<rpc::generic_request_t>(json_request);
-         if (!request.has_value()) {
+         rpc::generic_request_t request{};
+         if (const auto read_ec = glz::read<read_opts>(request, json_request); read_ec) {
             // Check if it's a JSON syntax error vs schema error
-            if (glz::validate_json(json_request)) {
+            static constexpr registry_validate_opts<read_opts> validate_opts{{read_opts}};
+            glz::skip skip_value{};
+            context validate_ctx{};
+            if (glz::read<validate_opts>(skip_value, json_request, validate_ctx)) {
                // JSON is syntactically invalid - return Parse error (-32700)
                return R"({"jsonrpc":"2.0","error":{"code":-32700,"message":"Parse error","data":)" +
-                      write_json(format_error(request.error(), json_request)).value_or("null") + R"(},"id":null})";
+                      write_json(format_error(read_ec, json_request)).value_or("null") + R"(},"id":null})";
             }
             // Valid JSON but invalid request structure - return Invalid Request (-32600)
-            auto id = glz::get_as_json<rpc::id_t, "/id">(json_request);
+            auto id = glz::get_as_json<rpc::id_t, "/id", read_opts>(json_request);
             std::string id_json = id.has_value() ? glz::write_json(id.value()).value_or("null") : "null";
             return R"({"jsonrpc":"2.0","error":{"code":-32600,"message":"Invalid Request","data":)" +
-                   write_json(format_error(request.error(), json_request)).value_or("null") + R"(},"id":)" + id_json +
-                   "}";
+                   write_json(format_error(read_ec, json_request)).value_or("null") + R"(},"id":)" + id_json + "}";
          }
 
-         auto& req = request.value();
+         auto& req = request;
 
          // Validate version
          if (req.version != rpc::supported_version) {
