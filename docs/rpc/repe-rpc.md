@@ -99,19 +99,59 @@ The zero-copy API uses these types:
 - **`glz::repe::parse_request(span)`**: Parses a request with zero-copy. Returns a `parse_result` containing a `request_view`.
 - **`glz::repe::request_view`**: Views into the original request buffer (query and body are `std::string_view`).
 - **`glz::repe::response_builder`**: Writes responses directly to a buffer without intermediate copies.
-- **`glz::repe::read_params<Opts>(value, state)`**: Reads a request body into `value`. Returns `true` on success; on failure it has already written the error response, so a custom handler should just return.
+- **`glz::repe::state_view`**: Pairs a `request_view` with a `response_builder` for a procedure to read from and write to.
+- **`glz::repe::read_params<Opts>(value, state)`**: Reads a request body into `value`. Returns `true` on success and writes the error response itself on a parse failure.
 
 See [REPE Buffer Handling](repe-buffer.md) for detailed documentation of these types.
 
-#### `read_params` returns `bool`
+#### Reading a body with `read_params`
+
+`read_params` is what the registry's own endpoints use to turn a request body into a value, and a custom handler can call it directly. It needs a `state_view`, which a handler builds from the request it parsed and the builder it writes through:
 
 ```cpp
-if (!glz::repe::read_params<Opts>(params, state)) {
-   return; // the error response is already written
-}
+server.call = [&](std::span<const char> request, std::string& response_buffer) {
+   auto result = glz::repe::parse_request(request);
+   if (!result) {
+      glz::repe::encode_error_buffer(glz::error_code::parse_error, response_buffer, "Failed to parse request");
+      return;
+   }
+
+   glz::repe::response_builder resp{response_buffer};
+   glz::repe::state_view state{result.request, resp}; // must be a named lvalue
+
+   my_params params{};
+   if (state.has_body()) {
+      if (!glz::repe::read_params<glz::registry_read_opts<glz::opts{}>>(params, state)) {
+         return; // read_params has written the error response
+      }
+   }
+   // ... act on params, then write a response through `resp`
+};
 ```
 
-Through v7.9.1 it returned the number of bytes consumed and callers tested that count for zero. That test is wrong on a buffer with no null terminator, which is every buffer the registry reads: a variant alternative that resolves at the end of the buffer rewinds its iterator, so a completed read can report zero bytes consumed. The registry took that for a failure and sent no response at all, leaving a non-notify request unanswered. Testing the returned `bool` is correct in every case; the count was never used for anything else.
+Two things are easy to get wrong:
+
+**`Opts` must have `null_terminated` turned off.** A request arrives as a span over bytes the handler does not own, with no `'\0'` after it, and a `null_terminated` read drops its end checks and runs off the end of that buffer. `glz::registry_read_opts<Opts>` is the registry's own options transform and turns the flag off for you; passing a bare `glz::opts{}` is a heap overflow on a body that ends at the edge of the buffer.
+
+**`state` must be a named lvalue.** The parameter is `state_view&`. A temporary binds to a different overload and fails to compile inside the header rather than at your call site.
+
+#### `read_params` returns `bool`
+
+It returned the number of bytes consumed through v7.9.1, and callers tested that count for zero to detect failure:
+
+```cpp
+// before
+if (glz::repe::read_params<Opts>(params, state) == 0) { return; }
+
+// now
+if (!glz::repe::read_params<Opts>(params, state)) { return; }
+```
+
+The count test is wrong on a buffer with no null terminator: a variant alternative that resolves by shape walks to the end of the buffer and rewinds its iterator, so a *completed* read reports zero bytes consumed. Reading `42.5` into a `std::variant<std::string, amount>` succeeds, applies the value, and reports zero.
+
+This did not bite in v7.9.1, where the registry still read with the terminator assumption in place and the same read reported four bytes. It became reachable when registry reads were bounded by the buffer instead, at which point a well-formed non-notify request could be taken for a failure and answered with nothing at all. The `bool` is correct in both regimes, and the count was not used for anything else.
+
+Note that the old signature returned `size_t`, so `if (read_params(...) == 0)` still compiles against the new one and inverts. Any custom handler carrying that idiom needs the edit above.
 
 ## Registering Multiple Objects with `glz::merge`
 

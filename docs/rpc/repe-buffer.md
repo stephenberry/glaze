@@ -245,6 +245,36 @@ struct state_view {
 
 This is used internally by `glz::registry` for zero-copy procedure dispatch.
 
+`state_view` is an aggregate over references, so build it from the request you parsed and the builder you write through, and keep it as a named lvalue:
+
+```cpp
+glz::repe::response_builder resp{response_buffer};
+glz::repe::state_view state{result.request, resp};
+```
+
+### `read_params`
+
+Reads a request body into a value, parsing directly out of the request buffer:
+
+```cpp
+template <auto Opts, class Value>
+bool read_params(Value&& value, state_view& state);
+```
+
+Returns `true` on success. On a parse failure it writes the error response through `state.out` itself, so a handler should return without writing anything further.
+
+`Opts` must have `null_terminated` turned off. A request is a span over bytes the handler does not own with no `'\0'` after it, and a `null_terminated` read drops its end checks and runs past the buffer. Use `glz::registry_read_opts<Opts>`, which is the transform the registry applies to its own options:
+
+```cpp
+if (state.has_body()) {
+    if (!glz::repe::read_params<glz::registry_read_opts<glz::opts{}>>(params, state)) {
+        return; // the error response is already written
+    }
+}
+```
+
+See [REPE RPC](repe-rpc.md) for the `bool` return and how it differs from the byte count returned through v7.9.1.
+
 ### Example: Zero-Copy Request Handler
 
 ```cpp
