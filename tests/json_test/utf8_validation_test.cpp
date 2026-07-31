@@ -153,6 +153,27 @@ suite validator_basics = [] {
       }
    };
 
+   // Every corpus case above is shorter than one register, so validate() dispatches to the scalar
+   // path and none of the tests above actually reach a SIMD backend. Re-run the whole corpus
+   // embedded in an ASCII carrier long enough to force the vector path, at offsets that straddle
+   // every register and step boundary any backend uses. ASCII is never a continuation byte, so the
+   // carrier cannot complete a malformed case or break a well formed one.
+   "corpus embedded in a carrier reaches the vector path"_test = [] {
+      constexpr size_t offsets[]{0, 1, 7, 15, 16, 17, 31, 32, 33, 47, 63, 64, 65, 96, 127};
+      for (const size_t pad : offsets) {
+         for (const auto& c : well_formed()) {
+            const std::string s = std::string(pad, 'a') + c.data + std::string(160, 'z');
+            expect(valid(s)) << c.name << " at offset " << pad;
+            expect(valid(s) == valid_scalar(s)) << c.name << " at offset " << pad;
+         }
+         for (const auto& c : malformed()) {
+            const std::string s = std::string(pad, 'a') + c.data + std::string(160, 'z');
+            expect(!valid(s)) << c.name << " at offset " << pad;
+            expect(valid(s) == valid_scalar(s)) << c.name << " at offset " << pad;
+         }
+      }
+   };
+
    "every code point round trips"_test = [] {
       // All of Unicode except the surrogate block, which is not encodable.
       for (uint32_t cp = 0; cp <= 0x10FFFF; ++cp) {

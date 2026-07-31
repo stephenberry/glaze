@@ -22,8 +22,12 @@
 #include "glaze/simd/simd.hpp"
 #include "glaze/util/inline.hpp"
 
+// GLZ_UTF8_GENERIC_WIDTH selects the portable backend below, which needs no target support, so it
+// enables the vector path on its own. Without it here the whole file would compile away on a host
+// with no usable backend, and the width-generic tests would silently degrade to testing the scalar
+// validator against itself.
 #if defined(GLZ_USE_AVX512BW) || defined(GLZ_USE_AVX2) || defined(GLZ_USE_SSSE3) || defined(GLZ_USE_NEON64) || \
-   defined(GLZ_USE_WASM_SIMD128)
+   defined(GLZ_USE_WASM_SIMD128) || defined(GLZ_UTF8_GENERIC_WIDTH)
 #define GLZ_UTF8_SIMD
 #endif
 

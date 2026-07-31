@@ -765,9 +765,13 @@ auto ec = glz::read_json(v, "[\"a\xFF\"]"); // ec == glz::error_code::invalid_ut
 
 This rejects lone continuation bytes, overlong encodings, truncated sequences, encoded UTF-16 surrogate halves, and code points above U+10FFFF. Escape sequences are validated separately, so `"\ud800"` without a matching low surrogate is rejected as well.
 
-Validation uses the Lemire & Keiser vector algorithm (SSSE3 or AArch64 NEON, with a scalar fallback). Pure ASCII strings skip it entirely, because the scan that finds the closing quote also detects that no byte has its high bit set. On real-world corpora the cost ranges from nothing for ASCII documents to roughly 8% for heavily non-ASCII text.
+Validation applies to every string the reader passes over, including keys, values you do not model, and values reached through `glz::skip` or `glz::raw_json`. A malformed byte in a field you never look at still fails the parse. This is the change most likely to affect existing code: input that previously parsed will now return an error.
+
+Validation uses the Lemire & Keiser vector algorithm, with backends for AVX-512BW, AVX2, SSSE3, AArch64 NEON, and WebAssembly SIMD128. Targets without a byte-granular shuffle fall back to a scalar validator. On the two hot paths that read string values out of a padded buffer, a pure ASCII string skips validation entirely, because the scan that finds the closing quote already proves no byte has its high bit set; other paths run a full pass. Measured on `twitter.json` (22% non-ASCII, string heavy), struct parsing costs about 15% and `glz::generic` about 13%; an ASCII document of the same shape is within noise of unvalidated parsing.
 
 Writing is **not** validated. Data you serialize is your own, so Glaze does not pay to re-check it; validate before writing if you have a specific reason to. Note that this makes round-tripping asymmetric: a `std::string` holding non-UTF-8 bytes will write successfully and then fail to read back.
+
+JSONC comments are skipped without validation, since comments are not part of RFC 8259 and their bytes never reach your program.
 
 ## See Also
 

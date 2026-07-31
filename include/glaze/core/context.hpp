@@ -96,7 +96,7 @@ namespace glz
       buffer_overflow, // Write would exceed fixed buffer capacity
       invalid_length, // Length exceeds allowed limit (buffer size or user-configured max)
       // Encoding errors
-      invalid_utf8 // Malformed UTF-8 in a string (only reported when validate_utf8 is enabled)
+      invalid_utf8 // Malformed UTF-8 in a string; always checked on read
    };
 
    // Unified error context for all read/write operations
