@@ -183,6 +183,8 @@ namespace glz
          skip_string_view(ctx, it, end);
          if (bool(ctx.error)) [[unlikely]]
             return;
+         if (validate_utf8_span(ctx, start, it)) [[unlikely]]
+            return;
          const sv key = {start, size_t(it - start)};
          ++it;
          if constexpr (not Opts.null_terminated) {
@@ -378,6 +380,10 @@ namespace glz
                return;
             }
             else {
+               // it sits one past the closing quote, so the raw key spans [key_start, it - 1)
+               if (validate_utf8_span(ctx, key_start, it - 1)) [[unlikely]] {
+                  return;
+               }
                const sv key{key_start, size_t(it - key_start - 1)};
                if constexpr (not Opts.null_terminated) {
                   if (it == end) [[unlikely]] {
@@ -488,6 +494,8 @@ namespace glz
                auto start = it;
                skip_string_view(ctx, it, end);
                if (bool(ctx.error)) [[unlikely]]
+                  return;
+               if (validate_utf8_span(ctx, start, it)) [[unlikely]]
                   return;
                const sv key = {start, size_t(it - start)};
                ++it; // skip the quote
@@ -948,6 +956,7 @@ namespace glz
                static constexpr auto string_padding_bytes = 8;
 
                auto start = it;
+               uint64_t ascii_acc{};
                while (true) {
                   if (it >= end) [[unlikely]] {
                      ctx.error = error_code::unexpected_end;
@@ -959,6 +968,7 @@ namespace glz
                   if constexpr (std::endian::native == std::endian::big) {
                      chunk = std::byteswap(chunk);
                   }
+                  ascii_acc |= chunk;
                   const uint64_t test_chars = has_quote(chunk);
                   if (test_chars) {
                      it += (countr_zero(test_chars) >> 3);
@@ -975,6 +985,10 @@ namespace glz
                   else {
                      it += 8;
                   }
+               }
+
+               if (validate_utf8_span(ctx, start, it, ascii_acc)) [[unlikely]] {
+                  return;
                }
 
                auto n = size_t(it - start);
@@ -1054,6 +1068,10 @@ namespace glz
                if (bool(ctx.error)) [[unlikely]]
                   return;
 
+               if (validate_utf8_span(ctx, start, it)) [[unlikely]] {
+                  return;
+               }
+
                value.assign(start, size_t(it - start));
                ++it;
             }
@@ -1094,6 +1112,7 @@ namespace glz
 
                if (size_t(end - it) >= 8) {
                   auto start = it;
+                  uint64_t ascii_acc{};
                   const auto end8 = end - 8;
                   while (true) {
                      if (it >= end8) [[unlikely]] {
@@ -1105,6 +1124,7 @@ namespace glz
                      if constexpr (std::endian::native == std::endian::big) {
                         chunk = std::byteswap(chunk);
                      }
+                     ascii_acc |= chunk;
                      const uint64_t test_chars = has_quote(chunk);
                      if (test_chars) {
                         it += (countr_zero(test_chars) >> 3);
@@ -1129,7 +1149,10 @@ namespace glz
                      --it;
                   }
 
+                  // The byte-wise tail keeps feeding the accumulator: it has to cover every byte of
+                  // the string, or a non-ASCII byte reached here would be waved through unvalidated.
                   for (; it < end; ++it) {
+                     ascii_acc |= uint8_t(*it);
                      if (*it == '"') {
                         auto* prev = it - 1;
                         while (*prev == '\\') {
@@ -1145,6 +1168,10 @@ namespace glz
                   return;
 
                continue_decode:
+
+                  if (validate_utf8_span(ctx, start, it, ascii_acc)) [[unlikely]] {
+                     return;
+                  }
 
                   const auto available_padding = size_t(end - it);
                   auto n = size_t(it - start);
@@ -1272,10 +1299,14 @@ namespace glz
                   std::array<char, 8> buffer{};
 
                   auto* p = buffer.data();
+                  const auto* const utf8_start = it;
 
                   while (it < end) [[likely]] {
                      *p = *it;
                      if (*it == '"') {
+                        if (validate_utf8_span(ctx, utf8_start, it)) [[unlikely]] {
+                           return;
+                        }
                         const size_t n = size_t(p - buffer.data());
 #if __has_cpp_attribute(assume) >= 202207L
                         [[assume(n <= sizeof(buffer))]];
@@ -1341,6 +1372,10 @@ namespace glz
                if (bool(ctx.error)) [[unlikely]]
                   return;
 
+               if (validate_utf8_span(ctx, start, it)) [[unlikely]] {
+                  return;
+               }
+
                value.assign(start, size_t(it - start));
                ++it;
             }
@@ -1382,6 +1417,7 @@ namespace glz
                static constexpr auto string_padding_bytes = 8;
 
                auto start = it;
+               uint64_t ascii_acc{};
                while (true) {
                   if (it >= end) [[unlikely]] {
                      ctx.error = error_code::unexpected_end;
@@ -1393,6 +1429,7 @@ namespace glz
                   if constexpr (std::endian::native == std::endian::big) {
                      chunk = std::byteswap(chunk);
                   }
+                  ascii_acc |= chunk;
                   const uint64_t test_chars = has_quote(chunk);
                   if (test_chars) {
                      it += (countr_zero(test_chars) >> 3);
@@ -1409,6 +1446,10 @@ namespace glz
                   else {
                      it += 8;
                   }
+               }
+
+               if (validate_utf8_span(ctx, start, it, ascii_acc)) [[unlikely]] {
+                  return;
                }
 
                auto n = size_t(it - start);
@@ -1488,6 +1529,10 @@ namespace glz
                if (bool(ctx.error)) [[unlikely]]
                   return;
 
+               if (validate_utf8_span(ctx, start, it)) [[unlikely]] {
+                  return;
+               }
+
                value.assign(reinterpret_cast<const char8_t*>(start), size_t(it - start));
                ++it;
             }
@@ -1528,6 +1573,7 @@ namespace glz
 
                if (size_t(end - it) >= 8) {
                   auto start = it;
+                  uint64_t ascii_acc{};
                   const auto end8 = end - 8;
                   while (true) {
                      if (it >= end8) [[unlikely]] {
@@ -1539,6 +1585,7 @@ namespace glz
                      if constexpr (std::endian::native == std::endian::big) {
                         chunk = std::byteswap(chunk);
                      }
+                     ascii_acc |= chunk;
                      const uint64_t test_chars = has_quote(chunk);
                      if (test_chars) {
                         it += (countr_zero(test_chars) >> 3);
@@ -1563,7 +1610,10 @@ namespace glz
                      --it;
                   }
 
+                  // The byte-wise tail keeps feeding the accumulator: it has to cover every byte of
+                  // the string, or a non-ASCII byte reached here would be waved through unvalidated.
                   for (; it < end; ++it) {
+                     ascii_acc |= uint8_t(*it);
                      if (*it == '"') {
                         auto* prev = it - 1;
                         while (*prev == '\\') {
@@ -1579,6 +1629,10 @@ namespace glz
                   return;
 
                continue_decode_u8:
+
+                  if (validate_utf8_span(ctx, start, it, ascii_acc)) [[unlikely]] {
+                     return;
+                  }
 
                   const auto available_padding = size_t(end - it);
                   auto n = size_t(it - start);
@@ -1706,10 +1760,14 @@ namespace glz
                   std::array<char, 8> buffer{};
 
                   auto* p = buffer.data();
+                  const auto* const utf8_start = it;
 
                   while (it < end) [[likely]] {
                      *p = *it;
                      if (*it == '"') {
+                        if (validate_utf8_span(ctx, utf8_start, it)) [[unlikely]] {
+                           return;
+                        }
                         value.assign(reinterpret_cast<const char8_t*>(buffer.data()), size_t(p - buffer.data()));
                         ++it;
                         if constexpr (not Opts.null_terminated) {
@@ -1770,6 +1828,10 @@ namespace glz
                skip_string_view(ctx, it, end);
                if (bool(ctx.error)) [[unlikely]]
                   return;
+
+               if (validate_utf8_span(ctx, start, it)) [[unlikely]] {
+                  return;
+               }
 
                value.assign(reinterpret_cast<const char8_t*>(start), size_t(it - start));
                ++it;
@@ -1850,6 +1912,10 @@ namespace glz
          skip_string_view(ctx, it, end);
          if (bool(ctx.error)) [[unlikely]]
             return;
+
+         if (validate_utf8_span(ctx, start, it)) [[unlikely]] {
+            return;
+         }
 
          if constexpr (string_view_t<T>) {
             using value_type = typename std::decay_t<T>::value_type;
@@ -3035,6 +3101,8 @@ namespace glz
                   skip_string_view(ctx, it, end);
                   if (bool(ctx.error)) [[unlikely]]
                      return;
+                  if (validate_utf8_span(ctx, start, it)) [[unlikely]]
+                     return;
                   const sv key{start, size_t(it - start)};
                   ++it;
                   if constexpr (not Opts.null_terminated) {
@@ -3222,6 +3290,8 @@ namespace glz
                      skip_string_view(ctx, it, end);
                      if (bool(ctx.error)) [[unlikely]]
                         return;
+                     if (validate_utf8_span(ctx, start, it)) [[unlikely]]
+                        return;
                      const sv key{start, size_t(it - start)};
                      ++it;
                      if constexpr (not Opts.null_terminated) {
@@ -3285,6 +3355,8 @@ namespace glz
                      const auto start = it;
                      skip_string_view(ctx, it, end);
                      if (bool(ctx.error)) [[unlikely]]
+                        return;
+                     if (validate_utf8_span(ctx, start, it)) [[unlikely]]
                         return;
                      const sv key{start, size_t(it - start)};
                      ++it;
@@ -3875,6 +3947,9 @@ namespace glz
                if (bool(ctx.error)) [[unlikely]] {
                   return false;
                }
+               if (validate_utf8_span(ctx, key_start, it)) [[unlikely]] {
+                  return false;
+               }
                const sv key{key_start, size_t(it - key_start)};
                if (match_invalid_end<'"', Opts>(ctx, it, end)) {
                   return false;
@@ -4095,6 +4170,8 @@ namespace glz
                      auto* key_start = it;
                      skip_string_view(ctx, it, end);
                      if (bool(ctx.error)) [[unlikely]]
+                        return;
+                     if (validate_utf8_span(ctx, key_start, it)) [[unlikely]]
                         return;
                      const sv key = {key_start, size_t(it - key_start)};
 
@@ -4596,26 +4673,24 @@ namespace glz
 
                         // Compile-time array of field counts for each variant type
                         constexpr auto field_counts = []<size_t... I>(std::index_sequence<I...>) {
-                           return std::array<size_t, N> {
-                              ([]<size_t J = I>() -> size_t {
-                                 using V = std::decay_t<std::variant_alternative_t<J, T>>;
-                                 if constexpr (glaze_object_t<V> || reflectable<V>) {
-                                    return reflect<V>::size;
-                                 }
-                                 else if constexpr (is_memory_object<V>) {
-                                    using X = memory_type<V>;
-                                    if constexpr (glaze_object_t<X> || reflectable<X>) {
-                                       return reflect<X>::size;
-                                    }
-                                    else {
-                                       return (std::numeric_limits<size_t>::max)();
-                                    }
+                           return std::array<size_t, N>{([]<size_t J = I>() -> size_t {
+                              using V = std::decay_t<std::variant_alternative_t<J, T>>;
+                              if constexpr (glaze_object_t<V> || reflectable<V>) {
+                                 return reflect<V>::size;
+                              }
+                              else if constexpr (is_memory_object<V>) {
+                                 using X = memory_type<V>;
+                                 if constexpr (glaze_object_t<X> || reflectable<X>) {
+                                    return reflect<X>::size;
                                  }
                                  else {
                                     return (std::numeric_limits<size_t>::max)();
                                  }
-                              }.template operator()<I>())...
-                           };
+                              }
+                              else {
+                                 return (std::numeric_limits<size_t>::max)();
+                              }
+                           }.template operator()<I>())...};
                         }(std::make_index_sequence<N>{});
 
                         // Find the type with minimum field count among the possible types

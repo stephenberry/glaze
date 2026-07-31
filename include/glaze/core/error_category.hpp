@@ -79,7 +79,8 @@ struct glz::meta<glz::error_code>
                                     "invalid_json_pointer",
                                     "patch_test_failed",
                                     "buffer_overflow",
-                                    "invalid_length"};
+                                    "invalid_length",
+                                    "invalid_utf8"};
    static constexpr std::array value{none, //
                                      version_mismatch, //
                                      invalid_header, //
@@ -156,5 +157,7 @@ struct glz::meta<glz::error_code>
                                      patch_test_failed, //
                                      // Buffer errors
                                      buffer_overflow, //
-                                     invalid_length};
+                                     invalid_length, //
+                                     // Encoding errors
+                                     invalid_utf8};
 };

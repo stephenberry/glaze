@@ -1206,6 +1206,7 @@ namespace glz
          }
          std::string_view raw{data_, static_cast<size_t>(it - data_)};
          return glz::read_json<std::string>(raw);
+         // read_json validates UTF-8, so the returned string is guaranteed well formed.
       }
       else if constexpr (std::is_same_v<T, std::string_view>) {
          if (!is_string()) {

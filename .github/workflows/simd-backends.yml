@@ -1,0 +1,280 @@
+name: simd-backends
+
+# UTF-8 validation compiles to a different SIMD backend per target, and a bug in one backend is
+# invisible on the others. This workflow runs the same suite against every backend Glaze selects.
+#
+# AVX-512 is the reason this workflow exists: GitHub's runner fleet mixes Intel parts that have it
+# with AMD parts that do not, so the job uses the runner's own AVX-512 when present and Intel SDE
+# otherwise. It never silently skips.
+
+on:
+  push:
+    branches:
+      - main
+      - feature/*
+    paths-ignore:
+      - '**/*.md'
+      - 'docs/**'
+  pull_request:
+    branches:
+      - main
+    paths-ignore:
+      - '**/*.md'
+      - 'docs/**'
+  workflow_dispatch:
+    inputs:
+      force_sde:
+        description: 'Run the AVX-512 job under Intel SDE even when the runner supports AVX-512 natively'
+        type: boolean
+        default: false
+
+env:
+  # Suites that exercise UTF-8 validation. Kept narrow so the emulated job stays quick.
+  UTF8_TESTS: "^(utf8_validation_test|json_conformance|json_test)$"
+
+jobs:
+  x86-backends:
+    runs-on: ubuntu-24.04
+    # force_sde targets the AVX-512 job, so skip the jobs a dispatch run would only repeat.
+    if: ${{ !inputs.force_sde }}
+    name: ${{ matrix.name }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: x86-64 SSE2 baseline (scalar fallback)
+            flags: "-mno-ssse3"
+            expect: scalar
+          - name: x86-64 SSSE3
+            flags: "-mssse3 -mno-avx"
+            expect: SSSE3
+          - name: x86-64 AVX2
+            flags: "-mavx2"
+            expect: AVX2
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Confirm the intended backend was selected
+        run: |
+          cat > /tmp/backend.cpp << 'EOF'
+          #include "glaze/simd/utf8_validation.hpp"
+          #include <cstdio>
+          int main() {
+          #if defined(GLZ_USE_AVX512BW)
+            std::puts("AVX512BW");
+          #elif defined(GLZ_USE_AVX2)
+            std::puts("AVX2");
+          #elif defined(GLZ_USE_SSSE3)
+            std::puts("SSSE3");
+          #else
+            std::puts("scalar");
+          #endif
+            return 0;
+          }
+          EOF
+          g++ -std=c++23 ${{ matrix.flags }} -I include /tmp/backend.cpp -o /tmp/backend
+          got=$(/tmp/backend)
+          echo "selected backend: $got (expected ${{ matrix.expect }})"
+          test "$got" = "${{ matrix.expect }}"
+
+      - name: Configure
+        run: |
+          cmake -B build \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_CXX_STANDARD=23 \
+            -DCMAKE_CXX_FLAGS="${{ matrix.flags }}" \
+            -Dglaze_BUILD_NETWORKING_TESTS=OFF \
+            -Dglaze_BUILD_PERFORMANCE_TESTS=OFF \
+            -Dglaze_ENABLE_FUZZING=OFF
+
+      - name: Build
+        run: cmake --build build -j"$(nproc)" --target utf8_validation_test json_conformance json_test
+
+      - name: Test
+        run: ctest --test-dir build --output-on-failure -R "$UTF8_TESTS"
+
+  avx512:
+    runs-on: ubuntu-24.04
+    name: x86-64 AVX-512BW
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Decide between native AVX-512 and Intel SDE
+        id: mode
+        run: |
+          # GitHub's fleet mixes Intel parts that have AVX-512 with AMD parts that do not, so which
+          # branch runs is not up to us. force_sde exercises the emulated branch deliberately.
+          if [ "${{ inputs.force_sde }}" = "true" ]; then
+            echo "Intel SDE requested explicitly."
+            echo "emulator=sde" >> "$GITHUB_OUTPUT"
+          elif grep -qw avx512bw /proc/cpuinfo; then
+            echo "Runner supports AVX-512BW natively."
+            echo "emulator=" >> "$GITHUB_OUTPUT"
+          else
+            echo "Runner lacks AVX-512BW; Intel SDE will be used."
+            echo "emulator=sde" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Install Intel SDE
+        if: steps.mode.outputs.emulator == 'sde'
+        run: |
+          set -euo pipefail
+          # Pinned by version and checksum so a moved or altered download fails loudly rather than
+          # silently changing what AVX-512 coverage means. Intel rotates the numeric mirror ID on
+          # every release, so bumping the version means bumping all three lines together.
+          SDE_TARBALL="sde-external-10.8.0-2026-03-15-lin.tar.xz"
+          SDE_URL="https://downloadmirror.intel.com/915934/${SDE_TARBALL}"
+          SDE_SHA256="50b320cd226acef7a491f5b321fc1be3c3c7984f9e27a456e64894b5b0979dd3"
+          curl -fsSL --retry 3 "$SDE_URL" -o /tmp/sde.tar.xz
+          echo "${SDE_SHA256}  /tmp/sde.tar.xz" | sha256sum -c -
+          mkdir -p /tmp/sde
+          tar -xf /tmp/sde.tar.xz -C /tmp/sde --strip-components=1
+          /tmp/sde/sde64 -version | head -3
+          echo "SDE=/tmp/sde/sde64" >> "$GITHUB_ENV"
+
+      - name: Confirm AVX-512BW backend was selected
+        run: |
+          cat > /tmp/backend.cpp << 'EOF'
+          #include "glaze/simd/utf8_validation.hpp"
+          #include <cstdio>
+          int main() {
+          #if defined(GLZ_USE_AVX512BW)
+            std::printf("AVX512BW width=%zu\n", glz::detail::utf8_simd::width);
+            return 0;
+          #else
+            std::puts("WRONG BACKEND");
+            return 1;
+          #endif
+          }
+          EOF
+          g++ -std=c++23 -mavx512f -mavx512bw -mavx512vl -I include /tmp/backend.cpp -o /tmp/backend
+          # Compiled for AVX-512 but only the preprocessor result matters, so run it under SDE when
+          # the runner cannot execute AVX-512 itself.
+          if [ -n "${SDE:-}" ]; then "$SDE" -future -- /tmp/backend; else /tmp/backend; fi
+
+      - name: Configure
+        run: |
+          cmake -B build \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_CXX_STANDARD=23 \
+            -DCMAKE_CXX_FLAGS="-mavx512f -mavx512bw -mavx512vl" \
+            -Dglaze_BUILD_NETWORKING_TESTS=OFF \
+            -Dglaze_BUILD_PERFORMANCE_TESTS=OFF \
+            -Dglaze_ENABLE_FUZZING=OFF
+
+      - name: Build
+        run: cmake --build build -j"$(nproc)" --target utf8_validation_test json_conformance json_test
+
+      - name: Test (native)
+        if: steps.mode.outputs.emulator == ''
+        run: ctest --test-dir build --output-on-failure -R "$UTF8_TESTS"
+
+      - name: Test (Intel SDE)
+        if: steps.mode.outputs.emulator == 'sde'
+        # -future selects a CPU model with the full AVX-512 feature set. Emulation is slow, so the
+        # binaries are invoked directly rather than through ctest's own timeouts.
+        run: |
+          set -euo pipefail
+          for t in build/tests/json_test/utf8_validation_test \
+                   build/tests/json_conformance/json_conformance \
+                   build/tests/json_test/json_test; do
+            echo "::group::$t"
+            "$SDE" -future -- "$t"
+            echo "::endgroup::"
+          done
+
+  wasm:
+    runs-on: ubuntu-24.04
+    # force_sde targets the AVX-512 job, so skip the jobs a dispatch run would only repeat.
+    if: ${{ !inputs.force_sde }}
+    name: WebAssembly SIMD128
+    steps:
+      - uses: actions/checkout@v6
+
+      # Installed directly rather than through a third-party action, so the toolchain version is
+      # pinned here and nothing else is trusted. Node ships with the runner image.
+      - name: Install Emscripten
+        run: |
+          set -euo pipefail
+          git clone --depth 1 --branch 3.1.64 https://github.com/emscripten-core/emsdk /tmp/emsdk
+          /tmp/emsdk/emsdk install 3.1.64
+          /tmp/emsdk/emsdk activate 3.1.64
+
+      - name: Build and run the UTF-8 suite
+        run: |
+          set -euo pipefail
+          source /tmp/emsdk/emsdk_env.sh
+          git clone --depth 1 --branch v1.1.0 https://github.com/openalgz/ut /tmp/ut
+          cat > /tmp/backend.cpp << 'EOF'
+          #include "glaze/simd/utf8_validation.hpp"
+          #include <cstdio>
+          int main() {
+          #if defined(GLZ_USE_WASM_SIMD128)
+            std::puts("SIMD128");
+          #else
+            std::puts("scalar");
+          #endif
+            return 0;
+          }
+          EOF
+          for cfg in "-msimd128:SIMD128" ":scalar"; do
+            flags="${cfg%%:*}"; label="${cfg##*:}"
+            echo "::group::WASM $label"
+            # Assert the backend before testing it, so a toolchain change that quietly drops SIMD128
+            # fails here instead of running the scalar path twice and reporting success.
+            em++ -std=c++23 $flags -I include /tmp/backend.cpp -o /tmp/backend.js -sEXIT_RUNTIME=1
+            got=$(node /tmp/backend.js | tr -d '\r')
+            echo "selected backend: $got (expected $label)"
+            test "$got" = "$label"
+            em++ -std=c++23 -O2 $flags \
+              -I include -I /tmp/ut/include \
+              tests/json_test/utf8_validation_test.cpp \
+              -o /tmp/utf8_wasm.js -sALLOW_MEMORY_GROWTH=1 -sEXIT_RUNTIME=1 -sTOTAL_STACK=8MB
+            node /tmp/utf8_wasm.js
+            echo "::endgroup::"
+          done
+
+  generic-widths:
+    runs-on: ubuntu-24.04
+    # force_sde targets the AVX-512 job, so skip the jobs a dispatch run would only repeat.
+    if: ${{ !inputs.force_sde }}
+    name: Portable backend (widths 16/32/64)
+    # Runs the width-generic algorithm at every register size in plain C++. This is what makes a
+    # 64 byte backend testable on hosts that cannot execute AVX-512 at all.
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Build and run at each width
+        run: |
+          set -euo pipefail
+          git clone --depth 1 --branch v1.1.0 https://github.com/openalgz/ut /tmp/ut
+          cat > /tmp/backend.cpp << 'EOF'
+          #include "glaze/simd/utf8_validation.hpp"
+          #include <cstdio>
+          int main() {
+          #if defined(GLZ_UTF8_SIMD)
+            std::printf("%zu\n", glz::detail::utf8_simd::width);
+            return 0;
+          #else
+            std::puts("scalar");
+            return 1;
+          #endif
+          }
+          EOF
+          for w in 16 32 64; do
+            echo "::group::generic width $w"
+            # This runner is x86-64 with no -m flags, so the baseline is SSE2 and no native backend
+            # is selected. Assert the portable backend really is active at the requested width:
+            # otherwise the vector path compiles away and all three widths silently test the scalar
+            # validator against itself.
+            g++ -std=c++23 -DGLZ_UTF8_GENERIC_WIDTH=$w -I include /tmp/backend.cpp -o /tmp/backend
+            got=$(/tmp/backend)
+            echo "active width: $got (expected $w)"
+            test "$got" = "$w"
+            g++ -std=c++23 -O2 -DGLZ_UTF8_GENERIC_WIDTH=$w \
+              -I include -I /tmp/ut/include \
+              tests/json_test/utf8_validation_test.cpp -o /tmp/utf8_generic_$w
+            /tmp/utf8_generic_$w
+            echo "::endgroup::"
+          done
