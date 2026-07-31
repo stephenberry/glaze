@@ -8,7 +8,6 @@
 #include "glaze/api/std/span.hpp"
 #include "glaze/core/buffer_traits.hpp"
 #include "glaze/core/common.hpp"
-#include "glaze/core/reflect.hpp"
 #include "glaze/core/streaming_state.hpp"
 #include "glaze/util/parse.hpp"
 
@@ -201,14 +200,6 @@ namespace glz
       requires read_supported<T, Opts.format> && is_input_streaming<std::remove_reference_t<Buffer>>
    [[nodiscard]] error_ctx read_streaming(T& value, Buffer&& buffer, Ctx&& ctx)
    {
-      static_assert(!holds_buffer_view<T>,
-                    "This type holds a non-owning view (std::string_view, glz::raw_json_view, or a "
-                    "std::span) somewhere inside it, and a streaming read refills by moving its "
-                    "window, which leaves every such view pointing at bytes that have since been "
-                    "overwritten. The read would report success and hand back silently wrong data. "
-                    "Read into the owning equivalent instead (std::string, glz::raw_json), or read "
-                    "from a buffer that holds the whole document.");
-
       // For streaming, we need null_terminated = false to track depth
       static constexpr auto StreamingOpts = [] {
          auto o = is_padded_off<Opts>();

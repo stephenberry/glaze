@@ -124,14 +124,16 @@ static_assert(glz::byte_input_stream<std::ifstream>);
 
 ## Non-owning types cannot be streamed
 
-A refill moves the window, so anything pointing into it dangles. Reading into a type that holds a `std::string_view`, a `glz::raw_json_view`, or a `std::span` — directly, as a member, or as the element of a container — is rejected at compile time:
+A refill moves the window, so anything pointing into it dangles. Filling a `std::string_view`, a `glz::raw_json_view`, a `glz::text_view`, or a `std::span<const T>` from a stream is rejected at compile time, wherever that view sits in the destination type:
 
 ```cpp
 std::vector<std::string_view> views{};
-glz::read_json(views, buffer);  // compile error: holds a non-owning view
+glz::read_json(views, buffer);  // compile error: fills a non-owning view
 ```
 
-Read into the owning equivalent (`std::string`, `glz::raw_json`) when the source is a stream. This is not a limitation that can be worked around by sizing the buffer up: whether a given view survives depends on where the refills happen to land, and a read that produces dangling views still reports success, so there is nothing to check at runtime.
+Read into the owning equivalent (`std::string`, `glz::raw_json`, `glz::text`) when the source is a stream. This is not a limitation that can be worked around by sizing the buffer up: whether a given view survives depends on where the refills happen to land, and a read that produces dangling views still reports success, so there is nothing to check at runtime.
+
+The check is on the readers that point into the buffer rather than on the shape of the destination, so it applies equally to a view reached through a container, a `std::tuple`, a map key, or a `glz::custom` setter. A `std::span` over your own storage is not affected — only `std::span<const T>` is ever aimed at the input.
 
 Buffered reads are unaffected. A buffer holds the whole document for the duration of the call, so views into it stay valid and remain a supported zero-copy idiom.
 

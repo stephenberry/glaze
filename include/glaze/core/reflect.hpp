@@ -3,8 +3,6 @@
 
 #pragma once
 
-#include <span>
-
 #include "glaze/beve/header.hpp"
 #include "glaze/core/common.hpp"
 #include "glaze/core/opts.hpp"
@@ -3563,81 +3561,6 @@ namespace glz
 
    template <is_variant T>
    inline constexpr bool adjacently_tagged_v = variant_tagging_v<T> == variant_tagging_kind::adjacent;
-
-   namespace detail
-   {
-      template <class T>
-      struct raw_json_string_type
-      {
-         using type = void;
-      };
-      template <class S>
-      struct raw_json_string_type<basic_raw_json<S>>
-      {
-         using type = S;
-      };
-
-      template <class T>
-      inline constexpr bool is_std_span = false;
-      template <class E, size_t N>
-      inline constexpr bool is_std_span<std::span<E, N>> = true;
-   }
-
-   // Whether reading into T can leave a pointer into the input buffer.
-   //
-   // A refill moves the streaming window, so a view produced before one addresses bytes that have
-   // since been overwritten. Nothing catches that at runtime: the read reports success, and the
-   // views compare equal to whatever now sits at those addresses. Since the destination type is
-   // known at compile time, the honest answer is to refuse the read rather than to produce it.
-   //
-   // The recursion is bounded because a type can contain itself, through a container or a pointer,
-   // and would otherwise not terminate. Past the bound this answers false: a view buried that
-   // deeply is not worth rejecting a legitimate type over.
-   template <class T, size_t Depth = 0>
-   inline constexpr bool holds_buffer_view = [] {
-      using V = std::remove_cvref_t<T>;
-      if constexpr (Depth > 8) {
-         return false;
-      }
-      else if constexpr (string_view_t<V>) {
-         return true;
-      }
-      else if constexpr (!std::same_as<typename detail::raw_json_string_type<V>::type, void>) {
-         return string_view_t<typename detail::raw_json_string_type<V>::type>;
-      }
-      else if constexpr (detail::is_std_span<V>) {
-         return true;
-      }
-      else if constexpr (str_t<V>) {
-         return false; // an owning string, whatever else it may also satisfy
-      }
-      else if constexpr (is_variant<V>) {
-         return []<size_t... I>(std::index_sequence<I...>) {
-            return (holds_buffer_view<std::variant_alternative_t<I, V>, Depth + 1> || ...);
-         }(std::make_index_sequence<std::variant_size_v<V>>{});
-      }
-      else if constexpr (pair_t<V>) {
-         return holds_buffer_view<typename V::first_type, Depth + 1> ||
-                holds_buffer_view<typename V::second_type, Depth + 1>;
-      }
-      else if constexpr (range<V>) {
-         return holds_buffer_view<range_value_t<V>, Depth + 1>;
-      }
-      else if constexpr (requires { typename V::element_type; } && nullable_t<V>) {
-         return holds_buffer_view<typename V::element_type, Depth + 1>;
-      }
-      else if constexpr (requires { typename V::value_type; } && nullable_t<V>) {
-         return holds_buffer_view<typename V::value_type, Depth + 1>;
-      }
-      else if constexpr (glaze_object_t<V> || reflectable<V>) {
-         return []<size_t... I>(std::index_sequence<I...>) {
-            return (holds_buffer_view<typename reflect<V>::template type<I>, Depth + 1> || ...);
-         }(std::make_index_sequence<reflect<V>::size>{});
-      }
-      else {
-         return false;
-      }
-   }();
 }
 
 #if defined(_MSC_VER) && !defined(__clang__)

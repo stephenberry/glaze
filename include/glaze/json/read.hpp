@@ -1859,6 +1859,7 @@ namespace glz
 
          const size_t n = size_t(it - start);
          if constexpr (string_view_t<T>) {
+            GLZ_ASSERT_OWNS_ITS_BYTES(decltype(ctx));
             using value_type = typename std::decay_t<T>::value_type;
             if constexpr (std::same_as<value_type, char8_t>) {
                value = {reinterpret_cast<const char8_t*>(start), n};
@@ -1918,6 +1919,7 @@ namespace glz
          }
 
          if constexpr (string_view_t<T>) {
+            GLZ_ASSERT_OWNS_ITS_BYTES(decltype(ctx));
             using value_type = typename std::decay_t<T>::value_type;
             if constexpr (std::same_as<value_type, char8_t>) {
                value = {reinterpret_cast<const char8_t*>(start), size_t(it - start)};
@@ -2238,6 +2240,9 @@ namespace glz
          }
          if (bool(ctx.error)) [[unlikely]]
             return;
+         if constexpr (string_view_t<T>) {
+            GLZ_ASSERT_OWNS_ITS_BYTES(decltype(ctx));
+         }
          value.str = {it_start, static_cast<size_t>(it - it_start)};
       }
    };
@@ -2246,8 +2251,11 @@ namespace glz
    struct from<JSON, basic_text<T>>
    {
       template <auto Opts>
-      GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&&, auto&& it, auto end)
+      GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&& it, auto end)
       {
+         if constexpr (string_view_t<T>) {
+            GLZ_ASSERT_OWNS_ITS_BYTES(decltype(ctx));
+         }
          value.str = {it, static_cast<size_t>(end - it)}; // read entire contents as string
          it = end;
       }

@@ -8,6 +8,7 @@
 #include <limits>
 #include <map>
 #include <mutex>
+#include <span>
 #include <sstream>
 #include <thread>
 
@@ -4324,62 +4325,44 @@ struct owning_record_t
    std::string name{};
 };
 
-struct viewing_record_t
-{
-   int id{};
-   std::string_view name{};
-};
+int span_backing[4]{};
 
-struct nests_a_view_t
+struct owns_its_span_t
 {
-   owning_record_t owned{};
-   viewing_record_t viewed{};
-};
-
-struct buries_a_view_t
-{
-   std::vector<std::map<std::string, viewing_record_t>> deep{};
-};
-
-struct self_referential_t
-{
-   int id{};
-   std::vector<self_referential_t> children{};
+   std::span<int, 4> values{span_backing};
 };
 
 // A refill moves the window, so a view handed out before one points at bytes that have since been
-// overwritten. The read still reports success, which is what makes it worth refusing at compile
-// time: there is no runtime signal to check. These pin which types the check catches, and just as
-// importantly which it leaves alone -- a trait that over-triggers would reject ordinary code.
+// overwritten, while the read still reports success. There is no runtime signal to check, so the
+// readers that alias the buffer refuse at compile time instead.
+//
+// This suite pins the direction that must keep working: a guard that over-triggers would reject
+// ordinary code, and that failure is as bad as the one it prevents. The rejection direction cannot
+// be asserted from here -- the binary would not build -- and lives in tests/streaming_view_rejection.
 suite streaming_view_rejection_tests = [] {
-   "owning types stream"_test = [] {
-      static_assert(!glz::holds_buffer_view<int>);
-      static_assert(!glz::holds_buffer_view<std::string>);
-      static_assert(!glz::holds_buffer_view<glz::raw_json>);
-      static_assert(!glz::holds_buffer_view<owning_record_t>);
-      static_assert(!glz::holds_buffer_view<std::vector<owning_record_t>>);
-      static_assert(!glz::holds_buffer_view<std::map<std::string, std::vector<owning_record_t>>>);
-      static_assert(!glz::holds_buffer_view<std::optional<double>>);
-      // a type that contains itself must not send the trait into an infinite recursion
-      static_assert(!glz::holds_buffer_view<self_referential_t>);
-      expect(true);
+   "owning types still stream"_test = [] {
+      std::istringstream in{R"({"id":7,"name":"alpha"})"};
+      glz::basic_istream_buffer<std::istringstream, 512> buffer{in};
+      owning_record_t record{};
+      expect(!glz::read_json(record, buffer));
+      expect(record.id == 7);
+      expect(record.name == "alpha");
    };
 
-   "types holding a view do not"_test = [] {
-      static_assert(glz::holds_buffer_view<std::string_view>);
-      static_assert(glz::holds_buffer_view<glz::raw_json_view>);
-      static_assert(glz::holds_buffer_view<std::vector<std::string_view>>);
-      static_assert(glz::holds_buffer_view<std::optional<std::string_view>>);
-      static_assert(glz::holds_buffer_view<std::variant<int, std::string_view>>);
-      // reached through a member, and through two containers and a member
-      static_assert(glz::holds_buffer_view<viewing_record_t>);
-      static_assert(glz::holds_buffer_view<nests_a_view_t>);
-      static_assert(glz::holds_buffer_view<buries_a_view_t>);
-      expect(true);
+   // Only std::span<const T> ever aliases the input; the BEVE zero-copy reader is constrained to
+   // const elements. A mutable span is the caller's own storage being filled in place, so it must
+   // keep streaming -- there is no owning type to redirect such a user to.
+   "a mutable span is not mistaken for a view"_test = [] {
+      std::istringstream in{R"({"values":[3,5,7,11]})"};
+      glz::basic_istream_buffer<std::istringstream, 512> buffer{in};
+      owns_its_span_t holder{};
+      expect(!glz::read_json(holder, buffer));
+      expect(holder.values[0] == 3);
+      expect(holder.values[3] == 11);
    };
 
-   // The trait only gates streaming. A buffered read owns its whole document for the duration of
-   // the call, so views into it stay valid and remain a supported zero-copy idiom.
+   // The guard only applies to streaming. A buffered read owns its whole document for the duration
+   // of the call, so views into it stay valid and remain a supported zero-copy idiom.
    "a buffered read into views still works"_test = [] {
       const std::string doc = R"(["alpha","beta","gamma"])";
       std::vector<std::string_view> views{};
