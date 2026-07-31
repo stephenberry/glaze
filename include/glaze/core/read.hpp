@@ -85,9 +85,9 @@ namespace glz
       finalize_read_context<Opts>(ctx);
    }
 
-   template <auto Opts, class T>
-      requires read_supported<T, Opts.format>
-   [[nodiscard]] error_ctx read(T& value, contiguous auto&& buffer, is_context auto&& ctx)
+   template <auto Opts, class T, contiguous Buf>
+      requires read_supported<T, Opts.format> && (!is_input_streaming<Buf>)
+   [[nodiscard]] error_ctx read(T& value, Buf&& buffer, is_context auto&& ctx)
    {
       static_assert(sizeof(decltype(*buffer.data())) == 1);
       using Buffer = std::remove_reference_t<decltype(buffer)>;
@@ -159,9 +159,9 @@ namespace glz
       return {size_t(it - start), ctx.error, ctx.custom_error_message};
    }
 
-   template <auto Opts, class T>
-      requires read_supported<T, Opts.format>
-   [[nodiscard]] error_ctx read(T& value, contiguous auto&& buffer)
+   template <auto Opts, class T, contiguous Buf>
+      requires read_supported<T, Opts.format> && (!is_input_streaming<Buf>)
+   [[nodiscard]] error_ctx read(T& value, Buf&& buffer)
    {
       format_context_t<Opts.format> ctx{};
       return read<Opts>(value, buffer, ctx);
@@ -270,5 +270,36 @@ namespace glz
    {
       streaming_context ctx{};
       return read_streaming<Opts>(value, std::forward<Buffer>(buffer), ctx);
+   }
+
+   // A streaming buffer satisfies `contiguous`, but the span it exposes is one window of a larger
+   // stream: it ends wherever the last fill stopped, it carries no terminator, and reading it as a
+   // flat buffer parses that window alone. Route it to read_streaming rather than let it bind to
+   // the overloads above, which would run with null_terminated on and read past the window's end.
+   // Doing this here rather than per format is what keeps read_jsonc, read_beve and every other
+   // helper that funnels through `read` from having to remember on its own.
+   template <auto Opts, class T, class Buffer>
+      requires read_supported<T, Opts.format> && is_input_streaming<std::remove_reference_t<Buffer>>
+   [[nodiscard]] error_ctx read(T& value, Buffer&& buffer, is_context auto&& ctx)
+   {
+      if constexpr (has_streaming_state<decltype(ctx)>) {
+         return read_streaming<Opts>(value, std::forward<Buffer>(buffer), ctx);
+      }
+      else {
+         // The caller's context has nowhere to hold the streaming state the parsers refill
+         // through, so the read runs on one that does and reports back through theirs.
+         streaming_context stream_ctx{};
+         const error_ctx ec = read_streaming<Opts>(value, std::forward<Buffer>(buffer), stream_ctx);
+         ctx.error = stream_ctx.error;
+         ctx.custom_error_message = stream_ctx.custom_error_message;
+         return ec;
+      }
+   }
+
+   template <auto Opts, class T, class Buffer>
+      requires read_supported<T, Opts.format> && is_input_streaming<std::remove_reference_t<Buffer>>
+   [[nodiscard]] error_ctx read(T& value, Buffer&& buffer)
+   {
+      return read_streaming<Opts>(value, std::forward<Buffer>(buffer));
    }
 }

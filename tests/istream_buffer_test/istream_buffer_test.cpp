@@ -4144,4 +4144,78 @@ suite additional_edge_cases = [] {
    };
 };
 
+// A streaming buffer satisfies `contiguous`, so before these entry points routed to read_streaming
+// they bound to the buffered read: one window, parsed with null_terminated on, read past its end.
+// Only read_json carried its own streaming overload; everything funnelling through `read` did not.
+// A document larger than the window is what makes the difference visible -- it both overruns the
+// window and, once routed correctly, needs the refills to complete.
+namespace
+{
+   std::string oversized_array()
+   {
+      std::string json = "[";
+      for (int i = 0; i < 400; ++i) {
+         if (i) json += ',';
+         json += std::to_string(i);
+      }
+      return json + "]";
+   }
+
+   constexpr size_t narrow_window = 512; // smaller than oversized_array()
+}
+
+suite streaming_buffer_dispatch_tests = [] {
+   "read_jsonc streams instead of parsing one window"_test = [] {
+      std::istringstream iss{oversized_array()};
+      glz::basic_istream_buffer<std::istringstream, narrow_window> buffer(iss);
+
+      std::vector<int> v{};
+      expect(!glz::read_jsonc(v, buffer));
+      expect(v.size() == 400u);
+      expect(v[399] == 399);
+   };
+
+   "generic read streams instead of parsing one window"_test = [] {
+      std::istringstream iss{oversized_array()};
+      glz::basic_istream_buffer<std::istringstream, narrow_window> buffer(iss);
+
+      std::vector<int> v{};
+      expect(!glz::read<glz::opts{}>(v, buffer));
+      expect(v.size() == 400u);
+   };
+
+   // The context-taking overload has nowhere to put the streaming state, so it runs on one that
+   // does. The caller's context must still come back carrying the outcome.
+   "generic read with a caller supplied context"_test = [] {
+      std::istringstream iss{oversized_array()};
+      glz::basic_istream_buffer<std::istringstream, narrow_window> buffer(iss);
+
+      std::vector<int> v{};
+      glz::context ctx{};
+      expect(!glz::read<glz::opts{}>(v, buffer, ctx));
+      expect(v.size() == 400u);
+      expect(ctx.error == glz::error_code::none);
+   };
+
+   "caller supplied context reports the error"_test = [] {
+      std::istringstream iss{R"([1,2,)"};
+      glz::basic_istream_buffer<std::istringstream, narrow_window> buffer(iss);
+
+      std::vector<int> v{};
+      glz::context ctx{};
+      expect(glz::read<glz::opts{}>(v, buffer, ctx)) << "truncated input must fail";
+      expect(ctx.error != glz::error_code::none) << "the caller's context must carry the error";
+   };
+
+   // read_json already had streaming overloads; nothing here may disturb them.
+   "read_json is unchanged"_test = [] {
+      std::istringstream iss{oversized_array()};
+      glz::basic_istream_buffer<std::istringstream, narrow_window> buffer(iss);
+
+      std::vector<int> v{};
+      expect(!glz::read_json(v, buffer));
+      expect(v.size() == 400u);
+   };
+};
+
 int main() { return 0; }
