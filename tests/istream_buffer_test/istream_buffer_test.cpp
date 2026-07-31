@@ -699,6 +699,43 @@ suite json_stream_reader_tests = [] {
       expect(records.size() == 3u);
    };
 
+   // A stream whose last record is cut off used to come back as a success holding only the records
+   // that survived. read_json_stream stops on end_reached and treats it as end of stream, so a tail
+   // that ran out mid-record was indistinguishable from a stream that ended between records, and
+   // the caller was handed a short vector with nothing to say it was short.
+   "a truncated final record is reported, not dropped"_test = [] {
+      for (std::string_view tail : {R"({"id":2)", R"({"id":2,"name":"b")", R"({"id":2,"name":)"}) {
+         std::istringstream iss{R"({"id":1,"name":"a"})"
+                                "\n" +
+                                std::string{tail}};
+
+         std::vector<Record> records;
+         const auto ec = glz::read_json_stream(records, iss);
+
+         expect(ec.ec == glz::error_code::unexpected_end) << tail;
+         expect(ec.ec != glz::error_code::end_reached) << tail;
+         expect(records.size() == 1u) << tail;
+      }
+   };
+
+   "a stream ending between records still succeeds"_test = [] {
+      for (std::string_view text : {R"({"id":1,"name":"a"})"
+                                    "\n"
+                                    R"({"id":2,"name":"b"})",
+                                    R"({"id":1,"name":"a"})"
+                                    "\n"
+                                    R"({"id":2,"name":"b"})"
+                                    "\n"}) {
+         std::istringstream iss{std::string{text}};
+
+         std::vector<Record> records;
+         const auto ec = glz::read_json_stream(records, iss);
+
+         expect(!ec) << text;
+         expect(records.size() == 2u) << text;
+      }
+   };
+
    "json_stream_reader error handling"_test = [] {
       std::istringstream iss(R"({"id":1,"name":"valid"}
 {"id":invalid})");

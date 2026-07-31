@@ -29,8 +29,15 @@ namespace glz
       // Other errors
       // Internal to a non-null-terminated read: "the buffer ran out here", which is a completed
       // read or a truncated one depending on the nesting depth. settle_end_reached decides which
-      // at the top level and replaces it with none or unexpected_end, so a read never returns it.
-      // json_stream_reader is the exception: it raises this itself to signal end of stream.
+      // and replaces it with none or unexpected_end, so every entry point that finalizes its
+      // context -- glz::read, read_streaming, repe::read_params -- has stopped returning it.
+      //
+      // Two paths still hand it back. json_stream_reader raises it deliberately, to signal end of
+      // stream. read_jmespath and get_view_json return ctx.error without finalizing at all; they
+      // navigate by matching braces rather than by entering depth, so ctx.depth stays zero
+      // throughout and settle_end_reached cannot be dropped in as-is -- it would settle their
+      // truncated reads to none, which is worse than leaking. Those need their own truncation
+      // accounting before they can join.
       end_reached,
       partial_read_complete, // A non-error code for short circuiting partial reads
       no_read_input, //
