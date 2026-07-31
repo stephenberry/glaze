@@ -69,7 +69,32 @@ namespace jsonrpc_fuzz
       };
       std::function<void()> reset = [] {};
    };
+
+   // Member functions listed in a glz::meta reach different endpoint registrations than the
+   // std::function members above -- register_member_function_endpoint and its with_params variant.
+   // The with_params one parks its argument in a `static thread_local`, which is the kind of state
+   // that survives between inputs and turns a crash into one that will not reproduce, so it is
+   // worth having under the fuzzer rather than only under the unit tests.
+   struct member_api
+   {
+      int32_t counter{};
+
+      int32_t scale(int32_t v)
+      {
+         counter += v;
+         return v * 3;
+      }
+      void bump() { ++counter; }
+      point shift(const point& p) { return {p.x + 1, p.y + 1}; }
+   };
 }
+
+template <>
+struct glz::meta<jsonrpc_fuzz::member_api>
+{
+   using T = jsonrpc_fuzz::member_api;
+   static constexpr auto value = object(&T::counter, &T::scale, &T::bump, &T::shift);
+};
 
 namespace
 {
@@ -89,6 +114,11 @@ namespace
    {
       glz::registry<glz::opts{}, glz::JSONRPC> registry;
       fuzz_api api{};
+      jsonrpc_fuzz::member_api members{};
+      // members first, so the last registration -- and therefore the root endpoint -- is the wider
+      // of the two objects. Root reads the whole object in one document, so it should be the one
+      // with the nested struct, containers, optional and variant in it.
+      registry.on(members);
       registry.on(api);
 
       const auto response = registry.call(request);
@@ -121,9 +151,11 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t* Data, size_t Size)
    // params reader is reached even when the fuzzer has not yet learned the envelope's shape. The
    // first byte picks the method, since which one is registered decides what the params must parse
    // as, and a params reader is only interesting once it has a destination type.
-   static constexpr std::string_view methods[] = {"value",  "name",     "position", "position/x", "inner",
-                                                  "series", "table",    "maybe",    "measure",    "doubled",
-                                                  "greet",  "midpoint", "total",    "reset",      "absent"};
+   // "" is the root method, which reads the whole registered object in one document -- every nested
+   // struct, container, optional and variant at once, and the deepest reader nesting on offer.
+   static constexpr std::string_view methods[] = {
+      "",        "value", "name",     "position", "position/x", "inner",   "series", "table", "maybe", "measure",
+      "doubled", "greet", "midpoint", "total",    "reset",      "counter", "scale",  "bump",  "shift", "absent"};
    const std::string_view method = methods[Data[0] % (sizeof(methods) / sizeof(methods[0]))];
    const std::string_view params = input.substr(1);
 

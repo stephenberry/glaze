@@ -70,7 +70,33 @@ namespace repe_fuzz
       };
       std::function<void()> reset = [] {};
    };
+
+   // Member functions listed in a glz::meta reach different endpoint registrations than the
+   // std::function members above -- register_member_function_endpoint and its with_params variant.
+   // The with_params one parks its argument in a `static thread_local`, which is the kind of state
+   // that survives between inputs and turns a crash into one that will not reproduce, so it is
+   // worth having under the fuzzer rather than only under the unit tests.
+   struct member_api
+   {
+      int32_t counter{};
+
+      int32_t scale(int32_t v)
+      {
+         counter += v;
+         return v * 3;
+      }
+      void bump() { ++counter; }
+      point shift(const point& p) { return {p.x + 1, p.y + 1}; }
+      std::string tag(const nested& n) { return n.label; }
+   };
 }
+
+template <>
+struct glz::meta<repe_fuzz::member_api>
+{
+   using T = repe_fuzz::member_api;
+   static constexpr auto value = object(&T::counter, &T::scale, &T::bump, &T::shift, &T::tag);
+};
 
 namespace
 {
@@ -97,7 +123,10 @@ namespace
       hdr.body_length = body.size();
       hdr.length = sizeof(glz::repe::header) + query.size() + body.size();
       hdr.query_format = glz::repe::query_format::JSON_POINTER;
-      hdr.body_format = (flags & 0x2) ? glz::repe::body_format::BEVE : glz::repe::body_format::JSON;
+      hdr.body_format = glz::repe::body_format::JSON;
+      // The registry echoes a request that already carries an error back to the sender without
+      // dispatching it. Nothing else in this target sets ec, so without this that branch is dead.
+      hdr.ec = (flags & 0x2) ? glz::error_code::invalid_query : glz::error_code::none;
 
       std::string msg;
       msg.resize(hdr.length);
@@ -109,28 +138,36 @@ namespace
 
    void drive(std::span<const char> request)
    {
-      {
-         glz::registry<> registry;
-         fuzz_api api{};
-         registry.on(api);
+      glz::registry<> registry;
+      fuzz_api api{};
+      repe_fuzz::member_api members{};
+      // members first, so the last registration -- and therefore the root endpoint -- is the wider
+      // of the two objects. Root reads the whole object in one document, so it should be the one
+      // with the nested struct, containers, optional and variant in it.
+      registry.on(members);
+      registry.on(api);
 
-         std::string response;
-         registry.call(request, response);
-         if (!response.empty()) {
-            // The response is a message in its own right, so parsing it back exercises the header
-            // reader on bytes the registry itself produced.
-            [[maybe_unused]] auto parsed = glz::repe::parse_request({response.data(), response.size()});
-         }
+      std::string response;
+      registry.call(request, response);
+      if (!response.empty()) {
+         // The response is a message in its own right, so parsing it back exercises the header
+         // reader on bytes the registry itself produced. Copy it out at exactly its own size first:
+         // a std::string keeps an implicit '\0' at data()[size()] and allocator slack behind it,
+         // which is the very thing this target exists to not have.
+         const auto buf = exact_buffer(response);
+         [[maybe_unused]] auto parsed = glz::repe::parse_request({buf.data(), buf.size()});
       }
+   }
 
-      {
-         // plugin_call reaches the same registry through a raw pointer and length, which is the
-         // shape an FFI caller supplies and the one with no terminator anywhere in sight.
-         glz::registry<> registry;
-         fuzz_api api{};
-         registry.on(api);
-         [[maybe_unused]] auto out = glz::repe::plugin_call(registry, request.data(), request.size());
-      }
+   // plugin_call forwards to the same registry::call overload drive() already uses, so running it
+   // per drive doubled the work for one extra line of coverage: the pointer-and-length wrapper and
+   // its thread_local response buffer. Once per input is enough to keep that line exercised.
+   void drive_plugin(std::span<const char> request)
+   {
+      glz::registry<> registry;
+      fuzz_api api{};
+      registry.on(api);
+      [[maybe_unused]] auto out = glz::repe::plugin_call(registry, request.data(), request.size());
    }
 }
 
@@ -142,6 +179,7 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t* Data, size_t Size)
    {
       const auto buf = exact_buffer(input);
       drive({buf.data(), buf.size()});
+      drive_plugin({buf.data(), buf.size()});
    }
 
    if (Size < 2) {
@@ -152,10 +190,10 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t* Data, size_t Size)
    // The query is what the dispatch walks and the body is what the reader parses, so splitting the
    // input between them lets a single corpus entry drive both.
    const uint8_t flags = Data[0];
-   const size_t query_size = size_t(Data[1]) % (Size - 1);
-   const std::string_view rest = input.substr(2 > Size ? Size : 2);
-   const std::string_view query = rest.substr(0, query_size > rest.size() ? rest.size() : query_size);
-   const std::string_view body = rest.substr(query.size());
+   const std::string_view rest = input.substr(2);
+   const size_t query_size = rest.empty() ? 0 : size_t(Data[1]) % (rest.size() + 1);
+   const std::string_view query = rest.substr(0, query_size);
+   const std::string_view body = rest.substr(query_size);
 
    {
       const auto framed = framed_message(query, body, flags);
@@ -165,9 +203,12 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t* Data, size_t Size)
 
    // The same body against a fixed query that is known to resolve, so the body reader is reached
    // even when the fuzzer has not yet learned what a valid JSON pointer looks like.
-   for (std::string_view known :
-        {"/value", "/name", "/position", "/position/x", "/inner", "/inner/label", "/series", "/table", "/maybe",
-         "/measure", "/doubled", "/greet", "/midpoint", "/total", "/reset"}) {
+   // "" is the root endpoint, which reads the whole registered object in one document -- every
+   // nested struct, container, optional and variant at once, and the deepest reader nesting on
+   // offer. It is the widest single target here, so it must not be left out of the list.
+   for (std::string_view known : {"",        "/value", "/name",    "/position", "/position/x", "/inner", "/inner/label",
+                                  "/series", "/table", "/maybe",   "/measure",  "/doubled",    "/greet", "/midpoint",
+                                  "/total",  "/reset", "/counter", "/scale",    "/bump",       "/shift", "/tag"}) {
       const auto framed = framed_message(known, body, flags);
       const auto buf = exact_buffer(framed);
       drive({buf.data(), buf.size()});
