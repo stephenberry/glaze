@@ -8,6 +8,7 @@
 #include <limits>
 #include <map>
 #include <mutex>
+#include <random>
 #include <sstream>
 #include <thread>
 
@@ -4370,6 +4371,83 @@ suite ndjson_streaming_tests = [] {
       expect(!glz::read_ndjson(v, buffer));
       expect(v.size() == 6u);
       expect(v[5].name.size() == 300u);
+   };
+
+   // The test this feature needs. Streaming and buffered reads of the same document must agree,
+   // and mixed record widths are what break refill policies: a record's start lands at a different
+   // offset into the window every time, so the interesting alignments only show up under variety.
+   // Uniform widths pass almost anything.
+   //
+   // What this catches, and what nothing built from fixed-width records did: a bare token cut by
+   // the window edge parses cleanly up to `end`, so it reads as a complete record and its tail
+   // reads as the next one. One number silently becomes two, with a success code.
+   "streaming agrees with buffered across record widths"_test = [] {
+      std::mt19937_64 rng{12345};
+      size_t compared = 0;
+
+      for (int round = 0; round < 400; ++round) {
+         // bare numbers, so a cut record still parses as a valid value rather than erroring out
+         std::string doc{};
+         const int records = 1 + int(rng() % 5);
+         for (int i = 0; i < records; ++i) {
+            doc += "0." + std::string(1 + rng() % 420, char('1' + int(rng() % 9))) + "\n";
+         }
+
+         std::vector<double> buffered{};
+         const auto ec_buffered = glz::read_ndjson(buffered, doc);
+
+         std::istringstream iss{doc};
+         glz::basic_istream_buffer<std::istringstream, narrow_window> buffer(iss);
+         std::vector<double> streamed{};
+         const auto ec_streamed = glz::read_ndjson(streamed, buffer);
+
+         expect(ec_streamed.ec == ec_buffered.ec) << "round " << round;
+         expect(streamed == buffered) << "round " << round << ": " << streamed.size() << " vs " << buffered.size();
+         ++compared;
+      }
+      expect(compared == 400u);
+   };
+
+   // A separator run can be wider than the window, and a CRLF can be split across the edge, so the
+   // reader has to pull the '\n' in before deciding whether the '\r' was a separator or garbage.
+   "separators spanning the window edge still separate"_test = [] {
+      for (size_t pad = 500; pad < 510; ++pad) {
+         const std::string doc = "0." + std::string(pad, '5') + "\r\n7\r\n";
+
+         std::vector<double> buffered{};
+         expect(!glz::read_ndjson(buffered, doc)) << pad;
+
+         std::istringstream iss{doc};
+         glz::basic_istream_buffer<std::istringstream, narrow_window> buffer(iss);
+         std::vector<double> streamed{};
+         expect(!glz::read_ndjson(streamed, buffer)) << pad;
+         expect(streamed == buffered) << pad;
+      }
+
+      // a run of separators longer than the window, then a record behind it
+      const std::string doc = std::string(narrow_window - 1, '\n') + "\r\n42\n";
+      std::istringstream iss{doc};
+      glz::basic_istream_buffer<std::istringstream, narrow_window> buffer(iss);
+      std::vector<double> v{};
+      expect(!glz::read_ndjson(v, buffer));
+      expect(v.size() == 1u);
+      expect(v[0] == 42.0);
+   };
+
+   // A record only has to fit in the window, not in whatever the previous record happened to leave
+   // behind. Sizing the first record so the second starts past the halfway mark is what a
+   // byte-count refill policy gets wrong: it declares a perfectly ordinary record too wide.
+   "a record wider than the window's remainder still reads"_test = [] {
+      const std::string doc = "\"" + std::string(197, 'a') + "\"\n\"" + std::string(398, 'b') + "\"\n";
+
+      std::istringstream iss{doc};
+      glz::basic_istream_buffer<std::istringstream, narrow_window> buffer(iss);
+
+      std::vector<std::string> v{};
+      const auto ec = glz::read_ndjson(v, buffer);
+      expect(!ec) << "a 400 byte record fits a 512 byte window";
+      expect(v.size() == 2u);
+      expect(v[1].size() == 398u);
    };
 
    // Nothing refills in the middle of a string or a number, so a single token still has to fit.

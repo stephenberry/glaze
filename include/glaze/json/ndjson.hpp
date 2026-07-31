@@ -3,6 +3,8 @@
 
 #pragma once
 
+#include <cstring>
+
 #include "glaze/json/read.hpp"
 #include "glaze/json/write.hpp"
 
@@ -32,73 +34,163 @@ namespace glz
 
    // Consume the line breaks that separate two records.
    //
+   // Both line endings are handled by one loop rather than one after the other, so that a CRLF
+   // following a bare LF is still a separator. Scanning for all the CRs and then all the LFs stops
+   // at the first CR after an LF and calls it the start of a record.
+   //
+   // A '\r' whose '\n' has not arrived is left unconsumed rather than rejected. From in here a CRLF
+   // split by the window edge and a stray carriage return are the same two bytes; only the caller
+   // knows whether more input can still arrive. So this stops there without an error, and the
+   // caller either refills and calls again or reports the syntax error itself.
+   //
    // A null-terminated buffer stops on the trailing '\0' sentinel. A non-null-terminated buffer has
    // no sentinel, so bound the scan on it != end.
    template <auto Opts>
    GLZ_ALWAYS_INLINE void skip_record_separators(is_context auto& ctx, auto& it, auto& end) noexcept
    {
       if constexpr (Opts.null_terminated) {
-         while (*it == '\r') {
-            ++it;
+         while (true) {
             if (*it == '\n') {
                ++it;
+               continue;
             }
-            else {
+            if (*it == '\r') {
+               if (*(it + 1) == '\n') {
+                  it += 2;
+                  continue;
+               }
                ctx.error = error_code::syntax_error; // Expected '\n' after '\r'
-               return;
             }
-         }
-         while (*it == '\n') {
-            ++it;
+            return;
          }
       }
       else {
-         while (it != end && *it == '\r') {
-            ++it;
-            if (it != end && *it == '\n') {
+         while (it != end) {
+            if (*it == '\n') {
                ++it;
+               continue;
             }
-            else {
+            if (*it == '\r') {
+               if ((it + 1) == end) {
+                  return; // undecidable from this window; the caller refills or errors
+               }
+               if (*(it + 1) == '\n') {
+                  it += 2;
+                  continue;
+               }
                ctx.error = error_code::syntax_error; // Expected '\n' after '\r'
-               return;
             }
-         }
-         while (it != end && *it == '\n') {
-            ++it;
+            return;
          }
       }
    }
 
-   // Position `it` at the next record, and report whether there is one.
+   // Whether a record delimiter is anywhere in the window ahead of `it`.
    //
-   // Records are independent, so the gap between two of them is where a streaming window can
-   // release what has been parsed and pull in more. Doing that here is what lets a document larger
-   // than the window be read at all; without it the read stops at the first window's edge, carrying
-   // only the records that happened to fit and calling that a complete document.
+   // Either line ending closes a record, and '\r' has to count on its own: a CRLF can be split by
+   // the window edge, and a window holding the whole record plus the '\r' does hold a complete
+   // record. Requiring the '\n' would call that record unreadable while it is sitting right there.
    //
-   // Returns false both when the input is exhausted and when the separators were malformed; the
-   // caller tells them apart from ctx.error, which is what distinguishes a document that ended from
-   // one that broke.
+   // A raw '\r' or '\n' inside a JSON string is invalid -- both have to be escaped -- so the first
+   // one after the start of a record always ends it.
+   GLZ_ALWAYS_INLINE bool window_holds_record_end(const char* it, const char* end) noexcept
+   {
+      const size_t n = size_t(end - it);
+      if (n == 0) {
+         return false;
+      }
+      return std::memchr(it, '\n', n) != nullptr || std::memchr(it, '\r', n) != nullptr;
+   }
+
+   // Bring a whole record into the window, so the record reader is never handed a partial one.
+   //
+   // Records are newline delimited, which makes "does the window hold a complete record" a question
+   // that can be answered before parsing: look for the delimiter. Nothing weaker works. A refill
+   // policy driven by a byte count cannot tell "the window ran out in the middle of this record"
+   // from "this record ended with the buffer", and the JSON reader reports both the same way, as a
+   // value that parsed cleanly up to `end`. A bare number split by the window edge then reads as
+   // two numbers, and neither the reader nor the caller has anything to notice it by.
+   //
+   // Refilling until the delimiter appears also drops the ceiling a byte count imposes. A record no
+   // longer has to fit in whatever fraction of the window happened to be left over from the last
+   // one; it only has to fit in the window.
+   //
+   // Returns false when no refill can produce a delimiter, which means the record really is wider
+   // than the window -- the standing limit of streaming, since nothing refills inside a record.
+   template <class Ctx>
+   bool fill_window_to_record_end(Ctx& ctx, auto& it, auto& end) noexcept
+   {
+      if constexpr (has_streaming_state<Ctx>) {
+         if (ctx.stream.enabled()) {
+            while (!window_holds_record_end(it, end)) {
+               // The last record in a document may end without a delimiter, so a source with
+               // nothing left to give has already delivered the whole record.
+               if (ctx.stream.source_at_eof()) {
+                  return true;
+               }
+               const size_t available = size_t(end - it);
+               refill_window(ctx, it, end);
+               if (size_t(end - it) <= available) {
+                  return false; // the refill brought nothing new: the record does not fit
+               }
+            }
+         }
+      }
+      return true;
+   }
+
+   // Position `it` at the start of the next record, with the whole record in the window, and report
+   // whether there is one.
+   //
+   // Records are independent, so the gap between two of them is the only place a streaming window
+   // may release what has been parsed and pull in more. Doing that here is what lets a document
+   // larger than the window be read at all; without it the read stops at the first window's edge,
+   // carrying only the records that happened to fit and calling that a complete document.
+   //
+   // Returns false when the input is exhausted, when the separators were malformed, and when a
+   // record is wider than the window; the caller tells them apart from ctx.error, which is what
+   // distinguishes a document that ended from one that could not be read.
    template <auto Opts, class Ctx>
    bool ndjson_has_next_record(Ctx& ctx, auto& it, auto& end) noexcept
    {
-      // A run of separators can be wider than the window, so this loops: each pass consumes at
-      // least the byte the previous refill made available, and stops as soon as the source runs
-      // dry. Without it a window ending in separators looks like the start of a record.
+      // A run of separators can be wider than the window, so this loops: each pass either reaches a
+      // record byte or releases the separators it walked and pulls more input in behind them.
       while (true) {
-         refill_between_values(ctx, it, end);
-         if (it >= end) {
-            return false;
-         }
-
          skip_record_separators<Opts>(ctx, it, end);
          if (bool(ctx.error)) [[unlikely]] {
             return false;
          }
-         if (it < end) {
-            return true;
+         if (it < end && *it != '\r') {
+            break; // a record byte
+         }
+
+         // Either the window is spent, or it ends on a '\r' whose '\n' has not arrived. Both are
+         // answered by more input, and both are the end of the document if there is none.
+         bool progressed = false;
+         if constexpr (has_streaming_state<Ctx>) {
+            if (ctx.stream.enabled() && !ctx.stream.source_at_eof()) {
+               const size_t available = size_t(end - it);
+               refill_window(ctx, it, end);
+               progressed = size_t(end - it) > available;
+            }
+         }
+         if (!progressed) {
+            if (it < end) [[unlikely]] {
+               // a '\r' at the true end of the input, with no '\n' to pair it with
+               ctx.error = error_code::syntax_error;
+            }
+            return false;
          }
       }
+
+      if (!fill_window_to_record_end(ctx, it, end)) {
+         ctx.error = error_code::streaming_unsupported;
+         ctx.custom_error_message =
+            "this NDJSON record is wider than the buffer window; a record must fit in the window "
+            "because nothing refills inside one";
+         return false;
+      }
+      return true;
    }
 
    // Read one record into `record`. Returns false on error.
@@ -122,9 +214,23 @@ namespace glz
       if (!bool(ctx.error)) [[likely]] {
          return true;
       }
+
+      // "The input ran out exactly where this record ended" is only the same statement as "this
+      // record is complete" when the input that ran out was the document. If it was the window, the
+      // record was cut mid-token and the bytes after the cut are the rest of that same token --
+      // accepting it here splits one value into two and reports success, which is the one outcome a
+      // reader must never produce. ndjson_has_next_record is what normally prevents this, by
+      // refusing to start a record it cannot see the end of; this is the check that makes the
+      // guarantee local rather than something the caller has to be trusted to have arranged.
       if (ctx.error == error_code::end_reached && ctx.depth == 0) {
-         ctx.error = error_code::none;
-         return true;
+         bool cut_by_window = false;
+         if constexpr (has_streaming_state<Ctx>) {
+            cut_by_window = ctx.stream.enabled() && !ctx.stream.source_at_eof() && it >= end;
+         }
+         if (!cut_by_window) {
+            ctx.error = error_code::none;
+            return true;
+         }
       }
 
       if constexpr (has_streaming_state<Ctx>) {
@@ -132,8 +238,8 @@ namespace glz
          if (ran_out_of_input && ctx.stream.enabled() && !ctx.stream.source_at_eof()) {
             ctx.error = error_code::streaming_unsupported;
             ctx.custom_error_message =
-               "a string or number in this NDJSON record is wider than the buffer window; nothing "
-               "refills inside a single token";
+               "this NDJSON record is wider than the buffer window; a record must fit in the window "
+               "because nothing refills inside one";
          }
       }
       return false;

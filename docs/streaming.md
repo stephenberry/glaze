@@ -137,13 +137,24 @@ Passing an `istream_buffer` to any format is safe: the read is bounded by the wi
 
 ### What still has to fit in the window
 
-Refill points sit *between* values, never inside one. A single JSON string or number is read in one piece, so it has to fit in what the window holds when it starts — the buffer capacity is the practical ceiling on one token, not on the document. A token that outruns the window reports `error_code::streaming_unsupported`, which names the buffer rather than blaming the document. Raise the capacity if you hit it:
+Refill points sit *between* values, never inside one. A single JSON string or number is read in one piece, so it has to fit in the window; the capacity is the ceiling on one token, not on the document. For NDJSON the unit is the record: a record and its newline have to fit, and a record only has to fit in the *window*, not in whatever the record before it left over. Outrunning the window reports `error_code::streaming_unsupported`, which names the buffer rather than blaming the document. Raise the capacity if you hit it:
 
 ```cpp
 glz::basic_istream_buffer<std::ifstream, 1 << 20> buffer(file);  // 1 MB window
 ```
 
 Leading whitespace is also read without refilling, so whitespace wider than the window stops a read before it reaches the value behind it.
+
+### Non-owning types are unsafe to stream
+
+A refill moves the window, so anything pointing into it dangles. Reading into a type that holds `std::string_view` or `glz::raw_json_view` — directly, or as a member, or as the element of a container — gives views into bytes that have since been overwritten, and the read still reports success. This is not currently diagnosed.
+
+```cpp
+std::vector<std::string_view> views{};
+glz::read_json(views, buffer);  // silently wrong once the document outruns one window
+```
+
+Read into owning types (`std::string`, `glz::raw_json`) when the source is a stream. This applies to every streaming read, not just NDJSON.
 
 ## See Also
 

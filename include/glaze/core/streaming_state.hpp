@@ -127,30 +127,34 @@ namespace glz
       }
    }
 
-   // A refill point for a reader parsing a sequence of independent values: called between two of
-   // them, it releases what has been parsed and pulls more input into the space behind it. Both
-   // iterators move, since a refill relocates the window.
+   // Release everything up to `it` and pull more input into the space behind it. Both iterators
+   // move, since a refill relocates the window.
    //
-   // Refilling once the window is half spent rather than only once it is drained is what keeps
-   // whole values inside it. A reader can refill between values but not inside one, so the next
-   // value has to fit in what is left; leaving half the window is the margin that buys. A value
-   // wider than that margin still runs out of window, which is the standing limit of streaming.
+   // This is mechanism only: when to refill is the calling reader's decision, because only it knows
+   // where one value ends and the next begins. Calling this anywhere else -- in the middle of a
+   // value -- invalidates every pointer the reader is holding into the window.
+   //
+   // `it` is clamped to the window rather than trusted. A reader can leave it past `end` on an
+   // error path, and a variant alternative resolved by shape rewinds it, so an unclamped
+   // subtraction underflows the byte count handed to consume(); the buffer's size then wraps and
+   // the next refill memmoves a garbage length.
    //
    // A context with no streaming state -- every buffered read -- compiles this away to nothing.
    template <class Ctx, class It, class End>
-   GLZ_ALWAYS_INLINE void refill_between_values(Ctx& ctx, It& it, End& end) noexcept
+   GLZ_ALWAYS_INLINE void refill_window(Ctx& ctx, It& it, End& end) noexcept
    {
       if constexpr (has_streaming_state<Ctx>) {
          if (ctx.stream.enabled()) {
-            const size_t window = ctx.stream.size();
-            const size_t consumed = size_t(it - ctx.stream.data());
-            if (it >= end || (window - consumed) <= window / 2) {
-               const char* new_it;
-               const char* new_end;
-               ctx.stream.consume_and_refill(consumed, new_it, new_end);
-               it = new_it;
-               end = new_end;
-            }
+            const char* const window = ctx.stream.data();
+            const size_t size = ctx.stream.size();
+            const size_t offset = (it > window) ? size_t(it - window) : 0;
+            const size_t consumed = (offset < size) ? offset : size;
+
+            const char* new_it;
+            const char* new_end;
+            ctx.stream.consume_and_refill(consumed, new_it, new_end);
+            it = new_it;
+            end = new_end;
          }
       }
    }
