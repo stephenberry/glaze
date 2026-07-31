@@ -122,6 +122,19 @@ static_assert(glz::byte_input_stream<std::ifstream>);
 // glz::basic_istream_buffer<std::wistream> bad(wstream);  // Error!
 ```
 
+## Non-owning types cannot be streamed
+
+A refill moves the window, so anything pointing into it dangles. Reading into a type that holds a `std::string_view`, a `glz::raw_json_view`, or a `std::span` — directly, as a member, or as the element of a container — is rejected at compile time:
+
+```cpp
+std::vector<std::string_view> views{};
+glz::read_json(views, buffer);  // compile error: holds a non-owning view
+```
+
+Read into the owning equivalent (`std::string`, `glz::raw_json`) when the source is a stream. This is not a limitation that can be worked around by sizing the buffer up: whether a given view survives depends on where the refills happen to land, and a read that produces dangling views still reports success, so there is nothing to check at runtime.
+
+Buffered reads are unaffected. A buffer holds the whole document for the duration of the call, so views into it stay valid and remain a supported zero-copy idiom.
+
 ## Format Support
 
 | Format | Output Streaming | Input Streaming |

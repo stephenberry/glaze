@@ -4317,4 +4317,77 @@ suite non_streaming_format_reporting = [] {
    };
 };
 
+// Reflection needs external linkage, so these cannot live in an anonymous namespace.
+struct owning_record_t
+{
+   int id{};
+   std::string name{};
+};
+
+struct viewing_record_t
+{
+   int id{};
+   std::string_view name{};
+};
+
+struct nests_a_view_t
+{
+   owning_record_t owned{};
+   viewing_record_t viewed{};
+};
+
+struct buries_a_view_t
+{
+   std::vector<std::map<std::string, viewing_record_t>> deep{};
+};
+
+struct self_referential_t
+{
+   int id{};
+   std::vector<self_referential_t> children{};
+};
+
+// A refill moves the window, so a view handed out before one points at bytes that have since been
+// overwritten. The read still reports success, which is what makes it worth refusing at compile
+// time: there is no runtime signal to check. These pin which types the check catches, and just as
+// importantly which it leaves alone -- a trait that over-triggers would reject ordinary code.
+suite streaming_view_rejection_tests = [] {
+   "owning types stream"_test = [] {
+      static_assert(!glz::holds_buffer_view<int>);
+      static_assert(!glz::holds_buffer_view<std::string>);
+      static_assert(!glz::holds_buffer_view<glz::raw_json>);
+      static_assert(!glz::holds_buffer_view<owning_record_t>);
+      static_assert(!glz::holds_buffer_view<std::vector<owning_record_t>>);
+      static_assert(!glz::holds_buffer_view<std::map<std::string, std::vector<owning_record_t>>>);
+      static_assert(!glz::holds_buffer_view<std::optional<double>>);
+      // a type that contains itself must not send the trait into an infinite recursion
+      static_assert(!glz::holds_buffer_view<self_referential_t>);
+      expect(true);
+   };
+
+   "types holding a view do not"_test = [] {
+      static_assert(glz::holds_buffer_view<std::string_view>);
+      static_assert(glz::holds_buffer_view<glz::raw_json_view>);
+      static_assert(glz::holds_buffer_view<std::vector<std::string_view>>);
+      static_assert(glz::holds_buffer_view<std::optional<std::string_view>>);
+      static_assert(glz::holds_buffer_view<std::variant<int, std::string_view>>);
+      // reached through a member, and through two containers and a member
+      static_assert(glz::holds_buffer_view<viewing_record_t>);
+      static_assert(glz::holds_buffer_view<nests_a_view_t>);
+      static_assert(glz::holds_buffer_view<buries_a_view_t>);
+      expect(true);
+   };
+
+   // The trait only gates streaming. A buffered read owns its whole document for the duration of
+   // the call, so views into it stay valid and remain a supported zero-copy idiom.
+   "a buffered read into views still works"_test = [] {
+      const std::string doc = R"(["alpha","beta","gamma"])";
+      std::vector<std::string_view> views{};
+      expect(!glz::read_json(views, doc));
+      expect(views.size() == 3u);
+      expect(views[0] == "alpha");
+      expect(views[2] == "gamma");
+   };
+};
+
 int main() { return 0; }
