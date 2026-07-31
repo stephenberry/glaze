@@ -52,35 +52,26 @@ namespace glz
 
    // Settle what a read that ran to the end of the buffer means, then finalize the context.
    //
-   // Without a '\0' sentinel the reader reports end_reached both when a value ended with the buffer
-   // and when it ran out of input still looking for one. The first is a completed read, which
-   // finalize_read_context clears; the second is not, and the two are told apart by what was
-   // consumed. A span holding only whitespace and comments held no value, and has to be rejected
-   // the way an empty buffer is. skip_ws answers that exactly, comments included, so the question
-   // is put to the same code that produced the end_reached rather than to a second opinion about
-   // which bytes count as whitespace. Because it == end here, replaying it over the consumed span
-   // is an exact re-run of the parse's own leading skip_ws over the same bytes under the same
-   // options, not a truncated variant of it, so it cannot manufacture an answer the parse did not
-   // already reach.
+   // Without a '\0' sentinel, end_reached means either "the value ended with the buffer" (a
+   // completed read, which finalize_read_context clears) or "ran out of input looking for a value"
+   // (not one). What was consumed tells them apart: a span of only whitespace and comments held no
+   // value and is rejected the way an empty buffer is. Replaying skip_ws answers that exactly
+   // instead of second-guessing which bytes count as whitespace, and because it == end the replay
+   // covers the same bytes under the same options as the parse's own leading skip_ws.
    //
-   // The it == end guard is load-bearing: a variant alternative resolved by shape rewinds its
-   // iterator once it settles, so a completed read can end with end_reached, depth 0, and a
-   // consumed span that is nothing but the whitespace ahead of the value it did apply.
-   //
-   // This runs after the parse rather than before it so that readers which take the buffer verbatim
-   // (glz::text, glz::raw_json) still see every byte the caller passed: they complete without
-   // error, so they never reach this. Only JSON produces end_reached, and only a read without a
-   // terminator can reach the end with no sentinel to stop on; every other configuration compiles
-   // this away.
+   // Two conditions are load-bearing rather than defensive:
+   //   - it == end, because a variant alternative resolved by shape rewinds its iterator, so a
+   //     completed read can end with end_reached, depth 0, and a span of only leading whitespace.
+   //   - running after the parse, because readers that take the buffer verbatim (glz::text,
+   //     glz::raw_json) must see every byte; they complete without error and never reach this.
    template <auto Opts>
    GLZ_ALWAYS_INLINE void finalize_top_level_read(is_context auto&& ctx, const char* start, const char* it,
                                                   const char* end) noexcept
    {
       if constexpr (Opts.format == JSON && !check_null_terminated(Opts)) {
-         // Not unlikely: a scalar or object body that ends with the buffer lands here on every
+         // Deliberately not [[unlikely]]: a body that ends with the buffer lands here on every
          // successful read, which is the ordinary case for a registry parsing a wire span.
-         // The span must be non-empty and must run forwards. A streaming read hands in a window
-         // origin that consumed its value in an earlier window, or that overshoots on an error
+         // start < it, not !=, because a streaming origin can be empty or overshoot on an error
          // path; neither is an absent value.
          if (ctx.error == error_code::end_reached && ctx.depth == 0 && it == end && start < it) {
             context ws_ctx{}; // only written to when skip_ws parses a comment; the result is unused
