@@ -8,6 +8,7 @@
 #include <limits>
 #include <map>
 #include <mutex>
+#include <random>
 #include <sstream>
 #include <thread>
 
@@ -4291,29 +4292,13 @@ suite streaming_buffer_dispatch_tests = [] {
 };
 
 // Routing every format to read_streaming only removes the overrun; it does not give a reader
-// refill points it never had. JSON is the only reader that has them, so for the rest a document
-// longer than the window used to end in an answer that blamed the document: NDJSON reported
-// success carrying the elements that fit, BEVE reported unexpected_end. Both now say which it was.
+// refill points it never had. The binary readers still see one window, so for them a document
+// longer than it used to end in an answer that blamed the document -- BEVE reported unexpected_end
+// for input that was not truncated at all. That now says which it was.
 suite non_streaming_format_reporting = [] {
    static_assert(glz::format_supports_streaming<glz::JSON>);
-   static_assert(!glz::format_supports_streaming<glz::NDJSON>,
-                 "NDJSON's line loop cannot refill between lines, whatever its per-line values do");
+   static_assert(glz::format_supports_streaming<glz::NDJSON>, "the NDJSON reader refills between records");
    static_assert(!glz::format_supports_streaming<glz::BEVE>);
-
-   "NDJSON larger than the window does not silently truncate"_test = [] {
-      std::vector<int> src{};
-      for (int i = 0; i < 400; ++i) src.push_back(i);
-      std::string doc{};
-      expect(!glz::write_ndjson(src, doc));
-      expect(doc.size() > narrow_window) << "the document has to outrun the window to test anything";
-
-      std::istringstream iss{doc};
-      glz::basic_istream_buffer<std::istringstream, narrow_window> buffer(iss);
-
-      std::vector<int> v{};
-      const auto ec = glz::read_streaming<glz::opts{.format = glz::NDJSON}>(v, buffer);
-      expect(ec == glz::error_code::streaming_unsupported) << "a short read must be reported, not returned as success";
-   };
 
    "BEVE larger than the window names the window"_test = [] {
       std::vector<int> src{};
@@ -4386,6 +4371,259 @@ suite non_streaming_format_reporting = [] {
       std::vector<int> v{};
       expect(!glz::read_streaming<glz::opts{}>(v, buffer));
       expect(v.size() == 400u);
+   };
+};
+
+// Reflection needs external linkage, so this cannot live in the anonymous namespace below.
+struct ndjson_record_t
+{
+   int id{};
+   std::string name{};
+};
+
+namespace
+{
+   // Records wide enough that a 512 byte window holds only a handful, so the read has to refill
+   // many times to get through the document.
+   std::string ndjson_document(int count, size_t name_width = 8)
+   {
+      std::string doc{};
+      for (int i = 0; i < count; ++i) {
+         doc += "{\"id\":" + std::to_string(i) + ",\"name\":\"" + std::string(name_width, 'x') + "\"}\n";
+      }
+      return doc;
+   }
+}
+
+// NDJSON records are independent, so the gap between two of them is a refill point. Before there
+// was one, a document larger than the window came back as however many records happened to fit.
+suite ndjson_streaming_tests = [] {
+   "a document many windows long reads every record"_test = [] {
+      const auto doc = ndjson_document(400);
+      expect(doc.size() > 20 * narrow_window) << "the document has to outrun the window many times over";
+
+      std::istringstream iss{doc};
+      glz::basic_istream_buffer<std::istringstream, narrow_window> buffer(iss);
+
+      std::vector<ndjson_record_t> v{};
+      expect(!glz::read_ndjson(v, buffer));
+      expect(v.size() == 400u);
+
+      bool ids_in_order = v.size() == 400u;
+      for (size_t i = 0; ids_in_order && i < v.size(); ++i) {
+         ids_in_order = v[i].id == int(i);
+      }
+      expect(ids_in_order) << "every record must survive the refill it straddles";
+      expect(v.back().name == std::string(8, 'x'));
+   };
+
+   // The last record carries no trailing separator, so it is the one that ends flush against the
+   // end of the input rather than against a newline.
+   "a document with no trailing newline reads every record"_test = [] {
+      auto doc = ndjson_document(400);
+      doc.pop_back();
+
+      std::istringstream iss{doc};
+      glz::basic_istream_buffer<std::istringstream, narrow_window> buffer(iss);
+
+      std::vector<ndjson_record_t> v{};
+      expect(!glz::read_ndjson(v, buffer));
+      expect(v.size() == 400u);
+   };
+
+   // Records between half a window and a whole one are the ones a naive "refill only when drained"
+   // rule would report as too wide.
+   "records that nearly fill the window still read"_test = [] {
+      const auto doc = ndjson_document(6, 300);
+
+      std::istringstream iss{doc};
+      glz::basic_istream_buffer<std::istringstream, narrow_window> buffer(iss);
+
+      std::vector<ndjson_record_t> v{};
+      expect(!glz::read_ndjson(v, buffer));
+      expect(v.size() == 6u);
+      expect(v[5].name.size() == 300u);
+   };
+
+   // The test this feature needs. Streaming and buffered reads of the same document must agree,
+   // and mixed record widths are what break refill policies: a record's start lands at a different
+   // offset into the window every time, so the interesting alignments only show up under variety.
+   // Uniform widths pass almost anything.
+   //
+   // What this catches, and what nothing built from fixed-width records did: a bare token cut by
+   // the window edge parses cleanly up to `end`, so it reads as a complete record and its tail
+   // reads as the next one. One number silently becomes two, with a success code.
+   "streaming agrees with buffered across record widths"_test = [] {
+      std::mt19937_64 rng{12345};
+      size_t compared = 0;
+
+      for (int round = 0; round < 400; ++round) {
+         // bare numbers, so a cut record still parses as a valid value rather than erroring out
+         std::string doc{};
+         const int records = 1 + int(rng() % 5);
+         for (int i = 0; i < records; ++i) {
+            doc += "0." + std::string(1 + rng() % 420, char('1' + int(rng() % 9))) + "\n";
+         }
+
+         std::vector<double> buffered{};
+         const auto ec_buffered = glz::read_ndjson(buffered, doc);
+
+         std::istringstream iss{doc};
+         glz::basic_istream_buffer<std::istringstream, narrow_window> buffer(iss);
+         std::vector<double> streamed{};
+         const auto ec_streamed = glz::read_ndjson(streamed, buffer);
+
+         expect(ec_streamed.ec == ec_buffered.ec) << "round " << round;
+         expect(streamed == buffered) << "round " << round << ": " << streamed.size() << " vs " << buffered.size();
+         ++compared;
+      }
+      expect(compared == 400u);
+   };
+
+   // A separator run can be wider than the window, and a CRLF can be split across the edge, so the
+   // reader has to pull the '\n' in before deciding whether the '\r' was a separator or garbage.
+   "separators spanning the window edge still separate"_test = [] {
+      for (size_t pad = 500; pad < 510; ++pad) {
+         const std::string doc = "0." + std::string(pad, '5') + "\r\n7\r\n";
+
+         std::vector<double> buffered{};
+         expect(!glz::read_ndjson(buffered, doc)) << pad;
+
+         std::istringstream iss{doc};
+         glz::basic_istream_buffer<std::istringstream, narrow_window> buffer(iss);
+         std::vector<double> streamed{};
+         expect(!glz::read_ndjson(streamed, buffer)) << pad;
+         expect(streamed == buffered) << pad;
+      }
+
+      // a run of separators longer than the window, then a record behind it
+      const std::string doc = std::string(narrow_window - 1, '\n') + "\r\n42\n";
+      std::istringstream iss{doc};
+      glz::basic_istream_buffer<std::istringstream, narrow_window> buffer(iss);
+      std::vector<double> v{};
+      expect(!glz::read_ndjson(v, buffer));
+      expect(v.size() == 1u);
+      expect(v[0] == 42.0);
+   };
+
+   // A record only has to fit in the window, not in whatever the previous record happened to leave
+   // behind. Sizing the first record so the second starts past the halfway mark is what a
+   // byte-count refill policy gets wrong: it declares a perfectly ordinary record too wide.
+   "a record wider than the window's remainder still reads"_test = [] {
+      const std::string doc = "\"" + std::string(197, 'a') + "\"\n\"" + std::string(398, 'b') + "\"\n";
+
+      std::istringstream iss{doc};
+      glz::basic_istream_buffer<std::istringstream, narrow_window> buffer(iss);
+
+      std::vector<std::string> v{};
+      const auto ec = glz::read_ndjson(v, buffer);
+      expect(!ec) << "a 400 byte record fits a 512 byte window";
+      expect(v.size() == 2u);
+      expect(v[1].size() == 398u);
+   };
+
+   // Nothing refills in the middle of a string or a number, so a single token still has to fit.
+   // The document is fine and the buffer is the thing to change, which is what the error says.
+   "a token wider than the window names the window"_test = [] {
+      const std::string doc = "{\"id\":1,\"name\":\"" + std::string(2000, 'x') + "\"}\n{\"id\":2}\n";
+
+      std::istringstream iss{doc};
+      glz::basic_istream_buffer<std::istringstream, narrow_window> buffer(iss);
+
+      std::vector<ndjson_record_t> v{};
+      const auto ec = glz::read_ndjson(v, buffer);
+      expect(ec == glz::error_code::streaming_unsupported)
+         << "unexpected_end would blame a document that is not malformed";
+   };
+
+   // A record cut off at the end of the source is a truncated document, and stays one: the source
+   // is exhausted, so the window is not what ran out.
+   "a truncated final record is still a truncated document"_test = [] {
+      const std::string doc = ndjson_document(200) + "{\"id\":";
+
+      std::istringstream iss{doc};
+      glz::basic_istream_buffer<std::istringstream, narrow_window> buffer(iss);
+
+      std::vector<ndjson_record_t> v{};
+      const auto ec = glz::read_ndjson(v, buffer);
+      expect(ec != glz::error_code::none);
+      expect(ec != glz::error_code::streaming_unsupported) << "the window held everything there was";
+   };
+
+   // A record that is malformed rather than cut short keeps its own error, whether or not the
+   // source still has input behind it.
+   "a malformed record keeps its own error"_test = [] {
+      const std::string doc = ndjson_document(40) + "{\"id\":]\n" + ndjson_document(40);
+
+      std::istringstream iss{doc};
+      glz::basic_istream_buffer<std::istringstream, narrow_window> buffer(iss);
+
+      std::vector<ndjson_record_t> v{};
+      const auto ec = glz::read_ndjson(v, buffer);
+      expect(ec != glz::error_code::none);
+      expect(ec != glz::error_code::streaming_unsupported) << "the record is broken, not too wide";
+   };
+
+   "an empty stream is an empty document"_test = [] {
+      std::istringstream iss{""};
+      glz::basic_istream_buffer<std::istringstream, narrow_window> buffer(iss);
+
+      std::vector<ndjson_record_t> v{};
+      expect(!glz::read_ndjson(v, buffer));
+      expect(v.empty());
+   };
+
+   "a stream of separators alone is an empty document"_test = [] {
+      std::istringstream iss{std::string(600, '\n')}; // outlasting the window
+      glz::basic_istream_buffer<std::istringstream, narrow_window> buffer(iss);
+
+      std::vector<ndjson_record_t> v{};
+      expect(!glz::read_ndjson(v, buffer));
+      expect(v.empty());
+   };
+
+   // Reading into a container that already holds elements takes the fixed-size path first, which
+   // fills what is there before growing. It needs its own refill points.
+   "a presized destination is filled across refills"_test = [] {
+      const auto doc = ndjson_document(400);
+
+      std::istringstream iss{doc};
+      glz::basic_istream_buffer<std::istringstream, narrow_window> buffer(iss);
+
+      std::vector<ndjson_record_t> v(400);
+      expect(!glz::read_ndjson(v, buffer));
+      expect(v.size() == 400u);
+      expect(v[399].id == 399);
+   };
+
+   // ...and shrinks to the records that were actually there when the document is shorter.
+   "a presized destination shrinks to the document"_test = [] {
+      const auto doc = ndjson_document(5);
+
+      std::istringstream iss{doc};
+      glz::basic_istream_buffer<std::istringstream, narrow_window> buffer(iss);
+
+      std::vector<ndjson_record_t> v(400);
+      expect(!glz::read_ndjson(v, buffer));
+      expect(v.size() == 5u);
+      expect(v[4].id == 4);
+   };
+
+   // The fixed-arity reader is a third loop over the same records and refills the same way.
+   "a tuple destination reads across refills"_test = [] {
+      std::string doc{};
+      for (int i = 0; i < 2; ++i) {
+         doc += "{\"id\":" + std::to_string(i) + ",\"name\":\"" + std::string(300, 'x') + "\"}\n";
+      }
+
+      std::istringstream iss{doc};
+      glz::basic_istream_buffer<std::istringstream, narrow_window> buffer(iss);
+
+      std::tuple<ndjson_record_t, ndjson_record_t> t{};
+      expect(!glz::read_ndjson(t, buffer));
+      expect(std::get<0>(t).id == 0);
+      expect(std::get<1>(t).id == 1);
+      expect(std::get<1>(t).name.size() == 300u);
    };
 };
 
