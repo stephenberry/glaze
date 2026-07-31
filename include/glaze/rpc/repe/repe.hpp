@@ -117,22 +117,33 @@ namespace glz::repe
    {
       glz::context ctx{};
       auto [b, e] = read_iterators<Opts>(state.in.body);
+      auto start = b;
+
+      // An empty body is a failure like any other and has to answer like one. Returning early left
+      // a non-notify request with no response at all: every caller is told the error response is
+      // written whenever this returns false, and every registered endpoint returns immediately on
+      // it. A parameterized function endpoint reads without a has_body() guard -- it has nothing to
+      // call the function with otherwise -- so an empty body reached here and the client was left
+      // waiting on a reply that was never sent.
       if (state.in.body.empty()) [[unlikely]] {
          ctx.error = error_code::no_read_input;
       }
-      if (bool(ctx.error)) [[unlikely]] {
-         return false;
+      else {
+         glz::parse<Opts.format>::template op<is_padded_off<Opts>()>(std::forward<Value>(value), ctx, b, e);
+         // This bypasses glz::read, so the bookkeeping glz::read performs after the parse has to be
+         // repeated here: a value that finishes exactly at the end of the body reports end_reached,
+         // which is a completed read rather than an error, while a body that held no value at all is
+         // not. finalize_top_level_read draws that line.
+         finalize_top_level_read<Opts>(ctx, start, b, e);
       }
-      auto start = b;
-
-      glz::parse<Opts.format>::template op<is_padded_off<Opts>()>(std::forward<Value>(value), ctx, b, e);
-      // This bypasses glz::read, so the bookkeeping glz::read performs after the parse has to be
-      // repeated here: a value that finishes exactly at the end of the body reports end_reached,
-      // which is a completed read rather than an error, while a body that held no value at all is
-      // not. finalize_top_level_read draws that line.
-      finalize_top_level_read<Opts>(ctx, start, b, e);
 
       if (bool(ctx.error)) {
+         // A notification is a request the sender has said it will not read a reply to, so a failed
+         // read of one is reported by not answering, exactly as a successful read of one is.
+         if (state.notify()) {
+            return false;
+         }
+
          state.out.header.ec = ctx.error;
          error_ctx ec{size_t(b - start), ctx.error, ctx.custom_error_message};
 
@@ -553,20 +564,25 @@ namespace glz::repe
       auto body = state.in.body;
       auto b = body.data();
       auto e = b + body.size();
+      auto start = b;
 
+      // An empty body answers like any other failure; see the note in the message overload above.
       if (body.empty()) [[unlikely]] {
          ctx.error = error_code::no_read_input;
       }
-      if (bool(ctx.error)) [[unlikely]] {
-         return false;
+      else {
+         glz::parse<Opts.format>::template op<is_padded_off<Opts>()>(std::forward<Value>(value), ctx, b, e);
+         // See the note in the message overload above for why glz::read's bookkeeping is repeated.
+         finalize_top_level_read<Opts>(ctx, start, b, e);
       }
-      auto start = b;
-
-      glz::parse<Opts.format>::template op<is_padded_off<Opts>()>(std::forward<Value>(value), ctx, b, e);
-      // See the note in the message overload above for why glz::read's bookkeeping is repeated.
-      finalize_top_level_read<Opts>(ctx, start, b, e);
 
       if (bool(ctx.error)) {
+         // A notification is a request the sender has said it will not read a reply to, so a failed
+         // read of one is reported by not answering, exactly as a successful read of one is.
+         if (state.notify()) {
+            return false;
+         }
+
          error_ctx ec{size_t(b - start), ctx.error, ctx.custom_error_message};
          std::string error_message = format_error(ec, body);
          state.out.reset(state.in);

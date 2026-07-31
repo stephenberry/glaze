@@ -2,6 +2,7 @@
 // For the license information refer to glaze.hpp
 
 #include <cstring>
+#include <functional>
 #include <string>
 #include <variant>
 #include <vector>
@@ -330,6 +331,13 @@ struct inferred_api
    std::variant<std::string, amount> measure{};
 };
 
+// A std::function member registers as a call with typed parameters, which is the one endpoint kind
+// that reads a body without first checking whether there is one.
+struct param_fn_api
+{
+   std::function<int(int)> doubled = [](int v) { return v * 2; };
+};
+
 suite unterminated_buffer_tests = [] {
    "scalar_body_ending_at_buffer_end"_test = [] {
       glz::registry<> registry;
@@ -405,6 +413,56 @@ suite unterminated_buffer_tests = [] {
       expect(std::get<amount>(api.measure).value == 42.5);
       auto result = glz::repe::parse_request({response_buf.data(), response_buf.size()});
       expect(result.request.error() == glz::error_code::none) << "No error expected";
+   };
+
+   // A parameterized function endpoint has nothing to call its function with when the body is
+   // empty, so it reads without the has_body() guard the value endpoints use. read_params returned
+   // false for an empty body without writing anything, and the endpoint returns immediately on
+   // false, so the request went unanswered and its client waited on a reply that was never coming.
+   "empty_body_to_a_param_function_is_answered"_test = [] {
+      glz::registry<> registry;
+      param_fn_api api{};
+      registry.on(api);
+
+      const auto request = exact_buffer(make_request("/doubled", ""));
+      std::string response_buf;
+      registry.call(std::span<const char>{request.data(), request.size()}, response_buf);
+
+      expect(!response_buf.empty()) << "A non-notify request must always get a response";
+      auto result = glz::repe::parse_request({response_buf.data(), response_buf.size()});
+      expect(bool(result)) << "Response should be parseable";
+      expect(result.request.error() == glz::error_code::no_read_input) << "Expected no_read_input";
+   };
+
+   "a param function still answers a good body"_test = [] {
+      glz::registry<> registry;
+      param_fn_api api{};
+      registry.on(api);
+
+      const auto request = exact_buffer(make_request("/doubled", "21"));
+      std::string response_buf;
+      registry.call(std::span<const char>{request.data(), request.size()}, response_buf);
+
+      auto result = glz::repe::parse_request({response_buf.data(), response_buf.size()});
+      expect(bool(result));
+      expect(result.request.error() == glz::error_code::none);
+      expect(result.request.body == "42") << "the function should have run";
+   };
+
+   // The other half of the same rule: a notification is a request the sender has said it will not
+   // read a reply to, so a read that fails on one is reported by not answering it.
+   "a failed read of a notification is not answered"_test = [] {
+      for (std::string_view body : {"", "{", "not json"}) {
+         glz::registry<> registry;
+         param_fn_api api{};
+         registry.on(api);
+
+         const auto request = exact_buffer(make_request("/doubled", body, 1, true));
+         std::string response_buf;
+         registry.call(std::span<const char>{request.data(), request.size()}, response_buf);
+
+         expect(response_buf.empty()) << "a notification must not be answered: " << body;
+      }
    };
 
    // A registry that accepts comments must reject a body that holds nothing but one, for the same
