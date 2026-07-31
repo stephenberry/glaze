@@ -699,6 +699,43 @@ suite json_stream_reader_tests = [] {
       expect(records.size() == 3u);
    };
 
+   // A stream whose last record is cut off used to come back as a success holding only the records
+   // that survived. read_json_stream stops on end_reached and treats it as end of stream, so a tail
+   // that ran out mid-record was indistinguishable from a stream that ended between records, and
+   // the caller was handed a short vector with nothing to say it was short.
+   "a truncated final record is reported, not dropped"_test = [] {
+      for (std::string_view tail : {R"({"id":2)", R"({"id":2,"name":"b")", R"({"id":2,"name":)"}) {
+         std::istringstream iss{R"({"id":1,"name":"a"})"
+                                "\n" +
+                                std::string{tail}};
+
+         std::vector<Record> records;
+         const auto ec = glz::read_json_stream(records, iss);
+
+         expect(ec.ec == glz::error_code::unexpected_end) << tail;
+         expect(ec.ec != glz::error_code::end_reached) << tail;
+         expect(records.size() == 1u) << tail;
+      }
+   };
+
+   "a stream ending between records still succeeds"_test = [] {
+      for (std::string_view text : {R"({"id":1,"name":"a"})"
+                                    "\n"
+                                    R"({"id":2,"name":"b"})",
+                                    R"({"id":1,"name":"a"})"
+                                    "\n"
+                                    R"({"id":2,"name":"b"})"
+                                    "\n"}) {
+         std::istringstream iss{std::string{text}};
+
+         std::vector<Record> records;
+         const auto ec = glz::read_json_stream(records, iss);
+
+         expect(!ec) << text;
+         expect(records.size() == 2u) << text;
+      }
+   };
+
    "json_stream_reader error handling"_test = [] {
       std::istringstream iss(R"({"id":1,"name":"valid"}
 {"id":invalid})");
@@ -4141,6 +4178,41 @@ suite additional_edge_cases = [] {
       expect(!glz::read_json(v, buffer));
       expect(v.size() == 400u);
       expect(v[399] == 399);
+   };
+
+   // A stream that ends with containers still open is truncated input. end_reached is documented as
+   // a non-error code, so surfacing it here would tell the caller the read succeeded and merely
+   // stopped early -- exactly the wrong reading of a stream that was cut off.
+   "a truncated stream reports unexpected_end"_test = [] {
+      for (std::string_view truncated : {"[1,2", "[[1,2],[3", "{\"a\":1", "[{\"a\":1}"}) {
+         std::istringstream iss{std::string{truncated}};
+         glz::istream_buffer<> buffer(iss);
+
+         glz::generic j{};
+         const auto ec = glz::read_json(j, buffer);
+         expect(ec == glz::error_code::unexpected_end) << truncated;
+         expect(ec != glz::error_code::end_reached) << truncated;
+      }
+   };
+
+   // The same input, but long enough that the reader refills its way through several windows before
+   // the source runs dry. The truncation is then many windows away from where the parse started,
+   // which is the case a check written against the first window would miss.
+   "a truncation found after refills reports unexpected_end"_test = [] {
+      std::string json = "[";
+      for (int i = 0; i < 400; ++i) {
+         if (i) json += ',';
+         json += std::to_string(i);
+      }
+      // no closing bracket
+
+      std::istringstream iss{json};
+      glz::basic_istream_buffer<std::istringstream, 512> buffer(iss);
+
+      std::vector<int> v{};
+      const auto ec = glz::read_json(v, buffer);
+      expect(ec == glz::error_code::unexpected_end);
+      expect(ec != glz::error_code::end_reached);
    };
 };
 

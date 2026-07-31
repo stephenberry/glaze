@@ -372,6 +372,10 @@ suite unterminated_buffer_tests = [] {
 
       auto result = glz::repe::parse_request({response_buf.data(), response_buf.size()});
       expect(result.request.error() != glz::error_code::none) << "Truncated body should not report success";
+      // Every registry read runs without a terminator, so a body that ends with containers still
+      // open reports end_reached internally. That code is documented as a non-error, so putting it
+      // in a response header would tell the client the request parsed and merely stopped early.
+      expect(result.request.error() == glz::error_code::unexpected_end) << "Expected unexpected_end";
    };
 
    "whitespace_only_body_is_an_error"_test = [] {

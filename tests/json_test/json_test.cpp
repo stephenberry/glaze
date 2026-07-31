@@ -833,6 +833,21 @@ bool equal(T x, T y)
    return x == y;
 }
 
+// Reflection needs external linkage, so these cannot be declared inside the test that uses them.
+struct partial_reuse_inner_t
+{
+   int a{};
+};
+struct partial_reuse_outer_t
+{
+   partial_reuse_inner_t inner{};
+};
+struct partial_reuse_pair_t
+{
+   int a{};
+   int b{};
+};
+
 suite basic_types = [] {
    using namespace ut;
 
@@ -1212,6 +1227,57 @@ suite basic_types = [] {
          expect(glz::read<options>(u64, std::string_view{buf.data(), buf.size()}) == glz::error_code::none) << fits;
          expect(u64 == 100000ull) << fits;
       }
+   };
+
+   "truncated input reports unexpected_end"_test = [] {
+      // A non-null-terminated buffer that runs out with containers still open is truncated input.
+      // end_reached is how the reader says "the buffer ran out here" and is documented as a
+      // non-error code, so it must not be what the caller sees: read that way it labels a partial
+      // parse a success that stopped early.
+      static constexpr glz::opts options{.null_terminated = false};
+      for (std::string_view truncated : {"[1,2", "[[1,2],[3", "[1,2,", "{\"a\":1", "[{\"a\":1}", "[ "}) {
+         const std::vector<char> buf{truncated.begin(), truncated.end()};
+         const std::string_view input{buf.data(), buf.size()};
+
+         glz::generic j{};
+         const auto ec = glz::read<options>(j, input);
+         expect(ec == glz::error_code::unexpected_end) << truncated;
+         expect(ec != glz::error_code::end_reached) << truncated;
+      }
+
+      // The other half of the same condition: a value whose last byte is the buffer's last byte
+      // also ends in end_reached, and there it means the read completed.
+      for (std::string_view complete : {"[1,2,3]", "[[1,2],[3]]", "{\"a\":1}", "42", "\"abc\"", "null"}) {
+         const std::vector<char> buf{complete.begin(), complete.end()};
+         glz::generic j{};
+         expect(glz::read<options>(j, std::string_view{buf.data(), buf.size()}) == glz::error_code::none) << complete;
+      }
+   };
+
+   // Depth is what tells a completed non-null-terminated read from a truncated one, so a read that
+   // reports success has to leave it at zero. A partial read is the one that would not: it stops as
+   // soon as it has the fields it wants and unwinds on an error code, so its enclosing containers
+   // never decrement. A context reused after one would then see the next well-formed buffer settle
+   // to unexpected_end.
+   "a context reused after a partial read still reads"_test = [] {
+      static constexpr glz::opts options{.null_terminated = false};
+      static constexpr glz::opts partial{.null_terminated = false, .partial_read = true};
+
+      glz::context ctx{};
+
+      const std::string first = R"({"inner":{"a":1}})";
+      const std::vector<char> buf1{first.begin(), first.end()};
+      partial_reuse_outer_t o{};
+      expect(glz::read<partial>(o, std::string_view{buf1.data(), buf1.size()}, ctx) == glz::error_code::none);
+      expect(o.inner.a == 1);
+      expect(ctx.depth == 0) << "a completed partial read must not leave depth raised";
+
+      const std::string second = R"({"a":1,"b":2})";
+      const std::vector<char> buf2{second.begin(), second.end()};
+      partial_reuse_pair_t p{};
+      expect(glz::read<options>(p, std::string_view{buf2.data(), buf2.size()}, ctx) == glz::error_code::none);
+      expect(p.a == 1);
+      expect(p.b == 2);
    };
 
    "bool write"_test = [] {
