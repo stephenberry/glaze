@@ -42,44 +42,45 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # expect_isa and expect differ on the baseline: SSE2 has no byte-granular shuffle, so the
-          # validator falls back to scalar while the rest of Glaze still uses its SSE2 paths.
+          # "detected utf8_validation string_escape". The three columns differ on purpose, which is
+          # the point of asserting all of them: SSE2 has no byte-granular shuffle so the validator
+          # falls back to scalar, and there is no SSSE3 escape helper so SSSE3 escapes with SSE2.
           - name: x86-64 SSE2 baseline (scalar fallback)
             flags: "-mno-ssse3"
-            expect_isa: SSE2
-            expect: scalar
+            expect: "SSE2 scalar SSE2"
           - name: x86-64 SSSE3
             flags: "-mssse3 -mno-avx"
-            expect_isa: SSSE3
-            expect: SSSE3
+            expect: "SSSE3 SSSE3 SSE2"
           - name: x86-64 AVX2
             flags: "-mavx2"
-            expect_isa: AVX2
-            expect: AVX2
+            expect: "AVX2 AVX2 AVX2"
 
     steps:
       - uses: actions/checkout@v6
 
       - name: Confirm the intended backend was selected
         run: |
-          # Reads the library's own names rather than restating its #if chain, so this cannot drift
-          # from what Glaze actually compiled. glz::simd_isa is public; the validator's own name is
-          # internal, which is fine to reach for from Glaze's own workflow. utf8_validation_test
-          # asserts both against the register width the selected backend defines, which is what
-          # keeps this from being a string the workflow reads back to itself.
+          set -euo pipefail
+          # Reads glz::simd_info rather than restating Glaze's #if chain, so this cannot drift from
+          # what Glaze actually compiled. utf8_validation_test anchors those names to the register
+          # width each backend branch defines and to the escape helper the write path invokes, which
+          # is what keeps this from being a string the workflow reads back to itself.
+          #
+          # Compared as one whole line on purpose. Splitting into fields lets a probe that prints
+          # fewer values than expected satisfy every field test at once.
           cat > /tmp/backend.cpp << 'EOF'
-          #include "glaze/simd/utf8_validation.hpp"
+          #include "glaze/simd/backends.hpp"
           #include <iostream>
-          int main() { std::cout << glz::simd_isa << ' ' << glz::detail::utf8_simd::backend << '\n'; }
+          int main() {
+            std::cout << glz::simd_info.detected << ' ' << glz::simd_info.utf8_validation << ' '
+                      << glz::simd_info.string_escape << '\n';
+          }
           EOF
           g++ -std=c++23 ${{ matrix.flags }} -I include /tmp/backend.cpp -o /tmp/backend
           out=$(/tmp/backend)
-          got_isa=${out%% *}
-          got=${out##* }
-          echo "simd_isa: $got_isa (expected ${{ matrix.expect_isa }})"
-          echo "utf8 backend: $got (expected ${{ matrix.expect }})"
-          test "$got_isa" = "${{ matrix.expect_isa }}"
-          test "$got" = "${{ matrix.expect }}"
+          echo "got:      $out"
+          echo "expected: ${{ matrix.expect }}"
+          test "$out" = "${{ matrix.expect }}"
 
       - name: Configure
         run: |
@@ -138,18 +139,25 @@ jobs:
 
       - name: Confirm AVX-512BW backend was selected
         run: |
+          set -euo pipefail
           cat > /tmp/backend.cpp << 'EOF'
-          #include "glaze/simd/utf8_validation.hpp"
+          #include "glaze/simd/backends.hpp"
           #include <iostream>
           int main() {
-            std::cout << glz::simd_isa << ' ' << glz::detail::utf8_simd::backend << '\n';
-            return (glz::simd_isa == "AVX512BW" && glz::detail::utf8_simd::backend == "AVX512BW") ? 0 : 1;
+            std::cout << glz::simd_info.detected << ' ' << glz::simd_info.utf8_validation << ' '
+                      << glz::simd_info.string_escape << '\n';
           }
           EOF
           g++ -std=c++23 -mavx512f -mavx512bw -mavx512vl -I include /tmp/backend.cpp -o /tmp/backend
           # Compiled for AVX-512 but only the preprocessor result matters, so run it under SDE when
-          # the runner cannot execute AVX-512 itself.
-          if [ -n "${SDE:-}" ]; then "$SDE" -future -- /tmp/backend; else /tmp/backend; fi
+          # the runner cannot execute AVX-512 itself. Checked in the shell rather than by the
+          # program's exit status, so a wrong answer fails here even if the emulator mishandles it.
+          if [ -n "${SDE:-}" ]; then out=$("$SDE" -future -- /tmp/backend); else out=$(/tmp/backend); fi
+          # Escaping stays AVX2: Glaze has no AVX-512 escape helper. That is the divergence a single
+          # backend name would hide, so this job is the one that pins it.
+          echo "got:      $out"
+          echo "expected: AVX512BW AVX512BW AVX2"
+          test "$out" = "AVX512BW AVX512BW AVX2"
 
       - name: Configure
         run: |
@@ -205,13 +213,13 @@ jobs:
           source /tmp/emsdk/emsdk_env.sh
           git clone --depth 1 --branch v1.1.0 https://github.com/openalgz/ut /tmp/ut
           cat > /tmp/backend.cpp << 'EOF'
-          #include "glaze/simd/utf8_validation.hpp"
+          #include "glaze/simd/backends.hpp"
           #include <iostream>
-          int main() { std::cout << glz::detail::utf8_simd::backend << '\n'; }
+          int main() { std::cout << glz::simd_info.utf8_validation << '\n'; }
           EOF
           for cfg in "-msimd128:WASM_SIMD128" ":scalar"; do
             flags="${cfg%%:*}"; label="${cfg##*:}"
-            echo "::group::WASM $label"
+            echo "::group::wasm ${label}"
             # Assert the backend before testing it, so a toolchain change that quietly drops SIMD128
             # fails here instead of running the scalar path twice and reporting success.
             em++ -std=c++23 $flags -I include /tmp/backend.cpp -o /tmp/backend.js -sEXIT_RUNTIME=1
@@ -241,17 +249,17 @@ jobs:
           set -euo pipefail
           git clone --depth 1 --branch v1.1.0 https://github.com/openalgz/ut /tmp/ut
           cat > /tmp/backend.cpp << 'EOF'
-          #include "glaze/simd/utf8_validation.hpp"
+          #include "glaze/simd/backends.hpp"
           #include <iostream>
-          int main() { std::cout << glz::detail::utf8_simd::backend << '\n'; }
+          int main() { std::cout << glz::simd_info.utf8_validation << '\n'; }
           EOF
           for w in 16 32 64; do
             echo "::group::generic width $w"
             # Assert the portable backend really is active at the requested width: otherwise the
             # vector path compiles away and all three widths silently test the scalar validator
-            # against itself. The name is checked rather than the width alone, because width does
-            # not identify a backend -- AVX2 and generic32 are both 32, so a runner that happened to
-            # enable AVX2 would satisfy a width-only check for w=32 without running portable code.
+            # against itself. Naming the backend rather than reading back the width also survives a
+            # future reordering of the selection chain, which currently puts the generic branch
+            # first and so makes a width-only check pass no matter which backend won.
             g++ -std=c++23 -DGLZ_UTF8_GENERIC_WIDTH=$w -I include /tmp/backend.cpp -o /tmp/backend
             got=$(/tmp/backend)
             echo "active backend: $got (expected generic$w)"

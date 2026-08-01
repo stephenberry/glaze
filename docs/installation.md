@@ -149,19 +149,9 @@ Since Glaze is header-only, you can simply:
 
 Glaze automatically detects the target architecture and enables platform-specific SIMD optimizations:
 
-| Flag | Detected When | Architecture |
-|------|--------------|--------------|
-| `GLZ_USE_SSE2` | `__x86_64__` or `_M_X64` | x86-64 (always has SSE2) |
-| `GLZ_USE_SSSE3` | `__SSSE3__`, or `__AVX__` on MSVC | x86-64 with byte-granular shuffle |
-| `GLZ_USE_AVX2` | `__AVX2__` | x86-64 with AVX2 |
-| `GLZ_USE_AVX512BW` | `__AVX512BW__`, or `__AVX512F__` on MSVC | x86-64 with AVX-512BW |
-| `GLZ_USE_NEON` | `__aarch64__`, `_M_ARM64`, or `__ARM_NEON` | ARM with NEON |
-| `GLZ_USE_NEON64` | `__aarch64__` or `_M_ARM64` | AArch64 |
-| `GLZ_USE_WASM_SIMD128` | `__wasm_simd128__` | WebAssembly |
+Detection covers SSE2 through AVX-512BW on x86-64, NEON on ARM, and SIMD128 on WebAssembly, using compiler-predefined macros that reflect the target architecture, so cross-compilation works correctly without any manual configuration. The full table of `GLZ_USE_*` flags and their conditions is in [Optimizing Performance](./optimizing-performance.md#simd-architecture-flags).
 
-Detection uses compiler-predefined macros that reflect the target architecture, so cross-compilation works correctly without any manual configuration.
-
-To check what a build actually selected, read `glz::simd_isa`. See [Querying the Selected Backend](./optimizing-performance.md#querying-the-selected-backend).
+To check what a build actually compiled, read `glz::simd_info`. See [Querying the Selected Backend](./optimizing-performance.md#querying-the-selected-backend).
 
 ### Disable SIMD
 
