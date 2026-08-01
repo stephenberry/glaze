@@ -462,24 +462,14 @@ namespace glz::detail::utf8_simd
    }
 }
 
-#endif
-
-namespace glz
-{
-   // The UTF-8 validator this translation unit compiled: "AVX512BW", "AVX2", "SSSE3", "NEON64",
-   // "WASM_SIMD128", "generic16" / "generic32" / "generic64", or "scalar".
-   //
-   // This is not always `glz::simd_isa`. The validator needs a byte-granular shuffle, so plain SSE2
-   // and 32 bit NEON have no vector path here and fall back to the scalar validator while other
-   // subsystems still use their vector paths. GLZ_UTF8_GENERIC_WIDTH overrides everything with the
-   // portable backend, which no GLZ_USE_* macro records.
-   //
-   // Each branch of the selection chain above names itself alongside its register width, so a new
-   // backend that forgets to declare one fails to compile here rather than reporting its
-   // predecessor's name.
-#if defined(GLZ_UTF8_SIMD)
-   inline constexpr std::string_view utf8_validation_backend = detail::utf8_simd::backend;
 #else
-   inline constexpr std::string_view utf8_validation_backend = "scalar";
-#endif
+
+namespace glz::detail::utf8_simd
+{
+   // No vector path on this target, so validation runs the scalar validator in parse.hpp. Declared
+   // here so the tests and the simd-backends workflow can name the fallback the same way they name
+   // a backend, without a second spelling for "there isn't one".
+   inline constexpr std::string_view backend = "scalar";
 }
+
+#endif

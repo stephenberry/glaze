@@ -131,8 +131,11 @@ namespace
 // -------------------------------------------------------------------------------------------
 // Backend identification
 //
-// glz::simd_isa and glz::utf8_validation_backend name what this translation unit compiled. The
-// assertions live here because this is the file the simd-backends workflow runs against every
+// glz::simd_isa is public and names the widest instruction set detection enabled.
+// glz::detail::utf8_simd::backend is internal and names the validator that was actually compiled;
+// the two differ whenever the validator has no vector path at the detected level.
+//
+// The assertions live here because this is the file the simd-backends workflow runs against every
 // target, so each one is checked on every backend Glaze can select rather than only on the host.
 // -------------------------------------------------------------------------------------------
 
@@ -169,59 +172,49 @@ namespace
       }
       return false;
    }
+
+   inline constexpr std::string_view utf8_backend = glz::detail::utf8_simd::backend;
 }
 
-// The spellings are public API, so a new one should be added here and to
+// These spellings are public API, so a new one should be added here and to
 // docs/optimizing-performance.md deliberately rather than arriving as a side effect of adding a
 // backend.
 static_assert(is_known_isa(glz::simd_isa), "glz::simd_isa reports a name this test does not know");
 
-static_assert(width_for(glz::utf8_validation_backend) != unknown_backend,
-              "glz::utf8_validation_backend reports a name this test does not know");
+static_assert(width_for(utf8_backend) != unknown_backend, "the UTF-8 validator reports a name this test does not know");
 
 #if defined(GLZ_UTF8_SIMD)
 // The name and the width come from the same branch of the selection chain, so a branch that copies
 // its neighbour's name is caught here. Without this the CI jobs would only be reading back a string
 // they had no independent way to check.
-static_assert(width_for(glz::utf8_validation_backend) == glz::detail::utf8_simd::width,
+static_assert(width_for(utf8_backend) == glz::detail::utf8_simd::width,
               "a UTF-8 backend named itself as one register width and then defined another");
 #else
-static_assert(glz::utf8_validation_backend == "scalar");
+static_assert(utf8_backend == "scalar");
 #endif
 
 #if !defined(GLZ_UTF8_GENERIC_WIDTH)
-// Outside the portable-backend testing hook the two constants are locked together: the validator
-// takes the detected instruction set whenever it has a byte-granular shuffle at that level, and
-// falls back to the scalar validator when it does not. SSE2 and 32 bit NEON are the two that fall
-// back, and they are the reason a single "the backend" name cannot be correct for all of Glaze.
-static_assert(glz::simd_isa != "AVX512BW" || glz::utf8_validation_backend == "AVX512BW");
-static_assert(glz::simd_isa != "AVX2" || glz::utf8_validation_backend == "AVX2");
-static_assert(glz::simd_isa != "SSSE3" || glz::utf8_validation_backend == "SSSE3");
-static_assert(glz::simd_isa != "SSE2" || glz::utf8_validation_backend == "scalar");
-static_assert(glz::simd_isa != "NEON64" || glz::utf8_validation_backend == "NEON64");
-static_assert(glz::simd_isa != "NEON" || glz::utf8_validation_backend == "scalar");
-static_assert(glz::simd_isa != "WASM_SIMD128" || glz::utf8_validation_backend == "WASM_SIMD128");
-static_assert(glz::simd_isa != "scalar" || glz::utf8_validation_backend == "scalar");
+// Outside the portable-backend testing hook the two are locked together: the validator takes the
+// detected instruction set whenever it has a byte-granular shuffle at that level, and falls back to
+// the scalar validator when it does not. SSE2 and 32 bit NEON are the two that fall back, and they
+// are why glz::simd_isa is documented as an upper bound rather than as the name of a code path.
+static_assert(glz::simd_isa != "AVX512BW" || utf8_backend == "AVX512BW");
+static_assert(glz::simd_isa != "AVX2" || utf8_backend == "AVX2");
+static_assert(glz::simd_isa != "SSSE3" || utf8_backend == "SSSE3");
+static_assert(glz::simd_isa != "SSE2" || utf8_backend == "scalar");
+static_assert(glz::simd_isa != "NEON64" || utf8_backend == "NEON64");
+static_assert(glz::simd_isa != "NEON" || utf8_backend == "scalar");
+static_assert(glz::simd_isa != "WASM_SIMD128" || utf8_backend == "WASM_SIMD128");
+static_assert(glz::simd_isa != "scalar" || utf8_backend == "scalar");
 #endif
 
 suite backend_identification = [] {
    // Echoed so a failing run in any of the backend jobs says which backend it was, without needing
    // a separate probe program to establish it.
    "reports which backend it compiled"_test = [] {
-      std::cout << "glz::simd_isa = " << glz::simd_isa
-                << ", glz::utf8_validation_backend = " << glz::utf8_validation_backend << '\n';
+      std::cout << "glz::simd_isa = " << glz::simd_isa << ", UTF-8 validator = " << utf8_backend << '\n';
       expect(!glz::simd_isa.empty());
-      expect(!glz::utf8_validation_backend.empty());
-   };
-
-   // The constants are consumed by shell (`test "$got" = ...`) in the simd-backends workflow, which
-   // would silently compare against a name carrying a stray newline or quote.
-   "names are bare identifiers"_test = [] {
-      for (const std::string_view name : {glz::simd_isa, glz::utf8_validation_backend}) {
-         for (const char c : name) {
-            expect((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '_') << name;
-         }
-      }
+      expect(!utf8_backend.empty());
    };
 };
 

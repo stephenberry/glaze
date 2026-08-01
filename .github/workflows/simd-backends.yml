@@ -62,14 +62,15 @@ jobs:
 
       - name: Confirm the intended backend was selected
         run: |
-          # Reads the library's own constants rather than restating its #if chain, so this cannot
-          # drift from what Glaze actually compiled. utf8_validation_test asserts the constants
-          # against the register width the selected backend defines, which is what keeps this from
-          # being a string the workflow reads back to itself.
+          # Reads the library's own names rather than restating its #if chain, so this cannot drift
+          # from what Glaze actually compiled. glz::simd_isa is public; the validator's own name is
+          # internal, which is fine to reach for from Glaze's own workflow. utf8_validation_test
+          # asserts both against the register width the selected backend defines, which is what
+          # keeps this from being a string the workflow reads back to itself.
           cat > /tmp/backend.cpp << 'EOF'
           #include "glaze/simd/utf8_validation.hpp"
           #include <iostream>
-          int main() { std::cout << glz::simd_isa << ' ' << glz::utf8_validation_backend << '\n'; }
+          int main() { std::cout << glz::simd_isa << ' ' << glz::detail::utf8_simd::backend << '\n'; }
           EOF
           g++ -std=c++23 ${{ matrix.flags }} -I include /tmp/backend.cpp -o /tmp/backend
           out=$(/tmp/backend)
@@ -141,8 +142,8 @@ jobs:
           #include "glaze/simd/utf8_validation.hpp"
           #include <iostream>
           int main() {
-            std::cout << glz::simd_isa << ' ' << glz::utf8_validation_backend << '\n';
-            return (glz::simd_isa == "AVX512BW" && glz::utf8_validation_backend == "AVX512BW") ? 0 : 1;
+            std::cout << glz::simd_isa << ' ' << glz::detail::utf8_simd::backend << '\n';
+            return (glz::simd_isa == "AVX512BW" && glz::detail::utf8_simd::backend == "AVX512BW") ? 0 : 1;
           }
           EOF
           g++ -std=c++23 -mavx512f -mavx512bw -mavx512vl -I include /tmp/backend.cpp -o /tmp/backend
@@ -206,7 +207,7 @@ jobs:
           cat > /tmp/backend.cpp << 'EOF'
           #include "glaze/simd/utf8_validation.hpp"
           #include <iostream>
-          int main() { std::cout << glz::utf8_validation_backend << '\n'; }
+          int main() { std::cout << glz::detail::utf8_simd::backend << '\n'; }
           EOF
           for cfg in "-msimd128:WASM_SIMD128" ":scalar"; do
             flags="${cfg%%:*}"; label="${cfg##*:}"
@@ -242,7 +243,7 @@ jobs:
           cat > /tmp/backend.cpp << 'EOF'
           #include "glaze/simd/utf8_validation.hpp"
           #include <iostream>
-          int main() { std::cout << glz::utf8_validation_backend << '\n'; }
+          int main() { std::cout << glz::detail::utf8_simd::backend << '\n'; }
           EOF
           for w in 16 32 64; do
             echo "::group::generic width $w"

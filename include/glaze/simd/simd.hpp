@@ -52,9 +52,9 @@ namespace glz
    // This is the detection result, which is an upper bound rather than the name of a single code
    // path. Subsystems consume the GLZ_USE_* macros independently and do not all reach the same
    // level: JSON string escaping has no AVX-512 helper, so an AVX-512 build reports "AVX512BW" here
-   // while escaping runs the AVX2 and SSE2 ones. Use `glz::utf8_validation_backend`, declared in
-   // simd/utf8_validation.hpp, for what the UTF-8 validator itself selected -- it names the
-   // width-generic backend, which this constant cannot see.
+   // while escaping runs the AVX2 and SSE2 ones, and UTF-8 validation needs a byte-granular shuffle
+   // that plain SSE2 and 32 bit NEON lack, so those report an instruction set here while validating
+   // with the scalar validator.
    //
    // These spellings are public API. Renaming one breaks every equality comparison against it, and
    // inserting a wider entry changes what an already-working build reports, so treat both as

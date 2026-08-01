@@ -161,7 +161,7 @@ Glaze automatically detects the target architecture and enables platform-specifi
 
 Detection uses compiler-predefined macros that reflect the target architecture, so cross-compilation works correctly without any manual configuration.
 
-To check what a build actually selected, read `glz::simd_isa` and `glz::utf8_validation_backend`. See [Querying the Selected Backend](./optimizing-performance.md#querying-the-selected-backend).
+To check what a build actually selected, read `glz::simd_isa`. See [Querying the Selected Backend](./optimizing-performance.md#querying-the-selected-backend).
 
 ### Disable SIMD
 
