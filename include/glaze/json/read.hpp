@@ -1840,11 +1840,15 @@ namespace glz
       }
    };
 
+   // `Transient` says the view being filled is consumed before this reader returns, so it never
+   // outlives the window it points into and the streaming guard does not apply. Only readers that
+   // borrow a view of what they just parsed set it, through parse_transient_string_view below; a
+   // view the caller keeps leaves it false and is rejected under a streaming read.
    template <class T>
       requires(string_view_t<T> || char_array_t<T> || array_char_t<T> || static_string_t<T>)
    struct from<JSON, T>
    {
-      template <auto Opts, class It, class End>
+      template <auto Opts, bool Transient = false, class It, class End>
          requires(check_string_as_number(Opts))
       GLZ_ALWAYS_INLINE static void op(auto& value, is_context auto&& ctx, It&& it, End end) noexcept
       {
@@ -1859,7 +1863,9 @@ namespace glz
 
          const size_t n = size_t(it - start);
          if constexpr (string_view_t<T>) {
-            GLZ_ASSERT_OWNS_ITS_BYTES(decltype(ctx));
+            if constexpr (!Transient) {
+               GLZ_ASSERT_OWNS_ITS_BYTES(decltype(ctx));
+            }
             using value_type = typename std::decay_t<T>::value_type;
             if constexpr (std::same_as<value_type, char8_t>) {
                value = {reinterpret_cast<const char8_t*>(start), n};
@@ -1893,7 +1899,7 @@ namespace glz
          }
       }
 
-      template <auto Opts, class It, class End>
+      template <auto Opts, bool Transient = false, class It, class End>
          requires(!check_string_as_number(Opts))
       GLZ_ALWAYS_INLINE static void op(auto& value, is_context auto&& ctx, It&& it, End end) noexcept
       {
@@ -1919,7 +1925,9 @@ namespace glz
          }
 
          if constexpr (string_view_t<T>) {
-            GLZ_ASSERT_OWNS_ITS_BYTES(decltype(ctx));
+            if constexpr (!Transient) {
+               GLZ_ASSERT_OWNS_ITS_BYTES(decltype(ctx));
+            }
             using value_type = typename std::decay_t<T>::value_type;
             if constexpr (std::same_as<value_type, char8_t>) {
                value = {reinterpret_cast<const char8_t*>(start), size_t(it - start)};
@@ -1963,6 +1971,17 @@ namespace glz
          }
       }
    };
+
+   // Reads a JSON string as a view of the input window, for a reader that consumes it before
+   // returning -- parsing a date out of it, say. Such a view cannot dangle: nothing refills the
+   // window between the read below and the caller's use of it, which is why this is exempt from the
+   // guard that rejects streaming into a view the caller keeps. Do not hand the view any further
+   // than the calling reader; store what it parsed, never the view itself.
+   template <auto Opts, class... Args>
+   GLZ_ALWAYS_INLINE void parse_transient_string_view(std::string_view& value, Args&&... args) noexcept
+   {
+      from<JSON, std::string_view>::template op<Opts, true>(value, std::forward<Args>(args)...);
+   }
 
    template <char_t T>
    struct from<JSON, T>
@@ -5170,7 +5189,7 @@ namespace glz
       static void op(auto&& value, is_context auto&& ctx, It0&& it, It1 end) noexcept
       {
          std::string_view str;
-         from<JSON, std::string_view>::template op<Opts>(str, ctx, it, end);
+         parse_transient_string_view<Opts>(str, ctx, it, end);
          if (bool(ctx.error)) [[unlikely]]
             return;
 
@@ -5199,7 +5218,7 @@ namespace glz
       static void op(auto&& value, is_context auto&& ctx, It0&& it, It1 end) noexcept
       {
          std::string_view str;
-         from<JSON, std::string_view>::template op<Opts>(str, ctx, it, end);
+         parse_transient_string_view<Opts>(str, ctx, it, end);
          if (bool(ctx.error)) [[unlikely]]
             return;
          chrono_detail::parse_ymd(str, value, ctx.error);

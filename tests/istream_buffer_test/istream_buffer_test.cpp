@@ -16,6 +16,7 @@
 #include "glaze/beve.hpp"
 #include "glaze/core/ostream_buffer.hpp"
 #include "glaze/json.hpp"
+#include "glaze/json/chrono_format.hpp"
 #include "ut/ut.hpp"
 
 using namespace ut;
@@ -4641,6 +4642,28 @@ struct owns_its_span_t
    std::span<int, 4> values{span_backing};
 };
 
+// The chrono readers borrow a view of the string they just parsed and turn it into a date before
+// returning, so nothing refills while they hold it. Streaming these must keep compiling: the guard
+// sits on the reader, and a reader that borrows a view for itself is not what it is aimed at.
+struct dated_record_t
+{
+   std::chrono::system_clock::time_point when{};
+   std::chrono::year_month_day on{};
+   std::string filler{};
+};
+
+struct formatted_date_t
+{
+   std::chrono::system_clock::time_point when{};
+};
+
+template <>
+struct glz::meta<formatted_date_t>
+{
+   using T = formatted_date_t;
+   static constexpr auto value = object("when", glz::date_format(&T::when, "%Y-%m-%d %H:%M:%S"));
+};
+
 // A refill moves the window, so a view handed out before one points at bytes that have since been
 // overwritten, while the read still reports success. There is no runtime signal to check, so the
 // readers that alias the buffer refuse at compile time instead.
@@ -4668,6 +4691,52 @@ suite streaming_view_rejection_tests = [] {
       expect(!glz::read_json(holder, buffer));
       expect(holder.values[0] == 3);
       expect(holder.values[3] == 11);
+   };
+
+   // A chrono reader fills a std::string_view from the window and parses a date out of it before it
+   // returns. Nothing refills in between, so that view cannot go stale, and rejecting it would cost
+   // every streaming read of a time_point or a year_month_day for a hazard it does not have.
+   //
+   // The records are wide enough that a 512 byte window holds only a couple, so the read refills
+   // between them: a view that did outlive its window would surface here as a wrong date rather
+   // than as a crash.
+   "a reader that borrows a view of its own parse still streams"_test = [] {
+      std::string doc = "[";
+      for (int i = 0; i < 12; ++i) {
+         if (i) {
+            doc += ',';
+         }
+         const std::string day = (i < 9 ? "0" : "") + std::to_string(i + 1);
+         doc += R"({"when":"2024-03-)" + day + R"(T04:05:06Z","on":"2021-07-)" + day + R"(","filler":")" +
+                std::string(64, 'x') + R"("})";
+      }
+      doc += ']';
+
+      std::istringstream in{doc};
+      glz::basic_istream_buffer<std::istringstream, 512> buffer{in};
+      std::vector<dated_record_t> records{};
+      expect(!glz::read_json(records, buffer));
+      expect(records.size() == 12u) << records.size();
+
+      for (size_t i = 0; i < records.size(); ++i) {
+         const std::chrono::day day{static_cast<unsigned>(i + 1)};
+         const auto expected_when = std::chrono::sys_days{std::chrono::year{2024} / std::chrono::March / day} +
+                                    std::chrono::hours{4} + std::chrono::minutes{5} + std::chrono::seconds{6};
+         expect(records[i].when == expected_when) << i;
+         expect(records[i].on == std::chrono::year{2021} / std::chrono::July / day) << i;
+         expect(records[i].filler.size() == 64u) << i;
+      }
+   };
+
+   // glz::date_format reaches the same reader through a wrapper, so it has to stay streamable too.
+   "a date_format field still streams"_test = [] {
+      std::istringstream in{R"({"when":"2024-03-04 05:06:07"})"};
+      glz::basic_istream_buffer<std::istringstream, 512> buffer{in};
+      formatted_date_t value{};
+      expect(!glz::read_json(value, buffer));
+      const auto expected = std::chrono::sys_days{std::chrono::year{2024} / std::chrono::March / std::chrono::day{4}} +
+                            std::chrono::hours{5} + std::chrono::minutes{6} + std::chrono::seconds{7};
+      expect(value.when == expected);
    };
 
    // The guard only applies to streaming. A buffered read owns its whole document for the duration
