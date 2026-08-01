@@ -335,6 +335,71 @@ If you need to re-scan from the beginning:
 doc.reset_parse_pos();  // Next access starts from beginning
 ```
 
+## Streaming Cursor (opt-in)
+
+When you iterate a large container and fully consume each element, the iterator normally has to re-scan the element it just handed you in order to find where the next one begins. `read_into` already walked those same bytes, so the scan is pure repeated work.
+
+The `lazy_streaming_cursor` option removes it. When a value is consumed end to end, its byte extent is recorded on the document, and the next advance jumps straight to the recorded end:
+
+```cpp
+struct stream_opts : glz::opts
+{
+   bool lazy_streaming_cursor = true;
+};
+
+inline constexpr stream_opts stream{};
+
+auto doc = glz::lazy_json<stream>(buffer);
+
+for (auto& row : (*doc)["rows"]) {
+   Row parsed{};
+   if (not row.read_into(parsed)) {
+      use(parsed);  // the next ++ skips the re-scan of this row
+   }
+}
+```
+
+The optimization composes through nesting: an inner iterator that runs to its closing bracket records the whole inner container, so the outer advance skips it too.
+
+An extent is only used when it starts exactly at the element the iterator is positioned on. A byte offset identifies exactly one value in the buffer, so this check is what keeps the single shared slot safe when iterators are interleaved or abandoned partway. Anything that does not match falls back to a normal scan.
+
+### What it costs
+
+Two `size_t` on `lazy_document` when enabled, and nothing when disabled, so a document that does not opt in is byte-for-byte what it was before. Views and iterators are unchanged in either case.
+
+### Thread safety
+
+Recording an extent writes to the document, from a `const` method. Two threads calling `read_into` on **disjoint** subviews of the same `lazy_document` do not race with the option off, but do with it on. Give each thread its own `lazy_document` (copying one is cheap — it holds a pointer and a length, not the buffer) or leave the option off.
+
+Note that a `lazy_document` is already not safe to share for keyed access either way, because `operator[]` advances the cached root view's scan position.
+
+### When it does not help
+
+- **Scalar elements.** Only containers are recorded (see below); numbers, strings, booleans and nulls are skipped by the cheap paths anyway.
+- **Elements consumed key by key** via `operator[]`. Those are already served by the progressive `parse_pos_` scan described above; no extent is produced.
+- **Elements that are skipped rather than read.** Nothing was consumed, so there is nothing to record.
+- **`partial_read`.** That option deliberately stops the parser as soon as the target's known keys are filled, which leaves it short of the element's true end.
+- **The final element of a bounded (non-null-terminated) buffer**, which ends on `end_reached` rather than on a close bracket.
+
+### What the cursor trusts, and what it verifies
+
+`read_into` hands the iterator to `parse<JSON>::op`, and where that leaves it is up to the `from<JSON, T>` specialization. Glaze's own readers stop at the value's end, but that is a convention, not something the cursor can check for free — `glz::text` deliberately swallows the rest of the buffer, and a custom reader may consume only a prefix. Trusting the stopping point blindly is how a cursor turns a well-formed document into a short or mis-valued element stream with no error reported anywhere.
+
+So an extent is recorded only when **the element is a container and the parse finished exactly on that container's own closing bracket**. That covers the case worth accelerating (large elements, where re-scanning is expensive) and rejects readers that stopped somewhere else.
+
+One residual limitation: a custom reader that consumes a *complete inner container* but stops before the element's own end (for example reading `[[1],2]` and stopping after `[1]`) produces an extent that passes this check and is still wrong. Such a reader is already incompatible with ordinary `glz::read_json` on nested structures, since it would misparse whatever follows. If you write custom `from<JSON, T>` specializations, leave the iterator at the value's end.
+
+### Measured effect
+
+A 9 MB array of three-field objects, `read_into` per row, Apple M1, clang `-O3`:
+
+| | throughput |
+|---|---:|
+| cursor off | 575 MB/s |
+| cursor on | 955 MB/s (**+66%**) |
+
+The gain scales with how much of each element `read_into` consumes; containers whose elements are large benefit most, since those are the scans being elided.
+
 ## Type Checking
 
 Check the type of a value before extracting:
