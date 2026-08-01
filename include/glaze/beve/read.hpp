@@ -1675,6 +1675,8 @@ namespace glz
       template <auto Opts>
       static void op(std::span<T, Extent>& value, is_context auto&& ctx, auto&& it, auto end)
       {
+         GLZ_ASSERT_OWNS_ITS_BYTES(decltype(ctx));
+
          if (invalid_end(ctx, it, end)) {
             return;
          }
