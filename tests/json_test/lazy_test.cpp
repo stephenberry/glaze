@@ -70,6 +70,23 @@ inline constexpr cursor_off_bounded_opts cursor_off_bounded{};
 inline constexpr cursor_on_partial_opts cursor_on_partial{};
 inline constexpr cursor_off_partial_opts cursor_off_partial{};
 
+// Wide number skip. Like the cursor, it is only ever a speed difference, so its tests compare
+// the option on against the option off. Non-null-terminated only, which is where it applies.
+struct wide_num_on_opts : glz::opts
+{
+   bool null_terminated = false;
+   bool lazy_wide_number_skip = true;
+};
+
+struct wide_num_off_opts : glz::opts
+{
+   bool null_terminated = false;
+   bool lazy_wide_number_skip = false;
+};
+
+inline constexpr wide_num_on_opts wide_num_on{};
+inline constexpr wide_num_off_opts wide_num_off{};
+
 struct Cell
 {
    int a{};
@@ -2038,6 +2055,162 @@ suite lazy_streaming_cursor_tests = [] {
       // grow lazy_document at all.
       expect(sizeof(glz::lazy_document<cursor_off>) == sizeof(glz::lazy_document<glz::opts{}>));
       expect(sizeof(glz::lazy_document<cursor_on>) > sizeof(glz::lazy_document<cursor_off>));
+   };
+};
+
+// ============================================================================
+// Wide number skip (lazy_wide_number_skip)
+// ============================================================================
+
+// Renders a full traversal of {"a":[ ... ]} so both option settings can be compared exactly.
+// Elements are rendered by raw_json() so container elements and scalars alike are covered, and
+// any misplaced skip shows up as a shifted or truncated slice rather than a silent miscount.
+template <auto Opts>
+std::string traverse_raw(std::string_view json)
+{
+   auto doc = glz::lazy_json<Opts>(json);
+   if (not doc) return "<parse-error>";
+   std::string out;
+   for (auto& e : (*doc)["a"]) {
+      out += e.raw_json();
+      out += '|';
+   }
+   return out;
+}
+
+suite find_first_of_tests = [] {
+   // glz::find_first_of is a shared SWAR primitive, so it is worth pinning down directly rather
+   // than only through its caller. The 8-byte chunking means the interesting cases are matches
+   // straddling a chunk boundary and inputs shorter than one chunk.
+   auto at = [](std::string_view s) {
+      return glz::find_first_of<'"', '[', ']', '{', '}'>(s.data(), s.data() + s.size()) - s.data();
+   };
+
+   "find_first_of_basic"_test = [&] {
+      expect(at("") == 0);
+      expect(at("abc") == 3); // no match: lands on end
+      expect(at("[abc") == 0); // match at the very start
+      expect(at("abc]") == 3); // match at the very end
+      expect(at("ab\"cd") == 2);
+   };
+
+   "find_first_of_chunk_boundaries"_test = [&] {
+      // Byte 7 is the last of the first chunk, byte 8 the first of the second.
+      expect(at("0123456{") == 7);
+      expect(at("01234567{") == 8);
+      expect(at("0123456789012345}") == 16);
+      expect(at(std::string(64, 'x') + "]") == 64);
+      expect(at(std::string(64, 'x')) == 64); // no match across many chunks
+   };
+
+   "find_first_of_picks_earliest"_test = [&] {
+      // Several matches inside one chunk must resolve to the first, not merely any.
+      expect(at("ab[cd]ef") == 2);
+      expect(at("]]]]") == 0);
+      expect(at("0123456[]{}") == 7);
+   };
+
+   "find_first_of_does_not_overrun"_test = [&] {
+      // A match sitting just past the end must not be seen.
+      const std::string backing = "abcdefghijkl]";
+      const std::string_view bounded{backing.data(), backing.size() - 1};
+      expect(at(bounded) == std::ptrdiff_t(bounded.size()));
+   };
+};
+
+suite lazy_wide_number_skip_tests = [] {
+   // The escalation threshold is 8 bytes into a numeric run, so the interesting cases sit either
+   // side of it and exactly on it. numeric_table also accepts . + - e E, so runs are not just
+   // digits.
+   const std::vector<std::string> shapes{
+      R"({"a":[1,2,3]})", // shorter than the threshold
+      R"({"a":[1234567,12345678,123456789]})", // 7, 8 and 9 bytes: straddles the boundary
+      R"({"a":[1234567890123456789012345678901234567890]})", // far past it
+      R"({"a":[-1.5e-10,+2.25E+30,-0.000000000001]})", // full numeric alphabet
+      R"({"a":[[1234567890123,2345678901234],[3456789012345]]})", // runs nested in containers
+      R"({"a":[{"n":1234567890123,"m":2},{"n":3,"m":4567890123456}]})", // runs inside objects
+      // The skip escalates 8 bytes into a run, so a run of exactly 9 digits ends the moment it
+      // escalates. Only a container element routes through that code, and only a closing bracket
+      // (rather than a comma) is lost if the escalated scan starts one byte late - so these are
+      // the shapes where an off-by-one at the boundary actually changes the parse.
+      R"({"a":[[123456789],[1],[12345678],[1234567890]]})",
+      R"({"a":[{"n":123456789},{"n":12345678},{"n":1234567890}]})",
+      R"({"a":[[[123456789]],[[12345678]]]})", // boundary at two levels of nesting
+      // A long run immediately before each kind of structural byte. Runs followed only by a
+      // closing bracket cannot tell whether the scan still stops at '"', '[' and '{', so this
+      // puts a string, a nested array and a nested object directly after long numbers - and the
+      // string carries ']' and '}' so a scan that ignored quotes would miscount depth.
+      R"({"a":[[1234567890123,"s]}",1234567890124,[7],1234567890125,{"k":1}],9]})",
+      R"({"a":[1,"a string, with ] and } inside",2345678901234,true,null])", // mixed with strings
+      R"({"a":[]})", // empty
+   };
+
+   "wide_number_skip_matches_disabled"_test = [&] {
+      for (const auto& json : shapes) {
+         const auto on = traverse_raw<wide_num_on>(json);
+         const auto off = traverse_raw<wide_num_off>(json);
+         expect(on == off) << json;
+      }
+   };
+
+   "wide_number_skip_values_are_correct"_test = [&] {
+      expect(traverse_raw<wide_num_on>(shapes[1]) == "1234567|12345678|123456789|");
+      expect(traverse_raw<wide_num_on>(shapes[3]) == "-1.5e-10|+2.25E+30|-0.000000000001|");
+      expect(traverse_raw<wide_num_on>(shapes[4]) == "[1234567890123,2345678901234]|[3456789012345]|");
+      expect(traverse_raw<wide_num_on>(shapes[6]) == "[123456789]|[1]|[12345678]|[1234567890]|");
+      expect(traverse_raw<wide_num_on>(shapes[7]) == R"({"n":123456789}|{"n":12345678}|{"n":1234567890}|)");
+      expect(traverse_raw<wide_num_on>(shapes[8]) == "[[123456789]]|[[12345678]]|");
+      expect(traverse_raw<wide_num_on>(shapes[9]) ==
+             R"([1234567890123,"s]}",1234567890124,[7],1234567890125,{"k":1}]|9|)");
+      expect(traverse_raw<wide_num_on>(shapes[10]) == R"(1|"a string, with ] and } inside"|2345678901234|true|null|)");
+   };
+
+   "wide_number_skip_reads_agree"_test = [&] {
+      // The skip feeds iteration, so read_into over a long-run document must land on the same
+      // elements with the option on as with it off.
+      std::string json = R"({"a":[)";
+      for (int i = 0; i < 64; ++i) {
+         if (i) json += ',';
+         json += std::to_string(1234567890123456LL + i);
+      }
+      json += "]}";
+
+      auto sum = []<auto Opts>(std::string_view j) {
+         auto doc = glz::lazy_json<Opts>(j);
+         int64_t total{};
+         int count{};
+         for (auto& e : (*doc)["a"]) {
+            int64_t v{};
+            if (not e.read_into(v)) total += v;
+            if (++count > 128) break;
+         }
+         return std::pair{total, count};
+      };
+
+      const auto on = sum.template operator()<wide_num_on>(json);
+      const auto off = sum.template operator()<wide_num_off>(json);
+      expect(on == off);
+      expect(on.second == 64);
+   };
+
+   "wide_number_skip_respects_buffer_end"_test = [&] {
+      // A long run butted right up against the logical end, with a numeric tail past it. If the
+      // scan overran json_end() it would swallow the tail and change the last element.
+      std::string backing = R"({"a":[1,123456789012345678901234567890]}99999999999999999999)";
+      const std::string_view json{backing.data(), backing.find("]}") + 2};
+
+      expect(traverse_raw<wide_num_on>(json) == traverse_raw<wide_num_off>(json));
+      expect(traverse_raw<wide_num_on>(json) == "1|123456789012345678901234567890|");
+   };
+
+   "wide_number_skip_truncated_input_terminates"_test = [&] {
+      // Truncated mid-number: both settings must stop rather than run off the end.
+      std::string backing = R"({"a":[1,12345678901234567890)";
+      const std::string_view json{backing.data(), backing.size()};
+
+      const auto on = traverse_raw<wide_num_on>(json);
+      const auto off = traverse_raw<wide_num_off>(json);
+      expect(on == off);
    };
 };
 

@@ -3,8 +3,10 @@
 
 #pragma once
 
+#include <array>
 #include <string_view>
 #include <type_traits>
+#include <utility>
 
 #include "glaze/json/read.hpp"
 #include "glaze/json/skip.hpp"
@@ -61,6 +63,75 @@ namespace glz
          return p;
       }
 
+      // The escalated scan below jumps to the next byte the depth loops actually act on, so its
+      // character set must be exactly the bytes lazy_char_class does not classify as `other`.
+      // The two live in different headers, and that equality IS the correctness argument for
+      // escalating, so pin it here rather than leaving it to a comment.
+      inline constexpr std::array<char, 5> lazy_structural_chars{'"', '[', ']', '{', '}'};
+
+      template <size_t... I>
+      GLZ_ALWAYS_INLINE const char* find_next_structural(const char* p, const char* end,
+                                                         std::index_sequence<I...>) noexcept
+      {
+         return glz::find_first_of<lazy_structural_chars[I]...>(p, end);
+      }
+
+      // Scans to the next byte the depth loops act on. Expanded from lazy_structural_chars so the
+      // scan and the assertion below cannot describe different sets.
+      GLZ_ALWAYS_INLINE const char* find_next_structural(const char* p, const char* end) noexcept
+      {
+         return find_next_structural(p, end, std::make_index_sequence<lazy_structural_chars.size()>{});
+      }
+
+      static_assert(
+         [] {
+            for (size_t c = 0; c < 256; ++c) {
+               const bool structural = lazy_char_class[c] != lazy_char_type::other;
+               bool listed = false;
+               for (const char l : lazy_structural_chars) {
+                  if (uint8_t(l) == c) listed = true;
+               }
+               // `number` bytes are non-`other` but are consumed by the run walk, not the scan.
+               if (lazy_char_class[c] == lazy_char_type::number) continue;
+               if (structural != listed) return false;
+            }
+            return true;
+         }(),
+         "the wide-number escalation set must match lazy_char_class's structural bytes");
+
+      // Skip a number inside a container, where the only bytes that matter are the structural
+      // ones. Returns the position just past the numeric run.
+      //
+      // The default walk is a byte-at-a-time table lookup, which is what most JSON wants: typical
+      // numbers are a few bytes long and a wide scan cannot amortize its setup over them. The
+      // lazy_wide_number_skip option targets documents built from long numeric runs, where it
+      // escalates to the SWAR scan once a run is still going after 8 bytes. Escalating is always
+      // semantically safe - inside a container every non-structural byte is ignorable either way -
+      // so the option changes only how fast the same position is reached.
+      template <auto Opts>
+      GLZ_ALWAYS_INLINE const char* skip_number_lazy(const char* p, const char* end) noexcept
+      {
+         ++p;
+         if constexpr (Opts.null_terminated) {
+            // A null-terminated buffer stops on its own sentinel, and end may be absent entirely
+            // for a detached view, so the wide scan does not apply here.
+            while (numeric_table[uint8_t(*p)]) ++p;
+            return p;
+         }
+         else if constexpr (check_lazy_wide_number_skip(Opts)) {
+            const char* const short_run_end = (end - p) > 8 ? p + 8 : end;
+            while (p < short_run_end && numeric_table[uint8_t(*p)]) ++p;
+            if (p == short_run_end && p < end) {
+               return find_next_structural(p, end);
+            }
+            return p;
+         }
+         else {
+            while (p < end && numeric_table[uint8_t(*p)]) ++p;
+            return p;
+         }
+      }
+
       // Skip from current position to depth zero (end of enclosing container)
       // Used after partial scanning to find container end efficiently
       template <auto Opts>
@@ -87,13 +158,7 @@ namespace glz
                ++p;
                break;
             case number:
-               ++p;
-               if constexpr (Opts.null_terminated) {
-                  while (numeric_table[uint8_t(*p)]) ++p;
-               }
-               else {
-                  while (p < end && numeric_table[uint8_t(*p)]) ++p;
-               }
+               p = skip_number_lazy<Opts>(p, end);
                break;
             default:
                ++p;
@@ -148,13 +213,7 @@ namespace glz
                   ++p;
                   break;
                case number:
-                  ++p;
-                  if constexpr (Opts.null_terminated) {
-                     while (numeric_table[uint8_t(*p)]) ++p;
-                  }
-                  else {
-                     while (p < end && numeric_table[uint8_t(*p)]) ++p;
-                  }
+                  p = skip_number_lazy<Opts>(p, end);
                   break;
                default:
                   ++p;

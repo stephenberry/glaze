@@ -400,6 +400,48 @@ A 9 MB array of three-field objects, `read_into` per row, Apple M1, clang `-O3`:
 
 The gain scales with how much of each element `read_into` consumes; containers whose elements are large benefit most, since those are the scans being elided.
 
+## Wide Number Skip (opt-in)
+
+Skipping over a container walks its bytes looking for the structural characters (`"` `[` `]` `{` `}`) that carry depth. Everything in between — numbers, literals, commas, whitespace — is stepped over one byte at a time with a table lookup.
+
+That is the right default. Typical JSON numbers are a few bytes long, and a wide SIMD-style scan cannot amortize its setup over three digits. But documents built from **long numeric cells** — telemetry dumps, exported matrices, scientific data — spend most of their bytes inside numeric runs, and there the byte-at-a-time walk dominates.
+
+`lazy_wide_number_skip` targets exactly that case. It keeps the cheap table walk for short numbers and escalates to an 8-byte SWAR scan only once a run is still going after 8 bytes:
+
+```cpp
+struct wide_opts : glz::opts
+{
+   bool null_terminated = false;   // required: the option applies to bounded buffers
+   bool lazy_wide_number_skip = true;
+};
+```
+
+### When to enable it
+
+Measure on your own data. This is a real trade, not a free win, and how it lands depends on more than just how long your numbers are. Full traversal, Apple M1, clang `-O3`, bounded buffers, interleaved best-of-5:
+
+| document shape | option off | option on | |
+|---|---:|---:|---|
+| long numeric runs, array cells | 904 MB/s | 1231 MB/s | **+36%** |
+| long numeric, object-keyed | 521 MB/s | 479 MB/s | **−8%** |
+| short numeric cells | 380 MB/s | 380 MB/s | ±0% |
+| tiny objects (`{"k":"v","w":1}`) | 314 MB/s | 310 MB/s | −1% |
+| long strings | 1877 MB/s | 1884 MB/s | ±0% |
+| telemetry records | 485 MB/s | 478 MB/s | −1% |
+| nested mixed (typical API payload) | 356 MB/s | 340 MB/s | −4% |
+
+The two rows that matter most are the numeric ones, and they point in opposite directions:
+
+- **Long numbers as array cells win big.** The escalated scan runs past the commas and the following cells in one sweep, so it skips much more than a single number.
+- **Long numbers as object values can lose.** Each run ends a few bytes later at the next key's `"`, so the scan never amortizes its setup. An independent measurement using a different traversal put this case as bad as −19%, so treat roughly −20% as the worst case rather than the −8% above.
+
+Enable it for array-shaped numeric data. Leave it off otherwise. With the option off the generated code is byte-for-byte what it was before the option existed, so the default costs nothing at all.
+
+### Restrictions
+
+- **Non-null-terminated buffers only.** A null-terminated buffer stops on its own sentinel, and a detached view may have no end pointer at all, so the option is ignored there.
+- **Correctness is independent of the option.** Inside a container every non-structural byte is ignorable, so escalating early, late, or never reaches the same position. The threshold is a performance knob, not a semantic one.
+
 ## Type Checking
 
 Check the type of a value before extracting:
