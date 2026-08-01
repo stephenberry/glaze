@@ -18,6 +18,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
+#include <string_view>
 
 #include "glaze/simd/simd.hpp"
 #include "glaze/util/inline.hpp"
@@ -140,6 +141,10 @@ namespace glz::detail::utf8_simd
    };
    inline constexpr size_t width = GLZ_UTF8_GENERIC_WIDTH;
    static_assert(width == 16 || width == 32 || width == 64, "generic width must be 16, 32, or 64");
+   // Named apart from the native backends of the same width, so a build that meant to exercise the
+   // portable path cannot mistake a native one for it. Width alone is ambiguous: AVX2 and generic32
+   // both report 32.
+   inline constexpr std::string_view backend = width == 64 ? "generic64" : (width == 32 ? "generic32" : "generic16");
 
    GLZ_ALWAYS_INLINE vec load(const uint8_t* p) noexcept
    {
@@ -215,6 +220,7 @@ namespace glz::detail::utf8_simd
 #elif defined(GLZ_USE_AVX512BW)
    using vec = __m512i;
    inline constexpr size_t width = 64;
+   inline constexpr std::string_view backend = "AVX512BW";
 
    GLZ_ALWAYS_INLINE vec load(const uint8_t* p) noexcept { return _mm512_loadu_si512(p); }
    GLZ_ALWAYS_INLINE vec zero() noexcept { return _mm512_setzero_si512(); }
@@ -246,6 +252,7 @@ namespace glz::detail::utf8_simd
 #elif defined(GLZ_USE_AVX2)
    using vec = __m256i;
    inline constexpr size_t width = 32;
+   inline constexpr std::string_view backend = "AVX2";
 
    GLZ_ALWAYS_INLINE vec load(const uint8_t* p) noexcept
    {
@@ -278,6 +285,7 @@ namespace glz::detail::utf8_simd
 #elif defined(GLZ_USE_SSSE3)
    using vec = __m128i;
    inline constexpr size_t width = 16;
+   inline constexpr std::string_view backend = "SSSE3";
 
    GLZ_ALWAYS_INLINE vec load(const uint8_t* p) noexcept
    {
@@ -306,6 +314,7 @@ namespace glz::detail::utf8_simd
 #elif defined(GLZ_USE_NEON64)
    using vec = uint8x16_t;
    inline constexpr size_t width = 16;
+   inline constexpr std::string_view backend = "NEON64";
 
    GLZ_ALWAYS_INLINE vec load(const uint8_t* p) noexcept { return vld1q_u8(p); }
    GLZ_ALWAYS_INLINE vec zero() noexcept { return vdupq_n_u8(0); }
@@ -328,6 +337,7 @@ namespace glz::detail::utf8_simd
 #elif defined(GLZ_USE_WASM_SIMD128)
    using vec = v128_t;
    inline constexpr size_t width = 16;
+   inline constexpr std::string_view backend = "WASM_SIMD128";
 
    GLZ_ALWAYS_INLINE vec load(const uint8_t* p) noexcept { return wasm_v128_load(p); }
    GLZ_ALWAYS_INLINE vec zero() noexcept { return wasm_i8x16_splat(0); }
@@ -453,3 +463,23 @@ namespace glz::detail::utf8_simd
 }
 
 #endif
+
+namespace glz
+{
+   // The UTF-8 validator this translation unit compiled: "AVX512BW", "AVX2", "SSSE3", "NEON64",
+   // "WASM_SIMD128", "generic16" / "generic32" / "generic64", or "scalar".
+   //
+   // This is not always `glz::simd_isa`. The validator needs a byte-granular shuffle, so plain SSE2
+   // and 32 bit NEON have no vector path here and fall back to the scalar validator while other
+   // subsystems still use their vector paths. GLZ_UTF8_GENERIC_WIDTH overrides everything with the
+   // portable backend, which no GLZ_USE_* macro records.
+   //
+   // Each branch of the selection chain above names itself alongside its register width, so a new
+   // backend that forgets to declare one fails to compile here rather than reporting its
+   // predecessor's name.
+#if defined(GLZ_UTF8_SIMD)
+   inline constexpr std::string_view utf8_validation_backend = detail::utf8_simd::backend;
+#else
+   inline constexpr std::string_view utf8_validation_backend = "scalar";
+#endif
+}

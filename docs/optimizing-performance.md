@@ -15,12 +15,51 @@ Glaze automatically detects the target architecture using compiler-predefined ma
 | Flag | Detected When | Architecture |
 |------|--------------|--------------|
 | `GLZ_USE_SSE2` | `__x86_64__` or `_M_X64` | x86-64 (always has SSE2) |
-| `GLZ_USE_AVX2` | `__AVX2__` (in addition to x86-64) | x86-64 with AVX2 |
-| `GLZ_USE_NEON` | `__aarch64__`, `_M_ARM64`, or `__ARM_NEON` | ARM64 / AArch64 |
+| `GLZ_USE_SSSE3` | `__SSSE3__`, or `__AVX__` on MSVC | x86-64 with byte-granular shuffle |
+| `GLZ_USE_AVX2` | `__AVX2__` | x86-64 with AVX2 |
+| `GLZ_USE_AVX512BW` | `__AVX512BW__`, or `__AVX512F__` on MSVC | x86-64 with AVX-512BW |
+| `GLZ_USE_NEON` | `__aarch64__`, `_M_ARM64`, or `__ARM_NEON` | ARM with NEON |
+| `GLZ_USE_NEON64` | `__aarch64__` or `_M_ARM64` | AArch64 (has the full 16-byte table lookup) |
+| `GLZ_USE_WASM_SIMD128` | `__wasm_simd128__` | WebAssembly |
 
 These macros are set by the compiler based on the target architecture, so they work correctly when cross-compiling (e.g., an x86 host building for ARM will not define `__x86_64__`).
 
-When AVX2 is available, both `GLZ_USE_SSE2` and `GLZ_USE_AVX2` are defined. The AVX2 path handles 32-byte chunks, then the SSE2 path handles 16-byte remainders.
+The flags are cumulative rather than exclusive. When AVX2 is available, `GLZ_USE_SSE2`, `GLZ_USE_SSSE3`, and `GLZ_USE_AVX2` are all defined, and string escaping uses them together: the AVX2 path handles 32-byte chunks, then the SSE2 path handles the 16-byte remainder.
+
+### Querying the Selected Backend
+
+Glaze selects its SIMD paths entirely in the preprocessor, with no runtime dispatch. Two `constexpr` names report what a translation unit compiled.
+
+`glz::simd_isa`, in `glaze/simd/simd.hpp`, names the widest instruction set the detection above enabled. It is one of `"AVX512BW"`, `"AVX2"`, `"SSSE3"`, `"SSE2"`, `"NEON64"`, `"NEON"`, `"WASM_SIMD128"`, or `"scalar"`.
+
+`glz::utf8_validation_backend`, in `glaze/simd/utf8_validation.hpp`, names the UTF-8 validator that was compiled. It is one of `"AVX512BW"`, `"AVX2"`, `"SSSE3"`, `"NEON64"`, `"WASM_SIMD128"`, `"generic16"`, `"generic32"`, `"generic64"`, or `"scalar"`.
+
+```c++
+#include "glaze/glaze.hpp"
+#include <iostream>
+
+std::cout << glz::simd_isa << '\n';                 // e.g. AVX2
+std::cout << glz::utf8_validation_backend << '\n';  // e.g. AVX2
+```
+
+Both are `std::string_view`, so they compare by value and are usable in `constexpr` contexts:
+
+```c++
+static_assert(glz::simd_isa != "scalar", "this build was expected to have a vector path");
+```
+
+Both describe the binary, not the machine running it. A build reporting `"AVX2"` runs AVX2 on a host that also supports AVX-512, and crashes on one that supports neither.
+
+> [!IMPORTANT]
+>
+> `glz::simd_isa` is the detection result, which is an upper bound rather than the name of a single code path. Subsystems consume the `GLZ_USE_*` macros independently and do not all reach the same level:
+>
+> - **JSON string escaping** has no AVX-512 helper. An AVX-512 build reports `simd_isa == "AVX512BW"` while escaping runs the AVX2 and SSE2 helpers.
+> - **UTF-8 validation** needs a byte-granular shuffle, which plain SSE2 and 32-bit NEON do not have. Those targets report `simd_isa == "SSE2"` or `"NEON"` alongside `utf8_validation_backend == "scalar"`: validation runs the scalar validator while the rest of Glaze still uses its vector paths.
+>
+> Compare against `glz::utf8_validation_backend` when validation specifically is what you care about.
+
+The `generic*` values come from `GLZ_UTF8_GENERIC_WIDTH`, a testing hook that selects a portable width-generic validator written in plain C++ so the algorithm can be exercised at register sizes the host cannot execute. No ordinary build selects it, and it is the one case where `utf8_validation_backend` is unrelated to `simd_isa`.
 
 ### Disabling SIMD
 

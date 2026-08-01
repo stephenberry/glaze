@@ -3,6 +3,8 @@
 
 #pragma once
 
+#include <string_view>
+
 #if !defined(GLZ_DISABLE_SIMD)
 #if defined(__x86_64__) || defined(_M_X64)
 #if defined(_MSC_VER)
@@ -37,3 +39,43 @@
 #define GLZ_USE_WASM_SIMD128
 #endif
 #endif
+
+namespace glz
+{
+   // The widest instruction set the detection above enabled for this translation unit.
+   //
+   // Glaze has no runtime dispatch: every SIMD path is chosen in the preprocessor, so this is fixed
+   // for the binary and reports what it was compiled for rather than what the host can execute. A
+   // build that reports "AVX2" runs AVX2 on a machine that supports AVX-512, and crashes on one
+   // that supports neither.
+   //
+   // This is the detection result, which is an upper bound rather than the name of a single code
+   // path. Subsystems consume the GLZ_USE_* macros independently and do not all reach the same
+   // level: JSON string escaping has no AVX-512 helper, so an AVX-512 build reports "AVX512BW" here
+   // while escaping runs the AVX2 and SSE2 ones. Use `glz::utf8_validation_backend`, declared in
+   // simd/utf8_validation.hpp, for what the UTF-8 validator itself selected -- it names the
+   // width-generic backend, which this constant cannot see.
+   //
+   // These spellings are public API. Renaming one breaks every equality comparison against it, and
+   // inserting a wider entry changes what an already-working build reports, so treat both as
+   // deliberate rather than incidental.
+#if defined(GLZ_USE_AVX512BW)
+   inline constexpr std::string_view simd_isa = "AVX512BW";
+#elif defined(GLZ_USE_AVX2)
+   inline constexpr std::string_view simd_isa = "AVX2";
+#elif defined(GLZ_USE_SSSE3)
+   inline constexpr std::string_view simd_isa = "SSSE3";
+#elif defined(GLZ_USE_SSE2)
+   inline constexpr std::string_view simd_isa = "SSE2";
+#elif defined(GLZ_USE_NEON64)
+   inline constexpr std::string_view simd_isa = "NEON64";
+#elif defined(GLZ_USE_NEON)
+   inline constexpr std::string_view simd_isa = "NEON";
+#elif defined(GLZ_USE_WASM_SIMD128)
+   inline constexpr std::string_view simd_isa = "WASM_SIMD128";
+#else
+   // No vector path: either GLZ_DISABLE_SIMD, or a target the detection above does not cover.
+   // Glaze still uses SWAR everywhere, which needs no intrinsics, so this is not "no acceleration".
+   inline constexpr std::string_view simd_isa = "scalar";
+#endif
+}

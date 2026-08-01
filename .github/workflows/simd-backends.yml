@@ -42,14 +42,19 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          # expect_isa and expect differ on the baseline: SSE2 has no byte-granular shuffle, so the
+          # validator falls back to scalar while the rest of Glaze still uses its SSE2 paths.
           - name: x86-64 SSE2 baseline (scalar fallback)
             flags: "-mno-ssse3"
+            expect_isa: SSE2
             expect: scalar
           - name: x86-64 SSSE3
             flags: "-mssse3 -mno-avx"
+            expect_isa: SSSE3
             expect: SSSE3
           - name: x86-64 AVX2
             flags: "-mavx2"
+            expect_isa: AVX2
             expect: AVX2
 
     steps:
@@ -57,25 +62,22 @@ jobs:
 
       - name: Confirm the intended backend was selected
         run: |
+          # Reads the library's own constants rather than restating its #if chain, so this cannot
+          # drift from what Glaze actually compiled. utf8_validation_test asserts the constants
+          # against the register width the selected backend defines, which is what keeps this from
+          # being a string the workflow reads back to itself.
           cat > /tmp/backend.cpp << 'EOF'
           #include "glaze/simd/utf8_validation.hpp"
-          #include <cstdio>
-          int main() {
-          #if defined(GLZ_USE_AVX512BW)
-            std::puts("AVX512BW");
-          #elif defined(GLZ_USE_AVX2)
-            std::puts("AVX2");
-          #elif defined(GLZ_USE_SSSE3)
-            std::puts("SSSE3");
-          #else
-            std::puts("scalar");
-          #endif
-            return 0;
-          }
+          #include <iostream>
+          int main() { std::cout << glz::simd_isa << ' ' << glz::utf8_validation_backend << '\n'; }
           EOF
           g++ -std=c++23 ${{ matrix.flags }} -I include /tmp/backend.cpp -o /tmp/backend
-          got=$(/tmp/backend)
-          echo "selected backend: $got (expected ${{ matrix.expect }})"
+          out=$(/tmp/backend)
+          got_isa=${out%% *}
+          got=${out##* }
+          echo "simd_isa: $got_isa (expected ${{ matrix.expect_isa }})"
+          echo "utf8 backend: $got (expected ${{ matrix.expect }})"
+          test "$got_isa" = "${{ matrix.expect_isa }}"
           test "$got" = "${{ matrix.expect }}"
 
       - name: Configure
@@ -137,15 +139,10 @@ jobs:
         run: |
           cat > /tmp/backend.cpp << 'EOF'
           #include "glaze/simd/utf8_validation.hpp"
-          #include <cstdio>
+          #include <iostream>
           int main() {
-          #if defined(GLZ_USE_AVX512BW)
-            std::printf("AVX512BW width=%zu\n", glz::detail::utf8_simd::width);
-            return 0;
-          #else
-            std::puts("WRONG BACKEND");
-            return 1;
-          #endif
+            std::cout << glz::simd_isa << ' ' << glz::utf8_validation_backend << '\n';
+            return (glz::simd_isa == "AVX512BW" && glz::utf8_validation_backend == "AVX512BW") ? 0 : 1;
           }
           EOF
           g++ -std=c++23 -mavx512f -mavx512bw -mavx512vl -I include /tmp/backend.cpp -o /tmp/backend
@@ -208,17 +205,10 @@ jobs:
           git clone --depth 1 --branch v1.1.0 https://github.com/openalgz/ut /tmp/ut
           cat > /tmp/backend.cpp << 'EOF'
           #include "glaze/simd/utf8_validation.hpp"
-          #include <cstdio>
-          int main() {
-          #if defined(GLZ_USE_WASM_SIMD128)
-            std::puts("SIMD128");
-          #else
-            std::puts("scalar");
-          #endif
-            return 0;
-          }
+          #include <iostream>
+          int main() { std::cout << glz::utf8_validation_backend << '\n'; }
           EOF
-          for cfg in "-msimd128:SIMD128" ":scalar"; do
+          for cfg in "-msimd128:WASM_SIMD128" ":scalar"; do
             flags="${cfg%%:*}"; label="${cfg##*:}"
             echo "::group::WASM $label"
             # Assert the backend before testing it, so a toolchain change that quietly drops SIMD128
@@ -251,27 +241,20 @@ jobs:
           git clone --depth 1 --branch v1.1.0 https://github.com/openalgz/ut /tmp/ut
           cat > /tmp/backend.cpp << 'EOF'
           #include "glaze/simd/utf8_validation.hpp"
-          #include <cstdio>
-          int main() {
-          #if defined(GLZ_UTF8_SIMD)
-            std::printf("%zu\n", glz::detail::utf8_simd::width);
-            return 0;
-          #else
-            std::puts("scalar");
-            return 1;
-          #endif
-          }
+          #include <iostream>
+          int main() { std::cout << glz::utf8_validation_backend << '\n'; }
           EOF
           for w in 16 32 64; do
             echo "::group::generic width $w"
-            # This runner is x86-64 with no -m flags, so the baseline is SSE2 and no native backend
-            # is selected. Assert the portable backend really is active at the requested width:
-            # otherwise the vector path compiles away and all three widths silently test the scalar
-            # validator against itself.
+            # Assert the portable backend really is active at the requested width: otherwise the
+            # vector path compiles away and all three widths silently test the scalar validator
+            # against itself. The name is checked rather than the width alone, because width does
+            # not identify a backend -- AVX2 and generic32 are both 32, so a runner that happened to
+            # enable AVX2 would satisfy a width-only check for w=32 without running portable code.
             g++ -std=c++23 -DGLZ_UTF8_GENERIC_WIDTH=$w -I include /tmp/backend.cpp -o /tmp/backend
             got=$(/tmp/backend)
-            echo "active width: $got (expected $w)"
-            test "$got" = "$w"
+            echo "active backend: $got (expected generic$w)"
+            test "$got" = "generic$w"
             g++ -std=c++23 -O2 -DGLZ_UTF8_GENERIC_WIDTH=$w \
               -I include -I /tmp/ut/include \
               tests/json_test/utf8_validation_test.cpp -o /tmp/utf8_generic_$w
