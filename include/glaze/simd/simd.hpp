@@ -37,3 +37,24 @@
 #define GLZ_USE_WASM_SIMD128
 #endif
 #endif
+
+namespace glz
+{
+#if defined(GLZ_USE_AVX512BW)
+   static constexpr const char* glz_cpu_backend{"AVX512BW"};
+#elif defined(GLZ_USE_AVX2)
+   static constexpr const char* glz_cpu_backend{"AVX2"};
+#elif defined(GLZ_USE_SSSE3)
+   static constexpr const char* glz_cpu_backend{"SSSE3"};
+#elif defined(GLZ_USE_SSE2)
+   static constexpr const char* glz_cpu_backend{"SSE2"};
+#elif defined(GLZ_USE_NEON64)
+   static constexpr const char* glz_cpu_backend{"NEON64"};
+#elif defined(GLZ_USE_NEON)
+   static constexpr const char* glz_cpu_backend{"NEON"};
+#elif defined(GLZ_USE_WASM_SIMD128)
+   static constexpr const char* glz_cpu_backend{"WASM_SIMD128"};
+#else
+   static constexpr const char* glz_cpu_backend{"Scalar"};
+#endif
+}
