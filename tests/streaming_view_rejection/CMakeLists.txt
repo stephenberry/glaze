@@ -29,6 +29,18 @@ foreach(case IN LISTS glz_rejection_cases)
         NAME ${target}
         COMMAND "${CMAKE_COMMAND}" --build "${PROJECT_BINARY_DIR}" --target ${target} --config $<CONFIG>
     )
-    # The compile is required to fail; if it ever succeeds the guard has stopped firing.
-    set_tests_properties(${target} PROPERTIES WILL_FAIL TRUE)
+    # The build must fail, and it must fail *for the right reason*: pass only when the guard's own
+    # message appears in the compiler output. A plain WILL_FAIL would score any build failure -- a
+    # typo, a renamed target, a stale build tree -- as a pass. PASS_REGULAR_EXPRESSION ignores the
+    # exit code, so a build that succeeds emits no such message and fails the test, which is exactly
+    # the direction that matters if the guard ever stops firing. Match only the assert's own prose;
+    # the surrounding boilerplate is spelled differently by GCC, Clang, and MSVC.
+    #
+    # RESOURCE_LOCK keeps these from driving the generator concurrently. Under `ctest -j` they are
+    # the only tests that write to the build tree, and if the build system is stale each one starts
+    # its own regeneration of the same tree -- which races on shared state and can damage what the
+    # other tests link against, not just this one.
+    set_tests_properties(${target} PROPERTIES
+        PASS_REGULAR_EXPRESSION "fills a non-owning view"
+        RESOURCE_LOCK glz_build_tree)
 endforeach()
