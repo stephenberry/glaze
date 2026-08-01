@@ -168,6 +168,20 @@ namespace glz
          return p;
       }
 
+      // skip_value stops a scalar on the byte that follows it, so a scalar occupying the tail of
+      // a document reports unexpected_end: it runs out of buffer (bounded) or reaches the '\0'
+      // sentinel (null-terminated) with nothing left to look at. Nothing is truncated at the
+      // document edge, so that report is spurious and the value is complete -- the same
+      // situation finalize_read_context settles for readers that land there.
+      //
+      // Containers and strings are deliberately excluded. Each carries its own terminator, so
+      // reaching the edge without one is genuine truncation and must stay an error.
+      [[nodiscard]] inline bool lazy_scalar_reaches_end(const char lead, const error_code ec, const char* it,
+                                                        const char* end) noexcept
+      {
+         return ec == error_code::unexpected_end && it == end && lead != '{' && lead != '[' && lead != '"';
+      }
+
       // Skip any JSON value - optimized container skip
       // Returns pointer after the value
       template <auto Opts>
@@ -1402,7 +1416,7 @@ namespace glz
          }
          auto it = data_;
          context ctx{};
-         skip_value<JSON>::op<opts{}>(ctx, it, end);
+         skip_value<JSON>::op<Opts>(ctx, it, end);
          if (bool(ctx.error)) {
             return unexpected(error_ctx{0, ctx.error});
          }
@@ -1500,15 +1514,35 @@ namespace glz
             return;
          }
 
+         const char* const view_end = view.json_end();
          auto it = view.data();
          context parse_ctx{};
-         skip_value<JSON>::op<opts{}>(parse_ctx, it, view.json_end());
+         // Skip under the document's own options, not a default-constructed set. `opts{}` has
+         // null_terminated = true, so a view over a buffer without a '\0' sentinel would scan
+         // past json_end() looking for one and copy out-of-window bytes into the output.
+         skip_value<JSON>::op<Opts>(parse_ctx, it, view_end);
          if (bool(parse_ctx.error)) [[unlikely]] {
-            ctx.error = parse_ctx.error;
-            return;
+            if (!detail::lazy_scalar_reaches_end(*view.data(), parse_ctx.error, it, view_end)) {
+               ctx.error = parse_ctx.error;
+               return;
+            }
+            // Complete after all: trim the run of whitespace skip_value walked into so the
+            // written bytes match raw_json() exactly.
+            while (it > view.data() && whitespace_table[uint8_t(it[-1])]) {
+               --it;
+            }
          }
 
          const size_t n = static_cast<size_t>(it - view.data());
+         if (n == 0) [[unlikely]] {
+            // No JSON value is zero bytes. skip_value consumes nothing when the view is not on a
+            // value at all, which navigation can produce on malformed input: looking up "a" in
+            // {"a":} leaves the view on the closing brace. Writing nothing while reporting
+            // success would splice invalid JSON into the caller's buffer, so refuse.
+            ctx.error = error_code::syntax_error;
+            return;
+         }
+
          if constexpr (resizable<B>) {
             if (ix + n > b.size()) [[unlikely]] {
                b.resize((std::max)(b.size() * 2, ix + n));

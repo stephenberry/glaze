@@ -500,6 +500,21 @@ auto user_bytes = (*result)["user"].raw_beve();
 
 > **Note**: For deserialization, use `glz::read_beve(value, view)` instead of `glz::read_beve(value, view.raw_beve())` for better performance.
 
+## Writing Lazy Views
+
+Lazy views can be written back to BEVE:
+
+```cpp
+auto result = glz::lazy_beve(buffer);
+auto address = (*result)["address"];
+
+std::string output;
+auto ec = glz::write_beve(address, output);
+// output holds the BEVE encoding of just the "address" member
+```
+
+The bytes written are the same bytes `raw_beve()` returns, so writing a view copies the original encoding rather than re-encoding it. A view with no data writes BEVE null (the single tag byte `0`).
+
 ## Best Practices
 
 1. **Access keys in document order**: This is the most important optimization. Sequential access gives O(n) total complexity.
