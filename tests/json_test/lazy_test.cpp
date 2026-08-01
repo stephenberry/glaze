@@ -1618,7 +1618,7 @@ suite lazy_derived_opts_tests = [] {
       expect(result.has_value());
 
       BoolHolder holder{};
-      expect(not (*result)["obj"].read_into(holder));
+      expect(not(*result)["obj"].read_into(holder));
       expect(holder.flag == true);
    };
 };
