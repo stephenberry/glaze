@@ -1,6 +1,8 @@
 // Glaze Library
 // For the license information refer to glaze.hpp
 
+#include <concepts>
+
 #include "glaze/glaze.hpp"
 #include "ut/ut.hpp"
 
@@ -94,7 +96,27 @@ namespace lazy_beve_test
       std::map<int, std::string> num_map{{1, "hello"}, {2, "world"}};
       std::string after{"after_map"};
    };
+
+   struct DoubleField
+   {
+      double value{3.5};
+   };
+
+   struct FloatField
+   {
+      float value{};
+   };
 }
+
+// A user options struct that derives from glz::opts to carry an extra field, which is the
+// pattern glz::opts documents ("Add these fields to a custom options struct if you want to
+// use them"). The lazy API must instantiate on the exact type so the derived field survives.
+struct custom_lazy_beve_opts : glz::opts
+{
+   bool allow_conversions = false;
+};
+
+inline constexpr custom_lazy_beve_opts derived_beve_opts{glz::opts{.format = glz::BEVE}};
 
 suite lazy_beve_tests = [] {
    "lazy_beve_read_basic"_test = [] {
@@ -1199,6 +1221,32 @@ suite lazy_beve_tests = [] {
       // Booleans and nulls return 0 for size
       expect(result->size["flag"] == 0u);
       expect(result->size["empty"] == 0u);
+   };
+};
+
+// Regression coverage for the lazy API taking `opts` (a concrete base-class NTTP) rather than
+// `auto`, which sliced any derived user options struct down to glz::opts and silently dropped
+// every extra field.
+suite lazy_beve_derived_opts_tests = [] {
+   "lazy_beve_derived_opts_preserve_exact_type"_test = [] {
+      // Sliced to glz::opts, these would collapse to the same instantiation.
+      expect(not std::same_as<glz::lazy_beve_document<derived_beve_opts>,
+                              glz::lazy_beve_document<glz::opts{.format = glz::BEVE}>>);
+      expect(
+         not std::same_as<glz::lazy_beve_view<derived_beve_opts>, glz::lazy_beve_view<glz::opts{.format = glz::BEVE}>>);
+   };
+
+   "lazy_beve_derived_opts_reach_read_into"_test = [] {
+      // allow_conversions only exists on the derived struct and defaults to true when absent, so
+      // the double -> float read is refused only if the lazy API instantiated on the exact type.
+      std::string buffer{};
+      expect(not glz::write_beve(lazy_beve_test::DoubleField{}, buffer));
+
+      auto result = glz::lazy_beve<derived_beve_opts>(buffer);
+      expect(result.has_value());
+
+      lazy_beve_test::FloatField narrowed{};
+      expect(bool((*result).root().read_into(narrowed)));
    };
 };
 

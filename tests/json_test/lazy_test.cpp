@@ -1,10 +1,27 @@
 // Glaze Library
 // For the license information refer to glaze.hpp
 
+#include <concepts>
+
 #include "glaze/json.hpp"
 #include "ut/ut.hpp"
 
 using namespace ut;
+
+// A user options struct that derives from glz::opts to carry an extra field, which is the
+// pattern glz::opts documents ("Add these fields to a custom options struct if you want to
+// use them"). The lazy API must instantiate on the exact type so the derived field survives.
+struct custom_lazy_opts : glz::opts
+{
+   bool bools_as_numbers = true;
+};
+
+inline constexpr custom_lazy_opts derived_opts{};
+
+struct BoolHolder
+{
+   bool flag{};
+};
 
 struct User
 {
@@ -1580,6 +1597,29 @@ suite dynamic_key_custom_tests = [] {
       expect((*result).root().size() == 1u); // '@' scalar, then bounded by json_end_
       expect((*result).root().index().size() == 1u);
       expect((*result).root()[1].has_error()); // nothing past the lone scalar
+   };
+};
+
+// Regression coverage for the lazy API taking `opts` (a concrete base-class NTTP) rather than
+// `auto`, which sliced any derived user options struct down to glz::opts and silently dropped
+// every extra field.
+suite lazy_derived_opts_tests = [] {
+   "lazy_derived_opts_preserve_exact_type"_test = [] {
+      // Sliced to glz::opts, these would collapse to the same instantiation.
+      expect(not std::same_as<glz::lazy_document<derived_opts>, glz::lazy_document<glz::opts{}>>);
+      expect(not std::same_as<glz::lazy_json_view<derived_opts>, glz::lazy_json_view<glz::opts{}>>);
+   };
+
+   "lazy_derived_opts_reach_read_into"_test = [] {
+      // bools_as_numbers only exists on the derived struct, so it reaches the parser only if
+      // the lazy API instantiated on custom_lazy_opts rather than on a sliced glz::opts.
+      std::string buffer = R"({"obj":{"flag":1}})";
+      auto result = glz::lazy_json<derived_opts>(buffer);
+      expect(result.has_value());
+
+      BoolHolder holder{};
+      expect(not (*result)["obj"].read_into(holder));
+      expect(holder.flag == true);
    };
 };
 
