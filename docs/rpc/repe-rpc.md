@@ -100,7 +100,7 @@ The zero-copy API uses these types:
 - **`glz::repe::request_view`**: Views into the original request buffer (query and body are `std::string_view`).
 - **`glz::repe::response_builder`**: Writes responses directly to a buffer without intermediate copies.
 - **`glz::repe::state_view`**: Pairs a `request_view` with a `response_builder` for a procedure to read from and write to.
-- **`glz::repe::read_params<Opts>(value, state)`**: Reads a request body into `value`. Returns `true` on success and writes the error response itself on a parse failure, except for a notification, which is left unanswered.
+- **`glz::repe::read_params<Opts>(value, state)`**: Reads a request body into `value`. Returns `true` on success and writes the error response itself on failure, except for a notification, which is left unanswered.
 
 See [REPE Buffer Handling](repe-buffer.md) for detailed documentation of these types.
 

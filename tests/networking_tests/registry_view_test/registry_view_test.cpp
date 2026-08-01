@@ -16,13 +16,15 @@ using namespace ut;
 namespace
 {
    // Helper to create a valid REPE request buffer
-   std::string make_request(std::string_view query, std::string_view body, uint64_t id = 1, bool notify = false)
+   std::string make_request(std::string_view query, std::string_view body, uint64_t id = 1, bool notify = false,
+                            glz::error_code ec = glz::error_code::none)
    {
       glz::repe::header hdr{};
       hdr.spec = glz::repe::repe_magic;
       hdr.version = 1;
       hdr.id = id;
       hdr.notify = notify ? 1 : 0;
+      hdr.ec = ec;
       hdr.query_length = query.size();
       hdr.body_length = body.size();
       hdr.length = sizeof(glz::repe::header) + query.size() + body.size();
@@ -467,6 +469,34 @@ suite unterminated_buffer_tests = [] {
 
          expect(response_buf.empty()) << "a notification must not be answered: " << body;
       }
+   };
+
+   // The registry echoes a request that already carries an error back to its sender. A notification
+   // has no sender waiting on that echo, so it is dropped like every other unanswerable request.
+   "a notification carrying an error is not echoed"_test = [] {
+      glz::registry<> registry;
+      unterminated_api api{};
+      registry.on(api);
+
+      const auto request = exact_buffer(make_request("/value", "", 1, true, glz::error_code::parse_error));
+      std::string response_buf;
+      registry.call(std::span<const char>{request.data(), request.size()}, response_buf);
+
+      expect(response_buf.empty()) << "a notification must not be answered";
+   };
+
+   "a request carrying an error is still echoed"_test = [] {
+      glz::registry<> registry;
+      unterminated_api api{};
+      registry.on(api);
+
+      const auto request = exact_buffer(make_request("/value", "", 1, false, glz::error_code::parse_error));
+      std::string response_buf;
+      registry.call(std::span<const char>{request.data(), request.size()}, response_buf);
+
+      auto result = glz::repe::parse_request({response_buf.data(), response_buf.size()});
+      expect(bool(result)) << "Response should be parseable";
+      expect(result.request.error() == glz::error_code::parse_error) << "the error should be echoed back";
    };
 
    // A registry that accepts comments must reject a body that holds nothing but one, for the same
