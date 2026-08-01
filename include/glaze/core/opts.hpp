@@ -186,6 +186,16 @@ namespace glz
    // or when validation should be deferred.
 
    // ---
+   // bool lazy_wide_number_skip = false;
+   // Speeds up skipping long numeric runs during lazy JSON traversal by escalating to a SWAR
+   // scan for the next structural byte once a number is still going after 8 bytes. Aimed at
+   // documents built from long numeric cells; on JSON with ordinary short numbers it costs a
+   // few percent, which is why it is off by default. Gains are largest for long numbers as array
+   // cells; long numbers as object values can lose ground, so measure before enabling.
+   // Has no effect unless null_terminated is also false - a null-terminated buffer stops on its
+   // own sentinel and takes the plain table walk regardless. See docs/lazy-json.md.
+
+   // ---
    // bool lazy_streaming_cursor = false;
    // Lets lazy JSON iteration skip re-scanning values it has already consumed. When a
    // lazy_json_view::read_into fully consumes an element, or a nested container iterator runs to
@@ -719,6 +729,16 @@ namespace glz
    {
       if constexpr (requires { Opts.assume_sufficient_buffer; }) {
          return Opts.assume_sufficient_buffer;
+      }
+      else {
+         return false;
+      }
+   }
+
+   consteval bool check_lazy_wide_number_skip(auto&& Opts)
+   {
+      if constexpr (requires { Opts.lazy_wide_number_skip; }) {
+         return Opts.lazy_wide_number_skip;
       }
       else {
          return false;

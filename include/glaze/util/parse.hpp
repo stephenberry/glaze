@@ -551,6 +551,39 @@ namespace glz
       return has_zero(chunk ^ repeat_byte8(Char));
    }
 
+   // Advance to the first byte equal to any of Chars, or to end if there is none.
+   //
+   // Eight bytes at a time via the has_char SWAR test above, which is the same technique the
+   // skip_until_closed loops use inline; this is the bounded, reusable form for callers that
+   // have an explicit end rather than a padded buffer. Never reads past end, so it is safe on
+   // buffers that are neither padded nor null terminated.
+   template <char... Chars>
+      requires(sizeof...(Chars) > 0)
+   GLZ_ALWAYS_INLINE const char* find_first_of(const char* p, const char* const end) noexcept
+   {
+      // end - p rather than p + 8 <= end: the latter forms a pointer past one-past-the-end for
+      // short ranges, and is diagnosable UB on a null range. Pointer difference is well defined
+      // for both, including two null pointers.
+      while (end - p >= 8) {
+         uint64_t chunk;
+         std::memcpy(&chunk, p, 8);
+         if constexpr (std::endian::native == std::endian::big) {
+            chunk = std::byteswap(chunk);
+         }
+         // has_char marks the low bit-group of each matching byte, so the first match is the
+         // lowest set bit regardless of how many bytes in the chunk match.
+         const uint64_t test = (has_char<Chars>(chunk) | ...);
+         if (test) {
+            return p + (countr_zero(test) >> 3);
+         }
+         p += 8;
+      }
+      while (p < end && not((*p == Chars) || ...)) {
+         ++p;
+      }
+      return p;
+   }
+
    GLZ_ALWAYS_INLINE constexpr uint64_t is_less_32(const uint64_t chunk) noexcept
    {
       return has_zero(chunk & repeat_byte8(0b11100000u));
