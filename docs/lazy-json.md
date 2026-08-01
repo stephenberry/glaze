@@ -622,6 +622,12 @@ auto ec = glz::write_json(user, output);
 // output contains the JSON for just the "user" field
 ```
 
+The bytes written are the same bytes `raw_json()` returns, so writing a view is a copy of the original text rather than a re-serialization: formatting, key order, and number spelling are all preserved exactly.
+
+The writer determines the value's extent under the *document's* options, which means a view over a buffer opened with `null_terminated = false` stays inside that buffer. It reports an error rather than writing anything if the value is truncated: a container that never reaches its closing bracket, or a string that never reaches its closing quote. A scalar that runs to the last byte of the document is complete, not truncated, and is written normally.
+
+Like the rest of the lazy API, the writer does not validate scalars. A malformed literal is copied through as-is, exactly as `raw_json()` would return it.
+
 ## Options
 
 Use compile-time options for non-null-terminated buffers:

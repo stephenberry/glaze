@@ -1270,13 +1270,13 @@ namespace glz
          }
          if (!view.data()) {
             // Write null
-            dump_type<tag::null>(b, ix);
+            dump_type(ctx, uint8_t{tag::null}, b, ix);
             return;
          }
 
          auto it = view.data();
          context parse_ctx{};
-         skip_value<BEVE>::op<opts{}>(parse_ctx, it, view.beve_end());
+         skip_value<BEVE>::op<Opts>(parse_ctx, it, view.beve_end());
          if (bool(parse_ctx.error)) [[unlikely]] {
             ctx.error = parse_ctx.error;
             return;

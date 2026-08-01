@@ -2,6 +2,8 @@
 // For the license information refer to glaze.hpp
 
 #include <concepts>
+#include <utility>
+#include <vector>
 
 #include "glaze/json.hpp"
 #include "ut/ut.hpp"
@@ -2211,6 +2213,213 @@ suite lazy_wide_number_skip_tests = [] {
       const auto on = traverse_raw<wide_num_on>(json);
       const auto off = traverse_raw<wide_num_off>(json);
       expect(on == off);
+   };
+};
+
+// The shapes every writer test runs over. Each string is a complete document, so writing its
+// root must reproduce it byte for byte.
+inline const std::vector<std::string> writer_shapes{
+   R"({"a":1,"b":2})",
+   R"({"rows":[{"id":1,"tags":["x","y"]},{"id":2,"tags":[]}]})",
+   R"([1,2,3])",
+   R"([])",
+   R"({})",
+   R"([[[1]]])",
+   R"({"s":"has \"escapes\" and \\ backslashes"})",
+   R"("plain string")",
+   R"(1234567890123)",
+   R"(-4.25e-11)",
+   R"(true)",
+   R"(false)",
+   R"(null)",
+   R"(0)",
+};
+
+// validate_skipped routes skip_value down its validating path, which the writer must not
+// undermine when it settles a scalar sitting at the document edge.
+struct validating_bounded_opts : glz::opts
+{
+   bool null_terminated = false;
+   bool validate_skipped = true;
+};
+
+inline constexpr validating_bounded_opts validating_bounded{};
+
+// A document held in an exactly-sized heap allocation: no '\0' sentinel, and a sanitizer
+// redzone immediately after the last byte. Any read past json_end() trips ASAN here, which is
+// what makes these tests a memory-safety guard rather than only a behavior check.
+struct exact_buffer
+{
+   std::vector<char> bytes{};
+
+   explicit exact_buffer(std::string_view doc, std::string_view trailing = {})
+   {
+      bytes.reserve(doc.size() + trailing.size());
+      bytes.insert(bytes.end(), doc.begin(), doc.end());
+      bytes.insert(bytes.end(), trailing.begin(), trailing.end());
+      bytes.shrink_to_fit();
+   }
+
+   // Deliberately excludes `trailing`: the writer must never reach past this.
+   [[nodiscard]] std::string_view window(size_t n) const { return {bytes.data(), n}; }
+};
+
+suite lazy_writer_bounds_tests = [] {
+   "write_bounded_stays_inside_the_window"_test = [] {
+      // The regression this suite exists for: the writer skipped with a default-constructed
+      // `opts{}`, whose null_terminated = true made it scan past json_end() for a sentinel that
+      // a bounded buffer does not have. Scalars were the reachable case -- `42` was written out
+      // as `429187` when those digits happened to follow in memory.
+      for (const auto& doc : writer_shapes) {
+         const exact_buffer buf{doc, "9187SECRET_TOKEN"};
+         auto d = glz::lazy_json<cursor_off_bounded>(buf.window(doc.size()));
+         expect(d.has_value()) << doc;
+         if (not d) continue;
+
+         std::string out{};
+         expect(not glz::write_json(d->root(), out)) << doc;
+         expect(out == doc) << doc << " wrote " << out;
+      }
+   };
+
+   "write_bounded_matches_null_terminated"_test = [] {
+      // Bounded and null-terminated documents describe the same value, so the writer must not
+      // be able to tell them apart. This is the property that keeps the two skip paths honest.
+      for (const auto& doc : writer_shapes) {
+         const exact_buffer buf{doc};
+
+         std::string bounded_out{};
+         auto bounded_doc = glz::lazy_json<cursor_off_bounded>(buf.window(doc.size()));
+         expect(bounded_doc.has_value()) << doc;
+         const auto bounded_ec = glz::write_json(bounded_doc->root(), bounded_out);
+
+         std::string terminated_out{};
+         auto terminated_doc = glz::lazy_json<glz::opts{}>(doc);
+         expect(terminated_doc.has_value()) << doc;
+         const auto terminated_ec = glz::write_json(terminated_doc->root(), terminated_out);
+
+         expect(bounded_ec.ec == terminated_ec.ec) << doc;
+         expect(bounded_out == terminated_out) << doc;
+      }
+   };
+
+   "write_matches_raw_json"_test = [] {
+      // raw_json() and the writer are two implementations of "the bytes of this value". They
+      // are reached through different skips, so they are only equal if both agree on the extent
+      // -- including for a scalar sitting at the very end of the buffer.
+      for (const auto& doc : writer_shapes) {
+         const exact_buffer buf{doc};
+         auto d = glz::lazy_json<cursor_off_bounded>(buf.window(doc.size()));
+         expect(d.has_value()) << doc;
+         if (not d) continue;
+
+         std::string out{};
+         expect(not glz::write_json(d->root(), out)) << doc;
+         expect(out == d->root().raw_json()) << doc;
+      }
+   };
+
+   "write_nested_view_stops_at_its_own_end"_test = [] {
+      // A nested view's json_end() is the whole document's end, so an element that over-skips
+      // swallows its siblings instead of running off the buffer. Bounded and terminated modes
+      // must both stop at the element.
+      const std::string doc = R"({"a":[1,2],"b":"tail","c":{"d":3},"e":42})";
+      const exact_buffer buf{doc};
+
+      auto check = [&]<auto Opts>(std::string_view json) {
+         auto d = glz::lazy_json<Opts>(json);
+         expect(d.has_value());
+         if (not d) return;
+         const std::vector<std::pair<const char*, const char*>> expected{
+            {"a", "[1,2]"}, {"b", R"("tail")"}, {"c", R"({"d":3})"}, {"e", "42"}};
+         for (const auto& [key, want] : expected) {
+            std::string out{};
+            expect(not glz::write_json((*d)[key], out)) << key;
+            expect(out == want) << key << " wrote " << out;
+         }
+      };
+
+      check.template operator()<cursor_off_bounded>(buf.window(doc.size()));
+      check.template operator()<glz::opts{}>(doc);
+   };
+
+   "write_truncated_container_still_errors"_test = [] {
+      // Settling a scalar at the document edge must not settle a container or string that never
+      // reached its terminator: those are genuinely truncated and the writer has to say so.
+      const std::vector<std::string> truncated{
+         R"({"a":1)", R"([1,2)", R"("unterminated)", R"({"a":[1,)", R"([{"a")",
+      };
+
+      for (const auto& doc : truncated) {
+         const exact_buffer buf{doc, "SECRET_TOKEN"};
+         auto d = glz::lazy_json<cursor_off_bounded>(buf.window(doc.size()));
+         if (not d) continue; // rejected at construction is also a refusal
+         std::string out{};
+         expect(bool(glz::write_json(d->root(), out).ec)) << doc << " wrote " << out;
+      }
+   };
+
+   "write_never_succeeds_without_writing"_test = [] {
+      // Navigation to a key with no value leaves the view on the closing brace, where the skip
+      // consumes nothing. Emitting zero bytes and reporting success would splice invalid JSON
+      // into whatever the caller is building, so the writer has to refuse.
+      const std::string doc = R"({"a":})";
+      const exact_buffer buf{doc};
+
+      auto check = [&]<auto Opts>(std::string_view json) {
+         auto d = glz::lazy_json<Opts>(json);
+         if (not d) return; // rejecting the document outright is also a refusal
+         std::string out{};
+         const auto ec = glz::write_json((*d)["a"], out);
+         // Reporting success here is the failure mode: glz::write only truncates the buffer to
+         // the bytes written once the write succeeds, so a zero-byte success is an empty value
+         // the caller would go on to treat as JSON.
+         expect(bool(ec.ec));
+         expect(ec.ec != glz::error_code::none);
+      };
+
+      check.template operator()<cursor_off_bounded>(buf.window(doc.size()));
+      check.template operator()<glz::opts{}>(doc);
+   };
+
+   "write_settle_does_not_weaken_validate_skipped"_test = [] {
+      // The settle keys off unexpected_end, which is what skip_value reports when it simply runs
+      // out of bytes. A caller who opted into validate_skipped gets syntax_error for a malformed
+      // scalar instead, so the settle never sees it and their validation still holds.
+      // Only inputs the validating skip actually rejects. "01" is not one of them: skip_number
+      // stops cleanly after the leading zero, so the view is a complete "0" with trailing bytes
+      // the lazy API never claims to check.
+      const std::vector<std::string> malformed{"1.2e", "tru", "nul", "+5"};
+      for (const auto& doc : malformed) {
+         const exact_buffer buf{doc};
+         auto d = glz::lazy_json<validating_bounded>(buf.window(doc.size()));
+         if (not d) continue;
+         std::string out{};
+         expect(bool(glz::write_json(d->root(), out).ec)) << doc << " wrote " << out;
+      }
+
+      // Well-formed scalars at the document edge still write under the same options.
+      for (const auto& doc : {std::string{"42"}, std::string{"true"}, std::string{"-4.25e-11"}}) {
+         const exact_buffer buf{doc};
+         auto d = glz::lazy_json<validating_bounded>(buf.window(doc.size()));
+         expect(d.has_value()) << doc;
+         if (not d) continue;
+         std::string out{};
+         expect(not glz::write_json(d->root(), out)) << doc;
+         expect(out == doc) << doc << " wrote " << out;
+      }
+   };
+
+   "write_respects_derived_opts"_test = [] {
+      // The writer skips under the document's own options. Instantiating on a derived struct
+      // must compile and behave, which it cannot if the option pack is sliced back to glz::opts.
+      const std::string doc = R"({"a":[1,2,3]})";
+      const exact_buffer buf{doc};
+      auto d = glz::lazy_json<cursor_on_bounded>(buf.window(doc.size()));
+      expect(d.has_value());
+      std::string out{};
+      expect(not glz::write_json(d->root(), out));
+      expect(out == doc) << out;
    };
 };
 
