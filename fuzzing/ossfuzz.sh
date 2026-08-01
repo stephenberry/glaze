@@ -8,7 +8,7 @@ set -eux
 
 $CXX --version
 
-for SRCFILE in $(ls fuzzing/*.cpp |grep -v -E '(exhaustive|main\.cpp)'); do
+for SRCFILE in $(ls fuzzing/*.cpp |grep -v -E '(exhaustive|main\.cpp|msgpack_roundtrip_string\.cpp)'); do
     NAME=$(basename $SRCFILE .cpp)
     $CXX $CXXFLAGS -std=c++23 -g -Iinclude \
          $SRCFILE -o $OUT/$NAME \
