@@ -353,10 +353,37 @@ namespace glz
          if constexpr (check_lazy_streaming_cursor(Opts)) {
             // doc_ is null only for detached subviews; lazy_json() views always carry it.
             if (doc_ && consumed_whole_value) [[likely]] {
-               doc_->consumed_.set(doc_->json_data(), data_, it);
+               record_consumed_extent(it);
             }
          }
          return {};
+      }
+
+      // Record [data_, it) as consumed, but only when we can actually tell that `it` is this
+      // value's end.
+      //
+      // read_into hands the iterator to parse<JSON>::op, and where that leaves it is up to the
+      // from<JSON, T> specialization. Glaze's own readers stop at the value's end, but that is a
+      // convention rather than something checkable here: glz::text deliberately swallows the
+      // rest of the buffer, and a custom reader may consume only a prefix. Trusting `it` blindly
+      // is how the cursor turns a well-formed document into a short or mis-valued element
+      // stream, with no error anywhere.
+      //
+      // So only containers are recorded, and only when the parse finished exactly on the
+      // element's own closing bracket. Scalars are skipped by the cheap paths anyway (a numeric
+      // table walk or a memchr for strings), so declining to record them costs almost nothing
+      // and removes the whole class of doubt.
+      void record_consumed_extent(const char* it) const noexcept
+      {
+         const char open = *data_;
+         const char close = (open == '{') ? '}' : ((open == '[') ? ']' : '\0');
+         if (close == '\0') {
+            return; // scalar: not worth recording
+         }
+         if (it <= data_ || it[-1] != close) {
+            return; // the reader stopped somewhere other than this container's end
+         }
+         doc_->consumed_.set(doc_->json_data(), data_, it);
       }
 
       template <class T>
@@ -531,6 +558,18 @@ namespace glz
                doc_->consumed_.set(doc_->json_data(), container_start_, extent_end);
             }
          }
+      }
+
+      // Scan past the element beginning at elem_start, using the parse_pos_ shortcut when keyed
+      // access already walked part of it.
+      [[nodiscard]] const char* scan_past_element(const char* elem_start) const noexcept
+      {
+         if (current_view_.is_object() && current_view_.parse_pos_ && current_view_.parse_pos_ > elem_start) {
+            // Skip the last accessed value, then scan to the end of this object (depth 1 -> 0).
+            const char* p = detail::skip_value_lazy<Opts>(current_view_.parse_pos_, json_end_);
+            return detail::skip_to_depth_zero<Opts>(p, json_end_, 1);
+         }
+         return detail::skip_value_lazy<Opts>(elem_start, json_end_);
       }
 
      public:
@@ -1127,33 +1166,20 @@ namespace glz
    {
       if (at_end_) return *this;
 
-      const char* pos = current_view_.data();
+      const char* const elem_start = current_view_.data();
+      const char* pos = elem_start;
 
       // Streaming cursor: if this element was already consumed end-to-end (read_into, or a
-      // nested iterator that ran to its close) the recorded extent tells us exactly where it
-      // finishes, so skip the scan entirely.
+      // nested iterator that ran to its close) the recorded extent says where it finishes, so
+      // skip the scan entirely.
       bool jumped = false;
       if constexpr (check_lazy_streaming_cursor(Opts)) {
          if (doc_) [[likely]] {
             jumped = doc_->consumed_.try_jump(doc_->json_data(), pos, pos);
          }
       }
-
-      if (!jumped) {
-         // Optimization: if user accessed fields via operator[], parse_pos_ tells us how far we scanned
-         // We can skip from there instead of re-scanning the entire element
-         // Note: check current_view_.is_object(), not is_object_ (which is about the container)
-         if (current_view_.is_object() && current_view_.parse_pos_ && current_view_.parse_pos_ > pos) {
-            // Skip the last accessed value, then scan to end of object
-            pos = current_view_.parse_pos_;
-            pos = detail::skip_value_lazy<Opts>(pos, json_end_);
-            // Skip remaining content until we close this object (depth 1 -> 0)
-            pos = detail::skip_to_depth_zero<Opts>(pos, json_end_, 1);
-         }
-         else {
-            // No optimization possible, skip entire value
-            pos = detail::skip_value_lazy<Opts>(pos, json_end_);
-         }
+      if (not jumped) {
+         pos = scan_past_element(elem_start);
       }
 
       skip_ws(pos);

@@ -76,6 +76,25 @@ struct Cell
    std::string s{};
 };
 
+// A reader that deliberately stops inside the value: it takes '[' and the first element, leaving
+// the iterator on an interior comma without reporting an error. Glaze's own readers do not behave
+// this way, but from<JSON, T> is a public extension point, so the cursor must not trust `it`.
+struct FirstOfPair
+{
+   int v{};
+};
+
+template <>
+struct glz::from<glz::JSON, FirstOfPair>
+{
+   template <auto Opts, class... Args>
+   static void op(FirstOfPair& value, glz::is_context auto&& ctx, auto&& it, auto end)
+   {
+      ++it; // '['
+      glz::parse<glz::JSON>::op<Opts>(value.v, ctx, it, end);
+   }
+};
+
 struct CellId
 {
    int a{};
@@ -1892,6 +1911,126 @@ suite lazy_streaming_cursor_tests = [] {
       }
       expect(first == "1;2;3;");
       expect(first == second);
+   };
+
+   "cursor_ignores_over_consuming_reader"_test = [] {
+      // glz::text swallows everything from the value start to the end of the buffer and reports
+      // success. Taking its stopping point as the element end would record an extent covering the
+      // rest of the document and silently end iteration after one element.
+      const std::string json = R"([{"a":1},{"a":2},{"a":3}])";
+
+      auto collect = []<auto Opts>() {
+         const std::string_view src{R"([{"a":1},{"a":2},{"a":3}])"};
+         auto doc = glz::lazy_json<Opts>(src);
+         int count{};
+         for (auto& e : doc->root()) {
+            glz::text t{};
+            expect(not e.read_into(t));
+            if (++count > 8) break;
+         }
+         return count;
+      };
+
+      expect(collect.template operator()<cursor_on>() == 3);
+      expect(collect.template operator()<cursor_on>() == collect.template operator()<cursor_off>());
+   };
+
+   "cursor_ignores_under_consuming_reader"_test = [] {
+      // FirstOfPair stops on an interior comma. That looks exactly like a legitimate element
+      // boundary from the outside, so the extent has to be rejected when it is recorded rather
+      // than when it is used.
+      auto collect = []<auto Opts>() {
+         const std::string_view src{"[[1,20],[3,40],[5,60]]"};
+         auto doc = glz::lazy_json<Opts>(src);
+         std::string out;
+         int guard{};
+         for (auto& e : doc->root()) {
+            FirstOfPair f{};
+            out += e.read_into(f) ? "!" : std::to_string(f.v);
+            out += ' ';
+            if (++guard > 8) break;
+         }
+         return out;
+      };
+
+      expect(collect.template operator()<cursor_on>() == "1 3 5 ");
+      expect(collect.template operator()<cursor_on>() == collect.template operator()<cursor_off>());
+   };
+
+   "cursor_scalar_elements_iterate_correctly"_test = [&] {
+      // Scalars are deliberately never recorded, so this exercises the un-accelerated path
+      // through the same loop.
+      const std::string json = R"({"rows":[1,"two",3.5,true,null,-6]})";
+      auto walk = []<auto Opts>(std::string_view j) {
+         auto doc = glz::lazy_json<Opts>(j);
+         std::string out;
+         for (auto& e : (*doc)["rows"]) {
+            out += e.raw_json();
+            out += '|';
+         }
+         return out;
+      };
+      expect(walk.template operator()<cursor_on>(json) == R"(1|"two"|3.5|true|null|-6|)");
+      expect(walk.template operator()<cursor_on>(json) == walk.template operator()<cursor_off>(json));
+   };
+
+   "cursor_malformed_input_matches_uncursored"_test = [] {
+      // The cursor must stay a pure speed difference on input that is not well formed, where the
+      // parser and the structural skip can disagree about where a token ends.
+      const std::vector<std::string> broken{
+         R"({"rows":[0-1,2]})",       R"({"rows":[1e,2]})",  R"({"rows":[--,3]})",
+         R"({"rows":[1,2)",           R"({"rows":[[1,2],3)", R"({"rows":[{"a":1},{"a":)",
+         R"({"rows":[{"a":1},{"b":)", R"({"rows":[")",       R"({"rows":[{)",
+      };
+
+      auto walk = []<auto Opts>(std::string_view j) {
+         auto doc = glz::lazy_json<Opts>(j);
+         if (not doc) return std::string{"<parse-error>"};
+         std::string out;
+         int guard{};
+         for (auto& e : (*doc)["rows"]) {
+            double v{};
+            out += e.read_into(v) ? "!" : std::to_string(v);
+            out += ';';
+            if (++guard > 32) return out + "<runaway>";
+         }
+         return out;
+      };
+
+      for (const auto& j : broken) {
+         expect(walk.template operator()<cursor_on>(j) == walk.template operator()<cursor_off>(j)) << j;
+      }
+   };
+
+   "cursor_truncated_container_matches_uncursored"_test = [] {
+      // An unclosed container never reaches its close bracket, so no container extent is
+      // published. Bounded buffers only, since that is the mode with no sentinel to stop on.
+      const std::vector<std::string> truncated{
+         R"({"rows":[[1,2],[3)",
+         R"({"rows":[{"a":1},{"a")",
+         R"({"rows":[[[)",
+         R"({"rows":[[1],)",
+      };
+
+      auto walk = []<auto Opts>(std::string_view j) {
+         auto doc = glz::lazy_json<Opts>(j);
+         if (not doc) return std::string{"<parse-error>"};
+         std::string out;
+         int guard{};
+         for (auto& e : (*doc)["rows"]) {
+            out += e.raw_json();
+            out += '|';
+            if (++guard > 32) return out + "<runaway>";
+         }
+         return out;
+      };
+
+      for (const auto& j : truncated) {
+         const std::string_view bounded{j.data(), j.size()};
+         expect(walk.template operator()<cursor_on_bounded>(bounded) ==
+                walk.template operator()<cursor_off_bounded>(bounded))
+            << j;
+      }
    };
 
    "cursor_disabled_costs_nothing"_test = [] {
