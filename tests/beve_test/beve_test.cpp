@@ -1,6 +1,7 @@
 // Glaze Library
 // For the license information refer to glaze.hpp
 
+#include <algorithm>
 #include <bit>
 #include <bitset>
 #include <chrono>
@@ -4755,6 +4756,15 @@ suite beve_v2_variant_resolution = [] {
       // Depth is capped at 200 because the reader rejects anything past max_recursive_depth_limit
       // (256), one level per nested object. Each buffer is read many times so the ratio does not
       // rest on a single sub-millisecond sample.
+      //
+      // The growth is then measured as the median of several rounds rather than from one sample of
+      // each depth. Timing each depth once put the ratio at 8.6x on a busy CI runner, close enough
+      // to the 8x threshold to fail a build that had not touched this code path. Both depths are
+      // timed back-to-back within a round so that interference lands on numerator and denominator
+      // together and largely divides out; the median then discards whichever rounds it skewed
+      // anyway. Note that taking the fastest round of each depth separately does not work here --
+      // the shallow loop is a quarter of the work and finds a clean window far more easily than
+      // the deep one, so independent minima bias the ratio apart instead of converging it.
       auto build = [](int depth) {
          deep_v v{deep_leaf{1}};
          for (int i = 0; i < depth; ++i) {
@@ -4766,6 +4776,7 @@ suite beve_v2_variant_resolution = [] {
          return glz::write_beve(v).value();
       };
       constexpr int reps = 200;
+      constexpr int rounds = 5; // odd, so the median is the middle element
       auto bench_ms = [](const std::string& buf, int n) {
          const auto t0 = std::chrono::steady_clock::now();
          for (int i = 0; i < n; ++i) {
@@ -4783,10 +4794,16 @@ suite beve_v2_variant_resolution = [] {
       }
       bench_ms(shallow, reps / 4); // warm both paths before timing
       bench_ms(deep, reps / 4);
-      const auto t_shallow = bench_ms(shallow, reps);
-      const auto t_deep = bench_ms(deep, reps);
+      std::array<double, rounds> growth{};
+      for (auto& g : growth) {
+         const auto t_shallow = bench_ms(shallow, reps);
+         const auto t_deep = bench_ms(deep, reps);
+         g = t_deep / t_shallow;
+      }
+      std::ranges::sort(growth);
+      const auto median_growth = growth[rounds / 2];
       // Measured 3.9-4.1x linear against 13.3-14.2x quadratic, so 8x separates them with margin.
-      expect(t_deep < t_shallow * 8.0) << "read time grew " << (t_deep / t_shallow) << "x for 4x the depth";
+      expect(median_growth < 8.0) << "read time grew " << median_growth << "x for 4x the depth";
 
       // Past the limit, every level fails identically. Each of the variant reader's recovery paths
       // -- the other object alternatives, the lenient conversion pass, the last-resort try_each --
