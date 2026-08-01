@@ -171,12 +171,11 @@ namespace glz
 // window moves, so it catches the case wherever the view sits -- behind a tuple, a map key, a
 // custom setter, or ten structs down -- and never fires on a type that merely looks like it holds
 // one. Every reader that aliases the input places this next to the assignment that does it.
-#define GLZ_ASSERT_OWNS_ITS_BYTES(Ctx)                                                              \
-   static_assert(                                                                                   \
-      !::glz::has_streaming_state<Ctx>,                                                              \
-      "This read fills a non-owning view (std::string_view, glz::raw_json_view, glz::text_view, or " \
-      "a std::span) that would point into the streaming window. A streaming read refills that "      \
-      "window as it goes, so the view would address overwritten bytes by the time the read "         \
-      "returns, and the read would report success while handing back silently wrong data. Read "     \
-      "into the owning equivalent instead (std::string, glz::raw_json, glz::text, or an owning "     \
-      "container), or read from a buffer that holds the whole document.")
+#define GLZ_ASSERT_OWNS_ITS_BYTES(Ctx)                                                                          \
+   static_assert(!::glz::has_streaming_state<Ctx>,                                                              \
+                 "This read fills a non-owning view (std::string_view, glz::raw_json_view, glz::text_view, or " \
+                 "a std::span) that would point into the streaming window. A streaming read refills that "      \
+                 "window as it goes, so the view would address overwritten bytes by the time the read "         \
+                 "returns, and the read would report success while handing back silently wrong data. Read "     \
+                 "into the owning equivalent instead (std::string, glz::raw_json, glz::text, or an owning "     \
+                 "container), or read from a buffer that holds the whole document.")
