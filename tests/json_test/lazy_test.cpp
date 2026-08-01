@@ -23,6 +23,64 @@ struct BoolHolder
    bool flag{};
 };
 
+// Streaming cursor option matrix. Every cursor test is differential: the same traversal is run
+// with the cursor on and off and the two results must agree, so the cursor can only ever be a
+// speed difference, never a behavior difference.
+struct cursor_on_opts : glz::opts
+{
+   bool lazy_streaming_cursor = true;
+};
+
+struct cursor_off_opts : glz::opts
+{
+   bool lazy_streaming_cursor = false;
+};
+
+// Non-null-terminated input, the mode a caller feeding bounded string_views uses.
+struct cursor_on_bounded_opts : glz::opts
+{
+   bool null_terminated = false;
+   bool lazy_streaming_cursor = true;
+};
+
+struct cursor_off_bounded_opts : glz::opts
+{
+   bool null_terminated = false;
+   bool lazy_streaming_cursor = false;
+};
+
+// partial_read leaves the parser short of the value's true end. The cursor must not mistake
+// that stopping point for the end of the element.
+struct cursor_on_partial_opts : glz::opts
+{
+   bool partial_read = true;
+   bool lazy_streaming_cursor = true;
+};
+
+struct cursor_off_partial_opts : glz::opts
+{
+   bool partial_read = true;
+   bool lazy_streaming_cursor = false;
+};
+
+inline constexpr cursor_on_opts cursor_on{};
+inline constexpr cursor_off_opts cursor_off{};
+inline constexpr cursor_on_bounded_opts cursor_on_bounded{};
+inline constexpr cursor_off_bounded_opts cursor_off_bounded{};
+inline constexpr cursor_on_partial_opts cursor_on_partial{};
+inline constexpr cursor_off_partial_opts cursor_off_partial{};
+
+struct Cell
+{
+   int a{};
+   std::string s{};
+};
+
+struct CellId
+{
+   int a{};
+};
+
 struct User
 {
    std::string name{};
@@ -1618,8 +1676,229 @@ suite lazy_derived_opts_tests = [] {
       expect(result.has_value());
 
       BoolHolder holder{};
-      expect(not (*result)["obj"].read_into(holder));
+      expect(not(*result)["obj"].read_into(holder));
       expect(holder.flag == true);
+   };
+};
+
+// ============================================================================
+// Streaming cursor (lazy_streaming_cursor)
+// ============================================================================
+
+// Each helper renders a traversal to a string so cursor-on and cursor-off runs can be compared
+// exactly. Any divergence - a skipped element, a bogus extra one, a changed value - shows up as
+// a string mismatch rather than a silently equal checksum.
+
+template <auto Opts>
+std::string traverse_read_into(std::string_view json)
+{
+   auto doc = glz::lazy_json<Opts>(json);
+   if (not doc) return "<parse-error>";
+   std::string out;
+   for (auto& row : (*doc)["rows"]) {
+      Cell cell{};
+      if (row.read_into(cell)) {
+         out += "!;";
+      }
+      else {
+         out += std::to_string(cell.a) + ':' + cell.s + ';';
+      }
+   }
+   return out;
+}
+
+// Nested containers: the inner loop runs to completion, which is what lets the outer advance
+// jump. Exercises the self-composing extent.
+template <auto Opts>
+std::string traverse_nested(std::string_view json)
+{
+   auto doc = glz::lazy_json<Opts>(json);
+   if (not doc) return "<parse-error>";
+   std::string out;
+   for (auto& row : (*doc)["rows"]) {
+      out += '[';
+      for (auto& cell : row) {
+         int v{};
+         if (cell.read_into(v)) {
+            out += "!,";
+         }
+         else {
+            out += std::to_string(v) + ',';
+         }
+      }
+      out += ']';
+   }
+   return out;
+}
+
+// Mixes the access patterns that produce and consume extents: read_into on some rows, keyed
+// access (which drives parse_pos_ instead) on others, and rows left entirely untouched.
+template <auto Opts>
+std::string traverse_mixed(std::string_view json)
+{
+   auto doc = glz::lazy_json<Opts>(json);
+   if (not doc) return "<parse-error>";
+   std::string out;
+   int n = 0;
+   for (auto& row : (*doc)["rows"]) {
+      switch (n++ % 3) {
+      case 0: {
+         Cell cell{};
+         out += row.read_into(cell) ? "!;" : std::to_string(cell.a) + ':' + cell.s + ';';
+         break;
+      }
+      case 1: {
+         auto a = row["a"].template get<int64_t>();
+         out += a ? std::to_string(a.value()) + '#' : "!#";
+         break;
+      }
+      default:
+         out += "-";
+         break;
+      }
+   }
+   return out;
+}
+
+suite lazy_streaming_cursor_tests = [] {
+   // Every shape below is run through both option sets and must agree.
+   const std::string rows = R"({"rows":[{"a":1,"s":"one"},{"a":2,"s":"two"},{"a":3,"s":"three"}]})";
+   const std::string nested = R"({"rows":[[1,2,3],[],[4],[5,6,7,8]]})";
+   const std::string empty_rows = R"({"rows":[]})";
+   const std::string single = R"({"rows":[{"a":9,"s":"only"}]})";
+   const std::string escaped = R"({"rows":[{"a":1,"s":"a\"b,]}"},{"a":2,"s":"]}\\"}]})";
+   const std::string deep = R"({"rows":[{"a":1,"s":"x"},{"a":2,"s":"y"},{"a":3,"s":"z"},{"a":4,"s":"w"}]})";
+
+   "cursor_read_into_matches_uncursored"_test = [&] {
+      for (const auto& json : {rows, empty_rows, single, escaped, deep}) {
+         const auto with = traverse_read_into<cursor_on>(json);
+         const auto without = traverse_read_into<cursor_off>(json);
+         expect(with == without) << json;
+         expect(not with.empty() or json == empty_rows);
+      }
+      expect(traverse_read_into<cursor_on>(rows) == "1:one;2:two;3:three;");
+   };
+
+   "cursor_nested_containers_match_uncursored"_test = [&] {
+      expect(traverse_nested<cursor_on>(nested) == traverse_nested<cursor_off>(nested));
+      expect(traverse_nested<cursor_on>(nested) == "[1,2,3,][][4,][5,6,7,8,]");
+   };
+
+   "cursor_mixed_access_matches_uncursored"_test = [&] {
+      for (const auto& json : {rows, single, escaped, deep}) {
+         expect(traverse_mixed<cursor_on>(json) == traverse_mixed<cursor_off>(json)) << json;
+      }
+      expect(traverse_mixed<cursor_on>(deep) == "1:x;2#-4:w;");
+   };
+
+   "cursor_bounded_buffer_matches_uncursored"_test = [&] {
+      // A trailing tail past the logical end catches any read beyond json_end().
+      std::string backing = R"({"rows":[{"a":1,"s":"one"},{"a":2,"s":"two"}]}TRAILING_NON_JSON)";
+      const std::string_view json{backing.data(), backing.find("]}") + 2};
+
+      expect(traverse_read_into<cursor_on_bounded>(json) == traverse_read_into<cursor_off_bounded>(json));
+      expect(traverse_read_into<cursor_on_bounded>(json) == "1:one;2:two;");
+   };
+
+   "cursor_under_partial_read_matches_uncursored"_test = [&] {
+      // partial_read stops the parser inside the object once its known keys are filled, and
+      // finalize_read_context downgrades that to success. Recording `it` as the element end
+      // would land the next advance in the middle of the object and desynchronize iteration.
+      const std::string wide = R"({"rows":[{"a":1,"b":7,"c":8},{"a":2,"b":7,"c":8},{"a":3,"b":7,"c":8}]})";
+
+      auto collect = []<auto Opts>(std::string_view json) {
+         auto doc = glz::lazy_json<Opts>(json);
+         std::string out;
+         int guard = 0;
+         for (auto& row : (*doc)["rows"]) {
+            CellId cell{};
+            out += row.read_into(cell) ? "!;" : std::to_string(cell.a) + ';';
+            if (++guard > 16) return out + "<runaway>";
+         }
+         return out;
+      };
+
+      const auto with = collect.template operator()<cursor_on_partial>(wide);
+      const auto without = collect.template operator()<cursor_off_partial>(wide);
+      expect(with == without);
+      expect(with == "1;2;3;");
+   };
+
+   "cursor_interleaved_iterators_share_one_slot"_test = [&] {
+      // Two live iterators over the same document write to the same extent slot. The
+      // pointer-identity check must keep each advance honest.
+      const std::string json = R"({"x":[{"a":1,"s":"p"},{"a":2,"s":"q"},{"a":3,"s":"r"}],)"
+                               R"("y":[{"a":10,"s":"P"},{"a":20,"s":"Q"},{"a":30,"s":"R"}]})";
+      auto doc = glz::lazy_json<cursor_on>(json);
+      expect(doc.has_value());
+
+      auto xs = (*doc)["x"];
+      auto ys = (*doc)["y"];
+      auto ix = xs.begin();
+      auto iy = ys.begin();
+
+      std::string out;
+      int guard = 0;
+      while (ix != xs.end() && iy != ys.end()) {
+         Cell a{};
+         Cell b{};
+         expect(not(*ix).read_into(a));
+         expect(not(*iy).read_into(b));
+         out += std::to_string(a.a) + a.s + std::to_string(b.a) + b.s + ';';
+         ++ix;
+         ++iy;
+         if (++guard > 16) break;
+      }
+      expect(out == "1p10P;2q20Q;3r30R;");
+   };
+
+   "cursor_survives_document_copy_and_move"_test = [&] {
+      // The extent is stored as offsets, so a copied or moved document rebases onto its own
+      // buffer pointer rather than dangling into the original.
+      auto original = glz::lazy_json<cursor_on>(rows);
+      expect(original.has_value());
+
+      auto it = (*original)["rows"].begin();
+      Cell first{};
+      expect(not(*it).read_into(first)); // leaves a live extent on the document
+      expect(first.a == 1);
+
+      auto copied = *original; // copy with the extent live
+      auto moved = std::move(copied);
+
+      std::string out;
+      for (auto& row : moved["rows"]) {
+         Cell cell{};
+         out += row.read_into(cell) ? "!;" : std::to_string(cell.a) + ':' + cell.s + ';';
+      }
+      expect(out == "1:one;2:two;3:three;");
+   };
+
+   "cursor_repeated_traversals_are_stable"_test = [&] {
+      // A second pass over the same document must see the same elements: an extent left over
+      // from the first pass may not leak into the second.
+      auto doc = glz::lazy_json<cursor_on>(rows);
+      expect(doc.has_value());
+
+      std::string first;
+      std::string second;
+      for (auto& row : (*doc)["rows"]) {
+         Cell cell{};
+         first += row.read_into(cell) ? "!;" : std::to_string(cell.a) + ';';
+      }
+      for (auto& row : (*doc)["rows"]) {
+         Cell cell{};
+         second += row.read_into(cell) ? "!;" : std::to_string(cell.a) + ';';
+      }
+      expect(first == "1;2;3;");
+      expect(first == second);
+   };
+
+   "cursor_disabled_costs_nothing"_test = [] {
+      // The disabled slot is an empty type under GLZ_NO_UNIQUE_ADDRESS, so opting out must not
+      // grow lazy_document at all.
+      expect(sizeof(glz::lazy_document<cursor_off>) == sizeof(glz::lazy_document<glz::opts{}>));
+      expect(sizeof(glz::lazy_document<cursor_on>) > sizeof(glz::lazy_document<cursor_off>));
    };
 };
 

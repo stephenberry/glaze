@@ -335,6 +335,55 @@ If you need to re-scan from the beginning:
 doc.reset_parse_pos();  // Next access starts from beginning
 ```
 
+## Streaming Cursor (opt-in)
+
+When you iterate a large container and fully consume each element, the iterator normally has to re-scan the element it just handed you in order to find where the next one begins. `read_into` already walked those same bytes, so the scan is pure repeated work.
+
+The `lazy_streaming_cursor` option removes it. When a value is consumed end to end, its byte extent is recorded on the document, and the next advance jumps straight to the recorded end:
+
+```cpp
+struct stream_opts : glz::opts
+{
+   bool lazy_streaming_cursor = true;
+};
+
+inline constexpr stream_opts stream{};
+
+auto doc = glz::lazy_json<stream>(buffer);
+
+for (auto& row : (*doc)["rows"]) {
+   Row parsed{};
+   if (not row.read_into(parsed)) {
+      use(parsed);  // the next ++ skips the re-scan of this row
+   }
+}
+```
+
+The optimization composes through nesting: an inner iterator that runs to its closing bracket records the whole inner container, so the outer advance skips it too.
+
+An extent is only used when it starts exactly at the element the iterator is positioned on. A byte offset identifies exactly one value in the buffer, so this check is what keeps the single shared slot safe when iterators are interleaved or abandoned partway. Anything that does not match falls back to a normal scan.
+
+### What it costs
+
+Two `size_t` on `lazy_document` when enabled, and nothing when disabled, so a document that does not opt in is byte-for-byte what it was before. Views and iterators are unchanged in either case.
+
+### When it does not help
+
+- **Elements consumed key by key** via `operator[]`. Those are already served by the progressive `parse_pos_` scan described above; no extent is produced.
+- **Elements that are skipped rather than read.** Nothing was consumed, so there is nothing to record.
+- **`partial_read`.** That option deliberately stops the parser as soon as the target's known keys are filled, which leaves it short of the element's true end. No extent is recorded in that case, so iteration stays correct and simply falls back to scanning.
+
+### Measured effect
+
+A 9 MB array of three-field objects, `read_into` per row, Apple M1, clang `-O3`:
+
+| | throughput |
+|---|---:|
+| cursor off | 575 MB/s |
+| cursor on | 955 MB/s (**+66%**) |
+
+The gain scales with how much of each element `read_into` consumes; containers whose elements are large benefit most, since those are the scans being elided.
+
 ## Type Checking
 
 Check the type of a value before extracting:

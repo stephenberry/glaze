@@ -4,10 +4,12 @@
 #pragma once
 
 #include <string_view>
+#include <type_traits>
 
 #include "glaze/json/read.hpp"
 #include "glaze/json/skip.hpp"
 #include "glaze/json/write.hpp"
+#include "glaze/tuplet/tuple.hpp" // GLZ_NO_UNIQUE_ADDRESS
 #include "glaze/util/expected.hpp"
 
 namespace glz
@@ -184,6 +186,64 @@ namespace glz
          }
          }
       }
+
+      // ============================================================================
+      // Streaming cursor storage (lazy_streaming_cursor option)
+      // ============================================================================
+      //
+      // A single slot on lazy_document remembering the byte extent of the most recently
+      // consumed value. lazy_iterator::operator++ jumps to the recorded end instead of
+      // re-scanning, but only when the recorded extent starts exactly at the element the
+      // iterator is sitting on. That pointer-identity check is what makes a stale slot
+      // harmless: a byte offset in the buffer identifies exactly one value, so an extent
+      // that starts where the iterator stands always describes the value it is about to
+      // skip. Anything else falls back to a normal scan.
+
+      // Disabled: an empty type, so lazy_document pays nothing under GLZ_NO_UNIQUE_ADDRESS.
+      struct lazy_extent_disabled
+      {
+         static constexpr void clear() noexcept {}
+         static constexpr void set(const char*, const char*, const char*) noexcept {}
+         [[nodiscard]] static constexpr bool try_jump(const char*, const char*, const char*&) noexcept { return false; }
+      };
+
+      // Offsets rather than pointers so a copied/moved document rebases onto its own buffer.
+      // end_off == 0 means "no extent recorded" - a real value can never end at offset 0.
+      struct lazy_extent
+      {
+         size_t start_off{};
+         size_t end_off{};
+
+         void clear() noexcept { end_off = 0; }
+
+         void set(const char* base, const char* start, const char* end) noexcept
+         {
+            if (!base || start < base || end < start) [[unlikely]] {
+               clear();
+               return;
+            }
+            start_off = size_t(start - base);
+            end_off = size_t(end - base);
+         }
+
+         [[nodiscard]] bool try_jump(const char* base, const char* pos, const char*& out) noexcept
+         {
+            if (end_off == 0 || !base) {
+               return false;
+            }
+            if (pos != base + start_off) {
+               // The extent describes some other value; leave it in place, it may still match a
+               // later advance (an inner iterator can record before an outer one asks).
+               return false;
+            }
+            out = base + end_off;
+            clear(); // consumed exactly once
+            return true;
+         }
+      };
+
+      template <auto Opts>
+      using lazy_extent_for = std::conditional_t<check_lazy_streaming_cursor(Opts), lazy_extent, lazy_extent_disabled>;
    } // namespace detail
 
    // ============================================================================
@@ -277,9 +337,24 @@ namespace glz
          auto it = data_;
          auto end = json_end();
          parse<JSON>::op<Opts>(value, ctx, it, end);
+         // Capture completeness before finalize_read_context, which downgrades
+         // partial_read_complete and a depth-zero end_reached to success. Those leave `it`
+         // short of the value's true end, so `it` is only the real extent when the parse
+         // reported nothing at all.
+         const bool consumed_whole_value = ctx.error == error_code::none;
          finalize_read_context<Opts>(ctx);
          if (bool(ctx.error)) {
             return error_ctx{static_cast<size_t>(it - data_), ctx.error};
+         }
+         // Streaming cursor: the value spans [data_, it). Record it so a subsequent iterator
+         // advance over this element can jump rather than re-scan. Under partial_read the
+         // parse deliberately stops early, so nothing is recorded and iteration falls back to
+         // scanning - correct, just not accelerated.
+         if constexpr (check_lazy_streaming_cursor(Opts)) {
+            // doc_ is null only for detached subviews; lazy_json() views always carry it.
+            if (doc_ && consumed_whole_value) [[likely]] {
+               doc_->consumed_.set(doc_->json_data(), data_, it);
+            }
          }
          return {};
       }
@@ -345,6 +420,11 @@ namespace glz
       const char* root_data_{};
       mutable lazy_json_view<Opts> root_view_{}; // Cached root view with parse_pos_
 
+      // Streaming cursor slot (lazy_streaming_cursor option). Empty, and therefore free, when
+      // the option is off. Mutable because recording an extent is a caching side effect of
+      // otherwise const traversal.
+      GLZ_NO_UNIQUE_ADDRESS mutable detail::lazy_extent_for<Opts> consumed_{};
+
       friend struct lazy_json_view<Opts>;
       friend class lazy_iterator<Opts>;
 
@@ -359,7 +439,8 @@ namespace glz
       lazy_document() = default;
 
       // Copy constructor - fix doc_ pointer and preserve parse_pos_
-      lazy_document(const lazy_document& other) : json_(other.json_), len_(other.len_), root_data_(other.root_data_)
+      lazy_document(const lazy_document& other)
+         : json_(other.json_), len_(other.len_), root_data_(other.root_data_), consumed_(other.consumed_)
       {
          init_root_view();
          root_view_.parse_pos_ = other.root_view_.parse_pos_;
@@ -371,6 +452,7 @@ namespace glz
             json_ = other.json_;
             len_ = other.len_;
             root_data_ = other.root_data_;
+            consumed_ = other.consumed_;
             init_root_view();
             root_view_.parse_pos_ = other.root_view_.parse_pos_;
          }
@@ -378,7 +460,8 @@ namespace glz
       }
 
       // Move constructor - fix doc_ pointer and transfer parse_pos_
-      lazy_document(lazy_document&& other) noexcept : json_(other.json_), len_(other.len_), root_data_(other.root_data_)
+      lazy_document(lazy_document&& other) noexcept
+         : json_(other.json_), len_(other.len_), root_data_(other.root_data_), consumed_(other.consumed_)
       {
          init_root_view();
          root_view_.parse_pos_ = other.root_view_.parse_pos_;
@@ -390,6 +473,7 @@ namespace glz
             json_ = other.json_;
             len_ = other.len_;
             root_data_ = other.root_data_;
+            consumed_ = other.consumed_;
             init_root_view();
             root_view_.parse_pos_ = other.root_view_.parse_pos_;
          }
@@ -427,10 +511,27 @@ namespace glz
      private:
       const lazy_document<Opts>* doc_{};
       const char* json_end_{};
+      const char* container_start_{}; // '[' or '{' of the container being iterated
       char close_char_{};
       bool is_object_{};
       bool at_end_{true};
       lazy_json_view<Opts> current_view_{}; // Stored view for parse_pos_ optimization
+
+      // Streaming cursor: on reaching the close, publish this container's own extent so an
+      // outer iterator advancing over it can jump too. That is what makes the optimization
+      // compose through nesting - an inner loop running to completion pays for the outer
+      // advance. No-op when the option is off.
+      void record_container_extent(const char* close_pos) noexcept
+      {
+         if constexpr (check_lazy_streaming_cursor(Opts)) {
+            if (doc_ && container_start_) [[likely]] {
+               // close_pos is the close character, except on a truncated buffer where it is
+               // json_end_ and there is nothing past it to include.
+               const char* const extent_end = (close_pos < json_end_) ? close_pos + 1 : close_pos;
+               doc_->consumed_.set(doc_->json_data(), container_start_, extent_end);
+            }
+         }
+      }
 
      public:
       using iterator_category = std::forward_iterator_tag;
@@ -965,7 +1066,7 @@ namespace glz
    template <auto Opts>
    inline lazy_iterator<Opts>::lazy_iterator(const lazy_document<Opts>* doc, const char* container_start,
                                              const char* end, bool is_object)
-      : doc_(doc), json_end_(end), is_object_(is_object), at_end_(false)
+      : doc_(doc), json_end_(end), container_start_(container_start), is_object_(is_object), at_end_(false)
    {
       close_char_ = is_object ? '}' : ']';
       const char* pos = container_start + 1; // skip '[' or '{'
@@ -975,12 +1076,14 @@ namespace glz
       if constexpr (Opts.null_terminated) {
          if (*pos == close_char_) {
             at_end_ = true;
+            record_container_extent(pos);
             return;
          }
       }
       else {
          if (pos >= json_end_ || *pos == close_char_) {
             at_end_ = true;
+            record_container_extent(pos);
             return;
          }
       }
@@ -1026,19 +1129,31 @@ namespace glz
 
       const char* pos = current_view_.data();
 
-      // Optimization: if user accessed fields via operator[], parse_pos_ tells us how far we scanned
-      // We can skip from there instead of re-scanning the entire element
-      // Note: check current_view_.is_object(), not is_object_ (which is about the container)
-      if (current_view_.is_object() && current_view_.parse_pos_ && current_view_.parse_pos_ > pos) {
-         // Skip the last accessed value, then scan to end of object
-         pos = current_view_.parse_pos_;
-         pos = detail::skip_value_lazy<Opts>(pos, json_end_);
-         // Skip remaining content until we close this object (depth 1 -> 0)
-         pos = detail::skip_to_depth_zero<Opts>(pos, json_end_, 1);
+      // Streaming cursor: if this element was already consumed end-to-end (read_into, or a
+      // nested iterator that ran to its close) the recorded extent tells us exactly where it
+      // finishes, so skip the scan entirely.
+      bool jumped = false;
+      if constexpr (check_lazy_streaming_cursor(Opts)) {
+         if (doc_) [[likely]] {
+            jumped = doc_->consumed_.try_jump(doc_->json_data(), pos, pos);
+         }
       }
-      else {
-         // No optimization possible, skip entire value
-         pos = detail::skip_value_lazy<Opts>(pos, json_end_);
+
+      if (!jumped) {
+         // Optimization: if user accessed fields via operator[], parse_pos_ tells us how far we scanned
+         // We can skip from there instead of re-scanning the entire element
+         // Note: check current_view_.is_object(), not is_object_ (which is about the container)
+         if (current_view_.is_object() && current_view_.parse_pos_ && current_view_.parse_pos_ > pos) {
+            // Skip the last accessed value, then scan to end of object
+            pos = current_view_.parse_pos_;
+            pos = detail::skip_value_lazy<Opts>(pos, json_end_);
+            // Skip remaining content until we close this object (depth 1 -> 0)
+            pos = detail::skip_to_depth_zero<Opts>(pos, json_end_, 1);
+         }
+         else {
+            // No optimization possible, skip entire value
+            pos = detail::skip_value_lazy<Opts>(pos, json_end_);
+         }
       }
 
       skip_ws(pos);
@@ -1047,12 +1162,14 @@ namespace glz
       if constexpr (Opts.null_terminated) {
          if (*pos == close_char_) {
             at_end_ = true;
+            record_container_extent(pos);
             return *this;
          }
       }
       else {
          if (pos >= json_end_ || *pos == close_char_) {
             at_end_ = true;
+            record_container_extent(pos);
             return *this;
          }
       }

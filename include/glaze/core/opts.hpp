@@ -186,6 +186,14 @@ namespace glz
    // or when validation should be deferred.
 
    // ---
+   // bool lazy_streaming_cursor = false;
+   // Lets lazy JSON iteration skip re-scanning values it has already consumed. When a
+   // lazy_json_view::read_into fully consumes an element, or a nested container iterator runs to
+   // its close, the byte extent is recorded on the document and the next lazy_iterator advance
+   // jumps straight past it instead of re-scanning with skip_value_lazy. Costs two size_t on
+   // lazy_document when enabled and nothing at all when disabled. See docs/lazy-json.md.
+
+   // ---
    // bool linear_search = false;
    // Uses linear key search instead of hash-based lookup for JSON object fields.
    // This eliminates 256-byte hash tables per struct type, significantly reducing binary size.
@@ -711,6 +719,16 @@ namespace glz
    {
       if constexpr (requires { Opts.assume_sufficient_buffer; }) {
          return Opts.assume_sufficient_buffer;
+      }
+      else {
+         return false;
+      }
+   }
+
+   consteval bool check_lazy_streaming_cursor(auto&& Opts)
+   {
+      if constexpr (requires { Opts.lazy_streaming_cursor; }) {
+         return Opts.lazy_streaming_cursor;
       }
       else {
          return false;
