@@ -100,7 +100,7 @@ The zero-copy API uses these types:
 - **`glz::repe::request_view`**: Views into the original request buffer (query and body are `std::string_view`).
 - **`glz::repe::response_builder`**: Writes responses directly to a buffer without intermediate copies.
 - **`glz::repe::state_view`**: Pairs a `request_view` with a `response_builder` for a procedure to read from and write to.
-- **`glz::repe::read_params<Opts>(value, state)`**: Reads a request body into `value`. Returns `true` on success and writes the error response itself on a parse failure.
+- **`glz::repe::read_params<Opts>(value, state)`**: Reads a request body into `value`. Returns `true` on success and writes the error response itself on failure, except for a notification, which is left unanswered.
 
 See [REPE Buffer Handling](repe-buffer.md) for detailed documentation of these types.
 
@@ -122,18 +122,20 @@ server.call = [&](std::span<const char> request, std::string& response_buffer) {
    my_params params{};
    if (state.has_body()) {
       if (!glz::repe::read_params<glz::registry_read_opts<glz::opts{}>>(params, state)) {
-         return; // read_params has written the error response
+         return; // read_params has written the error response, or withheld it from a notification
       }
    }
    // ... act on params, then write a response through `resp`
 };
 ```
 
-Two things are easy to get wrong:
+Three things are easy to get wrong:
 
 **`Opts` must have `null_terminated` turned off.** A request arrives as a span over bytes the handler does not own, with no `'\0'` after it, and a `null_terminated` read drops its end checks and runs off the end of that buffer. `glz::registry_read_opts<Opts>` is the registry's own options transform and turns the flag off for you; passing a bare `glz::opts{}` is a heap overflow on a body that ends at the edge of the buffer.
 
 **`state` must be a named lvalue.** The parameter is `state_view&`. A temporary binds to a different overload and fails to compile inside the header rather than at your call site.
+
+**`false` does not always mean a response was written.** A notification is answered by silence whether the read succeeds or fails, so a notification whose body will not parse returns `false` with `state.out` untouched. Returning immediately on `false`, as above, is correct either way. A handler that instead inspects the response buffer, or appends to it, has to allow for it being empty: answering a notification desynchronizes the connection, because the client never reads a reply for one and will take it as the answer to the next call.
 
 #### `read_params` returns `bool`
 

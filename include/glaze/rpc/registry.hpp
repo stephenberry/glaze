@@ -460,8 +460,15 @@ namespace glz
             return;
          }
 
-         // If request has an error, just echo it back
+         // If request has an error, just echo it back -- unless it is a notification, whose sender
+         // has said it will not read a reply, so answering one desynchronizes the connection: the
+         // client takes the echo as the answer to its next call. The header parsed and validated
+         // cleanly to reach here, so its notify bit can be trusted, which is what separates this
+         // from the malformed-header paths above.
          if (bool(req.hdr.ec)) {
+            if (req.is_notify()) {
+               return; // Silent ignore for a notification that carries an error (buffer stays empty)
+            }
             resp.reset(req);
             resp.set_error(req.hdr.ec);
             return;

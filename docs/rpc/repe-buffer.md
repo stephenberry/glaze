@@ -261,14 +261,14 @@ template <auto Opts, class Value>
 bool read_params(Value&& value, state_view& state);
 ```
 
-Returns `true` on success. On a parse failure it writes the error response through `state.out` itself, so a handler should return without writing anything further.
+Returns `true` on success. On failure it writes the error response through `state.out` itself, so a handler should return without writing anything further. An empty body is a failure like any other and is answered with `no_read_input`. The exception is a notification, which is answered by silence whether the read succeeds or fails: `read_params` returns `false` having left `state.out` untouched. Returning immediately on `false` is correct in both cases, but a handler that inspects the response buffer afterwards has to allow for it being empty.
 
 `Opts` must have `null_terminated` turned off. A request is a span over bytes the handler does not own with no `'\0'` after it, and a `null_terminated` read drops its end checks and runs past the buffer. Use `glz::registry_read_opts<Opts>`, which is the transform the registry applies to its own options:
 
 ```cpp
 if (state.has_body()) {
     if (!glz::repe::read_params<glz::registry_read_opts<glz::opts{}>>(params, state)) {
-        return; // the error response is already written
+        return; // the error response is already written, or withheld from a notification
     }
 }
 ```
