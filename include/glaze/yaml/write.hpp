@@ -371,7 +371,17 @@ namespace glz
       template <auto Opts, class B>
       static void op(auto&& value, is_context auto&& ctx, B&& b, auto& ix)
       {
-         const sv str{value};
+         const sv str = [&]() -> const sv {
+            if constexpr (!char_array_t<T> && std::is_pointer_v<std::decay_t<T>>) {
+               return value ? value : "";
+            }
+            else if constexpr (has_data<T> && has_size<T>) {
+               return sv{value.data(), value.size()};
+            }
+            else {
+               return sv{value};
+            }
+         }();
          yaml::write_yaml_string<Opts>(str, ctx, b, ix);
       }
    };
@@ -545,7 +555,18 @@ namespace glz
             write_variant_value<Opts>(get_member(value, meta_wrapper_v<V>), ctx, b, ix, indent_level);
          }
          else if constexpr (str_t<V>) {
-            write_yaml_string<Opts>(sv{value}, ctx, b, ix, indent_level);
+            const sv str = [&]() -> const sv {
+               if constexpr (!char_array_t<V> && std::is_pointer_v<std::decay_t<V>>) {
+                  return value ? value : "";
+               }
+               else if constexpr (has_data<V> && has_size<V>) {
+                  return sv{value.data(), value.size()};
+               }
+               else {
+                  return sv{value};
+               }
+            }();
+            write_yaml_string<Opts>(str, ctx, b, ix, indent_level);
          }
          else {
             serialize<YAML>::op<Opts>(value, ctx, b, ix);

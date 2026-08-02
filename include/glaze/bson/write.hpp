@@ -429,6 +429,9 @@ namespace glz
             if constexpr (!char_array_t<T> && std::is_pointer_v<std::decay_t<decltype(value)>>) {
                return value ? std::string_view{value} : std::string_view{};
             }
+            else if constexpr (has_data<T> && has_size<T>) {
+               return std::string_view{value.data(), value.size()};
+            }
             else {
                return std::string_view{value};
             }

@@ -779,6 +779,9 @@ namespace glz
                else if constexpr (u8str_t<T>) {
                   return sv{reinterpret_cast<const char*>(value.data()), value.size()};
                }
+               else if constexpr (has_data<T> && has_size<T>) {
+                  return sv{value.data(), value.size()};
+               }
                else {
                   return sv{value};
                }
@@ -839,6 +842,9 @@ namespace glz
                   else if constexpr (u8str_t<T>) {
                      return sv{reinterpret_cast<const char*>(value.data()), value.size()};
                   }
+                  else if constexpr (has_data<T> && has_size<T>) {
+                     return sv{value.data(), value.size()};
+                  }
                   else {
                      return sv{value};
                   }
@@ -875,6 +881,9 @@ namespace glz
                   }
                   else if constexpr (u8str_t<T>) {
                      return sv{reinterpret_cast<const char*>(value.data()), value.size()};
+                  }
+                  else if constexpr (has_data<T> && has_size<T>) {
+                     return sv{value.data(), value.size()};
                   }
                   else {
                      return sv{value};
