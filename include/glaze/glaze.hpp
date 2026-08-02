@@ -41,5 +41,6 @@
 #include "glaze/file/read_directory.hpp"
 #include "glaze/file/write_directory.hpp"
 #include "glaze/json.hpp"
+#include "glaze/simd/backends.hpp"
 #include "glaze/stencil/stencil.hpp"
 #include "glaze/util/key_transformers.hpp"
