@@ -34,7 +34,18 @@ namespace glz
       send_error,
       connection_failure,
       // Other errors
-      end_reached, // A non-error code for non-null terminated input buffers
+      // Internal to a non-null-terminated read: "the buffer ran out here", which is a completed
+      // read or a truncated one depending on the nesting depth. settle_end_reached decides which
+      // and replaces it with none or unexpected_end, so every entry point that finalizes its
+      // context -- glz::read, read_streaming, repe::read_params -- has stopped returning it.
+      //
+      // Two paths still hand it back. json_stream_reader raises it deliberately, to signal end of
+      // stream. read_jmespath and get_view_json return ctx.error without finalizing at all; they
+      // navigate by matching braces rather than by entering depth, so ctx.depth stays zero
+      // throughout and settle_end_reached cannot be dropped in as-is -- it would settle their
+      // truncated reads to none, which is worse than leaking. Those need their own truncation
+      // accounting before they can join.
+      end_reached,
       partial_read_complete, // A non-error code for short circuiting partial reads
       no_read_input, //
       data_must_be_null_terminated, //
@@ -101,8 +112,12 @@ namespace glz
       patch_test_failed, // Test operation value mismatch (unique to RFC 6902 test op)
       // Buffer errors
       buffer_overflow, // Write would exceed fixed buffer capacity
-      invalid_length // Length exceeds allowed limit (buffer size or user-configured max)
-   };
+      invalid_length, // Length exceeds allowed limit (buffer size or user-configured max)
+      // Encoding errors
+      invalid_utf8, // Malformed UTF-8 in a string; always checked on read
+      // Streaming errors
+      streaming_unsupported // Document outruns the buffer window and this format's reader cannot refill
+};
 
    // Unified error context for all read/write operations
    // Provides error information and byte count processed
@@ -271,7 +286,9 @@ namespace glz
                                        "invalid_json_pointer",
                                        "patch_test_failed",
                                        "buffer_overflow",
-                                       "invalid_length"};
+                                       "invalid_length",
+                                       "invalid_utf8"
+                                    };
       static constexpr std::array value{none, //
                                         version_mismatch, //
                                         invalid_header, //
@@ -348,6 +365,9 @@ namespace glz
                                         patch_test_failed, //
                                         // Buffer errors
                                         buffer_overflow, //
-                                        invalid_length};
+                                        invalid_length, //
+                                        // Encoding errors
+                                        invalid_utf8
+                                       };
    };
 }
