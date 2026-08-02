@@ -286,7 +286,10 @@ namespace glz
    template <class T>
    [[nodiscard]] GLZ_ALWAYS_INLINE constexpr std::string_view str_view(auto&& value) noexcept
    {
-      if constexpr (!char_array_t<T> && std::is_pointer_v<std::decay_t<T>>) {
+      if constexpr (std::same_as<std::decay_t<T>, std::string_view>) {
+         return value; // already the answer; rebuilding it from data() and size() costs instructions
+      }
+      else if constexpr (!char_array_t<T> && std::is_pointer_v<std::decay_t<T>>) {
          return value ? std::string_view{value} : std::string_view{};
       }
       else if constexpr (has_data<T> && has_size<T>) {
