@@ -4,6 +4,8 @@ export module glaze.core.format_str;
 
 import std;
 
+using std::size_t;
+
 namespace glz
 {
    // Compile-time string for use as a non-type template parameter.

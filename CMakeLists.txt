@@ -1,6 +1,6 @@
-cmake_minimum_required(VERSION 4.3) 
+cmake_minimum_required(VERSION 4.4) 
 
-set(CMAKE_EXPERIMENTAL_CXX_IMPORT_STD "451f2fe2-a8a2-47c3-bc32-94786d8fc91b") 
+set(CACHE{CMAKE_EXPERIMENTAL_CXX_IMPORT_STD} VALUE "f35a9ac6-8463-4d38-8eec-5d6008153e7d")
 
 include(cmake/prelude.cmake)
 

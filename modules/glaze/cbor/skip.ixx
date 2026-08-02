@@ -13,7 +13,7 @@ import glaze.core.opts;
 
 import std;
 
-#include <glaze/util/inline.hpp>
+#include "glaze/util/inline.hpp"
 
 using std::uint8_t;
 using std::uint16_t;
@@ -340,4 +340,3 @@ namespace glz
       }
    };
 }
-

@@ -63,6 +63,7 @@ target_sources(glaze_glaze
   PUBLIC
     FILE_SET CXX_MODULES
     FILES
+    modules/glaze/json/chrono_format.ixx
     modules/glaze/json/escape_unicode.ixx
     modules/glaze/json/float_format.ixx
     modules/glaze/json/generic_fwd.ixx

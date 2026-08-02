@@ -16,6 +16,7 @@ import std;
 import glaze.beve.header;
 import glaze.beve.key_traits;
 
+import glaze.core.chrono;
 import glaze.core.common;
 import glaze.core.meta;
 import glaze.core.opts;

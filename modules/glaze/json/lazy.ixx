@@ -33,6 +33,16 @@ import glaze.concepts.container_concepts;
 
 #include "glaze/util/inline.hpp"
 
+#ifndef GLZ_NO_UNIQUE_ADDRESS
+#if (__has_cpp_attribute(no_unique_address))
+#define GLZ_NO_UNIQUE_ADDRESS [[no_unique_address]]
+#elif (__has_cpp_attribute(msvc::no_unique_address)) || ((defined _MSC_VER) && (!defined __clang__))
+#define GLZ_NO_UNIQUE_ADDRESS [[msvc::no_unique_address]]
+#else
+#define GLZ_NO_UNIQUE_ADDRESS
+#endif
+#endif
+
 using std::uint8_t;
 using std::int32_t;
 using std::uint32_t;

@@ -12,8 +12,12 @@ export module glaze.core.chrono;
 import std;
 
 import glaze.core.context;
+import glaze.core.meta;
+import glaze.core.opts;
 import glaze.core.traits;
 
+using std::uint8_t;
+using std::uint32_t;
 using std::uint64_t;
 using std::int64_t;
 using std::size_t;

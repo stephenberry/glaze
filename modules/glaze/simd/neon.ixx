@@ -4,12 +4,11 @@
 module;
 
 #include "glaze/simd/simd.hpp"
+#include "glaze/util/inline.hpp"
 
 export module glaze.simd.neon;
 
 import std;
-
-#include "glaze/util/inline.hpp"
 
 #if defined(GLZ_USE_NEON)
 
@@ -95,4 +94,3 @@ export namespace glz::detail
 }
 
 #endif
-

@@ -127,6 +127,10 @@ module;
 #include <emmintrin.h>
 #endif
 
+#if defined(__aarch64__) || defined(_M_ARM64)
+#include <arm_neon.h>
+#endif
+
 export module glaze.util.fast_float;
 
 import std;
@@ -1468,10 +1472,6 @@ from_chars(UC const *first, UC const *last, T &value, int base = 10) noexcept;
 
 #ifndef GLZ_FASTFLOAT_ASCII_NUMBER_H
 #define GLZ_FASTFLOAT_ASCII_NUMBER_H
-
-#ifdef GLZ_FASTFLOAT_NEON
-#include <arm_neon.h>
-#endif
 
 namespace glz::fast_float {
 

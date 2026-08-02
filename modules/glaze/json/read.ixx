@@ -1925,7 +1925,7 @@ namespace glz
          const size_t n = size_t(it - start);
          if constexpr (string_view_t<T>) {
             if constexpr (!Transient) {
-               GLZ_ASSERT_OWNS_ITS_BYTES(decltype(ctx));
+               assert_owns_its_bytes<decltype(ctx)>();
             }
             using value_type = typename std::decay_t<T>::value_type;
             if constexpr (std::same_as<value_type, char8_t>) {
@@ -1987,7 +1987,7 @@ namespace glz
 
          if constexpr (string_view_t<T>) {
             if constexpr (!Transient) {
-               GLZ_ASSERT_OWNS_ITS_BYTES(decltype(ctx));
+               assert_owns_its_bytes<decltype(ctx)>();
             }
             using value_type = typename std::decay_t<T>::value_type;
             if constexpr (std::same_as<value_type, char8_t>) {
@@ -2038,7 +2038,7 @@ namespace glz
    // window between the read below and the caller's use of it, which is why this is exempt from the
    // guard that rejects streaming into a view the caller keeps. Do not hand the view any further
    // than the calling reader; store what it parsed, never the view itself.
-   template <auto Opts, class... Args>
+   export template <auto Opts, class... Args>
    GLZ_ALWAYS_INLINE void parse_transient_string_view(std::string_view& value, Args&&... args) noexcept
    {
       from<JSON, std::string_view>::template op<Opts, true>(value, std::forward<Args>(args)...);
@@ -2321,7 +2321,7 @@ namespace glz
          if (bool(ctx.error)) [[unlikely]]
             return;
          if constexpr (string_view_t<T>) {
-            GLZ_ASSERT_OWNS_ITS_BYTES(decltype(ctx));
+            assert_owns_its_bytes<decltype(ctx)>();
          }
          value.str = {it_start, static_cast<size_t>(it - it_start)};
       }
@@ -2334,7 +2334,7 @@ namespace glz
       GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&& it, auto end)
       {
          if constexpr (string_view_t<T>) {
-            GLZ_ASSERT_OWNS_ITS_BYTES(decltype(ctx));
+            assert_owns_its_bytes<decltype(ctx)>();
          }
          value.str = {it, static_cast<size_t>(end - it)}; // read entire contents as string
          it = end;

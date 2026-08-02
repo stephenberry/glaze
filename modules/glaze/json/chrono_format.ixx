@@ -1,15 +1,24 @@
 // Glaze Library
-// For the license information refer to glaze.hpp
+// For the license information refer to glaze.ixx
+// glz:header path="glaze/json/chrono_format.hpp"
+// glz:header std=<chrono>
+// glz:header std=<cstddef>
+// glz:header std=<string_view>
+// glz:header std=<type_traits>
+export module glaze.json.chrono_format;
 
-#pragma once
+import std;
 
-#include <chrono>
-#include <string_view>
-#include <type_traits>
+import glaze.core.buffer_traits;
+import glaze.core.chrono;
+import glaze.core.context;
+import glaze.core.meta;
+import glaze.core.opts;
 
-#include "glaze/core/chrono.hpp"
-#include "glaze/json/read.hpp"
-#include "glaze/json/write.hpp"
+import glaze.json.read;
+import glaze.json.write;
+
+using std::size_t;
 
 // Per-field chrono customization wrappers.
 //
@@ -38,7 +47,7 @@
 // year_month_day; epoch_count supports system_clock time_points. utc_time and
 // the binary backends are intentionally out of scope here.
 
-namespace glz
+export namespace glz
 {
    // ============================================
    // glz::date_format — per-field strftime-subset format string

@@ -1,5 +1,10 @@
 project(size_optimization_test)
 
+set(glz_size_default_define
+  "$<$<CXX_COMPILER_ID:MSVC>:/DGLZ_DEFAULT_OPTIMIZATION_SIZE>"
+  "$<$<NOT:$<CXX_COMPILER_ID:MSVC>>:-DGLZ_DEFAULT_OPTIMIZATION_SIZE>"
+)
+
 # Compile-time wiring checks for the default optimization level seam, built in BOTH modes:
 # the normal default, and the size default (GLZ_DEFAULT_OPTIMIZATION_SIZE). The static_asserts
 # in the source assert the correct behavior for whichever mode the target is compiled in.
@@ -10,7 +15,7 @@ add_test(NAME ${PROJECT_NAME} COMMAND ${PROJECT_NAME})
 
 add_executable(size_optimization_size_default ${PROJECT_NAME}.cpp)
 target_link_libraries(size_optimization_size_default PRIVATE glz_test_common)
-target_compile_definitions(size_optimization_size_default PRIVATE GLZ_DEFAULT_OPTIMIZATION_SIZE)
+target_compile_options(size_optimization_size_default PRIVATE ${glz_size_default_define})
 add_test(NAME size_optimization_size_default COMMAND size_optimization_size_default)
 
 # Symbol-absence guarantee: a pure size-default binary must not link the 40 KB integer table.
@@ -23,8 +28,12 @@ if(NOT MSVC)
   if(GLZ_NM_TOOL)
     add_executable(size_optimization_symbols symbols_main.cpp)
     target_link_libraries(size_optimization_symbols PRIVATE glaze::glaze)
-    target_compile_definitions(size_optimization_symbols PRIVATE GLZ_DEFAULT_OPTIMIZATION_SIZE)
-    target_compile_options(size_optimization_symbols PRIVATE -Os -ffunction-sections -fdata-sections)
+    target_compile_options(size_optimization_symbols PRIVATE
+      ${glz_size_default_define}
+      -Os
+      -ffunction-sections
+      -fdata-sections
+    )
     if(APPLE)
       target_link_options(size_optimization_symbols PRIVATE -Wl,-dead_strip)
     else()

@@ -9,6 +9,7 @@ import std;
 
 import glaze.beve.header;
 
+import glaze.core.chrono;
 import glaze.core.common;
 import glaze.core.cast;
 import glaze.core.meta;

@@ -3,7 +3,7 @@ include(FetchContent)
 FetchContent_Declare(
   ut
   GIT_REPOSITORY https://github.com/openalgz/ut
-  GIT_TAG fc3f5a9c36dfc56bd2cb0eab07733005e5af7b74 # todo: Return to tag later
+  GIT_TAG main
   GIT_SHALLOW TRUE
 )
 
@@ -50,6 +50,11 @@ elseif(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
 elseif(CMAKE_CXX_COMPILER_ID MATCHES "Clang|AppleClang")
     target_compile_options(glz_test_common INTERFACE -fno-rtti)
     target_compile_options(glz_test_common INTERFACE -Wall -Wextra -pedantic $<$<CONFIG:Debug>:-Werror>)
+    target_compile_options(glz_test_common INTERFACE -Wno-error=reserved-module-identifier)
+    if(CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
+        target_compile_options(glz_test_common INTERFACE -Wno-error=TU-local-entity-exposure)
+    endif()
+    target_compile_options(glz_test_common INTERFACE -Wno-error=missing-braces)
     target_compile_options(glz_test_common INTERFACE -ftime-trace)
     if(glaze_ENABLE_SANITIZERS)
         target_compile_options(glz_test_common INTERFACE -fsanitize=address -fsanitize-address-use-after-scope -fsanitize=undefined)
@@ -74,6 +79,15 @@ elseif(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang|AppleClang")
     target_compile_options(glz_test_exceptions INTERFACE -Wall -Wextra -pedantic)
 endif()
 
+foreach(glz_test_support IN ITEMS glz_test_common glz_test_exceptions)
+    set_property(
+        TARGET ${glz_test_support}
+        PROPERTY INTERFACE_LINK_LIBRARIES_DIRECT
+            "$<$<STREQUAL:$<TARGET_PROPERTY:TYPE>,EXECUTABLE>:ut::ut>"
+            "$<$<STREQUAL:$<TARGET_PROPERTY:TYPE>,EXECUTABLE>:glaze::glaze>"
+    )
+endforeach()
+
 add_subdirectory(api_test)
 add_subdirectory(beve_test)
 # add_subdirectory(bson_test)
@@ -93,7 +107,6 @@ add_subdirectory(exceptions_test)
 # add_subdirectory(inplace_vector)
 add_subdirectory(float_write_test)
 add_subdirectory(size_optimization_test)
-add_subdirectory(inplace_vector)
 option(glaze_BUILD_PERFORMANCE_TESTS "Build performance tests" ON)
 if(glaze_BUILD_PERFORMANCE_TESTS)
     add_subdirectory(int_parsing)

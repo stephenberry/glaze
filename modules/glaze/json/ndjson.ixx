@@ -18,6 +18,7 @@ import glaze.core.context;
 import glaze.core.meta;
 import glaze.core.opts;
 import glaze.core.read;
+import glaze.core.streaming_state;
 import glaze.core.reflect;
 import glaze.core.write;
 
@@ -33,6 +34,8 @@ import glaze.util.tuple;
 import glaze.tuplet;
 
 using std::size_t;
+
+#include "glaze/util/inline.hpp"
 
 namespace glz
 {

@@ -343,7 +343,7 @@ namespace glz
    // the overloads above, which would run with null_terminated on and read past the window's end.
    // Doing this here rather than per format is what keeps read_jsonc, read_beve and every other
    // helper that funnels through `read` from having to remember on its own.
-   template <auto Opts, class T, class Buffer>
+   export template <auto Opts, class T, class Buffer>
       requires read_supported<T, Opts.format> && is_input_streaming<std::remove_reference_t<Buffer>>
    [[nodiscard]] error_ctx read(T& value, Buffer&& buffer, is_context auto&& ctx)
    {
@@ -361,7 +361,7 @@ namespace glz
       }
    }
 
-   template <auto Opts, class T, class Buffer>
+   export template <auto Opts, class T, class Buffer>
       requires read_supported<T, Opts.format> && is_input_streaming<std::remove_reference_t<Buffer>>
    [[nodiscard]] error_ctx read(T& value, Buffer&& buffer)
    {

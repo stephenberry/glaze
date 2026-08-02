@@ -12,6 +12,8 @@
 import std;
 import glaze;
 
+using std::int64_t;
+
 namespace
 {
    using glz::check_linear_search;

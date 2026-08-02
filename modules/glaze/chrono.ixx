@@ -4,5 +4,6 @@
 export module glaze.chrono;
 
 export import glaze.core.chrono;
+export import glaze.json.chrono_format;
 export import glaze.json.read;
 export import glaze.json.write;

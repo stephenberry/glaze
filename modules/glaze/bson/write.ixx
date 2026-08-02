@@ -27,6 +27,7 @@ import glaze.bson.header;
 import glaze.concepts.container_concepts;
 
 import glaze.core.buffer_traits;
+import glaze.core.chrono;
 import glaze.core.common;
 import glaze.core.context;
 import glaze.core.meta;

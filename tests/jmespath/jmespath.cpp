@@ -3,11 +3,16 @@
 
 import std;
 import glaze;
+
 import glaze.tuplet;
+
 import glaze.util.tuple;
+import glaze.util.string_literal;
+
 import ut;
 
 using std::uint16_t;
+using std::size_t;
 
 using namespace ut;
 

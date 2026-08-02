@@ -9,6 +9,7 @@ import glaze.core.buffer_traits;
 import glaze.core.ostream_buffer;
 import glaze.core.streaming_state;
 import glaze.json;
+import glaze.json.chrono_format;
 
 import ut;
 

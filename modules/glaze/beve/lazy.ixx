@@ -44,13 +44,13 @@ using std::size_t;
 namespace glz
 {
    // Forward declarations
-   export template <opts Opts>
+   export template <auto Opts>
    struct lazy_beve_document;
-   export template <opts Opts>
+   export template <auto Opts>
    class lazy_beve_iterator;
-   export template <opts Opts>
+   export template <auto Opts>
    struct indexed_lazy_beve_view;
-   export template <opts Opts>
+   export template <auto Opts>
    class indexed_lazy_beve_iterator;
 
    // ============================================================================
@@ -164,7 +164,7 @@ namespace glz
     * For objects, parse_pos_ tracks the current scan position to enable
     * efficient sequential key access (O(n) total instead of O(n²)).
     */
-   export template <opts Opts = opts{}>
+   export template <auto Opts = opts{}>
    struct lazy_beve_view
    {
      private:
@@ -327,7 +327,7 @@ namespace glz
    // lazy_beve_document - Minimal container
    // ============================================================================
 
-   export template <opts Opts = opts{}>
+   export template <auto Opts = opts{}>
    struct lazy_beve_document
    {
      private:
@@ -434,7 +434,7 @@ namespace glz
    // lazy_beve_iterator - Forward iterator with lazy scanning
    // ============================================================================
 
-   export template <opts Opts>
+   export template <auto Opts>
    class lazy_beve_iterator
    {
      private:
@@ -485,7 +485,7 @@ namespace glz
    // indexed_lazy_beve_view - Pre-built index for O(1) access
    // ============================================================================
 
-   export template <opts Opts>
+   export template <auto Opts>
    struct indexed_lazy_beve_view
    {
      private:
@@ -570,7 +570,7 @@ namespace glz
    // indexed_lazy_beve_iterator - O(1) advancement
    // ============================================================================
 
-   export template <opts Opts>
+   export template <auto Opts>
    class indexed_lazy_beve_iterator
    {
      private:
@@ -1340,7 +1340,7 @@ namespace glz
     * @param buffer The BEVE buffer (must remain valid for document lifetime)
     * @return lazy_beve_document on success, error_ctx on failure
     */
-   export template <opts Opts = opts{}, class Buffer>
+   export template <auto Opts = opts{}, class Buffer>
    [[nodiscard]] inline expected<lazy_beve_document<Opts>, error_ctx> lazy_beve(Buffer&& buffer)
    {
       lazy_beve_document<Opts> doc;

@@ -3,6 +3,7 @@
 
 import std;
 import glaze.json;
+import glaze.util.parse;
 import ut;
 
 using std::int32_t;

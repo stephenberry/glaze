@@ -13,6 +13,7 @@ export module glaze.beve.header;
 
 import std;
 
+import glaze.core.chrono;
 import glaze.core.context;
 import glaze.concepts.container_concepts;
 
@@ -172,10 +173,10 @@ namespace glz
    // `rep` member, but the standard specifies that member as exposition-only, so the property
    // is asserted rather than assumed -- a violation would silently emit corrupt bytes instead
    // of failing to compile.
-   template <class T, class Rep>
+   export template <class T, class Rep>
    concept beve_rep_layout_compatible = sizeof(T) == sizeof(Rep) && std::is_trivially_copyable_v<T>;
 
-   template <class V>
+   export template <class V>
    struct beve_num_array_value
    {
       using type = std::remove_cvref_t<V>;
@@ -196,16 +197,16 @@ namespace glz
                     "BEVE typed-array packing requires std::chrono::time_point to be a trivially copyable "
                     "wrapper the size of its rep");
    };
-   template <class V>
+   export template <class V>
    using beve_num_array_value_t = typename beve_num_array_value<V>::type;
 
    // True when V lays out as a numeric typed-array element: a number/byte, or a chrono type
    // that reduces to one.
-   template <class V>
+   export template <class V>
    concept beve_num_array_t = beve_num_t<beve_num_array_value_t<V>>;
 
    // Extract the wire `rep` value from an element (identity for plain numbers).
-   template <class V>
+   export template <class V>
    GLZ_ALWAYS_INLINE constexpr auto beve_num_array_extract(const V& x) noexcept
    {
       using D = std::remove_cvref_t<V>;
@@ -221,7 +222,7 @@ namespace glz
    }
 
    // Construct an element from a wire `rep` value (identity for plain numbers).
-   template <class V>
+   export template <class V>
    GLZ_ALWAYS_INLINE constexpr std::remove_cvref_t<V> beve_num_array_construct(beve_num_array_value_t<V> nv) noexcept
    {
       using D = std::remove_cvref_t<V>;
@@ -236,7 +237,8 @@ namespace glz
       }
    }
 
-   [[nodiscard]] GLZ_ALWAYS_INLINE constexpr size_t int_from_compressed(auto&& ctx, auto&& it, auto end) noexcept
+   export [[nodiscard]] GLZ_ALWAYS_INLINE constexpr size_t int_from_compressed(auto&& ctx, auto&& it,
+                                                                               auto end) noexcept
    {
       if (it >= end) [[unlikely]] {
          ctx.error = error_code::unexpected_end;

@@ -3467,11 +3467,11 @@ namespace glz
    // quietly producing unreadable output today.
    // ---------------------------------------------------------------------------------------------
 
-   enum struct variant_tagging_kind : uint8_t { none, internal, adjacent };
+   export enum struct variant_tagging_kind : uint8_t { none, internal, adjacent };
 
    // The object type an alternative presents to the serializers: memory objects (smart pointers,
    // std::optional of a struct, ...) tag through the type they point to.
-   template <class V>
+   export template <class V>
    using variant_alternative_object_t = std::conditional_t<is_memory_object<V>, memory_type<V>, V>;
 
    // A unit alternative carries no data at all: std::monostate, std::nullptr_t, std::nullopt_t.
@@ -3481,7 +3481,7 @@ namespace glz
    // left one alternative of the union with no discriminator on it for no reason anyone chose: the
    // `null` writer simply predates the tagging machinery. Untagged variants still write it as `null`,
    // and both readers still accept `null` for it so existing data keeps parsing.
-   template <class V>
+   export template <class V>
    inline constexpr bool variant_unit_alternative = always_null_t<std::decay_t<V>>;
 
    // An alternative can host a merged discriminator only if it serializes as an object whose members
@@ -3493,7 +3493,7 @@ namespace glz
    // whatever body the user's serializer produces. BEVE cannot do the same because its objects are
    // length-prefixed and the member count of a custom body is not knowable in advance -- the BEVE
    // writer static_asserts on that combination rather than silently dropping the discriminator.
-   template <class V>
+   export template <class V>
    inline constexpr bool internally_taggable_alternative =
       glaze_object_t<variant_alternative_object_t<V>> || reflectable<variant_alternative_object_t<V>> ||
       custom_write<V> || variant_unit_alternative<V>;
@@ -3503,7 +3503,7 @@ namespace glz
       // An empty reflected object, used to consume the body of a discriminator-only object on behalf
       // of a unit alternative. Routing through it reuses the object readers' key handling, unknown-key
       // policy, and terminator consumption rather than duplicating them per format.
-      struct variant_unit_body
+      export struct variant_unit_body
       {};
    }
 
@@ -3512,7 +3512,7 @@ namespace glz
    // (doing so produced a duplicate key for glaze_object_t alternatives) and the reader stores the id
    // into that member. The custom cases are excluded because their serializer, not reflection,
    // decides which members exist.
-   template <class V>
+   export template <class V>
    consteval bool alternative_declares_key(const sv& name) noexcept
    {
       if constexpr (custom_write<V>) {
@@ -3527,22 +3527,22 @@ namespace glz
    {
       // Instantiated only to fail, so the compiler's instantiation backtrace names the alternative
       // that internal tagging cannot represent.
-      template <class Variant, class Alternative>
+      export template <class Variant, class Alternative>
       struct internal_tagging_requires_object_alternatives : std::false_type
       {};
 
       // Same trick for the two representation limits that are specific to BEVE rather than to the
       // variant's declaration, and so are diagnosed where they bite instead of here.
-      template <class Variant, class Alternative>
+      export template <class Variant, class Alternative>
       struct beve_internal_tagging_needs_reflected_alternative : std::false_type
       {};
 
-      template <class Variant>
+      export template <class Variant>
       struct beve_positional_tagging_needs_content : std::false_type
       {};
    }
 
-   template <is_variant T>
+   export template <is_variant T>
    struct variant_tagging
    {
       static constexpr size_t size = std::variant_size_v<T>;
@@ -3589,13 +3589,13 @@ namespace glz
          "internal_tagging_requires_object_alternatives in the instantiation backtrace.");
    };
 
-   template <is_variant T>
+   export template <is_variant T>
    inline constexpr variant_tagging_kind variant_tagging_v = variant_tagging<T>::kind;
 
-   template <is_variant T>
+   export template <is_variant T>
    inline constexpr bool internally_tagged_v = variant_tagging_v<T> == variant_tagging_kind::internal;
 
-   template <is_variant T>
+   export template <is_variant T>
    inline constexpr bool adjacently_tagged_v = variant_tagging_v<T> == variant_tagging_kind::adjacent;
 }
 
