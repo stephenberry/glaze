@@ -942,6 +942,9 @@ namespace glz
                      ++c;
                   };
 
+                  // Adding a helper here means adding a branch to string_escape_simd() in
+                  // simd/backends.hpp, which names the widest one this cascade invokes, and a row
+                  // to known_builds in tests/json_test/utf8_validation_test.cpp, which checks it.
 #if defined(GLZ_USE_AVX2)
                   detail::avx2_string_escape(c, e, data, n, write_escape);
 #endif

@@ -269,15 +269,15 @@ Glaze requires a C++ standard conformant pre-processor, which requires the `/Zc:
 
 ### SIMD Architecture Detection
 
-Glaze automatically detects the target architecture and enables platform-specific SIMD optimizations using compiler-predefined macros:
+Glaze automatically detects the target architecture and enables platform-specific SIMD optimizations using compiler-predefined macros, covering SSE2 through AVX-512BW on x86-64, NEON on ARM, and SIMD128 on WebAssembly. Since these are target-architecture macros set by the compiler, cross-compilation works automatically (e.g., an x86 host cross-compiling for ARM will not enable x86 SIMD paths). See [Optimizing Performance](./docs/optimizing-performance.md#simd-architecture-flags) for the full table.
 
-| Flag | Detected When | Architecture |
-|------|--------------|--------------|
-| `GLZ_USE_SSE2` | `__x86_64__` or `_M_X64` | x86-64 (always has SSE2) |
-| `GLZ_USE_AVX2` | `__AVX2__` (in addition to x86-64) | x86-64 with AVX2 |
-| `GLZ_USE_NEON` | `__aarch64__`, `_M_ARM64`, or `__ARM_NEON` | ARM64 / AArch64 |
+To report what a build actually compiled, read `glz::simd_info`:
 
-Since these are target-architecture macros set by the compiler, cross-compilation works automatically (e.g., an x86 host cross-compiling for ARM will not enable x86 SIMD paths).
+```c++
+std::string report;
+std::ignore = glz::write_json(glz::simd_info, report);
+// {"detected":"AVX512BW","utf8_validation":"AVX512BW","string_escape":"AVX2","float_write":"SSE4.1"}
+```
 
 To disable SIMD optimizations:
 
