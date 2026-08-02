@@ -275,7 +275,7 @@ To report what a build actually compiled, read `glz::simd_info`:
 
 ```c++
 std::string report;
-glz::write_json(glz::simd_info, report);
+std::ignore = glz::write_json(glz::simd_info, report);
 // {"detected":"AVX512BW","utf8_validation":"AVX512BW","string_escape":"AVX2","float_write":"SSE4.1"}
 ```
 

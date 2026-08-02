@@ -34,7 +34,7 @@ The flags are cumulative rather than exclusive. When AVX2 is available, `GLZ_USE
 
 ```c++
 std::string report;
-glz::write_json(glz::simd_info, report);
+std::ignore = glz::write_json(glz::simd_info, report);
 // {"detected":"AVX512BW","utf8_validation":"AVX512BW","string_escape":"AVX2","float_write":"SSE4.1"}
 ```
 
@@ -45,7 +45,11 @@ Each field is a `std::string_view`, so they compare by value and work in `conste
 | `detected` | Widest instruction set the flags above enabled | `AVX512BW`, `AVX2`, `SSSE3`, `SSE2`, `NEON64`, `NEON`, `WASM_SIMD128`, `scalar` |
 | `utf8_validation` | UTF-8 validator | `AVX512BW`, `AVX2`, `SSSE3`, `NEON64`, `WASM_SIMD128`, `scalar` |
 | `string_escape` | Widest JSON string-escape helper | `AVX2`, `SSE2`, `NEON`, `SWAR` |
-| `float_write` | Float serialization | `NEON`, `SSE4.1`, `SSE2`, `scalar` |
+| `float_write` | Float serialization, via the zmij writer | `NEON`, `SSE4.1`, `SSE2`, `scalar` |
+
+`SWAR` means SIMD-within-a-register: eight bytes at a time packed into a `uint64_t`, needing no intrinsics. It is Glaze's fallback everywhere, so `scalar` in the other fields does not mean the work is done a byte at a time.
+
+`float_write` describes the default float path only. Setting the `float_format` option routes floats through `std::format` instead, which no field reports.
 
 > [!IMPORTANT]
 >
@@ -53,15 +57,13 @@ Each field is a `std::string_view`, so they compare by value and work in `conste
 >
 > - **String escaping** has no AVX-512 helper and no WASM helper, so an AVX-512 build escapes with AVX2 and a WASM build escapes with SWAR.
 > - **UTF-8 validation** needs a byte-granular shuffle, which plain SSE2 and 32-bit NEON lack. Those targets validate with the scalar validator while the rest of Glaze stays vectorized.
-> - **Float writing** runs its own detection off `__SSE2__` / `__ARM_NEON` rather than Glaze's `GLZ_USE_*` macros, honouring only `GLZ_DISABLE_SIMD`. It is the one field `detected` does not bound: a 32-bit x86 build with SSE2 reports `detected == "scalar"` and `float_write == "SSE2"`.
+> - **Float writing** runs its own detection off `__SSE2__` / `__ARM_NEON` rather than Glaze's `GLZ_USE_*` macros, honouring only `GLZ_DISABLE_SIMD`. `detected` does not even bound it from above: a 32-bit x86 build with SSE2 reports `detected == "scalar"` and `float_write == "SSE2"`.
 >
 > This list is illustrative, not exhaustive — check the field you care about rather than inferring it from `detected`.
 
 Selection happens entirely in the preprocessor, with no runtime dispatch, so this describes the *translation unit* rather than the machine running it. A build reporting `"AVX2"` runs AVX2 on a host that also supports AVX-512, and crashes on one that supports neither.
 
-> [!WARNING]
->
-> Compiling different translation units with different `-march` flags gives them different values for `glz::simd_info`, which is an ODR violation on that object. The linker keeps one arbitrarily, so the reported values may describe a translation unit other than the one doing the work.
+`glz::simd_info` has internal linkage, so each translation unit gets its own copy holding its own answer. A project compiling some files with `-mavx2` and others without gets accurate values in both, and the one you read is the one for the file you read it from.
 
 `utf8_validation` has three further values — `generic16`, `generic32`, and `generic64` — which mean `GLZ_UTF8_GENERIC_WIDTH` selected a portable width-generic validator written in plain C++. That is a testing hook for exercising the algorithm at register sizes the host cannot execute; no ordinary build selects it.
 

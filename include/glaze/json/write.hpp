@@ -10,7 +10,6 @@
 
 #include "glaze/core/chrono.hpp"
 #include "glaze/simd/avx.hpp"
-#include "glaze/simd/backends.hpp"
 #include "glaze/simd/neon.hpp"
 #include "glaze/simd/simd.hpp"
 #include "glaze/simd/sse.hpp"
@@ -943,18 +942,15 @@ namespace glz
                      ++c;
                   };
 
-                  // simd_info.string_escape names the widest helper invoked below. Each branch
-                  // asserts it, so adding a wider helper here without naming it in simd/backends.hpp
-                  // fails to compile rather than silently making the reported name too narrow.
+                  // Adding a helper here means adding a branch to string_escape_simd() in
+                  // simd/backends.hpp, which names the widest one this cascade invokes, and a row
+                  // to known_builds in tests/json_test/utf8_validation_test.cpp, which checks it.
 #if defined(GLZ_USE_AVX2)
-                  static_assert(simd_info.string_escape == "AVX2");
                   detail::avx2_string_escape(c, e, data, n, write_escape);
 #endif
 #if defined(GLZ_USE_SSE2)
-                  static_assert(simd_info.string_escape == "AVX2" || simd_info.string_escape == "SSE2");
                   detail::sse2_string_escape(c, e, data, n, write_escape);
 #elif defined(GLZ_USE_NEON)
-                  static_assert(simd_info.string_escape == "NEON");
                   detail::neon_string_escape(c, e, data, n, write_escape);
 #endif
 

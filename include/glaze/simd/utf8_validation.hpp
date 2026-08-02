@@ -361,6 +361,12 @@ namespace glz::detail::utf8_simd
    }
 #endif
 
+   // Anchors the width each branch declares to the register type it picked alongside it. Everything
+   // downstream trusts `width` -- regs_per_step, the tail handling, the incomplete_max offset -- so
+   // a branch that names a width its vec does not have corrupts validation rather than failing to
+   // build. The name/width pairing is checked separately, in utf8_validation_test.cpp.
+   static_assert(sizeof(vec) == width, "a UTF-8 backend declared a width its register type does not have");
+
    // Number of registers consumed per 64 byte step of the main loop.
    inline constexpr size_t regs_per_step = 64 / width;
 

@@ -16,18 +16,18 @@ namespace glz
    // Selection happens entirely in the preprocessor -- Glaze has no runtime dispatch -- so these
    // describe the translation unit, not the host. A build reporting "AVX2" runs AVX2 on a machine
    // that also supports AVX-512, and crashes on one that supports neither. Compiling different
-   // files with different -march flags gives them different values, and linking those together is
-   // an ODR violation on this object; a mixed build reports whichever one the linker kept.
+   // files with different -march flags gives each of them its own values; see simd_info below for
+   // what that means when they are linked together.
    //
-   // The fields disagree with each other on purpose, which is the reason this is a struct rather
-   // than a single name. No one instruction set is "the SIMD Glaze is using": the widest one
-   // detected is an upper bound that most subsystems do not reach, and one of them does not even
-   // read Glaze's detection.
+   // Four fields rather than one name because they genuinely disagree; docs/optimizing-performance.md
+   // has the cases and why they arise.
    struct simd_backends
    {
-      // Widest instruction set the detection in simd.hpp enabled. Bounds every field below except
-      // float_write. One of "AVX512BW", "AVX2", "SSSE3", "SSE2", "NEON64", "NEON", "WASM_SIMD128",
-      // or "scalar".
+      // Widest instruction set the detection in simd.hpp enabled. One of "AVX512BW", "AVX2",
+      // "SSSE3", "SSE2", "NEON64", "NEON", "WASM_SIMD128", or "scalar".
+      //
+      // An upper bound on string_escape, but not on the other two: float_write runs its own
+      // detection, and GLZ_UTF8_GENERIC_WIDTH overrides utf8_validation outright.
       std::string_view detected{};
 
       // UTF-8 validation. Needs a byte-granular shuffle, which plain SSE2 and 32 bit NEON lack, so
@@ -44,9 +44,12 @@ namespace glz
 
       // Float writing, through the zmij port in util/zmij.hpp. It runs its own detection off
       // __SSE2__ / __ARM_NEON rather than Glaze's GLZ_USE_* macros, and only honours
-      // GLZ_DISABLE_SIMD from Glaze. That makes it the one field `detected` does not bound: a 32 bit
-      // x86 build with SSE2 reports detected == "scalar" and float_write == "SSE2", because Glaze's
-      // own detection requires __x86_64__ and zmij's does not.
+      // GLZ_DISABLE_SIMD from Glaze. `detected` does not even bound it from above: a 32 bit x86
+      // build with SSE2 reports detected == "scalar" and float_write == "SSE2", because Glaze's own
+      // detection requires __x86_64__ and zmij's does not.
+      //
+      // Names zmij's path only. Setting opts::float_format routes floats through std::format
+      // instead (core/write_chars.hpp), which this field does not describe.
       std::string_view float_write{};
    };
 
@@ -76,8 +79,15 @@ namespace glz
 #endif
       }
 
-      // Mirrors the escape cascade in json/write.hpp. Kept in step by static_asserts at that
-      // cascade, so a helper added there without a name here fails to compile.
+      // Mirrors the escape cascade in json/write.hpp, whose branches static_assert against the
+      // result. Those asserts key off the same macros as this chain, so what they catch is an edit
+      // here that the cascade did not make: rename a branch and every translation unit that writes
+      // JSON stops compiling.
+      //
+      // They cannot catch the reverse. A helper added to the cascade under a macro this chain does
+      // not test -- an AVX-512 or WASM escape helper, the two Glaze lacks -- compiles cleanly and
+      // leaves this reporting a name that is too narrow. Adding one means adding a branch here in
+      // the same commit; the cascade says so at the point of change.
       consteval std::string_view string_escape_simd() noexcept
       {
 #if defined(GLZ_USE_AVX2)
@@ -110,13 +120,18 @@ namespace glz
    // Report what this build compiled. Reflectable, so a benchmark harness can emit it directly:
    //
    //    std::string s;
-   //    glz::write_json(glz::simd_info, s);
+   //    std::ignore = glz::write_json(glz::simd_info, s);
    //    // {"detected":"AVX512BW","utf8_validation":"AVX512BW",
    //    //  "string_escape":"AVX2","float_write":"SSE4.1"}
    //
+   // Deliberately not `inline`. The values come from the preprocessor, so every translation unit
+   // must keep its own answer, which internal linkage gives it. Under `inline` the copies merge
+   // and a project compiling some files with -mavx2 and others without reports the survivor's
+   // answer for all of them, including through the write_json call above.
+   //
    // These spellings are public API. Renaming one breaks every comparison against it, and inserting
    // a wider entry changes what an already-working build reports, so treat both as deliberate.
-   inline constexpr simd_backends simd_info{
+   constexpr simd_backends simd_info{
       .detected = detail::detected_simd(),
       .utf8_validation = detail::utf8_simd::backend,
       .string_escape = detail::string_escape_simd(),

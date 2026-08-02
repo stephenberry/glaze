@@ -139,8 +139,7 @@ namespace
 namespace
 {
    // Every value simd_info.detected can take, paired with what the other subsystems must report on
-   // a build that detected it. This table IS the divergence: reading down the columns shows why one
-   // name for "the SIMD Glaze is using" would be wrong on most builds.
+   // a build that detected it.
    //
    // float_write is absent on purpose -- zmij runs its own detection off __SSE2__ / __ARM_NEON, so
    // it is not a function of what Glaze detected. It is checked separately below.
@@ -191,15 +190,6 @@ namespace
       return unknown_width;
    }
 
-   inline constexpr std::string_view known_float_write[]{"NEON", "SSE4.1", "SSE2", "scalar"};
-
-   constexpr bool is_known_float_write(std::string_view name) noexcept
-   {
-      for (const auto& known : known_float_write) {
-         if (known == name) return true;
-      }
-      return false;
-   }
 }
 
 // These spellings are public API, so a new one should be added here and to
@@ -209,7 +199,11 @@ static_assert(shape_for(glz::simd_info.detected) != nullptr,
               "simd_info.detected reports a value this test does not know");
 static_assert(width_for(glz::simd_info.utf8_validation) != unknown_width,
               "simd_info.utf8_validation reports a value this test does not know");
-static_assert(is_known_float_write(glz::simd_info.float_write),
+// Registration only. Which of these zmij picks is not checkable here: any mapping would have to
+// read the same ZMIJ_USE_* macros float_write_simd() reads, and so would agree with it by
+// construction. This catches a new spelling entering public API without the docs following.
+static_assert(glz::simd_info.float_write == "NEON" || glz::simd_info.float_write == "SSE4.1" ||
+                 glz::simd_info.float_write == "SSE2" || glz::simd_info.float_write == "scalar",
               "simd_info.float_write reports a value this test does not know");
 
 // String escaping is a pure function of what was detected, with no testing hook to fence against.
@@ -225,14 +219,43 @@ static_assert(shape_for(glz::simd_info.detected)->utf8 == glz::simd_info.utf8_va
 #endif
 
 #if defined(GLZ_UTF8_SIMD)
-// Ties the reported name to the register width its own branch defines. The table above pins the
-// name, so what this adds is the width: a branch that declares the wrong width for its register
-// type would otherwise only surface as wrong validation results at runtime.
+// Ties the reported name to the register width its own branch defines, catching a branch that
+// copied a neighbour's name without its width. That the width matches the register type is a
+// separate question, and utf8_validation.hpp asserts it there with sizeof(vec) == width, where the
+// type is in scope.
 static_assert(width_for(glz::simd_info.utf8_validation) == glz::detail::utf8_simd::width,
               "a UTF-8 backend named itself as one register width and then defined another");
-#else
-static_assert(glz::simd_info.utf8_validation == "scalar");
 #endif
+
+// Everything above checks that the reported names agree with each other. None of it can say which
+// backend this build was supposed to select: a job whose flags quietly stopped taking effect gets a
+// different backend that is just as self-consistent, and every assert above stays green.
+//
+// So the simd-backends workflow pins the answer, passing e.g. -DGLZ_EXPECT_DETECTED=SSSE3 through
+// the same flags that compile this file. Compiling it here rather than in a standalone probe is the
+// point: a probe is a second compilation that can drift from the one that builds the suite, and
+// then it confirms its own flags while the tests run on whatever the build actually used.
+//
+// Each is optional, because not every job can pin every field. The generic-width job pins only the
+// validator; what the host detects underneath it is not the runner's to promise.
+#define GLZ_EXPECTED_NAME_2(x) #x
+#define GLZ_EXPECTED_NAME(x) GLZ_EXPECTED_NAME_2(x)
+
+#if defined(GLZ_EXPECT_DETECTED)
+static_assert(glz::simd_info.detected == GLZ_EXPECTED_NAME(GLZ_EXPECT_DETECTED),
+              "detected is not the instruction set this build was configured to select");
+#endif
+#if defined(GLZ_EXPECT_UTF8_VALIDATION)
+static_assert(glz::simd_info.utf8_validation == GLZ_EXPECTED_NAME(GLZ_EXPECT_UTF8_VALIDATION),
+              "utf8_validation is not the backend this build was configured to select");
+#endif
+#if defined(GLZ_EXPECT_STRING_ESCAPE)
+static_assert(glz::simd_info.string_escape == GLZ_EXPECTED_NAME(GLZ_EXPECT_STRING_ESCAPE),
+              "string_escape is not the helper this build was configured to select");
+#endif
+
+#undef GLZ_EXPECTED_NAME
+#undef GLZ_EXPECTED_NAME_2
 
 #if defined(GLZ_DISABLE_SIMD)
 // The one promise that spans all four fields: asking for no vector path gets none anywhere,
