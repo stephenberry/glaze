@@ -449,6 +449,113 @@ struct opts_validate_trailing_whitespace : glz::opts
    bool validate_trailing_whitespace = true;
 };
 
+// RFC 8259 section 8.1 requires JSON text to be encoded in UTF-8. Read input is always someone
+// else's data, so this is validated unconditionally rather than behind an option.
+suite utf8_validation = [] {
+   // Each of these is malformed UTF-8 in a distinct way.
+   static const std::pair<sv, std::string> malformed[]{
+      {"lone continuation byte", std::string("[\"a\x80!b\"]")},
+      {"overlong encoding of NUL", std::string("[\"a\xC0\x80!b\"]")},
+      {"truncated 3 byte sequence", std::string("[\"a\xE2\x82!b\"]")},
+      {"invalid start byte", std::string("[\"a\xFF!b\"]")},
+      {"encoded UTF-16 surrogate half", std::string("[\"a\xED\xA0\x80!b\"]")},
+      {"code point above U+10FFFF", std::string("[\"a\xF5\x80\x80\x80!b\"]")},
+   };
+
+   "malformed utf8 rejected"_test = [] {
+      for (const auto& [name, s] : malformed) {
+         std::vector<std::string> v;
+         const auto ec = glz::read_json(v, s);
+         expect(ec == glz::error_code::invalid_utf8) << name;
+      }
+   };
+
+   "malformed utf8 rejected by validate_json"_test = [] {
+      for (const auto& [name, s] : malformed) {
+         expect(bool(glz::validate_json(s))) << name;
+      }
+   };
+
+   // Reading into glz::generic must be just as strict as reading into concrete types.
+   "malformed utf8 rejected for generic"_test = [] {
+      for (const auto& [name, s] : malformed) {
+         glz::generic obj{};
+         expect(glz::read_json(obj, s) == glz::error_code::invalid_utf8) << name;
+      }
+   };
+
+   "well formed utf8 accepted"_test = [] {
+      // Euro sign, 2 byte, and 4 byte (emoji) sequences.
+      for (const sv s : {sv{"[\"a\xE2\x82\xAC"
+                            "b\"]"},
+                         sv{"[\"a\xC3\xA9"
+                            "b\"]"},
+                         sv{"[\"a\xF0\x9F\x98\x80"
+                            "b\"]"}}) {
+         {
+            std::vector<std::string> v;
+            expect(!glz::read_json(v, s)) << s;
+         }
+         expect(!glz::validate_json(s)) << s;
+      }
+   };
+
+   // The scan loops take different paths for short strings and for the 8 byte SWAR bulk loop, so a
+   // bad byte must be caught at either length.
+   "malformed utf8 in a long string"_test = [] {
+      const std::string s = "[\"" + std::string(64, 'a') + "\xFF" + std::string(64, 'b') + "\"]";
+      std::vector<std::string> v;
+      expect(glz::read_json(v, s) == glz::error_code::invalid_utf8);
+   };
+
+   "malformed utf8 in an object key"_test = [] {
+      const std::string s = "{\"k\xFF!\":1}";
+      {
+         std::map<std::string, int> m;
+         expect(glz::read_json(m, s) == glz::error_code::invalid_utf8);
+      }
+      expect(bool(glz::validate_json(s)));
+   };
+
+   "malformed utf8 for other string targets"_test = [] {
+      const std::string s = "[\"a\xFF!b\"]";
+      {
+         std::vector<std::string_view> v;
+         expect(glz::read_json(v, s) == glz::error_code::invalid_utf8);
+      }
+      {
+         std::vector<std::u8string> v;
+         expect(glz::read_json(v, s) == glz::error_code::invalid_utf8);
+      }
+      {
+         glz::generic obj{};
+         expect(glz::read_json(obj, s) == glz::error_code::invalid_utf8);
+      }
+   };
+
+   // \uXXXX escapes are validated separately from raw byte validation; both must reject. A lone
+   // surrogate escape is pure ASCII on the wire, so only the escape decoder can catch it.
+   "unpaired surrogate escapes rejected"_test = [] {
+      constexpr sv s = R"(["a\ud800b"])";
+      {
+         std::vector<std::string> v;
+         expect(glz::read_json(v, s));
+      }
+      expect(bool(glz::validate_json(s)));
+   };
+
+   // Escaped high code points decode to multi-byte UTF-8 and must still be accepted.
+   "valid surrogate pair escapes accepted"_test = [] {
+      constexpr sv s = R"(["a😀b"])";
+      std::vector<std::string> v;
+      expect(!glz::read_json(v, s));
+      expect(v.size() == 1u);
+      expect(v[0] ==
+             "a\xF0\x9F\x98\x80"
+             "b");
+   };
+};
+
 suite json_conformance = [] {
    "error_on_unknown_keys = true"_test = [] {
       should_fail<glz::opts{}>();

@@ -30,6 +30,10 @@ if (!ec) {
 > [!NOTE]
 > Reading CBOR is safe for invalid input and does not require null-terminated buffers.
 
+**Recursion depth**
+
+A CBOR nesting level costs a single byte, so a small hostile buffer could otherwise drive the reader deep enough to overflow the stack. The readers and the value skipper cap nesting at `max_recursive_depth_limit` (256 levels) and return `error_code::exceeded_max_recursive_depth` beyond it. Every array and every map counts as a level, so a struct holding a vector of itself reaches the cap at 128 struct levels.
+
 ## Exceptions Interface
 
 If you prefer exceptions over error codes:

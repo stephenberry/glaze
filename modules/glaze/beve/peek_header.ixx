@@ -27,11 +27,14 @@ using std::size_t;
 namespace glz
 {
    // Extension subtypes for beve_header
-   namespace extension
+   export namespace extension
    {
       constexpr uint8_t delimiter = 0; // Data delimiter (tag = 0x06)
-      export constexpr uint8_t variant = 1; // Variant type (tag = 0x0E), count = variant index
-      export constexpr uint8_t complex = 3; // Complex number/array (tag = 0x1E)
+      // Variant type (tag = 0x0E), count = variant index. BEVE Version 2 writes variants as ordinary
+      // self-describing values, so this subtype only appears in Version 1 data, which remains
+      // readable but is no longer written.
+      constexpr uint8_t variant = 1;
+      constexpr uint8_t complex = 3; // Complex number/array (tag = 0x1E)
       constexpr uint8_t complex_number = 0; // Single complex (count = 2)
       constexpr uint8_t complex_array = 1; // Array of complex (count = element count)
    }

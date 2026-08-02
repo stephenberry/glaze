@@ -3441,6 +3441,162 @@ namespace glz
       sizeof(reflect<T>); // Ensure reflect<T> is complete
       { reflect<T>::size } -> std::convertible_to<size_t>;
    };
+
+   // ---------------------------------------------------------------------------------------------
+   // Variant tagging representation
+   //
+   // How a discriminated variant is laid out on the wire is a property of the *variant type*, not of
+   // whichever alternative happens to be active. Choosing it per alternative -- emitting a merged tag
+   // for object alternatives and silently nothing for the rest -- produces a type whose wire shape
+   // has no single schema, and lets two tag-less alternatives that share a shape be confused for one
+   // another on read. So the representation is decided once, here, and every alternative obeys it.
+   //
+   //   internal (glz::meta `tag` only)
+   //      {"type": "circle", "radius": 5}
+   //      The discriminator is one more member of the alternative's own object. Nicest shape, but it
+   //      only exists for alternatives that *are* objects.
+   //
+   //   adjacent (glz::meta `tag` and `content`)
+   //      {"type": "vec", "value": [1, 2, 3]}
+   //      The discriminator sits beside the value under a second fixed key. Works for every
+   //      alternative type -- objects, arrays, maps, scalars, null -- at the cost of one nesting
+   //      level. Under `structs_as_arrays` this projects to the two element array [id, value].
+   //
+   // Declaring `tag` alone for a variant that has an alternative internal tagging cannot represent is
+   // a static_assert rather than a silent degradation: that combination is exactly the code that is
+   // quietly producing unreadable output today.
+   // ---------------------------------------------------------------------------------------------
+
+   enum struct variant_tagging_kind : uint8_t { none, internal, adjacent };
+
+   // The object type an alternative presents to the serializers: memory objects (smart pointers,
+   // std::optional of a struct, ...) tag through the type they point to.
+   template <class V>
+   using variant_alternative_object_t = std::conditional_t<is_memory_object<V>, memory_type<V>, V>;
+
+   // A unit alternative carries no data at all: std::monostate, std::nullptr_t, std::nullopt_t.
+   // Internal tagging renders it as a discriminator-only object -- exactly the object an empty struct
+   // alternative already produces -- so that every alternative of an internally tagged variant is an
+   // object carrying the tag. Writing it as a bare `null` instead, which is what Glaze did before,
+   // left one alternative of the union with no discriminator on it for no reason anyone chose: the
+   // `null` writer simply predates the tagging machinery. Untagged variants still write it as `null`,
+   // and both readers still accept `null` for it so existing data keeps parsing.
+   template <class V>
+   inline constexpr bool variant_unit_alternative = always_null_t<std::decay_t<V>>;
+
+   // An alternative can host a merged discriminator only if it serializes as an object whose members
+   // Glaze itself emits, so one more member can be spliced in, or if it carries no data and can be
+   // rendered as the discriminator alone. Maps and pairs are objects on the wire but no writer merges
+   // a tag into them, and scalars and arrays have nowhere to put one.
+   //
+   // A custom-serialized alternative is taken at its word: the JSON writer merges the tag into
+   // whatever body the user's serializer produces. BEVE cannot do the same because its objects are
+   // length-prefixed and the member count of a custom body is not knowable in advance -- the BEVE
+   // writer static_asserts on that combination rather than silently dropping the discriminator.
+   template <class V>
+   inline constexpr bool internally_taggable_alternative =
+      glaze_object_t<variant_alternative_object_t<V>> || reflectable<variant_alternative_object_t<V>> ||
+      custom_write<V> || variant_unit_alternative<V>;
+
+   namespace detail
+   {
+      // An empty reflected object, used to consume the body of a discriminator-only object on behalf
+      // of a unit alternative. Routing through it reuses the object readers' key handling, unknown-key
+      // policy, and terminator consumption rather than duplicating them per format.
+      struct variant_unit_body
+      {};
+   }
+
+   // True when the alternative itself declares a member named like the discriminator. Such an
+   // alternative carries the discriminator in its own field: the writer must not emit a second one
+   // (doing so produced a duplicate key for glaze_object_t alternatives) and the reader stores the id
+   // into that member. The custom cases are excluded because their serializer, not reflection,
+   // decides which members exist.
+   template <class V>
+   consteval bool alternative_declares_key(const sv& name) noexcept
+   {
+      if constexpr (custom_write<V>) {
+         return false;
+      }
+      else {
+         return has_member_with_name<variant_alternative_object_t<V>>(name);
+      }
+   }
+
+   namespace detail
+   {
+      // Instantiated only to fail, so the compiler's instantiation backtrace names the alternative
+      // that internal tagging cannot represent.
+      template <class Variant, class Alternative>
+      struct internal_tagging_requires_object_alternatives : std::false_type
+      {};
+
+      // Same trick for the two representation limits that are specific to BEVE rather than to the
+      // variant's declaration, and so are diagnosed where they bite instead of here.
+      template <class Variant, class Alternative>
+      struct beve_internal_tagging_needs_reflected_alternative : std::false_type
+      {};
+
+      template <class Variant>
+      struct beve_positional_tagging_needs_content : std::false_type
+      {};
+   }
+
+   template <is_variant T>
+   struct variant_tagging
+   {
+      static constexpr size_t size = std::variant_size_v<T>;
+      static constexpr bool has_tag = not tag_v<T>.empty();
+      static constexpr bool has_content = not content_v<T>.empty();
+
+      static_assert(has_tag || not has_content,
+                    "glz::meta `content` selects adjacent tagging for a variant and means nothing on "
+                    "its own. Declare `tag` beside it, or remove `content`.");
+
+      static_assert(not(has_tag && has_content) || tag_v<T> != content_v<T>,
+                    "glz::meta `tag` and `content` must differ: adjacent tagging writes them as two "
+                    "distinct keys of the same object.");
+
+      static constexpr auto kind = has_tag ? (has_content ? variant_tagging_kind::adjacent //
+                                                          : variant_tagging_kind::internal)
+                                           : variant_tagging_kind::none;
+
+      // Index of the first alternative internal tagging cannot represent, or `size` if there is none.
+      static constexpr size_t unrepresentable = []<size_t... I>(std::index_sequence<I...>) {
+         size_t r = size;
+         (((not internally_taggable_alternative<std::variant_alternative_t<I, T>> && r == size) ? (void)(r = I)
+                                                                                                : (void)0),
+          ...);
+         return r;
+      }(std::make_index_sequence<size>{});
+
+      static constexpr bool representable = (kind != variant_tagging_kind::internal) || unrepresentable == size;
+
+      // Clamped so the type below is always nameable; it is only reported when the assert fails.
+      static constexpr size_t report = unrepresentable < size ? unrepresentable : 0;
+
+      static_assert(
+         representable ||
+            detail::internal_tagging_requires_object_alternatives<T, std::variant_alternative_t<report, T>>::value,
+         "Internal tagging (glz::meta `tag` without `content`) merges the discriminator into the "
+         "alternative's own object, so every alternative must be an object -- or a unit type such as "
+         "std::monostate, which is rendered as the discriminator alone. This variant has an "
+         "alternative that is neither: a scalar, an array, a map, or a pair. It would be written with "
+         "no discriminator at all, giving the variant a wire shape no schema can describe and leaving "
+         "same-shaped alternatives impossible to tell apart on read. Declare `content` beside `tag` to "
+         "select adjacent tagging, which carries the discriminator for every alternative type. The "
+         "offending alternative is the second template argument of "
+         "internal_tagging_requires_object_alternatives in the instantiation backtrace.");
+   };
+
+   template <is_variant T>
+   inline constexpr variant_tagging_kind variant_tagging_v = variant_tagging<T>::kind;
+
+   template <is_variant T>
+   inline constexpr bool internally_tagged_v = variant_tagging_v<T> == variant_tagging_kind::internal;
+
+   template <is_variant T>
+   inline constexpr bool adjacently_tagged_v = variant_tagging_v<T> == variant_tagging_kind::adjacent;
 }
 
 #if defined(_MSC_VER) && !defined(__clang__)

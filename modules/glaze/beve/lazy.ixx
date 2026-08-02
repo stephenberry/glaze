@@ -59,8 +59,17 @@ namespace glz
 
    namespace detail
    {
-      // Skip a BEVE value and return the new position (no context needed for position tracking)
-      template <opts Opts>
+      // Skip a BEVE value and return the new position (no context needed for position tracking).
+      //
+      // A failed skip leaves `it` part way through the value, and every caller here treats the
+      // returned pointer as the start of the next one, so handing that position back would resolve
+      // later lookups against the middle of a value. Return `end` instead: the caller's scan stops
+      // and reports nothing found rather than something wrong. Nesting deeper than
+      // max_recursive_depth_limit is the reachable case -- skip_value<BEVE> refuses it, which is what
+      // keeps this from being a stack overflow -- so a lazy view over such a value can no longer
+      // reach the members past it. Distinguishing "too deep" from "absent" needs an error channel
+      // through the lazy API, which these accessors do not have.
+      template <auto Opts>
       GLZ_ALWAYS_INLINE const char* skip_value_beve_lazy(const char* p, const char* end) noexcept
       {
          if (p >= end) return p;
@@ -68,6 +77,9 @@ namespace glz
          context ctx{};
          auto it = p;
          skip_value<BEVE>::op<Opts>(ctx, it, end);
+         if (bool(ctx.error)) [[unlikely]] {
+            return end;
+         }
          return it;
       }
 
@@ -327,7 +339,7 @@ namespace glz
       friend struct lazy_beve_view<Opts>;
       friend class lazy_beve_iterator<Opts>;
 
-      template <opts O, class Buffer>
+      template <auto O, class Buffer>
       friend expected<lazy_beve_document<O>, error_ctx> lazy_beve(Buffer&&);
 
       void init_root_view() noexcept { root_view_ = lazy_beve_view<Opts>{this, root_data_}; }
@@ -671,13 +683,13 @@ namespace glz
    // Implementation: lazy_beve_view methods
    // ============================================================================
 
-   template <opts Opts>
+   template <auto Opts>
    inline const char* lazy_beve_view<Opts>::beve_end() const noexcept
    {
       return doc_ ? doc_->beve_ + doc_->len_ : nullptr;
    }
 
-   template <opts Opts>
+   template <auto Opts>
    inline lazy_beve_view<Opts> lazy_beve_view<Opts>::operator[](size_t index) const
    {
       if (has_error()) return *this;
@@ -734,7 +746,7 @@ namespace glz
       }
    }
 
-   template <opts Opts>
+   template <auto Opts>
    inline lazy_beve_view<Opts> lazy_beve_view<Opts>::operator[](std::string_view key) const
    {
       if (has_error()) return *this;
@@ -818,14 +830,14 @@ namespace glz
       return make_error(error_code::key_not_found);
    }
 
-   template <opts Opts>
+   template <auto Opts>
    inline bool lazy_beve_view<Opts>::contains(std::string_view key) const
    {
       auto result = (*this)[key];
       return !result.has_error();
    }
 
-   template <opts Opts>
+   template <auto Opts>
    inline size_t lazy_beve_view<Opts>::size() const
    {
       if (has_error() || !data_) return 0;
@@ -857,7 +869,7 @@ namespace glz
       return 0;
    }
 
-   template <opts Opts>
+   template <auto Opts>
    inline bool lazy_beve_view<Opts>::empty() const noexcept
    {
       if (has_error() || !data_) return true;
@@ -873,7 +885,7 @@ namespace glz
    // lazy_beve_iterator implementation
    // ============================================================================
 
-   template <opts Opts>
+   template <auto Opts>
    inline lazy_beve_iterator<Opts>::lazy_beve_iterator(const lazy_beve_document<Opts>* doc, const char* container_start,
                                                        const char* end, bool is_object, bool is_typed_array)
       : doc_(doc), beve_end_(end), is_object_(is_object), is_typed_array_(is_typed_array), at_end_(false)
@@ -914,7 +926,7 @@ namespace glz
       advance_to_current_element();
    }
 
-   template <opts Opts>
+   template <auto Opts>
    inline void lazy_beve_iterator<Opts>::advance_to_current_element()
    {
       std::string_view key{};
@@ -942,7 +954,7 @@ namespace glz
       current_view_ = lazy_beve_view<Opts>{doc_, current_pos_, key};
    }
 
-   template <opts Opts>
+   template <auto Opts>
    inline lazy_beve_iterator<Opts>& lazy_beve_iterator<Opts>::operator++()
    {
       if (at_end_) return *this;
@@ -965,7 +977,7 @@ namespace glz
       return *this;
    }
 
-   template <opts Opts>
+   template <auto Opts>
    inline lazy_beve_iterator<Opts> lazy_beve_view<Opts>::begin() const
    {
       if (has_error() || !data_) return end();
@@ -976,7 +988,7 @@ namespace glz
       return lazy_beve_iterator<Opts>{doc_, data_, beve_end(), is_object(), is_typed};
    }
 
-   template <opts Opts>
+   template <auto Opts>
    inline lazy_beve_iterator<Opts> lazy_beve_view<Opts>::end() const
    {
       return lazy_beve_iterator<Opts>{};
@@ -986,19 +998,19 @@ namespace glz
    // indexed_lazy_beve_view implementation
    // ============================================================================
 
-   template <opts Opts>
+   template <auto Opts>
    inline indexed_lazy_beve_iterator<Opts> indexed_lazy_beve_view<Opts>::begin() const
    {
       return indexed_lazy_beve_iterator<Opts>{this, 0};
    }
 
-   template <opts Opts>
+   template <auto Opts>
    inline indexed_lazy_beve_iterator<Opts> indexed_lazy_beve_view<Opts>::end() const
    {
       return indexed_lazy_beve_iterator<Opts>{this, value_starts_.size()};
    }
 
-   template <opts Opts>
+   template <auto Opts>
    inline indexed_lazy_beve_view<Opts> lazy_beve_view<Opts>::index() const
    {
       if (has_error() || !data_ || (!is_array() && !is_object())) {
@@ -1098,7 +1110,7 @@ namespace glz
    // lazy_beve_view::get<T>() implementation
    // ============================================================================
 
-   template <opts Opts>
+   template <auto Opts>
    template <class T>
    [[nodiscard]] inline expected<T, error_ctx> lazy_beve_view<Opts>::get() const
    {
@@ -1184,7 +1196,7 @@ namespace glz
    }
 
    // Helper to read numeric value directly given tag info (for typed array elements)
-   template <opts Opts>
+   template <auto Opts>
    template <class T>
    [[nodiscard]] inline expected<T, error_ctx> lazy_beve_view<Opts>::read_numeric_from_tag(uint8_t tag,
                                                                                            const char* value_ptr,
@@ -1276,7 +1288,7 @@ namespace glz
    // BEVE writer for lazy_beve_view
    // ============================================================================
 
-   template <opts Opts>
+   template <auto Opts>
    struct to<BEVE, lazy_beve_view<Opts>>
    {
       template <auto WriteOpts, class B>
@@ -1288,13 +1300,13 @@ namespace glz
          }
          if (!view.data()) {
             // Write null
-            dump_type<tag::null>(b, ix);
+            dump_type(ctx, uint8_t{tag::null}, b, ix);
             return;
          }
 
          auto it = view.data();
          context parse_ctx{};
-         skip_value<BEVE>::op<opts{}>(parse_ctx, it, view.beve_end());
+         skip_value<BEVE>::op<Opts>(parse_ctx, it, view.beve_end());
          if (bool(parse_ctx.error)) [[unlikely]] {
             ctx.error = parse_ctx.error;
             return;

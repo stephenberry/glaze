@@ -45,7 +45,8 @@ bool wait_for_condition(Predicate pred, std::chrono::milliseconds timeout = std:
 }
 
 // Helper to run a basic echo server
-void run_echo_server(std::atomic<bool>& server_ready, std::atomic<bool>& should_stop, uint16_t port)
+void run_echo_server(std::atomic<bool>& server_ready, std::atomic<bool>& should_stop,
+                     std::atomic<uint16_t>& selected_port)
 {
    http_server server;
    auto ws_server = std::make_shared<websocket_server>();
@@ -82,7 +83,8 @@ void run_echo_server(std::atomic<bool>& server_ready, std::atomic<bool>& should_
    server.websocket("/ws", ws_server);
 
    try {
-      server.bind(port);
+      server.bind("127.0.0.1", 0);
+      selected_port = server.port();
       server.start();
       server_ready = true;
 
@@ -110,8 +112,8 @@ struct ws_upgrade_capture
 // Helper to run a server that records the request seen by on_open.
 // Used to verify that query parameters on the WebSocket upgrade URL are parsed
 // and that the upgrade matches the path-only handler (regression for issue #2549).
-void run_capture_server(std::atomic<bool>& server_ready, std::atomic<bool>& should_stop, uint16_t port,
-                        std::shared_ptr<ws_upgrade_capture> capture)
+void run_capture_server(std::atomic<bool>& server_ready, std::atomic<bool>& should_stop,
+                        std::atomic<uint16_t>& selected_port, std::shared_ptr<ws_upgrade_capture> capture)
 {
    http_server server;
    auto ws_server = std::make_shared<websocket_server>();
@@ -133,7 +135,8 @@ void run_capture_server(std::atomic<bool>& server_ready, std::atomic<bool>& shou
    server.websocket("/ws", ws_server);
 
    try {
-      server.bind(port);
+      server.bind("127.0.0.1", 0);
+      selected_port = server.port();
       server.start();
       server_ready = true;
       while (!should_stop) {
@@ -148,7 +151,8 @@ void run_capture_server(std::atomic<bool>& server_ready, std::atomic<bool>& shou
 }
 
 // Helper to run a server that closes connections after first message
-void run_close_after_message_server(std::atomic<bool>& server_ready, std::atomic<bool>& should_stop, uint16_t port)
+void run_close_after_message_server(std::atomic<bool>& server_ready, std::atomic<bool>& should_stop,
+                                    std::atomic<uint16_t>& selected_port)
 {
    http_server server;
    auto ws_server = std::make_shared<websocket_server>();
@@ -166,7 +170,8 @@ void run_close_after_message_server(std::atomic<bool>& server_ready, std::atomic
    server.websocket("/ws", ws_server);
 
    try {
-      server.bind(port);
+      server.bind("127.0.0.1", 0);
+      selected_port = server.port();
       server.start();
       server_ready = true;
 
@@ -182,8 +187,8 @@ void run_close_after_message_server(std::atomic<bool>& server_ready, std::atomic
 }
 
 // Helper to run a server that counts messages
-void run_counting_server(std::atomic<bool>& server_ready, std::atomic<bool>& should_stop, uint16_t port,
-                         std::atomic<int>& message_count)
+void run_counting_server(std::atomic<bool>& server_ready, std::atomic<bool>& should_stop,
+                         std::atomic<uint16_t>& selected_port, std::atomic<int>& message_count)
 {
    http_server server;
    auto ws_server = std::make_shared<websocket_server>();
@@ -204,7 +209,8 @@ void run_counting_server(std::atomic<bool>& server_ready, std::atomic<bool>& sho
    server.websocket("/ws", ws_server);
 
    try {
-      server.bind(port);
+      server.bind("127.0.0.1", 0);
+      selected_port = server.port();
       server.start();
       server_ready = true;
 
@@ -626,11 +632,11 @@ void run_invalid_frame_case(std::string_view name, std::vector<uint8_t> frame_pa
 
 suite websocket_client_tests = [] {
    "basic_echo_test"_test = [] {
-      uint16_t port = 8091;
+      std::atomic<uint16_t> port{0};
       std::atomic<bool> server_ready{false};
       std::atomic<bool> stop_server{false};
 
-      std::thread server_thread(run_echo_server, std::ref(server_ready), std::ref(stop_server), port);
+      std::thread server_thread(run_echo_server, std::ref(server_ready), std::ref(stop_server), std::ref(port));
 
       expect(wait_for_condition([&] { return server_ready.load(); })) << "Server failed to start";
 
@@ -657,7 +663,7 @@ suite websocket_client_tests = [] {
          client.context()->stop();
       });
 
-      std::string client_url = "ws://localhost:" + std::to_string(port) + "/ws";
+      std::string client_url = "ws://localhost:" + std::to_string(port.load()) + "/ws";
       client.connect(client_url);
 
       std::thread client_thread([&client]() { client.context()->run(); });
@@ -678,12 +684,12 @@ suite websocket_client_tests = [] {
    };
 
    "multiple_messages_test"_test = [] {
-      uint16_t port = 8092;
+      std::atomic<uint16_t> port{0};
       std::atomic<bool> server_ready{false};
       std::atomic<bool> stop_server{false};
       std::atomic<int> server_message_count{0};
 
-      std::thread server_thread(run_counting_server, std::ref(server_ready), std::ref(stop_server), port,
+      std::thread server_thread(run_counting_server, std::ref(server_ready), std::ref(stop_server), std::ref(port),
                                 std::ref(server_message_count));
 
       expect(wait_for_condition([&] { return server_ready.load(); })) << "Server failed to start";
@@ -712,7 +718,7 @@ suite websocket_client_tests = [] {
 
       client.on_close([&](ws_close_code, std::string_view) { client.context()->stop(); });
 
-      std::string client_url = "ws://localhost:" + std::to_string(port) + "/ws";
+      std::string client_url = "ws://localhost:" + std::to_string(port.load()) + "/ws";
       client.connect(client_url);
 
       std::thread client_thread([&client]() { client.context()->run(); });
@@ -735,11 +741,11 @@ suite websocket_client_tests = [] {
    };
 
    "binary_message_test"_test = [] {
-      uint16_t port = 8093;
+      std::atomic<uint16_t> port{0};
       std::atomic<bool> server_ready{false};
       std::atomic<bool> stop_server{false};
 
-      std::thread server_thread(run_echo_server, std::ref(server_ready), std::ref(stop_server), port);
+      std::thread server_thread(run_echo_server, std::ref(server_ready), std::ref(stop_server), std::ref(port));
 
       expect(wait_for_condition([&] { return server_ready.load(); })) << "Server failed to start";
 
@@ -766,7 +772,7 @@ suite websocket_client_tests = [] {
 
       client.on_close([&](ws_close_code, std::string_view) { client.context()->stop(); });
 
-      std::string client_url = "ws://localhost:" + std::to_string(port) + "/ws";
+      std::string client_url = "ws://localhost:" + std::to_string(port.load()) + "/ws";
       client.connect(client_url);
 
       std::thread client_thread([&client]() { client.context()->run(); });
@@ -786,11 +792,11 @@ suite websocket_client_tests = [] {
    };
 
    "large_message_test"_test = [] {
-      uint16_t port = 8094;
+      std::atomic<uint16_t> port{0};
       std::atomic<bool> server_ready{false};
       std::atomic<bool> stop_server{false};
 
-      std::thread server_thread(run_echo_server, std::ref(server_ready), std::ref(stop_server), port);
+      std::thread server_thread(run_echo_server, std::ref(server_ready), std::ref(stop_server), std::ref(port));
 
       expect(wait_for_condition([&] { return server_ready.load(); })) << "Server failed to start";
 
@@ -829,7 +835,7 @@ suite websocket_client_tests = [] {
 
       client.on_close([&](ws_close_code, std::string_view) { client.context()->stop(); });
 
-      std::string client_url = "ws://localhost:" + std::to_string(port) + "/ws";
+      std::string client_url = "ws://localhost:" + std::to_string(port.load()) + "/ws";
       client.connect(client_url);
 
       std::thread client_thread([&client]() { client.context()->run(); });
@@ -912,11 +918,12 @@ suite websocket_client_tests = [] {
    };
 
    "server_initiated_close_test"_test = [] {
-      uint16_t port = 8095;
+      std::atomic<uint16_t> port{0};
       std::atomic<bool> server_ready{false};
       std::atomic<bool> stop_server{false};
 
-      std::thread server_thread(run_close_after_message_server, std::ref(server_ready), std::ref(stop_server), port);
+      std::thread server_thread(run_close_after_message_server, std::ref(server_ready), std::ref(stop_server),
+                                std::ref(port));
 
       expect(wait_for_condition([&] { return server_ready.load(); })) << "Server failed to start";
 
@@ -939,7 +946,7 @@ suite websocket_client_tests = [] {
 
       client.on_error([](std::error_code ec) { std::cerr << "Client Error: " << ec.message() << "\n"; });
 
-      std::string client_url = "ws://localhost:" + std::to_string(port) + "/ws";
+      std::string client_url = "ws://localhost:" + std::to_string(port.load()) + "/ws";
       client.connect(client_url);
 
       std::thread client_thread([&client]() { client.context()->run(); });
@@ -989,11 +996,11 @@ suite websocket_client_tests = [] {
    };
 
    "multiple_clients_shared_context_test"_test = [] {
-      uint16_t port = 8096;
+      std::atomic<uint16_t> port{0};
       std::atomic<bool> server_ready{false};
       std::atomic<bool> stop_server{false};
 
-      std::thread server_thread(run_echo_server, std::ref(server_ready), std::ref(stop_server), port);
+      std::thread server_thread(run_echo_server, std::ref(server_ready), std::ref(stop_server), std::ref(port));
 
       expect(wait_for_condition([&] { return server_ready.load(); })) << "Server failed to start";
 
@@ -1032,7 +1039,7 @@ suite websocket_client_tests = [] {
          client_ptr->on_close(
             [&clients_closed, client_id](ws_close_code, std::string_view) { clients_closed[client_id] = true; });
 
-         std::string client_url = "ws://localhost:" + std::to_string(port) + "/ws";
+         std::string client_url = "ws://localhost:" + std::to_string(port.load()) + "/ws";
          client_ptr->connect(client_url);
       }
 
@@ -1072,12 +1079,12 @@ suite websocket_client_tests = [] {
    };
 
    "thread_safety_test"_test = [] {
-      uint16_t port = 8097;
+      std::atomic<uint16_t> port{0};
       std::atomic<bool> server_ready{false};
       std::atomic<bool> stop_server{false};
       std::atomic<int> server_message_count{0};
 
-      std::thread server_thread(run_counting_server, std::ref(server_ready), std::ref(stop_server), port,
+      std::thread server_thread(run_counting_server, std::ref(server_ready), std::ref(stop_server), std::ref(port),
                                 std::ref(server_message_count));
 
       expect(wait_for_condition([&] { return server_ready.load(); })) << "Server failed to start";
@@ -1102,7 +1109,7 @@ suite websocket_client_tests = [] {
 
       client.on_close([&](ws_close_code, std::string_view) { client.context()->stop(); });
 
-      std::string client_url = "ws://localhost:" + std::to_string(port) + "/ws";
+      std::string client_url = "ws://localhost:" + std::to_string(port.load()) + "/ws";
       client.connect(client_url);
 
       std::thread client_thread([&client]() { client.context()->run(); });
@@ -1143,7 +1150,7 @@ suite websocket_client_tests = [] {
    };
 
    "json_message_exchange_test"_test = [] {
-      uint16_t port = 8098;
+      std::atomic<uint16_t> port{0};
       std::atomic<bool> server_ready{false};
       std::atomic<bool> stop_server{false};
 
@@ -1174,7 +1181,8 @@ suite websocket_client_tests = [] {
 
       std::thread server_thread([&]() {
          try {
-            server.bind(port);
+            server.bind("127.0.0.1", 0);
+            port = server.port();
             server.start();
             server_ready = true;
 
@@ -1217,7 +1225,7 @@ suite websocket_client_tests = [] {
 
       client.on_close([&](ws_close_code, std::string_view) { client.context()->stop(); });
 
-      std::string client_url = "ws://localhost:" + std::to_string(port) + "/ws";
+      std::string client_url = "ws://localhost:" + std::to_string(port.load()) + "/ws";
       client.connect(client_url);
 
       std::thread client_thread([&client]() { client.context()->run(); });
@@ -1237,11 +1245,11 @@ suite websocket_client_tests = [] {
    };
 
    "empty_message_test"_test = [] {
-      uint16_t port = 8099;
+      std::atomic<uint16_t> port{0};
       std::atomic<bool> server_ready{false};
       std::atomic<bool> stop_server{false};
 
-      std::thread server_thread(run_echo_server, std::ref(server_ready), std::ref(stop_server), port);
+      std::thread server_thread(run_echo_server, std::ref(server_ready), std::ref(stop_server), std::ref(port));
 
       expect(wait_for_condition([&] { return server_ready.load(); })) << "Server failed to start";
 
@@ -1261,7 +1269,7 @@ suite websocket_client_tests = [] {
 
       client.on_close([&](ws_close_code, std::string_view) { client.context()->stop(); });
 
-      std::string client_url = "ws://localhost:" + std::to_string(port) + "/ws";
+      std::string client_url = "ws://localhost:" + std::to_string(port.load()) + "/ws";
       client.connect(client_url);
 
       std::thread client_thread([&client]() { client.context()->run(); });
@@ -1281,11 +1289,11 @@ suite websocket_client_tests = [] {
    };
 
    "max_message_size_test"_test = [] {
-      uint16_t port = 8100;
+      std::atomic<uint16_t> port{0};
       std::atomic<bool> server_ready{false};
       std::atomic<bool> stop_server{false};
 
-      std::thread server_thread(run_echo_server, std::ref(server_ready), std::ref(stop_server), port);
+      std::thread server_thread(run_echo_server, std::ref(server_ready), std::ref(stop_server), std::ref(port));
 
       expect(wait_for_condition([&] { return server_ready.load(); })) << "Server failed to start";
 
@@ -1310,7 +1318,7 @@ suite websocket_client_tests = [] {
 
       client.on_close([&](ws_close_code, std::string_view) { client.context()->stop(); });
 
-      std::string client_url = "ws://localhost:" + std::to_string(port) + "/ws";
+      std::string client_url = "ws://localhost:" + std::to_string(port.load()) + "/ws";
       client.connect(client_url);
 
       std::thread client_thread([&client]() { client.context()->run(); });
@@ -1969,12 +1977,13 @@ suite websocket_client_tests = [] {
    // Regression for issue #2549: WebSocket upgrade lookup must strip the query string
    // and the on_open handler must see the parsed path/query like a regular handler.
    "websocket_upgrade_with_query_parameters_test"_test = [] {
-      uint16_t port = 8131;
+      std::atomic<uint16_t> port{0};
       std::atomic<bool> server_ready{false};
       std::atomic<bool> stop_server{false};
       auto capture = std::make_shared<ws_upgrade_capture>();
 
-      std::thread server_thread(run_capture_server, std::ref(server_ready), std::ref(stop_server), port, capture);
+      std::thread server_thread(run_capture_server, std::ref(server_ready), std::ref(stop_server), std::ref(port),
+                                capture);
       expect(wait_for_condition([&] { return server_ready.load(); })) << "Server failed to start";
 
       websocket_client client;
@@ -1992,7 +2001,7 @@ suite websocket_client_tests = [] {
       client.on_close([&](ws_close_code, std::string_view) { client.context()->stop(); });
 
       // Connect with a query string. Without the fix this 404s before the upgrade.
-      std::string client_url = "ws://localhost:" + std::to_string(port) + "/ws?token=abc&user=alice";
+      std::string client_url = "ws://localhost:" + std::to_string(port.load()) + "/ws?token=abc&user=alice";
       client.connect(client_url);
 
       std::thread client_thread([&client]() { client.context()->run(); });
@@ -2025,7 +2034,7 @@ suite websocket_client_tests = [] {
    // WebSocket routes registered with ":param" path segments must populate
    // request.params with the captured value, just like normal and streaming routes.
    "websocket_upgrade_with_path_parameter_test"_test = [] {
-      uint16_t port = 8132;
+      std::atomic<uint16_t> port{0};
       std::atomic<bool> server_ready{false};
       std::atomic<bool> stop_server{false};
       auto capture = std::make_shared<ws_upgrade_capture>();
@@ -2057,7 +2066,8 @@ suite websocket_client_tests = [] {
          server.websocket("/rooms/:room/ws", ws_server);
 
          try {
-            server.bind(port);
+            server.bind("127.0.0.1", 0);
+            port = server.port();
             server.start();
             server_ready = true;
             while (!stop_server) {
@@ -2086,7 +2096,7 @@ suite websocket_client_tests = [] {
       client.on_error([&](std::error_code) { connect_error = true; });
       client.on_close([&](ws_close_code, std::string_view) { client.context()->stop(); });
 
-      std::string client_url = "ws://localhost:" + std::to_string(port) + "/rooms/lobby/ws";
+      std::string client_url = "ws://localhost:" + std::to_string(port.load()) + "/rooms/lobby/ws";
       client.connect(client_url);
       std::thread client_thread([&client]() { client.context()->run(); });
 
@@ -2111,7 +2121,7 @@ suite websocket_client_tests = [] {
    // WebSocket routes registered through http_router and mounted via server.mount()
    // must also support ":param" segments and propagate captured params to on_open.
    "websocket_router_mount_with_path_parameter_test"_test = [] {
-      uint16_t port = 8133;
+      std::atomic<uint16_t> port{0};
       std::atomic<bool> server_ready{false};
       std::atomic<bool> stop_server{false};
       auto capture = std::make_shared<ws_upgrade_capture>();
@@ -2146,7 +2156,8 @@ suite websocket_client_tests = [] {
          server.mount("/api", router);
 
          try {
-            server.bind(port);
+            server.bind("127.0.0.1", 0);
+            port = server.port();
             server.start();
             server_ready = true;
             while (!stop_server) {
@@ -2175,7 +2186,7 @@ suite websocket_client_tests = [] {
       client.on_error([&](std::error_code) { connect_error = true; });
       client.on_close([&](ws_close_code, std::string_view) { client.context()->stop(); });
 
-      std::string client_url = "ws://localhost:" + std::to_string(port) + "/api/users/42/ws";
+      std::string client_url = "ws://localhost:" + std::to_string(port.load()) + "/api/users/42/ws";
       client.connect(client_url);
       std::thread client_thread([&client]() { client.context()->run(); });
 
@@ -2199,7 +2210,7 @@ suite websocket_client_tests = [] {
    // WebSocket routes with a wildcard segment ("*name") should capture the entire
    // remaining path (including embedded slashes), like normal and streaming routes.
    "websocket_with_wildcard_path_test"_test = [] {
-      uint16_t port = 8134;
+      std::atomic<uint16_t> port{0};
       std::atomic<bool> server_ready{false};
       std::atomic<bool> stop_server{false};
       auto capture = std::make_shared<ws_upgrade_capture>();
@@ -2230,7 +2241,8 @@ suite websocket_client_tests = [] {
          server.websocket("/files/*rest", ws_server);
 
          try {
-            server.bind(port);
+            server.bind("127.0.0.1", 0);
+            port = server.port();
             server.start();
             server_ready = true;
             while (!stop_server) {
@@ -2259,7 +2271,7 @@ suite websocket_client_tests = [] {
       client.on_error([&](std::error_code) { connect_error = true; });
       client.on_close([&](ws_close_code, std::string_view) { client.context()->stop(); });
 
-      std::string client_url = "ws://localhost:" + std::to_string(port) + "/files/a/b/c.txt";
+      std::string client_url = "ws://localhost:" + std::to_string(port.load()) + "/files/a/b/c.txt";
       client.connect(client_url);
       std::thread client_thread([&client]() { client.context()->run(); });
 
@@ -2286,7 +2298,7 @@ suite websocket_client_tests = [] {
    // handler with its own captured params, confirming the three radix tables in
    // basic_http_router are independent.
    "router_normal_streaming_websocket_coexist_test"_test = [] {
-      uint16_t port = 8135;
+      std::atomic<uint16_t> port{0};
       std::atomic<bool> server_ready{false};
       std::atomic<bool> stop_server{false};
 
@@ -2329,7 +2341,8 @@ suite websocket_client_tests = [] {
          server.mount("/api", router);
 
          try {
-            server.bind(port);
+            server.bind("127.0.0.1", 0);
+            port = server.port();
             server.start();
             server_ready = true;
             while (!stop_server) {
@@ -2346,12 +2359,12 @@ suite websocket_client_tests = [] {
 
       // Hit the normal route via http_client.
       glz::http_client http;
-      auto normal = http.get("http://127.0.0.1:" + std::to_string(port) + "/api/normal/1");
+      auto normal = http.get("http://127.0.0.1:" + std::to_string(port.load()) + "/api/normal/1");
       expect(normal.has_value() && normal->status_code == 200);
       if (normal) expect(normal->response_body == "normal-id=1") << normal->response_body;
 
       // Hit the streaming route via http_client.
-      auto stream = http.get("http://127.0.0.1:" + std::to_string(port) + "/api/stream/2");
+      auto stream = http.get("http://127.0.0.1:" + std::to_string(port.load()) + "/api/stream/2");
       expect(stream.has_value() && stream->status_code == 200);
       if (stream) expect(stream->response_body == "stream-id=2") << stream->response_body;
 
@@ -2370,7 +2383,7 @@ suite websocket_client_tests = [] {
       client.on_error([&](std::error_code) { connect_error = true; });
       client.on_close([&](ws_close_code, std::string_view) { client.context()->stop(); });
 
-      client.connect("ws://localhost:" + std::to_string(port) + "/api/ws/3");
+      client.connect("ws://localhost:" + std::to_string(port.load()) + "/api/ws/3");
       std::thread client_thread([&client]() { client.context()->run(); });
 
       expect(wait_for_condition([&] { return ws_opened.load(); })) << "WebSocket sibling route did not open";
@@ -2397,8 +2410,9 @@ suite websocket_client_tests = [] {
 // =============================================================================
 
 // Helper server that validates message integrity and echoes with sequence number
-void run_integrity_check_server(std::atomic<bool>& server_ready, std::atomic<bool>& should_stop, uint16_t port,
-                                std::atomic<int>& valid_messages, std::atomic<int>& invalid_messages)
+void run_integrity_check_server(std::atomic<bool>& server_ready, std::atomic<bool>& should_stop,
+                                std::atomic<uint16_t>& selected_port, std::atomic<int>& valid_messages,
+                                std::atomic<int>& invalid_messages)
 {
    http_server server;
    auto ws_server = std::make_shared<websocket_server>();
@@ -2446,7 +2460,8 @@ void run_integrity_check_server(std::atomic<bool>& server_ready, std::atomic<boo
    server.websocket("/ws", ws_server);
 
    try {
-      server.bind(port);
+      server.bind("127.0.0.1", 0);
+      selected_port = server.port();
       server.start();
       server_ready = true;
 
@@ -2462,8 +2477,8 @@ void run_integrity_check_server(std::atomic<bool>& server_ready, std::atomic<boo
 }
 
 // Helper server that broadcasts messages rapidly to all connected clients
-void run_broadcast_server(std::atomic<bool>& server_ready, std::atomic<bool>& should_stop, uint16_t port,
-                          std::atomic<bool>& start_broadcast, int broadcast_count)
+void run_broadcast_server(std::atomic<bool>& server_ready, std::atomic<bool>& should_stop,
+                          std::atomic<uint16_t>& selected_port, std::atomic<bool>& start_broadcast, int broadcast_count)
 {
    http_server server;
    auto ws_server = std::make_shared<websocket_server>();
@@ -2493,7 +2508,8 @@ void run_broadcast_server(std::atomic<bool>& server_ready, std::atomic<bool>& sh
    server.websocket("/ws", ws_server);
 
    try {
-      server.bind(port);
+      server.bind("127.0.0.1", 0);
+      selected_port = server.port();
       server.start();
       server_ready = true;
 
@@ -2528,14 +2544,14 @@ void run_broadcast_server(std::atomic<bool>& server_ready, std::atomic<bool>& sh
 suite websocket_write_queue_tests = [] {
    // Test: Rapid fire messages from a single thread (no delays)
    "rapid_fire_single_thread_test"_test = [] {
-      uint16_t port = 8110;
+      std::atomic<uint16_t> port{0};
       std::atomic<bool> server_ready{false};
       std::atomic<bool> stop_server{false};
       std::atomic<int> valid_messages{0};
       std::atomic<int> invalid_messages{0};
 
-      std::thread server_thread(run_integrity_check_server, std::ref(server_ready), std::ref(stop_server), port,
-                                std::ref(valid_messages), std::ref(invalid_messages));
+      std::thread server_thread(run_integrity_check_server, std::ref(server_ready), std::ref(stop_server),
+                                std::ref(port), std::ref(valid_messages), std::ref(invalid_messages));
 
       expect(wait_for_condition([&] { return server_ready.load(); })) << "Server failed to start";
 
@@ -2566,7 +2582,7 @@ suite websocket_write_queue_tests = [] {
 
       client.on_close([&](ws_close_code, std::string_view) { client.context()->stop(); });
 
-      std::string client_url = "ws://localhost:" + std::to_string(port) + "/ws";
+      std::string client_url = "ws://localhost:" + std::to_string(port.load()) + "/ws";
       client.connect(client_url);
 
       std::thread client_thread([&client]() { client.context()->run(); });
@@ -2593,14 +2609,14 @@ suite websocket_write_queue_tests = [] {
 
    // Test: Concurrent message sending from multiple threads (the key race condition test)
    "concurrent_multi_thread_send_test"_test = [] {
-      uint16_t port = 8111;
+      std::atomic<uint16_t> port{0};
       std::atomic<bool> server_ready{false};
       std::atomic<bool> stop_server{false};
       std::atomic<int> valid_messages{0};
       std::atomic<int> invalid_messages{0};
 
-      std::thread server_thread(run_integrity_check_server, std::ref(server_ready), std::ref(stop_server), port,
-                                std::ref(valid_messages), std::ref(invalid_messages));
+      std::thread server_thread(run_integrity_check_server, std::ref(server_ready), std::ref(stop_server),
+                                std::ref(port), std::ref(valid_messages), std::ref(invalid_messages));
 
       expect(wait_for_condition([&] { return server_ready.load(); })) << "Server failed to start";
 
@@ -2627,7 +2643,7 @@ suite websocket_write_queue_tests = [] {
 
       client.on_close([&](ws_close_code, std::string_view) { client.context()->stop(); });
 
-      std::string client_url = "ws://localhost:" + std::to_string(port) + "/ws";
+      std::string client_url = "ws://localhost:" + std::to_string(port.load()) + "/ws";
       client.connect(client_url);
 
       std::thread client_thread([&client]() { client.context()->run(); });
@@ -2687,13 +2703,13 @@ suite websocket_write_queue_tests = [] {
 
    // Test: Server-side rapid broadcasting (tests server write queue)
    "server_broadcast_stress_test"_test = [] {
-      uint16_t port = 8112;
+      std::atomic<uint16_t> port{0};
       std::atomic<bool> server_ready{false};
       std::atomic<bool> stop_server{false};
       std::atomic<bool> start_broadcast{false};
       const int broadcast_count = 100;
 
-      std::thread server_thread(run_broadcast_server, std::ref(server_ready), std::ref(stop_server), port,
+      std::thread server_thread(run_broadcast_server, std::ref(server_ready), std::ref(stop_server), std::ref(port),
                                 std::ref(start_broadcast), broadcast_count);
 
       expect(wait_for_condition([&] { return server_ready.load(); })) << "Server failed to start";
@@ -2745,7 +2761,7 @@ suite websocket_write_queue_tests = [] {
 
       client.on_close([&](ws_close_code, std::string_view) { client.context()->stop(); });
 
-      std::string client_url = "ws://localhost:" + std::to_string(port) + "/ws";
+      std::string client_url = "ws://localhost:" + std::to_string(port.load()) + "/ws";
       client.connect(client_url);
 
       std::thread client_thread([&client]() { client.context()->run(); });
@@ -2775,14 +2791,14 @@ suite websocket_write_queue_tests = [] {
 
    // Test: Mixed message sizes with concurrent sends
    "mixed_size_concurrent_test"_test = [] {
-      uint16_t port = 8113;
+      std::atomic<uint16_t> port{0};
       std::atomic<bool> server_ready{false};
       std::atomic<bool> stop_server{false};
       std::atomic<int> valid_messages{0};
       std::atomic<int> invalid_messages{0};
 
-      std::thread server_thread(run_integrity_check_server, std::ref(server_ready), std::ref(stop_server), port,
-                                std::ref(valid_messages), std::ref(invalid_messages));
+      std::thread server_thread(run_integrity_check_server, std::ref(server_ready), std::ref(stop_server),
+                                std::ref(port), std::ref(valid_messages), std::ref(invalid_messages));
 
       expect(wait_for_condition([&] { return server_ready.load(); })) << "Server failed to start";
 
@@ -2809,7 +2825,7 @@ suite websocket_write_queue_tests = [] {
 
       client.on_close([&](ws_close_code, std::string_view) { client.context()->stop(); });
 
-      std::string client_url = "ws://localhost:" + std::to_string(port) + "/ws";
+      std::string client_url = "ws://localhost:" + std::to_string(port.load()) + "/ws";
       client.connect(client_url);
 
       std::thread client_thread([&client]() { client.context()->run(); });
@@ -2866,14 +2882,14 @@ suite websocket_write_queue_tests = [] {
 
    // Test: Concurrent send and close - exercises close_after_write_ race condition fix
    "concurrent_send_and_close_test"_test = [] {
-      uint16_t port = 8115;
+      std::atomic<uint16_t> port{0};
       std::atomic<bool> server_ready{false};
       std::atomic<bool> stop_server{false};
       std::atomic<int> valid_messages{0};
       std::atomic<int> invalid_messages{0};
 
-      std::thread server_thread(run_integrity_check_server, std::ref(server_ready), std::ref(stop_server), port,
-                                std::ref(valid_messages), std::ref(invalid_messages));
+      std::thread server_thread(run_integrity_check_server, std::ref(server_ready), std::ref(stop_server),
+                                std::ref(port), std::ref(valid_messages), std::ref(invalid_messages));
 
       expect(wait_for_condition([&] { return server_ready.load(); })) << "Server failed to start";
 
@@ -2899,7 +2915,7 @@ suite websocket_write_queue_tests = [] {
          client.context()->stop();
       });
 
-      std::string client_url = "ws://localhost:" + std::to_string(port) + "/ws";
+      std::string client_url = "ws://localhost:" + std::to_string(port.load()) + "/ws";
       client.connect(client_url);
 
       std::thread client_thread([&client]() { client.context()->run(); });
@@ -2965,14 +2981,14 @@ suite websocket_write_queue_tests = [] {
 
    // Test: Stress test with many messages to ensure queue doesn't leak/corrupt under load
    "high_volume_stress_test"_test = [] {
-      uint16_t port = 8114;
+      std::atomic<uint16_t> port{0};
       std::atomic<bool> server_ready{false};
       std::atomic<bool> stop_server{false};
       std::atomic<int> valid_messages{0};
       std::atomic<int> invalid_messages{0};
 
-      std::thread server_thread(run_integrity_check_server, std::ref(server_ready), std::ref(stop_server), port,
-                                std::ref(valid_messages), std::ref(invalid_messages));
+      std::thread server_thread(run_integrity_check_server, std::ref(server_ready), std::ref(stop_server),
+                                std::ref(port), std::ref(valid_messages), std::ref(invalid_messages));
 
       expect(wait_for_condition([&] { return server_ready.load(); })) << "Server failed to start";
 
@@ -2996,7 +3012,7 @@ suite websocket_write_queue_tests = [] {
 
       client.on_close([&](ws_close_code, std::string_view) { client.context()->stop(); });
 
-      std::string client_url = "ws://localhost:" + std::to_string(port) + "/ws";
+      std::string client_url = "ws://localhost:" + std::to_string(port.load()) + "/ws";
       client.connect(client_url);
 
       std::thread client_thread([&client]() { client.context()->run(); });

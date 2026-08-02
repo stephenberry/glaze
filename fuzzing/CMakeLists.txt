@@ -62,6 +62,8 @@ create_fuzztest(json_roundtrip_int)
 create_fuzztest(json_roundtrip_string)
 create_fuzztest(json_with_comments)
 create_fuzztest(jsonb_reflection)
+create_fuzztest(repe_registry)
+create_fuzztest(jsonrpc_registry)
 
 macro(create_exhaustive_test testname)
     add_executable(${testname} ${testname}.cpp)

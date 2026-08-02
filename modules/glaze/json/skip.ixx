@@ -48,8 +48,10 @@ export namespace glz
          skip_until_closed<Opts, '{', '}'>(ctx, it, end);
       }
       else {
-         if constexpr (not Opts.null_terminated) {
-            ++ctx.depth;
+         // one nesting level (see enter_depth): counted in both modes so the limit binds,
+         // released at each syntactic close below
+         if (enter_depth(ctx)) [[unlikely]] {
+            return;
          }
          ++it;
          if constexpr (not Opts.null_terminated) {
@@ -62,9 +64,7 @@ export namespace glz
             return;
          }
          if (*it == '}') {
-            if constexpr (not Opts.null_terminated) {
-               --ctx.depth;
-            }
+            --ctx.depth;
             ++it;
             if constexpr (not Opts.null_terminated) {
                if (it == end) {
@@ -110,9 +110,7 @@ export namespace glz
             }
          }
          match<'}'>(ctx, it);
-         if constexpr (not Opts.null_terminated) {
-            --ctx.depth;
-         }
+         --ctx.depth;
          if constexpr (not Opts.null_terminated) {
             if (it == end) {
                ctx.error = error_code::end_reached;
@@ -137,8 +135,10 @@ export namespace glz
          skip_until_closed<Opts, '[', ']'>(ctx, it, end);
       }
       else {
-         if constexpr (not Opts.null_terminated) {
-            ++ctx.depth;
+         // one nesting level (see enter_depth): counted in both modes so the limit binds,
+         // released at each syntactic close below
+         if (enter_depth(ctx)) [[unlikely]] {
+            return;
          }
          ++it;
          if constexpr (not Opts.null_terminated) {
@@ -151,9 +151,7 @@ export namespace glz
             return;
          }
          if (*it == ']') {
-            if constexpr (not Opts.null_terminated) {
-               --ctx.depth;
-            }
+            --ctx.depth;
             ++it;
             if constexpr (not Opts.null_terminated) {
                if (it == end) {
@@ -183,9 +181,7 @@ export namespace glz
             }
          }
          match<']'>(ctx, it);
-         if constexpr (not Opts.null_terminated) {
-            --ctx.depth;
-         }
+         --ctx.depth;
          if constexpr (not Opts.null_terminated) {
             if (it == end) {
                ctx.error = error_code::end_reached;

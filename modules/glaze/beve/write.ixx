@@ -533,34 +533,234 @@ namespace glz
       }
    };
 
+   template <class T, class V>
+   constexpr size_t variant_index_v = []<size_t... I>(std::index_sequence<I...>) {
+      return ((std::is_same_v<T, std::variant_alternative_t<I, V>> * I) + ...);
+   }(std::make_index_sequence<std::variant_size_v<V>>{});
+
+   // BEVE Version 2 represents a std::variant as an ordinary self-describing value rather than the
+   // deprecated type-tag extension (extension id 1, header byte 0x0E). Which shape it takes is fixed
+   // by the variant's tagging representation (see glz::variant_tagging), not by whichever alternative
+   // is active, so a given variant type has exactly one wire shape:
+   //
+   //   internal   { tag : id, ...members }   the discriminator merged into the alternative's object
+   //   adjacent   { tag : id, content : value }   the discriminator beside a value of any shape
+   //   none       the active alternative's own BEVE value, bare
+   //
+   // In every case the encoding is a plain BEVE value that maps 1:1 to the JSON writer's output, and
+   // no 0x0E extension byte is emitted. The reader recovers the alternative from the discriminator,
+   // the object's key set, or the value's self-describing type header.
+   //
+   // Positional (structs_as_arrays) writes have no keys at all, so adjacent tagging projects to the
+   // two element generic array [id, value] -- an ordinary BEVE array, not a reinstatement of the
+   // extension. Internal tagging has nothing to project: its whole mechanism is a key. An untagged
+   // positional variant is written bare, and alternatives that share a positional shape are then
+   // indistinguishable on read.
+   //
+   // Version 1 data is still readable (the reader dispatches on the leading byte), but it is not
+   // writable: a process that must produce Version 1 output should pin an older Glaze.
    template <is_variant T>
       requires(not custom_write<T>)
    struct to<BEVE, T> final
    {
+      // The tagging representation is a property of the variant, decided once for every alternative.
+      static constexpr auto tagging = variant_tagging_v<T>;
+
+      // `ids` may legally declare fewer entries than the variant has alternatives -- the readers
+      // treat the first unlabeled alternative as the default for an id they do not recognize, which
+      // is a deliberate forward-compatibility feature -- so an alternative past the end of `ids` has
+      // no id to write. Indexing ids_v there reads past the end of a static array, so reject the
+      // write rather than emitting whatever data follows it.
+      static bool missing_id(auto&& value, is_context auto&& ctx)
+      {
+         if (value.index() >= ids_v<T>.size()) [[unlikely]] {
+            ctx.error = error_code::no_matching_variant_type;
+            ctx.custom_error_message = variant_ids_string_v<T>;
+            return true;
+         }
+         return false;
+      }
+
+      // A headerless string key. The key type is spelled through decltype(tag_v<T>) so lookup of the
+      // str_t writer specialization (defined later in this file) is deferred to instantiation.
+      template <const sv& Key, class B>
+      static void write_key(is_context auto&& ctx, B&& b, auto& ix)
+      {
+         to<BEVE, std::remove_cvref_t<decltype(tag_v<T>)>>::template no_header_cx<Key.size()>(Key, ctx, b, ix);
+      }
+
+      // Adjacent tagging: an object of exactly two members, { tag : id, content : value }. Because
+      // the discriminator sits beside the value rather than inside it, this shape is the same for
+      // every alternative -- object, array, map, scalar, or null.
+      template <auto Opts, class B>
+      static void write_adjacent(auto&& value, is_context auto&& ctx, B&& b, auto& ix)
+      {
+         if (missing_id(value, ctx)) {
+            return;
+         }
+         dump_type(ctx, uint8_t(tag::object | 0), b, ix); // string keys
+         if (bool(ctx.error)) [[unlikely]] {
+            return;
+         }
+         dump_compressed_int<2>(ctx, b, ix);
+         if (bool(ctx.error)) [[unlikely]] {
+            return;
+         }
+         write_key<tag_v<T>>(ctx, b, ix);
+         if (bool(ctx.error)) [[unlikely]] {
+            return;
+         }
+         serialize<BEVE>::op<Opts>(ids_v<T>[value.index()], ctx, b, ix);
+         if (bool(ctx.error)) [[unlikely]] {
+            return;
+         }
+         write_key<content_v<T>>(ctx, b, ix);
+         if (bool(ctx.error)) [[unlikely]] {
+            return;
+         }
+         std::visit([&](auto&& v) { serialize<BEVE>::op<Opts>(v, ctx, b, ix); }, value);
+      }
+
+      // The positional projection of adjacent tagging: the two element array [id, value].
+      template <auto Opts, class B>
+      static void write_positional(auto&& value, is_context auto&& ctx, B&& b, auto& ix)
+      {
+         if (missing_id(value, ctx)) {
+            return;
+         }
+         if (!ensure_space(ctx, b, ix + 1 + write_padding_bytes)) [[unlikely]] {
+            return;
+         }
+         dump<tag::generic_array>(b, ix);
+         dump_compressed_int<2>(ctx, b, ix);
+         if (bool(ctx.error)) [[unlikely]] {
+            return;
+         }
+         serialize<BEVE>::op<Opts>(ids_v<T>[value.index()], ctx, b, ix);
+         if (bool(ctx.error)) [[unlikely]] {
+            return;
+         }
+         std::visit([&](auto&& v) { serialize<BEVE>::op<Opts>(v, ctx, b, ix); }, value);
+      }
+
       template <auto Opts, class B>
       static void op(auto&& value, is_context auto&& ctx, B&& b, auto& ix)
       {
-         using Variant = std::decay_t<decltype(value)>;
+         constexpr bool tagged = check_write_type_info(Opts) && tagging != variant_tagging_kind::none;
 
-         std::visit(
-            [&](auto&& v) {
-               using V = std::decay_t<decltype(v)>;
+         if constexpr (tagged && check_structs_as_arrays(Opts)) {
+            static_assert(
+               tagging == variant_tagging_kind::adjacent || detail::beve_positional_tagging_needs_content<T>::value,
+               "Positional writes (structs_as_arrays) have no keys, so there is nothing for "
+               "internal tagging to merge a discriminator into. Declare `content` beside "
+               "`tag` in glz::meta to select adjacent tagging, which projects positionally "
+               "to the two element array [id, value].");
+            write_positional<Opts>(value, ctx, b, ix);
+         }
+         else if constexpr (tagged && tagging == variant_tagging_kind::adjacent) {
+            write_adjacent<Opts>(value, ctx, b, ix);
+         }
+         else {
+            std::visit(
+               [&](auto&& v) {
+                  using V = std::decay_t<decltype(v)>;
+                  using X = variant_alternative_object_t<V>;
 
-               static constexpr uint64_t index = variant_index_v<V, Variant>;
+                  if constexpr (tagged && variant_unit_alternative<V>) {
+                     // A unit alternative carries no data, so internal tagging renders it as the
+                     // discriminator alone -- the same one-member object an empty struct produces.
+                     if (missing_id(value, ctx)) {
+                        return;
+                     }
+                     dump_type(ctx, uint8_t(tag::object | 0), b, ix); // string keys
+                     if (bool(ctx.error)) [[unlikely]] {
+                        return;
+                     }
+                     dump_compressed_int<1>(ctx, b, ix);
+                     if (bool(ctx.error)) [[unlikely]] {
+                        return;
+                     }
+                     write_key<tag_v<T>>(ctx, b, ix);
+                     if (bool(ctx.error)) [[unlikely]] {
+                        return;
+                     }
+                     serialize<BEVE>::op<Opts>(ids_v<T>[value.index()], ctx, b, ix);
+                  }
+                  // `not custom_write<V>`: a custom alternative that also happens to be reflectable
+                  // still has no reflected members to count, so it must reach the static_assert below
+                  // rather than this branch's written_member_count.
+                  else if constexpr (tagged && (glaze_object_t<X> || reflectable<X>) && (not custom_write<V>) &&
+                                     (not alternative_declares_key<V>(tag_v<T>))) {
+                     // Internal tagging: emit { tag_v : id, ...members } as one merged object. An
+                     // alternative that declares a member named like the discriminator carries it
+                     // itself and falls through to the bare write below.
+                     size_t body_count{};
+                     if constexpr (is_memory_object<V>) {
+                        if (!v) [[unlikely]] {
+                           ctx.error = error_code::invalid_variant_object;
+                           return;
+                        }
+                        body_count = to<BEVE, X>::template written_member_count<Opts>(*v, ctx);
+                     }
+                     else {
+                        body_count = to<BEVE, X>::template written_member_count<Opts>(v, ctx);
+                     }
 
-               constexpr uint8_t tag = tag::extensions | 0b00001'000;
+                     if (missing_id(value, ctx)) {
+                        return;
+                     }
 
-               dump_type(ctx, tag, b, ix);
-               if (bool(ctx.error)) [[unlikely]] {
-                  return;
-               }
-               dump_compressed_int<index>(ctx, b, ix);
-               if (bool(ctx.error)) [[unlikely]] {
-                  return;
-               }
-               serialize<BEVE>::op<Opts>(v, ctx, b, ix);
-            },
-            value);
+                     // object header (string keys) + merged count (discriminator + body members)
+                     dump_type(ctx, uint8_t(tag::object | 0), b, ix);
+                     if (bool(ctx.error)) [[unlikely]] {
+                        return;
+                     }
+                     dump_compressed_int(ctx, body_count + 1, b, ix);
+                     if (bool(ctx.error)) [[unlikely]] {
+                        return;
+                     }
+
+                     // discriminator: headerless string key + id VALUE (string or integral)
+                     write_key<tag_v<T>>(ctx, b, ix);
+                     if (bool(ctx.error)) [[unlikely]] {
+                        return;
+                     }
+                     serialize<BEVE>::op<Opts>(ids_v<T>[value.index()], ctx, b, ix);
+                     if (bool(ctx.error)) [[unlikely]] {
+                        return;
+                     }
+
+                     // alternative body: header suppressed so its members splice into this object
+                     if constexpr (is_memory_object<V>) {
+                        serialize<BEVE>::op<opening_handled<Opts>()>(*v, ctx, b, ix);
+                     }
+                     else {
+                        serialize<BEVE>::op<opening_handled<Opts>()>(v, ctx, b, ix);
+                     }
+                  }
+                  else {
+                     // A custom-serialized alternative is the one shape internal tagging promises but
+                     // BEVE cannot deliver: a BEVE object is length-prefixed, and the member count of
+                     // a body written by someone else's serializer is not knowable in advance. The
+                     // JSON writer merges into such a body because JSON objects are not counted.
+                     // Emitting this bare would silently drop the discriminator that JSON keeps, so
+                     // say so instead.
+                     static_assert(not(tagged && custom_write<V>) ||
+                                      detail::beve_internal_tagging_needs_reflected_alternative<T, V>::value,
+                                   "Internal tagging (glz::meta `tag` without `content`) cannot be "
+                                   "written to BEVE for a custom-serialized alternative: BEVE objects "
+                                   "are length-prefixed and the member count of a custom body is not "
+                                   "knowable in advance. Declare `content` beside `tag` to select "
+                                   "adjacent tagging, which nests the custom value instead of merging "
+                                   "into it. The offending alternative is the second template argument "
+                                   "of beve_internal_tagging_needs_reflected_alternative in the "
+                                   "instantiation backtrace.");
+                     // Untagged, or an alternative that carries the discriminator in its own member.
+                     serialize<BEVE>::op<Opts>(v, ctx, b, ix);
+                  }
+               },
+               value);
+         }
       }
    };
 
@@ -782,9 +982,12 @@ namespace glz
                static_assert(false_v<T>);
             }
          }
-         else if constexpr (beve_num_t<V>) {
-            constexpr uint8_t type = std::floating_point<V> ? 0 : (std::is_signed_v<V> ? 0b000'01'000 : 0b000'10'000);
-            constexpr uint8_t numeric_header = tag::typed_array | type | (byte_count<V> << 5);
+         else if constexpr (beve_num_array_t<V>) {
+            // NV is the arithmetic wire type: V for plain numbers, the rep for chrono
+            // durations / count-based time points (which are bit-compatible with it).
+            using NV = beve_num_array_value_t<V>;
+            constexpr uint8_t type = std::floating_point<NV> ? 0 : (std::is_signed_v<NV> ? 0b000'01'000 : 0b000'10'000);
+            constexpr uint8_t numeric_header = tag::typed_array | type | (byte_count<NV> << 5);
 
             if constexpr (check_aligned_arrays(Opts) && sizeof(V) > 1) {
                // Aligned typed array: ALIGNED_HEADER | NUMERIC_HEADER | SIZE | PADDING_LENGTH | PADDING | DATA
@@ -839,26 +1042,28 @@ namespace glz
                if constexpr (is_volatile) {
                   const auto n_elements = value.size();
                   for (size_t i = 0; i < n_elements; ++i) {
-                     V temp = value[i];
+                     V elem = value[i]; // copy out of volatile storage first
+                     NV temp = beve_num_array_extract(elem);
                      if constexpr (std::endian::native == std::endian::big) {
                         byteswap_le(temp);
                      }
-                     std::memcpy(&b[ix], &temp, sizeof(V));
-                     ix += sizeof(V);
+                     std::memcpy(&b[ix], &temp, sizeof(NV));
+                     ix += sizeof(NV);
                   }
                }
                else if constexpr (std::endian::native == std::endian::big && sizeof(V) > 1) {
                   // On big endian, swap each element
                   const auto n_elements = static_cast<size_t>(value.size());
                   for (size_t i = 0; i < n_elements; ++i) {
-                     V temp = value[i];
+                     NV temp = beve_num_array_extract(value[i]);
                      byteswap_le(temp);
-                     std::memcpy(&b[ix], &temp, sizeof(V));
-                     ix += sizeof(V);
+                     std::memcpy(&b[ix], &temp, sizeof(NV));
+                     ix += sizeof(NV);
                   }
                }
                else {
-                  // Little endian or single-byte: bulk memcpy
+                  // Little endian or single-byte: bulk memcpy. A chrono element is
+                  // bit-identical to its rep, so the raw bytes are already the wire form.
                   if (n) {
                      std::memcpy(&b[ix], value.data(), n);
                      ix += n;
@@ -871,7 +1076,7 @@ namespace glz
                   return;
                }
                for (auto& x : value) {
-                  dump_type(ctx, x, b, ix);
+                  dump_type(ctx, beve_num_array_extract(x), b, ix);
                }
             }
          }
@@ -1303,66 +1508,30 @@ namespace glz
          }(std::make_index_sequence<N>{});
       }
 
-      template <auto Opts, class B>
-         requires(check_structs_as_arrays(Opts) == true)
-      static void op(auto&& value, is_context auto&& ctx, B&& b, auto& ix)
+      // Number of members this object will actually write under Opts for the given value.
+      // Equals the compile-time count_to_write() unless runtime skipping (skip_null_members /
+      // skip_default_members / meta skip) is in play, in which case the members are counted at
+      // runtime exactly as the write pass decides. Shared by the object writer's dynamic header
+      // count, the merged-object variant writer, and size calculation, so all three agree.
+      template <auto Options>
+      static size_t written_member_count(auto&& value, is_context auto&& ctx)
       {
-         if (!ensure_space(ctx, b, ix + 1 + write_padding_bytes)) [[unlikely]] {
-            return;
+         if constexpr (!maybe_skipped<Options, T>) {
+            (void)value;
+            (void)ctx;
+            return count_to_write<Options>();
          }
-         dump<tag::generic_array>(b, ix);
-         dump_compressed_int<count_to_write<Opts>()>(ctx, b, ix);
-         if (bool(ctx.error)) [[unlikely]] {
-            return;
-         }
-
-         [[maybe_unused]] decltype(auto) t = [&]() -> decltype(auto) {
-            if constexpr (reflectable<T>) {
-               return to_tie(value);
-            }
-            else {
-               return nullptr;
-            }
-         }();
-
-         for_each<N>([&]<size_t I>() {
-            if (bool(ctx.error)) [[unlikely]] {
-               return;
-            }
-            if constexpr (should_skip_field<Opts, I>()) {
-               return;
-            }
-            else {
+         else {
+            [[maybe_unused]] decltype(auto) t = [&]() -> decltype(auto) {
                if constexpr (reflectable<T>) {
-                  serialize<BEVE>::op<Opts>(get_member(value, get<I>(t)), ctx, b, ix);
+                  return to_tie(value);
                }
                else {
-                  serialize<BEVE>::op<Opts>(get_member(value, get<I>(reflect<T>::values)), ctx, b, ix);
+                  return nullptr;
                }
-            }
-         });
-      }
+            }();
 
-      template <auto Options, class B>
-         requires(check_structs_as_arrays(Options) == false)
-      static void op(auto&& value, is_context auto&& ctx, B&& b, auto& ix)
-      {
-         constexpr auto Opts = opening_handled_off<Options>();
-
-         [[maybe_unused]] decltype(auto) t = [&]() -> decltype(auto) {
-            if constexpr (reflectable<T>) {
-               return to_tie(value);
-            }
-            else {
-               return nullptr;
-            }
-         }();
-
-         if constexpr (maybe_skipped<Options, T>) {
-            // Dynamic path: count members at runtime to handle skip_null_members
             size_t member_count = 0;
-
-            // First pass: count members that will be written
             for_each<N>([&]<size_t I>() {
                if constexpr (should_skip_field<Options, I>()) {
                   return;
@@ -1429,6 +1598,68 @@ namespace glz
                   }
                }
             });
+            return member_count;
+         }
+      }
+
+      template <auto Opts, class B>
+         requires(check_structs_as_arrays(Opts) == true)
+      static void op(auto&& value, is_context auto&& ctx, B&& b, auto& ix)
+      {
+         if (!ensure_space(ctx, b, ix + 1 + write_padding_bytes)) [[unlikely]] {
+            return;
+         }
+         dump<tag::generic_array>(b, ix);
+         dump_compressed_int<count_to_write<Opts>()>(ctx, b, ix);
+         if (bool(ctx.error)) [[unlikely]] {
+            return;
+         }
+
+         [[maybe_unused]] decltype(auto) t = [&]() -> decltype(auto) {
+            if constexpr (reflectable<T>) {
+               return to_tie(value);
+            }
+            else {
+               return nullptr;
+            }
+         }();
+
+         for_each<N>([&]<size_t I>() {
+            if (bool(ctx.error)) [[unlikely]] {
+               return;
+            }
+            if constexpr (should_skip_field<Opts, I>()) {
+               return;
+            }
+            else {
+               if constexpr (reflectable<T>) {
+                  serialize<BEVE>::op<Opts>(get_member(value, get<I>(t)), ctx, b, ix);
+               }
+               else {
+                  serialize<BEVE>::op<Opts>(get_member(value, get<I>(reflect<T>::values)), ctx, b, ix);
+               }
+            }
+         });
+      }
+
+      template <auto Options, class B>
+         requires(check_structs_as_arrays(Options) == false)
+      static void op(auto&& value, is_context auto&& ctx, B&& b, auto& ix)
+      {
+         constexpr auto Opts = opening_handled_off<Options>();
+
+         [[maybe_unused]] decltype(auto) t = [&]() -> decltype(auto) {
+            if constexpr (reflectable<T>) {
+               return to_tie(value);
+            }
+            else {
+               return nullptr;
+            }
+         }();
+
+         if constexpr (maybe_skipped<Options, T>) {
+            // Dynamic path: count members at runtime to handle skip_null_members
+            const size_t member_count = written_member_count<Options>(value, ctx);
 
             // Write header with dynamic count
             if constexpr (!check_opening_handled(Options)) {

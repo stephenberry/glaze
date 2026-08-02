@@ -122,13 +122,45 @@ static_assert(glz::byte_input_stream<std::ifstream>);
 // glz::basic_istream_buffer<std::wistream> bad(wstream);  // Error!
 ```
 
+## Non-owning types cannot be streamed
+
+A refill moves the window, so anything pointing into it dangles. Filling a `std::string_view`, a `glz::raw_json_view`, a `glz::text_view`, or a `std::span<const T>` from a stream is rejected at compile time, wherever that view sits in the destination type:
+
+```cpp
+std::vector<std::string_view> views{};
+glz::read_json(views, buffer);  // compile error: fills a non-owning view
+```
+
+Read into the owning equivalent (`std::string`, `glz::raw_json`, `glz::text`) when the source is a stream. This is not a limitation that can be worked around by sizing the buffer up: whether a given view survives depends on where the refills happen to land, and a read that produces dangling views still reports success, so there is nothing to check at runtime.
+
+The check is on the readers that point into the buffer rather than on the shape of the destination, so it applies equally to a view reached through a container, a `std::tuple`, a map key, or a `glz::custom` setter. A `std::span` over your own storage is not affected — only `std::span<const T>` is ever aimed at the input.
+
+What the check is aimed at is a view the *caller* keeps. A reader that borrows a view of the string it just parsed and turns it into a value before returning — how `std::chrono::system_clock::time_point`, `std::chrono::year_month_day`, and `glz::date_format` fields are read — holds it across nothing that refills, so those types stream normally.
+
+Buffered reads are unaffected. A buffer holds the whole document for the duration of the call, so views into it stay valid and remain a supported zero-copy idiom.
+
 ## Format Support
 
-| Format | Output Streaming | Input Streaming |
-|--------|-----------------|-----------------|
-| JSON   | `ostream_buffer` | `istream_buffer` |
-| BEVE   | `ostream_buffer` | `istream_buffer` |
-| NDJSON | `ostream_buffer` | `json_stream_reader` |
+Reading a document larger than the buffer window requires the format's reader to be able to refill partway through a parse. Not every reader can, and `glz::format_supports_streaming<Format>` says which:
+
+| Format | Output streaming | Reads past one window |
+|--------|------------------|-----------------------|
+| JSON   | `ostream_buffer` | yes, refills between array elements and object members |
+| NDJSON | `ostream_buffer` | yes, refills between records |
+| BEVE   | `ostream_buffer` | no |
+| others | `ostream_buffer` | no |
+
+Passing an `istream_buffer` to any format is safe: the read is bounded by the window either way. A format whose reader cannot refill simply sees the first window, and a document that outruns it fails with `error_code::streaming_unsupported` rather than silently returning the part that fit.
+
+### What still has to fit in the window
+
+Refill points sit *between* values, never inside one. A single JSON string or number is read in one piece, so it has to fit in the window; the capacity is the ceiling on one token, not on the document. For NDJSON the unit is the record: a record and its newline have to fit, and a record only has to fit in the *window*, not in whatever the record before it left over. Outrunning the window reports `error_code::streaming_unsupported`, which names the buffer rather than blaming the document. Raise the capacity if you hit it:
+
+```cpp
+glz::basic_istream_buffer<std::ifstream, 1 << 20> buffer(file);  // 1 MB window
+```
+
+Leading whitespace is also read without refilling, so whitespace wider than the window stops a read before it reaches the value behind it.
 
 ## See Also
 

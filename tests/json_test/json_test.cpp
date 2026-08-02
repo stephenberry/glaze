@@ -836,6 +836,21 @@ bool equal(T x, T y)
    return x == y;
 }
 
+// Reflection needs external linkage, so these cannot be declared inside the test that uses them.
+struct partial_reuse_inner_t
+{
+   int a{};
+};
+struct partial_reuse_outer_t
+{
+   partial_reuse_inner_t inner{};
+};
+struct partial_reuse_pair_t
+{
+   int a{};
+   int b{};
+};
+
 suite basic_types = [] {
    using namespace ut;
 
@@ -994,6 +1009,278 @@ suite basic_types = [] {
       expect(glz::read_json(num, "[]") == glz::error_code::parse_number_failure);
       expect(glz::read_json(num, ".") == glz::error_code::parse_number_failure);
       expect(glz::read_json(num, "0045") == glz::error_code::parse_number_failure);
+   };
+
+   "unsigned exponent out of range"_test = [] {
+      // A three-digit exponent must be rejected as out of range, not wrapped into an accepted
+      // value. "1e256" denotes 10^256; the exponent accumulator used to overflow a uint8_t
+      // (256 & 0xFF == 0) and decode it as 1.
+      uint64_t u64{};
+      expect(glz::read_json(u64, "1e256") == glz::error_code::parse_number_failure);
+      expect(glz::read_json(u64, "5e256") == glz::error_code::parse_number_failure);
+      expect(glz::read_json(u64, "1e260") == glz::error_code::parse_number_failure);
+      expect(glz::read_json(u64, "1e275") == glz::error_code::parse_number_failure);
+      expect(glz::read_json(u64, "1e512") == glz::error_code::parse_number_failure);
+      expect(glz::read_json(u64, "1e100") == glz::error_code::parse_number_failure);
+
+      uint32_t u32{};
+      expect(glz::read_json(u32, "1e256") == glz::error_code::parse_number_failure);
+      uint16_t u16{};
+      expect(glz::read_json(u16, "7e256") == glz::error_code::parse_number_failure);
+      uint8_t u8{};
+      expect(glz::read_json(u8, "9e256") == glz::error_code::parse_number_failure);
+
+      // In-range exponents still parse correctly, including leading zeros in the exponent.
+      expect(glz::read_json(u64, "1e19") == glz::error_code::none);
+      expect(u64 == 10000000000000000000ull);
+      expect(glz::read_json(u64, "1e007") == glz::error_code::none);
+      expect(u64 == 10000000ull);
+   };
+
+   "exponent leading zeros"_test = [] {
+      // JSON forbids a leading zero in the integer part but allows any run of digits in the
+      // exponent, so "1e007" is a valid spelling of 10^7. Reading the exponent with a fixed digit
+      // count stopped mid-number, leaving the trailing digits to be rejected as trailing content.
+      // These are read inside arrays because a top-level read ignores trailing content.
+      std::vector<int64_t> i64s{};
+      expect(glz::read_json(i64s, "[1e007,2]") == glz::error_code::none);
+      expect(i64s == std::vector<int64_t>{10000000, 2});
+
+      std::vector<uint64_t> u64s{};
+      expect(glz::read_json(u64s, "[1e0007,2]") == glz::error_code::none);
+      expect(u64s == std::vector<uint64_t>{10000000, 2});
+
+      expect(glz::read_json(u64s, "[1e00000000000007,2]") == glz::error_code::none);
+      expect(u64s == std::vector<uint64_t>{10000000, 2});
+
+      std::vector<int32_t> i32s{};
+      expect(glz::read_json(i32s, "[3e0004,7]") == glz::error_code::none);
+      expect(i32s == std::vector<int32_t>{30000, 7});
+
+      // A padded exponent that is still out of range must stay rejected.
+      expect(glz::read_json(u64s, "[1e0020]") == glz::error_code::parse_number_failure);
+      expect(glz::read_json(i64s, "[1e0019]") == glz::error_code::parse_number_failure);
+      // As must an exponent long enough to overrun any fixed-width accumulator.
+      expect(glz::read_json(u64s, "[1e999999]") == glz::error_code::parse_number_failure);
+   };
+
+   "signed exponent negative values"_test = [] {
+      // The 64-bit signed path scaled the two's-complement bit pattern instead of the magnitude,
+      // so every negative 64-bit integer written with an exponent overflowed and was rejected.
+      int64_t i64{};
+      expect(glz::read_json(i64, "-1e2") == glz::error_code::none);
+      expect(i64 == -100);
+      expect(glz::read_json(i64, "-5e7") == glz::error_code::none);
+      expect(i64 == -50000000);
+      expect(glz::read_json(i64, "-1e18") == glz::error_code::none);
+      expect(i64 == -1000000000000000000ll);
+      expect(glz::read_json(i64, "-9e18") == glz::error_code::none);
+      expect(i64 == -9000000000000000000ll);
+      expect(glz::read_json(i64, "-5e0007") == glz::error_code::none);
+      expect(i64 == -50000000);
+
+      expect(glz::read_json(i64, "9e18") == glz::error_code::none);
+      expect(i64 == 9000000000000000000ll);
+      expect(glz::read_json(i64, "-1e19") == glz::error_code::parse_number_failure);
+
+      // The 128-bit product must be range checked at full width; narrowing it to 64 bits first
+      // let an out-of-range magnitude alias onto an accepted value (9e36 truncated into range).
+      expect(glz::read_json(i64, "9000000000000000000e18") == glz::error_code::parse_number_failure);
+      expect(glz::read_json(i64, "-9000000000000000000e18") == glz::error_code::parse_number_failure);
+      expect(glz::read_json(i64, "1000000000000000000e17") == glz::error_code::parse_number_failure);
+      expect(glz::read_json(i64, "5000000000000000000e10") == glz::error_code::parse_number_failure);
+   };
+
+   "stoui exponent out of range"_test = [] {
+      // Same wrap as the atoi path: a uint8_t accumulator turned "1e256" into exponent 0.
+      expect(glz::stoui("1e256") == std::nullopt);
+      expect(glz::stoui("5e256") == std::nullopt);
+      expect(glz::stoui("1e260") == std::nullopt);
+      expect(glz::stoui("1e20") == std::nullopt);
+      expect(glz::stoui("1e999999") == std::nullopt);
+
+      // A magnitude below one truncates to zero rather than aliasing onto the significand.
+      expect(glz::stoui("1e-256") == std::optional<uint64_t>{0});
+
+      expect(glz::stoui("1e19") == std::optional<uint64_t>{10000000000000000000ull});
+      expect(glz::stoui("1e007") == std::optional<uint64_t>{10000000ull});
+      expect(glz::stoui("1e0000000007") == std::optional<uint64_t>{10000000ull});
+      expect(glz::stoui("123") == std::optional<uint64_t>{123});
+   };
+
+   "exponent scan stays in bounds"_test = [] {
+      // The exponent scan stops at a non-digit rather than after a fixed digit count, so the
+      // scratch buffer that the non-null-terminated overload copies into must be terminated even
+      // when the input fills it. Each input gets its own exact-size heap buffer so ASAN flags any
+      // read past the end. Values this long exceed the scratch buffer and so must error, but they
+      // must error rather than over-read.
+      static constexpr glz::opts options{.null_terminated = false};
+      for (std::string_view number :
+           {"1e00000000000000000000000000000000000007", "1e99999999999999999999999999999999999999",
+            "12345678901234567890123456789012345678901234567890", "-1e00000000000000000000000000000000000007"}) {
+         const std::string complete = "[" + std::string{number} + "]";
+         std::vector<char> buf{complete.begin(), complete.end()};
+
+         std::vector<uint64_t> u64s{};
+         expect(bool(glz::read<options>(u64s, std::string_view{buf.data(), buf.size()}))) << number;
+
+         std::vector<int64_t> i64s{};
+         expect(bool(glz::read<options>(i64s, std::string_view{buf.data(), buf.size()}))) << number;
+      }
+   };
+
+   "whitespace only input holds no value"_test = [] {
+      // Without a terminator the reader runs out of input looking for a value and reports
+      // end_reached, which at the top level otherwise means "the value ended with the buffer".
+      // A buffer that never held a value must be rejected the way an empty one is, rather than
+      // leaving the destination untouched and reporting success.
+      // Both options are spelled out because this file is also built with GLZ_NULL_TERMINATED=false.
+      static constexpr glz::opts options{.null_terminated = false};
+      for (std::string_view blank : {" ", "   ", "\t\n\r "}) {
+         const std::vector<char> buf{blank.begin(), blank.end()};
+         const std::string_view input{buf.data(), buf.size()};
+
+         int i{42};
+         expect(glz::read<options>(i, input) == glz::error_code::no_read_input) << blank;
+         expect(i == 42) << "destination must be left alone";
+
+         std::vector<int> v{};
+         expect(glz::read<options>(v, input) == glz::error_code::no_read_input) << blank;
+
+         std::map<std::string, int> m{};
+         expect(glz::read<options>(m, input) == glz::error_code::no_read_input) << blank;
+      }
+   };
+
+   "comment only input holds no value"_test = [] {
+      // A comment is no more a value than whitespace is. With comments enabled the reader consumes
+      // one and then runs out of input the same way, so it has to reach the same answer.
+      static constexpr glz::opts options{.null_terminated = false, .comments = true};
+      for (std::string_view commented : {"// hi\n", " //x\n", "/* block */", "\t/*a*/ // b\n "}) {
+         const std::vector<char> buf{commented.begin(), commented.end()};
+         const std::string_view input{buf.data(), buf.size()};
+
+         int i{42};
+         expect(glz::read<options>(i, input) == glz::error_code::no_read_input) << commented;
+         expect(i == 42) << "destination must be left alone";
+
+         std::vector<int> v{};
+         expect(glz::read<options>(v, input) == glz::error_code::no_read_input) << commented;
+      }
+
+      // An unterminated block comment runs to the end of the buffer without skip_comment flagging
+      // it, so it arrives here as an input that held no value. That is the same answer as an empty
+      // buffer, which is a coarse diagnosis but a true one.
+      {
+         const std::string_view unterminated{"/* never closed"};
+         const std::vector<char> buf{unterminated.begin(), unterminated.end()};
+         const std::string_view input{buf.data(), buf.size()};
+         int i{42};
+         expect(glz::read<options>(i, input) == glz::error_code::no_read_input);
+         expect(i == 42) << "destination must be left alone";
+      }
+
+      // A comment malformed in a way skip_comment does detect keeps its own error, rather than
+      // being flattened into the absent-value answer.
+      for (std::string_view malformed : {"/", "/x"}) {
+         const std::vector<char> buf{malformed.begin(), malformed.end()};
+         int i{42};
+         const auto ec = glz::read<options>(i, std::string_view{buf.data(), buf.size()});
+         expect(ec != glz::error_code::none) << malformed;
+         expect(ec != glz::error_code::no_read_input) << malformed;
+         expect(i == 42) << "destination must be left alone";
+      }
+   };
+
+   "truncated number is rejected, not valued"_test = [] {
+      // A number longer than the scratch buffer is copied in as a prefix, and the prefix can parse
+      // cleanly on its own: "1e" followed by enough zeros reads as 1 once the copy cuts off the
+      // final digit. A caller that ignores trailing content -- a top level scalar read does, the
+      // same way "17abc" reads as 17 -- would then take that prefix's value as the answer. The
+      // number must be rejected instead. Padding is the only way to stretch a number this far,
+      // since no in-range integer needs that many characters.
+      // Both options are spelled out because this file is also built with GLZ_NULL_TERMINATED=false,
+      // which flips what the default would mean.
+      static constexpr glz::opts options{.null_terminated = false};
+      static constexpr glz::opts terminated{.null_terminated = true};
+      for (size_t zeros : {size_t(30), size_t(40), size_t(64)}) {
+         // 1e<zeros>5 is 100000 however long the padding is
+         const std::string number = "1e" + std::string(zeros, '0') + "5";
+         std::vector<char> buf{number.begin(), number.end()};
+         const std::string_view input{buf.data(), buf.size()};
+
+         uint64_t u64{};
+         expect(bool(glz::read<options>(u64, input))) << number;
+
+         int64_t i64{};
+         expect(bool(glz::read<options>(i64, input))) << number;
+
+         // Null terminated input has the whole number available and reads it exactly. std::string
+         // supplies the terminator this path relies on.
+         expect(glz::read<terminated>(u64, number) == glz::error_code::none) << number;
+         expect(u64 == 100000ull) << number;
+      }
+
+      // A number that fits is still read from a non-null-terminated buffer, padding and all. The
+      // second of these fills the scratch buffer exactly, which is not a truncation: every
+      // character of the input made it in.
+      for (std::string_view fits : {"1e0000000005", "1e000000000000000000000000000005"}) {
+         std::vector<char> buf{fits.begin(), fits.end()};
+         uint64_t u64{};
+         expect(glz::read<options>(u64, std::string_view{buf.data(), buf.size()}) == glz::error_code::none) << fits;
+         expect(u64 == 100000ull) << fits;
+      }
+   };
+
+   "truncated input reports unexpected_end"_test = [] {
+      // A non-null-terminated buffer that runs out with containers still open is truncated input.
+      // end_reached is how the reader says "the buffer ran out here" and is documented as a
+      // non-error code, so it must not be what the caller sees: read that way it labels a partial
+      // parse a success that stopped early.
+      static constexpr glz::opts options{.null_terminated = false};
+      for (std::string_view truncated : {"[1,2", "[[1,2],[3", "[1,2,", "{\"a\":1", "[{\"a\":1}", "[ "}) {
+         const std::vector<char> buf{truncated.begin(), truncated.end()};
+         const std::string_view input{buf.data(), buf.size()};
+
+         glz::generic j{};
+         const auto ec = glz::read<options>(j, input);
+         expect(ec == glz::error_code::unexpected_end) << truncated;
+         expect(ec != glz::error_code::end_reached) << truncated;
+      }
+
+      // The other half of the same condition: a value whose last byte is the buffer's last byte
+      // also ends in end_reached, and there it means the read completed.
+      for (std::string_view complete : {"[1,2,3]", "[[1,2],[3]]", "{\"a\":1}", "42", "\"abc\"", "null"}) {
+         const std::vector<char> buf{complete.begin(), complete.end()};
+         glz::generic j{};
+         expect(glz::read<options>(j, std::string_view{buf.data(), buf.size()}) == glz::error_code::none) << complete;
+      }
+   };
+
+   // Depth is what tells a completed non-null-terminated read from a truncated one, so a read that
+   // reports success has to leave it at zero. A partial read is the one that would not: it stops as
+   // soon as it has the fields it wants and unwinds on an error code, so its enclosing containers
+   // never decrement. A context reused after one would then see the next well-formed buffer settle
+   // to unexpected_end.
+   "a context reused after a partial read still reads"_test = [] {
+      static constexpr glz::opts options{.null_terminated = false};
+      static constexpr glz::opts partial{.null_terminated = false, .partial_read = true};
+
+      glz::context ctx{};
+
+      const std::string first = R"({"inner":{"a":1}})";
+      const std::vector<char> buf1{first.begin(), first.end()};
+      partial_reuse_outer_t o{};
+      expect(glz::read<partial>(o, std::string_view{buf1.data(), buf1.size()}, ctx) == glz::error_code::none);
+      expect(o.inner.a == 1);
+      expect(ctx.depth == 0) << "a completed partial read must not leave depth raised";
+
+      const std::string second = R"({"a":1,"b":2})";
+      const std::vector<char> buf2{second.begin(), second.end()};
+      partial_reuse_pair_t p{};
+      expect(glz::read<options>(p, std::string_view{buf2.data(), buf2.size()}, ctx) == glz::error_code::none);
+      expect(p.a == 1);
+      expect(p.b == 2);
    };
 
    "bool write"_test = [] {
@@ -4436,23 +4723,106 @@ suite nested_file_include_test = [] {
    };
 };
 
-// Shrink to fit is nonbinding and cannot be properly tested
-/*suite shrink_to_fit = [] {
-   "shrink_to_fit"_test = [] {
-      std::vector<int> v = { 1, 2, 3, 4, 5, 6 };
-      std::string b = R"([1,2,3])";
-      expect(glz::read_json(v, b) == glz::error_code::none);
+struct shrink_opts : glz::opts
+{
+   bool shrink_to_fit = true;
+};
 
-      expect(v.size() == 3);
-      expect(v.capacity() > 3);
+// std::vector::shrink_to_fit() is a non-binding request, so capacity can't be asserted portably.
+// Track the call itself instead, which is what Glaze is responsible for.
+struct shrink_counter : std::vector<int>
+{
+   using std::vector<int>::vector;
+   size_t shrink_calls{};
+   void shrink_to_fit()
+   {
+      ++shrink_calls;
+      std::vector<int>::shrink_to_fit();
+   }
+};
 
-      v = { 1, 2, 3, 4, 5, 6 };
+const std::vector<int> expected_123{1, 2, 3};
 
-      expect(glz::read<glz::opts{.shrink_to_fit = true}>(v, b) == glz::error_code::none);
-      expect(v.size() == 3);
-      expect(v.capacity() == 3);
+suite shrink_to_fit_tests = [] {
+   "growing read shrinks"_test = [] {
+      shrink_counter v;
+      expect(not glz::read<shrink_opts{}>(v, std::string{"[1,2,3]"}));
+      expect(v == expected_123);
+      expect(v.shrink_calls == 1);
    };
-};*/
+
+   "read past existing size shrinks"_test = [] {
+      // starts smaller than the buffer, so the overwrite loop falls through into the growing loop
+      shrink_counter v{1};
+      expect(not glz::read<shrink_opts{}>(v, std::string{"[1,2,3]"}));
+      expect(v == expected_123);
+      expect(v.shrink_calls == 1);
+   };
+
+   "shrinking read shrinks"_test = [] {
+      shrink_counter v{1, 2, 3, 4, 5, 6};
+      expect(not glz::read<shrink_opts{}>(v, std::string{"[1,2,3]"}));
+      expect(v == expected_123);
+      expect(v.shrink_calls == 1);
+   };
+
+   "empty array shrinks"_test = [] {
+      shrink_counter v{1, 2, 3};
+      expect(not glz::read<shrink_opts{}>(v, std::string{"[]"}));
+      expect(v.empty());
+      expect(v.shrink_calls == 1);
+   };
+
+   "appended read shrinks"_test = [] {
+      struct append_shrink_opts : glz::opts
+      {
+         bool append_arrays = true;
+         bool shrink_to_fit = true;
+      };
+      shrink_counter v{1};
+      expect(not glz::read<append_shrink_opts{}>(v, std::string{"[2,3]"}));
+      expect(v == expected_123);
+      expect(v.shrink_calls == 1);
+   };
+
+   "no shrink by default"_test = [] {
+      shrink_counter v{1, 2, 3, 4, 5, 6};
+      expect(not glz::read_json(v, std::string{"[1,2,3]"}));
+      expect(v == expected_123);
+      expect(v.shrink_calls == 0);
+   };
+
+   // std::list and std::forward_list are resizable but have no shrink_to_fit member
+   "containers without shrink_to_fit still compile"_test = [] {
+      std::list<int> l{9, 9, 9, 9};
+      expect(not glz::read<shrink_opts{}>(l, std::string{"[1,2,3]"}));
+      expect(l == (std::list<int>{1, 2, 3}));
+
+      std::forward_list<int> fl{9, 9, 9, 9};
+      expect(not glz::read<shrink_opts{}>(fl, std::string{"[1,2,3]"}));
+      expect(fl == (std::forward_list<int>{1, 2, 3}));
+   };
+
+   "ndjson shrinking read shrinks"_test = [] {
+      shrink_counter v{1, 2, 3, 4, 5, 6};
+      expect(not glz::read<shrink_opts{{.format = glz::NDJSON}}>(v, std::string{"1\n2\n3"}));
+      expect(v == expected_123);
+      expect(v.shrink_calls == 1);
+   };
+
+   "ndjson growing read shrinks"_test = [] {
+      shrink_counter v;
+      expect(not glz::read<shrink_opts{{.format = glz::NDJSON}}>(v, std::string{"1\n2\n3"}));
+      expect(v == expected_123);
+      expect(v.shrink_calls == 1);
+   };
+
+   "ndjson containers without shrink_to_fit still compile"_test = [] {
+      std::list<int> l{9, 9, 9, 9};
+      expect(not glz::read<shrink_opts{{.format = glz::NDJSON}}>(l, std::string{"1\n2\n3"}));
+      expect(l == (std::list<int>{1, 2, 3}));
+   };
+};
 
 suite recorder_test = [] {
    "recorder_to_file"_test = [] {
@@ -13019,6 +13389,41 @@ suite directory_tests = [] {
       expect(input.contains("./dir/beta.json"));
       expect(input["./dir/beta.json"].i == 0);
    };
+
+   // read_directory must report a missing directory through its error_ctx rather
+   // than throwing a std::filesystem_error out of directory_to_buffers.
+   "read_directory nonexistent"_test = [] {
+      std::map<std::filesystem::path, my_struct> input{};
+      const auto ec = glz::read_directory(input, "./directory_that_does_not_exist_9f3a");
+      expect(bool(ec));
+      expect(input.empty());
+   };
+};
+
+suite buffer_to_file_tests = [] {
+   // buffer_to_file must write bytes verbatim: text-mode newline translation would
+   // corrupt binary formats on Windows (0x0A -> 0x0D 0x0A) and break byte-exact
+   // round-trips. On POSIX this passes regardless; it guards the Windows path.
+   "buffer_to_file byte-exact round trip"_test = [] {
+      const std::string path = "./verbatim_roundtrip.bin";
+      std::string payload{};
+      for (int rep = 0; rep < 4; ++rep) {
+         for (int b = 0; b < 256; ++b) {
+            payload.push_back(static_cast<char>(b)); // includes 0x0A and 0x0D
+         }
+      }
+      payload += "a\nb\r\nc\r"; // explicit newline combinations
+
+      expect(glz::buffer_to_file(payload, path) == glz::error_code::none);
+
+      std::string readback{};
+      expect(glz::file_to_buffer(readback, path) == glz::error_code::none);
+      expect(readback.size() == payload.size());
+      expect(readback == payload);
+
+      std::error_code fs_ec{};
+      std::filesystem::remove(path, fs_ec);
+   };
 };
 
 struct WorkshopModConfig
@@ -14934,6 +15339,209 @@ suite bounded_buffer_overflow_tests = [] {
       auto ec = glz::write<opts>(w, buffer);
       expect(not ec) << "prettify with many fields should not crash";
       expect(buffer.size() > 0) << "output should not be empty";
+   };
+};
+
+namespace json_depth
+{
+   struct list_node
+   {
+      std::unique_ptr<list_node> next{};
+      int n{};
+   };
+
+   struct one_field
+   {
+      int a{};
+   };
+
+   struct alt_a
+   {
+      int a{};
+   };
+   struct alt_b
+   {
+      int b{};
+   };
+
+   inline std::string nested_objects(size_t levels, std::string_view key = "next")
+   {
+      std::string b;
+      for (size_t i = 0; i < levels; ++i) {
+         b += "{\"";
+         b += key;
+         b += "\":";
+      }
+      b += "null";
+      b.append(levels, '}');
+      return b;
+   }
+
+   // Two array alternatives, so the variant is not auto-deducible and each level tries both.
+   struct node;
+   using two_arrays = std::variant<std::vector<node>, std::list<node>>;
+   struct node
+   {
+      two_arrays child{};
+   };
+
+   inline std::string nested_arrays(size_t levels)
+   {
+      std::string b;
+      b.append(levels, '[');
+      b.append(levels, ']');
+      return b;
+   }
+}
+
+suite json_recursion_depth_limit = [] {
+   using namespace json_depth;
+
+   "a recursive type is bounded by the depth limit, not by the stack"_test = [] {
+      // Nesting is driven by the input, not by the type, so the readers have to count it. 100k levels
+      // of "{\"next\":" is 900 KB against a default 8 MB stack (1 MB on Windows).
+      list_node deep_out{};
+      expect(glz::read_json(deep_out, nested_objects(100'000)) == glz::error_code::exceeded_max_recursive_depth);
+
+      list_node ok_out{};
+      expect(not glz::read_json(ok_out, nested_objects(100))) << "nesting within the limit must still read";
+   };
+
+   "the limit binds at max_recursive_depth_limit levels"_test = [] {
+      list_node at_limit{};
+      expect(not glz::read_json(at_limit, nested_objects(glz::max_recursive_depth_limit)));
+
+      list_node past_limit{};
+      expect(glz::read_json(past_limit, nested_objects(glz::max_recursive_depth_limit + 1)) ==
+             glz::error_code::exceeded_max_recursive_depth);
+   };
+
+   "untyped reads are bounded too"_test = [] {
+      glz::generic out{};
+      expect(glz::read_json(out, nested_arrays(100'000)) == glz::error_code::exceeded_max_recursive_depth);
+   };
+
+   "a validated skip of an unknown key is bounded"_test = [] {
+      // The default skip walks the nest iteratively; validate_skipped parses it, which recurses.
+      struct validating : glz::opts
+      {
+         bool validate_skipped = true;
+      };
+      static constexpr validating opts{{glz::opts{.error_on_unknown_keys = false}}};
+
+      std::string buffer = R"({"zz":)";
+      buffer += nested_arrays(100'000);
+      buffer += "}";
+
+      one_field out{};
+      expect(glz::read<opts>(out, buffer) == glz::error_code::exceeded_max_recursive_depth);
+   };
+
+   "an over-nested variant errors instead of retrying every alternative"_test = [] {
+      // Two array alternatives make this variant non-auto-deducible, so each level tries both. Past
+      // the limit every level fails identically, and a retry that rewound the depth handed the next
+      // alternative a fresh budget to re-descend on: N^depth work for a 1.5 KB buffer. The limit is
+      // reached at 128 levels here because the array and the object each count. This must error
+      // immediately, so a regression shows up as a hung test rather than a failed assertion.
+      const auto build = [](size_t levels) {
+         std::string b;
+         for (size_t i = 0; i < levels; ++i) b += R"([{"child":)";
+         b += "[]";
+         for (size_t i = 0; i < levels; ++i) b += "}]";
+         return b;
+      };
+
+      two_arrays under{};
+      expect(not glz::read_json(under, build(glz::max_recursive_depth_limit / 2 - 1)));
+
+      two_arrays over{};
+      expect(glz::read_json(over, build(glz::max_recursive_depth_limit / 2)) ==
+             glz::error_code::exceeded_max_recursive_depth);
+
+      two_arrays far_over{};
+      expect(glz::read_json(far_over, build(5000)) == glz::error_code::exceeded_max_recursive_depth);
+   };
+
+   "std::expected does not spend a level per value"_test = [] {
+      // The wrapper reader holds a level while it scans for the "unexpected" key, and every path has
+      // to give it back -- the two that rewind and re-read the object through a counting reader
+      // included. Leaking it capped a run of wrappers at 256.
+      //
+      // Reads share one context rather than filling a std::vector<std::expected<...>>, which is the
+      // same test but instantiates vector's iterator comparison against std::expected; libc++ on the
+      // P2996 clang recurses into its own operator== constraint there and fails to compile.
+      glz::context ctx{};
+      for (size_t i = 0; i < 2 * glz::max_recursive_depth_limit; ++i) {
+         std::expected<one_field, std::string> out{};
+         const auto ec = glz::read<glz::opts{}>(out, R"({"a":1})", ctx);
+         expect(not ec) << "read " << i << ": " << glz::format_error(ec);
+         if (ec) break;
+      }
+      expect(ctx.depth == 0) << "the reader must leave the depth balanced: " << ctx.depth;
+
+      // Holding the level on the error paths is what still catches a truncated wrapper when the
+      // buffer is not null terminated.
+      static constexpr glz::opts nnt{.null_terminated = false};
+      for (const std::string_view prefix : {R"({"unexpected")", R"({"unexpected":"boom")"}) {
+         std::vector<char> buf{prefix.begin(), prefix.end()};
+         const std::string_view view{buf.data(), buf.data() + buf.size()};
+         std::expected<one_field, std::string> trunc{};
+         expect(bool(glz::read<nnt>(trunc, view))) << "truncated wrapper must not succeed: " << prefix;
+      }
+   };
+
+   "partial_read leaves the depth balanced"_test = [] {
+      // A partial read stops on a success path, so it has to close its level like any other exit;
+      // otherwise the count creeps up across reads that share a context.
+      static constexpr glz::opts partial{.partial_read = true};
+
+      glz::context ctx{};
+      for (size_t i = 0; i < 2 * glz::max_recursive_depth_limit; ++i) {
+         one_field out{};
+         const auto ec = glz::read<partial>(out, R"({"a":1,"zz":2})", ctx);
+         expect(not ec) << "read " << i << ": " << glz::format_error(ec);
+         if (ec) break;
+      }
+      expect(ctx.depth == 0) << ctx.depth;
+   };
+
+   "an ambiguous nest cannot multiply the work of resolving it"_test = [] {
+      // The JSON analogue of the BEVE cascade: two array alternatives, so every level tries both,
+      // with a malformed leaf at the bottom that every level retries. 339 bytes took 40 seconds
+      // before the speculation budget capped the total re-parsed bytes; the cost no longer grows
+      // with depth.
+      const auto build = [](size_t levels) {
+         std::string b;
+         for (size_t i = 0; i < levels; ++i) b += R"([{"child":)";
+         b += "[{]"; // malformed leaf
+         for (size_t i = 0; i < levels; ++i) b += "}]";
+         return b;
+      };
+
+      const auto start = std::chrono::steady_clock::now();
+      for (size_t levels : {8u, 16u, 28u, 36u}) {
+         two_arrays out{};
+         expect(bool(glz::read_json(out, build(levels)))) << "levels=" << levels;
+      }
+      const auto ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count();
+      expect(ms < 5000.0) << "resolving ambiguous nests took " << ms << " ms";
+   };
+
+   "rejected variant alternatives do not spend the depth budget"_test = [] {
+      // Each element tries alt_a first and fails inside its object, which leaves that level counted
+      // until the alternative is rewound. Without the rewind this errors once 256 elements have been
+      // attempted, even though the document is two levels deep.
+      std::string buffer = "[";
+      for (size_t i = 0; i < 2 * glz::max_recursive_depth_limit; ++i) {
+         if (i) buffer += ',';
+         buffer += R"({"b":1})";
+      }
+      buffer += "]";
+
+      std::vector<std::variant<alt_a, alt_b>> out{};
+      const auto ec = glz::read<glz::opts{.error_on_unknown_keys = false}>(out, buffer);
+      expect(not ec) << glz::format_error(ec, buffer);
+      expect(out.size() == 2 * glz::max_recursive_depth_limit);
    };
 };
 

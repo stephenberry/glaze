@@ -57,6 +57,12 @@ using std::uint64_t;
 using std::int64_t;
 using std::size_t;
 
+// Recursion depth: a CBOR nesting level costs a single byte, so input alone can drive the reader
+// arbitrarily deep and overflow the stack. Every reader that consumes an array or map head and then
+// descends into the items takes one level with glz::depth_guard, and skip_value<CBOR> does the same,
+// which bounds the descent at max_recursive_depth_limit and reports exceeded_max_recursive_depth
+// instead of crashing.
+
 namespace glz
 {
    namespace cbor_detail
@@ -883,7 +889,7 @@ namespace glz
 
                   if constexpr (resizable<T>) {
                      value.resize(count);
-                     if constexpr (check_shrink_to_fit(Opts)) {
+                     if constexpr (check_shrink_to_fit(Opts) && has_shrink_to_fit<T>) {
                         value.shrink_to_fit();
                      }
                   }
@@ -1030,7 +1036,7 @@ namespace glz
 
                   if constexpr (resizable<T>) {
                      value.resize(count);
-                     if constexpr (check_shrink_to_fit(Opts)) {
+                     if constexpr (check_shrink_to_fit(Opts) && has_shrink_to_fit<T>) {
                         value.shrink_to_fit();
                      }
                   }
@@ -1095,6 +1101,12 @@ namespace glz
 
          if (major_type != major::array) [[unlikely]] {
             ctx.error = error_code::syntax_error;
+            return;
+         }
+
+         // The typed and complex array forms above are flat; only this branch descends into elements.
+         depth_guard guard{ctx};
+         if (!guard) [[unlikely]] {
             return;
          }
 
@@ -1164,7 +1176,7 @@ namespace glz
             if constexpr (resizable<T>) {
                value.resize(static_cast<size_t>(count));
 
-               if constexpr (check_shrink_to_fit(Opts)) {
+               if constexpr (check_shrink_to_fit(Opts) && has_shrink_to_fit<T>) {
                   value.shrink_to_fit();
                }
             }
@@ -1208,6 +1220,11 @@ namespace glz
 
          if (major_type != major::map) [[unlikely]] {
             ctx.error = error_code::syntax_error;
+            return;
+         }
+
+         depth_guard guard{ctx};
+         if (!guard) [[unlikely]] {
             return;
          }
 
@@ -1307,6 +1324,11 @@ namespace glz
             return;
          }
 
+         depth_guard guard{ctx};
+         if (!guard) [[unlikely]] {
+            return;
+         }
+
          uint64_t count = cbor_detail::decode_arg(ctx, it, end, additional_info);
          if (bool(ctx.error)) [[unlikely]]
             return;
@@ -1351,6 +1373,11 @@ namespace glz
 
          if (major_type != major::map) [[unlikely]] {
             ctx.error = error_code::syntax_error;
+            return;
+         }
+
+         depth_guard guard{ctx};
+         if (!guard) [[unlikely]] {
             return;
          }
 
@@ -1505,6 +1532,11 @@ namespace glz
             return;
          }
 
+         depth_guard guard{ctx};
+         if (!guard) [[unlikely]] {
+            return;
+         }
+
          using V = std::decay_t<T>;
          static constexpr auto N = glz::tuple_size_v<V>;
 
@@ -1563,6 +1595,11 @@ namespace glz
                ctx.error = error_code::syntax_error;
                return;
             }
+         }
+
+         depth_guard guard{ctx};
+         if (!guard) [[unlikely]] {
+            return;
          }
 
          for_each<reflect<T>::size>(
@@ -1787,6 +1824,12 @@ namespace glz
             return;
          }
 
+         // This reader consumes the [index, value] array itself, so the level is its to count.
+         depth_guard guard{ctx};
+         if (!guard) [[unlikely]] {
+            return;
+         }
+
          uint64_t count = cbor_detail::decode_arg(ctx, it, end, additional_info);
          if (bool(ctx.error)) [[unlikely]]
             return;
@@ -2002,21 +2045,8 @@ namespace glz
       }
    };
 
-   // std::chrono::duration - bare numeric count in the duration's native units
-   template <is_duration T>
-   struct from<CBOR, T>
-   {
-      template <auto Opts>
-      GLZ_ALWAYS_INLINE static void op(auto& value, is_context auto& ctx, auto& it, auto end) noexcept
-      {
-         using Rep = typename std::remove_cvref_t<T>::rep;
-         Rep count{};
-         from<CBOR, Rep>::template op<Opts>(count, ctx, it, end);
-         if (bool(ctx.error)) [[unlikely]]
-            return;
-         value = std::remove_cvref_t<T>(count);
-      }
-   };
+   // std::chrono::duration - parsed generically (from the bare rep count) by the
+   // from<uint32_t Format, is_duration T> specialization in core/chrono.hpp.
 
    namespace cbor_detail
    {
@@ -2171,39 +2201,8 @@ namespace glz
       }
    };
 
-   // steady_clock::time_point - bare count in native duration
-   template <is_steady_time_point T>
-   struct from<CBOR, T>
-   {
-      template <auto Opts>
-      GLZ_ALWAYS_INLINE static void op(auto& value, is_context auto& ctx, auto& it, auto end) noexcept
-      {
-         using Duration = typename std::remove_cvref_t<T>::duration;
-         using Rep = typename Duration::rep;
-         Rep count{};
-         from<CBOR, Rep>::template op<Opts>(count, ctx, it, end);
-         if (bool(ctx.error)) [[unlikely]]
-            return;
-         value = std::remove_cvref_t<T>(Duration(count));
-      }
-   };
-
-   // high_resolution_clock::time_point when it's a distinct type (rare)
-   template <is_high_res_time_point T>
-   struct from<CBOR, T>
-   {
-      template <auto Opts>
-      GLZ_ALWAYS_INLINE static void op(auto& value, is_context auto& ctx, auto& it, auto end) noexcept
-      {
-         using Duration = typename std::remove_cvref_t<T>::duration;
-         using Rep = typename Duration::rep;
-         Rep count{};
-         from<CBOR, Rep>::template op<Opts>(count, ctx, it, end);
-         if (bool(ctx.error)) [[unlikely]]
-            return;
-         value = std::remove_cvref_t<T>(Duration(count));
-      }
-   };
+   // steady_clock / high_resolution_clock time_points: parsed generically (from the bare
+   // count) by the from<uint32_t Format, is_count_time_point T> specialization in core/chrono.hpp.
 
    // epoch_time wrapper - decoder accepts:
    //   - tag 1 + integer seconds (RFC 8949 §3.4.2; what glaze writes for Period >= 1s)

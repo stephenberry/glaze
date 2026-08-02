@@ -1078,6 +1078,14 @@ namespace glz
             return;
          }
          static constexpr auto ids = ids_v<T>;
+         // `ids` may declare fewer entries than the variant has alternatives -- the readers treat the
+         // first unlabeled alternative as the default for an unrecognized id -- so an alternative past
+         // the end of `ids` has no id to write. Indexing there reads past a static array.
+         if (value.index() >= ids.size()) [[unlikely]] {
+            ctx.error = error_code::no_matching_variant_type;
+            ctx.custom_error_message = variant_ids_string_v<T>;
+            return;
+         }
          if (!msgpack::detail::write_str_header(ctx, ids[value.index()].size(), b, ix)) [[unlikely]] {
             return;
          }

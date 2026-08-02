@@ -1739,14 +1739,105 @@ namespace glz
       requires(not custom_write<T>)
    struct to<JSON, T>
    {
+      // The tagging representation is a property of the variant, decided once for every alternative.
+      static constexpr auto tagging = variant_tagging_v<T>;
+
+      // Every tagged form indexes ids_v by the active alternative. `ids` may legally declare fewer
+      // entries than the variant has alternatives -- the readers treat the first unlabeled
+      // alternative as the default for an id they do not recognize, which is a deliberate
+      // forward-compatibility feature -- so an alternative past the end of `ids` has no id to write.
+      // Indexing ids_v there reads past the end of a static array, which without a sanitizer silently
+      // emits whatever data follows it as the tag value. Reject the write instead.
+      static bool missing_id(auto&& value, is_context auto&& ctx)
+      {
+         if (value.index() >= ids_v<T>.size()) [[unlikely]] {
+            ctx.error = error_code::no_matching_variant_type;
+            ctx.custom_error_message = variant_ids_string_v<T>;
+            return true;
+         }
+         return false;
+      }
+
+      // The discriminator VALUE: string ids are quoted, integral ids are written bare.
+      template <auto Opts, class B>
+      static void write_id(auto&& value, is_context auto&& ctx, B&& b, auto& ix)
+      {
+         using id_type = std::decay_t<decltype(ids_v<T>[0])>;
+         if constexpr (std::integral<id_type>) {
+            serialize<JSON>::op<Opts>(ids_v<T>[value.index()], ctx, b, ix);
+         }
+         else {
+            dump('"', b, ix);
+            dump_maybe_empty(ids_v<T>[value.index()], b, ix);
+            dump('"', b, ix);
+         }
+      }
+
+      // Adjacent tagging: {tag: id, content: value}. The discriminator sits beside the value rather
+      // than inside it, so this form is identical for every alternative -- object, array, map,
+      // scalar, or null -- which is what makes the variant describable by a single schema and its
+      // alternatives distinguishable on read regardless of their shapes.
+      template <auto Opts, class B>
+      static void write_adjacent(auto&& value, is_context auto&& ctx, B&& b, auto& ix)
+      {
+         if (missing_id(value, ctx)) {
+            return;
+         }
+         if constexpr (Opts.prettify) {
+            dump("{\n", b, ix);
+            ctx.depth += check_indentation_width(Opts);
+            dumpn(check_indentation_char(Opts), ctx.depth, b, ix);
+            dump('"', b, ix);
+            dump_maybe_empty(tag_v<T>, b, ix);
+            dump("\": ", b, ix);
+            write_id<Opts>(value, ctx, b, ix);
+            dump(",\n", b, ix);
+            dumpn(check_indentation_char(Opts), ctx.depth, b, ix);
+            dump('"', b, ix);
+            dump_maybe_empty(content_v<T>, b, ix);
+            dump("\": ", b, ix);
+            std::visit([&](auto&& v) { serialize<JSON>::op<Opts>(v, ctx, b, ix); }, value);
+            ctx.depth -= check_indentation_width(Opts);
+            if (!ensure_space(ctx, b, ix + ctx.depth + write_padding_bytes)) [[unlikely]] {
+               return;
+            }
+            std::memcpy(&b[ix], "\n", 1);
+            ++ix;
+            std::memset(&b[ix], check_indentation_char(Opts), ctx.depth);
+            ix += ctx.depth;
+            std::memcpy(&b[ix], "}", 1);
+            ++ix;
+         }
+         else {
+            dump("{\"", b, ix);
+            dump_maybe_empty(tag_v<T>, b, ix);
+            dump("\":", b, ix);
+            write_id<Opts>(value, ctx, b, ix);
+            dump(",\"", b, ix);
+            dump_maybe_empty(content_v<T>, b, ix);
+            dump("\":", b, ix);
+            std::visit([&](auto&& v) { serialize<JSON>::op<Opts>(v, ctx, b, ix); }, value);
+            dump('}', b, ix);
+         }
+      }
+
       template <auto Opts, class B>
       static void op(auto&& value, is_context auto&& ctx, B&& b, auto& ix)
       {
+         // Adjacent tagging needs no per-alternative dispatch: the discriminator and the value are
+         // written side by side whatever the alternative is. The visit below still instantiates in
+         // that mode (`if constexpr` does not discard the statements after it), but both of its
+         // tagged branches are compile-time dead there and the runtime `return` keeps it unreached.
+         if constexpr (check_write_type_info(Opts) && tagging == variant_tagging_kind::adjacent) {
+            write_adjacent<Opts>(value, ctx, b, ix);
+            return;
+         }
          std::visit(
             [&](auto&& val) {
                using V = std::decay_t<decltype(val)>;
 
-               if constexpr (check_write_type_info(Opts) && not tag_v<T>.empty() && custom_write<V>) {
+               if constexpr (check_write_type_info(Opts) && tagging == variant_tagging_kind::internal &&
+                             custom_write<V>) {
                   // Custom alternative: the user's serializer emits the object body, into which we
                   // merge the variant tag. For this to produce valid JSON the custom to<> must (1)
                   // write an object body and (2) honor opening_and_closing_handled (suppress its own
@@ -1756,6 +1847,9 @@ namespace glz
                   // The tag-emission below mirrors the reflected-object branch that follows; keep the
                   // two in sync. The body size is not known at compile time, so we always write the
                   // tag separator and then drop it at runtime if the body turned out empty.
+                  if (missing_id(value, ctx)) {
+                     return;
+                  }
                   using id_type = std::decay_t<decltype(ids_v<T>[value.index()])>;
                   if constexpr (Opts.prettify) {
                      dump("{\n", b, ix);
@@ -1813,9 +1907,50 @@ namespace glz
                      dump('}', b, ix);
                   }
                }
-               else if constexpr (check_write_type_info(Opts) && not tag_v<T>.empty() &&
-                                  (glaze_object_t<V> || (reflectable<V> && !has_member_with_name<V>(tag_v<T>)) ||
-                                   is_memory_object<V>)) {
+               else if constexpr (check_write_type_info(Opts) && tagging == variant_tagging_kind::internal &&
+                                  variant_unit_alternative<V>) {
+                  // A unit alternative carries no data, so internal tagging renders it as the
+                  // discriminator alone -- the same object an empty struct alternative produces.
+                  if (missing_id(value, ctx)) {
+                     return;
+                  }
+                  if constexpr (Opts.prettify) {
+                     dump("{\n", b, ix);
+                     ctx.depth += check_indentation_width(Opts);
+                     dumpn(check_indentation_char(Opts), ctx.depth, b, ix);
+                     dump('"', b, ix);
+                     dump_maybe_empty(tag_v<T>, b, ix);
+                     dump("\": ", b, ix);
+                     write_id<Opts>(value, ctx, b, ix);
+                     ctx.depth -= check_indentation_width(Opts);
+                     if (!ensure_space(ctx, b, ix + ctx.depth + write_padding_bytes)) [[unlikely]] {
+                        return;
+                     }
+                     std::memcpy(&b[ix], "\n", 1);
+                     ++ix;
+                     std::memset(&b[ix], check_indentation_char(Opts), ctx.depth);
+                     ix += ctx.depth;
+                     std::memcpy(&b[ix], "}", 1);
+                     ++ix;
+                  }
+                  else {
+                     dump("{\"", b, ix);
+                     dump_maybe_empty(tag_v<T>, b, ix);
+                     dump("\":", b, ix);
+                     write_id<Opts>(value, ctx, b, ix);
+                     dump('}', b, ix);
+                  }
+               }
+               else if constexpr (check_write_type_info(Opts) && tagging == variant_tagging_kind::internal &&
+                                  (glaze_object_t<V> || reflectable<V> || is_memory_object<V>) &&
+                                  (not alternative_declares_key<V>(tag_v<T>))) {
+                  // An alternative that declares a member named like the discriminator carries the
+                  // discriminator itself, so no tag is merged here and the bare-write branch below
+                  // handles it. Previously only `reflectable` alternatives were excluded; a
+                  // `glaze_object_t` one fell through to this branch and emitted the key twice.
+                  if (missing_id(value, ctx)) {
+                     return;
+                  }
                   constexpr auto N = []() {
                      if constexpr (is_memory_object<V>) {
                         return reflect<memory_type<V>>::size;
@@ -1927,6 +2062,13 @@ namespace glz
       static void op(auto&& wrapper, is_context auto&& ctx, Args&&... args)
       {
          auto& value = wrapper.value;
+         // `ids` may declare fewer entries than the variant has alternatives; indexing past the end
+         // reads static data beyond the array and emits it as the id. See to<JSON, is_variant>.
+         if (value.index() >= ids_v<T>.size()) [[unlikely]] {
+            ctx.error = error_code::no_matching_variant_type;
+            ctx.custom_error_message = variant_ids_string_v<T>;
+            return;
+         }
          dump('[', args...);
          if constexpr (Opts.prettify) {
             ctx.depth += check_indentation_width(Opts);
@@ -2500,26 +2642,13 @@ namespace glz
    // std::chrono serialization
    // ============================================
 
-   // Duration: serialize as count
-   template <is_duration T>
-      requires(not custom_write<T>)
-   struct to<JSON, T>
-   {
-      template <auto Opts, class B>
-      GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, B&& b, auto& ix) noexcept
-      {
-         using Rep = typename std::remove_cvref_t<T>::rep;
-         to<JSON, Rep>::template op<Opts>(value.count(), ctx, b, ix);
-      }
-   };
+   // Duration: serialized generically (as the bare rep count) by the
+   // to<uint32_t Format, is_duration T> specialization in core/chrono.hpp.
 
    // system_clock::time_point: serialize as ISO 8601 string.
-   // Zero-allocation implementation writing directly to buffer.
-   // Time points whose Duration period is exactly `days` (e.g. std::chrono::sys_days)
-   // are written as date-only "YYYY-MM-DD" since the time-of-day is always zero at that
-   // precision and the calendar date is the meaningful payload. Coarser periods (weeks,
-   // months, years) fall through to the full ISO 8601 path; this avoids silently
-   // truncating an arbitrary date to a multi-day boundary on read.
+   // Zero-allocation implementation writing directly to buffer. The layout is shared with
+   // every other text format via chrono_detail::write_iso_time_point; JSON supplies the
+   // quoting (a JSON scalar is a quoted string unless the caller opted out via `unquoted`).
    template <is_system_time_point T>
       requires(not custom_write<T>)
    struct to<JSON, T>
@@ -2527,111 +2656,11 @@ namespace glz
       template <auto Opts, class B>
       static void op(auto&& value, is_context auto&& ctx, B&& b, auto& ix) noexcept
       {
-         using namespace std::chrono;
-         using TP = std::remove_cvref_t<T>;
-         using Duration = typename TP::duration;
-         using Period = typename Duration::period;
-
-         constexpr bool date_only = std::ratio_equal_v<Period, std::ratio<86400>>;
-
-         const auto dp = floor<days>(value);
-         const year_month_day ymd{dp};
-         const int yr = static_cast<int>(ymd.year());
-         const unsigned mo = static_cast<unsigned>(ymd.month());
-         const unsigned dy = static_cast<unsigned>(ymd.day());
-
-         // RFC 3339 requires a 4-digit year in [0000, 9999]. Reject anything else rather
-         // than silently corrupting the output via uint64_t wrap of a negative year.
-         if (yr < 0 || yr > 9999) [[unlikely]] {
-            ctx.error = error_code::constraint_violated;
+         using Period = typename std::remove_cvref_t<T>::duration::period;
+         if (!ensure_space(ctx, b, ix + chrono_detail::iso_time_point_max_size<Period>)) [[unlikely]] {
             return;
          }
-
-         if constexpr (date_only) {
-            // "YYYY-MM-DD" = 10 chars + optional quotes
-            constexpr size_t max_size = 12;
-            if (!ensure_space(ctx, b, ix + max_size)) [[unlikely]] {
-               return;
-            }
-
-            if constexpr (not check_unquoted(Opts)) {
-               b[ix++] = '"';
-            }
-            chrono_detail::write_digits<4>(b, ix, static_cast<uint64_t>(yr));
-            b[ix++] = '-';
-            chrono_detail::write_digits<2>(b, ix, mo);
-            b[ix++] = '-';
-            chrono_detail::write_digits<2>(b, ix, dy);
-            if constexpr (not check_unquoted(Opts)) {
-               b[ix++] = '"';
-            }
-         }
-         else {
-            const hh_mm_ss tod{floor<Duration>(value - dp)};
-            const auto hr = static_cast<unsigned>(tod.hours().count());
-            const auto mi = static_cast<unsigned>(tod.minutes().count());
-            const auto sc = static_cast<unsigned>(tod.seconds().count());
-
-            // Calculate fractional digits based on duration precision
-            constexpr size_t frac_digits = []() constexpr {
-               if constexpr (std::ratio_greater_equal_v<Period, std::ratio<1>>) {
-                  return 0; // seconds or coarser
-               }
-               else if constexpr (std::ratio_greater_equal_v<Period, std::milli>) {
-                  return 3; // milliseconds
-               }
-               else if constexpr (std::ratio_greater_equal_v<Period, std::micro>) {
-                  return 6; // microseconds
-               }
-               else {
-                  return 9; // nanoseconds or finer
-               }
-            }();
-
-            // Max size: "YYYY-MM-DDTHH:MM:SS.nnnnnnnnnZ" = 30 + quotes = 32
-            constexpr size_t max_size = 22 + (frac_digits > 0 ? 1 + frac_digits : 0);
-            if (!ensure_space(ctx, b, ix + max_size)) [[unlikely]] {
-               return;
-            }
-
-            if constexpr (not check_unquoted(Opts)) {
-               b[ix++] = '"';
-            }
-            chrono_detail::write_digits<4>(b, ix, static_cast<uint64_t>(yr));
-            b[ix++] = '-';
-            chrono_detail::write_digits<2>(b, ix, mo);
-            b[ix++] = '-';
-            chrono_detail::write_digits<2>(b, ix, dy);
-            b[ix++] = 'T';
-            chrono_detail::write_digits<2>(b, ix, hr);
-            b[ix++] = ':';
-            chrono_detail::write_digits<2>(b, ix, mi);
-            b[ix++] = ':';
-            chrono_detail::write_digits<2>(b, ix, sc);
-
-            // Write fractional seconds if duration is finer than seconds
-            if constexpr (frac_digits > 0) {
-               b[ix++] = '.';
-               const auto subsec = tod.subseconds();
-               if constexpr (frac_digits == 3) {
-                  chrono_detail::write_digits<3>(b, ix,
-                                                 static_cast<uint64_t>(duration_cast<milliseconds>(subsec).count()));
-               }
-               else if constexpr (frac_digits == 6) {
-                  chrono_detail::write_digits<6>(b, ix,
-                                                 static_cast<uint64_t>(duration_cast<microseconds>(subsec).count()));
-               }
-               else {
-                  chrono_detail::write_digits<9>(b, ix,
-                                                 static_cast<uint64_t>(duration_cast<nanoseconds>(subsec).count()));
-               }
-            }
-
-            b[ix++] = 'Z';
-            if constexpr (not check_unquoted(Opts)) {
-               b[ix++] = '"';
-            }
-         }
+         chrono_detail::write_iso_time_point<not check_unquoted(Opts)>(value, ctx, b, ix);
       }
    };
 
@@ -2643,67 +2672,20 @@ namespace glz
       template <auto Opts, class B>
       static void op(auto&& value, is_context auto&& ctx, B&& b, auto& ix) noexcept
       {
-         const int yr = static_cast<int>(value.year());
-         const unsigned mo = static_cast<unsigned>(value.month());
-         const unsigned dy = static_cast<unsigned>(value.day());
-
-         // std::chrono::year is a signed 16-bit-ish range, so users can construct dates
-         // outside [0000, 9999]. Reject those rather than emitting wrap-around digits.
-         if (yr < 0 || yr > 9999) [[unlikely]] {
-            ctx.error = error_code::constraint_violated;
+         if (!ensure_space(ctx, b, ix + chrono_detail::iso_date_max_size)) [[unlikely]] {
             return;
          }
-
-         // "YYYY-MM-DD" = 10 chars + optional quotes
-         constexpr size_t max_size = 12;
-         if (!ensure_space(ctx, b, ix + max_size)) [[unlikely]] {
-            return;
-         }
-
-         if constexpr (not check_unquoted(Opts)) {
-            b[ix++] = '"';
-         }
-         chrono_detail::write_digits<4>(b, ix, static_cast<uint64_t>(yr));
-         b[ix++] = '-';
-         chrono_detail::write_digits<2>(b, ix, mo);
-         b[ix++] = '-';
-         chrono_detail::write_digits<2>(b, ix, dy);
-         if constexpr (not check_unquoted(Opts)) {
-            b[ix++] = '"';
-         }
+         // std::chrono::year spans a signed 16-bit range, so users can construct dates
+         // outside [0000, 9999]; write_iso_date rejects those rather than emitting
+         // wrap-around digits.
+         chrono_detail::write_iso_date<not check_unquoted(Opts)>(static_cast<int>(value.year()),
+                                                                 static_cast<unsigned>(value.month()),
+                                                                 static_cast<unsigned>(value.day()), ctx, b, ix);
       }
    };
 
-   // steady_clock::time_point: serialize as count in the time_point's native duration
-   template <is_steady_time_point T>
-      requires(not custom_write<T>)
-   struct to<JSON, T>
-   {
-      template <auto Opts, class B>
-      GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, B&& b, auto& ix) noexcept
-      {
-         using Duration = typename std::remove_cvref_t<T>::duration;
-         using Rep = typename Duration::rep;
-         const auto count = value.time_since_epoch().count();
-         to<JSON, Rep>::template op<Opts>(count, ctx, b, ix);
-      }
-   };
-
-   // high_resolution_clock::time_point when it's a distinct type (rare)
-   template <is_high_res_time_point T>
-      requires(not custom_write<T>)
-   struct to<JSON, T>
-   {
-      template <auto Opts, class B>
-      GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, B&& b, auto& ix) noexcept
-      {
-         // Treat like steady_clock - serialize as count since epoch is implementation-defined
-         using Duration = typename std::remove_cvref_t<T>::duration;
-         using Rep = typename Duration::rep;
-         const auto count = value.time_since_epoch().count();
-         to<JSON, Rep>::template op<Opts>(count, ctx, b, ix);
-      }
-   };
+   // steady_clock / high_resolution_clock time_points: serialized generically (as the bare
+   // count) by the to<uint32_t Format, is_count_time_point T> specialization in core/chrono.hpp.
 
    // epoch_time wrapper: serialize as numeric Unix timestamp
    template <class Duration>

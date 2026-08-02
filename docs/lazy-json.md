@@ -44,12 +44,12 @@ if (result) {
 
 ## UTF-8 Validation
 
-To maximize performance, `lazy_json` does not validate UTF-8 encoding during initial parsing or field scanning. Validation only occurs when you extract string values:
+To maximize performance, `lazy_json` does no validation during initial parsing or field scanning. Validation happens when you extract a string value:
 
-- **`get<std::string>()`**: Processes escape sequences (`\n`, `\uXXXX`, etc.) and validates UTF-8 encoding
+- **`get<std::string>()`**: Processes escape sequences (`\n`, `\uXXXX`, etc.) and validates UTF-8 encoding, failing with `error_code::invalid_utf8` on malformed input
 - **`get<std::string_view>()`**: Returns a raw view into the JSON buffer with no validation or processing
 
-If you need validated UTF-8 strings and unescaping, use `get<std::string>()`.  Otherwise, `get<std::string_view>()` is faster.
+If you need validated UTF-8 strings and unescaping, use `get<std::string>()`. Otherwise `get<std::string_view>()` is faster, but the bytes it returns are unchecked. To validate a whole document up front, run `glz::validate_json` over the buffer. See [Reading](./json.md#utf-8-validation).
 
 > glz::lazy_json will ensure that any instantiated C++ values are valid JSON (except for std::string_view), but it doesn't validate the entire document, because this is often not a requirement for lazy parsing. If you want high performance full validation it is best to use C++ structs. Or, use glz::validate_json for pure validation passes.
 
@@ -335,6 +335,113 @@ If you need to re-scan from the beginning:
 doc.reset_parse_pos();  // Next access starts from beginning
 ```
 
+## Streaming Cursor (opt-in)
+
+When you iterate a large container and fully consume each element, the iterator normally has to re-scan the element it just handed you in order to find where the next one begins. `read_into` already walked those same bytes, so the scan is pure repeated work.
+
+The `lazy_streaming_cursor` option removes it. When a value is consumed end to end, its byte extent is recorded on the document, and the next advance jumps straight to the recorded end:
+
+```cpp
+struct stream_opts : glz::opts
+{
+   bool lazy_streaming_cursor = true;
+};
+
+inline constexpr stream_opts stream{};
+
+auto doc = glz::lazy_json<stream>(buffer);
+
+for (auto& row : (*doc)["rows"]) {
+   Row parsed{};
+   if (not row.read_into(parsed)) {
+      use(parsed);  // the next ++ skips the re-scan of this row
+   }
+}
+```
+
+The optimization composes through nesting: an inner iterator that runs to its closing bracket records the whole inner container, so the outer advance skips it too.
+
+An extent is only used when it starts exactly at the element the iterator is positioned on. A byte offset identifies exactly one value in the buffer, so this check is what keeps the single shared slot safe when iterators are interleaved or abandoned partway. Anything that does not match falls back to a normal scan.
+
+### What it costs
+
+Two `size_t` on `lazy_document` when enabled, and nothing when disabled, so a document that does not opt in is byte-for-byte what it was before. Views and iterators are unchanged in either case.
+
+### Thread safety
+
+Recording an extent writes to the document, from a `const` method. Two threads calling `read_into` on **disjoint** subviews of the same `lazy_document` do not race with the option off, but do with it on. Give each thread its own `lazy_document` (copying one is cheap — it holds a pointer and a length, not the buffer) or leave the option off.
+
+Note that a `lazy_document` is already not safe to share for keyed access either way, because `operator[]` advances the cached root view's scan position.
+
+### When it does not help
+
+- **Scalar elements.** Only containers are recorded (see below); numbers, strings, booleans and nulls are skipped by the cheap paths anyway.
+- **Elements consumed key by key** via `operator[]`. Those are already served by the progressive `parse_pos_` scan described above; no extent is produced.
+- **Elements that are skipped rather than read.** Nothing was consumed, so there is nothing to record.
+- **`partial_read`.** That option deliberately stops the parser as soon as the target's known keys are filled, which leaves it short of the element's true end.
+- **The final element of a bounded (non-null-terminated) buffer**, which ends on `end_reached` rather than on a close bracket.
+
+### What the cursor trusts, and what it verifies
+
+`read_into` hands the iterator to `parse<JSON>::op`, and where that leaves it is up to the `from<JSON, T>` specialization. Glaze's own readers stop at the value's end, but that is a convention, not something the cursor can check for free — `glz::text` deliberately swallows the rest of the buffer, and a custom reader may consume only a prefix. Trusting the stopping point blindly is how a cursor turns a well-formed document into a short or mis-valued element stream with no error reported anywhere.
+
+So an extent is recorded only when **the element is a container and the parse finished exactly on that container's own closing bracket**. That covers the case worth accelerating (large elements, where re-scanning is expensive) and rejects readers that stopped somewhere else.
+
+One residual limitation: a custom reader that consumes a *complete inner container* but stops before the element's own end (for example reading `[[1],2]` and stopping after `[1]`) produces an extent that passes this check and is still wrong. Such a reader is already incompatible with ordinary `glz::read_json` on nested structures, since it would misparse whatever follows. If you write custom `from<JSON, T>` specializations, leave the iterator at the value's end.
+
+### Measured effect
+
+A 9 MB array of three-field objects, `read_into` per row, Apple M1, clang `-O3`:
+
+| | throughput |
+|---|---:|
+| cursor off | 575 MB/s |
+| cursor on | 955 MB/s (**+66%**) |
+
+The gain scales with how much of each element `read_into` consumes; containers whose elements are large benefit most, since those are the scans being elided.
+
+## Wide Number Skip (opt-in)
+
+Skipping over a container walks its bytes looking for the structural characters (`"` `[` `]` `{` `}`) that carry depth. Everything in between — numbers, literals, commas, whitespace — is stepped over one byte at a time with a table lookup.
+
+That is the right default. Typical JSON numbers are a few bytes long, and a wide SIMD-style scan cannot amortize its setup over three digits. But documents built from **long numeric cells** — telemetry dumps, exported matrices, scientific data — spend most of their bytes inside numeric runs, and there the byte-at-a-time walk dominates.
+
+`lazy_wide_number_skip` targets exactly that case. It keeps the cheap table walk for short numbers and escalates to an 8-byte SWAR scan only once a run is still going after 8 bytes:
+
+```cpp
+struct wide_opts : glz::opts
+{
+   bool null_terminated = false;   // required: the option applies to bounded buffers
+   bool lazy_wide_number_skip = true;
+};
+```
+
+### When to enable it
+
+Measure on your own data. This is a real trade, not a free win, and how it lands depends on more than just how long your numbers are. Full traversal, Apple M1, clang `-O3`, bounded buffers, interleaved best-of-5:
+
+| document shape | option off | option on | |
+|---|---:|---:|---|
+| long numeric runs, array cells | 904 MB/s | 1231 MB/s | **+36%** |
+| long numeric, object-keyed | 521 MB/s | 479 MB/s | **−8%** |
+| short numeric cells | 380 MB/s | 380 MB/s | ±0% |
+| tiny objects (`{"k":"v","w":1}`) | 314 MB/s | 310 MB/s | −1% |
+| long strings | 1877 MB/s | 1884 MB/s | ±0% |
+| telemetry records | 485 MB/s | 478 MB/s | −1% |
+| nested mixed (typical API payload) | 356 MB/s | 340 MB/s | −4% |
+
+The two rows that matter most are the numeric ones, and they point in opposite directions:
+
+- **Long numbers as array cells win big.** The escalated scan runs past the commas and the following cells in one sweep, so it skips much more than a single number.
+- **Long numbers as object values can lose.** Each run ends a few bytes later at the next key's `"`, so the scan never amortizes its setup. An independent measurement using a different traversal put this case as bad as −19%, so treat roughly −20% as the worst case rather than the −8% above.
+
+Enable it for array-shaped numeric data. Leave it off otherwise. With the option off the generated code is byte-for-byte what it was before the option existed, so the default costs nothing at all.
+
+### Restrictions
+
+- **Non-null-terminated buffers only.** A null-terminated buffer stops on its own sentinel, and a detached view may have no end pointer at all, so the option is ignored there.
+- **Correctness is independent of the option.** Inside a container every non-structural byte is ignorable, so escalating early, late, or never reaches the same position. The threshold is a performance knob, not a semantic one.
+
 ## Type Checking
 
 Check the type of a value before extracting:
@@ -514,6 +621,12 @@ std::string output;
 auto ec = glz::write_json(user, output);
 // output contains the JSON for just the "user" field
 ```
+
+The bytes written are the same bytes `raw_json()` returns, so writing a view is a copy of the original text rather than a re-serialization: formatting, key order, and number spelling are all preserved exactly.
+
+The writer determines the value's extent under the *document's* options, which means a view over a buffer opened with `null_terminated = false` stays inside that buffer. It reports an error rather than writing anything if the value is truncated: a container that never reaches its closing bracket, or a string that never reaches its closing quote. A scalar that runs to the last byte of the document is complete, not truncated, and is written normally.
+
+Like the rest of the lazy API, the writer does not validate scalars. A malformed literal is copied through as-is, exactly as `raw_json()` would return it.
 
 ## Options
 

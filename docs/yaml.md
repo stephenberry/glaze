@@ -266,7 +266,7 @@ auto ec = glz::write<glz::yaml::yaml_opts{.flow_style = true}>(cfg, yaml);
 YAML support leverages the same type system as JSON. All types that work with `glz::read_json`/`glz::write_json` also work with YAML:
 
 - Arithmetic types (integers, floating-point)
-- `std::string`, `std::string_view`
+- `std::string` (read and write), `std::string_view` (write only, see below)
 - `std::vector`, `std::array`, `std::deque`, `std::list`
 - `std::map`, `std::unordered_map`
 - `std::optional`, `std::unique_ptr`, `std::shared_ptr`
@@ -274,6 +274,68 @@ YAML support leverages the same type system as JSON. All types that work with `g
 - `std::tuple`
 - User-defined types with `glz::meta` or pure reflection
 - Enums (as integers or strings with `glz::meta`)
+- `std::chrono` durations and time points (see below)
+
+## std::chrono Types
+
+Durations serialize as their bare numeric count, the same representation every Glaze format uses:
+
+```cpp
+std::chrono::milliseconds took{1500};  // took: 1500
+```
+
+Calendar types serialize as **plain (unquoted) ISO 8601 scalars**, which is the idiomatic YAML form and matches how Glaze's TOML writer emits a native datetime:
+
+```cpp
+struct event
+{
+   std::string name{};
+   std::chrono::sys_time<std::chrono::seconds> at{};
+   std::chrono::sys_days day{};
+   std::chrono::milliseconds took{};
+};
+```
+
+```yaml
+name: build
+at: 2024-12-13T15:30:45Z
+day: 2024-12-13
+took: 1500
+```
+
+Emitting these unquoted is safe: ISO 8601 uses only digits, `-`, `:`, `T` and `Z`, so it contains no character that requires quoting, none of the flow indicators (`,` `[` `]` `{` `}`), and no `: ` or ` #` sequence that would terminate a plain scalar. Every `:` is followed by a digit, which keeps it a scalar rather than a mapping separator in both block and flow context.
+
+Reading accepts any scalar style, so YAML from other generators (which commonly quote timestamps) parses without special handling:
+
+```yaml
+at: 2024-12-13T15:30:45Z      # plain
+at: '2024-12-13T15:30:45Z'    # single-quoted
+at: "2024-12-13T15:30:45Z"    # double-quoted
+```
+
+Timezone offsets are applied on read and normalized to UTC; `2024-12-13T10:30:45-05:00` and `2024-12-13T15:30:45Z` parse to the same instant. Fractional-second precision on write follows the time point's own duration, and a `sys_days` (days precision) is written date-only as `2024-12-13`.
+
+RFC 3339 has no representation for a year outside `[0000, 9999]`, so writing one fails with `constraint_violated` rather than emitting wrapped digits.
+
+See [std::chrono Support](./chrono.md) for the full cross-format behavior.
+
+### Reading strings requires an owning target
+
+Unlike JSON, YAML cannot hand you a view into the input buffer. A double-quoted scalar may carry escape sequences, a plain scalar may fold across multiple lines, and a block scalar joins lines together, so the decoded value often does not appear contiguously in the source. The reader therefore decodes into an owning buffer and gives that buffer to your type.
+
+Read targets must be able to take ownership, so use `std::string` (or another owning string type) rather than `std::string_view`:
+
+```cpp
+struct config
+{
+   std::string name{};       // reads and writes
+   std::string_view label{}; // writes only
+};
+```
+
+A non-owning read target is rejected at compile time, and `glz::read_supported<std::string_view, glz::YAML>` is `false`. Writing is unaffected, since a view is a perfectly good source: `glz::write_supported<std::string_view, glz::YAML>` remains `true`. `std::array<char, N>` is likewise write-only for the same reason.
+
+This is a YAML-specific restriction. JSON views the input buffer directly and keeps zero-copy `std::string_view` reads.
 
 ## Tag Validation
 
@@ -283,8 +345,8 @@ Glaze supports YAML Core Schema tags and validates them against the C++ types be
 
 | Tag | Verbatim Form | Valid C++ Types |
 |-----|---------------|-----------------|
-| `!!str` | `!<tag:yaml.org,2002:str>` | `std::string`, `std::string_view` |
-| `!!int` | `!<tag:yaml.org,2002:int>` | `int`, `int64_t`, `std::uint32_t`, etc. |
+| `!!str` | `!<tag:yaml.org,2002:str>` | `std::string` (`std::string_view` on write only) |
+| `!!int` | `!<tag:yaml.org,2002:int>` | `int`, `int64_t`, `uint32_t`, etc. |
 | `!!float` | `!<tag:yaml.org,2002:float>` | `float`, `double` |
 | `!!bool` | `!<tag:yaml.org,2002:bool>` | `bool` |
 | `!!null` | `!<tag:yaml.org,2002:null>` | `std::optional`, `std::unique_ptr`, pointers |

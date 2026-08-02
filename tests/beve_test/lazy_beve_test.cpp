@@ -101,7 +101,27 @@ namespace lazy_beve_test
       std::map<int, std::string> num_map{{1, "hello"}, {2, "world"}};
       std::string after{"after_map"};
    };
+
+   struct DoubleField
+   {
+      double value{3.5};
+   };
+
+   struct FloatField
+   {
+      float value{};
+   };
 }
+
+// A user options struct that derives from glz::opts to carry an extra field, which is the
+// pattern glz::opts documents ("Add these fields to a custom options struct if you want to
+// use them"). The lazy API must instantiate on the exact type so the derived field survives.
+struct custom_lazy_beve_opts : glz::opts
+{
+   bool allow_conversions = false;
+};
+
+inline constexpr custom_lazy_beve_opts derived_beve_opts{glz::opts{.format = glz::BEVE}};
 
 suite lazy_beve_tests = [] {
    "lazy_beve_read_basic"_test = [] {
@@ -1206,6 +1226,112 @@ suite lazy_beve_tests = [] {
       // Booleans and nulls return 0 for size
       expect(result->size["flag"] == 0u);
       expect(result->size["empty"] == 0u);
+   };
+};
+
+// Regression coverage for the lazy API taking `opts` (a concrete base-class NTTP) rather than
+// `auto`, which sliced any derived user options struct down to glz::opts and silently dropped
+// every extra field.
+suite lazy_beve_derived_opts_tests = [] {
+   "lazy_beve_derived_opts_preserve_exact_type"_test = [] {
+      // Sliced to glz::opts, these would collapse to the same instantiation.
+      expect(not std::same_as<glz::lazy_beve_document<derived_beve_opts>,
+                              glz::lazy_beve_document<glz::opts{.format = glz::BEVE}>>);
+      expect(
+         not std::same_as<glz::lazy_beve_view<derived_beve_opts>, glz::lazy_beve_view<glz::opts{.format = glz::BEVE}>>);
+   };
+
+   "lazy_beve_derived_opts_reach_read_into"_test = [] {
+      // allow_conversions only exists on the derived struct and defaults to true when absent, so
+      // the double -> float read is refused only if the lazy API instantiated on the exact type.
+      std::string buffer{};
+      expect(not glz::write_beve(lazy_beve_test::DoubleField{}, buffer));
+
+      auto result = glz::lazy_beve<derived_beve_opts>(buffer);
+      expect(result.has_value());
+
+      lazy_beve_test::FloatField narrowed{};
+      expect(bool((*result).root().read_into(narrowed)));
+   };
+};
+
+// glz::write_beve on a lazy BEVE view did not compile: the null branch called
+// dump_type<tag::null>(b, ix), and dump_type takes its value as a function argument rather than
+// a template parameter. Nothing in the suite instantiated the writer, so the whole public path
+// stayed broken. These tests exist to instantiate it.
+suite lazy_beve_writer_tests = [] {
+   "write_beve_round_trips_a_lazy_view"_test = [] {
+      std::string buffer{};
+      const lazy_beve_test::User user{"Alice", 30, true};
+      expect(not glz::write_beve(user, buffer));
+
+      auto doc = glz::lazy_beve<glz::opts{.format = glz::BEVE}>(buffer);
+      expect(doc.has_value());
+      if (not doc) return;
+
+      std::string out{};
+      expect(not glz::write_beve(doc->root(), out));
+      expect(out == buffer) << "rewrote " << out.size() << " of " << buffer.size() << " bytes";
+
+      // The rewritten bytes have to be BEVE a reader still accepts, not merely equal-length.
+      lazy_beve_test::User restored{};
+      expect(not glz::read_beve(restored, out));
+      expect(restored.name == user.name);
+      expect(restored.age == user.age);
+      expect(restored.active == user.active);
+   };
+
+   "write_beve_empty_view_writes_the_null_tag"_test = [] {
+      // The branch that failed to compile. A view with no data writes BEVE null, which is the
+      // single tag byte 0, and a reader has to accept it as such.
+      glz::lazy_beve_view<glz::opts{.format = glz::BEVE}> empty{};
+      expect(not empty.has_error());
+      expect(empty.data() == nullptr);
+
+      std::string out{};
+      expect(not glz::write_beve(empty, out));
+      expect(out.size() == 1u) << out.size();
+      expect(out == std::string(1, '\0'));
+
+      std::optional<int> restored{42};
+      expect(not glz::read_beve(restored, out));
+      expect(not restored.has_value());
+   };
+
+   "write_beve_nested_view_stops_at_its_own_end"_test = [] {
+      // A member view's beve_end() is the whole document's end, so writing one must emit that
+      // member alone rather than everything that follows it.
+      std::string buffer{};
+      const lazy_beve_test::Person person{"Bob", {"Paris", "France"}};
+      expect(not glz::write_beve(person, buffer));
+
+      auto doc = glz::lazy_beve<glz::opts{.format = glz::BEVE}>(buffer);
+      expect(doc.has_value());
+      if (not doc) return;
+
+      std::string out{};
+      expect(not glz::write_beve((*doc)["address"], out));
+      expect(out.size() < buffer.size());
+
+      lazy_beve_test::Address restored{};
+      expect(not glz::read_beve(restored, out));
+      expect(restored.city == person.address.city);
+      expect(restored.country == person.address.country);
+   };
+
+   "write_beve_respects_derived_opts"_test = [] {
+      // Instantiating the writer on a derived option struct has to compile too; the skip inside
+      // it used a default-constructed opts{}, which sliced the pack away.
+      std::string buffer{};
+      expect(not glz::write_beve(lazy_beve_test::User{"Carol", 41, false}, buffer));
+
+      auto doc = glz::lazy_beve<derived_beve_opts>(buffer);
+      expect(doc.has_value());
+      if (not doc) return;
+
+      std::string out{};
+      expect(not glz::write_beve(doc->root(), out));
+      expect(out == buffer);
    };
 };
 

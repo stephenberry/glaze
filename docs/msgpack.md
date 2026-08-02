@@ -137,6 +137,23 @@ event e{"user_login", {1700000000, 0}};
 auto encoded = glz::write_msgpack(e);
 ```
 
+### `std::chrono::duration`
+
+Durations serialize as their bare numeric count (the `rep`), exactly as the equivalent integer or floating-point value would, so a duration field interoperates with a schema that reads it back as a number. See [std::chrono Support](./chrono.md#durations) for the cross-format details.
+
+```cpp
+std::chrono::milliseconds ms{12345};
+std::string buffer;
+glz::write_msgpack(ms, buffer);
+
+std::chrono::milliseconds decoded{};
+glz::read_msgpack(decoded, buffer); // decoded.count() == 12345
+```
+
+## Recursion Depth
+
+A `fixarray` or `fixmap` nesting level costs a single byte, so a small hostile buffer could otherwise drive the reader deep enough to overflow the stack. The readers and the value skipper cap nesting at `max_recursive_depth_limit` (256 levels) and return `error_code::exceeded_max_recursive_depth` beyond it. Structs are written as arrays, so a struct holding a vector of itself counts two levels per struct and reaches the cap at 128 struct levels.
+
 ## Binary Buffers
 
 Glaze automatically emits the compact MessagePack `bin*` tags for contiguous byte buffers such as

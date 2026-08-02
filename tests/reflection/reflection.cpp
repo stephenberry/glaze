@@ -283,17 +283,56 @@ suite variant_no_double_tagging = [] {
    };
 };
 
-// Test that primitive types in variants still work without object tagging
+// Test that primitive types in variants still work without object tagging.
+//
+// This variant used to declare `tag`/`ids`, which did nothing: a discriminator has nowhere to live
+// in `true` or `3.14`, so it was never written and never read, and the alternatives were separated
+// purely by their JSON types. Declaring `tag` alone for a variant with a non-object alternative is
+// now a static_assert -- see AdjacentPrimitiveVariant below for the form that actually carries a
+// discriminator for these types.
 using PrimitiveVariant = std::variant<bool, std::string, double>;
 
+// Primitive alternatives under adjacent tagging, where the discriminator is real. (A distinct set of
+// alternatives, since two aliases of the same std::variant instantiation are one type and could not
+// carry different metas.)
+using AdjacentPrimitiveVariant = std::variant<bool, std::string, double, std::monostate>;
+
 template <>
-struct glz::meta<PrimitiveVariant>
+struct glz::meta<AdjacentPrimitiveVariant>
 {
    static constexpr std::string_view tag = "type";
-   static constexpr auto ids = std::array{"boolean", "string", "double"};
+   static constexpr std::string_view content = "value";
+   static constexpr auto ids = std::array{"boolean", "string", "double", "none"};
 };
 
 suite variant_primitive_types = [] {
+   "adjacently tagged primitives carry a discriminator"_test = [] {
+      AdjacentPrimitiveVariant variant = std::string("hello");
+      auto json = glz::write_json(variant);
+      expect(json.has_value());
+      expect(json.value() == R"({"type":"string","value":"hello"})") << json.value();
+
+      variant = 3.14;
+      json = glz::write_json(variant);
+      expect(json.has_value());
+      expect(json.value() == R"({"type":"double","value":3.14})") << json.value();
+
+      AdjacentPrimitiveVariant out{};
+      auto ec = glz::read_json(out, json.value());
+      expect(!ec) << glz::format_error(ec, json.value());
+      expect(std::holds_alternative<double>(out));
+      expect(std::get<double>(out) == 3.14);
+
+      // A unit alternative is nested like any other under adjacent tagging.
+      variant = std::monostate{};
+      json = glz::write_json(variant);
+      expect(json.has_value());
+      expect(json.value() == R"({"type":"none","value":null})") << json.value();
+      ec = glz::read_json(out, json.value());
+      expect(!ec) << glz::format_error(ec, json.value());
+      expect(std::holds_alternative<std::monostate>(out));
+   };
+
    "variant with primitive types (no object tagging)"_test = [] {
       PrimitiveVariant variant = true;
       auto json = glz::write_json(variant);
@@ -314,7 +353,7 @@ suite variant_primitive_types = [] {
    "variant with primitive types reading"_test = [] {
       PrimitiveVariant variant;
 
-      // Even with tag defined, primitive types should read directly without object wrapping
+      // Untagged primitive alternatives read directly from their JSON type
 
       // Test reading boolean directly
       std::string json = "true";

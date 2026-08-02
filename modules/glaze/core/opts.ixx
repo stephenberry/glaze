@@ -221,6 +221,24 @@ export namespace glz
    // or when validation should be deferred.
 
    // ---
+   // bool lazy_wide_number_skip = false;
+   // Speeds up skipping long numeric runs during lazy JSON traversal by escalating to a SWAR
+   // scan for the next structural byte once a number is still going after 8 bytes. Aimed at
+   // documents built from long numeric cells; on JSON with ordinary short numbers it costs a
+   // few percent, which is why it is off by default. Gains are largest for long numbers as array
+   // cells; long numbers as object values can lose ground, so measure before enabling.
+   // Has no effect unless null_terminated is also false - a null-terminated buffer stops on its
+   // own sentinel and takes the plain table walk regardless. See docs/lazy-json.md.
+
+   // ---
+   // bool lazy_streaming_cursor = false;
+   // Lets lazy JSON iteration skip re-scanning values it has already consumed. When a
+   // lazy_json_view::read_into fully consumes an element, or a nested container iterator runs to
+   // its close, the byte extent is recorded on the document and the next lazy_iterator advance
+   // jumps straight past it instead of re-scanning with skip_value_lazy. Costs two size_t on
+   // lazy_document when enabled and nothing at all when disabled. See docs/lazy-json.md.
+
+   // ---
    // bool linear_search = false;
    // Uses linear key search instead of hash-based lookup for JSON object fields.
    // This eliminates 256-byte hash tables per struct type, significantly reducing binary size.
@@ -342,6 +360,9 @@ export namespace glz
    struct structs_as_arrays_opt_tag
    {};
 
+   struct allow_conversions_opt_tag
+   {};
+
    // Helper for deprecated option static_asserts (dependent false pattern)
    template <class>
    inline constexpr bool deprecated_opts_raw = false;
@@ -372,6 +393,9 @@ export namespace glz
 
    template <auto member_ptr>
    concept is_structs_as_arrays_tag = std::same_as<std::decay_t<decltype(member_ptr)>, structs_as_arrays_opt_tag>;
+
+   template <auto member_ptr>
+   concept is_allow_conversions_tag = std::same_as<std::decay_t<decltype(member_ptr)>, allow_conversions_opt_tag>;
 
    consteval bool check_validate_skipped(auto&& Opts)
    {
@@ -740,6 +764,26 @@ export namespace glz
    {
       if constexpr (requires { Opts.assume_sufficient_buffer; }) {
          return Opts.assume_sufficient_buffer;
+      }
+      else {
+         return false;
+      }
+   }
+
+   consteval bool check_lazy_wide_number_skip(auto&& Opts)
+   {
+      if constexpr (requires { Opts.lazy_wide_number_skip; }) {
+         return Opts.lazy_wide_number_skip;
+      }
+      else {
+         return false;
+      }
+   }
+
+   consteval bool check_lazy_streaming_cursor(auto&& Opts)
+   {
+      if constexpr (requires { Opts.lazy_streaming_cursor; }) {
+         return Opts.lazy_streaming_cursor;
       }
       else {
          return false;
@@ -1292,6 +1336,20 @@ export namespace glz
             return opts_structs_as_arrays{{Opts}};
          }
       }
+      else if constexpr (is_allow_conversions_tag<member_ptr>) {
+         if constexpr (requires { Opts.allow_conversions; }) {
+            auto ret = Opts;
+            ret.allow_conversions = true;
+            return ret;
+         }
+         else {
+            struct opts_allow_conversions : std::decay_t<decltype(Opts)>
+            {
+               bool allow_conversions = true;
+            };
+            return opts_allow_conversions{{Opts}};
+         }
+      }
       else {
          auto ret = Opts;
          ret.*member_ptr = true;
@@ -1403,6 +1461,22 @@ export namespace glz
          }
          else {
             return Opts;
+         }
+      }
+      else if constexpr (is_allow_conversions_tag<member_ptr>) {
+         if constexpr (requires { Opts.allow_conversions; }) {
+            auto ret = Opts;
+            ret.allow_conversions = false;
+            return ret;
+         }
+         else {
+            // `allow_conversions` defaults to true when absent, so turning it off must materialize
+            // the field rather than return Opts unchanged.
+            struct opts_allow_conversions : std::decay_t<decltype(Opts)>
+            {
+               bool allow_conversions = false;
+            };
+            return opts_allow_conversions{{Opts}};
          }
       }
       else {

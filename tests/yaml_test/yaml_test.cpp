@@ -4,6 +4,7 @@
 #include "glaze/yaml.hpp"
 
 #include <array>
+#include <chrono>
 #include <cmath>
 #include <cstdio>
 #include <deque>
@@ -3602,6 +3603,72 @@ name: test)";
       expect(bool(ec)) << "%YAML 3.0 should be rejected";
    };
 
+   // A long version number must not wrap past the major version check. The accumulator used to be
+   // an unbounded int, so a value congruent to 0 or 1 mod 2^32 overflowed -- undefined behavior --
+   // and came back inside the accepted range: "%YAML 4294967296.0" was read as major version 0.
+   "yaml_directive_major_version_overflow_error"_test = [] {
+      for (std::string_view version : {"4294967296", // 2^32, wrapped to 0
+                                       "4294967297", // 2^32 + 1, wrapped to 1
+                                       "8589934592", // 2^33, wrapped to 0
+                                       "2147483648", // 2^31
+                                       "18446744073709551616", // 2^64, 20 digits, wrapped to 0
+                                       "18446744073709551617", // 2^64 + 1, wrapped to 1
+                                       "99999999999999999999"}) {
+         const std::string yaml = "%YAML " + std::string{version} + ".0\n---\nx: 42\ny: 3.14\nname: test";
+         simple_struct obj{};
+         auto ec = glz::read_yaml(obj, yaml);
+         expect(bool(ec)) << "%YAML " << version << ".0 should be rejected";
+      }
+   };
+
+   // Clamping the accumulator must not disturb versions that are in range, including the zero
+   // padding the grammar allows (the version is digits '.' digits, with no leading-zero rule).
+   "yaml_directive_major_version_padded"_test = [] {
+      for (std::string_view version : {"01.2", "001.2", "00000000000000000001.2"}) {
+         const std::string yaml = "%YAML " + std::string{version} + "\n---\nx: 42\ny: 3.14\nname: test";
+         simple_struct obj{};
+         auto ec = glz::read_yaml(obj, yaml);
+         expect(!ec) << glz::format_error(ec, yaml);
+         expect(obj.x == 42);
+      }
+
+      // Padding far longer than the clamp bound: the two are unrelated, since leading zeros never
+      // advance the accumulator. The matching out-of-range case must still be rejected.
+      {
+         const std::string yaml = "%YAML " + std::string(200, '0') + "1.2\n---\nx: 42\ny: 3.14\nname: test";
+         simple_struct obj{};
+         auto ec = glz::read_yaml(obj, yaml);
+         expect(!ec) << glz::format_error(ec, yaml);
+         expect(obj.x == 42);
+      }
+      {
+         const std::string yaml = "%YAML " + std::string(200, '0') + "2.0\n---\nx: 42\ny: 3.14\nname: test";
+         simple_struct obj{};
+         expect(bool(glz::read_yaml(obj, yaml))) << "padded major 2 should be rejected";
+      }
+
+      // Multi-digit majors are still out of range, on both sides of the clamp.
+      for (std::string_view version : {"10.0", "11.0", "99.0", "100.0", "101.0"}) {
+         const std::string yaml = "%YAML " + std::string{version} + "\n---\nx: 42\ny: 3.14\nname: test";
+         simple_struct obj{};
+         auto ec = glz::read_yaml(obj, yaml);
+         expect(bool(ec)) << "%YAML " << version << " should be rejected";
+      }
+   };
+
+   // Major version 0 is accepted: the spec only requires rejecting a version this parser is too
+   // old to understand, and 0 is not that. Pinned here because the all-zeros digit run is the one
+   // accepted input that reaches the clamped accumulator, so a change to the clamp would show up.
+   "yaml_directive_major_version_zero"_test = [] {
+      for (std::string_view version : {"0.1", "0.0", "00.1", "000.2"}) {
+         const std::string yaml = "%YAML " + std::string{version} + "\n---\nx: 42\ny: 3.14\nname: test";
+         simple_struct obj{};
+         auto ec = glz::read_yaml(obj, yaml);
+         expect(!ec) << glz::format_error(ec, yaml);
+         expect(obj.x == 42);
+      }
+   };
+
    // Unknown directives should be silently ignored (per spec)
    "yaml_directive_unknown_ignored"_test = [] {
       std::string yaml = R"(%FOOBAR some params here
@@ -4211,6 +4278,31 @@ ship-to: *id001)";
       std::string expected =
          R"({"bill-to":{"given":"Chris","family":"Dumars"},"ship-to":{"given":"Chris","family":"Dumars"}})";
       expect(json == expected) << json;
+   };
+
+   "anchor_trailing_blank_line_stays_in_bounds"_test = [] {
+      static constexpr glz::opts options{.format = glz::YAML, .null_terminated = false};
+      // An anchor whose value is on the next line, where that line holds only whitespace the
+      // indent scan does not measure (a tab), leaves the cursor at the end of the buffer.
+      // A non-null-terminated buffer has no sentinel there, so the anchor scan must stop
+      // rather than read the byte past the end.
+      for (const std::string_view s : {"&a\n\t", "&a\n\t\t", "&a\n \t", "&a\n\t \t"}) {
+         std::vector<char> buf{s.begin(), s.end()};
+         const std::string_view view{buf.data(), buf.data() + buf.size()};
+         glz::generic parsed{};
+         const auto ec = glz::read<options>(parsed, view);
+         expect(ec.ec == glz::error_code::unexpected_end) << s;
+         expect(ec.count <= view.size()) << s;
+      }
+
+      // An anchor with real content on the next line still parses.
+      const std::string_view valid = "&a\n  x";
+      std::vector<char> buf{valid.begin(), valid.end()};
+      const std::string_view view{buf.data(), buf.data() + buf.size()};
+      glz::generic parsed{};
+      const auto ec = glz::read<options>(parsed, view);
+      expect(!ec) << glz::format_error(ec, view);
+      expect(glz::write_json(parsed).value_or("WRITE_ERR") == R"("x")");
    };
 };
 
@@ -10404,6 +10496,268 @@ suite recursion_depth_tests = [] {
       skip_depth_probe value{};
       auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(value, yaml);
       expect(ec.ec == glz::error_code::exceeded_max_recursive_depth);
+   };
+};
+
+struct yaml_event
+{
+   std::string name{};
+   std::chrono::sys_time<std::chrono::seconds> at{};
+   std::chrono::sys_days day{};
+   std::chrono::year_month_day ymd{};
+   std::chrono::milliseconds took{};
+   bool operator==(const yaml_event&) const = default;
+};
+
+struct yaml_tp_holder
+{
+   std::chrono::sys_time<std::chrono::seconds> at{};
+};
+
+struct yaml_ymd_holder
+{
+   std::chrono::year_month_day d{};
+};
+
+suite yaml_chrono_calendar_tests = [] {
+   using namespace std::chrono;
+
+   static constexpr auto expected = sys_days{2024y / 12 / 13} + 15h + 30min + 45s;
+
+   // Glaze writes a plain (unquoted) ISO 8601 scalar, matching the TOML writer's native
+   // datetime and the idiomatic YAML form.
+   "time_point writes a plain ISO 8601 scalar"_test = [] {
+      yaml_tp_holder v{time_point_cast<seconds>(expected)};
+      std::string out{};
+      expect(not glz::write_yaml(v, out));
+      expect(out == "at: 2024-12-13T15:30:45Z\n") << out;
+   };
+
+   "struct round-trip with mixed chrono members"_test = [] {
+      yaml_event e{"build", time_point_cast<seconds>(expected), sys_days{2024y / 12 / 13}, 2024y / 12 / 13,
+                   milliseconds{1500}};
+      std::string out{};
+      expect(not glz::write_yaml(e, out));
+      yaml_event decoded{};
+      const auto ec = glz::read_yaml(decoded, out);
+      expect(not ec) << glz::format_error(ec, out);
+      expect(decoded == e);
+   };
+
+   // The writer emits plain scalars, but hand-written and third-party YAML routinely quotes
+   // timestamps, so every scalar style must read back.
+   "reads every scalar style"_test = [] {
+      const auto check = [](const std::string& yaml) {
+         yaml_tp_holder v{};
+         const auto ec = glz::read_yaml(v, yaml);
+         expect(not ec) << glz::format_error(ec, yaml);
+         expect(v.at == time_point_cast<seconds>(expected));
+      };
+      check("at: 2024-12-13T15:30:45Z");
+      check("at: '2024-12-13T15:30:45Z'");
+      check("at: \"2024-12-13T15:30:45Z\"");
+   };
+
+   // A plain scalar must survive flow context, where ',' '}' ']' would terminate it. ISO 8601
+   // contains none of them, and every ':' is followed by a digit so it cannot be mistaken for
+   // a mapping separator.
+   "plain scalar survives flow context"_test = [] {
+      const std::string yaml = "{at: 2024-12-13T15:30:45Z}";
+      yaml_tp_holder v{};
+      const auto ec = glz::read_yaml(v, yaml);
+      expect(not ec) << glz::format_error(ec, yaml);
+      expect(v.at == time_point_cast<seconds>(expected));
+   };
+
+   "timezone offsets are applied"_test = [] {
+      const auto check = [](const std::string& yaml) {
+         yaml_tp_holder v{};
+         const auto ec = glz::read_yaml(v, yaml);
+         expect(not ec) << glz::format_error(ec, yaml);
+         expect(v.at == time_point_cast<seconds>(expected));
+      };
+      check("at: 2024-12-13T15:30:45+00:00");
+      check("at: 2024-12-13T10:30:45-05:00");
+      check("at: 2024-12-13T21:00:45+05:30");
+   };
+
+   "fractional precision matches the time point"_test = [] {
+      const auto written = [](auto tp) {
+         std::string out{};
+         expect(not glz::write_yaml(tp, out));
+         return out;
+      };
+      expect(written(time_point_cast<seconds>(expected)) == "2024-12-13T15:30:45Z");
+      expect(written(time_point_cast<milliseconds>(expected + 123ms)) == "2024-12-13T15:30:45.123Z");
+      expect(written(time_point_cast<microseconds>(expected + 123456us)) == "2024-12-13T15:30:45.123456Z");
+      expect(written(time_point_cast<nanoseconds>(expected + 123456789ns)) == "2024-12-13T15:30:45.123456789Z");
+   };
+
+   // `days` precision carries no time of day, so it is written (and accepted) date-only.
+   "sys_days is date-only"_test = [] {
+      std::string out{};
+      expect(not glz::write_yaml(sys_days{2024y / 12 / 13}, out));
+      expect(out == "2024-12-13") << out;
+
+      sys_days decoded{};
+      expect(not glz::read_yaml(decoded, out));
+      expect(decoded == sys_days{2024y / 12 / 13});
+
+      // A full datetime is still accepted at days precision and floored.
+      sys_days floored{};
+      const std::string full = "2024-12-13T15:30:45Z";
+      expect(not glz::read_yaml(floored, full));
+      expect(floored == sys_days{2024y / 12 / 13});
+   };
+
+   "year_month_day round-trip"_test = [] {
+      yaml_ymd_holder v{2024y / 12 / 13};
+      std::string out{};
+      expect(not glz::write_yaml(v, out));
+      expect(out == "d: 2024-12-13\n") << out;
+      yaml_ymd_holder decoded{};
+      expect(not glz::read_yaml(decoded, out));
+      expect(decoded.d == v.d);
+   };
+
+   "sequences of time points"_test = [] {
+      std::vector<sys_time<seconds>> v{time_point_cast<seconds>(expected), time_point_cast<seconds>(expected + 1h)};
+      std::string out{};
+      expect(not glz::write_yaml(v, out));
+      std::vector<sys_time<seconds>> decoded{};
+      const auto ec = glz::read_yaml(decoded, out);
+      expect(not ec) << glz::format_error(ec, out);
+      expect(decoded == v);
+   };
+
+   "malformed input is rejected"_test = [] {
+      const auto rejects = [](const std::string& yaml) {
+         yaml_tp_holder v{};
+         return bool(glz::read_yaml(v, yaml));
+      };
+      expect(rejects("at: not-a-date"));
+      expect(rejects("at: 2024-13-45T99:99:99Z"));
+      expect(rejects("at: 2024-02-30T00:00:00Z")); // Feb 30 is not a real date
+      expect(rejects("at: 2024-12-13")); // date-only is not valid at seconds precision
+      expect(rejects("at: 2024-12-13T15:30:45Z trailing"));
+   };
+
+   // RFC 3339 has no representation for a year outside [0000, 9999], and the fixed-width
+   // parsers cannot read one back, so writing must fail rather than emit wrapped digits.
+   "years outside [0000, 9999] are rejected on write"_test = [] {
+      std::string out{};
+      expect(bool(glz::write_yaml(sys_days{year{10000} / 1 / 1}, out)));
+      out.clear();
+      expect(bool(glz::write_yaml(year_month_day{year{-1} / 1 / 1}, out)));
+   };
+
+   // Durations and steady_clock time points stay numeric; the calendar types above are the
+   // only ones with a YAML-specific representation.
+   "durations remain numeric"_test = [] {
+      std::string out{};
+      expect(not glz::write_yaml(milliseconds{1500}, out));
+      expect(out == "1500") << out;
+      milliseconds decoded{};
+      expect(not glz::read_yaml(decoded, out));
+      expect(decoded == milliseconds{1500});
+   };
+};
+
+struct yaml_sv_writable
+{
+   std::string_view a{};
+};
+
+struct yaml_string_holder
+{
+   std::string a{};
+};
+
+// A YAML scalar is decoded into an owning buffer before it reaches the target, so a
+// non-owning target cannot be supported: it would be left pointing at that buffer after it
+// died. These pin the contract, because the failure mode this replaced was silent (a
+// std::string_view target compiled and then read freed memory) rather than diagnosed.
+static_assert(not glz::read_supported<std::string_view, glz::YAML>,
+              "reading a YAML scalar into a non-owning view would dangle");
+static_assert(not glz::read_supported<std::u8string_view, glz::YAML>);
+
+// std::array<char, N> cannot take ownership of the buffer either. It previously reported as
+// supported and then failed to compile inside the reader.
+static_assert(not glz::read_supported<std::array<char, 16>, glz::YAML>);
+
+// Writing is unaffected: a non-owning string is a perfectly good source.
+static_assert(glz::write_supported<std::string_view, glz::YAML>);
+static_assert(glz::write_supported<std::u8string_view, glz::YAML>);
+
+// Owning targets are unaffected.
+static_assert(glz::read_supported<std::string, glz::YAML>);
+static_assert(glz::write_supported<std::string, glz::YAML>);
+
+// The restriction is YAML-specific. JSON views into the input buffer directly, so it keeps
+// zero-copy string_view reads.
+static_assert(glz::read_supported<std::string_view, glz::JSON>);
+
+suite yaml_string_target_tests = [] {
+   // Regression guard for the owning path the constraint now scopes: every scalar style must
+   // still decode correctly into a std::string.
+   "owning string targets read every scalar style"_test = [] {
+      const auto read_a = [](const std::string& yaml) {
+         yaml_string_holder v{};
+         const auto ec = glz::read_yaml(v, yaml);
+         expect(not ec) << glz::format_error(ec, yaml);
+         return v.a;
+      };
+      expect(read_a("a: hello") == "hello");
+      expect(read_a("a: 'hello'") == "hello");
+      expect(read_a("a: \"hello\"") == "hello");
+      expect(read_a("a: \"tab\\there\"") == "tab\there"); // escapes are decoded
+      expect(read_a("a: 'it''s'") == "it's"); // '' unescapes to '
+      expect(read_a("a: |\n  line1\n  line2\n") == "line1\nline2\n"); // literal block
+      expect(read_a("a: >\n  folded\n  onto one\n") == "folded onto one\n"); // folded block
+   };
+
+   // Writing a view remains supported, which is what makes the read-side restriction
+   // asymmetric rather than a blanket ban on std::string_view.
+   "string_view still writes"_test = [] {
+      yaml_sv_writable v{"hello"};
+      std::string out{};
+      expect(not glz::write_yaml(v, out));
+      expect(out == "a: hello\n") << out;
+   };
+};
+
+// A variant whose `ids` array is shorter than its alternative list. That is a supported read-side
+// feature -- the first unlabeled alternative is the default for an unrecognized id -- so it is
+// reachable from a legal glz::meta. Writing the unlabeled alternative has no id to emit; indexing
+// ids_v there read past the end of a static array and emitted the adjacent static data as the tag
+// value (~4 GB read under ASan). The writer must report an error instead.
+namespace short_ids_guard
+{
+   struct labeled
+   {
+      int a{};
+   };
+   struct unlabeled
+   {
+      int b{};
+   };
+   using v_t = std::variant<labeled, unlabeled>;
+}
+
+template <>
+struct glz::meta<short_ids_guard::v_t>
+{
+   static constexpr std::string_view tag = "t";
+   static constexpr std::array<std::string_view, 1> ids{"a"}; // 1 id, 2 alternatives
+};
+
+suite short_ids_write_guard = [] {
+   "writing an alternative with no declared id errors instead of reading out of bounds"_test = [] {
+      using namespace short_ids_guard;
+      std::string buffer{};
+      expect(bool(glz::write_yaml(v_t{unlabeled{7}}, buffer)));
+      buffer.clear();
+      expect(not glz::write_yaml(v_t{labeled{3}}, buffer)); // the labeled alternative is unaffected
    };
 };
 

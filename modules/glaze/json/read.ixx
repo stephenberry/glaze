@@ -244,6 +244,8 @@ namespace glz
          skip_string_view(ctx, it, end);
          if (bool(ctx.error)) [[unlikely]]
             return;
+         if (validate_utf8_span(ctx, start, it)) [[unlikely]]
+            return;
          const sv key = {start, size_t(it - start)};
          ++it;
          if constexpr (not Opts.null_terminated) {
@@ -439,6 +441,10 @@ namespace glz
                return;
             }
             else {
+               // it sits one past the closing quote, so the raw key spans [key_start, it - 1)
+               if (validate_utf8_span(ctx, key_start, it - 1)) [[unlikely]] {
+                  return;
+               }
                const sv key{key_start, size_t(it - key_start - 1)};
                if constexpr (not Opts.null_terminated) {
                   if (it == end) [[unlikely]] {
@@ -549,6 +555,8 @@ namespace glz
                auto start = it;
                skip_string_view(ctx, it, end);
                if (bool(ctx.error)) [[unlikely]]
+                  return;
+               if (validate_utf8_span(ctx, start, it)) [[unlikely]]
                   return;
                const sv key = {start, size_t(it - start)};
                ++it; // skip the quote
@@ -696,8 +704,10 @@ namespace glz
          if (match_invalid_end<'[', Opts>(ctx, it, end)) {
             return;
          }
-         if constexpr (not Opts.null_terminated) {
-            ++ctx.depth;
+         // one nesting level (see enter_depth): counted in both modes so the limit binds,
+         // released at each syntactic close below
+         if (enter_depth(ctx)) [[unlikely]] {
+            return;
          }
 
          auto* ptr = reinterpret_cast<typename T::value_type*>(&v);
@@ -722,9 +732,7 @@ namespace glz
             return;
          }
          match<']'>(ctx, it);
-         if constexpr (not Opts.null_terminated) {
-            --ctx.depth;
-         }
+         --ctx.depth;
       }
    };
 
@@ -1009,6 +1017,7 @@ namespace glz
                static constexpr auto string_padding_bytes = 8;
 
                auto start = it;
+               uint64_t ascii_acc{};
                while (true) {
                   if (it >= end) [[unlikely]] {
                      ctx.error = error_code::unexpected_end;
@@ -1020,6 +1029,7 @@ namespace glz
                   if constexpr (std::endian::native == std::endian::big) {
                      chunk = std::byteswap(chunk);
                   }
+                  ascii_acc |= chunk;
                   const uint64_t test_chars = has_quote(chunk);
                   if (test_chars) {
                      it += (std::countr_zero(test_chars) >> 3);
@@ -1036,6 +1046,10 @@ namespace glz
                   else {
                      it += 8;
                   }
+               }
+
+               if (validate_utf8_span(ctx, start, it, ascii_acc)) [[unlikely]] {
+                  return;
                }
 
                auto n = size_t(it - start);
@@ -1115,6 +1129,10 @@ namespace glz
                if (bool(ctx.error)) [[unlikely]]
                   return;
 
+               if (validate_utf8_span(ctx, start, it)) [[unlikely]] {
+                  return;
+               }
+
                value.assign(start, size_t(it - start));
                ++it;
             }
@@ -1155,6 +1173,7 @@ namespace glz
 
                if (size_t(end - it) >= 8) {
                   auto start = it;
+                  uint64_t ascii_acc{};
                   const auto end8 = end - 8;
                   while (true) {
                      if (it >= end8) [[unlikely]] {
@@ -1166,6 +1185,7 @@ namespace glz
                      if constexpr (std::endian::native == std::endian::big) {
                         chunk = std::byteswap(chunk);
                      }
+                     ascii_acc |= chunk;
                      const uint64_t test_chars = has_quote(chunk);
                      if (test_chars) {
                         it += (std::countr_zero(test_chars) >> 3);
@@ -1190,7 +1210,10 @@ namespace glz
                      --it;
                   }
 
+                  // The byte-wise tail keeps feeding the accumulator: it has to cover every byte of
+                  // the string, or a non-ASCII byte reached here would be waved through unvalidated.
                   for (; it < end; ++it) {
+                     ascii_acc |= uint8_t(*it);
                      if (*it == '"') {
                         auto* prev = it - 1;
                         while (*prev == '\\') {
@@ -1206,6 +1229,10 @@ namespace glz
                   return;
 
                continue_decode:
+
+                  if (validate_utf8_span(ctx, start, it, ascii_acc)) [[unlikely]] {
+                     return;
+                  }
 
                   const auto available_padding = size_t(end - it);
                   auto n = size_t(it - start);
@@ -1333,10 +1360,14 @@ namespace glz
                   std::array<char, 8> buffer{};
 
                   auto* p = buffer.data();
+                  const auto* const utf8_start = it;
 
                   while (it < end) [[likely]] {
                      *p = *it;
                      if (*it == '"') {
+                        if (validate_utf8_span(ctx, utf8_start, it)) [[unlikely]] {
+                           return;
+                        }
                         const size_t n = size_t(p - buffer.data());
 #if __has_cpp_attribute(assume) >= 202207L
                         [[assume(n <= sizeof(buffer))]];
@@ -1402,6 +1433,10 @@ namespace glz
                if (bool(ctx.error)) [[unlikely]]
                   return;
 
+               if (validate_utf8_span(ctx, start, it)) [[unlikely]] {
+                  return;
+               }
+
                value.assign(start, size_t(it - start));
                ++it;
             }
@@ -1443,6 +1478,7 @@ namespace glz
                static constexpr auto string_padding_bytes = 8;
 
                auto start = it;
+               uint64_t ascii_acc{};
                while (true) {
                   if (it >= end) [[unlikely]] {
                      ctx.error = error_code::unexpected_end;
@@ -1454,6 +1490,7 @@ namespace glz
                   if constexpr (std::endian::native == std::endian::big) {
                      chunk = std::byteswap(chunk);
                   }
+                  ascii_acc |= chunk;
                   const uint64_t test_chars = has_quote(chunk);
                   if (test_chars) {
                      it += (std::countr_zero(test_chars) >> 3);
@@ -1470,6 +1507,10 @@ namespace glz
                   else {
                      it += 8;
                   }
+               }
+
+               if (validate_utf8_span(ctx, start, it, ascii_acc)) [[unlikely]] {
+                  return;
                }
 
                auto n = size_t(it - start);
@@ -1549,6 +1590,10 @@ namespace glz
                if (bool(ctx.error)) [[unlikely]]
                   return;
 
+               if (validate_utf8_span(ctx, start, it)) [[unlikely]] {
+                  return;
+               }
+
                value.assign(reinterpret_cast<const char8_t*>(start), size_t(it - start));
                ++it;
             }
@@ -1589,6 +1634,7 @@ namespace glz
 
                if (size_t(end - it) >= 8) {
                   auto start = it;
+                  uint64_t ascii_acc{};
                   const auto end8 = end - 8;
                   while (true) {
                      if (it >= end8) [[unlikely]] {
@@ -1600,6 +1646,7 @@ namespace glz
                      if constexpr (std::endian::native == std::endian::big) {
                         chunk = std::byteswap(chunk);
                      }
+                     ascii_acc |= chunk;
                      const uint64_t test_chars = has_quote(chunk);
                      if (test_chars) {
                         it += (std::countr_zero(test_chars) >> 3);
@@ -1624,7 +1671,10 @@ namespace glz
                      --it;
                   }
 
+                  // The byte-wise tail keeps feeding the accumulator: it has to cover every byte of
+                  // the string, or a non-ASCII byte reached here would be waved through unvalidated.
                   for (; it < end; ++it) {
+                     ascii_acc |= uint8_t(*it);
                      if (*it == '"') {
                         auto* prev = it - 1;
                         while (*prev == '\\') {
@@ -1640,6 +1690,10 @@ namespace glz
                   return;
 
                continue_decode_u8:
+
+                  if (validate_utf8_span(ctx, start, it, ascii_acc)) [[unlikely]] {
+                     return;
+                  }
 
                   const auto available_padding = size_t(end - it);
                   auto n = size_t(it - start);
@@ -1767,10 +1821,14 @@ namespace glz
                   std::array<char, 8> buffer{};
 
                   auto* p = buffer.data();
+                  const auto* const utf8_start = it;
 
                   while (it < end) [[likely]] {
                      *p = *it;
                      if (*it == '"') {
+                        if (validate_utf8_span(ctx, utf8_start, it)) [[unlikely]] {
+                           return;
+                        }
                         value.assign(reinterpret_cast<const char8_t*>(buffer.data()), size_t(p - buffer.data()));
                         ++it;
                         if constexpr (not Opts.null_terminated) {
@@ -1832,6 +1890,10 @@ namespace glz
                if (bool(ctx.error)) [[unlikely]]
                   return;
 
+               if (validate_utf8_span(ctx, start, it)) [[unlikely]] {
+                  return;
+               }
+
                value.assign(reinterpret_cast<const char8_t*>(start), size_t(it - start));
                ++it;
             }
@@ -1839,11 +1901,15 @@ namespace glz
       }
    };
 
+   // `Transient` says the view being filled is consumed before this reader returns, so it never
+   // outlives the window it points into and the streaming guard does not apply. Only readers that
+   // borrow a view of what they just parsed set it, through parse_transient_string_view below; a
+   // view the caller keeps leaves it false and is rejected under a streaming read.
    template <class T>
       requires(string_view_t<T> || char_array_t<T> || array_char_t<T> || static_string_t<T>)
    struct from<JSON, T>
    {
-      template <auto Opts, class It, class End>
+      template <auto Opts, bool Transient = false, class It, class End>
          requires(check_string_as_number(Opts))
       GLZ_ALWAYS_INLINE static void op(auto& value, is_context auto&& ctx, It&& it, End end) noexcept
       {
@@ -1858,6 +1924,9 @@ namespace glz
 
          const size_t n = size_t(it - start);
          if constexpr (string_view_t<T>) {
+            if constexpr (!Transient) {
+               GLZ_ASSERT_OWNS_ITS_BYTES(decltype(ctx));
+            }
             using value_type = typename std::decay_t<T>::value_type;
             if constexpr (std::same_as<value_type, char8_t>) {
                value = {reinterpret_cast<const char8_t*>(start), n};
@@ -1891,7 +1960,7 @@ namespace glz
          }
       }
 
-      template <auto Opts, class It, class End>
+      template <auto Opts, bool Transient = false, class It, class End>
          requires(!check_string_as_number(Opts))
       GLZ_ALWAYS_INLINE static void op(auto& value, is_context auto&& ctx, It&& it, End end) noexcept
       {
@@ -1912,7 +1981,14 @@ namespace glz
          if (bool(ctx.error)) [[unlikely]]
             return;
 
+         if (validate_utf8_span(ctx, start, it)) [[unlikely]] {
+            return;
+         }
+
          if constexpr (string_view_t<T>) {
+            if constexpr (!Transient) {
+               GLZ_ASSERT_OWNS_ITS_BYTES(decltype(ctx));
+            }
             using value_type = typename std::decay_t<T>::value_type;
             if constexpr (std::same_as<value_type, char8_t>) {
                value = {reinterpret_cast<const char8_t*>(start), size_t(it - start)};
@@ -1956,6 +2032,17 @@ namespace glz
          }
       }
    };
+
+   // Reads a JSON string as a view of the input window, for a reader that consumes it before
+   // returning -- parsing a date out of it, say. Such a view cannot dangle: nothing refills the
+   // window between the read below and the caller's use of it, which is why this is exempt from the
+   // guard that rejects streaming into a view the caller keeps. Do not hand the view any further
+   // than the calling reader; store what it parsed, never the view itself.
+   template <auto Opts, class... Args>
+   GLZ_ALWAYS_INLINE void parse_transient_string_view(std::string_view& value, Args&&... args) noexcept
+   {
+      from<JSON, std::string_view>::template op<Opts, true>(value, std::forward<Args>(args)...);
+   }
 
    template <char_t T>
    struct from<JSON, T>
@@ -2233,6 +2320,9 @@ namespace glz
          }
          if (bool(ctx.error)) [[unlikely]]
             return;
+         if constexpr (string_view_t<T>) {
+            GLZ_ASSERT_OWNS_ITS_BYTES(decltype(ctx));
+         }
          value.str = {it_start, static_cast<size_t>(it - it_start)};
       }
    };
@@ -2241,8 +2331,11 @@ namespace glz
    struct from<JSON, basic_text<T>>
    {
       template <auto Opts>
-      GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&&, auto&& it, auto end)
+      GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&& it, auto end)
       {
+         if constexpr (string_view_t<T>) {
+            GLZ_ASSERT_OWNS_ITS_BYTES(decltype(ctx));
+         }
          value.str = {it, static_cast<size_t>(end - it)}; // read entire contents as string
          it = end;
       }
@@ -2266,8 +2359,10 @@ namespace glz
          if (match_invalid_end<'[', Opts>(ctx, it, end)) {
             return;
          }
-         if constexpr (not Opts.null_terminated) {
-            ++ctx.depth;
+         // one nesting level (see enter_depth): counted in both modes so the limit binds,
+         // released at each syntactic close below
+         if (enter_depth(ctx)) [[unlikely]] {
+            return;
          }
          if (skip_ws<Opts>(ctx, it, end)) {
             return;
@@ -2275,9 +2370,7 @@ namespace glz
 
          value.clear();
          if (*it == ']') [[unlikely]] {
-            if constexpr (not Opts.null_terminated) {
-               --ctx.depth;
-            }
+            --ctx.depth;
             ++it;
             return;
          }
@@ -2293,9 +2386,7 @@ namespace glz
                return;
             }
             if (*it == ']') {
-               if constexpr (not Opts.null_terminated) {
-                  --ctx.depth;
-               }
+               --ctx.depth;
                ++it;
                return;
             }
@@ -2327,8 +2418,10 @@ namespace glz
          if (match_invalid_end<'[', Opts>(ctx, it, end)) {
             return;
          }
-         if constexpr (not Opts.null_terminated) {
-            ++ctx.depth;
+         // one nesting level (see enter_depth): counted in both modes so the limit binds,
+         // released at each syntactic close below
+         if (enter_depth(ctx)) [[unlikely]] {
+            return;
          }
 
          const auto ws_start = it;
@@ -2337,14 +2430,12 @@ namespace glz
          }
 
          if (*it == ']') {
-            if constexpr (not Opts.null_terminated) {
-               --ctx.depth;
-            }
+            --ctx.depth;
             ++it;
             if constexpr ((resizable<T> || is_inplace_vector<T>) && not check_append_arrays(Opts)) {
                value.clear();
 
-               if constexpr (check_shrink_to_fit(Opts)) {
+               if constexpr (check_shrink_to_fit(Opts) && has_shrink_to_fit<T>) {
                   value.shrink_to_fit();
                }
             }
@@ -2380,15 +2471,13 @@ namespace glz
                   }
                }
                else if (*it == ']') {
-                  if constexpr (not Opts.null_terminated) {
-                     --ctx.depth;
-                  }
+                  --ctx.depth;
                   ++it;
                   if constexpr (erasable<T>) {
                      value.erase(value_it,
                                  value.end()); // use erase rather than resize for non-default constructible elements
 
-                     if constexpr (check_shrink_to_fit(Opts)) {
+                     if constexpr (check_shrink_to_fit(Opts) && has_shrink_to_fit<T>) {
                         value.shrink_to_fit();
                      }
                   }
@@ -2402,6 +2491,9 @@ namespace glz
          }
 
          if constexpr (Opts.partial_read) {
+            // partial_read stops early on a success path, so give the level back like the
+            // syntactic-close paths do; otherwise it accumulates across reads sharing a context.
+            --ctx.depth;
             return;
          }
          else {
@@ -2476,10 +2568,11 @@ namespace glz
                      }
                   }
                   else if (*it == ']') {
-                     if constexpr (not Opts.null_terminated) {
-                        --ctx.depth;
-                     }
+                     --ctx.depth;
                      ++it;
+                     if constexpr (check_shrink_to_fit(Opts) && has_shrink_to_fit<T>) {
+                        value.shrink_to_fit();
+                     }
                      return;
                   }
                   else [[unlikely]] {
@@ -2527,8 +2620,10 @@ namespace glz
                   return;
                }
             }
-            if constexpr (not Opts.null_terminated) {
-               ++ctx.depth;
+            // one nesting level (see enter_depth): counted in both modes so the limit binds,
+            // released at each syntactic close below
+            if (enter_depth(ctx)) [[unlikely]] {
+               return;
             }
          }
 
@@ -2542,9 +2637,7 @@ namespace glz
 
             if (*it == '}') {
                ++it;
-               if constexpr (not Opts.null_terminated) {
-                  --ctx.depth;
-               }
+               --ctx.depth;
                if constexpr (not Opts.null_terminated) {
                   if (it == end) {
                      ctx.error = error_code::end_reached;
@@ -2714,8 +2807,10 @@ namespace glz
          if (match_invalid_end<'[', Opts>(ctx, it, end)) {
             return;
          }
-         if constexpr (not Opts.null_terminated) {
-            ++ctx.depth;
+         // one nesting level (see enter_depth): counted in both modes so the limit binds,
+         // released at each syntactic close below
+         if (enter_depth(ctx)) [[unlikely]] {
+            return;
          }
          const auto n = number_of_array_elements<Opts>(ctx, it, end);
          if (bool(ctx.error)) [[unlikely]]
@@ -2738,9 +2833,7 @@ namespace glz
             ++i;
          }
          match<']'>(ctx, it);
-         if constexpr (not Opts.null_terminated) {
-            --ctx.depth;
-         }
+         --ctx.depth;
       }
    };
 
@@ -2769,8 +2862,10 @@ namespace glz
          if (match_invalid_end<'[', Opts>(ctx, it, end)) {
             return;
          }
-         if constexpr (not Opts.null_terminated) {
-            ++ctx.depth;
+         // one nesting level (see enter_depth): counted in both modes so the limit binds,
+         // released at each syntactic close below
+         if (enter_depth(ctx)) [[unlikely]] {
+            return;
          }
          if (skip_ws<Opts>(ctx, it, end)) {
             return;
@@ -2816,15 +2911,14 @@ namespace glz
          });
 
          if constexpr (Opts.partial_read) {
+            --ctx.depth; // as above: an early success still closes this level
             return;
          }
          else {
             if (bool(ctx.error)) [[unlikely]]
                return;
             match<']'>(ctx, it);
-            if constexpr (not Opts.null_terminated) {
-               --ctx.depth;
-            }
+            --ctx.depth;
             if constexpr (not Opts.null_terminated) {
                if (it == end) {
                   ctx.error = error_code::end_reached;
@@ -2850,8 +2944,10 @@ namespace glz
          if (match_invalid_end<'[', Opts>(ctx, it, end)) {
             return;
          }
-         if constexpr (not Opts.null_terminated) {
-            ++ctx.depth;
+         // one nesting level (see enter_depth): counted in both modes so the limit binds,
+         // released at each syntactic close below
+         if (enter_depth(ctx)) [[unlikely]] {
+            return;
          }
 
          constexpr auto& HashInfo = hash_info<T>;
@@ -2878,9 +2974,7 @@ namespace glz
                return;
             }
             if (*it == ']') {
-               if constexpr (not Opts.null_terminated) {
-                  --ctx.depth;
-               }
+               --ctx.depth;
                ++it;
                if constexpr (not Opts.null_terminated) {
                   if (it == end) {
@@ -2958,8 +3052,10 @@ namespace glz
             if (match_invalid_end<'{', Opts>(ctx, it, end)) {
                return;
             }
-            if constexpr (not Opts.null_terminated) {
-               ++ctx.depth;
+            // one nesting level (see enter_depth): counted in both modes so the limit binds,
+            // released at each syntactic close below
+            if (enter_depth(ctx)) [[unlikely]] {
+               return;
             }
          }
          if (skip_ws<Opts>(ctx, it, end)) {
@@ -2967,9 +3063,7 @@ namespace glz
          }
 
          if (*it == '}') {
-            if constexpr (not Opts.null_terminated) {
-               --ctx.depth;
-            }
+            --ctx.depth;
             if constexpr (Opts.error_on_missing_keys) {
                ctx.error = error_code::missing_key;
             }
@@ -3016,9 +3110,7 @@ namespace glz
          }
 
          match<'}'>(ctx, it);
-         if constexpr (not Opts.null_terminated) {
-            --ctx.depth;
-         }
+         --ctx.depth;
          if constexpr (not Opts.null_terminated) {
             if (it == end) {
                ctx.error = error_code::end_reached;
@@ -3070,8 +3162,10 @@ namespace glz
                   return;
                }
             }
-            if constexpr (not Opts.null_terminated) {
-               ++ctx.depth;
+            // one nesting level (see enter_depth): counted in both modes so the limit binds,
+            // released at each syntactic close below
+            if (enter_depth(ctx)) [[unlikely]] {
+               return;
             }
          }
          const auto ws_start = it;
@@ -3094,6 +3188,8 @@ namespace glz
                   const auto start = it;
                   skip_string_view(ctx, it, end);
                   if (bool(ctx.error)) [[unlikely]]
+                     return;
+                  if (validate_utf8_span(ctx, start, it)) [[unlikely]]
                      return;
                   const sv key{start, size_t(it - start)};
                   ++it;
@@ -3125,9 +3221,7 @@ namespace glz
             }
 
             if (*it == '}') [[likely]] {
-               if constexpr (not Opts.null_terminated) {
-                  --ctx.depth;
-               }
+               --ctx.depth;
                if constexpr (glaze_object_t<T> || reflectable<T>) {
                   if constexpr (has_self_constraint_v<T> && !check_skip_self_constraint(Opts)) {
                      auto wrapper = self_constraint_v<T>(value);
@@ -3178,6 +3272,7 @@ namespace glz
 
                   if ((all_fields & fields) == all_fields) {
                      ctx.error = error_code::partial_read_complete;
+                     --ctx.depth; // as above: an early success still closes this level
                      return;
                   }
                }
@@ -3203,9 +3298,7 @@ namespace glz
                }
 
                if (*it == '}') {
-                  if constexpr (not Opts.null_terminated) {
-                     --ctx.depth;
-                  }
+                  --ctx.depth;
                   if constexpr ((glaze_object_t<T> || reflectable<T>) && Opts.error_on_missing_keys) {
                      constexpr auto req_fields = required_fields<T, Opts>();
                      if ((req_fields & fields) != req_fields) {
@@ -3285,6 +3378,8 @@ namespace glz
                      skip_string_view(ctx, it, end);
                      if (bool(ctx.error)) [[unlikely]]
                         return;
+                     if (validate_utf8_span(ctx, start, it)) [[unlikely]]
+                        return;
                      const sv key{start, size_t(it - start)};
                      ++it;
                      if constexpr (not Opts.null_terminated) {
@@ -3348,6 +3443,8 @@ namespace glz
                      const auto start = it;
                      skip_string_view(ctx, it, end);
                      if (bool(ctx.error)) [[unlikely]]
+                        return;
+                     if (validate_utf8_span(ctx, start, it)) [[unlikely]]
                         return;
                      const sv key{start, size_t(it - start)};
                      ++it;
@@ -3683,6 +3780,42 @@ namespace glz
          return std::variant_npos;
    }();
 
+   // Restores a nesting-depth snapshot after a rejected variant alternative, alongside the iterator
+   // rewind. A rejected alternative that bailed out inside a container left its level counted (see
+   // enter_depth), and without this, trying N alternatives could spend N levels of the recursion
+   // budget -- a long array of variants would eventually report exceeded_max_recursive_depth.
+   //
+   // The exception is a truncation signal on a non-null-terminated buffer: there ctx.depth is also
+   // the completion counter, and leaving that level counted is precisely what tells
+   // finalize_read_context the buffer ended mid-value rather than exactly at a clean close.
+   //
+   // Nesting past the limit is excluded in both modes, and for a third reason: handing the next
+   // alternative a fresh budget lets it re-descend to the limit and fail identically, so the retry
+   // re-parses the whole subtree once per alternative at every level of the nest, which is
+   // exponential. `variant_alternative_exhausted` below stops the retry outright.
+   template <auto Opts>
+   GLZ_ALWAYS_INLINE void rewind_depth(is_context auto& ctx, const uint32_t depth) noexcept
+   {
+      if (ctx.error == error_code::exceeded_max_recursive_depth) [[unlikely]] {
+         return;
+      }
+      if constexpr (Opts.null_terminated) {
+         ctx.depth = depth;
+      }
+      else {
+         if (ctx.error != error_code::end_reached && ctx.error != error_code::unexpected_end) {
+            ctx.depth = depth;
+         }
+      }
+   }
+
+   // True once a failure means no further alternative is worth trying: nesting past the depth limit
+   // is a property of the input rather than of the alternative, so retrying only multiplies the work.
+   GLZ_ALWAYS_INLINE bool variant_alternative_exhausted(is_context auto& ctx) noexcept
+   {
+      return ctx.error == error_code::exceeded_max_recursive_depth;
+   }
+
    // Process variant alternatives by iterating directly over variant indices
    // (replaces tuple_cat + tuple iteration approach)
    template <class Variant, template <class> class Trait>
@@ -3702,11 +3835,15 @@ namespace glz
             constexpr auto non_const_count = variant_filtered_count_v<Variant, Trait, false>;
 
             bool found_match{};
+            // Set when the speculative parsing budget runs out; see charge_speculation. An ambiguous
+            // nest re-parses the same subtree per alternative at every level, which is exponential,
+            // so the budget stops it and the failure already in hand is reported.
+            bool exhausted{};
 
             // First pass: const glaze types in this category
             if constexpr (const_count > 0) {
                for_each<N>([&]<size_t I>() {
-                  if (found_match) {
+                  if (found_match || exhausted || variant_alternative_exhausted(ctx)) {
                      return;
                   }
                   using V = std::variant_alternative_t<I, Variant>;
@@ -3714,6 +3851,10 @@ namespace glz
                      // run time substitute to compare to const value
                      std::remove_const_t<std::remove_pointer_t<std::remove_const_t<meta_wrapper_t<V>>>> substitute{};
                      auto copy_it{it};
+                     // A rejected alternative may have bailed out inside a container, which leaves its
+                     // nesting level counted (see enter_depth). Rewind the depth with the iterator so
+                     // trying N alternatives cannot spend N levels of the recursion budget.
+                     const auto copy_depth{ctx.depth};
                      parse<JSON>::op<ws_handled<Options>()>(substitute, ctx, it, end);
                      static constexpr auto const_value{*meta_wrapper_v<V>};
                      if (substitute == const_value) {
@@ -3723,12 +3864,17 @@ namespace glz
                         }
                      }
                      else {
+                        // Rejected: charge the bytes it parsed before we rewind. See charge_speculation.
+                        if (!charge_speculation(ctx, size_t(it - copy_it))) {
+                           exhausted = true;
+                        }
                         if constexpr (not Options.null_terminated) {
-                           if (ctx.error == error_code::end_reached) {
+                           if (ctx.error == error_code::end_reached && not exhausted) {
                               ctx.error = error_code::none;
                            }
                         }
                         it = copy_it;
+                        rewind_depth<Options>(ctx, copy_depth);
                      }
                   }
                });
@@ -3747,16 +3893,20 @@ namespace glz
                size_t non_const_idx = 0;
 
                for_each<N>([&]<size_t I>() {
-                  if (found_match) {
+                  if (found_match || exhausted || variant_alternative_exhausted(ctx)) {
                      return;
                   }
                   using V = std::variant_alternative_t<I, Variant>;
                   if constexpr (Trait<V>::value && !glaze_const_value_t<V>) {
                      auto copy_it{it};
+                     const auto copy_depth{ctx.depth}; // rewound with `it`; see the note above
                      if (!std::holds_alternative<V>(value)) {
                         value = V{};
                      }
                      parse<JSON>::op<ws_handled<Options>()>(std::get<V>(value), ctx, it, end);
+                     if (bool(ctx.error) && !charge_speculation(ctx, size_t(it - copy_it))) {
+                        exhausted = true; // only rejected attempts are charged; see charge_speculation
+                     }
                      if (!bool(ctx.error)) {
                         found_match = true;
                      }
@@ -3765,27 +3915,33 @@ namespace glz
                            num_t<V> || bool_t<V> || string_t<V> || std::is_enum_v<V> || tuple_t<V> || is_std_tuple<V>;
 
                         if constexpr (is_complete_type) {
-                           if (ctx.error == error_code::end_reached && it > copy_it) {
+                           if (ctx.error == error_code::end_reached && it > copy_it && not speculation_exhausted(ctx)) {
                               found_match = true;
                               ctx.error = error_code::none;
                            }
                            else {
                               it = copy_it;
-                              if (non_const_idx + 1 < non_const_count) {
+                              rewind_depth<Options>(ctx, copy_depth);
+                              if (non_const_idx + 1 < non_const_count && not exhausted &&
+                                  not variant_alternative_exhausted(ctx)) {
                                  ctx.error = error_code::none;
                               }
                            }
                         }
                         else {
                            it = copy_it;
-                           if (non_const_idx + 1 < non_const_count) {
+                           rewind_depth<Options>(ctx, copy_depth);
+                           if (non_const_idx + 1 < non_const_count && not exhausted &&
+                               not variant_alternative_exhausted(ctx)) {
                               ctx.error = error_code::none;
                            }
                         }
                      }
                      else {
                         it = copy_it;
-                        if (non_const_idx + 1 < non_const_count) {
+                        rewind_depth<Options>(ctx, copy_depth);
+                        if (non_const_idx + 1 < non_const_count && not exhausted &&
+                            not variant_alternative_exhausted(ctx)) {
                            ctx.error = error_code::none;
                         }
                      }
@@ -3796,7 +3952,8 @@ namespace glz
                   if constexpr (non_const_count == 1) {
                      // Keep the specific error from the single type we tried
                   }
-                  else {
+                  else if (not exhausted && not variant_alternative_exhausted(ctx)) {
+                     // Over-nested input is not a failure of the alternative set; keep saying so.
                      ctx.error = error_code::no_matching_variant_type;
                   }
                }
@@ -3812,9 +3969,199 @@ namespace glz
       requires(not custom_read<T>)
    struct from<JSON, T>
    {
+      static constexpr size_t variant_size = std::variant_size_v<T>;
+
+      // The tagging representation is a property of the variant, decided once for every alternative.
+      static constexpr auto tagging = variant_tagging_v<T>;
+
+      // Adjacent tagging: {tag: id, content: value}. Nothing needs to be deduced here -- the
+      // discriminator names the alternative outright -- so this path is wholly independent of the
+      // structural deduction machinery below and works for alternatives of any shape, including
+      // several that share one. That is the point of the form: `variant<vector<double>,
+      // deque<double>>` round-trips under it, where internal tagging cannot even represent it.
+      //
+      // The two keys may arrive in either order, so the object is walked twice: once to find the
+      // discriminator, once to read the content into the alternative it named. Both walks are over
+      // an object that in practice has exactly two members, so the second costs one extra skip.
+      template <auto Options>
+      static void read_adjacent(auto&& value, is_context auto&& ctx, auto&& it, auto end)
+      {
+         constexpr auto Opts = ws_handled_off<Options>();
+         if constexpr (not check_ws_handled(Options)) {
+            if (skip_ws<Opts>(ctx, it, end)) {
+               return;
+            }
+         }
+         if (match_invalid_end<'{', Opts>(ctx, it, end)) {
+            return;
+         }
+
+         // Adjacent values nest (the content of one variant may be another), so this reader has to
+         // count depth itself rather than leaning on the object parser it never calls. Counted by
+         // hand rather than with depth_guard: the non-null-terminated readers rely on depth staying
+         // elevated when a read bails out, because finalize_read_context only downgrades
+         // `end_reached` to success at depth 0. An RAII restore turns a truncated stream into a
+         // silent success with the destination untouched. Only the success path below decrements.
+         if (ctx.depth >= max_recursive_depth_limit) [[unlikely]] {
+            ctx.error = error_code::exceeded_max_recursive_depth;
+            return;
+         }
+         ++ctx.depth;
+
+         const auto obj_start = it;
+
+         // Walk the members, handing each key to `on_key`, which must consume that key's value.
+         // Leaves `it` just past the closing brace. Returns false once an error has been set.
+         const auto walk = [&](auto&& on_key) {
+            it = obj_start;
+            if (skip_ws<Opts>(ctx, it, end)) {
+               return false;
+            }
+            const auto first = it;
+            while (*it != '}') {
+               if (it != first) {
+                  if (match_invalid_end<',', Opts>(ctx, it, end)) {
+                     return false;
+                  }
+                  if (skip_ws<Opts>(ctx, it, end)) {
+                     return false;
+                  }
+               }
+               if (match_invalid_end<'"', Opts>(ctx, it, end)) {
+                  return false;
+               }
+               auto* key_start = it;
+               skip_string_view(ctx, it, end);
+               if (bool(ctx.error)) [[unlikely]] {
+                  return false;
+               }
+               if (validate_utf8_span(ctx, key_start, it)) [[unlikely]] {
+                  return false;
+               }
+               const sv key{key_start, size_t(it - key_start)};
+               if (match_invalid_end<'"', Opts>(ctx, it, end)) {
+                  return false;
+               }
+               if (parse_ws_colon<Opts>(ctx, it, end)) {
+                  return false;
+               }
+               if (!on_key(key)) {
+                  return false;
+               }
+               if (skip_ws<Opts>(ctx, it, end)) {
+                  return false;
+               }
+            }
+            if (match<'}'>(ctx, it)) {
+               return false;
+            }
+            return true;
+         };
+
+         using id_type = std::decay_t<decltype(ids_v<T>[0])>;
+         size_t type_index = ids_v<T>.size();
+         bool tag_seen = false;
+         bool content_scanned = false;
+
+         if (!walk([&](const sv key) {
+                if (!tag_seen && key == tag_v<T>) {
+                   std::conditional_t<std::integral<id_type>, id_type, sv> type_id{};
+                   if constexpr (std::integral<id_type>) {
+                      from<JSON, id_type>::template op<ws_handled<Opts>()>(type_id, ctx, it, end);
+                   }
+                   else {
+                      from<JSON, sv>::template op<ws_handled<Opts>()>(type_id, ctx, it, end);
+                   }
+                   if (bool(ctx.error)) [[unlikely]] {
+                      return false;
+                   }
+                   if constexpr (std::integral<id_type>) {
+                      type_index = variant_id_to_index<T>::op(type_id);
+                   }
+                   else {
+                      type_index =
+                         variant_id_to_index<T>::op(type_id.data(), type_id.data() + type_id.size(), type_id.size());
+                   }
+                   tag_seen = true;
+                   return true;
+                }
+                if (!content_scanned && key == content_v<T>) {
+                   content_scanned = true;
+                   skip_value<JSON>::op<Opts>(ctx, it, end);
+                   return !bool(ctx.error);
+                }
+                if constexpr (Opts.error_on_unknown_keys) {
+                   // Only the two declared keys belong in an adjacently tagged object, and each only
+                   // once. Anything else is the caller reading data this variant did not describe.
+                   ctx.error = error_code::unknown_key;
+                   return false;
+                }
+                skip_value<JSON>::op<Opts>(ctx, it, end);
+                return !bool(ctx.error);
+             })) {
+            return;
+         }
+
+         if (!tag_seen) [[unlikely]] {
+            ctx.error = error_code::missing_key;
+            ctx.custom_error_message = variant_ids_string_v<T>;
+            return;
+         }
+
+         size_t resolved = variant_size;
+         if (type_index < ids_v<T>.size()) [[likely]] {
+            resolved = type_index;
+         }
+         else if constexpr (ids_v<T>.size() < variant_size) {
+            // Fewer ids than alternatives: the first unlabeled alternative is the default for an
+            // unrecognized id, matching the internally tagged reader.
+            resolved = ids_v<T>.size();
+         }
+         if (resolved >= variant_size) [[unlikely]] {
+            ctx.error = error_code::no_matching_variant_type;
+            ctx.custom_error_message = variant_ids_string_v<T>;
+            return;
+         }
+
+         if (value.index() != resolved) {
+            emplace_runtime_variant(value, resolved);
+         }
+
+         bool content_seen = false;
+         if (!walk([&](const sv key) {
+                if (!content_seen && key == content_v<T>) {
+                   content_seen = true;
+                   std::visit([&](auto&& v) { parse<JSON>::op<ws_handled<Opts>()>(v, ctx, it, end); }, value);
+                   return !bool(ctx.error);
+                }
+                skip_value<JSON>::op<Opts>(ctx, it, end);
+                return !bool(ctx.error);
+             })) {
+            return;
+         }
+
+         if (!content_seen) [[unlikely]] {
+            ctx.error = error_code::missing_key;
+            ctx.custom_error_message = content_v<T>;
+            return;
+         }
+         --ctx.depth;
+      }
+
       // Note that items in the variant are required to be default constructable for us to switch types
       template <auto Options>
       static void op(auto&& value, is_context auto&& ctx, auto&& it, auto end)
+      {
+         if constexpr (tagging == variant_tagging_kind::adjacent) {
+            read_adjacent<Options>(value, ctx, it, end);
+         }
+         else {
+            read_deduced<Options>(value, ctx, it, end);
+         }
+      }
+
+      template <auto Options>
+      static void read_deduced(auto&& value, is_context auto&& ctx, auto&& it, auto end)
       {
          constexpr auto Opts = ws_handled_off<Options>();
          if constexpr (variant_is_auto_deducible<T>()) {
@@ -3829,13 +4176,13 @@ namespace glz
                ctx.error = error_code::unexpected_end;
                return;
             case '{': {
-               if (ctx.depth >= max_recursive_depth_limit) {
-                  ctx.error = error_code::exceeded_max_recursive_depth;
+               // This branch consumes the brace itself and hands the object to a reader with
+               // `opening_handled`, which therefore does not count the level -- but does release it at
+               // the closing brace. So the level is taken here, in both buffer modes, and paid back by
+               // the reader below.
+               if (enter_depth(ctx)) [[unlikely]] {
                   return;
                }
-               // In the null terminated case this guards for stack overflow
-               // Depth counting is done at the object level when not null terminated
-               ++ctx.depth;
 
                ++it;
                if constexpr (not Opts.null_terminated) {
@@ -3855,11 +4202,6 @@ namespace glz
                   using V = std::variant_alternative_t<first_idx, T>;
                   if (!std::holds_alternative<V>(value)) value = V{};
                   parse<JSON>::op<opening_handled<Opts>()>(std::get<V>(value), ctx, it, end);
-                  if constexpr (Opts.null_terminated) {
-                     // In the null terminated case this guards for stack overflow
-                     // Depth counting is done at the object level when not null terminated
-                     --ctx.depth;
-                  }
                   return;
                }
                else {
@@ -3916,6 +4258,8 @@ namespace glz
                      auto* key_start = it;
                      skip_string_view(ctx, it, end);
                      if (bool(ctx.error)) [[unlikely]]
+                        return;
+                     if (validate_utf8_span(ctx, key_start, it)) [[unlikely]]
                         return;
                      const sv key = {key_start, size_t(it - key_start)};
 
@@ -3979,7 +4323,16 @@ namespace glz
                                        using V = std::decay_t<decltype(v)>;
                                        constexpr bool is_object =
                                           (glaze_object_t<V> || reflectable<V>) && not custom_read<V>;
-                                       if constexpr (is_object) {
+                                       if constexpr (variant_unit_alternative<V>) {
+                                          // A unit alternative carries no data; its object holds only the
+                                          // discriminator. Consume that body through an empty reflected object so
+                                          // unknown-key policy and terminator handling match every other alternative.
+                                          detail::variant_unit_body unit_body{};
+                                          from<JSON, detail::variant_unit_body>::template op<opening_handled<Opts>(),
+                                                                                             tag_literal>(unit_body,
+                                                                                                          ctx, it, end);
+                                       }
+                                       else if constexpr (is_object) {
                                           if constexpr (contains_tag<V, tag_literal>()) {
                                              it = start; // tag is a struct field, must re-parse
                                           }
@@ -4040,11 +4393,6 @@ namespace glz
                                     },
                                     value);
 
-                                 if constexpr (Opts.null_terminated) {
-                                    // In the null terminated case this guards for stack overflow
-                                    // Depth counting is done at the object level when not null terminated
-                                    --ctx.depth;
-                                 }
                                  return; // we've decoded our target type
                               }
                               else [[unlikely]] {
@@ -4064,7 +4412,17 @@ namespace glz
                                           using V = std::decay_t<decltype(v)>;
                                           constexpr bool is_object =
                                              (glaze_object_t<V> || reflectable<V>) && not custom_read<V>;
-                                          if constexpr (is_object) {
+                                          if constexpr (variant_unit_alternative<V>) {
+                                             // A unit alternative carries no data; its object holds only the
+                                             // discriminator. Consume that body through an empty reflected object so
+                                             // unknown-key policy and terminator handling match every other
+                                             // alternative.
+                                             detail::variant_unit_body unit_body{};
+                                             from<JSON, detail::variant_unit_body>::template op<opening_handled<Opts>(),
+                                                                                                tag_literal>(
+                                                unit_body, ctx, it, end);
+                                          }
+                                          else if constexpr (is_object) {
                                              if constexpr (contains_tag<V, tag_literal>()) {
                                                 it = start; // tag is a struct field, must re-parse
                                              }
@@ -4121,9 +4479,6 @@ namespace glz
                                        },
                                        value);
 
-                                    if constexpr (Opts.null_terminated) {
-                                       --ctx.depth;
-                                    }
                                     return;
                                  }
                                  else {
@@ -4216,9 +4571,6 @@ namespace glz
                                  }
                               },
                               value);
-                           if constexpr (Opts.null_terminated) {
-                              --ctx.depth;
-                           }
                            return;
                         }
                         else if constexpr (Opts.error_on_unknown_keys) {
@@ -4261,7 +4613,16 @@ namespace glz
                               [&](auto&& v) {
                                  using V = std::decay_t<decltype(v)>;
                                  constexpr bool is_object = (glaze_object_t<V> || reflectable<V>) && not custom_read<V>;
-                                 if constexpr (is_object) {
+                                 if constexpr (variant_unit_alternative<V>) {
+                                    // A unit alternative carries no data; its object holds only the discriminator.
+                                    // Consume that body through an empty reflected object so unknown-key policy and
+                                    // terminator handling match every other alternative.
+                                    detail::variant_unit_body unit_body{};
+                                    from<JSON, detail::variant_unit_body>::template op<opening_handled<Opts>(),
+                                                                                       tag_literal>(unit_body, ctx, it,
+                                                                                                    end);
+                                 }
+                                 else if constexpr (is_object) {
                                     from<JSON, V>::template op<opening_handled<Opts>(), tag_literal>(v, ctx, it, end);
                                  }
                                  else if constexpr (is_memory_object<V>) {
@@ -4304,11 +4665,6 @@ namespace glz
                               },
                               value);
 
-                           if constexpr (Opts.null_terminated) {
-                              // In the null terminated case this guards for stack overflow
-                              // Depth counting is done at the object level when not null terminated
-                              --ctx.depth;
-                           }
                            return; // we've decoded our target type
                         }
                      }
@@ -4350,7 +4706,16 @@ namespace glz
                            [&](auto&& v) {
                               using V = std::decay_t<decltype(v)>;
                               constexpr bool is_object = (glaze_object_t<V> || reflectable<V>) && not custom_read<V>;
-                              if constexpr (is_object) {
+                              if constexpr (variant_unit_alternative<V>) {
+                                 // A unit alternative carries no data; its object holds only the discriminator.
+                                 // Consume that body through an empty reflected object so unknown-key policy and
+                                 // terminator handling match every other alternative.
+                                 detail::variant_unit_body unit_body{};
+                                 from<JSON, detail::variant_unit_body>::template op<opening_handled<Opts>(),
+                                                                                    tag_literal>(unit_body, ctx, it,
+                                                                                                 end);
+                              }
+                              else if constexpr (is_object) {
                                  from<JSON, V>::template op<opening_handled<Opts>(), tag_literal>(v, ctx, it, end);
                               }
                               else if constexpr (is_memory_object<V>) {
@@ -4390,10 +4755,6 @@ namespace glz
                               }
                            },
                            value);
-
-                        if constexpr (Opts.null_terminated) {
-                           --ctx.depth;
-                        }
                      }
                      else if (final_matching > 1) {
                         constexpr auto N = std::variant_size_v<T>;
@@ -4446,7 +4807,16 @@ namespace glz
                               [&](auto&& v) {
                                  using V = std::decay_t<decltype(v)>;
                                  constexpr bool is_object = (glaze_object_t<V> || reflectable<V>) && not custom_read<V>;
-                                 if constexpr (is_object) {
+                                 if constexpr (variant_unit_alternative<V>) {
+                                    // A unit alternative carries no data; its object holds only the discriminator.
+                                    // Consume that body through an empty reflected object so unknown-key policy and
+                                    // terminator handling match every other alternative.
+                                    detail::variant_unit_body unit_body{};
+                                    from<JSON, detail::variant_unit_body>::template op<opening_handled<Opts>(),
+                                                                                       tag_literal>(unit_body, ctx, it,
+                                                                                                    end);
+                                 }
+                                 else if constexpr (is_object) {
                                     from<JSON, V>::template op<opening_handled<Opts>(), tag_literal>(v, ctx, it, end);
                                  }
                                  else if constexpr (is_memory_object<V>) {
@@ -4486,10 +4856,6 @@ namespace glz
                                  }
                               },
                               value);
-
-                           if constexpr (Opts.null_terminated) {
-                              --ctx.depth;
-                           }
                         }
                         else {
                            ctx.error = error_code::no_matching_variant_type;
@@ -4504,19 +4870,8 @@ namespace glz
                break;
             }
             case '[':
-               if (ctx.depth >= max_recursive_depth_limit) {
-                  ctx.error = error_code::exceeded_max_recursive_depth;
-                  return;
-               }
-               if constexpr (Opts.null_terminated) {
-                  // In the null terminated case this guards for stack overflow
-                  // Depth counting is done at the object level when not null terminated
-                  ++ctx.depth;
-               }
+               // As with '{' above: the array reader each alternative goes through counts the level.
                process_variant_alternatives<T, is_variant_array>::template op<Opts>(value, ctx, it, end);
-               if constexpr (Opts.null_terminated) {
-                  --ctx.depth;
-               }
                break;
             case '"': {
                process_variant_alternatives<T, is_variant_str>::template op<Opts>(value, ctx, it, end);
@@ -4548,11 +4903,15 @@ namespace glz
             // For non-auto-deducible variants, try each type until one succeeds
             constexpr auto N = std::variant_size_v<T>;
             bool parsed = false;
+            bool exhausted = false; // speculation budget spent; see charge_speculation
 
             for_each<N>([&]<size_t I>() {
-               if (parsed) return;
+               if (parsed || exhausted || variant_alternative_exhausted(ctx)) return;
 
                auto copy_it = it;
+               // A rejected alternative may have bailed out inside a container, which leaves its
+               // nesting level counted (see enter_depth), so the depth rewinds with the iterator.
+               const auto copy_depth = ctx.depth;
 
                // Try parsing as this type
                if (value.index() != I) {
@@ -4560,6 +4919,9 @@ namespace glz
                }
 
                std::visit([&](auto&& v) { parse<JSON>::op<Options>(v, ctx, it, end); }, value);
+               if (bool(ctx.error) && !charge_speculation(ctx, size_t(it - copy_it))) {
+                  exhausted = true; // only rejected attempts are charged; see charge_speculation
+               }
 
                if (!bool(ctx.error)) {
                   parsed = true;
@@ -4567,24 +4929,31 @@ namespace glz
                else if constexpr (not Options.null_terminated) {
                   // In non-null-terminated mode, if we hit end_reached after advancing the iterator,
                   // it means we successfully parsed the value but couldn't skip trailing whitespace
-                  if (ctx.error == error_code::end_reached && it > copy_it) {
-                     // We advanced the iterator, so we did parse something
+                  if (ctx.error == error_code::end_reached && it > copy_it && not speculation_exhausted(ctx)) {
+                     // We advanced the iterator, so we did parse something -- unless what advanced it
+                     // was an abandoned attempt, which is what a spent speculation budget means.
                      parsed = true;
                      ctx.error = error_code::none;
                   }
                   else {
                      // Reset for next attempt (unless this is the last type)
                      it = copy_it;
+                     rewind_depth<Options>(ctx, copy_depth);
                      if constexpr (I + 1 < N) {
-                        ctx.error = error_code::none; // Clear error for next attempt
+                        if (not exhausted && not variant_alternative_exhausted(ctx)) {
+                           ctx.error = error_code::none; // Clear error for next attempt
+                        }
                      }
                   }
                }
                else {
                   // Reset for next attempt (unless this is the last type)
                   it = copy_it;
+                  rewind_depth<Options>(ctx, copy_depth);
                   if constexpr (I + 1 < N) {
-                     ctx.error = error_code::none; // Clear error for next attempt
+                     if (not exhausted && not variant_alternative_exhausted(ctx)) {
+                        ctx.error = error_code::none; // Clear error for next attempt
+                     }
                   }
                }
             });
@@ -4610,8 +4979,10 @@ namespace glz
          if (match_invalid_end<'[', Opts>(ctx, it, end)) {
             return;
          }
-         if constexpr (not Opts.null_terminated) {
-            ++ctx.depth;
+         // one nesting level (see enter_depth): counted in both modes so the limit binds,
+         // released at each syntactic close below
+         if (enter_depth(ctx)) [[unlikely]] {
+            return;
          }
          if (skip_ws<Opts>(ctx, it, end)) {
             return;
@@ -4659,9 +5030,7 @@ namespace glz
             return;
          }
          match<']'>(ctx, it);
-         if constexpr (not Opts.null_terminated) {
-            --ctx.depth;
-         }
+         --ctx.depth;
       }
    };
 
@@ -4693,8 +5062,15 @@ namespace glz
          };
 
          if (*it == '{') {
-            if constexpr (not Opts.null_terminated) {
-               ++ctx.depth;
+            // One level, held only while this reader scans the wrapper. Every path below releases it:
+            // the two that rewind to `start` do so before delegating, since the reader they hand the
+            // object to counts the level itself, and the {"unexpected": value} branch releases at the
+            // closing brace. Releasing on all three matters because this is the ordinary path -- a
+            // flat array of a few hundred expected values would otherwise spend the whole budget --
+            // and holding it on the error paths is what keeps a truncated wrapper from finalizing as
+            // success on a non-null-terminated buffer.
+            if (enter_depth(ctx)) [[unlikely]] {
+               return;
             }
             auto start = it;
             ++it;
@@ -4708,6 +5084,7 @@ namespace glz
                return;
             }
             if (*it == '}') {
+               --ctx.depth; // released before delegating; parse_val re-reads the object and counts it
                it = start;
                // empty object
                parse_val();
@@ -4744,11 +5121,10 @@ namespace glz
                      return;
                   }
                   match<'}'>(ctx, it);
-                  if constexpr (not Opts.null_terminated) {
-                     --ctx.depth;
-                  }
+                  --ctx.depth;
                }
                else {
+                  --ctx.depth; // as above: released before delegating
                   it = start;
                   parse_val();
                }
@@ -4857,22 +5233,8 @@ namespace glz
    // std::chrono deserialization
    // ============================================
 
-   // Duration: parse from count
-   template <is_duration T>
-      requires(not custom_read<T>)
-   struct from<JSON, T>
-   {
-      template <auto Opts, class It0, class It1>
-      GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, It0&& it, It1 end) noexcept
-      {
-         using Rep = typename std::remove_cvref_t<T>::rep;
-         Rep count{};
-         from<JSON, Rep>::template op<Opts>(count, ctx, it, end);
-         if (bool(ctx.error)) [[unlikely]]
-            return;
-         value = std::remove_cvref_t<T>(count);
-      }
-   };
+   // Duration: parsed generically (from the bare rep count) by the
+   // from<uint32_t Format, is_duration T> specialization in core/chrono.hpp.
 
    // system_clock::time_point: parse from ISO 8601 string.
    // Time points whose Duration period is exactly `days` (e.g. std::chrono::sys_days)
@@ -4888,7 +5250,7 @@ namespace glz
       static void op(auto&& value, is_context auto&& ctx, It0&& it, It1 end) noexcept
       {
          std::string_view str;
-         from<JSON, std::string_view>::template op<Opts>(str, ctx, it, end);
+         parse_transient_string_view<Opts>(str, ctx, it, end);
          if (bool(ctx.error)) [[unlikely]]
             return;
 
@@ -4917,49 +5279,15 @@ namespace glz
       static void op(auto&& value, is_context auto&& ctx, It0&& it, It1 end) noexcept
       {
          std::string_view str;
-         from<JSON, std::string_view>::template op<Opts>(str, ctx, it, end);
+         parse_transient_string_view<Opts>(str, ctx, it, end);
          if (bool(ctx.error)) [[unlikely]]
             return;
          chrono_detail::parse_ymd(str, value, ctx.error);
       }
    };
 
-   // steady_clock::time_point: parse as count in the time_point's native duration
-   template <is_steady_time_point T>
-      requires(not custom_read<T>)
-   struct from<JSON, T>
-   {
-      template <auto Opts, class It0, class It1>
-      GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, It0&& it, It1 end) noexcept
-      {
-         using Duration = typename std::remove_cvref_t<T>::duration;
-         using Rep = typename Duration::rep;
-         Rep count{};
-         from<JSON, Rep>::template op<Opts>(count, ctx, it, end);
-         if (bool(ctx.error)) [[unlikely]]
-            return;
-         value = std::remove_cvref_t<T>(Duration(count));
-      }
-   };
-
-   // high_resolution_clock::time_point when it's a distinct type (rare)
-   template <is_high_res_time_point T>
-      requires(not custom_read<T>)
-   struct from<JSON, T>
-   {
-      template <auto Opts, class It0, class It1>
-      GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, It0&& it, It1 end) noexcept
-      {
-         // Treat like steady_clock - parse as count
-         using Duration = typename std::remove_cvref_t<T>::duration;
-         using Rep = typename Duration::rep;
-         Rep count{};
-         from<JSON, Rep>::template op<Opts>(count, ctx, it, end);
-         if (bool(ctx.error)) [[unlikely]]
-            return;
-         value = std::remove_cvref_t<T>(Duration(count));
-      }
-   };
+   // steady_clock / high_resolution_clock time_points: parsed generically (from the bare
+   // count) by the from<uint32_t Format, is_count_time_point T> specialization in core/chrono.hpp.
 
    // epoch_time wrapper: parse as numeric Unix timestamp
    template <class Duration>

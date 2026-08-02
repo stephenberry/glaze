@@ -736,7 +736,7 @@ auto ec = glz::write_json(large_object, buffer);
 
 ## JSON Conformance
 
-Glaze is fully RFC 8259 compliant with UTF-8 validation. By default, it uses two optimizations:
+Glaze is RFC 8259 compliant. UTF-8 encoding is always validated when reading. Two further checks are off by default for performance:
 
 - `validate_skipped = false`: Faster parsing by not fully validating skipped values (does not affect resulting C++ objects)
 - `validate_trailing_whitespace = false`: Stops parsing after the target object
@@ -749,8 +749,31 @@ struct strict_opts : glz::opts {
     bool validate_trailing_whitespace = true;
 };
 
-auto ec = glz::read<strict_opts>(obj, json_data);
+auto ec = glz::read<strict_opts{}>(obj, json_data);
 ```
+
+`glz::validate_json` and `glz::validate_jsonc` enable both, so a document that passes them is fully RFC 8259 conformant.
+
+### UTF-8 Validation
+
+RFC 8259 section 8.1 requires JSON text to be encoded in UTF-8, and Glaze enforces it on every read. There is no option to disable it: read input is by definition someone else's data, and accepting malformed encodings silently propagates them into your program.
+
+```cpp
+std::vector<std::string> v{};
+auto ec = glz::read_json(v, "[\"a\xFF\"]"); // ec == glz::error_code::invalid_utf8
+```
+
+This rejects lone continuation bytes, overlong encodings, truncated sequences, encoded UTF-16 surrogate halves, and code points above U+10FFFF. Escape sequences are validated separately, so `"\ud800"` without a matching low surrogate is rejected as well.
+
+Validation applies to every string the reader passes over, including keys, values you do not model, and values reached through `glz::skip` or `glz::raw_json`. A malformed byte in a field you never look at still fails the parse. This is the change most likely to affect existing code: input that previously parsed will now return an error.
+
+Validation uses the Lemire & Keiser vector algorithm, with backends for AVX-512BW, AVX2, SSSE3, AArch64 NEON, and WebAssembly SIMD128. Targets without a byte-granular shuffle fall back to a scalar validator. Reading a string value skips validation entirely when the string is pure ASCII, because the scan that finds its closing quote already proves no byte has the high bit set. Object keys and skipped strings are located with `memchr`, which proves nothing about the bytes it passed over, so those always run a full pass.
+
+Cost therefore tracks how much of a document is non-ASCII. Measured on `twitter.json` (22% non-ASCII, string heavy), reading costs roughly 5% into structs and 6% into `glz::generic`. A pure ASCII document is within noise of unvalidated parsing when read into structs, and costs about 3% when read into `glz::generic`.
+
+Writing is **not** validated. Data you serialize is your own, so Glaze does not pay to re-check it; validate before writing if you have a specific reason to. Note that this makes round-tripping asymmetric: a `std::string` holding non-UTF-8 bytes will write successfully and then fail to read back.
+
+JSONC comments are skipped without validation, since comments are not part of RFC 8259 and their bytes never reach your program.
 
 ## See Also
 

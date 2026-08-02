@@ -142,7 +142,7 @@ namespace glz
                        "glz::date_format requires a std::chrono::system_clock time_point or year_month_day member");
 
          std::string_view str;
-         from<JSON, std::string_view>::template op<Opts>(str, ctx, args...);
+         parse_transient_string_view<Opts>(str, ctx, args...);
          if (bool(ctx.error)) [[unlikely]]
             return;
 

@@ -560,6 +560,86 @@ suite msgpack_reserve_amplification_tests = [] {
    };
 };
 
+// A variant whose `ids` array is shorter than its alternative list. That is a supported read-side
+// feature -- the first unlabeled alternative is the default for an unrecognized id -- so it is
+// reachable from a legal glz::meta. Writing the unlabeled alternative has no id to emit; indexing
+// ids_v there read past the end of a static array and emitted the adjacent static data as the tag
+// value (~4 GB read under ASan). The writer must report an error instead.
+namespace short_ids_guard
+{
+   struct labeled
+   {
+      int a{};
+   };
+   struct unlabeled
+   {
+      int b{};
+   };
+   using v_t = std::variant<labeled, unlabeled>;
+}
+
+template <>
+struct glz::meta<short_ids_guard::v_t>
+{
+   static constexpr std::string_view tag = "t";
+   static constexpr std::array<std::string_view, 1> ids{"a"}; // 1 id, 2 alternatives
+};
+
+suite short_ids_write_guard = [] {
+   "writing an alternative with no declared id errors instead of reading out of bounds"_test = [] {
+      using namespace short_ids_guard;
+      std::string buffer{};
+      expect(bool(glz::write_msgpack(v_t{unlabeled{7}}, buffer)));
+      buffer.clear();
+      expect(not glz::write_msgpack(v_t{labeled{3}}, buffer)); // the labeled alternative is unaffected
+   };
+};
+
+namespace msgpack_depth
+{
+   struct tree_node
+   {
+      std::vector<tree_node> children{};
+   };
+
+   // Structs are written as arrays, so every level is fixarray(1) for the struct plus fixarray(1)
+   // for its member: two bytes of input per level of nesting.
+   inline std::string nested_tree(size_t levels)
+   {
+      std::string b;
+      for (size_t i = 0; i < levels; ++i) {
+         b.push_back(char(0x91));
+         b.push_back(char(0x91));
+      }
+      b.push_back(char(0x91));
+      b.push_back(char(0x90)); // innermost node, no children
+      return b;
+   }
+}
+
+suite msgpack_recursion_depth_limit = [] {
+   using namespace msgpack_depth;
+
+   "a hostile nest is rejected rather than overflowing the stack"_test = [] {
+      // 100k levels is 200 KB of input against a default 8 MB stack (1 MB on Windows).
+      tree_node deep_out{};
+      expect(glz::read_msgpack(deep_out, nested_tree(100'000)) == glz::error_code::exceeded_max_recursive_depth);
+   };
+
+   "nesting within the limit still reads"_test = [] {
+      tree_node shallow_out{};
+      expect(not glz::read_msgpack(shallow_out, nested_tree(100)));
+
+      tree_node* cur = &shallow_out;
+      size_t levels = 0;
+      while (not cur->children.empty()) {
+         cur = &cur->children.front();
+         ++levels;
+      }
+      expect(levels == 100) << levels;
+   };
+};
+
 int main()
 {
    // Only the write side is exercised here: MessagePack passes its type-tag byte
@@ -934,6 +1014,24 @@ int main()
       expect_roundtrip_equal(mask);
    };
 
+   "msgpack bitset rejects truncated payload"_test = [] {
+      // The bin header declares num_bytes of packed bits, but the buffer is cut
+      // short so fewer payload bytes are present. The reader must report
+      // unexpected_end rather than silently leaving the missing bits at zero.
+      std::bitset<16> mask{0b10101010'01010101};
+      std::string buffer;
+      expect(!glz::write_msgpack(mask, buffer));
+
+      std::bitset<16> out{};
+      const auto ec = glz::read_msgpack(out, std::string_view{buffer}.substr(0, buffer.size() - 1));
+      expect(ec.ec == glz::error_code::unexpected_end)
+         << "expected unexpected_end on truncated bitset payload, got: " << glz::format_error(ec, buffer);
+
+      std::bitset<16> out2{};
+      const auto ec2 = glz::read_msgpack(out2, std::string_view{buffer}.substr(0, buffer.size() - 2));
+      expect(ec2.ec == glz::error_code::unexpected_end) << "expected unexpected_end on missing bitset payload";
+   };
+
    "msgpack ext container roundtrip"_test = [] {
       std::vector<glz::msgpack::ext> payloads{
          glz::msgpack::ext{1, {std::byte{0x01}, std::byte{0x02}}},
@@ -1030,6 +1128,23 @@ int main()
       ec = glz::read_msgpack(decoded, buffer);
       expect(!ec);
       expect(decoded == epoch);
+   };
+
+   "chrono duration roundtrip"_test = [] {
+      using namespace std::chrono;
+      auto check = [](auto v) {
+         std::string buffer{};
+         expect(not glz::write_msgpack(v, buffer));
+         decltype(v) decoded{};
+         expect(not glz::read_msgpack(decoded, buffer));
+         expect(decoded == v);
+      };
+      check(seconds{3600});
+      check(milliseconds{12345});
+      check(seconds{-42});
+      check(nanoseconds{987654321});
+      check(duration<double, std::milli>{123.5});
+      check(duration<int64_t, std::ratio<1, 60>>{90});
    };
 
    "timestamp in struct"_test = [] {

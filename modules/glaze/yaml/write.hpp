@@ -4,6 +4,7 @@
 #pragma once
 
 #include "glaze/core/buffer_traits.hpp"
+#include "glaze/core/chrono.hpp"
 #include "glaze/core/custom_meta.hpp"
 #include "glaze/core/custom.hpp"
 #include "glaze/core/opts.hpp"
@@ -376,6 +377,55 @@ namespace glz
       {
          const sv str{value};
          yaml::write_yaml_string<Opts>(str, ctx, b, ix);
+      }
+   };
+
+   // ============================================
+   // std::chrono calendar types
+   // ============================================
+   //
+   // Written as plain (unquoted) ISO 8601 scalars, sharing the digit layout with JSON via
+   // chrono_detail. Plain is the idiomatic YAML form and matches how Glaze's TOML writer
+   // emits a native datetime. It is also unambiguously safe: ISO 8601 uses only digits,
+   // '-', ':', 'T' and 'Z', so it contains no character that requires quoting, none of the
+   // flow indicators (',' '[' ']' '{' '}'), and no ": " or " #" sequence that would end a
+   // plain scalar. Every ':' is followed by a digit, which keeps it a scalar rather than a
+   // mapping separator in both block and flow context.
+   //
+   // Durations and steady_clock / high_resolution_clock time points are numeric and are
+   // handled generically in core/chrono.hpp; only the calendar types need a format-specific
+   // representation.
+
+   // system_clock::time_point: plain ISO 8601 scalar (date-only for `days` precision)
+   template <is_system_time_point T>
+      requires(not custom_write<T>)
+   struct to<YAML, T>
+   {
+      template <auto Opts, class B>
+      static void op(auto&& value, is_context auto&& ctx, B&& b, auto& ix) noexcept
+      {
+         using Period = typename std::remove_cvref_t<T>::duration::period;
+         constexpr size_t max_size = chrono_detail::iso_time_point_max_size<Period> + write_padding_bytes;
+         if (!ensure_space(ctx, b, ix + max_size)) [[unlikely]] {
+            return;
+         }
+         chrono_detail::write_iso_time_point<false>(value, ctx, b, ix);
+      }
+   };
+
+   // year_month_day: plain "YYYY-MM-DD" scalar
+   template <is_year_month_day T>
+      requires(not custom_write<T>)
+   struct to<YAML, T>
+   {
+      template <auto Opts, class B>
+      static void op(auto&& value, is_context auto&& ctx, B&& b, auto& ix) noexcept
+      {
+         if (!ensure_space(ctx, b, ix + chrono_detail::iso_date_max_size + write_padding_bytes)) [[unlikely]] {
+            return;
+         }
+         chrono_detail::write_iso_date<false>(static_cast<int>(value.year()), static_cast<unsigned>(value.month()),
+                                              static_cast<unsigned>(value.day()), ctx, b, ix);
       }
    };
 
@@ -1383,6 +1433,14 @@ namespace glz
       inline void write_variant_tag_id(size_t index, is_context auto&& ctx, B&& b, auto& ix, int32_t indent_level)
       {
          using id_type = std::decay_t<decltype(ids_v<Variant>[0])>;
+         // `ids` may declare fewer entries than the variant has alternatives -- the readers treat the
+         // first unlabeled alternative as the default for an unrecognized id -- so an alternative past
+         // the end of `ids` has no id to write. Indexing there reads past a static array.
+         if (index >= ids_v<Variant>.size()) [[unlikely]] {
+            ctx.error = error_code::no_matching_variant_type;
+            ctx.custom_error_message = variant_ids_string_v<Variant>;
+            return;
+         }
          if constexpr (std::integral<id_type>) {
             serialize<YAML>::op<Opts>(ids_v<Variant>[index], ctx, b, ix);
          }
@@ -1575,6 +1633,13 @@ namespace glz
       static void op(auto&& value, is_context auto&& ctx, B&& b, auto& ix)
       {
          using V = std::remove_cvref_t<T>;
+         // Inside op() rather than at class scope: write_supported is `requires { to<Format, T>{}; }`,
+         // so a class-scope assert turns that feature probe into a hard error instead of `false`.
+         static_assert(content_v<V>.empty(),
+                       "Adjacent variant tagging (glz::meta `content`) is implemented for JSON and "
+                       "BEVE but not yet for YAML. Writing this variant as YAML would silently fall "
+                       "back to internal tagging and produce a different shape than the other "
+                       "formats, so it is rejected here instead.");
          // Tagged variants emit a discriminator entry (meta::tag) when holding an object, so the
          // output names which alternative it is and round-trips through the reader.
          if constexpr (check_write_type_info(Opts) && not tag_v<V>.empty()) {

@@ -242,7 +242,7 @@ This allows building unified deserializers that scale security based on the trus
 
 When parsing JSON from untrusted sources:
 
-1. **Limit recursion depth**: Deeply nested structures can cause stack overflow. Consider flattening data structures or implementing depth limits at the application level.
+1. **Recursion depth is bounded**: the readers, skippers, and format converters cap nesting at `max_recursive_depth_limit` (256 levels) and return `error_code::exceeded_max_recursive_depth`, so deeply nested input cannot overflow the stack. Every object and every array counts as a level, so a struct holding a vector of itself reaches the cap at 128 struct levels. Flatten your data structures if you legitimately need to exceed that.
 
 2. **Limit string sizes**: Very large strings can consume excessive memory. Control this through input buffer size limits.
 

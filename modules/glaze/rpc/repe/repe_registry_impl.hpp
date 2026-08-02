@@ -29,7 +29,7 @@ namespace glz
       {
          reg.endpoints[path] = [&value](repe::state_view& state) mutable {
             if (state.has_body()) {
-               if (read_params<Opts>(value, state) == 0) {
+               if (!read_params<Opts>(value, state)) {
                   return;
                }
             }
@@ -76,7 +76,7 @@ namespace glz
          reg.endpoints[path] = [&func](repe::state_view& state) mutable {
             static thread_local std::decay_t<Params> params{};
             params = {}; // reset to avoid stale optional/variant fields across calls
-            if (read_params<Opts>(params, state) == 0) {
+            if (!read_params<Opts>(params, state)) {
                return;
             }
 
@@ -107,7 +107,7 @@ namespace glz
       {
          reg.endpoints[path] = [&obj](repe::state_view& state) mutable {
             if (state.has_body()) {
-               if (read_params<Opts>(obj, state) == 0) {
+               if (!read_params<Opts>(obj, state)) {
                   return;
                }
             }
@@ -130,7 +130,7 @@ namespace glz
       {
          reg.endpoints[path] = [value](repe::state_view& state) mutable {
             if (state.has_body()) {
-               if (read_params<Opts>(value, state) == 0) {
+               if (!read_params<Opts>(value, state)) {
                   return;
                }
             }
@@ -153,7 +153,7 @@ namespace glz
       {
          reg.endpoints[path] = [&var](repe::state_view& state) mutable {
             if (state.has_body()) {
-               if (read_params<Opts>(var, state) == 0) {
+               if (!read_params<Opts>(var, state)) {
                   return;
                }
             }
@@ -202,7 +202,7 @@ namespace glz
             static thread_local Input input{};
             input = {}; // reset to avoid stale optional/variant fields across calls
             if (state.has_body()) {
-               if (read_params<Opts>(input, state) == 0) {
+               if (!read_params<Opts>(input, state)) {
                   return;
                }
             }

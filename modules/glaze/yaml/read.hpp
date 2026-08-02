@@ -5,7 +5,10 @@
 
 #include <cctype>
 #include <charconv>
+#include <concepts>
+#include <string>
 
+#include "glaze/core/chrono.hpp"
 #include "glaze/core/common.hpp"
 #include "glaze/core/read.hpp"
 #include "glaze/core/reflect.hpp"
@@ -1708,10 +1711,27 @@ namespace glz
          return true;
       }
 
+      // A YAML scalar cannot generally be viewed in place in the input buffer: a
+      // double-quoted scalar may carry escapes, a plain scalar may fold across lines, and a
+      // block scalar joins them. The reader therefore decodes into an owning buffer and
+      // hands that buffer to the target, so the target must be able to take ownership of it.
+      //
+      // This is deliberately narrower than str_t. A std::string_view is assignable from the
+      // decoded buffer, so without this constraint it compiled and then pointed at freed
+      // memory once the buffer died. A std::array<char, N> is not assignable at all, so it
+      // reported as supported and then failed to compile deep inside the reader. Both are
+      // now reported unsupported by read_supported<T, YAML>, which is the honest answer.
+      //
+      // Writing is unaffected: a non-owning string is a perfectly good source, so
+      // write_supported<std::string_view, YAML> remains true.
+      template <class T>
+      concept owning_scalar_target = not string_view_t<T> && std::assignable_from<std::decay_t<T>&, std::string&&>;
+
    } // namespace yaml
 
    // String types
    template <str_t T>
+      requires(yaml::owning_scalar_target<T>)
    struct from<YAML, T>
    {
       template <auto Opts, class It>
@@ -1765,6 +1785,68 @@ namespace glz
             value = std::move(str);
             yaml::finalize_node_anchor(preamble.node_props, ctx, it);
          }
+      }
+   };
+
+   // ============================================
+   // std::chrono calendar types
+   // ============================================
+   //
+   // Parsed from an ISO 8601 scalar using the shared chrono_detail parsers. Reading goes
+   // through the str_t reader above, so every YAML scalar style is accepted regardless of
+   // which one the writer emits: plain (what Glaze writes), single-quoted, double-quoted
+   // and block. That keeps hand-written and third-party YAML readable, since many
+   // generators quote timestamps.
+   //
+   // std::string rather than std::string_view is deliberate: YAML scalars can require
+   // unescaping and line folding, so the reader materializes them into an owning buffer.
+
+   // system_clock::time_point: parse from ISO 8601.
+   // Time points whose period is exactly `days` (e.g. std::chrono::sys_days) also accept
+   // the bare "YYYY-MM-DD" form; full datetimes remain accepted and are floored to days.
+   // Coarser periods fall through to the full parser so dates are not silently snapped to
+   // a multi-day boundary.
+   template <is_system_time_point T>
+      requires(not custom_read<T>)
+   struct from<YAML, T>
+   {
+      template <auto Opts, class It>
+      static void op(auto&& value, is_context auto&& ctx, It&& it, auto end) noexcept
+      {
+         std::string str;
+         from<YAML, std::string>::template op<Opts>(str, ctx, it, end);
+         if (bool(ctx.error)) [[unlikely]]
+            return;
+
+         using Duration = typename std::remove_cvref_t<T>::duration;
+         using Period = typename Duration::period;
+         if constexpr (std::ratio_equal_v<Period, std::ratio<86400>>) {
+            if (str.size() == 10) {
+               std::chrono::year_month_day ymd{};
+               chrono_detail::parse_ymd(str, ymd, ctx.error);
+               if (bool(ctx.error)) [[unlikely]]
+                  return;
+               value = std::chrono::time_point_cast<Duration>(std::chrono::sys_days{ymd});
+               return;
+            }
+         }
+         chrono_detail::parse_iso8601(str, value, ctx.error);
+      }
+   };
+
+   // year_month_day: parse from "YYYY-MM-DD"
+   template <is_year_month_day T>
+      requires(not custom_read<T>)
+   struct from<YAML, T>
+   {
+      template <auto Opts, class It>
+      static void op(auto&& value, is_context auto&& ctx, It&& it, auto end) noexcept
+      {
+         std::string str;
+         from<YAML, std::string>::template op<Opts>(str, ctx, it, end);
+         if (bool(ctx.error)) [[unlikely]]
+            return;
+         chrono_detail::parse_ymd(str, value, ctx.error);
       }
    };
 
@@ -5273,6 +5355,12 @@ namespace glz
       template <auto Opts, class It>
       static void op(auto&& value, is_context auto&& ctx, It&& it, auto end) noexcept
       {
+         // Inside op() rather than at class scope: read_supported is `requires { from<Format, T>{}; }`,
+         // so a class-scope assert turns that feature probe into a hard error instead of `false`.
+         static_assert(content_v<std::remove_cvref_t<T>>.empty(),
+                       "Adjacent variant tagging (glz::meta `content`) is implemented for JSON and "
+                       "BEVE but not yet for YAML. Reading this variant as YAML would silently expect "
+                       "the internally tagged shape, so it is rejected here instead.");
          if (bool(ctx.error)) [[unlikely]]
             return;
 
@@ -5568,7 +5656,7 @@ namespace glz
 
                // Anchor on alias (&anchor *alias) is invalid per YAML spec.
                // But alias-as-key (&anchor *alias : value) is valid.
-               if (*it == '*' && !yaml::alias_token_is_mapping_key(it, end)) {
+               if (it != end && *it == '*' && !yaml::alias_token_is_mapping_key(it, end)) {
                   ctx.error = error_code::syntax_error;
                   return;
                }

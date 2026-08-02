@@ -702,6 +702,12 @@ export namespace glz
    template <class T>
    concept ided = requires { meta<std::decay_t<T>>::ids; } || requires { std::decay_t<T>::glaze::ids; };
 
+   // `content` selects adjacent tagging for a variant: the discriminator and the alternative's value
+   // sit beside each other under two fixed keys ({tag: id, content: value}) instead of the
+   // discriminator being merged into the alternative's own object. See `variant_tagging_v`.
+   template <class T>
+   concept contented = requires { meta<std::decay_t<T>>::content; } || requires { std::decay_t<T>::glaze::content; };
+
    // Concept when skip is specified for the type
    template <class T>
    concept meta_has_skip = requires(T t, const std::string_view s, const meta_context& mctx) {
@@ -725,6 +731,21 @@ export namespace glz
          }
          else {
             return meta<std::decay_t<T>>::tag;
+         }
+      }
+      else {
+         return "";
+      }
+   }();
+
+   template <class T>
+   inline constexpr std::string_view content_v = [] {
+      if constexpr (contented<T>) {
+         if constexpr (local_meta_t<T>) {
+            return std::decay_t<T>::glaze::content;
+         }
+         else {
+            return meta<std::decay_t<T>>::content;
          }
       }
       else {

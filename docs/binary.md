@@ -29,6 +29,10 @@ if (!ec) {
 >
 > Reading binary is safe for invalid input and does not require null terminated buffers.
 
+**Recursion depth**
+
+BEVE spends as little as two bytes per nesting level, so a small hostile buffer could otherwise drive the reader deep enough to overflow the stack. The readers, the value skipper, and `glz::beve_to_json` all cap nesting at `max_recursive_depth_limit` (256 wire levels) and return `error_code::exceeded_max_recursive_depth` beyond it. Each object and each array counts as a level, so a struct holding a vector of itself reaches the cap at 128 struct levels.
+
 ## Calculate BEVE Size
 
 The `glz::beve_size` function calculates the exact number of bytes needed to serialize a value to BEVE format, without actually performing the serialization. This is useful when you need to pre-allocate a buffer of the exact size, such as when writing to shared memory for inter-process communication.
@@ -160,7 +164,7 @@ struct beve_header {
 | ext_type | Name | `count` meaning | `header_size` |
 |----------|------|-----------------|---------------|
 | `glz::extension::delimiter` (0) | Delimiter | 0 | 1 |
-| `glz::extension::variant` (1) | Variant | Variant index | 1 + compressed_int size |
+| `glz::extension::variant` (1) | Variant (Version 1 only) | Variant index | 1 + compressed_int size |
 | `glz::extension::complex` (3) | Complex number | 2 (real + imag) | 2 |
 | `glz::extension::complex` (3) | Complex array | Element count | 2 + compressed_int size |
 
@@ -205,26 +209,33 @@ if (header->type == glz::tag::typed_array && header->count > max_elements) {
 return glz::read_beve<std::vector<int>>(buffer);
 ```
 
-**Variant Index Example**
+**Variant Example**
 
-For variants, `count` contains the variant index, allowing you to determine which type is stored before deserializing:
+A variant is written as an ordinary self-describing value (see [Variants](#variants) below), so peeking a
+variant returns the header of whatever the active alternative is, not a variant-specific header:
 
 ```c++
 using MyVariant = std::variant<int, std::string, double>;
 std::string buffer = receive_data();
 
 auto header = glz::beve_peek_header(buffer);
-if (header && header->type == glz::tag::extensions
-           && header->ext_type == glz::extension::variant) {
-   switch (header->count) {
-      case 0: std::cout << "Contains int\n"; break;
-      case 1: std::cout << "Contains string\n"; break;
-      case 2: std::cout << "Contains double\n"; break;
-   }
+if (header && header->type == glz::tag::string) {
+   std::cout << "Contains a string of " << header->count << " bytes\n";
 }
 
 MyVariant value;
 glz::read_beve(value, buffer);
+```
+
+Buffers written by Glaze prior to BEVE Version 2 instead begin with the `glz::extension::variant`
+header, where `count` is the positional variant index. Such buffers still read back normally:
+
+```c++
+auto header = glz::beve_peek_header(buffer);
+if (header && header->type == glz::tag::extensions
+           && header->ext_type == glz::extension::variant) {
+   // Version 1 encoding: header->count is the variant index
+}
 ```
 
 **Raw Pointer Overload**
@@ -392,9 +403,78 @@ ALIGNED_HEADER | NUMERIC_HEADER | SIZE | PADDING_LENGTH | PADDING | DATA
 
 The overhead is 2 extra bytes (numeric header + padding length) plus at most `alignment - 1` bytes of padding. For large arrays this is negligible.
 
+## std::chrono Durations
+
+`std::chrono::duration` values serialize as their bare numeric count (the `rep`), so a duration is written byte-for-byte like the equivalent BEVE number. This makes a duration interchangeable with a numeric field in a shared schema:
+
+```c++
+std::chrono::milliseconds ms{12345};
+std::string buffer{};
+glz::write_beve(ms, buffer);
+
+std::chrono::milliseconds decoded{};
+glz::read_beve(decoded, buffer); // decoded.count() == 12345
+```
+
+Because the encoding is the numeric `rep`, durations also work as numeric BEVE map and pair keys (e.g. `std::map<std::chrono::seconds, V>`), producing the same wire form as the equivalent rep-keyed container. See [std::chrono Support](./chrono.md#durations) for the full cross-format behavior.
+
 ## Untagged Binary
 
 By default Glaze will handle structs as tagged objects, meaning that keys will be written/read. However, structs can be written/read without tags by using the option `structs_as_arrays` or the functions `glz::write_beve_untagged` and `glz::read_beve_untagged`.
+
+## Variants
+
+BEVE Version 2 writes a `std::variant` as an ordinary, self-describing value. Which shape it takes is fixed by the variant's tagging representation, declared once in `glz::meta` and applied to every alternative — see [Choosing a Tagging Representation](./variant-handling.md#choosing-a-tagging-representation) for the full rules:
+
+| `glz::meta` declares | Representation | BEVE shape |
+|---|---|---|
+| nothing | none | the alternative's own value, bare |
+| `tag` | internal | object with the discriminator merged in as the first member |
+| `tag` and `content` | adjacent | object of exactly two members, `{tag: id, content: value}` |
+
+Nothing variant-specific appears on the wire, so `glz::beve_to_json` of a variant produces the same JSON as `glz::write_json` of the same value, for every representation.
+
+Internal tagging requires every alternative to be object-shaped, since there is nowhere to merge a key into `[1, 2]` or `42`; declaring `tag` alone for a variant with a scalar, array, map, or pair alternative is a compile error directing you to `content`. Adjacent tagging carries the discriminator for every alternative type, so alternatives that share a wire shape — `std::variant<std::vector<double>, std::deque<double>>` — round-trip under it.
+
+Two BEVE-specific limits, both compile errors rather than silent divergence from JSON:
+
+- **Internal tagging cannot be written for a custom-serialized alternative.** BEVE objects are length-prefixed, and the member count of a body produced by someone else's `to<BEVE, T>` is not knowable in advance. (JSON merges into such a body because JSON objects are not counted.) Declare `content`, which nests the custom value rather than merging into it.
+- **`glz::beve_size` cannot size a custom-serialized type**, for the same reason: only your `to<BEVE, T>` knows its length. Specialize `glz::calculate_size<glz::BEVE, T>` beside it, or size the value by writing it.
+
+On read, the alternative is recovered from the discriminator when one is present, otherwise from the object's key set, otherwise from the value's own type header. Adjacent tagging skips all of that: the discriminator names the alternative outright, so nothing is deduced. For the other representations, several consequences are worth knowing:
+
+- Alternatives are matched on their **exact** type header first, so `std::variant<int32_t, int64_t>` round-trips without narrowing. If no alternative matches exactly, a second pass allows numeric conversions.
+- Alternatives that are genuinely indistinguishable on the wire collapse to the first one. This covers two structs with identical field sets, two empty structs, and containers with the same encoding (`std::vector<int>` and `std::deque<int>` are byte-identical, so the value survives but the alternative index may not). To tell them apart, declare a discriminator: `tag` and `ids` for two structs, or `tag`, `content` and `ids` when any of the colliding alternatives is not an object (two containers, for instance, which internal tagging cannot represent at all).
+- A map or pair alternative accepts any key set, so it competes with the struct alternatives for the same wire shape. It wins whenever the object carries a key that no struct alternative declares, and loses otherwise. A map whose keys are all field names of some struct alternative is therefore indistinguishable from that struct, and resolves to the struct — an empty map being the degenerate case. The same rule applies to alternatives that encode as objects but expose no key set at all: a nested `std::variant`, an `std::optional<Struct>`, or a type with a custom reader.
+
+- Where BEVE and the JSON reader disagree, BEVE is the stricter of the two: it prefers a map alternative on a foreign key where JSON prefers the struct, it treats an explicit discriminator as authoritative rather than cross-checking it against the keys seen so far, and it retries other candidates when a deduction fails. The two agree on the collapse rules above. One consequence to know: adding a map or pair alternative to a variant changes how struct data carrying an unknown key decodes, and `error_on_unknown_keys = false` no longer makes such data read as the struct, because the foreign key is taken as evidence the map wrote it.
+
+- Retrying is limited to failures that say the shape does not fit. A `missing_key` failure is your own `error_on_missing_keys` strictness being enforced, so it is reported rather than treated as the wrong alternative. A tagged empty-struct alternative is likewise never reached by a retry: it reads by skipping the whole object, so it would match anything and silently discard the payload.
+- Deduction from keys is a guess, not a guarantee: if the deduced alternative fails to parse, the remaining alternatives are tried before the read is reported as an error. An explicit discriminator is authoritative and is never second-guessed this way.
+
+### Variants Under `structs_as_arrays`
+
+Positional writes (`structs_as_arrays`, `glz::write_beve_untagged`) have no keys, so there is nothing for a discriminator to merge into and no key set to deduce from. Adjacent tagging projects here to a two element array holding the id and the value:
+
+```c++
+using shape = std::variant<circle, rectangle>;
+// meta: tag = "type", content = "value", ids = {"circle", "rectangle"}
+
+glz::write_beve_untagged(shape{rectangle{2.0, 3.0}});
+// ["rectangle", [2.0, 3.0]]
+```
+
+This is an ordinary BEVE generic array, not the deprecated type tag extension. Since the id sits beside the value rather than inside it, it works for every alternative type including scalars and arrays. The discriminator is authoritative here: an id that names no alternative is an error rather than a fallback to structural guessing, because positional data carries nothing to guess from.
+
+Internal tagging has nothing to project in this mode — its entire mechanism is a key, and there are none — so declaring `tag` without `content` and then writing or reading positionally is a compile error. Add `content` to get the array form above.
+
+A variant with no discriminator is still written bare. Alternatives with distinguishable positional shapes round-trip by trying each in turn, but alternatives that share a shape (same arity and same element types) collapse to the first one — the value survives, the alternative index does not. Declare `tag`, `content` and `ids` if that distinction matters.
+
+### Version 1 Compatibility
+
+Version 1 encoded a variant as a type-tag extension (header byte `0x0E`) followed by a compressed positional index. The reader dispatches on the leading byte and accepts both encodings, so **reading needs no option** and existing Version 1 buffers continue to work.
+
+Writing is Version 2 only. Version 2 output is not decodable as a variant by a Glaze release that predates Version 2, so if you have a peer pinned to such a release, either upgrade it or pin this side to a matching older Glaze until both ends move.
 
 ## BEVE to JSON Conversion
 
