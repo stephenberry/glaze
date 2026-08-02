@@ -1,5 +1,6 @@
 #include <algorithm>
 #include <cstdint>
+#include <glaze/core/feature_test.hpp>
 #include <glaze/json.hpp>
 #include <glaze/json/schema.hpp>
 #include <string>
@@ -448,7 +449,8 @@ suite schema_tests = [] {
       std::string schema_str = glz::write_json_schema<required_meta>().value_or("error");
       expect(
          schema_str ==
-         R"({"type":"object","properties":{"a":{"$ref":"#/$defs/int32_t"},"b":{"$ref":"#/$defs/int32_t"},"reserved_1":{"$ref":"#/$defs/int32_t"},"reserved_2":{"$ref":"#/$defs/int32_t"}},"additionalProperties":false,"$defs":{"int32_t":{"type":"integer","minimum":-2147483648,"maximum":2147483647}},"required":["a","b"],"title":"required_meta"})");
+         R"({"type":"object","properties":{"a":{"$ref":"#/$defs/int32_t"},"b":{"$ref":"#/$defs/int32_t"},"reserved_1":{"$ref":"#/$defs/int32_t"},"reserved_2":{"$ref":"#/$defs/int32_t"}},"additionalProperties":false,"$defs":{"int32_t":{"type":"integer","minimum":-2147483648,"maximum":2147483647}},"required":["a","b"],"title":"required_meta"})")
+         << schema_str;
    };
 
    "Opts.error_on_missing_keys as fallback"_test = [] {
@@ -1173,6 +1175,214 @@ suite schema_round_trip_test = [] {
       expect(!ec);
       expect(re_serialized == schema_str)
          << "round-trip mismatch:\n  original: " << schema_str << "\n  re-serialized: " << re_serialized;
+   };
+};
+
+// Test structs for automatic default value extraction (Issue #1296)
+struct auto_defaults
+{
+   bool flag{true};
+   int32_t count{42};
+   double ratio{3.14};
+   uint64_t big{1000};
+   int8_t small{-5};
+};
+
+struct mixed_defaults
+{
+   int with_default{100}; // primitives CAN be auto-extracted
+   std::string no_schema_default{"hello"}; // std::string is not in is_schema_default_convertible;
+                                            // its buffer would not outlive the transient consteval T{}
+   std::vector<int> container{1, 2, 3}; // likewise, no extraction path for container types
+};
+
+struct explicit_override
+{
+   int value{42};
+};
+
+template <>
+struct glz::json_schema<explicit_override>
+{
+   schema value{
+      .defaultValue = 99L, // explicit default should override the 42 from struct
+   };
+};
+
+struct nested_defaults
+{
+   int outer{10};
+   auto_defaults inner{}; // nested struct with defaults
+};
+
+// Value-init members should NOT emit a "default" — they are sentinel-init,
+// not a deliberate recommendation. Only non-sentinel inits get extracted.
+struct value_init_defaults
+{
+   bool flag_true{true}; // deliberate non-zero → extract
+   bool flag_false{false}; // matches bool{} → skip
+   int zero{}; // matches int{} → skip
+   int nonzero{7}; // deliberate → extract
+   double ratio_zero{0.0}; // matches double{} → skip
+};
+
+// Opt in to primitive-member default extraction for these tests.
+struct auto_defaults_opts : glz::opts
+{
+   bool schema_auto_defaults = true;
+};
+
+suite auto_default_tests = [] {
+   "default opts emit no auto-extracted defaults"_test = [] {
+      // With the default options, primitive member defaults are not extracted.
+      std::string schema_str = glz::write_json_schema<auto_defaults>().value_or("error");
+      glz::schema obj{};
+      auto err = glz::read<glz::opts{.error_on_unknown_keys = false}>(obj, schema_str);
+      expect(!err) << glz::format_error(err, schema_str);
+      expect(obj.properties.has_value());
+      auto& props = *obj.properties;
+      expect(props.contains("flag"));
+      expect(!props.at("flag").defaultValue.has_value()) << schema_str;
+      expect(!props.at("count").defaultValue.has_value()) << schema_str;
+      expect(!props.at("ratio").defaultValue.has_value()) << schema_str;
+   };
+
+   "auto_defaults extracts primitive defaults"_test = [] {
+      std::string schema_str = glz::write_json_schema<auto_defaults, auto_defaults_opts{}>().value_or("error");
+
+      // Parse and check defaults
+      glz::schema obj{};
+      auto err = glz::read<glz::opts{.error_on_unknown_keys = false}>(obj, schema_str);
+      expect(!err) << glz::format_error(err, schema_str);
+
+      expect(obj.properties.has_value()) << schema_str;
+      auto& props = *obj.properties;
+
+      // Check bool default
+      expect(props.contains("flag")) << schema_str;
+      expect(props.at("flag").defaultValue.has_value()) << schema_str;
+      expect(std::holds_alternative<bool>(props.at("flag").defaultValue.value())) << schema_str;
+      expect(std::get<bool>(props.at("flag").defaultValue.value()) == true) << schema_str;
+
+      // Check int32_t default
+      expect(props.contains("count")) << schema_str;
+      expect(props.at("count").defaultValue.has_value()) << schema_str;
+      expect(std::holds_alternative<int64_t>(props.at("count").defaultValue.value())) << schema_str;
+      expect(std::get<int64_t>(props.at("count").defaultValue.value()) == 42) << schema_str;
+
+      // Check double default
+      expect(props.contains("ratio")) << schema_str;
+      expect(props.at("ratio").defaultValue.has_value()) << schema_str;
+      expect(std::holds_alternative<double>(props.at("ratio").defaultValue.value())) << schema_str;
+      expect(std::get<double>(props.at("ratio").defaultValue.value()) == 3.14) << schema_str;
+
+      // Check uint64_t default (note: when read back from JSON, positive integers parse as int64_t)
+      expect(props.contains("big")) << schema_str;
+      expect(props.at("big").defaultValue.has_value()) << schema_str;
+      // JSON parsing reads positive integers as int64_t, not uint64_t
+      expect(std::holds_alternative<int64_t>(props.at("big").defaultValue.value())) << schema_str;
+      expect(std::get<int64_t>(props.at("big").defaultValue.value()) == 1000) << schema_str;
+
+      // Check int8_t default (should be converted to int64_t)
+      expect(props.contains("small")) << schema_str;
+      expect(props.at("small").defaultValue.has_value()) << schema_str;
+      expect(std::holds_alternative<int64_t>(props.at("small").defaultValue.value())) << schema_str;
+      expect(std::get<int64_t>(props.at("small").defaultValue.value()) == -5) << schema_str;
+   };
+
+#if GLZ_HAS_CONSTEXPR_STRING
+   "mixed_defaults extracts primitive defaults even with non-trivial members"_test = [] {
+      // mixed_defaults contains std::string and std::vector, but with C++20 transient constexpr allocation
+      // we can still extract defaults for primitive members
+      std::string schema_str = glz::write_json_schema<mixed_defaults, auto_defaults_opts{}>().value_or("error");
+
+      glz::schema obj{};
+      auto err = glz::read<glz::opts{.error_on_unknown_keys = false}>(obj, schema_str);
+      expect(!err) << glz::format_error(err, schema_str);
+
+      expect(obj.properties.has_value()) << schema_str;
+      auto& props = *obj.properties;
+
+      // Primitive types CAN have defaults extracted even when struct contains non-trivial types
+      expect(props.contains("with_default")) << schema_str;
+      expect(props.at("with_default").defaultValue.has_value()) << schema_str;
+      expect(std::holds_alternative<int64_t>(props.at("with_default").defaultValue.value())) << schema_str;
+      expect(std::get<int64_t>(props.at("with_default").defaultValue.value()) == 100) << schema_str;
+
+      // std::string is not in is_schema_default_convertible (see struct comment)
+      expect(props.contains("no_schema_default")) << schema_str;
+      expect(!props.at("no_schema_default").defaultValue.has_value()) << schema_str;
+
+      // Containers likewise have no extraction path
+      expect(props.contains("container")) << schema_str;
+      expect(!props.at("container").defaultValue.has_value()) << schema_str;
+   };
+#endif
+
+   "explicit json_schema default overrides struct default"_test = [] {
+      std::string schema_str = glz::write_json_schema<explicit_override, auto_defaults_opts{}>().value_or("error");
+
+      glz::schema obj{};
+      auto err = glz::read<glz::opts{.error_on_unknown_keys = false}>(obj, schema_str);
+      expect(!err) << glz::format_error(err, schema_str);
+
+      expect(obj.properties.has_value()) << schema_str;
+      auto& props = *obj.properties;
+
+      // Explicit schema default (99) should override struct default (42)
+      expect(props.contains("value")) << schema_str;
+      expect(props.at("value").defaultValue.has_value()) << schema_str;
+      expect(std::holds_alternative<int64_t>(props.at("value").defaultValue.value())) << schema_str;
+      expect(std::get<int64_t>(props.at("value").defaultValue.value()) == 99) << schema_str;
+   };
+
+   "value-init members are filtered out"_test = [] {
+      std::string schema_str =
+         glz::write_json_schema<value_init_defaults, auto_defaults_opts{}>().value_or("error");
+      glz::schema obj{};
+      auto err = glz::read<glz::opts{.error_on_unknown_keys = false}>(obj, schema_str);
+      expect(!err) << glz::format_error(err, schema_str);
+      expect(obj.properties.has_value());
+      auto& props = *obj.properties;
+
+      // Deliberate non-sentinel values: extracted
+      expect(props.at("flag_true").defaultValue.has_value()) << schema_str;
+      expect(std::get<bool>(props.at("flag_true").defaultValue.value()) == true);
+      expect(props.at("nonzero").defaultValue.has_value()) << schema_str;
+      expect(std::get<int64_t>(props.at("nonzero").defaultValue.value()) == 7);
+
+      // Value-init cases: filtered
+      expect(!props.at("flag_false").defaultValue.has_value()) << schema_str;
+      expect(!props.at("zero").defaultValue.has_value()) << schema_str;
+      expect(!props.at("ratio_zero").defaultValue.has_value()) << schema_str;
+   };
+
+   "nested struct defaults work in inlined definition"_test = [] {
+      std::string schema_str = glz::write_json_schema<nested_defaults, auto_defaults_opts{}>().value_or("error");
+
+      glz::schema obj{};
+      auto err = glz::read<glz::opts{.error_on_unknown_keys = false}>(obj, schema_str);
+      expect(!err) << glz::format_error(err, schema_str);
+
+      expect(obj.properties.has_value()) << schema_str;
+      auto& props = *obj.properties;
+
+      // outer field should have default
+      expect(props.contains("outer")) << schema_str;
+      expect(props.at("outer").defaultValue.has_value()) << schema_str;
+      expect(std::get<int64_t>(props.at("outer").defaultValue.value()) == 10) << schema_str;
+
+      // inner field (complex type) should not have default on the property itself
+      expect(props.contains("inner")) << schema_str;
+      expect(!props.at("inner").defaultValue.has_value()) << schema_str;
+
+      // auto_defaults is single-use, so it gets inlined into the inner property.
+      // Verify the inlined struct has defaults for its members.
+      expect(props.at("inner").properties.has_value()) << schema_str;
+      auto& inner_props = *props.at("inner").properties;
+      expect(inner_props.contains("count")) << schema_str;
+      expect(inner_props.at("count").defaultValue.has_value()) << schema_str;
+      expect(std::get<int64_t>(inner_props.at("count").defaultValue.value()) == 42) << schema_str;
    };
 };
 
