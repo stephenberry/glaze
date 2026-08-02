@@ -20,9 +20,15 @@
 #define GLZ_USE_AVX2
 #endif
 // AVX-512BW supplies the byte-granular shuffle and saturating subtract at 512 bits.
-// MSVC has no __AVX512BW__ macro; /arch:AVX512 defines __AVX512F__ alongside it.
+//
+// The _MSC_VER arm is for MSVC, which reports AVX-512 only as __AVX512F__. clang-cl also defines
+// _MSC_VER but does define __AVX512BW__, so it must not take that arm: __AVX512F__ does not imply
+// __AVX512BW__, and /clang:-mavx512f would otherwise select _mm512_shuffle_epi8 without the feature
+// and fail to compile. The SSSE3 fallback above needs no such guard, because __AVX__ does imply
+// __SSSE3__.
+//
 // Covered by the simd-backends workflow, which runs the UTF-8 suite under Intel SDE.
-#if defined(__AVX512BW__) || (defined(_MSC_VER) && defined(__AVX512F__))
+#if defined(__AVX512BW__) || (defined(_MSC_VER) && !defined(__clang__) && defined(__AVX512F__))
 #define GLZ_USE_AVX512BW
 #endif
 #elif defined(__aarch64__) || defined(_M_ARM64) || defined(__ARM_NEON)
