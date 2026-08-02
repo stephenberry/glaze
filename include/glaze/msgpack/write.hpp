@@ -589,6 +589,13 @@ namespace glz
             if constexpr (!char_array_t<T> && std::is_pointer_v<std::decay_t<T>>) {
                return value ? value : "";
             }
+            else if constexpr (has_data<T> && has_size<T>) {
+               // Prefer the explicit bounds over a string_view conversion. A type may reach `str_t`
+               // through an `operator const char*`, which would silently truncate at the first
+               // embedded null and desync writing from reading, since reading always stores through
+               // `assign`/`data`. Standard string types agree either way.
+               return sv{value.data(), value.size()};
+            }
             else {
                return sv{value};
             }

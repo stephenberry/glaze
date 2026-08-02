@@ -59,6 +59,37 @@ namespace
    static_assert(glz::static_string_t<fixed_string_t>);
    static_assert(not glz::string_t<fixed_string_t>);
 
+   // A legacy-style buffer string that reaches str_t through `operator const char*` rather than a
+   // string_view conversion. Its bounds are authoritative; the conversion stops at the first null.
+   struct legacy_string_t
+   {
+      using value_type = char;
+      using size_type = size_t;
+
+      operator const char*() const { return buffer; }
+
+      const char* data() const { return buffer; }
+      size_t size() const { return length; }
+
+      void assign(const char* v, size_t n)
+      {
+         length = (std::min)(sizeof(buffer), n);
+         std::memcpy(buffer, v, length);
+      }
+
+      void resize(size_t n) { length = (std::min)(sizeof(buffer), n); }
+
+      bool operator==(const legacy_string_t& other) const
+      {
+         return length == other.length && std::memcmp(buffer, other.buffer, length) == 0;
+      }
+
+      size_t length{};
+      char buffer[16]{};
+   };
+
+   static_assert(glz::string_t<legacy_string_t>);
+
    template <class T>
    void expect_roundtrip_equal(const T& original)
    {
@@ -748,6 +779,21 @@ int main()
          const size_t header = size < 32 ? 1 : (size < 256 ? 2 : (size < 65536 ? 3 : 5));
          expect(encoded.value().size() == header + size) << "unexpected header width for size " << size;
       }
+   };
+
+   "msgpack string bounds beat conversion"_test = [] {
+      // Writing must use the type's own bounds, not its `operator const char*`, or an embedded null
+      // truncates the payload while reading still restores the full length recorded in the header.
+      legacy_string_t original{};
+      original.assign("a\0b", 3);
+
+      auto encoded = glz::write_msgpack(original);
+      expect(encoded.has_value());
+      expect(encoded.value() == std::string("\xa3"
+                                            "a\0b",
+                                            4));
+
+      expect_roundtrip_equal(original);
    };
 
    "msgpack static string roundtrip"_test = [] {
