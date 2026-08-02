@@ -371,17 +371,7 @@ namespace glz
       template <auto Opts, class B>
       static void op(auto&& value, is_context auto&& ctx, B&& b, auto& ix)
       {
-         const sv str = [&]() -> const sv {
-            if constexpr (!char_array_t<T> && std::is_pointer_v<std::decay_t<T>>) {
-               return value ? value : "";
-            }
-            else if constexpr (has_data<T> && has_size<T>) {
-               return sv{value.data(), value.size()};
-            }
-            else {
-               return sv{value};
-            }
-         }();
+         const sv str = str_view<T>(value);
          yaml::write_yaml_string<Opts>(str, ctx, b, ix);
       }
    };
@@ -543,7 +533,7 @@ namespace glz
                [&](auto&& inner) {
                   using inner_t = std::remove_cvref_t<decltype(inner)>;
                   if constexpr (str_t<inner_t>) {
-                     write_yaml_string<Opts>(sv{inner}, ctx, b, ix, indent_level);
+                     write_yaml_string<Opts>(str_view<inner_t>(inner), ctx, b, ix, indent_level);
                   }
                   else {
                      serialize<YAML>::op<Opts>(inner, ctx, b, ix);
@@ -555,17 +545,7 @@ namespace glz
             write_variant_value<Opts>(get_member(value, meta_wrapper_v<V>), ctx, b, ix, indent_level);
          }
          else if constexpr (str_t<V>) {
-            const sv str = [&]() -> const sv {
-               if constexpr (!char_array_t<V> && std::is_pointer_v<std::decay_t<V>>) {
-                  return value ? value : "";
-               }
-               else if constexpr (has_data<V> && has_size<V>) {
-                  return sv{value.data(), value.size()};
-               }
-               else {
-                  return sv{value};
-               }
-            }();
+            const sv str = str_view<V>(value);
             write_yaml_string<Opts>(str, ctx, b, ix, indent_level);
          }
          else {
@@ -629,7 +609,7 @@ namespace glz
 
             if constexpr (str_t<element_t>) {
                dump(' ', b, ix);
-               write_yaml_string<Opts>(sv{element}, ctx, b, ix, indent_level);
+               write_yaml_string<Opts>(str_view<element_t>(element), ctx, b, ix, indent_level);
                dump('\n', b, ix);
             }
             else if constexpr (is_simple_type<element_t>()) {
@@ -646,7 +626,7 @@ namespace glz
                }
                else if constexpr (str_t<inner_t>) {
                   dump(' ', b, ix);
-                  write_yaml_string<Opts>(sv{*element}, ctx, b, ix, indent_level);
+                  write_yaml_string<Opts>(str_view<inner_t>(*element), ctx, b, ix, indent_level);
                   dump('\n', b, ix);
                }
                else if constexpr (is_simple_type<inner_t>()) {
@@ -953,7 +933,7 @@ namespace glz
 
             // Write key
             if constexpr (str_t<first_type>) {
-               yaml::write_yaml_string<Opts>(sv{key}, ctx, b, ix);
+               yaml::write_yaml_string<Opts>(str_view<first_type>(key), ctx, b, ix);
             }
             else {
                serialize<YAML>::op<yaml::flow_context_on<Opts>()>(key, ctx, b, ix);
@@ -985,7 +965,7 @@ namespace glz
 
             // Write key
             if constexpr (str_t<first_type>) {
-               yaml::write_yaml_string<Opts>(sv{key}, ctx, b, ix);
+               yaml::write_yaml_string<Opts>(str_view<first_type>(key), ctx, b, ix);
             }
             else {
                serialize<YAML>::op<Opts>(key, ctx, b, ix);
@@ -1038,7 +1018,7 @@ namespace glz
             // Simple types go on same line
             dump(' ', b, ix);
             if constexpr (str_t<val_t>) {
-               yaml::write_yaml_string<Opts>(sv{member}, ctx, b, ix, indent_level);
+               yaml::write_yaml_string<Opts>(str_view<val_t>(member), ctx, b, ix, indent_level);
             }
             else {
                serialize<YAML>::op<Opts>(member, ctx, b, ix);
@@ -1057,7 +1037,7 @@ namespace glz
                // Simple inner type - same line
                dump(' ', b, ix);
                if constexpr (str_t<inner_t>) {
-                  yaml::write_yaml_string<Opts>(sv{*member}, ctx, b, ix, indent_level);
+                  yaml::write_yaml_string<Opts>(str_view<inner_t>(*member), ctx, b, ix, indent_level);
                }
                else {
                   serialize<YAML>::op<Opts>(*member, ctx, b, ix);
@@ -1287,7 +1267,7 @@ namespace glz
                // Write key
                using key_t = std::remove_cvref_t<decltype(k)>;
                if constexpr (str_t<key_t>) {
-                  write_yaml_string<Opts>(sv{k}, ctx, b, ix);
+                  write_yaml_string<Opts>(str_view<key_t>(k), ctx, b, ix);
                }
                else {
                   serialize<YAML>::op<Opts>(k, ctx, b, ix);
@@ -1297,7 +1277,7 @@ namespace glz
                using val_t = std::remove_cvref_t<decltype(v)>;
                if constexpr (str_t<val_t>) {
                   dump(' ', b, ix);
-                  write_yaml_string<Opts>(sv{v}, ctx, b, ix, indent_level);
+                  write_yaml_string<Opts>(str_view<val_t>(v), ctx, b, ix, indent_level);
                   dump('\n', b, ix);
                }
                else if constexpr (is_simple_type<val_t>()) {
@@ -1314,7 +1294,7 @@ namespace glz
                   }
                   else if constexpr (str_t<inner_t>) {
                      dump(' ', b, ix);
-                     write_yaml_string<Opts>(sv{*v}, ctx, b, ix, indent_level);
+                     write_yaml_string<Opts>(str_view<inner_t>(*v), ctx, b, ix, indent_level);
                      dump('\n', b, ix);
                   }
                   else if constexpr (is_simple_type<inner_t>()) {
@@ -1619,7 +1599,7 @@ namespace glz
 
                using key_t = std::remove_cvref_t<decltype(k)>;
                if constexpr (str_t<key_t>) {
-                  yaml::write_yaml_string<Opts>(sv{k}, ctx, b, ix);
+                  yaml::write_yaml_string<Opts>(str_view<key_t>(k), ctx, b, ix);
                }
                else {
                   serialize<YAML>::op<yaml::flow_context_on<Opts>()>(k, ctx, b, ix);

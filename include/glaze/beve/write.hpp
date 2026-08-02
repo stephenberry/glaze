@@ -819,17 +819,7 @@ namespace glz
       template <auto Opts, class B>
       GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, B&& b, auto& ix)
       {
-         const sv str = [&]() -> const sv {
-            if constexpr (!char_array_t<T> && std::is_pointer_v<std::decay_t<T>>) {
-               return value ? value : "";
-            }
-            else if constexpr (has_data<T> && has_size<T>) {
-               return sv{value.data(), value.size()};
-            }
-            else {
-               return sv{value};
-            }
-         }();
+         const sv str = str_view<T>(value);
 
          constexpr uint8_t tag = tag::string;
 
