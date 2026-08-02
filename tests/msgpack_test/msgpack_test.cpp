@@ -720,6 +720,36 @@ int main()
       expect(decoded == original);
    };
 
+   "msgpack embedded null string roundtrip"_test = [] {
+      // msgpack strings are length prefixed rather than terminated, so a null byte is ordinary
+      // payload. This is what the msgpack_roundtrip_string fuzzer generates.
+      const std::string original("a\0b", 3);
+      expect_roundtrip_equal(original);
+
+      auto encoded = glz::write_msgpack(original);
+      expect(encoded.has_value());
+      expect(encoded.value() == std::string("\xa3"
+                                            "a\0b",
+                                            4));
+
+      expect_roundtrip_equal(std::string_view{original});
+   };
+
+   "msgpack string length boundaries"_test = [] {
+      // fixstr holds up to 31 bytes, then str8, str16, and str32 take over
+      for (size_t size : {size_t(0), size_t(31), size_t(32), size_t(255), size_t(256), size_t(65535), size_t(65536)}) {
+         const std::string original(size, 'x');
+         expect_roundtrip_equal(original);
+
+         auto encoded = glz::write_msgpack(original);
+         expect(encoded.has_value());
+
+         // header width: fixstr 1, str8 2, str16 3, str32 5
+         const size_t header = size < 32 ? 1 : (size < 256 ? 2 : (size < 65536 ? 3 : 5));
+         expect(encoded.value().size() == header + size) << "unexpected header width for size " << size;
+      }
+   };
+
    "msgpack static string roundtrip"_test = [] {
       fixed_string_t original{};
       original.assign("static", 6);

@@ -574,7 +574,7 @@ namespace glz
       }
    };
 
-   // Every string-like type shares this one specialization, matching JSON, BEVE, and CBOR.
+   // Every string-like type shares this one specialization, using the same idiom as BEVE and CBOR.
    // Splitting `string_t` and `static_string_t` out into their own specializations makes several
    // of them viable for the same type, which forces the compiler to partially order constrained
    // partial specializations. Normalizing these disjunction-heavy concepts for that subsumption
