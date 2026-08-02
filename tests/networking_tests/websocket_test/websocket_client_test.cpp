@@ -18,6 +18,8 @@
 #include "glaze/net/websocket_connection.hpp"
 #include "ut/ut.hpp"
 
+using std::size_t;
+
 using namespace ut;
 using namespace glz;
 

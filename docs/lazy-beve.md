@@ -187,7 +187,7 @@ if (result) {
     auto indexed = result->root().index();
 
     // Now enjoy O(1) operations:
-    size_t count = indexed.size();      // O(1) - no scanning
+    std::size_t count = indexed.size();      // O(1) - no scanning
     auto key500 = indexed["key500"];    // Linear search in indexed keys
     auto first = indexed[0];            // O(1) - direct access by position
 
@@ -214,7 +214,7 @@ if (result) {
 auto indexed = doc["items"].index();
 
 // O(1) size query
-size_t count = indexed.size();
+std::size_t count = indexed.size();
 
 // O(1) empty check
 if (!indexed.empty()) { /* ... */ }
@@ -317,8 +317,8 @@ if (value) {
 | Type | Description |
 |------|-------------|
 | `bool` | Boolean values |
-| `int32_t`, `int64_t` | Signed integers |
-| `uint32_t`, `uint64_t` | Unsigned integers |
+| `std::int32_t`, `int64_t` | Signed integers |
+| `std::uint32_t`, `std::uint64_t` | Unsigned integers |
 | `float`, `double` | Floating-point numbers |
 | `std::string` | String value |
 | `std::string_view` | String view (zero-copy) |
@@ -364,7 +364,7 @@ auto arr = doc["items"];
 if (arr.empty()) { /* ... */ }
 
 // Get number of elements (O(1) in BEVE - count is stored)
-size_t count = arr.size();
+std::size_t count = arr.size();
 
 // Check if object contains a key
 if (doc.root().contains("name")) { /* ... */ }
@@ -389,7 +389,7 @@ if (result) {
     }
 
     // Also works with index access
-    size_t first_name_len = result->size[0];  // For arrays
+    std::size_t first_name_len = result->size[0];  // For arrays
 }
 ```
 

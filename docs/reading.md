@@ -8,7 +8,7 @@ All read functions return `glz::error_ctx`:
 
 ```cpp
 struct error_ctx {
-    size_t count{};                          // Bytes consumed from input
+    std::size_t count{};                          // Bytes consumed from input
     error_code ec{};                         // Error code (none on success)
     std::string_view custom_error_message{}; // Optional error details
 
@@ -59,7 +59,7 @@ my_struct obj1{}, obj2{};
 
 auto ec = glz::read_json(obj1, input);
 if (!ec) {
-    size_t consumed = ec.count;  // Bytes consumed by first read
+    std::size_t consumed = ec.count;  // Bytes consumed by first read
 
     // Read second object from remaining buffer
     ec = glz::read_json(obj2, std::string_view(input).substr(consumed));

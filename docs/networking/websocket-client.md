@@ -172,7 +172,7 @@ if (client.context()->stopped()) {
 Sets the maximum allowed message size in bytes.
 
 ```cpp
-void set_max_message_size(size_t size);
+void set_max_message_size(std::size_t size);
 ```
 
 Default is 16 MB (16 * 1024 * 1024 bytes).
@@ -566,7 +566,7 @@ int main() {
 
             // Process binary data
             const uint8_t* data = reinterpret_cast<const uint8_t*>(message.data());
-            for (size_t i = 0; i < std::min(size_t(16), message.size()); ++i) {
+            for (std::size_t i = 0; i < std::min(std::size_t(16), message.size()); ++i) {
                 printf("%02X ", data[i]);
             }
             std::cout << std::endl;
@@ -633,7 +633,7 @@ int main() {
 
     // Run the shared io_context in a thread pool
     std::vector<std::thread> threads;
-    for (size_t i = 0; i < std::thread::hardware_concurrency(); ++i) {
+    for (std::size_t i = 0; i < std::thread::hardware_concurrency(); ++i) {
         threads.emplace_back([io_ctx]() {
             io_ctx->run();
         });

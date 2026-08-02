@@ -1,9 +1,11 @@
-#include <string>
-#include <string_view>
-#include <vector>
+// Glaze Library
+// For the license information refer to glaze.ixx
 
-#include "glaze/glaze.hpp"
-#include "ut/ut.hpp"
+import std;
+
+import glaze;
+
+import ut;
 
 using namespace ut;
 

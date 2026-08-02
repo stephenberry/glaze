@@ -14,7 +14,7 @@ The tables below list **all** compile time options, organized by category:
 
 | Option | Default | Description |
 |--------|---------|-------------|
-| `uint32_t format` | `JSON` | Format selector (`JSON`, `BEVE`, `CSV`, `TOML`, etc.) |
+| `std::uint32_t format` | `JSON` | Format selector (`JSON`, `BEVE`, `CSV`, `TOML`, etc.) |
 | `bool null_terminated` | `true` | Whether the input buffer is null terminated |
 | `bool comments` | `false` | Support reading JSONC style comments |
 | `bool error_on_unknown_keys` | `true` | Error when an unknown key is encountered |
@@ -71,7 +71,7 @@ For CSV format, use `glz::opts_csv` which provides CSV-specific defaults.
 
 | Option | Default | Description |
 |--------|---------|-------------|
-| `uint32_t format` | `CSV` | Format selector (fixed to CSV) |
+| `std::uint32_t format` | `CSV` | Format selector (fixed to CSV) |
 | `bool null_terminated` | `true` | Whether the input buffer is null terminated |
 | `uint8_t layout` | `rowwise` | Data layout: `rowwise` or `colwise` |
 | `bool use_headers` | `true` | Read/write with column headers |

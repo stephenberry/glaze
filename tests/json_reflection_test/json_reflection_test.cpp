@@ -1,12 +1,19 @@
-#include <deque>
-#include <map>
-#include <optional>
-#include <unordered_map>
-#include <vector>
+// Glaze Library
+// For the license information refer to glaze.ixx
+
+import std;
+import glaze;
+import ut;
+
+import glaze.reflection.to_tuple;
 
 #include "glaze/core/feature_test.hpp"
-#include "glaze/glaze.hpp"
-#include "ut/ut.hpp"
+
+using std::uint8_t;
+using std::uint16_t;
+using std::int32_t;
+using std::uint32_t;
+using std::uint64_t;
 
 using namespace ut;
 

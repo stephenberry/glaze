@@ -1,5 +1,5 @@
 // Glaze Library
-// For the license information refer to glaze.hpp
+// For the license information refer to glaze.ixx
 
 // Force snprintf fallback by defining this BEFORE including glaze
 #define GLZ_USE_STD_FORMAT_FLOAT 0

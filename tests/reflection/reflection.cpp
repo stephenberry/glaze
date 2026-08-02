@@ -1,11 +1,13 @@
 // Glaze Library
-// For the license information refer to glaze.hpp
+// For the license information refer to glaze.ixx
 
-#include <ut/ut.hpp>
-#include <variant>
+import std;
+import glaze;
+import glaze.core.convert_struct;
+import ut;
 
-#include "glaze/core/convert_struct.hpp"
-#include "glaze/glaze.hpp"
+using std::int32_t;
+using std::int64_t;
 
 using namespace ut;
 

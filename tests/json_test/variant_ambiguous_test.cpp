@@ -1,10 +1,11 @@
 // Glaze Library
-// For the license information refer to glaze.hpp
+// For the license information refer to glaze.ixx
 
-#include <map>
+import std;
+import glaze;
+import ut;
 
-#include "glaze/glaze.hpp"
-#include "ut/ut.hpp"
+using std::int64_t;
 
 using namespace ut;
 
@@ -1145,42 +1146,42 @@ suite variant_error_message_tests = [] {
 // ============================================================================
 
 suite variant_int64_double_tests = [] {
-   "variant<int64_t, double> write int64"_test = [] {
+   "variant<std::int64_t, double> write int64"_test = [] {
       std::variant<int64_t, double> var = int64_t{42};
       std::string s{};
       expect(not glz::write_json(var, s));
       expect(s == "42") << s;
    };
 
-   "variant<int64_t, double> write double"_test = [] {
+   "variant<std::int64_t, double> write double"_test = [] {
       std::variant<int64_t, double> var = 3.14;
       std::string s{};
       expect(not glz::write_json(var, s));
       expect(s == "3.14") << s;
    };
 
-   "variant<int64_t, double> write large int64"_test = [] {
-      std::variant<int64_t, double> var = int64_t{9223372036854775807}; // max int64_t
+   "variant<std::int64_t, double> write large int64"_test = [] {
+      std::variant<int64_t, double> var = int64_t{9223372036854775807}; // max std::int64_t
       std::string s{};
       expect(not glz::write_json(var, s));
       expect(s == "9223372036854775807") << s;
    };
 
-   "variant<int64_t, double> write negative int64"_test = [] {
+   "variant<std::int64_t, double> write negative int64"_test = [] {
       std::variant<int64_t, double> var = int64_t{-9223372036854775807};
       std::string s{};
       expect(not glz::write_json(var, s));
       expect(s == "-9223372036854775807") << s;
    };
 
-   "variant<int64_t, double> write zero"_test = [] {
+   "variant<std::int64_t, double> write zero"_test = [] {
       std::variant<int64_t, double> var = int64_t{0};
       std::string s{};
       expect(not glz::write_json(var, s));
       expect(s == "0") << s;
    };
 
-   "variant<int64_t, double> read integer as int64"_test = [] {
+   "variant<std::int64_t, double> read integer as int64"_test = [] {
       std::variant<int64_t, double> var;
       auto ec = glz::read_json(var, "42");
       expect(ec == glz::error_code::none);
@@ -1188,7 +1189,7 @@ suite variant_int64_double_tests = [] {
       expect(std::get<int64_t>(var) == 42);
    };
 
-   "variant<int64_t, double> read floating point as double"_test = [] {
+   "variant<std::int64_t, double> read floating point as double"_test = [] {
       std::variant<int64_t, double> var;
       auto ec = glz::read_json(var, "3.14");
       expect(ec == glz::error_code::none);
@@ -1196,7 +1197,7 @@ suite variant_int64_double_tests = [] {
       expect(std::get<double>(var) == 3.14);
    };
 
-   "variant<int64_t, double> read negative integer"_test = [] {
+   "variant<std::int64_t, double> read negative integer"_test = [] {
       std::variant<int64_t, double> var;
       auto ec = glz::read_json(var, "-100");
       expect(ec == glz::error_code::none);
@@ -1204,7 +1205,7 @@ suite variant_int64_double_tests = [] {
       expect(std::get<int64_t>(var) == -100);
    };
 
-   "variant<int64_t, double> read negative double"_test = [] {
+   "variant<std::int64_t, double> read negative double"_test = [] {
       std::variant<int64_t, double> var;
       auto ec = glz::read_json(var, "-2.5");
       expect(ec == glz::error_code::none);
@@ -1212,7 +1213,7 @@ suite variant_int64_double_tests = [] {
       expect(std::get<double>(var) == -2.5);
    };
 
-   "variant<int64_t, double> read large int64"_test = [] {
+   "variant<std::int64_t, double> read large int64"_test = [] {
       std::variant<int64_t, double> var;
       auto ec = glz::read_json(var, "9223372036854775807");
       expect(ec == glz::error_code::none);
@@ -1220,7 +1221,7 @@ suite variant_int64_double_tests = [] {
       expect(std::get<int64_t>(var) == 9223372036854775807);
    };
 
-   "variant<int64_t, double> read zero"_test = [] {
+   "variant<std::int64_t, double> read zero"_test = [] {
       std::variant<int64_t, double> var;
       auto ec = glz::read_json(var, "0");
       expect(ec == glz::error_code::none);
@@ -1228,7 +1229,7 @@ suite variant_int64_double_tests = [] {
       expect(std::get<int64_t>(var) == 0);
    };
 
-   "variant<int64_t, double> read scientific notation"_test = [] {
+   "variant<std::int64_t, double> read scientific notation"_test = [] {
       std::variant<int64_t, double> var;
       auto ec = glz::read_json(var, "1.5e10");
       expect(ec == glz::error_code::none);
@@ -1236,7 +1237,7 @@ suite variant_int64_double_tests = [] {
       expect(std::get<double>(var) == 1.5e10);
    };
 
-   "variant<int64_t, double> roundtrip int64"_test = [] {
+   "variant<std::int64_t, double> roundtrip int64"_test = [] {
       std::variant<int64_t, double> original = int64_t{123456789};
       std::string json;
       expect(not glz::write_json(original, json));
@@ -1248,7 +1249,7 @@ suite variant_int64_double_tests = [] {
       expect(std::get<int64_t>(decoded) == 123456789);
    };
 
-   "variant<int64_t, double> roundtrip double"_test = [] {
+   "variant<std::int64_t, double> roundtrip double"_test = [] {
       std::variant<int64_t, double> original = 123.456;
       std::string json;
       expect(not glz::write_json(original, json));
@@ -1260,7 +1261,7 @@ suite variant_int64_double_tests = [] {
       expect(std::get<double>(decoded) == 123.456);
    };
 
-   "variant<int64_t, double> in vector"_test = [] {
+   "variant<std::int64_t, double> in vector"_test = [] {
       std::vector<std::variant<int64_t, double>> vec;
       vec.push_back(int64_t{10});
       vec.push_back(1.5);
@@ -1285,7 +1286,7 @@ suite variant_int64_double_tests = [] {
       expect(std::get<double>(decoded[3]) == 3.14159);
    };
 
-   "variant<int64_t, double> edge case - whole number double"_test = [] {
+   "variant<std::int64_t, double> edge case - whole number double"_test = [] {
       // Test if a double with .0 is properly handled
       std::variant<int64_t, double> var = 5.0;
       std::string s;
@@ -1294,7 +1295,7 @@ suite variant_int64_double_tests = [] {
       expect(std::holds_alternative<double>(var));
    };
 
-   "variant<int64_t, double> precision test"_test = [] {
+   "variant<std::int64_t, double> precision test"_test = [] {
       std::variant<int64_t, double> var = 0.123456789012345;
       std::string s;
       expect(not glz::write_json(var, s));

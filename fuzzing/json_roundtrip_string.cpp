@@ -6,6 +6,8 @@
 #include <glaze/glaze.hpp>
 #include <vector>
 
+using std::size_t;
+
 struct S
 {
    std::string value{};

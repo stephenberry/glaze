@@ -34,6 +34,8 @@ extern "C" {
 #undef DELETE
 #endif
 
+using std::size_t;
+
 using namespace ut;
 using namespace glz;
 

@@ -10,6 +10,11 @@
 #include "glaze/util/zmij.hpp"
 
 // Generate test data
+
+using std::uint32_t;
+using std::uint64_t;
+using std::size_t;
+
 std::vector<float> generate_random_floats(size_t count, uint32_t seed = 12345)
 {
    std::mt19937 rng(seed);

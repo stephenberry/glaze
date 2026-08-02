@@ -1,11 +1,19 @@
+// Glaze Library
+// For the license information refer to glaze.ixx
+
 // Benchmark performance tests - split from json_performance.cpp for faster compilation
 // This file tests large objects with 26 vector fields
-#include <limits>
-#include <random>
 
-#include "glaze/glaze.hpp"
-#include "json_perf_common.hpp"
-#include "ut/ut.hpp"
+import std;
+import glaze;
+import ut;
+
+import glaze.tests.json_perf_common;
+
+using std::int32_t;
+using std::int64_t;
+using std::uint64_t;
+using std::size_t;
 
 using namespace ut;
 using namespace glz::perf;

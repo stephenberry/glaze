@@ -6,16 +6,14 @@
 // much of this file sweeps byte offsets: a bug in cross-register carry or in the padded tail block
 // only shows up when a sequence straddles a boundary the host happens to use.
 
-#include <array>
-#include <cstdint>
-#include <map>
-#include <random>
-#include <string>
-#include <string_view>
-#include <vector>
+import std;
 
-#include "glaze/glaze.hpp"
-#include "ut/ut.hpp"
+import glaze;
+import ut;
+
+using std::uint8_t;
+using std::uint32_t;
+using std::size_t;
 
 using namespace ut;
 

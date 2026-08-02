@@ -22,11 +22,11 @@ The example below shows how results can be returned from a worker function and s
 glz::pool pool;
 auto f = [] {
   std::mt19937_64 generator{};
-  std::uniform_int_distribution<size_t> dist{ 0, 100 };
+  std::uniform_int_distribution<std::size_t> dist{ 0, 100 };
   return dist(generator);
 };
 
-std::vector<std::future<size_t>> numbers;
+std::vector<std::future<std::size_t>> numbers;
 for (auto i = 0; i < 1000; ++i) {
   numbers.emplace_back(pool.emplace_back(f));
 }

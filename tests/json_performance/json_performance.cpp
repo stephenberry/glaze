@@ -1,11 +1,15 @@
-#include <deque>
-#include <iostream>
-#include <map>
-#include <random>
-#include <unordered_map>
+// Glaze Library
+// For the license information refer to glaze.ixx
 
-#include "glaze/glaze.hpp"
-#include "ut/ut.hpp"
+import std;
+import glaze;
+import ut;
+
+using std::int32_t;
+using std::uint32_t;
+using std::int64_t;
+using std::uint64_t;
+using std::size_t;
 
 static constexpr bool skip = false;
 
@@ -147,16 +151,16 @@ struct integers
 /*suite default_numerics = [] {
    "default numerics"_test = [] {
 #ifdef NDEBUG
-      constexpr size_t n = 10000000;
+      constexpr std::size_t n = 10000000;
 #else
-      constexpr size_t n = 100000;
+      constexpr std::size_t n = 100000;
 #endif
 
       integers ints_obj{};
 
       std::string buffer;
       auto t0 = std::chrono::steady_clock::now();
-      for (size_t i = 0; i < n; ++i) {
+      for (std::size_t i = 0; i < n; ++i) {
          std::ignore = glz::write_json(ints_obj, buffer);
       }
       auto t1 = std::chrono::steady_clock::now();
@@ -165,7 +169,7 @@ struct integers
 
       t0 = std::chrono::steady_clock::now();
       glz::error_ctx e;
-      for (size_t i = 0; i < n; ++i) {
+      for (std::size_t i = 0; i < n; ++i) {
          e = glz::read_json(ints_obj, buffer);
       }
       t1 = std::chrono::steady_clock::now();
@@ -208,7 +212,7 @@ suite integers_test = [] {
 };
 
 suite uint64_t_test = [] {
-   "uint64_t"_test = [] {
+   "std::uint64_t"_test = [] {
       SKIP;
 
 #ifdef NDEBUG
