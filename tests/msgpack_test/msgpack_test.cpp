@@ -3,11 +3,13 @@
 
 #include "glaze/msgpack.hpp"
 
+#include <algorithm>
 #include <array>
 #include <bitset>
 #include <chrono>
 #include <compare>
 #include <cstddef>
+#include <cstring>
 #include <deque>
 #include <filesystem>
 #include <list>
@@ -28,6 +30,35 @@ using namespace ut;
 
 namespace
 {
+   // Minimal fixed-capacity string, enough to satisfy glz::static_string_t
+   struct fixed_string_t
+   {
+      static constexpr auto glaze_static_string = true;
+
+      using value_type = char;
+      using size_type = size_t;
+
+      operator std::string_view() const { return {buffer, length}; }
+
+      const char* data() const { return buffer; }
+      size_t size() const { return length; }
+      static constexpr size_t max_size() { return sizeof(buffer); }
+
+      void assign(const char* v, size_t n)
+      {
+         length = (std::min)(max_size(), n);
+         std::memcpy(buffer, v, length);
+      }
+
+      void resize(size_t n) { length = (std::min)(max_size(), n); }
+
+      size_t length{};
+      char buffer[8]{};
+   };
+
+   static_assert(glz::static_string_t<fixed_string_t>);
+   static_assert(not glz::string_t<fixed_string_t>);
+
    template <class T>
    void expect_roundtrip_equal(const T& original)
    {
@@ -687,6 +718,47 @@ int main()
       auto ec = glz::read_msgpack(decoded, std::string_view{buffer});
       expect(!ec);
       expect(decoded == original);
+   };
+
+   "msgpack static string roundtrip"_test = [] {
+      fixed_string_t original{};
+      original.assign("static", 6);
+
+      auto encoded = glz::write_msgpack(original);
+      expect(encoded.has_value());
+      expect(encoded.value() == std::string("\xa6"
+                                            "static"));
+
+      fixed_string_t decoded{};
+      auto ec = glz::read_msgpack(decoded, std::string_view{encoded.value()});
+      expect(!ec);
+      expect(std::string_view{decoded} == "static");
+   };
+
+   "msgpack char pointer write"_test = [] {
+      const char* text = "pointer";
+      auto encoded = glz::write_msgpack(text);
+      expect(encoded.has_value());
+      expect(encoded.value() == std::string("\xa7"
+                                            "pointer"));
+
+      // A null pointer must serialize as an empty string rather than dereferencing null
+      const char* empty = nullptr;
+      auto null_encoded = glz::write_msgpack(empty);
+      expect(null_encoded.has_value());
+      expect(null_encoded.value() == std::string("\xa0"));
+   };
+
+   "msgpack char array write"_test = [] {
+      auto encoded = glz::write_msgpack("array");
+      expect(encoded.has_value());
+      expect(encoded.value() == std::string("\xa5"
+                                            "array"));
+
+      auto array_encoded = glz::write_msgpack(std::array<char, 5>{'a', 'r', 'r', 'a', 'y'});
+      expect(array_encoded.has_value());
+      expect(array_encoded.value() == std::string("\xa5"
+                                                  "array"));
    };
 
    "msgpack container roundtrip"_test = [] {
