@@ -527,6 +527,12 @@ namespace glz
       }
    };
 
+   // The four string specializations below are mutually exclusive, which matters beyond avoiding an
+   // ambiguity: leaving two of them viable for one type forces the compiler to partially order
+   // constrained partial specializations, and normalizing these concepts for that subsumption check
+   // is costly enough to exhaust clang 22's stack (see issue #2742, and the note in write.hpp).
+   // `string_t` stays disjoint from the other three via its `!string_view_t` and `!is_static_string`
+   // clauses, so keep any new string specialization here exclusive as well.
    template <string_t T>
    struct from<MSGPACK, T>
    {
