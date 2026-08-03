@@ -736,7 +736,7 @@ auto ec = glz::write_json(large_object, buffer);
 
 ## JSON Conformance
 
-Glaze is RFC 8259 compliant. UTF-8 encoding is always validated when reading. Two further checks are off by default for performance:
+Glaze is RFC 8259 compliant. UTF-8 encoding is validated when reading unless you opt out with `validate_utf8 = false`. Two further checks are off by default for performance:
 
 - `validate_skipped = false`: Faster parsing by not fully validating skipped values (does not affect resulting C++ objects)
 - `validate_trailing_whitespace = false`: Stops parsing after the target object
@@ -756,7 +756,7 @@ auto ec = glz::read<strict_opts{}>(obj, json_data);
 
 ### UTF-8 Validation
 
-RFC 8259 section 8.1 requires JSON text to be encoded in UTF-8, and Glaze enforces it on every read. There is no option to disable it: read input is by definition someone else's data, and accepting malformed encodings silently propagates them into your program.
+RFC 8259 section 8.1 requires JSON text to be encoded in UTF-8, and Glaze enforces it on read. It is on by default because read input is by definition someone else's data, and accepting malformed encodings silently propagates them into your program. See [Disabling validation](#disabling-validation) below for the option that turns it off.
 
 ```cpp
 std::vector<std::string> v{};
@@ -765,7 +765,9 @@ auto ec = glz::read_json(v, "[\"a\xFF\"]"); // ec == glz::error_code::invalid_ut
 
 This rejects lone continuation bytes, overlong encodings, truncated sequences, encoded UTF-16 surrogate halves, and code points above U+10FFFF. Escape sequences are validated separately, so `"\ud800"` without a matching low surrogate is rejected as well.
 
-Validation applies to every string the reader passes over, including keys, values you do not model, and values reached through `glz::skip` or `glz::raw_json`. A malformed byte in a field you never look at still fails the parse. This is the change most likely to affect existing code: input that previously parsed will now return an error.
+Validation applies to every string the reader materializes, including map keys, keys that match no member, values you do not model, and values reached through `glz::skip` or `glz::raw_json`. A malformed byte in a field you never look at still fails the parse. This is the change most likely to affect existing code: input that previously parsed will now return an error.
+
+The one string not checked is an object key that matches a member name in your `glz::meta` or reflected struct. Matching compares the input bytes against the program's own literal, so a match proves the key is whatever you wrote in your C++ source, and no separate pass can tell you anything new. Keys read into a `std::map` or `glz::generic` are materialized and so are checked.
 
 Validation uses the Lemire & Keiser vector algorithm, with backends for AVX-512BW, AVX2, SSSE3, AArch64 NEON, and WebAssembly SIMD128. Targets without a byte-granular shuffle fall back to a scalar validator. Reading a string value skips validation entirely when the string is pure ASCII, because the scan that finds its closing quote already proves no byte has the high bit set. Object keys and skipped strings are located with `memchr`, which proves nothing about the bytes it passed over, so those always run a full pass.
 
@@ -774,6 +776,21 @@ Cost therefore tracks how much of a document is non-ASCII. Measured on `twitter.
 Writing is **not** validated. Data you serialize is your own, so Glaze does not pay to re-check it; validate before writing if you have a specific reason to. Note that this makes round-tripping asymmetric: a `std::string` holding non-UTF-8 bytes will write successfully and then fail to read back.
 
 JSONC comments are skipped without validation, since comments are not part of RFC 8259 and their bytes never reach your program.
+
+#### Disabling validation
+
+The inheritable `validate_utf8` option turns the check off, which restores the pre-validation behavior and its performance:
+
+```cpp
+struct unchecked_opts : glz::opts {
+   bool validate_utf8 = false;
+};
+
+std::vector<std::string> v{};
+auto ec = glz::read<unchecked_opts{}>(v, "[\"a\xFF\"]"); // no error; v[0] holds the raw bytes
+```
+
+Disabling it makes the parse non-conformant, so reach for it only when the encoding is already guaranteed by an earlier stage, or when the bytes are deliberately not UTF-8 and you accept that the resulting `std::string` may hold anything. The option is a compile-time setting like every other Glaze option, so it inherits into custom option structs and applies to nested values, keys, and skipped fields alike. It also governs `lazy_json_view::get<std::string>()`. Everything else still applies: unpaired `\uXXXX` surrogate escapes, raw control characters, and unterminated strings are rejected regardless.
 
 ## See Also
 

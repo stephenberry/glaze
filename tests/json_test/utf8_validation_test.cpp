@@ -622,4 +622,323 @@ suite json_integration = [] {
    };
 };
 
+// The `validate_utf8` option turns the checker off. Validation is on by default because RFC 8259
+// requires it, so every test here has to prove both halves: that the default still rejects the
+// input, and that the same read with the option off accepts it and hands back the original bytes.
+
+// A named namespace rather than an anonymous one, because reflected types need linkage.
+namespace utf8_option_test
+{
+   struct unchecked_opts : glz::opts
+   {
+      bool validate_utf8 = false;
+   };
+
+   // Options compose by inheritance, so a struct derived from another custom options struct has to
+   // keep carrying the flag.
+   struct unchecked_validate_skipped_opts : unchecked_opts
+   {
+      bool validate_skipped = true;
+   };
+
+   // Fields that glz::opts already declares are set on an instance rather than redeclared in a
+   // derived struct. Redeclaring shadows the base member, which still reads correctly through
+   // check_* but silently defeats opt_true/opt_false on &glz::opts::that_member.
+   template <class Opts>
+   consteval Opts with_unknown_keys_allowed()
+   {
+      Opts o{};
+      o.error_on_unknown_keys = false;
+      return o;
+   }
+
+   consteval unchecked_opts unchecked_unterminated()
+   {
+      unchecked_opts o{};
+      o.null_terminated = false;
+      return o;
+   }
+
+   consteval unchecked_opts unchecked_comments()
+   {
+      unchecked_opts o{};
+      o.comments = true;
+      o.error_on_unknown_keys = false;
+      return o;
+   }
+
+   consteval glz::opts checked_comments()
+   {
+      glz::opts o{};
+      o.comments = true;
+      o.error_on_unknown_keys = false;
+      return o;
+   }
+
+   struct unchecked_raw_string_opts : unchecked_opts
+   {
+      bool raw_string = true;
+   };
+
+   struct nested
+   {
+      std::string name{};
+   };
+
+   struct outer
+   {
+      nested nested_value{};
+      std::vector<std::string> tags{};
+      int id{};
+   };
+
+   struct partial
+   {
+      int id{};
+   };
+
+   struct matched_key
+   {
+      int a{};
+      int b{};
+   };
+}
+
+template <>
+struct glz::meta<utf8_option_test::matched_key>
+{
+   using T = utf8_option_test::matched_key;
+   // A key that is itself malformed UTF-8, so a read that matches it never materializes a string.
+   static constexpr auto value = object("k\xFF!", &T::a, "b", &T::b);
+};
+
+suite validate_utf8_option = [] {
+   using namespace utf8_option_test;
+
+   "disabled accepts every malformed case"_test = [] {
+      for (const auto& c : malformed()) {
+         const std::string doc = "[\"" + c.data + "\"]";
+         std::vector<std::string> v;
+         expect(bool(glz::read_json(v, doc))) << c.name;
+         expect(!glz::read<unchecked_opts{}>(v, doc)) << c.name;
+         expect(v.size() == 1u) << c.name;
+         expect(v[0] == c.data) << c.name;
+      }
+   };
+
+   "disabled accepts across string target types"_test = [] {
+      const std::string doc = "[\"a\xFF!b\"]";
+      {
+         std::vector<std::string> v;
+         expect(!glz::read<unchecked_opts{}>(v, doc));
+         expect(v[0] == "a\xFF!b");
+      }
+      {
+         std::vector<std::string_view> v;
+         expect(!glz::read<unchecked_opts{}>(v, doc));
+         expect(v[0] == "a\xFF!b");
+      }
+      {
+         std::vector<std::u8string> v;
+         expect(glz::read_json(v, doc) == glz::error_code::invalid_utf8);
+         expect(!glz::read<unchecked_opts{}>(v, doc));
+         expect(v[0] == std::u8string{u8"a\xFF!b"});
+      }
+      {
+         glz::generic g;
+         expect(glz::read_json(g, doc) == glz::error_code::invalid_utf8);
+         expect(!glz::read<unchecked_opts{}>(g, doc));
+         expect(g[0].get_string() == "a\xFF!b");
+      }
+   };
+
+   "disabled accepts malformed object keys"_test = [] {
+      const std::string doc = "{\"k\xFF!\":1}";
+      {
+         std::map<std::string, int> m;
+         expect(glz::read_json(m, doc) == glz::error_code::invalid_utf8);
+         expect(!glz::read<unchecked_opts{}>(m, doc));
+         expect(m.begin()->first == "k\xFF!");
+      }
+      {
+         glz::generic g;
+         expect(glz::read_json(g, doc) == glz::error_code::invalid_utf8);
+         expect(!glz::read<unchecked_opts{}>(g, doc));
+      }
+   };
+
+   "a key matching a member name is never materialized"_test = [] {
+      // Documented behavior, pinned here so it cannot drift silently: matching compares input bytes
+      // against the program's own literal, so a matched key is checked by neither setting of the
+      // option. Only keys that get materialized -- map keys, keys matching nothing -- are validated.
+      matched_key v{};
+      expect(!glz::read_json(v, std::string("{\"k\xFF!\":5,\"b\":6}")));
+      expect(v.a == 5);
+      expect(v.b == 6);
+   };
+
+   "disabled accepts malformed bytes in skipped values"_test = [] {
+      // A malformed byte in a field the target does not model is the likeliest reason to reach for
+      // this option, and skipped strings run through a different reader than modelled ones.
+      const std::string doc = "{\"other\":\"\xC0\x80\",\"id\":3}";
+      partial v{};
+      expect(glz::read<glz::opts{.error_on_unknown_keys = false}>(v, doc) == glz::error_code::invalid_utf8);
+      expect(!glz::read<with_unknown_keys_allowed<unchecked_opts>()>(v, doc));
+      expect(v.id == 3);
+
+      // The same field with full validation of skipped values enabled.
+      partial v2{};
+      expect(!glz::read<with_unknown_keys_allowed<unchecked_validate_skipped_opts>()>(v2, doc));
+      expect(v2.id == 3);
+   };
+
+   "disabled accepts malformed bytes in skipped values under JSONC"_test = [] {
+      // The comment-aware skip_until_closed overloads are separate instantiations from the ones
+      // above, and they reach skip_string through their own skip_string_opts constructions.
+      const std::string doc = "{/*c*/\"other\":{\"x\":\"a\xFF!b\"},\"id\":7}";
+      partial v{};
+      expect(glz::read<checked_comments()>(v, doc) == glz::error_code::invalid_utf8);
+      expect(!glz::read<unchecked_comments()>(v, doc));
+      expect(v.id == 7);
+
+      // A malformed byte inside a comment is skipped without validation either way, since comment
+      // bytes never reach the program.
+      partial v2{};
+      const std::string commented = "{/* \xFF */\"id\":9}";
+      expect(!glz::read<checked_comments()>(v2, commented));
+      expect(v2.id == 9);
+   };
+
+   "disabled propagates into nested values"_test = [] {
+      const std::string doc = R"({"nested_value":{"name":"a)"
+                              "\xFF"
+                              R"(b"},"tags":["c)"
+                              "\xFE"
+                              R"(d"],"id":5})";
+      outer v{};
+      expect(glz::read_json(v, doc) == glz::error_code::invalid_utf8);
+      expect(!glz::read<unchecked_opts{}>(v, doc));
+      expect(v.nested_value.name ==
+             "a\xFF"
+             "b");
+      expect(v.tags.size() == 1u);
+      expect(v.tags[0] ==
+             "c\xFE"
+             "d");
+      expect(v.id == 5);
+   };
+
+   "disabled on the non null terminated paths"_test = [] {
+      // A heap buffer with no terminator, so the reader really has to stop on `end`. Reading out of
+      // a std::string would not stress this: its data() is NUL terminated regardless.
+      const std::string_view source = "[\"a\xFF!b\"]";
+      std::vector<char> raw(source.begin(), source.end());
+      const std::string_view sv{raw.data(), raw.size()};
+      std::vector<std::string> v;
+      expect(glz::read<glz::opts{.null_terminated = false}>(v, sv) == glz::error_code::invalid_utf8);
+      expect(!glz::read<unchecked_unterminated()>(v, sv));
+      expect(v[0] == "a\xFF!b");
+   };
+
+   "disabled on the raw_string path"_test = [] {
+      const std::string doc = "[\"a\xFF!b\"]";
+      std::vector<std::string> v;
+      struct raw_opts : glz::opts
+      {
+         bool raw_string = true;
+      };
+      expect(glz::read<raw_opts{}>(v, doc) == glz::error_code::invalid_utf8);
+      expect(!glz::read<unchecked_raw_string_opts{}>(v, doc));
+      expect(v[0] == "a\xFF!b");
+   };
+
+   "disabled at many string lengths"_test = [] {
+      for (size_t n = 1; n <= 100; ++n) {
+         for (size_t pos = 0; pos < n; pos += 7) {
+            std::string payload(n, 'a');
+            payload[pos] = char(0xFF);
+            const std::string doc = "[\"" + payload + "\"]";
+            std::vector<std::string> v;
+            expect(glz::read_json(v, doc) == glz::error_code::invalid_utf8) << n << "@" << pos;
+            expect(!glz::read<unchecked_opts{}>(v, doc)) << n << "@" << pos;
+            expect(v[0] == payload) << n << "@" << pos;
+         }
+      }
+   };
+
+   "disabled in lazy JSON"_test = [] {
+      const std::string doc = "{\"s\":\"a\xFF!b\"}";
+      {
+         auto d = glz::lazy_json(doc);
+         expect(d.has_value());
+         const auto s = (*d)["s"].get<std::string>();
+         expect(!s.has_value());
+         expect(s.error() == glz::error_code::invalid_utf8);
+      }
+      {
+         auto d = glz::lazy_json<unchecked_opts{}>(doc);
+         expect(d.has_value());
+         const auto s = (*d)["s"].get<std::string>();
+         expect(s.has_value());
+         expect(s.value() == "a\xFF!b");
+      }
+   };
+
+   "disabled still decodes well formed input"_test = [] {
+      // Turning the check off must not change what a conforming document parses to.
+      for (const auto& c : well_formed()) {
+         if (c.data.find('\0') != std::string::npos) continue; // control chars need escaping
+         const std::string doc = "[\"" + c.data + "\"]";
+         std::vector<std::string> v;
+         expect(!glz::read<unchecked_opts{}>(v, doc)) << c.name;
+         expect(v.size() == 1u) << c.name;
+         expect(v[0] == c.data) << c.name;
+      }
+   };
+
+   "disabled still decodes escapes to multibyte sequences"_test = [] {
+      // \uXXXX escapes are ASCII on the wire and decode through a separate path, so the option
+      // must not disturb them.
+      for (const uint32_t cp : {0xE9u, 0x20ACu, 0x1F600u}) {
+         std::vector<std::string> escaped;
+         char buf[32];
+         if (cp > 0xFFFF) {
+            const uint32_t u = cp - 0x10000;
+            std::snprintf(buf, sizeof(buf), R"(["\u%04X\u%04X"])", 0xD800 + (u >> 10), 0xDC00 + (u & 0x3FF));
+         }
+         else {
+            std::snprintf(buf, sizeof(buf), R"(["\u%04X"])", cp);
+         }
+         expect(!glz::read<unchecked_opts{}>(escaped, std::string(buf))) << cp;
+         expect(escaped[0] == utf8(cp)) << cp;
+      }
+   };
+
+   "disabled still rejects other errors"_test = [] {
+      // Turning off the encoding check must not turn off anything else.
+      std::vector<std::string> v;
+      expect(bool(glz::read<unchecked_opts{}>(v, std::string(R"(["a\ud800b"])")))); // lone surrogate escape
+      expect(bool(glz::read<unchecked_opts{}>(v, std::string("[\"a\x01\x62\"]")))); // raw control character
+      expect(bool(glz::read<unchecked_opts{}>(v, std::string("[\"abc]")))); // unterminated string
+   };
+
+   "validate_json validates regardless of the caller"_test = [] {
+      // validate_json takes no options, so there is no way to hand it a disabled check. This pins
+      // that, because the documented conformance guarantee depends on it.
+      static_assert(glz::check_validate_utf8(glz::opts_validate{}));
+      expect(glz::validate_json(std::string("[\"a\xFF!b\"]")) == glz::error_code::invalid_utf8);
+   };
+
+   "enabled by default for opts without the field"_test = [] {
+      static_assert(glz::check_validate_utf8(glz::opts{}));
+      static_assert(glz::check_validate_utf8(glz::opts_validate{}));
+      static_assert(glz::check_validate_utf8(glz::opts_csv{}));
+      static_assert(!glz::check_validate_utf8(unchecked_opts{}));
+      static_assert(!glz::check_validate_utf8(unchecked_validate_skipped_opts{}));
+      static_assert(!glz::check_validate_utf8(with_unknown_keys_allowed<unchecked_opts>()));
+      static_assert(!glz::check_validate_utf8(unchecked_comments()));
+      static_assert(!glz::check_validate_utf8(unchecked_raw_string_opts{}));
+   };
+};
+
 int main() { return 0; }

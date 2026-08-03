@@ -126,6 +126,14 @@ namespace glz
    // If, after parsing a value, we want to validate the trailing whitespace
 
    // ---
+   // bool validate_utf8 = true;
+   // Validate that strings encountered while reading are well formed UTF-8, as RFC 8259 section 8.1
+   // requires. Malformed input fails with error_code::invalid_utf8. On by default: read input is by
+   // definition someone else's data, and accepting malformed encodings propagates them into your
+   // program. Turn it off only when the encoding is guaranteed by some earlier stage, or when the
+   // bytes are deliberately not UTF-8 and you accept what that means for your strings.
+
+   // ---
    // bool concatenate = true;
    // Concatenates ranges of std::pair into single objects when writing
 
@@ -429,6 +437,16 @@ namespace glz
       }
       else {
          return false;
+      }
+   }
+
+   consteval bool check_validate_utf8(auto&& Opts)
+   {
+      if constexpr (requires { Opts.validate_utf8; }) {
+         return Opts.validate_utf8;
+      }
+      else {
+         return true;
       }
    }
 
