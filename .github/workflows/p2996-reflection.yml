@@ -40,7 +40,7 @@ jobs:
           -w /glaze \
           ${{ env.P2996_IMAGE }} \
           /bin/sh -c "
-            git clone --depth 1 --branch v1.1.0 https://github.com/openalgz/ut /tmp/ut &&
+            git clone --depth 1 --branch v1.2.1 https://github.com/openalgz/ut /tmp/ut &&
             clang++ -std=c++26 -freflection -fexpansion-statements -stdlib=libc++ \
               -I/glaze/include -I/tmp/ut/include -DGLZ_REFLECTION26=1 \
               -Wl,-rpath,${{ env.P2996_LIB_PATH }} \
