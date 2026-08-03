@@ -229,7 +229,7 @@ See the **[ASIO Setup Guide](networking/asio-setup.md)** for detailed instructio
 
 ### Complete CMakeLists.txt Example
 ```cmake
-cmake_minimum_required(VERSION 3.20)
+cmake_minimum_required(VERSION 3.31)
 project(MyGlazeProject LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 23)

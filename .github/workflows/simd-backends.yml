@@ -209,7 +209,7 @@ jobs:
         run: |
           set -euo pipefail
           source /tmp/emsdk/emsdk_env.sh
-          git clone --depth 1 --branch v1.1.0 https://github.com/openalgz/ut /tmp/ut
+          git clone --depth 1 --branch v1.2.1 https://github.com/openalgz/ut /tmp/ut
           # Both configurations escape with SWAR: Glaze has no WASM escape helper. Pinning the
           # backend in the same compile that builds the suite means a toolchain change that quietly
           # drops SIMD128 fails to build, rather than running the scalar path twice and passing.
@@ -239,7 +239,7 @@ jobs:
       - name: Build and run at each width
         run: |
           set -euo pipefail
-          git clone --depth 1 --branch v1.1.0 https://github.com/openalgz/ut /tmp/ut
+          git clone --depth 1 --branch v1.2.1 https://github.com/openalgz/ut /tmp/ut
           for w in 16 32 64; do
             echo "::group::generic width $w"
             # Pin the portable backend, or the vector path could compile away and all three widths
