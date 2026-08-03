@@ -18,6 +18,9 @@ env:
   P2996_IMAGE: vsavkov/clang-p2996:amd64
   # Library path for runtime linking
   P2996_LIB_PATH: /opt/p2996/clang/lib/x86_64-unknown-linux-gnu
+  # The image is Ubuntu 24.04, whose apt cmake is 3.28 — older than the 3.31 that
+  # ut requires since v1.2.0. Install an official Kitware build instead of apt's.
+  CMAKE_TARBALL: https://github.com/Kitware/CMake/releases/download/v4.4.2/cmake-4.4.2-linux-x86_64.tar.gz
 
 jobs:
   test-p2996:
@@ -55,7 +58,9 @@ jobs:
           -w /glaze \
           ${{ env.P2996_IMAGE }} \
           /bin/sh -c "
-            apt-get update && apt-get install -y cmake &&
+            apt-get update && apt-get install -y curl &&
+            curl -fsSL ${{ env.CMAKE_TARBALL }} | tar xz --strip-components=1 -C /usr/local &&
+            cmake --version &&
             cmake -B build \
               -DCMAKE_CXX_COMPILER=clang++ \
               -DCMAKE_CXX_FLAGS='-std=c++26 -freflection -fexpansion-statements -stdlib=libc++' \
