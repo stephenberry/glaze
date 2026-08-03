@@ -135,7 +135,7 @@ system package instead of downloading one.
 ### Complete Example with ASIO
 
 ```cmake
-cmake_minimum_required(VERSION 3.20)
+cmake_minimum_required(VERSION 3.31)
 project(MyNetworkingApp LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 23)
@@ -370,7 +370,7 @@ int main() {
 
 ```cmake
 # CMakeLists.txt
-cmake_minimum_required(VERSION 3.20)
+cmake_minimum_required(VERSION 3.31)
 project(hello_server LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 23)
