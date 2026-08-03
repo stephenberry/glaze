@@ -3,6 +3,7 @@
 
 #pragma once
 
+#include <charconv>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
@@ -14,7 +15,7 @@
 #include "glaze/json/write.hpp"
 #include "glaze/jsonb/header.hpp"
 #include "glaze/jsonb/text_decode.hpp"
-#include "glaze/util/fast_float.hpp"
+#include "glaze/util/parse.hpp"
 
 namespace glz
 {
@@ -22,11 +23,33 @@ namespace glz
    {
       // Emit a JSON string literal from a raw UTF-8 byte payload. Uses the JSON writer so all
       // control characters and structural JSON chars are correctly escaped.
+      //
+      // Three writer options would each let payload bytes reach the output document unescaped,
+      // and all three are inheritable, so a caller's opts would otherwise silently reopen the
+      // hole this converter exists to close:
+      //   * escape_control_characters (off by default) leaves raw control bytes in place,
+      //   * raw_string emits the payload without escaping it at all,
+      //   * unquoted drops the surrounding quotes as well.
+      // Each default is reasonable for a C++ string being serialized, because that is the
+      // program's own data. None of them is reasonable for a blob, which is someone else's.
+      // The converter promises strict JSON, so it pins all three rather than inheriting them.
+      template <auto Opts>
+      inline constexpr auto raw_string_emit_opts =
+         opt_false<opt_false<opt_true<Opts, escape_control_characters_opt_tag{}>, raw_string_opt_tag{}>,
+                   unquoted_opt_tag{}>;
+
       template <auto Opts, class B>
       inline void emit_raw_string_as_json(is_context auto& ctx, const char* data, size_t size, B& out, size_t& ix)
       {
+         // RFC 8259 section 8.1 requires JSON text to be UTF-8, and these bytes came out of a
+         // blob rather than out of the program, so they get the same treatment the JSON reader
+         // gives its input. Honors the `validate_utf8` option, which compiles the check away.
+         // No accumulator is available here: nothing has scanned this payload yet.
+         if (validate_utf8_span<Opts>(ctx, data, data + size)) [[unlikely]] {
+            return;
+         }
          const sv s{data, size};
-         to<JSON, sv>::template op<Opts>(s, ctx, out, ix);
+         to<JSON, sv>::template op<raw_string_emit_opts<Opts>>(s, ctx, out, ix);
       }
 
       // The spec marks several payloads as "already valid JSON text" so that a converter can
@@ -40,7 +63,17 @@ namespace glz
       // (RFC 8259 section 7): no raw control character, no unescaped quote, and every
       // backslash introduces a well-formed escape. Surrogate escapes have to be properly
       // paired, matching what decode_json_escape enforces on the reader side.
-      [[nodiscard]] inline bool is_json_string_body(const char* data, size_t size) noexcept
+      //
+      // Every byte is visited here anyway, so each one is OR'd into `ascii_acc` on the way
+      // past. A caller hands that to validate_utf8_span, which then skips the UTF-8 pass
+      // outright for a pure ASCII payload — the case TEXT exists to make cheap.
+      //
+      // Note that validate_utf8_span documents the opposite bias for its accumulator: covering
+      // extra bytes only costs a needless pass, whereas covering too few would skip a needed
+      // one. So every byte is OR'd in unconditionally, including the ones consumed inside an
+      // escape. Those are all checked to be ASCII anyway, but making the accumulator depend on
+      // that would leave UTF-8 validation silently disabled if the escape set ever widened.
+      [[nodiscard]] inline bool is_json_string_body(const char* data, size_t size, uint64_t& ascii_acc) noexcept
       {
          // Reads the four hex digits at [pos, pos+4), or -1 if they are not all hex.
          auto hex4 = [&](size_t pos) -> int32_t {
@@ -50,6 +83,7 @@ namespace glz
             uint32_t v = 0;
             for (size_t k = 0; k < 4; ++k) {
                const auto h = static_cast<uint8_t>(data[pos + k]);
+               ascii_acc |= h;
                uint32_t d;
                if (h >= '0' && h <= '9')
                   d = h - '0';
@@ -66,6 +100,7 @@ namespace glz
 
          for (size_t i = 0; i < size; ++i) {
             const auto c = static_cast<uint8_t>(data[i]);
+            ascii_acc |= c;
             if (c < 0x20 || c == '"') {
                return false;
             }
@@ -73,6 +108,7 @@ namespace glz
                if (++i >= size) {
                   return false;
                }
+               ascii_acc |= static_cast<uint8_t>(data[i]);
                switch (data[i]) {
                case '"':
                case '\\':
@@ -97,6 +133,7 @@ namespace glz
                      if (size - i < 7 || data[i + 1] != '\\' || data[i + 2] != 'u') {
                         return false;
                      }
+                     ascii_acc |= static_cast<uint8_t>(data[i + 1]) | static_cast<uint8_t>(data[i + 2]);
                      const int32_t low = hex4(i + 3);
                      if (low < 0xDC00 || low > 0xDFFF) {
                         return false;
@@ -153,10 +190,17 @@ namespace glz
       }
 
       // Emit a string whose bytes are already a valid JSON string literal body (i.e. with
-      // RFC 8259 escapes already in the payload). We just wrap in quotes.
-      template <class B>
-      inline void emit_json_escaped_body(is_context auto& ctx, const char* data, size_t size, B& out, size_t& ix)
+      // RFC 8259 escapes already in the payload). We just wrap in quotes. `ascii_acc` is the
+      // OR of the payload's bytes, as produced by is_json_string_body.
+      template <auto Opts, class B>
+      inline void emit_json_escaped_body(is_context auto& ctx, const char* data, size_t size, uint64_t ascii_acc,
+                                         B& out, size_t& ix)
       {
+         // The escapes in the payload are ASCII, so only the raw bytes need the UTF-8 check;
+         // validate_utf8_span skips it entirely when the accumulator shows pure ASCII.
+         if (validate_utf8_span<Opts>(ctx, data, data + size, ascii_acc)) [[unlikely]] {
+            return;
+         }
          if (!ensure_space(ctx, out, ix + size + 2 + write_padding_bytes)) return;
          out[ix++] = static_cast<typename std::decay_t<B>::value_type>('"');
          if (size) {
@@ -329,21 +373,57 @@ namespace glz
                ix += 6;
                return;
             }
-            // What is left is JSON5 float syntax that strict JSON does not share, so parse it
-            // and re-render rather than copying it out. A leading '+' or '.' and a trailing
-            // '.' are all legal here and none of them are legal JSON. Mirrors the reader's
-            // parse_float_payload in jsonb/read.hpp, including its use of fast_float over
-            // std::from_chars for the floating-point overload.
-            const char* p = s.data();
-            const char* e = p + s.size();
-            if (p < e && *p == '+') ++p;
-            double d{};
-            auto [ptr, ec] = glz::fast_float::from_chars(p, e, d);
-            if (ec != std::errc{} || ptr != e) [[unlikely]] {
+            // What is left is JSON5 float syntax, which strict JSON does not share: a leading
+            // '+' is legal here, and so is a '.' with no digit on one side of it. Normalize
+            // those textually — supplying the digit the payload omits, the way SQLite's json()
+            // does — rather than parsing to a double and re-rendering. Re-rendering would round
+            // a payload carrying more precision than binary64 holds and would reject one whose
+            // magnitude is outside its range, even though both are already valid JSON once the
+            // JSON5-only spelling is gone. Whatever normalization produces still has to satisfy
+            // the JSON grammar before it is copied out: the blob is untrusted, and this arm is
+            // otherwise unconstrained.
+            sv body = s;
+            // Drop a leading '+' only when a number could actually follow it, so that a
+            // payload like "+-1.5" is left intact and rejected below rather than quietly
+            // becoming "-1.5".
+            if (body.size() > 1 && body.front() == '+' &&
+                ((body[1] >= '0' && body[1] <= '9') || body[1] == '.')) {
+               body.remove_prefix(1);
+            }
+
+            std::string scratch;
+            if (const size_t dot = body.find('.'); dot != sv::npos) {
+               const auto is_digit = [](char c) { return c >= '0' && c <= '9'; };
+               const bool has_int_digit = dot > 0 && is_digit(body[dot - 1]);
+               const bool has_frac_digit = dot + 1 < body.size() && is_digit(body[dot + 1]);
+               // Supply the missing digit only when the other side of the dot has one, so that
+               // a payload which is not JSON5 either ("." or ".e5") is left alone and rejected
+               // below rather than normalized into a number it never denoted.
+               if (has_int_digit && !has_frac_digit) {
+                  // "5." and "5.e3" omit the fraction digit.
+                  scratch.reserve(body.size() + 1);
+                  scratch.append(body.substr(0, dot + 1));
+                  scratch.push_back('0');
+                  scratch.append(body.substr(dot + 1));
+                  body = scratch;
+               }
+               else if (has_frac_digit && !has_int_digit) {
+                  // ".5" and "-.5" omit the integer digit.
+                  scratch.reserve(body.size() + 1);
+                  scratch.append(body.substr(0, dot));
+                  scratch.push_back('0');
+                  scratch.append(body.substr(dot));
+                  body = scratch;
+               }
+            }
+
+            if (!is_json_number(body.data(), body.size())) [[unlikely]] {
                ctx.error = error_code::parse_number_failure;
                return;
             }
-            to<JSON, double>::template op<Opts>(d, ctx, out, ix);
+            if (!ensure_space(ctx, out, ix + body.size() + write_padding_bytes)) return;
+            if (!body.empty()) std::memcpy(&out[ix], body.data(), body.size());
+            ix += body.size();
             return;
          }
          case jsonb::type::text:
@@ -355,11 +435,12 @@ namespace glz
             // is not an escape error, it just ends the string a character early.
             const auto* body = reinterpret_cast<const char*>(payload);
             const auto n = static_cast<size_t>(sz);
-            if (!is_json_string_body(body, n)) [[unlikely]] {
+            uint64_t ascii_acc{};
+            if (!is_json_string_body(body, n, ascii_acc)) [[unlikely]] {
                ctx.error = error_code::syntax_error;
                return;
             }
-            emit_json_escaped_body(ctx, body, n, out, ix);
+            emit_json_escaped_body<Opts>(ctx, body, n, ascii_acc, out, ix);
             return;
          }
          case jsonb::type::textraw:
