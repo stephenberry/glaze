@@ -1188,6 +1188,109 @@ suite converter_tests = [] {
       expect(j.value() == std::string("\"") + payload + "\"");
    };
 
+   "jsonb_to_json rejects a TEXT/TEXTJ payload that is not a JSON string body"_test = [] {
+      // TEXT and TEXTJ are emitted verbatim between quotes, so a payload that violates
+      // the spec would splice its own bytes into the output document.
+      auto scalar = [](uint8_t type_code, const std::string& payload) {
+         std::string buf;
+         if (payload.size() <= 11) {
+            buf.push_back(static_cast<char>((payload.size() << 4) | type_code));
+         }
+         else {
+            buf.push_back(static_cast<char>((12u << 4) | type_code)); // u8_follows
+            buf.push_back(static_cast<char>(payload.size()));
+         }
+         buf += payload;
+         return glz::jsonb_to_json(buf);
+      };
+
+      for (const uint8_t tc : {uint8_t(7), uint8_t(8)}) { // TEXT, TEXTJ
+         expect(!scalar(tc, "a\"b").has_value()); // unescaped quote ends the string early
+         expect(!scalar(tc, "a\\").has_value()); // dangling escape
+         expect(!scalar(tc, std::string("a\nb")).has_value()); // raw control character
+      }
+      expect(!scalar(8, "\\q").has_value()); // not a JSON escape
+      expect(!scalar(8, "\\u00g1").has_value()); // \u without four hex digits
+      expect(!scalar(8, "\\u00").has_value()); // \u truncated by the payload end
+      expect(!scalar(8, "\\uD83D").has_value()); // high surrogate with no low surrogate
+      expect(!scalar(8, "\\uDE00").has_value()); // low surrogate on its own
+      expect(!scalar(8, "\\uD83Dx").has_value()); // high surrogate not followed by \u
+      expect(scalar(8, "\\uD83D\\uDE00").value() == R"("\uD83D\uDE00")"); // a proper pair
+
+      // An unescaped quote in a TEXT value used to close the string and let the rest of
+      // the payload be read as further object members.
+      const std::string key = "a";
+      const std::string value = "x\",\"b\":\"y";
+      std::string members;
+      members.push_back(static_cast<char>((key.size() << 4) | 7u));
+      members += key;
+      members.push_back(static_cast<char>((value.size() << 4) | 7u));
+      members += value;
+      std::string blob;
+      blob.push_back(static_cast<char>((12u << 4) | 12u)); // object, size_nibble=u8_follows
+      blob.push_back(static_cast<char>(members.size()));
+      blob += members;
+      expect(!glz::jsonb_to_json(blob).has_value());
+
+      // The same bytes carried as TEXTRAW are escaped, not rejected.
+      expect(scalar(10, value).value() == R"("x\",\"b\":\"y")");
+   };
+
+   "jsonb_to_json rejects an INT/FLOAT payload that is not a JSON number"_test = [] {
+      // INT and FLOAT are copied out verbatim to preserve the blob's exact decimal
+      // representation, so the payload has to be checked against the JSON grammar first.
+      auto scalar = [](uint8_t type_code, const std::string& payload) {
+         std::string buf;
+         buf.push_back(static_cast<char>((payload.size() << 4) | type_code));
+         buf += payload;
+         return glz::jsonb_to_json(buf);
+      };
+
+      for (const uint8_t tc : {uint8_t(3), uint8_t(5)}) { // INT, FLOAT
+         expect(scalar(tc, "0").value() == "0");
+         expect(scalar(tc, "-7").value() == "-7");
+         expect(scalar(tc, "1e10").value() == "1e10"); // exact bytes preserved
+         expect(!scalar(tc, "").has_value());
+         expect(!scalar(tc, "-").has_value());
+         expect(!scalar(tc, "1e").has_value());
+         expect(!scalar(tc, "1.").has_value());
+         expect(!scalar(tc, "01").has_value()); // leading zero belongs to INT5
+         expect(!scalar(tc, "0x10").has_value()); // hex belongs to INT5
+         expect(!scalar(tc, "+1").has_value()); // leading plus belongs to INT5
+         expect(!scalar(tc, "1,\"b\":2").has_value()); // would fabricate a sibling member
+      }
+
+      // FLOAT5 carries JSON5-only float syntax, which has to be rendered rather than
+      // copied: none of these three payloads is valid JSON as written.
+      expect(scalar(6, ".5").value() == "0.5");
+      expect(scalar(6, "+1.5").value() == "1.5");
+      expect(scalar(6, "5.").value() == "5");
+      expect(!scalar(6, "1,\"b\":2").has_value());
+      expect(!scalar(6, "abc").has_value());
+   };
+
+   "jsonb_to_json rejects a non-text object key"_test = [] {
+      // A key slot holding anything but a text type would be emitted as a bare unquoted
+      // key, e.g. {{}:false}.
+      auto object_with_key = [](uint8_t key_type) {
+         std::string members;
+         members.push_back(static_cast<char>((0u << 4) | key_type)); // empty payload
+         members.push_back(static_cast<char>((1u << 4) | 1u)); // true, size 1
+         members.push_back('x');
+         std::string buf;
+         buf.push_back(static_cast<char>((12u << 4) | 12u)); // object, size_nibble=u8_follows
+         buf.push_back(static_cast<char>(members.size()));
+         buf += members;
+         return glz::jsonb_to_json(buf);
+      };
+
+      expect(!object_with_key(0).has_value()); // null
+      expect(!object_with_key(1).has_value()); // true
+      expect(!object_with_key(11).has_value()); // array
+      expect(!object_with_key(12).has_value()); // object
+      expect(object_with_key(7).value() == R"({"":true})"); // text keys still work
+   };
+
    "jsonb_to_json TEXT5 with \\x produces strict JSON"_test = [] {
       // TEXT5 payload "A\x20B" decodes to "A B" (space). Raw pass-through would emit
       // "A\x20B" which is invalid JSON.

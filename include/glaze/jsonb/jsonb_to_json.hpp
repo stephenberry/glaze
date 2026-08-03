@@ -14,6 +14,7 @@
 #include "glaze/json/write.hpp"
 #include "glaze/jsonb/header.hpp"
 #include "glaze/jsonb/text_decode.hpp"
+#include "glaze/util/fast_float.hpp"
 
 namespace glz
 {
@@ -26,6 +27,129 @@ namespace glz
       {
          const sv s{data, size};
          to<JSON, sv>::template op<Opts>(s, ctx, out, ix);
+      }
+
+      // The spec marks several payloads as "already valid JSON text" so that a converter can
+      // copy them into the output document rather than re-encoding them. A blob from a
+      // foreign producer need not honor that, and a payload that does not is not merely
+      // rendered wrong: it is spliced into the document as structure, so a single scalar can
+      // introduce object members that were never in the blob. The two predicates below check
+      // the claim before any such copy.
+
+      // True if [data, data+size) can stand verbatim as the body of a JSON string literal
+      // (RFC 8259 section 7): no raw control character, no unescaped quote, and every
+      // backslash introduces a well-formed escape. Surrogate escapes have to be properly
+      // paired, matching what decode_json_escape enforces on the reader side.
+      [[nodiscard]] inline bool is_json_string_body(const char* data, size_t size) noexcept
+      {
+         // Reads the four hex digits at [pos, pos+4), or -1 if they are not all hex.
+         auto hex4 = [&](size_t pos) -> int32_t {
+            if (size - pos < 4) {
+               return -1;
+            }
+            uint32_t v = 0;
+            for (size_t k = 0; k < 4; ++k) {
+               const auto h = static_cast<uint8_t>(data[pos + k]);
+               uint32_t d;
+               if (h >= '0' && h <= '9')
+                  d = h - '0';
+               else if (h >= 'a' && h <= 'f')
+                  d = h - 'a' + 10;
+               else if (h >= 'A' && h <= 'F')
+                  d = h - 'A' + 10;
+               else
+                  return -1;
+               v = (v << 4) | d;
+            }
+            return static_cast<int32_t>(v);
+         };
+
+         for (size_t i = 0; i < size; ++i) {
+            const auto c = static_cast<uint8_t>(data[i]);
+            if (c < 0x20 || c == '"') {
+               return false;
+            }
+            if (c == '\\') {
+               if (++i >= size) {
+                  return false;
+               }
+               switch (data[i]) {
+               case '"':
+               case '\\':
+               case '/':
+               case 'b':
+               case 'f':
+               case 'n':
+               case 'r':
+               case 't':
+                  break;
+               case 'u': {
+                  const int32_t cp = hex4(i + 1);
+                  if (cp < 0) {
+                     return false;
+                  }
+                  i += 4;
+                  if (cp >= 0xDC00 && cp <= 0xDFFF) {
+                     return false; // low surrogate without a preceding high one
+                  }
+                  if (cp >= 0xD800 && cp <= 0xDBFF) {
+                     // A high surrogate has to be followed by \uDC00..\uDFFF.
+                     if (size - i < 7 || data[i + 1] != '\\' || data[i + 2] != 'u') {
+                        return false;
+                     }
+                     const int32_t low = hex4(i + 3);
+                     if (low < 0xDC00 || low > 0xDFFF) {
+                        return false;
+                     }
+                     i += 6;
+                  }
+                  break;
+               }
+               default:
+                  return false;
+               }
+            }
+         }
+         return true;
+      }
+
+      // True if [data, data+size) is a complete RFC 8259 section 6 number.
+      [[nodiscard]] inline bool is_json_number(const char* data, size_t size) noexcept
+      {
+         size_t i = 0;
+         auto digits = [&] {
+            const size_t start = i;
+            while (i < size && data[i] >= '0' && data[i] <= '9') {
+               ++i;
+            }
+            return i > start;
+         };
+
+         if (i < size && data[i] == '-') {
+            ++i;
+         }
+         if (i < size && data[i] == '0') {
+            ++i; // a leading zero may not be followed by more integer digits
+         }
+         else if (!digits()) {
+            return false;
+         }
+         if (i < size && data[i] == '.') {
+            ++i;
+            if (!digits()) {
+               return false;
+            }
+         }
+         if (i < size && (data[i] == 'e' || data[i] == 'E')) {
+            ++i;
+            if (i < size && (data[i] == '+' || data[i] == '-')) {
+               ++i;
+            }
+            if (!digits()) {
+               return false;
+            }
+         }
+         return i == size;
       }
 
       // Emit a string whose bytes are already a valid JSON string literal body (i.e. with
@@ -59,6 +183,15 @@ namespace glz
                out[ix++] = static_cast<typename std::decay_t<B>::value_type>(',');
             }
             first = false;
+            if (close == '}') {
+               // An object key has to be one of the text types (7..10). Any other type here
+               // would be rendered as a bare unquoted key, e.g. `{{}:false}`.
+               const uint8_t key_type = jsonb::get_type(static_cast<uint8_t>(*it));
+               if (key_type < jsonb::type::text || key_type > jsonb::type::textraw) [[unlikely]] {
+                  ctx.error = error_code::syntax_error;
+                  return;
+               }
+            }
             jsonb_to_json_value<Opts>(ctx, it, stop, out, ix, depth);
             if (bool(ctx.error)) return;
 
@@ -124,7 +257,13 @@ namespace glz
             return;
          case jsonb::type::int_:
          case jsonb::type::float_: {
-            // Already valid JSON number text.
+            // Already valid JSON number text, so the payload is copied rather than parsed
+            // and re-rendered, which keeps the blob's exact decimal representation. Confirm
+            // the claim first: the blob is untrusted.
+            if (!is_json_number(reinterpret_cast<const char*>(payload), static_cast<size_t>(sz))) [[unlikely]] {
+               ctx.error = error_code::parse_number_failure;
+               return;
+            }
             if (!ensure_space(ctx, out, ix + sz + write_padding_bytes)) return;
             if (sz) std::memcpy(&out[ix], payload, sz);
             ix += sz;
@@ -190,32 +329,44 @@ namespace glz
                ix += 6;
                return;
             }
-            // Otherwise, best effort: strip leading '+'.
+            // What is left is JSON5 float syntax that strict JSON does not share, so parse it
+            // and re-render rather than copying it out. A leading '+' or '.' and a trailing
+            // '.' are all legal here and none of them are legal JSON. Mirrors the reader's
+            // parse_float_payload in jsonb/read.hpp, including its use of fast_float over
+            // std::from_chars for the floating-point overload.
             const char* p = s.data();
             const char* e = p + s.size();
             if (p < e && *p == '+') ++p;
-            const size_t n = static_cast<size_t>(e - p);
-            if (!ensure_space(ctx, out, ix + n + write_padding_bytes)) return;
-            if (n) std::memcpy(&out[ix], p, n);
-            ix += n;
+            double d{};
+            auto [ptr, ec] = glz::fast_float::from_chars(p, e, d);
+            if (ec != std::errc{} || ptr != e) [[unlikely]] {
+               ctx.error = error_code::parse_number_failure;
+               return;
+            }
+            to<JSON, double>::template op<Opts>(d, ctx, out, ix);
             return;
          }
          case jsonb::type::text:
-            // Spec: TEXT payload is already a valid JSON string body (no control chars,
-            // no unescaped " or \), so wrap in quotes and memcpy — no scan needed.
-            emit_json_escaped_body(ctx, reinterpret_cast<const char*>(payload), static_cast<size_t>(sz), out, ix);
+         case jsonb::type::textj: {
+            // Spec: a TEXT or TEXTJ payload is already a valid JSON string body (no control
+            // chars, no unescaped " or \), so wrap in quotes and memcpy — no unescaping
+            // needed. The blob is untrusted, so confirm it holds to that before copying it
+            // out. Decoding the escapes would not be enough on its own: an unescaped quote
+            // is not an escape error, it just ends the string a character early.
+            const auto* body = reinterpret_cast<const char*>(payload);
+            const auto n = static_cast<size_t>(sz);
+            if (!is_json_string_body(body, n)) [[unlikely]] {
+               ctx.error = error_code::syntax_error;
+               return;
+            }
+            emit_json_escaped_body(ctx, body, n, out, ix);
             return;
+         }
          case jsonb::type::textraw:
             // Raw bytes that may require escaping — run through the JSON string writer.
             emit_raw_string_as_json<Opts>(ctx, reinterpret_cast<const char*>(payload), static_cast<size_t>(sz), out,
                                           ix);
             return;
-         case jsonb::type::textj: {
-            // TEXTJ payload is already a valid JSON string body by spec. Emitting it
-            // verbatim wrapped in quotes is correct.
-            emit_json_escaped_body(ctx, reinterpret_cast<const char*>(payload), static_cast<size_t>(sz), out, ix);
-            return;
-         }
          case jsonb::type::text5: {
             // TEXT5 payloads may contain JSON5-only escapes (\xNN, \', \v, \0, line
             // continuations) that are not valid JSON. Decode to raw UTF-8 and re-emit via
