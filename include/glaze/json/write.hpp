@@ -768,10 +768,7 @@ namespace glz
       {
          if constexpr (check_string_as_number(Opts)) {
             const sv str = [&]() -> const sv {
-               if constexpr (!char_array_t<T> && std::is_pointer_v<std::decay_t<T>>) {
-                  return value ? value : "";
-               }
-               else if constexpr (array_char_t<T>) {
+               if constexpr (array_char_t<T>) {
                   const auto* start = value.data();
                   const auto* end = static_cast<const char*>(std::memchr(start, '\0', value.size()));
                   return sv{start, end ? size_t(end - start) : value.size()};
@@ -780,7 +777,7 @@ namespace glz
                   return sv{reinterpret_cast<const char*>(value.data()), value.size()};
                }
                else {
-                  return sv{value};
+                  return str_view<T>(value);
                }
             }();
             if (!ensure_space(ctx, b, ix + str.size() + write_padding_bytes)) [[unlikely]] {
@@ -833,14 +830,11 @@ namespace glz
          else {
             if constexpr (check_raw_string(Opts)) {
                const sv str = [&]() -> const sv {
-                  if constexpr (!char_array_t<T> && std::is_pointer_v<std::decay_t<T>>) {
-                     return value ? value : "";
-                  }
-                  else if constexpr (u8str_t<T>) {
+                  if constexpr (u8str_t<T>) {
                      return sv{reinterpret_cast<const char*>(value.data()), value.size()};
                   }
                   else {
-                     return sv{value};
+                     return str_view<T>(value);
                   }
                }();
 
@@ -867,17 +861,14 @@ namespace glz
             }
             else {
                const sv str = [&]() -> const sv {
-                  if constexpr (!char_array_t<T> && std::is_pointer_v<std::decay_t<T>>) {
-                     return value ? value : "";
-                  }
-                  else if constexpr (array_char_t<T>) {
+                  if constexpr (array_char_t<T>) {
                      return sv{value.data(), value.size()};
                   }
                   else if constexpr (u8str_t<T>) {
                      return sv{reinterpret_cast<const char*>(value.data()), value.size()};
                   }
                   else {
-                     return sv{value};
+                     return str_view<T>(value);
                   }
                }();
                const auto n = str.size();

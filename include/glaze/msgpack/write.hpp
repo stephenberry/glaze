@@ -585,21 +585,7 @@ namespace glz
       template <auto Opts, class Value, is_context Ctx, class B, class IX>
       GLZ_ALWAYS_INLINE static void op(Value&& value, Ctx&& ctx, B&& b, IX&& ix)
       {
-         const sv str = [&]() -> const sv {
-            if constexpr (!char_array_t<T> && std::is_pointer_v<std::decay_t<T>>) {
-               return value ? value : "";
-            }
-            else if constexpr (has_data<T> && has_size<T>) {
-               // Prefer the explicit bounds over a string_view conversion. A type may reach `str_t`
-               // through an `operator const char*`, which would silently truncate at the first
-               // embedded null and desync writing from reading, since reading always stores through
-               // `assign`/`data`. Standard string types agree either way.
-               return sv{value.data(), value.size()};
-            }
-            else {
-               return sv{value};
-            }
-         }();
+         const sv str = str_view<T>(value);
 
          if (!msgpack::detail::write_str_header(ctx, str.size(), b, ix)) [[unlikely]] {
             return;
