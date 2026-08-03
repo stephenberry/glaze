@@ -6,6 +6,7 @@
 #include <bitset>
 #include <chrono>
 #include <complex>
+#include <ctime>
 #include <deque>
 #include <expected>
 #include <list>
@@ -4757,14 +4758,19 @@ suite beve_v2_variant_resolution = [] {
       // (256), one level per nested object. Each buffer is read many times so the ratio does not
       // rest on a single sub-millisecond sample.
       //
-      // The growth is then measured as the median of several rounds rather than from one sample of
-      // each depth. Timing each depth once put the ratio at 8.6x on a busy CI runner, close enough
-      // to the 8x threshold to fail a build that had not touched this code path. Both depths are
-      // timed back-to-back within a round so that interference lands on numerator and denominator
-      // together and largely divides out; the median then discards whichever rounds it skewed
-      // anyway. Note that taking the fastest round of each depth separately does not work here --
-      // the shallow loop is a quarter of the work and finds a clean window far more easily than
-      // the deep one, so independent minima bias the ratio apart instead of converging it.
+      // The clock is process CPU time rather than wall time, because ctest runs this binary
+      // alongside two others and a loaded machine deschedules the loops. Wall time counts that
+      // waiting and the ratio stops describing the code: a three-way run on a macOS CI runner read
+      // 12.0x on a commit that touched only write paths, which is indistinguishable from the ~13x
+      // of a genuinely quadratic reader. CPU time excludes the waiting, and holds 3.1-4.9x against
+      // the quadratic reader's 10.5-13.9x even when the machine is oversubscribed six to one.
+      //
+      // The growth is then the median of several rounds rather than one sample of each depth. Both
+      // depths are timed back-to-back within a round so that whatever interference remains lands on
+      // numerator and denominator together and largely divides out; the median then discards
+      // whichever rounds it skewed anyway. The median and not the minimum: noise inflates a
+      // denominator as readily as a numerator, and a low outlier is how a real regression would
+      // slip through. On wall time the quadratic reader's cheapest loaded round already read 8.0x.
       auto build = [](int depth) {
          deep_v v{deep_leaf{1}};
          for (int i = 0; i < depth; ++i) {
@@ -4777,13 +4783,13 @@ suite beve_v2_variant_resolution = [] {
       };
       constexpr int reps = 200;
       constexpr int rounds = 5; // odd, so the median is the middle element
-      auto bench_ms = [](const std::string& buf, int n) {
-         const auto t0 = std::chrono::steady_clock::now();
+      auto bench_cpu_ms = [](const std::string& buf, int n) {
+         const auto c0 = std::clock();
          for (int i = 0; i < n; ++i) {
             deep_v out{};
             (void)glz::read_beve(out, buf);
          }
-         return std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
+         return 1000.0 * double(std::clock() - c0) / double(CLOCKS_PER_SEC);
       };
       const auto shallow = build(50);
       const auto deep = build(200); // 4x the depth
@@ -4792,17 +4798,17 @@ suite beve_v2_variant_resolution = [] {
          deep_v out{};
          expect(not glz::read_beve(out, deep));
       }
-      bench_ms(shallow, reps / 4); // warm both paths before timing
-      bench_ms(deep, reps / 4);
+      bench_cpu_ms(shallow, reps / 4); // warm both paths before timing
+      bench_cpu_ms(deep, reps / 4);
       std::array<double, rounds> growth{};
       for (auto& g : growth) {
-         const auto t_shallow = bench_ms(shallow, reps);
-         const auto t_deep = bench_ms(deep, reps);
+         const auto t_shallow = bench_cpu_ms(shallow, reps);
+         const auto t_deep = bench_cpu_ms(deep, reps);
          g = t_deep / t_shallow;
       }
       std::ranges::sort(growth);
       const auto median_growth = growth[rounds / 2];
-      // Measured 3.9-4.1x linear against 13.3-14.2x quadratic, so 8x separates them with margin.
+      // Measured 3.9-4.1x linear against 12.5-12.8x quadratic, so 8x separates them with margin.
       expect(median_growth < 8.0) << "read time grew " << median_growth << "x for 4x the depth";
 
       // Past the limit, every level fails identically. Each of the variant reader's recovery paths
