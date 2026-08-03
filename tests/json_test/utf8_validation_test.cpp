@@ -740,9 +740,13 @@ suite validate_utf8_option = [] {
       }
       {
          std::vector<std::u8string> v;
+         // Spelled out as code units rather than u8"a\xFF!b": MSVC treats a hex escape in a UTF-8
+         // literal as a code point and encodes it (0xFF becomes 0xC3 0xBF), while GCC and Clang
+         // emit the single byte. Only the byte sequence below is the same on all three.
+         const std::u8string expected{char8_t{'a'}, char8_t{0xFF}, char8_t{'!'}, char8_t{'b'}};
          expect(glz::read_json(v, doc) == glz::error_code::invalid_utf8);
          expect(!glz::read<unchecked_opts{}>(v, doc));
-         expect(v[0] == std::u8string{u8"a\xFF!b"});
+         expect(v[0] == expected);
       }
       {
          glz::generic g;
