@@ -1215,6 +1215,8 @@ By default Glaze is strictly conformant with the latest JSON standard except in 
 - `validate_trailing_whitespace`
   This option validates the trailing whitespace in a parsed document. Because Glaze parses C++ structs, there is typically no need to continue parsing after the object of interest has been read. Turn on this option if you want to ensure that the rest of the document has valid whitespace, otherwise Glaze will just ignore the content after the content of interest has been parsed.
 
+UTF-8 encoding is validated on read, as RFC 8259 section 8.1 requires. The `validate_utf8` option turns this off for input whose encoding is already guaranteed, at the cost of conformance. See [UTF-8 Validation](https://stephenberry.github.io/glaze/json/#utf-8-validation).
+
 > [!NOTE]
 >
 > By default, Glaze does not unicode escape control characters (e.g. `"\x1f"` to `"\u001f"`), as this poses a risk of embedding null characters and other invisible characters in strings. The compile time option `escape_control_characters` is available for those who desire to write out control characters as escaped unicode in strings.

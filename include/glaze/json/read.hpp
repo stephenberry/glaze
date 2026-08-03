@@ -183,7 +183,7 @@ namespace glz
          skip_string_view(ctx, it, end);
          if (bool(ctx.error)) [[unlikely]]
             return;
-         if (validate_utf8_span(ctx, start, it)) [[unlikely]]
+         if (validate_utf8_span<Opts>(ctx, start, it)) [[unlikely]]
             return;
          const sv key = {start, size_t(it - start)};
          ++it;
@@ -381,7 +381,7 @@ namespace glz
             }
             else {
                // it sits one past the closing quote, so the raw key spans [key_start, it - 1)
-               if (validate_utf8_span(ctx, key_start, it - 1)) [[unlikely]] {
+               if (validate_utf8_span<Opts>(ctx, key_start, it - 1)) [[unlikely]] {
                   return;
                }
                const sv key{key_start, size_t(it - key_start - 1)};
@@ -495,7 +495,7 @@ namespace glz
                skip_string_view(ctx, it, end);
                if (bool(ctx.error)) [[unlikely]]
                   return;
-               if (validate_utf8_span(ctx, start, it)) [[unlikely]]
+               if (validate_utf8_span<Opts>(ctx, start, it)) [[unlikely]]
                   return;
                const sv key = {start, size_t(it - start)};
                ++it; // skip the quote
@@ -987,7 +987,7 @@ namespace glz
                   }
                }
 
-               if (validate_utf8_span(ctx, start, it, ascii_acc)) [[unlikely]] {
+               if (validate_utf8_span<Opts>(ctx, start, it, ascii_acc)) [[unlikely]] {
                   return;
                }
 
@@ -1068,7 +1068,7 @@ namespace glz
                if (bool(ctx.error)) [[unlikely]]
                   return;
 
-               if (validate_utf8_span(ctx, start, it)) [[unlikely]] {
+               if (validate_utf8_span<Opts>(ctx, start, it)) [[unlikely]] {
                   return;
                }
 
@@ -1169,7 +1169,7 @@ namespace glz
 
                continue_decode:
 
-                  if (validate_utf8_span(ctx, start, it, ascii_acc)) [[unlikely]] {
+                  if (validate_utf8_span<Opts>(ctx, start, it, ascii_acc)) [[unlikely]] {
                      return;
                   }
 
@@ -1304,7 +1304,7 @@ namespace glz
                   while (it < end) [[likely]] {
                      *p = *it;
                      if (*it == '"') {
-                        if (validate_utf8_span(ctx, utf8_start, it)) [[unlikely]] {
+                        if (validate_utf8_span<Opts>(ctx, utf8_start, it)) [[unlikely]] {
                            return;
                         }
                         const size_t n = size_t(p - buffer.data());
@@ -1372,7 +1372,7 @@ namespace glz
                if (bool(ctx.error)) [[unlikely]]
                   return;
 
-               if (validate_utf8_span(ctx, start, it)) [[unlikely]] {
+               if (validate_utf8_span<Opts>(ctx, start, it)) [[unlikely]] {
                   return;
                }
 
@@ -1448,7 +1448,7 @@ namespace glz
                   }
                }
 
-               if (validate_utf8_span(ctx, start, it, ascii_acc)) [[unlikely]] {
+               if (validate_utf8_span<Opts>(ctx, start, it, ascii_acc)) [[unlikely]] {
                   return;
                }
 
@@ -1529,7 +1529,7 @@ namespace glz
                if (bool(ctx.error)) [[unlikely]]
                   return;
 
-               if (validate_utf8_span(ctx, start, it)) [[unlikely]] {
+               if (validate_utf8_span<Opts>(ctx, start, it)) [[unlikely]] {
                   return;
                }
 
@@ -1630,7 +1630,7 @@ namespace glz
 
                continue_decode_u8:
 
-                  if (validate_utf8_span(ctx, start, it, ascii_acc)) [[unlikely]] {
+                  if (validate_utf8_span<Opts>(ctx, start, it, ascii_acc)) [[unlikely]] {
                      return;
                   }
 
@@ -1765,7 +1765,7 @@ namespace glz
                   while (it < end) [[likely]] {
                      *p = *it;
                      if (*it == '"') {
-                        if (validate_utf8_span(ctx, utf8_start, it)) [[unlikely]] {
+                        if (validate_utf8_span<Opts>(ctx, utf8_start, it)) [[unlikely]] {
                            return;
                         }
                         value.assign(reinterpret_cast<const char8_t*>(buffer.data()), size_t(p - buffer.data()));
@@ -1829,7 +1829,7 @@ namespace glz
                if (bool(ctx.error)) [[unlikely]]
                   return;
 
-               if (validate_utf8_span(ctx, start, it)) [[unlikely]] {
+               if (validate_utf8_span<Opts>(ctx, start, it)) [[unlikely]] {
                   return;
                }
 
@@ -1920,7 +1920,7 @@ namespace glz
          if (bool(ctx.error)) [[unlikely]]
             return;
 
-         if (validate_utf8_span(ctx, start, it)) [[unlikely]] {
+         if (validate_utf8_span<Opts>(ctx, start, it)) [[unlikely]] {
             return;
          }
 
@@ -3128,7 +3128,7 @@ namespace glz
                   skip_string_view(ctx, it, end);
                   if (bool(ctx.error)) [[unlikely]]
                      return;
-                  if (validate_utf8_span(ctx, start, it)) [[unlikely]]
+                  if (validate_utf8_span<Opts>(ctx, start, it)) [[unlikely]]
                      return;
                   const sv key{start, size_t(it - start)};
                   ++it;
@@ -3317,7 +3317,7 @@ namespace glz
                      skip_string_view(ctx, it, end);
                      if (bool(ctx.error)) [[unlikely]]
                         return;
-                     if (validate_utf8_span(ctx, start, it)) [[unlikely]]
+                     if (validate_utf8_span<Opts>(ctx, start, it)) [[unlikely]]
                         return;
                      const sv key{start, size_t(it - start)};
                      ++it;
@@ -3383,7 +3383,7 @@ namespace glz
                      skip_string_view(ctx, it, end);
                      if (bool(ctx.error)) [[unlikely]]
                         return;
-                     if (validate_utf8_span(ctx, start, it)) [[unlikely]]
+                     if (validate_utf8_span<Opts>(ctx, start, it)) [[unlikely]]
                         return;
                      const sv key{start, size_t(it - start)};
                      ++it;
@@ -3974,7 +3974,7 @@ namespace glz
                if (bool(ctx.error)) [[unlikely]] {
                   return false;
                }
-               if (validate_utf8_span(ctx, key_start, it)) [[unlikely]] {
+               if (validate_utf8_span<Opts>(ctx, key_start, it)) [[unlikely]] {
                   return false;
                }
                const sv key{key_start, size_t(it - key_start)};
@@ -4198,7 +4198,7 @@ namespace glz
                      skip_string_view(ctx, it, end);
                      if (bool(ctx.error)) [[unlikely]]
                         return;
-                     if (validate_utf8_span(ctx, key_start, it)) [[unlikely]]
+                     if (validate_utf8_span<Opts>(ctx, key_start, it)) [[unlikely]]
                         return;
                      const sv key = {key_start, size_t(it - key_start)};
 
