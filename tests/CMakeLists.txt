@@ -26,6 +26,12 @@ list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/../cmake")
 include(glaze-asio)
 glaze_setup_asio()
 
+# ASIO requires Winsock libraries on Windows.
+# MSVC auto-links via #pragma comment(lib, ...) but MinGW requires explicit linking.
+if(WIN32)
+    target_link_libraries(glz_asio INTERFACE ws2_32 mswsock)
+endif()
+
 include(../cmake/code-coverage.cmake)
 add_code_coverage_all_targets()
 
