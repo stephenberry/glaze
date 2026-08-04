@@ -1338,8 +1338,14 @@ suite converter_tests = [] {
          return glz::jsonb_to_json(buf);
       };
 
-      expect(scalar(10, "a\x1c" "b").value() == R"("a\u001Cb")"); // TEXTRAW
-      expect(scalar(9, "a\x1c" "b").value() == R"("a\u001Cb")"); // TEXT5
+      expect(scalar(10,
+                    "a\x1c"
+                    "b")
+                .value() == R"("a\u001Cb")"); // TEXTRAW
+      expect(scalar(9,
+                    "a\x1c"
+                    "b")
+                .value() == R"("a\u001Cb")"); // TEXT5
       expect(scalar(10, std::string("a\0b", 3)).value() == R"("a\u0000b")");
       // The escapes with short forms still use them.
       expect(scalar(10, "a\nb").value() == R"("a\nb")");
@@ -1403,9 +1409,13 @@ suite converter_tests = [] {
          return glz::jsonb_to_json(buf);
       };
 
-      const std::string lone_ff = "a\xff" "b"; // 0xFF never appears in well-formed UTF-8
+      const std::string lone_ff =
+         "a\xff"
+         "b"; // 0xFF never appears in well-formed UTF-8
       const std::string truncated = "a\xc3"; // 2-byte sequence cut short by the payload end
-      const std::string valid = "a\xc3\xa9" "b"; // U+00E9 as a well-formed 2-byte sequence
+      const std::string valid =
+         "a\xc3\xa9"
+         "b"; // U+00E9 as a well-formed 2-byte sequence
 
       for (const uint8_t tc : {uint8_t(7), uint8_t(8), uint8_t(9), uint8_t(10)}) {
          expect(!scalar(tc, lone_ff).has_value());
@@ -1426,7 +1436,9 @@ suite converter_tests = [] {
       };
 
       std::string buf;
-      const std::string payload = "a\xff" "b";
+      const std::string payload =
+         "a\xff"
+         "b";
       buf.push_back(static_cast<char>((payload.size() << 4) | 7u)); // TEXT
       buf += payload;
 

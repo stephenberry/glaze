@@ -386,8 +386,7 @@ namespace glz
             // Drop a leading '+' only when a number could actually follow it, so that a
             // payload like "+-1.5" is left intact and rejected below rather than quietly
             // becoming "-1.5".
-            if (body.size() > 1 && body.front() == '+' &&
-                ((body[1] >= '0' && body[1] <= '9') || body[1] == '.')) {
+            if (body.size() > 1 && body.front() == '+' && ((body[1] >= '0' && body[1] <= '9') || body[1] == '.')) {
                body.remove_prefix(1);
             }
 
