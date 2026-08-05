@@ -1461,6 +1461,12 @@ namespace glz
       auto frac_start_it = end;
       if (it != end && *it == '0') {
          ++it;
+         // RFC 8259 section 6: number = [ minus ] int [ frac ] [ exp ]. The exponent may follow
+         // the integer part directly, with no fractional part in between (e.g. "0e4").
+         if (it != end && (*it | ('E' ^ 'e')) == 'e') {
+            ++it;
+            goto exp_start;
+         }
          if (it == end || *it != '.') {
             return;
          }
