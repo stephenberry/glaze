@@ -96,6 +96,17 @@ struct glz::meta<atom_rw>
 static_assert(glz::write_supported<my_struct_meta, glz::EETF>);
 static_assert(glz::read_supported<my_struct_meta, glz::EETF>);
 
+namespace
+{
+
+   auto expect_unexpected_end = [](const auto& buffer) {
+      std::string json{};
+      const auto ec = glz::eetf_to_json(buffer, json);
+      expect(ec.ec == glz::error_code::unexpected_end);
+   };
+
+}
+
 suite etf_tests = [] {
    "read_map_term"_test = [] {
       trace.begin("read_map_term");
@@ -436,12 +447,6 @@ suite eetf_to_json_tests = [] {
    };
 
    "eetf_to_json truncated small big integer"_test = [] {
-      auto expect_unexpected_end = [](const auto& buffer) {
-         std::string json{};
-         const auto ec = glz::eetf_to_json(buffer, json);
-         expect(ec.ec == glz::error_code::unexpected_end);
-      };
-
       const std::array<std::uint8_t, 2> missing_size{uint8_t(glz::eetf_magic_version), uint8_t(ERL_SMALL_BIG_EXT)};
       const std::array<std::uint8_t, 3> missing_sign{uint8_t(glz::eetf_magic_version), uint8_t(ERL_SMALL_BIG_EXT), 1};
       const std::array<std::uint8_t, 4> missing_digits{uint8_t(glz::eetf_magic_version), uint8_t(ERL_SMALL_BIG_EXT), 8,
@@ -464,12 +469,6 @@ suite eetf_to_json_tests = [] {
    };
 
    "eetf_to_json truncated map"_test = [] {
-      auto expect_unexpected_end = [](const auto& buffer) {
-         std::string json{};
-         const auto ec = glz::eetf_to_json(buffer, json);
-         expect(ec.ec == glz::error_code::unexpected_end);
-      };
-
       // ERL_MAP_EXT declares arity 1 but the buffer ends before any key/value entry.
       const std::array<std::uint8_t, 6> missing_entries{
          uint8_t(glz::eetf_magic_version), uint8_t(ERL_MAP_EXT), 0, 0, 0, 1};
@@ -524,12 +523,6 @@ suite eetf_to_json_tests = [] {
    };
 
    "eetf_to_json truncated scalar"_test = [] {
-      auto expect_unexpected_end = [](const auto& buffer) {
-         std::string json{};
-         const auto ec = glz::eetf_to_json(buffer, json);
-         expect(ec.ec == glz::error_code::unexpected_end);
-      };
-
       // Numeric tags whose fixed payload is cut off after the tag: ei_decode_long/double must not
       // read it off the raw pointer before the bounds check.
       const std::array<std::uint8_t, 2> small_int{uint8_t(glz::eetf_magic_version), uint8_t(ERL_SMALL_INTEGER_EXT)};
@@ -547,12 +540,6 @@ suite eetf_to_json_tests = [] {
    };
 
    "eetf_to_json truncated container header"_test = [] {
-      auto expect_unexpected_end = [](const auto& buffer) {
-         std::string json{};
-         const auto ec = glz::eetf_to_json(buffer, json);
-         expect(ec.ec == glz::error_code::unexpected_end);
-      };
-
       // Container tags whose 1- or 4-byte arity is cut off after the tag: decode_*_header must not
       // read it off the raw pointer before the bounds check.
       const std::array<std::uint8_t, 2> list{uint8_t(glz::eetf_magic_version), uint8_t(ERL_LIST_EXT)};
@@ -616,6 +603,97 @@ suite eetf_to_json_tests = [] {
             std::string_view{buffer.data() + curr, static_cast<size_t>(index - curr)}, json));
          expect(json == std::format(R"({{"a":{}}})", idx));
       }
+   };
+
+   "eetf_to_json empty binary"_test = [] {
+      const std::array<std::uint8_t, 6> buffer{
+         uint8_t(glz::eetf_magic_version), uint8_t(ERL_BINARY_EXT), 0x0, 0x0, 0x0, 0x0};
+
+      std::string json{};
+      expect(!glz::eetf_to_json(buffer, json));
+      expect(json == "\"\"") << json;
+   };
+
+   "eetf_to_json 1-byte binary"_test = [] {
+      std::array<std::uint8_t, 7> buffer{
+         uint8_t(glz::eetf_magic_version), uint8_t(ERL_BINARY_EXT), 0x0, 0x0, 0x0, 0x1, 0};
+
+      std::string json{};
+      expect(!glz::eetf_to_json<glz::eetf::eetf_opts{.binary_as_base64 = true}>(buffer, json));
+      expect(json == "\"AA==\"") << json;
+
+      buffer[6] = '0';
+      expect(!glz::eetf_to_json<glz::eetf::eetf_opts{.binary_as_base64 = true}>(buffer, json));
+      expect(json == "\"MA==\"") << json;
+   };
+
+   "eetf_to_json check big-endian size"_test = [] {
+      constexpr std::array<std::uint8_t, 1006> buffer{
+         uint8_t(glz::eetf_magic_version), uint8_t(ERL_BINARY_EXT), 0, 0, 0x03, 0xE8};
+      std::string json{};
+      expect(!glz::eetf_to_json(buffer, json));
+   };
+
+   "eetf_to_json truncated binary"_test = [] {
+      constexpr std::array<std::uint8_t, 2> no_size{uint8_t(glz::eetf_magic_version), uint8_t(ERL_BINARY_EXT)};
+      constexpr std::array<std::uint8_t, 3> truncated_size{uint8_t(glz::eetf_magic_version), uint8_t(ERL_BINARY_EXT),
+                                                          0x1};
+      constexpr std::array<std::uint8_t, 6> truncated_body{
+         uint8_t(glz::eetf_magic_version), uint8_t(ERL_BINARY_EXT), 0x0, 0x0, 0x0, 0x1};
+
+      expect_unexpected_end(no_size);
+      expect_unexpected_end(truncated_size);
+      expect_unexpected_end(truncated_body);
+   };
+
+   "eetf_to_json binary key map"_test = [] {
+      constexpr std::array<std::uint8_t, 18> buffer{uint8_t(glz::eetf_magic_version),
+                                                uint8_t(ERL_MAP_EXT),
+                                                0,
+                                                0,
+                                                0,
+                                                1,
+                                                uint8_t(ERL_BINARY_EXT),
+                                                0,
+                                                0,
+                                                0,
+                                                1,
+                                                'a',
+                                                uint8_t(ERL_BINARY_EXT),
+                                                0,
+                                                0,
+                                                0,
+                                                1,
+                                                '1'};
+
+      std::string json{};
+      expect(!glz::eetf_to_json(buffer, json));
+      expect(json == R"({"a":"1"})") << json;
+   };
+
+   "eetf_to_json binary key map explicit convert"_test = [] {
+      constexpr std::array<std::uint8_t, 18> buffer{uint8_t(glz::eetf_magic_version),
+                                                uint8_t(ERL_MAP_EXT),
+                                                0,
+                                                0,
+                                                0,
+                                                1,
+                                                uint8_t(ERL_BINARY_EXT),
+                                                0,
+                                                0,
+                                                0,
+                                                1,
+                                                '0',
+                                                uint8_t(ERL_BINARY_EXT),
+                                                0,
+                                                0,
+                                                0,
+                                                1,
+                                                1};
+
+      std::string json{};
+      expect(!glz::eetf_to_json(buffer, json));
+      expect(json == "{\"0\":\"\001\"}") << json;
    };
 };
 

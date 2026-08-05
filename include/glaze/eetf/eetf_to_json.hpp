@@ -6,6 +6,7 @@
 #include <cstdint>
 #include <cstring>
 
+#include "glaze/base64/base64.hpp"
 #include "glaze/eetf/ei.hpp"
 #include "glaze/eetf/opts.hpp"
 #include "glaze/json/write.hpp"
@@ -27,6 +28,16 @@ namespace glz
          if (check_invalid_offset(ctx, it, end, 2)) return 0;
          const std::size_t b1 = std::size_t(static_cast<uint8_t>(*it++)) << 8;
          return b1 | static_cast<uint8_t>(*it++);
+      }
+
+      template <class It0, class It1>
+      GLZ_ALWAYS_INLINE size_t get32be(auto&& ctx, It0&& it, It1&& end) noexcept
+      {
+         if (check_invalid_offset(ctx, it, end, sizeof(uint32_t))) return 0;
+         const std::size_t b1 = std::size_t(static_cast<uint8_t>(*it++)) << 24;
+         const std::size_t b2 = std::size_t(static_cast<uint8_t>(*it++)) << 16;
+         const std::size_t b3 = std::size_t(static_cast<uint8_t>(*it++)) << 8;
+         return b1 | b2 | b3 | static_cast<uint8_t>(*it++);
       }
 
       template <auto Opts, typename I>
@@ -233,9 +244,9 @@ namespace glz
                // is_string/is_atom accept the raw, un-normalized tag, and term_to_json_value re-reads
                // and bounds-checks the full key below. Widen to int so the tag clears the int_t
                // constraint on is_string/is_atom (uint8_t is a char type and would be rejected).
-               const int key_type = uint8_t(*it);
+               const auto key_type = uint8_t(*it);
                // support only string or atom keys in json
-               if (!eetf::is_string(key_type) && !eetf::is_atom(key_type)) {
+               if (!(eetf::is_string(key_type) || eetf::is_atom(key_type) || eetf::is_binary(key_type))) {
                   ctx.error = error_code::syntax_error;
                   ctx.custom_error_message = "unsupported key type";
                   return;
@@ -267,8 +278,33 @@ namespace glz
             break;
          }
 
+         case ERL_BINARY_EXT: {
+            ++it; // skip type
+            const size_t len = get32be(ctx, it, end);
+            if (bool(ctx.error)) [[unlikely]] {
+               return;
+            }
+            // bound binary length
+            if (check_invalid_offset(ctx, it, end, len)) return;
+            if constexpr (check_binary_as_base64(Opts)) {
+               dump('"', out, ix);
+               glz::write_base64_to(ctx, reinterpret_cast<const uint8_t*>(it), len, out, ix);
+               if (bool(ctx.error)) [[unlikely]] {
+                  return;
+               }
+               dump('"', out, ix);
+            }
+            else {
+               const sv value{reinterpret_cast<const char*>(it), len};
+               to<JSON, sv>::template op<Opts>(value, ctx, out, ix);
+            }
+            std::advance(it, len);
+            break;
+         }
+
          default: {
             ctx.error = error_code::syntax_error;
+            ctx.custom_error_message = "unsupported type";
             return;
          }
          }
