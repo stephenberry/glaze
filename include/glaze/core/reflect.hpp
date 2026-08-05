@@ -686,7 +686,7 @@ namespace glz
          }
       }
       else {
-         if constexpr (is_invocable_concrete<From>) {
+         if constexpr (is_invocable_concrete<From> || is_function_ptr_invocable<From>) {
             using Ret = invocable_result_t<From>;
             if constexpr (std::is_void_v<Ret>) {
                using Tuple = invocable_args_t<From>;
