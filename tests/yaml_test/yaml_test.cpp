@@ -4243,6 +4243,42 @@ other: *a5)";
       expect(json == R"({"key5":"value4","other":"key5"})") << json;
    };
 
+   "anchor_on_tagged_alias_key_is_rejected"_test = [] {
+      // An anchor property on an alias node is malformed, and the check for it ran before the
+      // key's tag was consumed -- so "&a !tag *a" slipped through and registered the anchor
+      // over a key span that aliased itself. Replaying that span expanded it forever.
+      // (The ']' terminates the anchor name; colons are legal inside one.)
+      for (const std::string_view yaml : {"&a ! *a]:", "&a !!str *a]: 1", "&a ! *a]: 1\nother: *a\n"}) {
+         glz::generic parsed{};
+         const auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
+         expect(ec == glz::error_code::syntax_error) << yaml;
+      }
+   };
+
+   "alias_as_tagged_mapping_key_still_parses"_test = [] {
+      // The rejection above must not swallow an alias used as a mapping key, which is valid:
+      // the alias token ends at the space, so the ':' is the key/value separator.
+      const std::string_view yaml = "a: &b x\n&c !!str *b : 1\nd: *c\n";
+      glz::generic parsed{};
+      const auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      const auto json = glz::write_json(parsed).value_or("WRITE_ERR");
+      expect(json == R"({"a":"x","*b":1,"d":"x"})") << json;
+   };
+
+   "cyclic_anchor_span_is_rejected"_test = [] {
+      // Anchors on mapping keys are registered over the key text before it is parsed, so a
+      // span can alias the name it defines. Expanding one must report a malformed document
+      // rather than recursing until the stack is gone. Covers a self-referential span, one
+      // reached through a second tag, and a mutual cycle between two anchors.
+      for (const std::string_view yaml :
+           {"&a [*a]: 1\nother: *a\n", "&a ! ! *a]: 1\nother: *a\n", "&a [*b]: 1\n&b [*a]: 2\nother: *a\n"}) {
+         glz::generic parsed{};
+         const auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
+         expect(bool(ec)) << yaml;
+      }
+   };
+
    "tag_then_anchor_on_key"_test = [] {
       std::string yaml = R"(!!str &a key: value
 other: *a)";

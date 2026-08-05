@@ -9,6 +9,7 @@
 #include <string>
 #include <string_view>
 #include <unordered_map>
+#include <utility>
 #include <vector>
 
 #include "glaze/core/common.hpp"
@@ -73,6 +74,21 @@ namespace glz::yaml
 
       std::unordered_map<std::string, anchor_span, transparent_string_hash, transparent_string_equal> anchors{};
 
+      // Anchor spans an alias is currently replaying, innermost last. An anchor is invisible to
+      // itself while it expands: a mapping key's anchor is registered over the key text before
+      // that text is parsed, so the span can hold an alias back to the name being defined, and
+      // replaying it would expand forever. Spans point into the input buffer, which outlives the
+      // read, so they stay valid even though `anchors` itself is replaced during speculation.
+      std::vector<std::pair<const char*, const char*>> active_alias_spans{};
+
+      bool alias_span_is_replaying(const char* begin, const char* end) const noexcept
+      {
+         for (const auto& [b, e] : active_alias_spans) {
+            if (b == begin && e == end) return true;
+         }
+         return false;
+      }
+
       // True while parsing the value payload of a "- item" block-sequence entry.
       // Used to distinguish indentless-sequence continuation from next sibling items.
       bool sequence_item_value_context = false;
@@ -112,6 +128,7 @@ namespace glz::yaml
          yaml_context c{};
          c.indent_stack = indent_stack;
          c.anchors = anchors;
+         c.active_alias_spans = active_alias_spans;
          c.sequence_item_value_context = sequence_item_value_context;
          c.sequence_dash_indent = sequence_dash_indent;
          c.explicit_mapping_key_context = explicit_mapping_key_context;
