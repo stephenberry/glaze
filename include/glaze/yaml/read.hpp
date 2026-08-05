@@ -239,12 +239,30 @@ namespace glz
             return true;
          }
 
-         auto& span = anchor_it->second;
+         // Copied rather than referenced: the replay below can replace ctx.anchors wholesale
+         // (a speculative parse hands its own map back), which would dangle a reference here.
+         const auto span = anchor_it->second;
 
          // Empty anchor span (anchor on null/empty node) — leave value as default
          if (span.begin == span.end) {
             return true;
          }
+
+         // An anchor is invisible to itself while it expands. A span that aliases the name it
+         // defines -- reachable because a mapping key's anchor is registered over the key text
+         // before that text is parsed -- would otherwise replay itself forever.
+         if (ctx.alias_span_is_replaying(span.begin, span.end)) [[unlikely]] {
+            ctx.error = error_code::syntax_error; // cyclic alias
+            return true;
+         }
+
+         // Replaying an anchor re-enters the reader directly, bypassing the variant reader's
+         // depth guard, so this is the only depth accounting a chain of aliases into a
+         // non-variant target gets. The cycle check above stops the unbounded case; this bounds
+         // a legitimate but deeply chained one.
+         depth_guard guard{ctx};
+         if (!guard) [[unlikely]]
+            return true;
 
          auto replay_it = span.begin;
          auto replay_end = span.end;
@@ -256,8 +274,12 @@ namespace glz
             ctx.push_indent(span.base_indent - 1);
          }
 
+         ctx.active_alias_spans.emplace_back(span.begin, span.end);
+
          using V = std::remove_cvref_t<T>;
          from<YAML, V>::template op<Opts>(std::forward<T>(value), ctx, replay_it, replay_end);
+
+         ctx.active_alias_spans.pop_back();
 
          // Restore indent context
          ctx.indent_stack = std::move(saved_indent_stack);
@@ -5696,6 +5718,15 @@ namespace glz
                            return;
                         }
                         if (*key_start == '\n' || *key_start == '\r') {
+                           ctx.error = error_code::syntax_error;
+                           return;
+                        }
+
+                        // Re-apply the anchor-on-alias rule now that the tag is consumed. The
+                        // check above ran before the tag, so "&anchor !tag *alias" reached the
+                        // key-span registration below while the untagged spelling was rejected;
+                        // an alias node carries no other properties either way.
+                        if (*key_start == '*' && !yaml::alias_token_is_mapping_key(key_start, end)) {
                            ctx.error = error_code::syntax_error;
                            return;
                         }
