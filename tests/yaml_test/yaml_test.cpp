@@ -4279,6 +4279,42 @@ other: *a5)";
       }
    };
 
+   "exponential_alias_expansion_is_bounded"_test = [] {
+      // Each anchor references the previous one eight times, so the expansion multiplies by
+      // eight per line while the document grows by 42 bytes. Nesting depth stays at two, so
+      // only the replay budget sees anything wrong. Unbounded, twelve levels is hundreds of
+      // gigabytes of nodes.
+      std::string yaml = "l0: &a0 lol\n";
+      for (int level = 1; level <= 12; ++level) {
+         yaml += "l" + std::to_string(level) + ": &a" + std::to_string(level) + " [";
+         for (int use = 0; use < 8; ++use) {
+            if (use) yaml += ',';
+            yaml += "*a" + std::to_string(level - 1);
+         }
+         yaml += "]\n";
+      }
+      glz::generic parsed{};
+      const auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
+      expect(ec == glz::error_code::exceeded_max_alias_expansion) << glz::format_error(ec, yaml);
+   };
+
+   "heavy_anchor_reuse_still_parses"_test = [] {
+      // The budget must not punish reuse, which is what anchors are for: a generated config
+      // that pulls a sizable template into thousands of entries is ordinary, and its cost
+      // tracks its own size rather than exploding.
+      std::string yaml = "tpl: &t\n";
+      for (int field = 0; field < 30; ++field) {
+         yaml += "  field" + std::to_string(field) + ": " + std::string(20, 'v') + "\n";
+      }
+      for (int job = 0; job < 5000; ++job) {
+         yaml += "job" + std::to_string(job) + ": *t\n";
+      }
+      glz::generic parsed{};
+      const auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(parsed.size() == 5001);
+   };
+
    "tag_then_anchor_on_key"_test = [] {
       std::string yaml = R"(!!str &a key: value
 other: *a)";
