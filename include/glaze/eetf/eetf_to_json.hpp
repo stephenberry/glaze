@@ -5,7 +5,9 @@
 
 #include <cstdint>
 #include <cstring>
+#include <string_view>
 
+#include "glaze/base64/base64.hpp"
 #include "glaze/eetf/ei.hpp"
 #include "glaze/eetf/opts.hpp"
 #include "glaze/json/write.hpp"
@@ -27,6 +29,16 @@ namespace glz
          if (check_invalid_offset(ctx, it, end, 2)) return 0;
          const std::size_t b1 = std::size_t(static_cast<uint8_t>(*it++)) << 8;
          return b1 | static_cast<uint8_t>(*it++);
+      }
+
+      template <class It0, class It1>
+      GLZ_ALWAYS_INLINE size_t get32be(auto&& ctx, It0&& it, It1&& end) noexcept
+      {
+         if (check_invalid_offset(ctx, it, end, sizeof(uint32_t))) return 0;
+         const std::size_t b1 = std::size_t(static_cast<uint8_t>(*it++)) << 24;
+         const std::size_t b2 = std::size_t(static_cast<uint8_t>(*it++)) << 16;
+         const std::size_t b3 = std::size_t(static_cast<uint8_t>(*it++)) << 8;
+         return b1 | b2 | b3 | static_cast<uint8_t>(*it++);
       }
 
       template <auto Opts, typename I>
@@ -267,8 +279,24 @@ namespace glz
             break;
          }
 
+         case ERL_BINARY_EXT: {
+            ++it; // skip type
+            const size_t len = get32be(ctx, it, end);
+            if (bool(ctx.error)) [[unlikely]] {
+               return;
+            }
+            // bound binary length
+            if (check_invalid_offset(ctx, it, end, len)) return;
+            dump('"', out, ix);
+            glz::write_base64_to(ctx, reinterpret_cast<const uint8_t*>(&*it), len, out, ix);
+            dump('"', out, ix);
+            std::advance(it, len);
+            break;
+         }
+
          default: {
             ctx.error = error_code::syntax_error;
+            ctx.custom_error_message = "unsupported type";
             return;
          }
          }
