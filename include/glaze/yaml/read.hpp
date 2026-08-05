@@ -34,6 +34,14 @@ namespace glz
          if constexpr (requires { ctx.stream_begin; }) {
             if (!ctx.stream_begin && it != end) {
                ctx.stream_begin = &*it;
+               // Seed the alias replay budget from the document this read was handed. Done here
+               // rather than in glz::read so every YAML entry point is covered, and only on the
+               // outermost parse so a nested document does not hand itself a fresh budget.
+               if constexpr (requires { ctx.alias_expansion_budget; } && requires { size_t(end - it); }) {
+                  const size_t scaled = size_t(end - it) * yaml::max_alias_expansion_factor;
+                  ctx.alias_expansion_budget =
+                     scaled > yaml::min_alias_expansion_bytes ? scaled : yaml::min_alias_expansion_bytes;
+               }
             }
          }
          // Skip YAML directives and document start marker (---) if present
@@ -263,6 +271,11 @@ namespace glz
          depth_guard guard{ctx};
          if (!guard) [[unlikely]]
             return true;
+
+         if (!ctx.charge_alias_expansion(static_cast<size_t>(span.end - span.begin))) [[unlikely]] {
+            ctx.error = error_code::exceeded_max_alias_expansion;
+            return true;
+         }
 
          auto replay_it = span.begin;
          auto replay_end = span.end;
@@ -1441,6 +1454,12 @@ namespace glz
             if (span.begin == span.end) {
                key.clear(); // empty anchor
             }
+            else if (!ctx.charge_alias_expansion(static_cast<size_t>(span.end - span.begin))) [[unlikely]] {
+               // A key alias replays its anchor the same way a value alias does, and a complex
+               // key hands the span to the full reader, so it is charged the same way.
+               ctx.error = error_code::exceeded_max_alias_expansion;
+               return false;
+            }
             else {
                // Replay the anchor span to extract the key string
                auto replay_it = span.begin;
@@ -1457,6 +1476,7 @@ namespace glz
                   auto temp_ctx = ctx.make_speculative();
                   from<YAML, glz::generic>::template op<flow_context_on<opts{.error_on_unknown_keys = false}>()>(
                      key_node, temp_ctx, replay_it, replay_end);
+                  ctx.alias_expansion_budget = temp_ctx.alias_expansion_budget; // charged even if rejected
                   if (bool(temp_ctx.error)) [[unlikely]] {
                      ctx.error = temp_ctx.error;
                      return false;
@@ -1508,6 +1528,7 @@ namespace glz
                      auto temp_ctx = ctx.make_speculative();
                      from<YAML, glz::generic>::template op<opts{.error_on_unknown_keys = false}>(key_node, temp_ctx,
                                                                                                  replay_it, replay_end);
+                     ctx.alias_expansion_budget = temp_ctx.alias_expansion_budget; // charged even if rejected
                      if (bool(temp_ctx.error)) [[unlikely]] {
                         ctx.error = temp_ctx.error;
                         return false;
@@ -5005,6 +5026,11 @@ namespace glz
                   auto temp_ctx = ctx.make_speculative();
                   from<YAML, V>::template op<Opts>(std::get<V>(value), temp_ctx, it, end);
 
+                  // Charged whether or not the alternative fit: a rejected probe still replayed
+                  // whatever aliases it reached, and an attempt that is never billed is an
+                  // attempt that can be repeated for free.
+                  ctx.alias_expansion_budget = temp_ctx.alias_expansion_budget;
+
                   if (!bool(temp_ctx.error)) {
                      found_match = true;
                      ctx.anchors = std::move(temp_ctx.anchors);
@@ -5140,6 +5166,7 @@ namespace glz
          auto temp_ctx = ctx.make_speculative();
          process_yaml_variant_alternatives<Variant, is_yaml_variant_object>::template op<Opts>(value, temp_ctx, it,
                                                                                                end);
+         ctx.alias_expansion_budget = temp_ctx.alias_expansion_budget; // charged even if rejected
          if (!bool(temp_ctx.error)) {
             ctx.anchors = std::move(temp_ctx.anchors);
             return true;
@@ -5326,11 +5353,13 @@ namespace glz
    }
 
    // Resolve a tagged variant's alternative index by scanning the mapping for the discriminator
-   // key (tag_v<V>). Operates on copies of the context and iterator so the caller's parse
-   // position is left untouched. Returns ids_v<V>.size() (the not-found sentinel) when the tag
-   // key is absent or its value matches no known id.
+   // key (tag_v<V>). Operates on a speculative context and a copy of the iterator so the caller's
+   // parse position is left untouched -- the context is the caller's to own, because what the
+   // scan spends of the alias budget is real work the caller has to account for. Returns
+   // ids_v<V>.size() (the not-found sentinel) when the tag key is absent or its value matches no
+   // known id.
    template <class V, auto Opts, class Ctx, class It, class End>
-   inline size_t scan_variant_tag_index(Ctx ctx, It it, End end, int32_t mapping_indent)
+   inline size_t scan_variant_tag_index(Ctx& ctx, It it, End end, int32_t mapping_indent)
    {
       using id_type = std::decay_t<decltype(ids_v<V>[0])>;
       size_t resolved = ids_v<V>.size();
@@ -5415,7 +5444,9 @@ namespace glz
                // item, etc. each push a different offset), not this mapping's true column (see helper).
                const int32_t mapping_column =
                   tagged_mapping_visual_indent(it, ctx.stream_begin, ctx.current_indent() + 1);
-               const size_t index = scan_variant_tag_index<V, Opts>(ctx.make_speculative(), it, end, mapping_column);
+               auto tag_ctx = ctx.make_speculative();
+               const size_t index = scan_variant_tag_index<V, Opts>(tag_ctx, it, end, mapping_column);
+               ctx.alias_expansion_budget = tag_ctx.alias_expansion_budget; // charged even if no tag matched
                if (index < ids_v<V>.size()) {
                   static constexpr auto tag_literal = string_literal_from_view<tag_v<V>.size()>(tag_v<V>);
                   emplace_runtime_variant(value, index);
@@ -6241,6 +6272,7 @@ namespace glz
                   auto temp_ctx = ctx.make_speculative();
                   process_yaml_variant_alternatives<V, is_yaml_variant_num>::template op<Opts>(value, temp_ctx, it,
                                                                                                end);
+                  ctx.alias_expansion_budget = temp_ctx.alias_expansion_budget; // charged even if rejected
                   if (!bool(temp_ctx.error)) {
                      ctx.anchors = std::move(temp_ctx.anchors);
                      return; // Successfully parsed as number
@@ -6262,6 +6294,7 @@ namespace glz
                      auto temp_ctx = ctx.make_speculative();
                      process_yaml_variant_alternatives<V, is_yaml_variant_num>::template op<Opts>(value, temp_ctx, it,
                                                                                                   end);
+                     ctx.alias_expansion_budget = temp_ctx.alias_expansion_budget; // charged even if rejected
                      if (!bool(temp_ctx.error)) {
                         ctx.anchors = std::move(temp_ctx.anchors);
                         return; // Successfully parsed as number
@@ -6288,6 +6321,7 @@ namespace glz
             V v{};
             auto temp_ctx = ctx.make_speculative();
             from<YAML, V>::template op<Opts>(v, temp_ctx, it, end);
+            ctx.alias_expansion_budget = temp_ctx.alias_expansion_budget; // charged even if rejected
 
             if (!bool(temp_ctx.error)) {
                value = std::move(v);

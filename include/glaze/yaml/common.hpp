@@ -18,6 +18,21 @@
 
 namespace glz::yaml
 {
+   // How many times over the input an alias may replay before the read gives up. Deliberately
+   // looser than the speculative-parse factor: re-parsing the same bytes to resolve a variant is
+   // waste to be capped, while replaying an anchor is the feature working as intended, and a
+   // generated config that references a large anchor from thousands of entries is ordinary. What
+   // this stops is growth that does not track the input at all, and that case is caught by the
+   // floor below rather than by this factor.
+   inline constexpr size_t max_alias_expansion_factor = 64;
+
+   // ...plus a floor, since the factor alone is meaningless for the small inputs where the
+   // exponential shape lives: a 306 byte document expands 60000x, so any multiple of its own
+   // size stops it. The floor is what every ordinary document actually reads against, and it is
+   // set where the exponential case costs a bounded ~40 MB and a tenth of a second instead of
+   // gigabytes and minutes -- while staying far above what a hand-written document replays.
+   inline constexpr size_t min_alias_expansion_bytes = 8 << 20;
+
    // YAML-specific context extending the base context
    // Adds indent tracking needed for block-style parsing
    struct yaml_context : context
@@ -89,6 +104,31 @@ namespace glz::yaml
          return false;
       }
 
+      // Source bytes an alias may still replay. Resolving one re-parses the anchor's text, so
+      // anchors that each reference the previous one several times expand exponentially without
+      // nesting: eight levels of eightfold reuse turn 348 bytes of input into gigabytes of nodes,
+      // and neither the depth guard nor the indent stack sees anything unusual. The bound is on
+      // total replayed bytes rather than on how often a name is reused or how deeply anchors
+      // nest, because replayed bytes are what the time and the memory both track.
+      // Seeded per read from the input; 0 means unbudgeted (a nested or hand-rolled parse).
+      size_t alias_expansion_budget = 0;
+
+      // Charge `bytes` of alias replay. Returns false once the budget is spent, at which point
+      // the caller must stop expanding. A spent budget latches at 1 rather than reaching 0,
+      // which would read as "unbudgeted" and hand the document a fresh allowance.
+      [[nodiscard]] bool charge_alias_expansion(const size_t bytes) noexcept
+      {
+         if (alias_expansion_budget == 0) {
+            return true; // unbudgeted
+         }
+         if (bytes >= alias_expansion_budget) {
+            alias_expansion_budget = 1; // latch: spent, and still not "unbudgeted"
+            return false;
+         }
+         alias_expansion_budget -= bytes;
+         return true;
+      }
+
       // True while parsing the value payload of a "- item" block-sequence entry.
       // Used to distinguish indentless-sequence continuation from next sibling items.
       bool sequence_item_value_context = false;
@@ -129,6 +169,9 @@ namespace glz::yaml
          c.indent_stack = indent_stack;
          c.anchors = anchors;
          c.active_alias_spans = active_alias_spans;
+         // Speculative work is real work: a probe that expands aliases spends the same budget,
+         // and the sites that adopt a probe's anchors adopt what it spent along with them.
+         c.alias_expansion_budget = alias_expansion_budget;
          c.sequence_item_value_context = sequence_item_value_context;
          c.sequence_dash_indent = sequence_dash_indent;
          c.explicit_mapping_key_context = explicit_mapping_key_context;
