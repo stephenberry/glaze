@@ -111,7 +111,10 @@ namespace glz
       // Streaming errors
       streaming_unsupported, // Document outruns the buffer window and this format's reader cannot refill
       // Expansion errors
-      exceeded_max_alias_expansion // YAML aliases replay more source text than the read budgets
+      // A YAML read produced more text than its budgets allow. Both budgets bound the same thing
+      // -- text a small document can multiply into an unbounded amount -- and both call for the
+      // same response, so they share a code; custom_error_message names which one ran away.
+      exceeded_max_expansion
    };
 
    // Unified error context for all read/write operations

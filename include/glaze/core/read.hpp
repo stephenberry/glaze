@@ -145,6 +145,15 @@ namespace glz
             (proportional > min_speculative_parse_bytes ? proportional : min_speculative_parse_bytes) + 2;
       }
 
+      // A YAML context marks its outermost parse with stream_begin and seeds its expansion budgets
+      // there, so clearing it here is what makes those budgets per-read like the one above. A
+      // reused context would otherwise carry a spent budget into the next document and reject a
+      // valid one, and would leave stream_begin pointing into the buffer of the previous read.
+      // Nested YAML parses do not route through glz::read, so they still cannot reseed themselves.
+      if constexpr (requires { ctx.stream_begin; }) {
+         ctx.stream_begin = nullptr;
+      }
+
       if constexpr (use_padded) {
          parse<Opts.format>::template op<is_padded_on<Opts>()>(value, ctx, it, end);
       }

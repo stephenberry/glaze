@@ -23,6 +23,42 @@
 #include "glaze/yaml/opts.hpp"
 #include "glaze/yaml/skip.hpp"
 
+namespace glz::yaml
+{
+   // Store `key_node` as the string form of a mapping key: scalars keep their own text, everything
+   // else is canonicalized to JSON. That JSON is charged against the read's key budget, because a
+   // structured key nested as the key of another has its escapes doubled at every level and grows
+   // multiplicatively in the input. Every site that turns a parsed node into a key goes through
+   // here so the budget cannot be bypassed by adding one more.
+   // `empty_on_null` distinguishes the callers that spell a null key as the empty string (an
+   // explicit "? " with no key node) from the alias-replay sites, where the replayed span always
+   // names a node and a null one is written out as "null" like any other non-scalar.
+   template <bool empty_on_null = true, class Ctx>
+   [[nodiscard]] bool materialize_key(std::string& key, glz::generic& key_node, Ctx& ctx)
+   {
+      if constexpr (empty_on_null) {
+         if (key_node.is_null()) {
+            key.clear();
+            return true;
+         }
+      }
+      if (auto* s = key_node.template get_if<std::string>()) {
+         key = *s;
+         return true;
+      }
+      key.clear();
+      (void)glz::write_json(key_node, key);
+      if constexpr (requires { ctx.charge_key_expansion(size_t{}); }) {
+         if (!ctx.charge_key_expansion(key.size())) [[unlikely]] {
+            ctx.error = error_code::exceeded_max_expansion;
+            ctx.custom_error_message = "complex key expansion";
+            return false;
+         }
+      }
+      return true;
+   }
+}
+
 namespace glz
 {
    template <>
@@ -41,6 +77,13 @@ namespace glz
                   const size_t scaled = size_t(end - it) * yaml::max_alias_expansion_factor;
                   ctx.alias_expansion_budget =
                      scaled > yaml::min_alias_expansion_bytes ? scaled : yaml::min_alias_expansion_bytes;
+               }
+               // Same treatment for the text complex keys materialize, seeded on its own budget so
+               // exhausting one reports which of the two ran away.
+               if constexpr (requires { ctx.key_expansion_budget; } && requires { size_t(end - it); }) {
+                  const size_t scaled = size_t(end - it) * yaml::max_key_expansion_factor;
+                  ctx.key_expansion_budget =
+                     scaled > yaml::min_key_expansion_bytes ? scaled : yaml::min_key_expansion_bytes;
                }
             }
          }
@@ -273,7 +316,8 @@ namespace glz
             return true;
 
          if (!ctx.charge_alias_expansion(static_cast<size_t>(span.end - span.begin))) [[unlikely]] {
-            ctx.error = error_code::exceeded_max_alias_expansion;
+            ctx.error = error_code::exceeded_max_expansion;
+            ctx.custom_error_message = "alias expansion";
             return true;
          }
 
@@ -1457,7 +1501,8 @@ namespace glz
             else if (!ctx.charge_alias_expansion(static_cast<size_t>(span.end - span.begin))) [[unlikely]] {
                // A key alias replays its anchor the same way a value alias does, and a complex
                // key hands the span to the full reader, so it is charged the same way.
-               ctx.error = error_code::exceeded_max_alias_expansion;
+               ctx.error = error_code::exceeded_max_expansion;
+               ctx.custom_error_message = "alias expansion";
                return false;
             }
             else {
@@ -1477,17 +1522,16 @@ namespace glz
                   from<YAML, glz::generic>::template op<flow_context_on<opts{.error_on_unknown_keys = false}>()>(
                      key_node, temp_ctx, replay_it, replay_end);
                   ctx.alias_expansion_budget = temp_ctx.alias_expansion_budget; // charged even if rejected
+                  ctx.key_expansion_budget = temp_ctx.key_expansion_budget;
                   if (bool(temp_ctx.error)) [[unlikely]] {
                      ctx.error = temp_ctx.error;
+                     ctx.custom_error_message = temp_ctx.custom_error_message;
                      return false;
                   }
                   ctx.anchors = std::move(temp_ctx.anchors);
 
-                  if (auto* s = key_node.template get_if<std::string>()) {
-                     key = *s;
-                  }
-                  else {
-                     (void)glz::write_json(key_node, key);
+                  if (!yaml::materialize_key<false>(key, key_node, ctx)) [[unlikely]] {
+                     return false;
                   }
                }
                else {
@@ -1529,17 +1573,16 @@ namespace glz
                      from<YAML, glz::generic>::template op<opts{.error_on_unknown_keys = false}>(key_node, temp_ctx,
                                                                                                  replay_it, replay_end);
                      ctx.alias_expansion_budget = temp_ctx.alias_expansion_budget; // charged even if rejected
+                     ctx.key_expansion_budget = temp_ctx.key_expansion_budget;
                      if (bool(temp_ctx.error)) [[unlikely]] {
                         ctx.error = temp_ctx.error;
+                        ctx.custom_error_message = temp_ctx.custom_error_message;
                         return false;
                      }
                      ctx.anchors = std::move(temp_ctx.anchors);
 
-                     if (auto* s = key_node.template get_if<std::string>()) {
-                        key = *s;
-                     }
-                     else {
-                        (void)glz::write_json(key_node, key);
+                     if (!yaml::materialize_key<false>(key, key_node, ctx)) [[unlikely]] {
+                        return false;
                      }
                   }
                   else {
@@ -2530,15 +2573,8 @@ namespace glz
                         return;
 
                      std::string key;
-                     if (key_node.is_null()) {
-                        key.clear();
-                     }
-                     else if (auto* s = key_node.template get_if<std::string>()) {
-                        key = *s;
-                     }
-                     else {
-                        (void)glz::write_json(key_node, key);
-                     }
+                     if (!yaml::materialize_key(key, key_node, ctx)) [[unlikely]]
+                        return;
 
                      glz::generic pair{};
                      pair[key] = std::move(mapped);
@@ -4382,17 +4418,8 @@ namespace glz
                         from<YAML, glz::generic>::template op<yaml::flow_context_on<Opts>()>(key_node, ctx, it, end);
                         if (bool(ctx.error)) [[unlikely]]
                            return;
-                        if (key_node.is_null()) {
-                           key.clear();
-                        }
-                        else if (auto* s = key_node.template get_if<std::string>()) {
-                           key = *s;
-                        }
-                        else {
-                           std::string key_json;
-                           (void)glz::write_json(key_node, key_json);
-                           key = std::move(key_json);
-                        }
+                        if (!yaml::materialize_key(key, key_node, ctx)) [[unlikely]]
+                           return;
                      }
                      else {
                         if (!yaml::parse_yaml_key(key, ctx, it, end, true)) {
@@ -4629,17 +4656,7 @@ namespace glz
                      key_t key{};
                      if constexpr (std::same_as<std::remove_cvref_t<key_t>, std::string>) {
                         auto to_string_key = [&](glz::generic& key_node) {
-                           if (key_node.is_null()) {
-                              key.clear();
-                           }
-                           else if (auto* s = key_node.template get_if<std::string>()) {
-                              key = *s;
-                           }
-                           else {
-                              std::string key_json;
-                              (void)glz::write_json(key_node, key_json);
-                              key = std::move(key_json);
-                           }
+                           return yaml::materialize_key(key, key_node, ctx);
                         };
 
                         auto key_it = it;
@@ -4760,7 +4777,8 @@ namespace glz
                            if (bool(ctx.error)) [[unlikely]]
                               return false;
                            it = key_node_it;
-                           to_string_key(key_node);
+                           if (!to_string_key(key_node)) [[unlikely]]
+                              return false;
                         }
                      }
                      else {
@@ -4843,17 +4861,8 @@ namespace glz
                         from<YAML, glz::generic>::template op<yaml::flow_context_on<Opts>()>(key_node, ctx, it, end);
                         if (bool(ctx.error)) [[unlikely]]
                            return false;
-                        if (key_node.is_null()) {
-                           key.clear();
-                        }
-                        else if (auto* s = key_node.template get_if<std::string>()) {
-                           key = *s;
-                        }
-                        else {
-                           std::string key_json;
-                           (void)glz::write_json(key_node, key_json);
-                           key = std::move(key_json);
-                        }
+                        if (!yaml::materialize_key(key, key_node, ctx)) [[unlikely]]
+                           return false;
                      }
                      else {
                         if (!yaml::parse_yaml_key(key, ctx, it, end, false)) {
@@ -5011,6 +5020,14 @@ namespace glz
             constexpr auto N = std::variant_size_v<Variant>;
             bool found_match{};
             size_t match_idx = 0;
+            // Only the last alternative propagates its error, so an alternative that exhausted an
+            // expansion budget would otherwise be reported as no_matching_variant_type -- a wrong
+            // diagnosis for a document that is hostile rather than merely the wrong shape. Held
+            // aside and used only if nothing matched, so an alternative that does succeed later
+            // (one that materializes no key text can still parse under a latched budget) is
+            // unaffected.
+            error_code expansion_error{};
+            std::string_view expansion_message{};
 
             for_each<N>([&]<size_t I>() {
                if (found_match) {
@@ -5030,6 +5047,7 @@ namespace glz
                   // whatever aliases it reached, and an attempt that is never billed is an
                   // attempt that can be repeated for free.
                   ctx.alias_expansion_budget = temp_ctx.alias_expansion_budget;
+                  ctx.key_expansion_budget = temp_ctx.key_expansion_budget;
 
                   if (!bool(temp_ctx.error)) {
                      found_match = true;
@@ -5037,12 +5055,17 @@ namespace glz
                   }
                   else {
                      it = copy_it;
+                     if (temp_ctx.error == error_code::exceeded_max_expansion && expansion_error == error_code::none) {
+                        expansion_error = temp_ctx.error;
+                        expansion_message = temp_ctx.custom_error_message;
+                     }
                      if (match_idx + 1 < category_count) {
                         // Not the last type, continue trying
                      }
                      else {
                         // Last type failed, propagate error
                         ctx.error = temp_ctx.error;
+                        ctx.custom_error_message = temp_ctx.custom_error_message;
                      }
                   }
                   ++match_idx;
@@ -5050,7 +5073,13 @@ namespace glz
             });
 
             if (!found_match && !bool(ctx.error)) {
-               ctx.error = error_code::no_matching_variant_type;
+               if (expansion_error != error_code::none) {
+                  ctx.error = expansion_error;
+                  ctx.custom_error_message = expansion_message;
+               }
+               else {
+                  ctx.error = error_code::no_matching_variant_type;
+               }
             }
          }
       }
@@ -5167,6 +5196,7 @@ namespace glz
          process_yaml_variant_alternatives<Variant, is_yaml_variant_object>::template op<Opts>(value, temp_ctx, it,
                                                                                                end);
          ctx.alias_expansion_budget = temp_ctx.alias_expansion_budget; // charged even if rejected
+         ctx.key_expansion_budget = temp_ctx.key_expansion_budget;
          if (!bool(temp_ctx.error)) {
             ctx.anchors = std::move(temp_ctx.anchors);
             return true;
@@ -5175,6 +5205,7 @@ namespace glz
          // This indicates malformed content (e.g., unclosed flow collection),
          // so propagate the error rather than silently falling back to string.
          ctx.error = temp_ctx.error;
+         ctx.custom_error_message = temp_ctx.custom_error_message;
          return false;
       }
    }
@@ -5447,6 +5478,7 @@ namespace glz
                auto tag_ctx = ctx.make_speculative();
                const size_t index = scan_variant_tag_index<V, Opts>(tag_ctx, it, end, mapping_column);
                ctx.alias_expansion_budget = tag_ctx.alias_expansion_budget; // charged even if no tag matched
+               ctx.key_expansion_budget = tag_ctx.key_expansion_budget;
                if (index < ids_v<V>.size()) {
                   static constexpr auto tag_literal = string_literal_from_view<tag_v<V>.size()>(tag_v<V>);
                   emplace_runtime_variant(value, index);
@@ -6273,6 +6305,7 @@ namespace glz
                   process_yaml_variant_alternatives<V, is_yaml_variant_num>::template op<Opts>(value, temp_ctx, it,
                                                                                                end);
                   ctx.alias_expansion_budget = temp_ctx.alias_expansion_budget; // charged even if rejected
+                  ctx.key_expansion_budget = temp_ctx.key_expansion_budget;
                   if (!bool(temp_ctx.error)) {
                      ctx.anchors = std::move(temp_ctx.anchors);
                      return; // Successfully parsed as number
@@ -6295,6 +6328,7 @@ namespace glz
                      process_yaml_variant_alternatives<V, is_yaml_variant_num>::template op<Opts>(value, temp_ctx, it,
                                                                                                   end);
                      ctx.alias_expansion_budget = temp_ctx.alias_expansion_budget; // charged even if rejected
+                     ctx.key_expansion_budget = temp_ctx.key_expansion_budget;
                      if (!bool(temp_ctx.error)) {
                         ctx.anchors = std::move(temp_ctx.anchors);
                         return; // Successfully parsed as number
@@ -6314,6 +6348,13 @@ namespace glz
          // For non-auto-deducible variants or fallback, try each type until one succeeds
          constexpr auto N = std::variant_size_v<std::remove_cvref_t<T>>;
 
+         // This fold discards each alternative's error and reports only that nothing fit, which
+         // misdiagnoses a document that exhausted an expansion budget as merely the wrong shape.
+         // Kept aside and used only if no alternative parsed, so a later one that does parse
+         // (possible under a latched budget if it materializes no key text) is unaffected.
+         error_code expansion_error{};
+         std::string_view expansion_message{};
+
          auto try_parse = [&]<size_t I>() -> bool {
             using V = std::variant_alternative_t<I, std::remove_cvref_t<T>>;
             auto start = it;
@@ -6322,6 +6363,7 @@ namespace glz
             auto temp_ctx = ctx.make_speculative();
             from<YAML, V>::template op<Opts>(v, temp_ctx, it, end);
             ctx.alias_expansion_budget = temp_ctx.alias_expansion_budget; // charged even if rejected
+            ctx.key_expansion_budget = temp_ctx.key_expansion_budget;
 
             if (!bool(temp_ctx.error)) {
                value = std::move(v);
@@ -6329,6 +6371,10 @@ namespace glz
                return true;
             }
 
+            if (temp_ctx.error == error_code::exceeded_max_expansion && expansion_error == error_code::none) {
+               expansion_error = temp_ctx.error;
+               expansion_message = temp_ctx.custom_error_message;
+            }
             it = start;
             return false;
          };
@@ -6339,7 +6385,13 @@ namespace glz
          }(std::make_index_sequence<N>{});
 
          if (!parsed) {
-            ctx.error = error_code::no_matching_variant_type;
+            if (expansion_error != error_code::none) {
+               ctx.error = expansion_error;
+               ctx.custom_error_message = expansion_message;
+            }
+            else {
+               ctx.error = error_code::no_matching_variant_type;
+            }
          }
       }
 #ifdef _MSC_VER
