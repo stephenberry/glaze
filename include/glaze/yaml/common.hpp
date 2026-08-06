@@ -33,6 +33,21 @@ namespace glz::yaml
    // gigabytes and minutes -- while staying far above what a hand-written document replays.
    inline constexpr size_t min_alias_expansion_bytes = 8 << 20;
 
+   // How many times over the input a read may materialize complex-key text, and the floor it
+   // reads against. A mapping key that is not a scalar is stored by its JSON form, and JSON
+   // escaping is multiplicative under nesting: every level that carries the previous one as its
+   // key doubles that level's backslashes, so each `? ` in `? ? ? ...` doubles the key while
+   // adding two bytes to the input. 52 bytes of input reach a 134 MB key, 72 bytes reach more
+   // memory than a machine has, and nothing about the shape looks unusual on the way down --
+   // nesting is linear in the input, so the recursion guard is no help: by its 84-level limit the
+   // key would be 2^84 bytes.
+   // Bounding materialized bytes is what the memory and the time both track. The constants match
+   // the alias budget for the same reason it chose them: a complex key's JSON form is comparable
+   // to the YAML that produced it, so any multiple of the document stops growth that does not
+   // track the document at all, and the floor is what ordinary documents actually read against.
+   inline constexpr size_t max_key_expansion_factor = 64;
+   inline constexpr size_t min_key_expansion_bytes = 8 << 20;
+
    // YAML-specific context extending the base context
    // Adds indent tracking needed for block-style parsing
    struct yaml_context : context
@@ -129,6 +144,26 @@ namespace glz::yaml
          return true;
       }
 
+      // Bytes of complex-key text this read may still materialize. Seeded per read from the
+      // input; 0 means unbudgeted (a nested or hand-rolled parse), matching the alias budget.
+      size_t key_expansion_budget = 0;
+
+      // Charge `bytes` of materialized key text. Returns false once the budget is spent, at which
+      // point the caller must stop and report exceeded_max_expansion. Latches at 1 rather than
+      // 0, which would read as "unbudgeted" and hand the document a fresh allowance.
+      [[nodiscard]] bool charge_key_expansion(const size_t bytes) noexcept
+      {
+         if (key_expansion_budget == 0) {
+            return true; // unbudgeted
+         }
+         if (bytes >= key_expansion_budget) {
+            key_expansion_budget = 1; // latch: spent, and still not "unbudgeted"
+            return false;
+         }
+         key_expansion_budget -= bytes;
+         return true;
+      }
+
       // True while parsing the value payload of a "- item" block-sequence entry.
       // Used to distinguish indentless-sequence continuation from next sibling items.
       bool sequence_item_value_context = false;
@@ -172,6 +207,9 @@ namespace glz::yaml
          // Speculative work is real work: a probe that expands aliases spends the same budget,
          // and the sites that adopt a probe's anchors adopt what it spent along with them.
          c.alias_expansion_budget = alias_expansion_budget;
+         // Likewise for key text: a probe that built a complex key did the work whether or not
+         // its alternative is adopted, and an attempt that is never billed can be repeated free.
+         c.key_expansion_budget = key_expansion_budget;
          c.sequence_item_value_context = sequence_item_value_context;
          c.sequence_dash_indent = sequence_dash_indent;
          c.explicit_mapping_key_context = explicit_mapping_key_context;

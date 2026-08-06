@@ -4295,7 +4295,8 @@ other: *a5)";
       }
       glz::generic parsed{};
       const auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
-      expect(ec == glz::error_code::exceeded_max_alias_expansion) << glz::format_error(ec, yaml);
+      expect(ec == glz::error_code::exceeded_max_expansion) << glz::format_error(ec, yaml);
+      expect(ec.custom_error_message == "alias expansion") << ec.custom_error_message;
    };
 
    "heavy_anchor_reuse_still_parses"_test = [] {
@@ -4313,6 +4314,97 @@ other: *a5)";
       const auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
       expect(!ec) << glz::format_error(ec, yaml);
       expect(parsed.size() == 5001);
+   };
+
+   "exponential_complex_key_expansion_is_bounded"_test = [] {
+      // A non-scalar mapping key is stored by its JSON form, and JSON escaping is multiplicative
+      // under nesting: each "? " makes the level below into a key, doubling its backslashes, so
+      // the key doubles for every two bytes of input. 52 bytes reached a 134 MB key and 141 bytes
+      // reached 17 GB and three minutes. Nesting is linear in the input the whole way, so the
+      // recursion guard never fires -- at its 84-level limit the key would be 2^84 bytes.
+      // Found by OSS-Fuzz's yaml_generic target.
+      //
+      // The levels are kept just past the cutoff (which sits at 22) on purpose. Unbudgeted, 24
+      // levels is a 33 MB key and 26 is 134 MB -- both large enough to prove the point, small
+      // enough that a regression here fails this assert instead of taking the machine with it.
+      // 30 levels would be ~8 GB and would OOM the runner before any assert could report.
+      for (const int levels : {24, 26}) {
+         std::string doc;
+         for (int i = 0; i < levels; ++i) doc += "? ";
+         glz::generic parsed{};
+         const auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, doc);
+         expect(ec == glz::error_code::exceeded_max_expansion) << levels << ' ' << glz::format_error(ec, doc);
+         // The two budgets share a code, so the message is what tells them apart.
+         expect(ec.custom_error_message == "complex key expansion") << ec.custom_error_message;
+      }
+   };
+
+   "expansion_budgets_reseed_per_read"_test = [] {
+      // The budgets are seeded on the outermost parse, marked by ctx.stream_begin. A context
+      // reused across reads kept the spent (latched) budget of the previous one, so the next
+      // document -- however small and valid -- was rejected. glz::read clears stream_begin so
+      // the seeding runs again, the same way speculation_budget is reseeded per read.
+      glz::yaml::yaml_context ctx{};
+      std::string runaway;
+      for (int i = 0; i < 40; ++i) runaway += "? ";
+      glz::generic first{};
+      const auto ec_first = glz::read<glz::yaml::yaml_opts{}>(first, runaway, ctx);
+      expect(ec_first == glz::error_code::exceeded_max_expansion) << glz::format_error(ec_first, runaway);
+
+      ctx.error = glz::error_code::none; // a reused context carries its error for every format
+      ctx.custom_error_message = {};
+
+      const std::string valid = "? {a: 1}\n: 2\n";
+      glz::generic second{};
+      const auto ec_second = glz::read<glz::yaml::yaml_opts{}>(second, valid, ctx);
+      expect(!ec_second) << glz::format_error(ec_second, valid);
+      expect(ctx.key_expansion_budget > (1 << 20)) << ctx.key_expansion_budget;
+   };
+
+   "budget_exhaustion_survives_variant_dispatch"_test = [] {
+      // Variant alternatives are tried speculatively and only the last one's error escapes, so an
+      // exhausted budget used to surface as no_matching_variant_type with no message at all.
+      std::string runaway;
+      for (int i = 0; i < 40; ++i) runaway += "? ";
+      std::variant<std::map<std::string, std::string>, std::map<std::string, glz::generic>> value{};
+      const auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(value, runaway);
+      expect(ec == glz::error_code::exceeded_max_expansion) << glz::format_error(ec, runaway);
+      expect(ec.custom_error_message == "complex key expansion") << ec.custom_error_message;
+
+      // ...but a document that is genuinely the wrong shape must still say so.
+      std::variant<double, bool> mismatch{};
+      const auto ec_mismatch = glz::read_yaml(mismatch, std::string("[1,2]"));
+      expect(ec_mismatch == glz::error_code::no_matching_variant_type) << glz::format_error(ec_mismatch, "[1,2]");
+   };
+
+   "nested_complex_keys_still_parse"_test = [] {
+      // The budget must not reject complex keys at the depths documents actually use: the JSON
+      // form of a key stays comparable to the YAML that produced it until nesting compounds it.
+      const std::pair<std::string_view, std::string_view> cases[]{
+         {"? {a: 1}\n: 2\n", R"({"{\"a\":1}":2})"},
+         {"? ? a\n: 2\n", R"({"{\"a\":null}":2})"},
+         {"? {a: {b: [1, 2]}}\n: 3\n", R"({"{\"a\":{\"b\":[1,2]}}":3})"},
+      };
+      for (const auto& [yaml, expected] : cases) {
+         glz::generic parsed{};
+         const auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
+         expect(!ec) << glz::format_error(ec, yaml);
+         const auto json = glz::write_json(parsed).value_or("WRITE_ERR");
+         expect(json == expected) << yaml << " -> " << json;
+      }
+   };
+
+   "many_flow_complex_keys_still_parse"_test = [] {
+      // Reuse of complex keys across a large document is ordinary and costs only what the
+      // document itself costs, so the budget must scale with the input rather than cap a count.
+      std::string yaml;
+      for (int entry = 0; entry < 5000; ++entry) {
+         yaml += "? {a: " + std::to_string(entry) + ", b: [1, 2, 3]}\n: " + std::to_string(entry) + "\n";
+      }
+      glz::generic parsed{};
+      const auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(parsed.size() == 5000);
    };
 
    "tag_then_anchor_on_key"_test = [] {
