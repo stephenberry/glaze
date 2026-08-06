@@ -343,8 +343,9 @@ namespace glz
       }
    };
 
-   template <typename Scalar, int Dim, int Mode>
-   struct from<JSON, Eigen::Transform<Scalar, Dim, Mode>>
+   // Options only selects alignment, so it affects neither the coefficient layout nor the size
+   template <typename Scalar, int Dim, int Mode, int Options>
+   struct from<JSON, Eigen::Transform<Scalar, Dim, Mode, Options>>
    {
       template <auto Opts>
       static void op(auto& value, is_context auto&& ctx, auto&& it, auto end)
@@ -355,8 +356,8 @@ namespace glz
       }
    };
 
-   template <typename Scalar, int Dim, int Mode>
-   struct to<JSON, Eigen::Transform<Scalar, Dim, Mode>>
+   template <typename Scalar, int Dim, int Mode, int Options>
+   struct to<JSON, Eigen::Transform<Scalar, Dim, Mode, Options>>
    {
       template <auto Opts>
       static void op(auto&& value, is_context auto&& ctx, auto&& b, auto& ix)
@@ -369,13 +370,179 @@ namespace glz
    };
 }
 
-template <class Scalar, int Rows, int Cols>
-struct glz::meta<Eigen::Matrix<Scalar, Rows, Cols>>
+namespace glz::detail
 {
-   static constexpr std::string_view name = join_v<chars<"Eigen::Matrix<">, name_v<Scalar>, chars<",">, //
-                                                   chars<num_to_string<Rows>::value>, chars<",">, //
-                                                   chars<num_to_string<Cols>::value>, chars<",">, //
-                                                   chars<">">>;
+   // Characters needed to spell n in decimal, counting a leading '-'.
+   // Negating through long long keeps the most negative int representable.
+   consteval size_t eigen_int_length(int n)
+   {
+      size_t count = (n < 0) ? 2 : 1;
+      for (long long magnitude = (n < 0) ? -static_cast<long long>(n) : n; magnitude >= 10; magnitude /= 10) {
+         ++count;
+      }
+      return count;
+   }
+
+   // Decimal spelling of an Eigen template parameter. glz::num_to_string only handles unsigned
+   // values, and Eigen::Dynamic is -1, so dynamic extents need a signed spelling.
+   template <int N>
+   inline constexpr auto eigen_int_chars = [] {
+      std::array<char, eigen_int_length(N) + 1> buffer{};
+      size_t i = buffer.size() - 1;
+      buffer[i] = '\0';
+      long long magnitude = (N < 0) ? -static_cast<long long>(N) : N;
+      do {
+         buffer[--i] = char('0' + (magnitude % 10));
+         magnitude /= 10;
+      } while (magnitude);
+      if constexpr (N < 0) {
+         buffer[--i] = '-';
+      }
+      return buffer;
+   }();
+
+   template <int N>
+   inline constexpr std::string_view eigen_int_v{eigen_int_chars<N>.data(), eigen_int_chars<N>.size() - 1};
+
+   // Eigen::Transform modes are a small closed set, so spell them the way a user writes them.
+   template <int Mode>
+   inline constexpr std::string_view eigen_transform_mode_v = [] {
+      if constexpr (Mode == Eigen::TransformTraits::Isometry) {
+         return std::string_view{"Eigen::Isometry"};
+      }
+      else if constexpr (Mode == Eigen::TransformTraits::Affine) {
+         return std::string_view{"Eigen::Affine"};
+      }
+      else if constexpr (Mode == Eigen::TransformTraits::AffineCompact) {
+         return std::string_view{"Eigen::AffineCompact"};
+      }
+      else if constexpr (Mode == Eigen::TransformTraits::Projective) {
+         return std::string_view{"Eigen::Projective"};
+      }
+      else {
+         return eigen_int_v<Mode>;
+      }
+   }();
+}
+
+// Names for the Eigen types this extension serializes: Matrix, Array, Transform, and the Map and Ref
+// views (with the stride types that appear inside their names). Without a name, glz::name_v falls
+// back to a compiler-specific spelling, so JSON schema $defs keys (and glz::api type hashes) differ
+// between compilers for the same type. Each name mirrors how the type is written in C++: the
+// trailing template parameters are elided when they are Eigen's defaults, and written out in full
+// otherwise so that distinct types never share a name.
+
+template <class Scalar, int Rows, int Cols, int Options, int MaxRows, int MaxCols>
+struct glz::meta<Eigen::Matrix<Scalar, Rows, Cols, Options, MaxRows, MaxCols>>
+{
+   static constexpr std::string_view name = [] {
+      if constexpr (std::same_as<Eigen::Matrix<Scalar, Rows, Cols, Options, MaxRows, MaxCols>,
+                                 Eigen::Matrix<Scalar, Rows, Cols>>) {
+         return join_v<chars<"Eigen::Matrix<">, name_v<Scalar>, chars<",">, //
+                       detail::eigen_int_v<Rows>, chars<",">, //
+                       detail::eigen_int_v<Cols>, chars<">">>;
+      }
+      else {
+         return join_v<chars<"Eigen::Matrix<">, name_v<Scalar>, chars<",">, //
+                       detail::eigen_int_v<Rows>, chars<",">, //
+                       detail::eigen_int_v<Cols>, chars<",">, //
+                       detail::eigen_int_v<Options>, chars<",">, //
+                       detail::eigen_int_v<MaxRows>, chars<",">, //
+                       detail::eigen_int_v<MaxCols>, chars<">">>;
+      }
+   }();
+};
+
+template <class Scalar, int Rows, int Cols, int Options, int MaxRows, int MaxCols>
+struct glz::meta<Eigen::Array<Scalar, Rows, Cols, Options, MaxRows, MaxCols>>
+{
+   static constexpr std::string_view name = [] {
+      if constexpr (std::same_as<Eigen::Array<Scalar, Rows, Cols, Options, MaxRows, MaxCols>,
+                                 Eigen::Array<Scalar, Rows, Cols>>) {
+         return join_v<chars<"Eigen::Array<">, name_v<Scalar>, chars<",">, //
+                       detail::eigen_int_v<Rows>, chars<",">, //
+                       detail::eigen_int_v<Cols>, chars<">">>;
+      }
+      else {
+         return join_v<chars<"Eigen::Array<">, name_v<Scalar>, chars<",">, //
+                       detail::eigen_int_v<Rows>, chars<",">, //
+                       detail::eigen_int_v<Cols>, chars<",">, //
+                       detail::eigen_int_v<Options>, chars<",">, //
+                       detail::eigen_int_v<MaxRows>, chars<",">, //
+                       detail::eigen_int_v<MaxCols>, chars<">">>;
+      }
+   }();
+};
+
+template <class Scalar, int Dim, int Mode, int Options>
+struct glz::meta<Eigen::Transform<Scalar, Dim, Mode, Options>>
+{
+   static constexpr std::string_view name = [] {
+      if constexpr (std::same_as<Eigen::Transform<Scalar, Dim, Mode, Options>, Eigen::Transform<Scalar, Dim, Mode>>) {
+         return join_v<chars<"Eigen::Transform<">, name_v<Scalar>, chars<",">, //
+                       detail::eigen_int_v<Dim>, chars<",">, //
+                       detail::eigen_transform_mode_v<Mode>, chars<">">>;
+      }
+      else {
+         return join_v<chars<"Eigen::Transform<">, name_v<Scalar>, chars<",">, //
+                       detail::eigen_int_v<Dim>, chars<",">, //
+                       detail::eigen_transform_mode_v<Mode>, chars<",">, //
+                       detail::eigen_int_v<Options>, chars<">">>;
+      }
+   }();
+};
+
+// Eigen::InnerStride and Eigen::OuterStride derive from Eigen::Stride rather than aliasing it,
+// so each needs its own name. They only appear within an Eigen::Ref name.
+template <int Outer, int Inner>
+struct glz::meta<Eigen::Stride<Outer, Inner>>
+{
+   static constexpr std::string_view name = join_v<chars<"Eigen::Stride<">, detail::eigen_int_v<Outer>, chars<",">, //
+                                                   detail::eigen_int_v<Inner>, chars<">">>;
+};
+
+template <int Value>
+struct glz::meta<Eigen::InnerStride<Value>>
+{
+   static constexpr std::string_view name =
+      join_v<chars<"Eigen::InnerStride<">, detail::eigen_int_v<Value>, chars<">">>;
+};
+
+template <int Value>
+struct glz::meta<Eigen::OuterStride<Value>>
+{
+   static constexpr std::string_view name =
+      join_v<chars<"Eigen::OuterStride<">, detail::eigen_int_v<Value>, chars<">">>;
+};
+
+template <class PlainObjectType, int MapOptions, class StrideType>
+struct glz::meta<Eigen::Map<PlainObjectType, MapOptions, StrideType>>
+{
+   static constexpr std::string_view name = [] {
+      if constexpr (std::same_as<Eigen::Map<PlainObjectType, MapOptions, StrideType>, Eigen::Map<PlainObjectType>>) {
+         return join_v<chars<"Eigen::Map<">, name_v<PlainObjectType>, chars<">">>;
+      }
+      else {
+         return join_v<chars<"Eigen::Map<">, name_v<PlainObjectType>, chars<",">, //
+                       detail::eigen_int_v<MapOptions>, chars<",">, //
+                       name_v<StrideType>, chars<">">>;
+      }
+   }();
+};
+
+template <class PlainObjectType, int Options, class StrideType>
+struct glz::meta<Eigen::Ref<PlainObjectType, Options, StrideType>>
+{
+   static constexpr std::string_view name = [] {
+      if constexpr (std::same_as<Eigen::Ref<PlainObjectType, Options, StrideType>, Eigen::Ref<PlainObjectType>>) {
+         return join_v<chars<"Eigen::Ref<">, name_v<PlainObjectType>, chars<">">>;
+      }
+      else {
+         return join_v<chars<"Eigen::Ref<">, name_v<PlainObjectType>, chars<",">, //
+                       detail::eigen_int_v<Options>, chars<",">, //
+                       name_v<StrideType>, chars<">">>;
+      }
+   }();
 };
 
 // Register Eigen types as having specified Glaze serialization
@@ -384,8 +551,16 @@ template <typename Scalar, int Rows, int Cols, int Options, int MaxRows, int Max
 struct glz::specified<Eigen::Matrix<Scalar, Rows, Cols, Options, MaxRows, MaxCols>> : std::true_type
 {};
 
-template <typename Scalar, int Dim, int Mode>
-struct glz::specified<Eigen::Transform<Scalar, Dim, Mode>> : std::true_type
+template <typename Scalar, int Rows, int Cols, int Options, int MaxRows, int MaxCols>
+struct glz::specified<Eigen::Array<Scalar, Rows, Cols, Options, MaxRows, MaxCols>> : std::true_type
+{};
+
+template <typename Scalar, int Dim, int Mode, int Options>
+struct glz::specified<Eigen::Transform<Scalar, Dim, Mode, Options>> : std::true_type
+{};
+
+template <typename PlainObjectType, int MapOptions, typename StrideType>
+struct glz::specified<Eigen::Map<PlainObjectType, MapOptions, StrideType>> : std::true_type
 {};
 
 template <typename PlainObjectType, int Options, typename StrideType>
