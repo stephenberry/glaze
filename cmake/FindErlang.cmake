@@ -28,10 +28,6 @@ This will define the following variables:
 
 ``Erlang_FOUND``
   True if the system has the Erlang library.
-``Erlang_RUNTIME``
-  The path to the Erlang runtime.
-``Erlang_COMPILE``
-  The path to the Erlang compiler.
 ``Erlang_EI_PATH``
   The path to the Erlang erl_interface path.
 ``Erlang_ERTS_PATH``
@@ -49,123 +45,82 @@ This will define the following variables:
 
 #]=======================================================================]
 include(FindPackageHandleStandardArgs)
+include(CMakePrintHelpers)
 
-SET(Erlang_BIN_PATH
-  $ENV{ERLANG_HOME}/bin
-  /opt/bin
-  /sw/bin
-  /usr/bin
-  /usr/local/bin
-  /opt/local/bin
+function(execute_erlang IN_ERL_EXECUTABLE OUT_ERLROOT_DIR OUT_INCLUDE_DIR OUT_LIBRARY_DIR)
+  EXECUTE_PROCESS(
+    COMMAND ${IN_ERL_EXECUTABLE} -noshell -eval "io:format(\"~s\", [code:lib_dir()])" -s erlang halt
+    OUTPUT_VARIABLE Erlang_OTP_LIB_DIR
   )
 
-FIND_PROGRAM(Erlang_RUNTIME
-  NAMES erl
-  PATHS ${Erlang_BIN_PATH}
+  EXECUTE_PROCESS(
+    COMMAND ${IN_ERL_EXECUTABLE} -noshell -eval "io:format(\"~s\", [code:root_dir()])" -s erlang halt
+    OUTPUT_VARIABLE Erlang_OTP_ROOT_DIR
   )
 
-FIND_PROGRAM(Erlang_COMPILE
-  NAMES erlc
-  PATHS ${Erlang_BIN_PATH}
+  EXECUTE_PROCESS(
+    COMMAND ${IN_ERL_EXECUTABLE} -noshell -eval "io:format(\"~s\",[filename:basename(code:lib_dir('erl_interface'))])" -s erlang halt
+    OUTPUT_VARIABLE Erlang_EI_DIR
   )
 
-EXECUTE_PROCESS(
-  COMMAND         erl -noshell -eval "io:format(\"~s\", [code:lib_dir()])" -s erlang halt
-  OUTPUT_VARIABLE Erlang_OTP_LIB_DIR
-  )
+  SET(${OUT_ERLROOT_DIR} ${Erlang_OTP_ROOT_DIR} PARENT_SCOPE)
+  SET(${OUT_INCLUDE_DIR} ${Erlang_OTP_LIB_DIR}/${Erlang_EI_DIR}/include PARENT_SCOPE)
+  SET(${OUT_LIBRARY_DIR} ${Erlang_OTP_LIB_DIR}/${Erlang_EI_DIR}/lib PARENT_SCOPE)
+endfunction(execute_erlang)
 
-EXECUTE_PROCESS(
-  COMMAND         erl -noshell -eval "io:format(\"~s\", [code:root_dir()])" -s erlang halt
-  OUTPUT_VARIABLE Erlang_OTP_ROOT_DIR
-  )
+cmake_print_variables(ERLANG_ROOT ERLANG_EI_LIB ERLANG_EI_LIB)
 
-EXECUTE_PROCESS(
-  COMMAND         erl -noshell -eval "io:format(\"~s\",[filename:basename(code:lib_dir('erl_interface'))])" -s erlang halt
-  OUTPUT_VARIABLE Erlang_EI_DIR
-  )
-
-EXECUTE_PROCESS(
-  COMMAND         erl -noshell -eval "io:format(\"~s\",[filename:basename(code:lib_dir('erts'))])" -s erlang halt
-  OUTPUT_VARIABLE Erlang_ERTS_DIR
-  )
-
-EXECUTE_PROCESS(
-  COMMAND         erl -noshell -eval "io:format(\"~s\", [erlang:system_info(otp_release)])" -s erlang halt
-  OUTPUT_VARIABLE Erlang_OTP_VERSION
-  )
-
-SET(Erlang_EI_PATH           ${Erlang_OTP_LIB_DIR}/${Erlang_EI_DIR})
-SET(Erlang_EI_INCLUDE_DIRS   ${Erlang_OTP_LIB_DIR}/${Erlang_EI_DIR}/include)
-SET(Erlang_EI_LIBRARY_PATH   ${Erlang_OTP_LIB_DIR}/${Erlang_EI_DIR}/lib)
-
-SET(Erlang_ERTS_PATH         ${Erlang_OTP_ROOT_DIR}/${Erlang_ERTS_DIR})
-SET(Erlang_ERTS_INCLUDE_DIRS ${Erlang_OTP_ROOT_DIR}/${Erlang_ERTS_DIR}/include)
-SET(Erlang_ERTS_LIBRARY_PATH ${Erlang_OTP_ROOT_DIR}/${Erlang_ERTS_DIR}/lib)
-
-FIND_PACKAGE_HANDLE_STANDARD_ARGS(
-  Erlang
-  DEFAULT_MSG
-  Erlang_RUNTIME
-  Erlang_COMPILE
-  Erlang_OTP_LIB_DIR
-  Erlang_OTP_ROOT_DIR
-  Erlang_EI_DIR
-  Erlang_ERTS_DIR
-  Erlang_OTP_VERSION
-  )
-
-if(Erlang_FOUND)
-  if(NOT TARGET Erlang::Erlang)
-    add_library(Erlang::Erlang INTERFACE IMPORTED)
-    set_target_properties(Erlang::Erlang
-      PROPERTIES
-      INTERFACE_INCLUDE_DIRECTORIES ${Erlang_OTP_ROOT_DIR}/usr/include
-      )
+if (NOT ERLANG_ROOT)
+  if ((NOT ERLANG_EI_LIB) OR (NOT ERLANG_EI_INCLUDE))
+    SET(Erlang_BIN_PATH
+      /opt/bin
+      /sw/bin
+      /usr/bin
+      /usr/local/bin
+      /opt/local/bin
+    )
+    FIND_PROGRAM(Erlang_RUNTIME
+      NAMES erl
+      PATHS ${Erlang_BIN_PATH}
+    )
+    execute_erlang(${Erlang_RUNTIME} Erlang_OTP_ROOT_DIR Erlang_EI_INCLUDE_DIRS Erlang_EI_LIBRARY_PATH)
+  else()
+    SET(Erlang_OTP_ROOT_DIR ${CMAKE_FIND_ROOT_PATH}/${ERLANG_ROOT})
+    SET(Erlang_EI_LIBRARY_PATH ${ERLANG_EI_LIB})
+    SET(Erlang_EI_INCLUDE_DIRS ${ERLANG_EI_INCLUDE})
   endif()
+else()
+  execute_erlang(${ERLANG_ROOT}/bin/erl Erlang_OTP_ROOT_DIR Erlang_EI_INCLUDE_DIRS Erlang_EI_LIBRARY_PATH)
+endif()
 
-  if(NOT TARGET Erlang::ERTS)
-    add_library(Erlang::ERTS STATIC IMPORTED)
-    set_target_properties(Erlang::ERTS
-      PROPERTIES
-      INTERFACE_INCLUDE_DIRECTORIES ${Erlang_ERTS_INCLUDE_DIRS}
-      IMPORTED_LOCATION             ${Erlang_ERTS_LIBRARY_PATH}/liberts.a
-      )
-  endif()
+SET(Erlang_EI_LIBRARY_NAME   libei.a)
+set(Erlang_FOUND ON)
 
-  if(NOT TARGET Erlang::EI)
-    add_library(erlang_ei STATIC IMPORTED)
-    set_property(TARGET erlang_ei PROPERTY
-      IMPORTED_LOCATION ${Erlang_EI_LIBRARY_PATH}/libei.a
-      )
-    add_library(Erlang::EI INTERFACE IMPORTED)
-    set_property(TARGET Erlang::EI PROPERTY
-      INTERFACE_INCLUDE_DIRECTORIES ${Erlang_EI_INCLUDE_DIRS}
-      )
-    set_property(TARGET Erlang::EI PROPERTY
-      INTERFACE_LINK_LIBRARIES erlang_ei
-      )
-  endif()
-endif(Erlang_FOUND)
+FIND_PACKAGE_HANDLE_STANDARD_ARGS(Erlang
+  Erlang_EI_LIBRARY_PATH
+  Erlang_EI_INCLUDE_DIRS
+  Erlang_FOUND
+)
 
+if(NOT TARGET Erlang::Erlang)
+  add_library(Erlang::Erlang INTERFACE IMPORTED)
+  set_target_properties(Erlang::Erlang
+    PROPERTIES
+    INTERFACE_INCLUDE_DIRECTORIES ${Erlang_OTP_ROOT_DIR}/usr/include
+    )
+endif()
 
+if(NOT TARGET Erlang::EI)
+  add_library(erlang_ei STATIC IMPORTED)
+  set_property(TARGET erlang_ei PROPERTY
+    IMPORTED_LOCATION ${Erlang_EI_LIBRARY_PATH}/${Erlang_EI_LIBRARY_NAME}
+  )
 
-#[[
-https://gist.github.com/JayKickliter/dd0016bd5545de466e7ca158d4b19417
-How I compile Erlang from source on macOS
-
-CFLAGS="-Og -ggdb3 -fno-omit-frame-pointer" \
-CXXFLAGS="-Og -ggdb3 -fno-omit-frame-pointer" \
-./configure \
-      --prefix=$HOME/.local \
-      --disable-silent-rules \
-      --enable-dynamic-ssl-lib \
-      --with-ssl=/usr/local/opt/openssl \
-      --disable-hipe \
-      --enable-sctp \
-      --enable-shared-zlib \
-      --enable-smp-support \
-      --enable-threads \
-      --enable-wx \
-      --without-javac \
-      --enable-darwin-64bit
-]]
+  add_library(Erlang::EI INTERFACE IMPORTED)
+  set_property(TARGET Erlang::EI PROPERTY
+    INTERFACE_INCLUDE_DIRECTORIES ${Erlang_EI_INCLUDE_DIRS}
+  )
+  set_property(TARGET Erlang::EI PROPERTY
+    INTERFACE_LINK_LIBRARIES erlang_ei
+  )
+endif()
