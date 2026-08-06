@@ -10922,4 +10922,514 @@ suite short_ids_write_guard = [] {
    };
 };
 
+// ============================================================
+// Nullable-wrapped block mappings as struct members
+// ============================================================
+
+// A block mapping discovers its own key column, so the parent must push the
+// column just outside it. A nullable wrapper (optional/smart pointer) delegates
+// the block parse to the mapping unchanged, so it must not change that column:
+// pushing the column itself made the mapping dedent out after its first entry
+// and the sibling entry surfaced as an unknown key on the enclosing struct.
+namespace nullable_block_mapping
+{
+   struct leaf
+   {
+      int id{};
+   };
+
+   struct branch
+   {
+      int id{};
+      std::optional<std::map<std::string, leaf>> leaves{};
+   };
+
+   struct root
+   {
+      std::optional<std::map<std::string, branch>> branches{};
+   };
+
+   struct optional_map_obj
+   {
+      std::optional<std::map<std::string, int>> m{};
+      int after{};
+   };
+
+   struct unique_ptr_map_obj
+   {
+      std::unique_ptr<std::map<std::string, int>> m{};
+      int after{};
+   };
+
+   struct optional_variant_map_obj
+   {
+      std::optional<std::variant<int, std::map<std::string, int>>> m{};
+      int after{};
+   };
+
+   struct optional_variant_sequence_obj
+   {
+      std::optional<std::variant<int, std::vector<int>>> m{};
+      int after{};
+   };
+
+   struct optional_generic_obj
+   {
+      std::optional<glz::generic> m{};
+      int after{};
+   };
+
+   struct sequence_of_optional_map_obj
+   {
+      std::vector<optional_map_obj> items{};
+   };
+
+   struct lenient_opts_t : glz::opts
+   {
+      bool error_on_unknown_keys = true;
+   };
+}
+
+suite yaml_nullable_block_mapping_tests = [] {
+   "optional_map_member_reads_all_entries"_test = [] {
+      using namespace nullable_block_mapping;
+      optional_map_obj obj{};
+      const std::string yaml = "m:\n  a: 1\n  b: 2\nafter: 7\n";
+      auto ec = glz::read_yaml(obj, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(obj.m.has_value());
+      if (obj.m) {
+         expect(obj.m->size() == 2u);
+         expect(obj.m->at("a") == 1);
+         expect(obj.m->at("b") == 2);
+      }
+      expect(obj.after == 7);
+   };
+
+   "unique_ptr_map_member_reads_all_entries"_test = [] {
+      using namespace nullable_block_mapping;
+      unique_ptr_map_obj obj{};
+      const std::string yaml = "m:\n  a: 1\n  b: 2\nafter: 7\n";
+      auto ec = glz::read_yaml(obj, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(obj.m != nullptr);
+      if (obj.m) {
+         expect(obj.m->size() == 2u);
+         expect(obj.m->at("a") == 1);
+         expect(obj.m->at("b") == 2);
+      }
+      expect(obj.after == 7);
+   };
+
+   "optional_variant_map_member_reads_all_entries"_test = [] {
+      using namespace nullable_block_mapping;
+      optional_variant_map_obj obj{};
+      const std::string yaml = "m:\n  a: 1\n  b: 2\nafter: 7\n";
+      auto ec = glz::read_yaml(obj, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(obj.m.has_value());
+      if (obj.m) {
+         using map_t = std::map<std::string, int>;
+         expect(std::holds_alternative<map_t>(*obj.m));
+         if (std::holds_alternative<map_t>(*obj.m)) expect(std::get<map_t>(*obj.m).size() == 2u);
+      }
+      expect(obj.after == 7);
+   };
+
+   "optional_map_member_with_deeper_indent"_test = [] {
+      using namespace nullable_block_mapping;
+      optional_map_obj obj{};
+      const std::string yaml = "m:\n      a: 1\n      b: 2\nafter: 7\n";
+      auto ec = glz::read_yaml(obj, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(obj.m.has_value());
+      if (obj.m) {
+         expect(obj.m->size() == 2u);
+         expect(obj.m->at("a") == 1);
+         expect(obj.m->at("b") == 2);
+      }
+      expect(obj.after == 7);
+   };
+
+   // The pushed column is one *outside* the mapping, so a single-space child
+   // indent is the boundary that proves it cannot swallow the parent's siblings.
+   "optional_map_member_with_single_space_indent"_test = [] {
+      using namespace nullable_block_mapping;
+      optional_map_obj obj{};
+      const std::string yaml = "m:\n a: 1\n b: 2\nafter: 7\n";
+      auto ec = glz::read_yaml(obj, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(obj.m.has_value());
+      if (obj.m) {
+         expect(obj.m->size() == 2u);
+         expect(obj.m->at("a") == 1);
+         expect(obj.m->at("b") == 2);
+      }
+      expect(obj.after == 7);
+   };
+
+   // Without error_on_unknown_keys the truncation is silent: the dropped entry
+   // is skipped as an unknown key of the enclosing struct instead of erroring.
+   "optional_map_member_reads_all_entries_without_unknown_key_errors"_test = [] {
+      using namespace nullable_block_mapping;
+      optional_map_obj obj{};
+      const std::string yaml = "m:\n  a: 1\n  b: 2\nafter: 7\n";
+      constexpr lenient_opts_t opts{{.format = glz::YAML}, false};
+      auto ec = glz::read<opts>(obj, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(obj.m.has_value());
+      if (obj.m) {
+         expect(obj.m->size() == 2u);
+         expect(obj.m->at("b") == 2);
+      }
+      expect(obj.after == 7);
+   };
+
+   // Block sequences truncate silently too, so the wrapped type must forward
+   // even when the value is not a mapping.
+   "optional_variant_sequence_member_reads_all_elements"_test = [] {
+      using namespace nullable_block_mapping;
+      optional_variant_sequence_obj obj{};
+      const std::string yaml = "m:\n  - 1\n  - 2\nafter: 7\n";
+      auto ec = glz::read_yaml(obj, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(obj.m.has_value());
+      if (obj.m) {
+         using vec_t = std::vector<int>;
+         expect(std::holds_alternative<vec_t>(*obj.m));
+         if (std::holds_alternative<vec_t>(*obj.m)) expect(std::get<vec_t>(*obj.m) == vec_t{1, 2});
+      }
+      expect(obj.after == 7);
+   };
+
+   // glz::generic is a glaze_value_t wrapping a variant, so an optional one
+   // exercises two levels of wrapper unwrapping.
+   "optional_generic_member_reads_all_elements"_test = [] {
+      using namespace nullable_block_mapping;
+      optional_generic_obj obj{};
+      const std::string yaml = "m:\n  - 1\n  - 2\nafter: 7\n";
+      auto ec = glz::read_yaml(obj, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(obj.m.has_value());
+      if (obj.m) {
+         expect(obj.m->is_array());
+         if (obj.m->is_array()) expect(obj.m->get_array().size() == 2u);
+      }
+      expect(obj.after == 7);
+   };
+
+   "optional_map_member_of_sequence_element"_test = [] {
+      using namespace nullable_block_mapping;
+      sequence_of_optional_map_obj obj{};
+      const std::string yaml = "items:\n  - m:\n      a: 1\n      b: 2\n    after: 3\n";
+      auto ec = glz::read_yaml(obj, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(obj.items.size() == 1u);
+      if (obj.items.size() == 1u) {
+         expect(obj.items[0].m.has_value());
+         if (obj.items[0].m) {
+            expect(obj.items[0].m->size() == 2u);
+            expect(obj.items[0].m->at("b") == 2);
+         }
+         expect(obj.items[0].after == 3);
+      }
+   };
+
+   "nested_optional_maps_roundtrip"_test = [] {
+      using namespace nullable_block_mapping;
+      const std::string yaml =
+         "branches:\n"
+         "  first:\n"
+         "    id: 1\n"
+         "    leaves:\n"
+         "      a:\n"
+         "        id: 10\n"
+         "      b:\n"
+         "        id: 20\n"
+         "  second:\n"
+         "    id: 2\n";
+
+      root value{};
+      auto ec = glz::read_yaml(value, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(value.branches.has_value());
+      if (!value.branches) return;
+      expect(value.branches->size() == 2u);
+      expect(value.branches->at("first").id == 1);
+      expect(value.branches->at("second").id == 2);
+      expect(value.branches->at("first").leaves.has_value());
+      if (value.branches->at("first").leaves) {
+         auto& leaves = *value.branches->at("first").leaves;
+         expect(leaves.size() == 2u);
+         expect(leaves.at("a").id == 10);
+         expect(leaves.at("b").id == 20);
+      }
+
+      std::string buffer{};
+      expect(!glz::write_yaml(value, buffer));
+      root reread{};
+      auto rec = glz::read_yaml(reread, buffer);
+      expect(!rec) << glz::format_error(rec, buffer);
+      expect(reread.branches.has_value());
+      if (reread.branches && reread.branches->at("first").leaves) {
+         expect(reread.branches->size() == 2u);
+         expect(reread.branches->at("first").leaves->size() == 2u);
+      }
+   };
+
+   "optional_map_member_null_and_flow_still_read"_test = [] {
+      using namespace nullable_block_mapping;
+      {
+         optional_map_obj obj{};
+         expect(!glz::read_yaml(obj, std::string{"m: null\nafter: 7\n"}));
+         expect(!obj.m.has_value());
+         expect(obj.after == 7);
+      }
+      {
+         optional_map_obj obj{};
+         expect(!glz::read_yaml(obj, std::string{"m: {a: 1, b: 2}\nafter: 7\n"}));
+         expect(obj.m.has_value());
+         if (obj.m) expect(obj.m->size() == 2u);
+         expect(obj.after == 7);
+      }
+   };
+};
+
+// ============================================================
+// The speculative null probe in the nullable reader
+// ============================================================
+
+// Reading a nullable first probes for a plain "null"/"~"/empty scalar. The probe only
+// settles the node when the token it read really is this node's scalar -- a token
+// followed by ": " is a mapping key, and an empty token in block context can mean the
+// node's content simply starts on a later line. Getting either wrong silently nulls a
+// node that has data in it, so these pin a nullable to the same result as its
+// non-nullable counterpart.
+namespace nullable_null_probe
+{
+   struct anchored_optional
+   {
+      std::optional<std::map<std::string, int>> src{};
+      std::optional<std::map<std::string, int>> dst{};
+   };
+
+   struct anchored_plain
+   {
+      std::map<std::string, int> src{};
+      std::map<std::string, int> dst{};
+   };
+
+   struct optional_map_holder
+   {
+      std::optional<std::map<std::string, int>> m{};
+      int after{};
+   };
+}
+
+suite yaml_nullable_null_probe_tests = [] {
+   "null_looking_first_key_is_a_mapping_key_not_a_null_node"_test = [] {
+      using namespace nullable_null_probe;
+      for (const auto& key : {"null", "Null", "NULL", "~"}) {
+         const std::string yaml = "m:\n  " + std::string{key} + ": 1\n  b: 2\nafter: 7\n";
+         optional_map_holder obj{};
+         auto ec = glz::read_yaml(obj, yaml);
+         expect(!ec) << key << ": " << glz::format_error(ec, yaml);
+         expect(obj.m.has_value()) << key;
+         if (obj.m) {
+            expect(obj.m->size() == 2u) << key;
+            expect(obj.m->at(key) == 1) << key;
+            expect(obj.m->at("b") == 2) << key;
+         }
+         expect(obj.after == 7) << key;
+      }
+   };
+
+   "null_looking_key_at_document_root_reads_as_a_mapping"_test = [] {
+      const std::string yaml = "null: 1\nb: 2\n";
+      std::optional<std::map<std::string, int>> opt{};
+      auto ec = glz::read_yaml(opt, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(opt.has_value());
+      if (opt) {
+         expect(opt->size() == 2u);
+         expect(opt->at("null") == 1);
+      }
+
+      // The nullable must agree with the plain map on the same document.
+      std::map<std::string, int> plain{};
+      expect(!glz::read_yaml(plain, yaml));
+      expect(opt.has_value() && *opt == plain);
+   };
+
+   // A null value keyed under a null-looking key is still null: the guard keys off
+   // the ": " that follows the token, not off the token itself.
+   "null_value_under_a_null_looking_key_stays_null"_test = [] {
+      std::map<std::string, std::optional<int>> m{};
+      const std::string yaml = "null: null\nb: 2\n";
+      auto ec = glz::read_yaml(m, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(m.size() == 2u);
+      expect(!m.at("null").has_value());
+      expect(m.at("b").has_value());
+      if (m.at("b")) expect(*m.at("b") == 2);
+   };
+
+   // An anchor on a block node records a span beginning at the line break after the
+   // anchor name, so replaying it hands the nullable reader an empty leading scalar.
+   "alias_to_a_block_node_fills_a_nullable"_test = [] {
+      using namespace nullable_null_probe;
+      const std::string yaml = "src: &a\n  a: 1\n  b: 2\ndst: *a\n";
+
+      anchored_optional opt{};
+      auto ec = glz::read_yaml(opt, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(opt.dst.has_value());
+      if (opt.dst) {
+         expect(opt.dst->size() == 2u);
+         expect(opt.dst->at("a") == 1);
+         expect(opt.dst->at("b") == 2);
+      }
+
+      anchored_plain plain{};
+      expect(!glz::read_yaml(plain, yaml));
+      expect(opt.src.has_value() && *opt.src == plain.src);
+      expect(opt.dst.has_value() && *opt.dst == plain.dst);
+   };
+
+   "alias_to_a_flow_node_still_fills_a_nullable"_test = [] {
+      using namespace nullable_null_probe;
+      anchored_optional opt{};
+      const std::string yaml = "src: &a {a: 1, b: 2}\ndst: *a\n";
+      auto ec = glz::read_yaml(opt, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(opt.dst.has_value());
+      if (opt.dst) expect(opt.dst->size() == 2u);
+   };
+
+   // The guards must not start claiming genuinely empty nodes are non-null.
+   "genuinely_empty_nullable_nodes_are_still_null"_test = [] {
+      using namespace nullable_null_probe;
+      {
+         optional_map_holder obj{};
+         expect(!glz::read_yaml(obj, std::string{"m:\nafter: 7\n"}));
+         expect(!obj.m.has_value());
+         expect(obj.after == 7);
+      }
+      {
+         optional_map_holder obj{};
+         expect(!glz::read_yaml(obj, std::string{"m: ~\nafter: 7\n"}));
+         expect(!obj.m.has_value());
+         expect(obj.after == 7);
+      }
+      {
+         // An empty node inside a flow mapping is null even though it reads as an
+         // empty scalar -- the block-context guard must not reach it.
+         std::map<std::string, std::optional<int>> m{};
+         expect(!glz::read_yaml(m, std::string{"{a: , b: 2}"}));
+         expect(m.size() == 2u);
+         expect(!m.at("a").has_value());
+      }
+      {
+         std::optional<int> opt{42};
+         expect(!glz::read_yaml(opt, std::string{"null"}));
+         expect(!opt.has_value());
+      }
+   };
+};
+
+// ============================================================
+// Block values one column short of their siblings
+// ============================================================
+
+// A struct value reads the indent its parent pushed as its own key column, so the
+// parent must push the column of the value itself. Pushing one less left the struct
+// dedent check satisfied by a key one column short of its siblings, folding a
+// malformed entry in instead of rejecting it. Map and sequence values already
+// rejected the same shape, so this is what makes the three agree.
+namespace under_indented_block_value
+{
+   struct point
+   {
+      int x{};
+      int y{};
+   };
+}
+
+suite yaml_under_indented_block_value_tests = [] {
+   "under_indented_key_in_a_map_value_is_rejected"_test = [] {
+      using namespace under_indented_block_value;
+      std::map<std::string, point> m{};
+      expect(bool(glz::read_yaml(m, std::string{"first:\n  x: 1\n y: 2\n"})));
+
+      // A map value already rejected it; a struct value now agrees.
+      std::map<std::string, std::map<std::string, int>> nested{};
+      expect(bool(glz::read_yaml(nested, std::string{"first:\n  a: 1\n b: 2\n"})));
+   };
+
+   "under_indented_key_in_a_sequence_element_is_rejected"_test = [] {
+      using namespace under_indented_block_value;
+      std::vector<point> v{};
+      expect(bool(glz::read_yaml(v, std::string{"-\n  x: 1\n y: 2\n"})));
+
+      std::vector<std::map<std::string, int>> nested{};
+      expect(bool(glz::read_yaml(nested, std::string{"-\n  a: 1\n b: 2\n"})));
+   };
+
+   "under_indented_key_in_a_nullable_value_is_rejected"_test = [] {
+      using namespace under_indented_block_value;
+      std::map<std::string, std::optional<point>> m{};
+      expect(bool(glz::read_yaml(m, std::string{"first:\n  x: 1\n y: 2\n"})));
+   };
+
+   // Consistently indented block values must keep reading, at any column.
+   "consistently_indented_block_values_still_read"_test = [] {
+      using namespace under_indented_block_value;
+      {
+         std::map<std::string, point> m{};
+         const std::string yaml = "k:\n  x: 1\n  y: 2\nz:\n  x: 3\n";
+         auto ec = glz::read_yaml(m, yaml);
+         expect(!ec) << glz::format_error(ec, yaml);
+         expect(m.size() == 2u);
+         expect(m.at("k").y == 2);
+         expect(m.at("z").x == 3);
+      }
+      {
+         // One-space children are consistent, so they are valid.
+         std::map<std::string, point> m{};
+         const std::string yaml = "k:\n x: 1\n y: 2\n";
+         auto ec = glz::read_yaml(m, yaml);
+         expect(!ec) << glz::format_error(ec, yaml);
+         expect(m.at("k").x == 1);
+         expect(m.at("k").y == 2);
+      }
+      {
+         std::vector<point> v{};
+         const std::string yaml = "-\n  x: 1\n  y: 2\n-\n  x: 3\n";
+         auto ec = glz::read_yaml(v, yaml);
+         expect(!ec) << glz::format_error(ec, yaml);
+         expect(v.size() == 2u);
+         expect(v[0].y == 2);
+         expect(v[1].x == 3);
+      }
+      {
+         // Scalar and sequence values read the pushed indent as a baseline rather
+         // than a key column, so they must be unaffected.
+         std::map<std::string, std::string> m{};
+         const std::string yaml = "k:\n  hello\n  world\nz: end\n";
+         auto ec = glz::read_yaml(m, yaml);
+         expect(!ec) << glz::format_error(ec, yaml);
+         expect(m.at("k") == "hello world");
+         expect(m.at("z") == "end");
+      }
+      {
+         std::map<std::string, std::vector<int>> m{};
+         const std::string yaml = "k:\n  - 1\n  - 2\nz:\n- 3\n";
+         auto ec = glz::read_yaml(m, yaml);
+         expect(!ec) << glz::format_error(ec, yaml);
+         expect(m.at("k") == std::vector{1, 2});
+         expect(m.at("z") == std::vector{3});
+      }
+   };
+};
+
 int main() { return 0; }
