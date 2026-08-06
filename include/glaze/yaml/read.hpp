@@ -1063,6 +1063,55 @@ namespace glz
          }
       }
 
+      // Is the plain scalar that just ended at `it` a mapping key rather than a scalar node?
+      // A trailing ": " (or ':' at a line end) means the node being read is the mapping that
+      // starts with this key, so "null: 1" is a mapping, not the null scalar.
+      template <class It, class End>
+      inline bool plain_scalar_is_mapping_key(It it, End end) noexcept
+      {
+         skip_inline_ws(it, end);
+         if (it == end || *it != ':') return false;
+         const auto after = it + 1;
+         return after == end || whitespace_or_line_end_table[static_cast<uint8_t>(*after)];
+      }
+
+      // Does a block node's content start on a line after `it`? Content indented past the
+      // enclosing block belongs to the node that begins at this line break, so an empty plain
+      // scalar there means "not started yet", not "empty". This is the shape an alias to a
+      // block node replays as: the recorded anchor span begins at the line break following
+      // the anchor name, since the content's own indentation is part of the span.
+      template <class Ctx, class It, class End>
+      inline bool block_node_content_follows(Ctx& ctx, It it, End end) noexcept
+      {
+         while (it != end) {
+            if (*it == '\n' || *it == '\r') {
+               skip_newline(it, end);
+               continue;
+            }
+
+            int32_t line_indent = 0;
+            auto line = it;
+            while (line != end && (*line == ' ' || *line == '\t')) {
+               ++line_indent;
+               ++line;
+            }
+
+            if (line == end) return false;
+            if (*line == '\n' || *line == '\r') { // blank line
+               it = line;
+               continue;
+            }
+            if (*line == '#') { // comment line
+               skip_comment(line, end);
+               it = line;
+               continue;
+            }
+
+            return line_indent > ctx.current_indent();
+         }
+         return false;
+      }
+
       // Parse a multiline plain scalar with folding (for block context)
       // This handles plain scalars that span multiple lines, where continuation
       // lines are indented more than the base indent level.
@@ -2273,12 +2322,30 @@ namespace glz
          if (yaml::handle_alias<Opts>(value, ctx, it, end)) return;
          // Anchors (&name) pass through to the inner type handler
 
-         // Check for null value (without tag)
+         // Check for null value (without tag). The probe runs on a copy: a null-looking
+         // token only settles the node when the token really is this node's scalar, and
+         // otherwise the inner parser has to start from where this began.
          if (tag == yaml::yaml_tag::none) {
             std::string str;
-            yaml::parse_plain_scalar(str, ctx, it, end, yaml::check_flow_context(Opts));
+            auto probe = it;
+            yaml::parse_plain_scalar(str, ctx, probe, end, yaml::check_flow_context(Opts));
 
-            if (yaml::is_yaml_null(str)) {
+            bool is_null = yaml::is_yaml_null(str);
+            if (is_null) {
+               if (yaml::plain_scalar_is_mapping_key(probe, end)) {
+                  // "null: 1" is a mapping whose first key happens to look null.
+                  is_null = false;
+               }
+               else if (str.empty() && !yaml::check_flow_context(Opts) &&
+                        yaml::block_node_content_follows(ctx, probe, end)) {
+                  // A block node whose content begins on a following line reads as an
+                  // empty scalar here. In flow context an empty node really is null.
+                  is_null = false;
+               }
+            }
+
+            if (is_null) {
+               it = probe;
                value = {};
                return;
             }
@@ -2422,6 +2489,61 @@ namespace glz
 
    namespace yaml
    {
+      // A parent that hands a block-style value the lines below it pushes an indent for the
+      // value to judge itself against. What that indent must be depends on how the value
+      // reads a block mapping, so the two predicates below classify the value type. Both
+      // treat wrappers as transparent: glaze_value_t and nullable types (std::optional,
+      // smart/raw pointers) delegate the block parse to what they hold, unchanged.
+
+      // Maps -- and variants, which may resolve to one -- run parse_block_mapping_loop in
+      // discover mode: they find their own key column and judge dedent against the pushed
+      // indent as a strict parent. The parent must therefore push the column *outside* the
+      // value (nested_indent - 1).
+      template <class T>
+      constexpr bool discovers_own_block_mapping_indent()
+      {
+         using V = std::remove_cvref_t<T>;
+         if constexpr (readable_map_t<V> || is_variant<V>) {
+            return true;
+         }
+         else if constexpr (glaze_value_t<V>) {
+            return discovers_own_block_mapping_indent<
+               std::decay_t<decltype(get_member(std::declval<V&>(), meta_wrapper_v<V>))>>();
+         }
+         else if constexpr (nullable_like<V>) {
+            return discovers_own_block_mapping_indent<std::remove_cvref_t<decltype(*std::declval<V&>())>>();
+         }
+         else {
+            return false;
+         }
+      }
+
+      // Structs read the pushed indent as their own key column: from<YAML, T> for objects
+      // passes ctx.current_indent() straight through as parse_block_mapping's mapping_indent.
+      // The parent must push the column *of* the value (nested_indent), otherwise a key one
+      // column short of its siblings still clears the dedent check and is folded in.
+      //
+      // Every other value type (scalars, sequences) reads the pushed indent as an enclosing
+      // baseline and is not covered by either predicate.
+      template <class T>
+      constexpr bool receives_block_mapping_column()
+      {
+         using V = std::remove_cvref_t<T>;
+         if constexpr (glaze_object_t<V> || reflectable<V>) {
+            return true;
+         }
+         else if constexpr (glaze_value_t<V>) {
+            return receives_block_mapping_column<
+               std::decay_t<decltype(get_member(std::declval<V&>(), meta_wrapper_v<V>))>>();
+         }
+         else if constexpr (nullable_like<V>) {
+            return receives_block_mapping_column<std::remove_cvref_t<decltype(*std::declval<V&>())>>();
+         }
+         else {
+            return false;
+         }
+      }
+
       // Reading a YAML sequence node into a container OVERWRITES its previous
       // contents rather than appending to them, matching the JSON parser
       // (see json/read.hpp). Growable containers are cleared up front so that
@@ -3188,10 +3310,13 @@ namespace glz
                   // This prevents content at column 0 from being treated as nested.
                   const int32_t effective_line_indent = (line_indent < 0) ? 0 : line_indent;
                   if (nested_indent > effective_line_indent) {
-                     // Save and set indent for nested parsing
-                     // Set parent indent to one less than content indent so items at
-                     // content indent pass the "indent > parent" check and continue parsing
-                     if (!ctx.push_indent(nested_indent - 1)) [[unlikely]]
+                     // Save and set indent for nested parsing.
+                     // A struct element reads the pushed indent as its own key column; every
+                     // other element type reads it as the enclosing baseline, so it gets one
+                     // less than the content indent and its content passes "indent > parent".
+                     const int32_t element_indent =
+                        receives_block_mapping_column<value_type>() ? nested_indent : nested_indent - 1;
+                     if (!ctx.push_indent(element_indent)) [[unlikely]]
                         return;
                      const bool prev_sequence_item_value_context = ctx.sequence_item_value_context;
                      const int32_t prev_sequence_dash_indent = ctx.sequence_dash_indent;
@@ -3785,22 +3910,7 @@ namespace glz
                               int32_t nested_indent = detect_nested_value_indent(ctx, it, end, line_indent);
                               if (nested_indent >= 0) {
                                  skip_to_content(it, end);
-                                 constexpr bool uses_discovered_block_mapping_indent = [] {
-                                    if constexpr (readable_map_t<member_type> || is_variant<member_type>) {
-                                       return true;
-                                    }
-                                    else if constexpr (glaze_value_t<member_type>) {
-                                       using unwrapped_member_type = std::decay_t<decltype(get_member(
-                                          std::declval<member_type&>(), meta_wrapper_v<member_type>))>;
-                                       return readable_map_t<unwrapped_member_type> ||
-                                              is_variant<unwrapped_member_type>;
-                                    }
-                                    else {
-                                       return false;
-                                    }
-                                 }();
-
-                                 if constexpr (uses_discovered_block_mapping_indent) {
+                                 if constexpr (discovers_own_block_mapping_indent<member_type>()) {
                                     if (!ctx.push_indent(nested_indent - 1)) [[unlikely]]
                                        return false;
                                  }
@@ -4630,7 +4740,11 @@ namespace glz
                               ctx.error = error_code::syntax_error;
                               return false;
                            }
-                           if (!ctx.push_indent(nested_indent - 1)) [[unlikely]]
+                           // A struct value reads the pushed indent as its own key column;
+                           // every other value type reads it as the enclosing baseline.
+                           const int32_t value_indent =
+                              yaml::receives_block_mapping_column<val_t>() ? nested_indent : nested_indent - 1;
+                           if (!ctx.push_indent(value_indent)) [[unlikely]]
                               return false;
                            from<YAML, val_t>::template op<Opts>(val, ctx, it, end);
                            ctx.pop_indent();
