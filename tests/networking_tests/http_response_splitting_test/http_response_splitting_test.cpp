@@ -124,7 +124,7 @@ suite client_request_serializer_crlf = [] {
       url.port = 80;
       url.path = "/";
 
-      const std::unordered_map<std::string, std::string> headers{
+      const glz::http_headers headers{
          {"X-Evil", "a\r\nSmuggled-Header: 1"},
          {"X-Safe", "kept"},
       };
@@ -210,8 +210,7 @@ suite http_response_splitting_suite = [] {
 
       const std::string response = send_raw_timed(port, payload);
       expect(response.find("200") != std::string::npos) << "Request should be served";
-      // response::header() lowercases the field-name (RFC 7230 case-insensitive).
-      expect(response.find("x-echo: harmless-value") != std::string::npos) << "Benign header should round-trip";
+      expect(response.find("X-Echo: harmless-value") != std::string::npos) << "Benign header should round-trip";
    };
 
    "dropping a reflected Content-Length still frames the response"_test = [&] {
