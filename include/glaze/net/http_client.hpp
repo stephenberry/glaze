@@ -301,6 +301,16 @@ namespace glz
          return request_str;
       }
 
+      // Sets the Content-Type header to application/json if the Content-Type
+      // header is not already set.
+      inline glz::http_headers with_json_content_type(glz::http_headers headers)
+      {
+         if (!headers.contains("Content-Type")) {
+            headers.add("Content-Type", "application/json");
+         }
+         return headers;
+      }
+
 #ifdef GLZ_ENABLE_SSL
       // Configure SNI and hostname verification for client TLS connections.
       inline bool configure_ssl_client_hostname(ssl_socket& sock, const std::string& host)
@@ -1142,10 +1152,7 @@ namespace glz
             return std::unexpected(std::make_error_code(std::errc::invalid_argument));
          }
 
-         auto merged_headers = headers;
-         merged_headers.set("Content-Type", "application/json");
-
-         return post(url, json_str, merged_headers);
+         return post(url, json_str, detail::with_json_content_type(headers));
       }
 
       // Synchronous JSON PUT request
@@ -1159,10 +1166,7 @@ namespace glz
             return std::unexpected(std::make_error_code(std::errc::invalid_argument));
          }
 
-         auto merged_headers = headers;
-         merged_headers.set("Content-Type", "application/json");
-
-         return put(url, json_str, merged_headers);
+         return put(url, json_str, detail::with_json_content_type(headers));
       }
 
       [[deprecated("use stream_request_v2 instead")]]
@@ -1265,10 +1269,7 @@ namespace glz
             return;
          }
 
-         auto merged_headers = headers;
-         merged_headers.set("Content-Type", "application/json");
-
-         post_async(url, json_str, merged_headers, std::forward<CompletionHandler>(handler));
+         post_async(url, json_str, detail::with_json_content_type(headers), std::forward<CompletionHandler>(handler));
       }
 
       // Overload for post_json_async without completion handler (returns future)

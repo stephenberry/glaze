@@ -167,14 +167,16 @@ class working_test_server
       });
 
       server_.put("/json", [](const request& req, response& res) {
-         auto content_type = req.headers.find("content-type");
-         if (content_type == req.headers.end()) {
+         auto content_type = req.headers.first_value("content-type");
+         if (!content_type) {
             res.status(415).body("missing content-type");
             return;
          }
 
          std::string response_body = "CT=";
-         response_body.append(content_type->value);
+         response_body.append(*content_type);
+         response_body.append(";CT_COUNT=");
+         response_body.append(std::to_string(req.headers.count("content-type")));
          response_body.append(";BODY=");
          response_body.append(req.body);
          res.status(200).content_type("text/plain").body(response_body);
@@ -1004,8 +1006,54 @@ suite glz_http_client_tests = [] {
          expect(result->status_code == 200) << "PUT JSON status should be 200";
          expect(result->response_body.find("CT=application/json") != std::string::npos)
             << "Content-Type header should be forwarded";
+         expect(result->response_body.find("CT_COUNT=1") != std::string::npos)
+            << "Content-Type should reach the wire exactly once";
          expect(result->response_body.find("BODY=" + expected_json) != std::string::npos)
             << "JSON body should be forwarded";
+      }
+
+      server.stop();
+   };
+
+   "put_json_keeps_a_caller_supplied_content_type"_test = [] {
+      working_test_server server;
+      expect(server.start());
+
+      glz::http_client client;
+
+      test_http_client::put_payload payload{.value = 7, .message = "vendor"};
+
+      glz::http_headers vendor_headers{{"Content-Type", "application/vnd.api+json"}};
+      auto result = client.put_json(server.base_url() + "/json", payload, vendor_headers);
+
+      expect(result.has_value()) << "PUT JSON request should succeed";
+      if (result.has_value()) {
+         expect(result->response_body.find("CT=application/vnd.api+json") != std::string::npos)
+            << "A caller-supplied Content-Type must not be replaced by application/json";
+         expect(result->response_body.find("CT_COUNT=1") != std::string::npos)
+            << "The default must not be appended alongside the caller's field";
+      }
+
+      server.stop();
+   };
+
+   "put_json_matches_a_lowercase_caller_content_type"_test = [] {
+      working_test_server server;
+      expect(server.start());
+
+      glz::http_client client;
+
+      test_http_client::put_payload payload{.value = 9, .message = "charset"};
+
+      glz::http_headers lowercase_headers{{"content-type", "application/json; charset=utf-8"}};
+      auto result = client.put_json(server.base_url() + "/json", payload, lowercase_headers);
+
+      expect(result.has_value()) << "PUT JSON request should succeed";
+      if (result.has_value()) {
+         expect(result->response_body.find("CT=application/json; charset=utf-8") != std::string::npos)
+            << "The charset parameter must survive";
+         expect(result->response_body.find("CT_COUNT=1") != std::string::npos)
+            << "A lowercase field name must be recognized as already present";
       }
 
       server.stop();
@@ -1561,6 +1609,39 @@ suite host_header_tests = [] {
 
       const std::string expected_host = "127.0.0.1:" + std::to_string(server.port());
       expect(server.host_header() == expected_host) << "Host header should include authority port";
+   };
+};
+
+suite with_json_content_type_tests = [] {
+   "absent_content_type_gets_the_json_default"_test = [] {
+      auto headers = glz::detail::with_json_content_type(glz::http_headers{{"X-Extra", "value"}});
+
+      expect(headers.count("Content-Type") == 1);
+      expect(headers.first_value("Content-Type") == "application/json");
+      expect(headers.first_value("X-Extra") == "value") << "Caller headers should be carried through";
+   };
+
+   "a_caller_content_type_is_left_alone"_test = [] {
+      auto headers =
+         glz::detail::with_json_content_type(glz::http_headers{{"Content-Type", "application/vnd.api+json"}});
+
+      expect(headers.count("Content-Type") == 1);
+      expect(headers.first_value("Content-Type") == "application/vnd.api+json");
+   };
+
+   "the_lookup_ignores_field_name_case"_test = [] {
+      auto headers = glz::detail::with_json_content_type(glz::http_headers{{"content-type", "text/plain"}});
+
+      expect(headers.count("Content-Type") == 1) << "A lowercase name must not yield a second field";
+      expect(headers.first_value("Content-Type") == "text/plain");
+   };
+
+   "the_caller_headers_are_not_mutated"_test = [] {
+      glz::http_headers original{{"X-Extra", "value"}};
+      auto headers = glz::detail::with_json_content_type(original);
+
+      expect(!original.contains("Content-Type")) << "The caller's container is taken by value";
+      expect(headers.contains("Content-Type"));
    };
 };
 
