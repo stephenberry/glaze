@@ -747,7 +747,8 @@ suite response_building_tests = [] {
       res.json(data);
 
       expect(!res.response_body.empty()) << "JSON serialization should produce content\n";
-      expect(res.response_headers.first_value("content-type") == "application/json") << "Should set JSON content type\n";
+      expect(res.response_headers.first_value("content-type") == "application/json")
+         << "Should set JSON content type\n";
 
       // Verify serialization worked
       TestData deserialized;
@@ -1327,6 +1328,12 @@ struct keepalive_test_server
             res.body("Connection: (none)");
          }
       });
+
+      server_.get("/set-cookies", [](const glz::request&, glz::response& res) {
+         res.add_header("Set-Cookie", "session=abc; Path=/; HttpOnly")
+            .add_header("Set-Cookie", "theme=dark; Path=/")
+            .body("OK");
+      });
    }
 };
 
@@ -1511,6 +1518,38 @@ suite keepalive_behavior_tests = [] {
          if (ka_header != resp->headers.end()) {
             expect(ka_header->value.find("timeout=45") != std::string::npos) << "Should contain timeout\n";
             expect(ka_header->value.find("max=100") != std::string::npos) << "Should contain max\n";
+         }
+      }
+
+      client.close();
+      server.stop();
+   };
+};
+
+suite repeated_response_header_tests = [] {
+   "repeated_set_cookie_fields_reach_the_wire"_test = [] {
+      keepalive_test_server server;
+      expect(server.start()) << "Server should start\n";
+
+      raw_http_client client;
+      expect(client.connect("127.0.0.1", server.port())) << "Client should connect\n";
+
+      auto resp = client.send_request("GET", "/set-cookies", "127.0.0.1:" + std::to_string(server.port()));
+      expect(resp.has_value()) << "Should receive response\n";
+
+      if (resp.has_value()) {
+         expect(resp->status_code == 200) << "Status should be 200\n";
+         expect(resp->headers.count("Set-Cookie") == 2) << "Both Set-Cookie fields should reach the wire\n";
+
+         std::vector<std::string> cookies;
+         for (auto value : resp->headers.values("Set-Cookie")) {
+            cookies.emplace_back(value);
+         }
+
+         expect(cookies.size() == 2);
+         if (cookies.size() == 2) {
+            expect(cookies[0] == "session=abc; Path=/; HttpOnly") << "First cookie should keep its position\n";
+            expect(cookies[1] == "theme=dark; Path=/") << "Second cookie should keep its position\n";
          }
       }
 
