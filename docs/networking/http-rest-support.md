@@ -140,6 +140,27 @@ struct response {
 `glz::generic` is the dynamic JSON-compatible type (formerly `glz::json_t`) and remains the default payload for
 helpers like `response::json` when you need flexible data that can be serialized to JSON or equivalent formats.
 
+### Field Name Casing
+
+Field names keep the case they were written with. `request::headers` holds the names exactly as the client sent them,
+and `response::header` serializes fields exactly in the case the handler passed them in.
+
+Lookups are case-insensitive: `find`, `contains`, `first_value`, `values`, `count`, `contains_token`, `set` and `erase`
+all match regardless of case, so `req.headers.find("content-type")` finds a field the client sent as `Content-Type`.
+
+Code that iterates the container and compares names on its own has to do the same:
+
+```cpp
+for (const auto& field : req.headers) {
+    if (field.name == "content-type") {                // misses "Content-Type"
+    }
+    if (glz::striequal(field.name, "content-type")) {  // matches any casing
+    }
+}
+```
+
+Both forms compile, so the first one fails silently.
+
 ## HTTP Methods
 
 Glaze supports all standard HTTP methods:
