@@ -4,14 +4,18 @@
 #include <atomic>
 #include <cctype>
 #include <cstdint>
+#include <expected>
 #include <memory>
 #include <mutex>
 #include <random>
 #include <string>
+#include <string_view>
+#include <system_error>
 #include <variant>
 #include <vector>
 
 #include "glaze/net/http_client.hpp"
+#include "glaze/net/ssl.hpp" // Direct dependency: TLS context setup and trust anchors
 #include "glaze/net/websocket_connection.hpp"
 #include "glaze/util/itoa.hpp"
 
@@ -68,10 +72,24 @@ namespace glz
 
          size_t max_message_size{1024 * 1024 * 16}; // 16 MB limit
 #ifdef GLZ_ENABLE_SSL
+         mutable std::mutex ssl_ctx_mutex_; // Guards ssl_ctx_ creation and trust-anchor mutation
          asio::ssl::verify_mode ssl_verify_mode_{asio::ssl::verify_peer}; // Default to verify peer
 #endif
 
          explicit impl(std::shared_ptr<asio::io_context> context) : ctx(std::move(context)) {}
+
+#ifdef GLZ_ENABLE_SSL
+         // Create the client TLS context on first use and seed it with the platform's
+         // trust anchors. Callers must hold ssl_ctx_mutex_.
+         asio::ssl::context& ensure_ssl_context_locked()
+         {
+            if (!ssl_ctx_) {
+               ssl_ctx_ = std::make_shared<asio::ssl::context>(asio::ssl::context::tls_client);
+               detail::seed_platform_trust_anchors(*ssl_ctx_);
+            }
+            return *ssl_ctx_;
+         }
+#endif
 
          static bool header_name_equal(std::string_view lhs, std::string_view rhs)
          {
@@ -233,12 +251,15 @@ namespace glz
 
             if (url.protocol == "wss") {
 #ifdef GLZ_ENABLE_SSL
-               if (!ssl_ctx_) {
-                  ssl_ctx_ = std::make_shared<asio::ssl::context>(asio::ssl::context::tls_client);
-                  ssl_ctx_->set_default_verify_paths();
-                  ssl_ctx_->set_verify_mode(ssl_verify_mode_);
+               {
+                  std::lock_guard<std::mutex> ssl_lock(ssl_ctx_mutex_);
+                  // Apply the verify mode on every connect, not just when the context is
+                  // first created: the context may already exist because trust anchors were
+                  // added before connecting, and a set_ssl_verify_mode() call must not be
+                  // silently dropped in that case.
+                  ensure_ssl_context_locked().set_verify_mode(ssl_verify_mode_);
+                  ssl_socket_ = std::make_shared<asio::ssl::stream<asio::ip::tcp::socket>>(*ctx, *ssl_ctx_);
                }
-               ssl_socket_ = std::make_shared<asio::ssl::stream<asio::ip::tcp::socket>>(*ctx, *ssl_ctx_);
 
                if (!detail::configure_ssl_client_hostname(*ssl_socket_, url.host)) {
                   if (on_error && *on_error) (*on_error)(make_error_code(ssl_error::sni_hostname_failed));
@@ -533,7 +554,57 @@ namespace glz
       // Set SSL verification mode before calling connect()
       // Use asio::ssl::verify_none to disable certificate verification
       // (useful for self-signed certificates in testing)
-      void set_ssl_verify_mode(asio::ssl::verify_mode mode) { impl_->ssl_verify_mode_ = mode; }
+      //
+      // Takes ssl_ctx_mutex_ because connect() reads this under the same lock; without it
+      // a setter racing a connect on another thread would be a data race.
+      void set_ssl_verify_mode(asio::ssl::verify_mode mode)
+      {
+         std::lock_guard<std::mutex> lock(impl_->ssl_ctx_mutex_);
+         impl_->ssl_verify_mode_ = mode;
+      }
+
+      // Trust-anchor configuration, all callable before connect() and all additive: the
+      // platform's own anchors are loaded when the TLS context is created and are kept.
+      // Prefer these over set_ssl_verify_mode(verify_none), which disables verification
+      // entirely and exposes the connection to man-in-the-middle attacks.
+
+      // Add the certificates in a PEM bundle file to the set of trusted CAs.
+      std::expected<void, std::error_code> add_ca_certificate_file(std::string_view path)
+      {
+         std::lock_guard<std::mutex> lock(impl_->ssl_ctx_mutex_);
+         return detail::add_ca_file(impl_->ensure_ssl_context_locked(), path);
+      }
+
+      // Add an OpenSSL-style hashed certificate directory to the set of trusted CAs.
+      // The directory must be indexed with c_rehash/`openssl rehash`. A bad path is not
+      // reported here: OpenSSL reads the directory lazily during the handshake, so it
+      // surfaces as a verification failure instead. Call this before connect(): OpenSSL
+      // mutates and reads its lookup list without locking, so adding a directory during a
+      // handshake races inside OpenSSL regardless of the lock held here.
+      std::expected<void, std::error_code> add_ca_certificate_directory(std::string_view path)
+      {
+         std::lock_guard<std::mutex> lock(impl_->ssl_ctx_mutex_);
+         return detail::add_ca_directory(impl_->ensure_ssl_context_locked(), path);
+      }
+
+      // Add trusted CAs from an in-memory PEM bundle. Accepts any number of concatenated
+      // PEM certificates, so a trust bundle can be embedded in the binary. Empty input is
+      // reported as an error rather than silently adding nothing.
+      std::expected<void, std::error_code> add_ca_certificates_pem(std::string_view pem)
+      {
+         std::lock_guard<std::mutex> lock(impl_->ssl_ctx_mutex_);
+         return detail::add_ca_pem(impl_->ensure_ssl_context_locked(), pem);
+      }
+
+      // Add the operating system's native trust anchors, returning how many were added.
+      // Windows only; returns 0 on platforms where OpenSSL's default verify paths already
+      // resolve to the system bundle. Done once when the TLS context is created, so this
+      // is only needed to restore OS trust after replacing the context's anchors.
+      std::expected<size_t, std::error_code> add_os_ca_certificates()
+      {
+         std::lock_guard<std::mutex> lock(impl_->ssl_ctx_mutex_);
+         return detail::load_os_ca_certificates(impl_->ensure_ssl_context_locked());
+      }
 #endif
 
       // Set an additional HTTP header for the opening WebSocket handshake.
