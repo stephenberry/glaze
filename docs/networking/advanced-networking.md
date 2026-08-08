@@ -202,12 +202,12 @@ auto secure_ws = std::make_shared<glz::websocket_server>();
 
 // Validate connections before upgrade
 secure_ws->on_validate([](const glz::request& req) -> bool {
-    auto auth_header = req.headers.find("Authorization");
-    if (auth_header == req.headers.end()) {
+    auto auth_header = req.headers.first_value("Authorization");
+    if (!auth_header) {
         return false;
     }
     
-    return validate_jwt_token(auth_header->value);
+    return validate_jwt_token(*auth_header);
 });
 
 secure_ws->on_open([](auto conn, const glz::request& req) {
@@ -442,9 +442,10 @@ auto timing_middleware = [](const glz::request& req, glz::response& res) {
 
 // Response time middleware (would need to be applied after handler)
 auto response_time_middleware = [](const glz::request& req, glz::response& res) {
-    auto start_header = res.response_headers.find("X-Request-Start");
-    if (start_header != res.response_headers.end()) {
-        auto start_ms = std::stoll(start_header->value);
+    auto start_header = res.response_headers.first_value("X-Request-Start");
+    if (start_header) {
+        long long start_ms{};
+        std::from_chars(start_header->data(), start_header->data() + start_header->size(), start_ms);
         auto now_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
             std::chrono::high_resolution_clock::now().time_since_epoch()).count();
         

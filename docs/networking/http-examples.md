@@ -808,19 +808,18 @@ auto create_simple_auth_middleware(SimpleAuthService& auth_service) {
             return;
         }
         
-        auto auth_header = req.headers.find("authorization");
-        if (auth_header == req.headers.end()) {
+        auto auth_value = req.headers.first_value("authorization");
+        if (!auth_value) {
             res.status(401).json({{"error", "Authorization header required"}});
             return;
         }
         
-        std::string auth_value{auth_header->value};
-        if (!auth_value.starts_with("Bearer ")) {
+        if (!auth_value->starts_with("Bearer ")) {
             res.status(401).json({{"error", "Bearer token required"}});
             return;
         }
         
-        std::string token = auth_value.substr(7); // Remove "Bearer "
+        std::string token{auth_value->substr(7)}; // Remove "Bearer "
         auto user = auth_service.validate_token(token);
         
         if (!user) {
