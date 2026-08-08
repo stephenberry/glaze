@@ -18,12 +18,12 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
 
     strategy:
       fail-fast: false
       matrix:
-        gcc: [13, 14]
+        gcc: [14, 15]
         build_type: [Debug]
         std: [23]
 
@@ -32,12 +32,13 @@ jobs:
       CXX: g++-${{matrix.gcc}}
 
     steps:
-    - name: Install Dependencies
-      run: |
-          sudo apt-get update
-          sudo apt-get install erlang-dev
 
     - uses: actions/checkout@v6
+
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y erlang-dev
 
     - name: Configure CMake
       run: |

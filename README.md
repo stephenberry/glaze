@@ -91,6 +91,29 @@ See this README, the [Glaze Documentation Page](https://stephenberry.github.io/g
 - [Streaming I/O](https://stephenberry.github.io/glaze/streaming/) for reading/writing large files with bounded memory
 - [Much more!](#more-features)
 
+## Compiler/System Support
+
+- Requires C++23
+- Tested for both 64bit and 32bit
+- Supports both little-endian and big-endian systems
+
+| Compiler    | Supported versions                                   | Versions tested in CI |
+|-------------|------------------------------------------------------|-----------------------|
+| MSVC        | Visual Studio 2026 MSVC Build Tools 14.50 and higher | 14.51                 |
+| Clang       | >= 18                                                | 21, 22                |
+| GCC         | >= 13                                                | 14, 15, 16            |
+| Apple Clang | >= 21                                                | 21                    |
+
+In [Actions](https://github.com/stephenberry/glaze/actions), MSVC is tested on Windows, GCC is tested on Linux and Clang is tested on Linux and macOS. Big-endian is tested via QEMU emulation on s390x.
+
+![clang build](https://github.com/stephenberry/glaze/actions/workflows/clang.yml/badge.svg) ![gcc build](https://github.com/stephenberry/glaze/actions/workflows/gcc.yml/badge.svg) ![msvc build](https://github.com/stephenberry/glaze/actions/workflows/msvc.yml/badge.svg) 
+
+Glaze seeks to maintain compatibility with the latest three versions of GCC and Clang, as well as the two latest versions of MSVC and the latest version of Apple Clang (Xcode). We aim to only drop old versions with major releases.
+
+### MSVC Compiler Flags
+
+Glaze requires a C++ standard conformant pre-processor, which requires the `/Zc:preprocessor` flag when building with MSVC.
+
 ## Performance
 
 | Library                                                      | Roundtrip Time (s) | Write (MB/s) | Read (MB/s) |
@@ -251,21 +274,6 @@ auto ec = glz::read_json(obj, buffer);
 
 The buffer refills automatically during parsing, enabling reading of arbitrarily large inputs with fixed memory. See [Streaming I/O](https://stephenberry.github.io/glaze/streaming/) for NDJSON processing and other streaming patterns.
 
-## Compiler/System Support
-
-- Requires C++23
-- Tested for both 64bit and 32bit
-- Supports both little-endian and big-endian systems
-
-[Actions](https://github.com/stephenberry/glaze/actions) build and test with [Clang](https://clang.llvm.org) (18+), [MSVC](https://visualstudio.microsoft.com/vs/features/cplusplus/) (Visual Studio 2026 MSVC Build Tools 14.50), and [GCC](https://gcc.gnu.org) (13+) on apple, windows, and linux. Big-endian is tested via QEMU emulation on s390x.
-
-![clang build](https://github.com/stephenberry/glaze/actions/workflows/clang.yml/badge.svg) ![gcc build](https://github.com/stephenberry/glaze/actions/workflows/gcc.yml/badge.svg) ![msvc build](https://github.com/stephenberry/glaze/actions/workflows/msvc.yml/badge.svg) 
-
-> Glaze seeks to maintain compatibility with the latest three versions of GCC and Clang, as well as the latest version of MSVC and Apple Clang (Xcode). And, we aim to only drop old versions with major releases.
-
-### MSVC Compiler Flags
-
-Glaze requires a C++ standard conformant pre-processor, which requires the `/Zc:preprocessor` flag when building with MSVC.
 
 ### SIMD Architecture Detection
 
