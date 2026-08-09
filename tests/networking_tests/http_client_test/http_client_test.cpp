@@ -1015,7 +1015,7 @@ suite glz_http_client_tests = [] {
       server.stop();
    };
 
-   "put_json_keeps_a_caller_supplied_content_type"_test = [] {
+   "put_json_keeps_caller_content_type"_test = [] {
       working_test_server server;
       expect(server.start());
 
@@ -1037,7 +1037,7 @@ suite glz_http_client_tests = [] {
       server.stop();
    };
 
-   "put_json_matches_a_lowercase_caller_content_type"_test = [] {
+   "put_json_matches_lowercase_content_type"_test = [] {
       working_test_server server;
       expect(server.start());
 
@@ -1613,7 +1613,7 @@ suite host_header_tests = [] {
 };
 
 suite with_json_content_type_tests = [] {
-   "absent_content_type_gets_the_json_default"_test = [] {
+   "with_json_content_type_sets_default"_test = [] {
       auto headers = glz::detail::with_json_content_type(glz::http_headers{{"X-Extra", "value"}});
 
       expect(headers.count("Content-Type") == 1);
@@ -1621,7 +1621,7 @@ suite with_json_content_type_tests = [] {
       expect(headers.first_value("X-Extra") == "value") << "Caller headers should be carried through";
    };
 
-   "a_caller_content_type_is_left_alone"_test = [] {
+   "with_json_content_type_keeps_caller_value"_test = [] {
       auto headers =
          glz::detail::with_json_content_type(glz::http_headers{{"Content-Type", "application/vnd.api+json"}});
 
@@ -1629,14 +1629,14 @@ suite with_json_content_type_tests = [] {
       expect(headers.first_value("Content-Type") == "application/vnd.api+json");
    };
 
-   "the_lookup_ignores_field_name_case"_test = [] {
+   "with_json_content_type_ignores_name_case"_test = [] {
       auto headers = glz::detail::with_json_content_type(glz::http_headers{{"content-type", "text/plain"}});
 
       expect(headers.count("Content-Type") == 1) << "A lowercase name must not yield a second field";
       expect(headers.first_value("Content-Type") == "text/plain");
    };
 
-   "the_caller_headers_are_not_mutated"_test = [] {
+   "with_json_content_type_copies_caller_headers"_test = [] {
       glz::http_headers original{{"X-Extra", "value"}};
       auto headers = glz::detail::with_json_content_type(original);
 

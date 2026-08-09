@@ -1527,7 +1527,7 @@ suite keepalive_behavior_tests = [] {
 };
 
 suite repeated_response_header_tests = [] {
-   "repeated_set_cookie_fields_reach_the_wire"_test = [] {
+   "server_sends_repeated_set_cookie_fields"_test = [] {
       keepalive_test_server server;
       expect(server.start()) << "Server should start\n";
 
