@@ -13,6 +13,7 @@
 
 #include <atomic>
 #include <chrono>
+#include <future>
 #include <memory>
 #include <string>
 #include <thread>
@@ -531,6 +532,64 @@ suite content_length_connection_reuse = [] {
       server.join();
 
       expect(second.has_value()) << "after an EOF-truncated response the connection must not be pooled; the follow-up "
+                                    "request must open a fresh connection instead of reusing a dead socket";
+      if (second) {
+         expect(second->status_code == 200);
+         expect(second->response_body == "HELLO");
+      }
+      expect(accept_count->load() == 2) << "expected two server connections (dead socket not reused), got: "
+                                        << accept_count->load();
+   };
+
+   // The streaming path shares the same connection pool as ordinary requests, so a
+   // socket it hands back poisons whatever request draws it next. A stream whose
+   // body is framed by connection close ends at EOF: the socket is still "open" from
+   // this side, so it used to be pooled unconditionally and the next request drew a
+   // dead connection. Only a stream read to its framed end is reusable.
+   "eof_framed_stream_not_pooled"_test = [] {
+      auto listener = std::make_shared<asio::io_context>();
+      auto acceptor = std::make_shared<asio::ip::tcp::acceptor>(*listener);
+      asio::ip::tcp::endpoint ep(asio::ip::make_address("127.0.0.1"), 0);
+      acceptor->open(ep.protocol());
+      acceptor->set_option(asio::socket_base::reuse_address(true));
+      acceptor->bind(ep);
+      acceptor->listen(2);
+      const uint16_t port = acceptor->local_endpoint().port();
+
+      auto accept_count = std::make_shared<std::atomic<int>>(0);
+      std::vector<std::string> responses = {
+         // No Content-Length and no chunked framing: the body runs to the close that
+         // serve_sequence performs after writing.
+         "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nConnection: keep-alive\r\n\r\nSTREAMED",
+         "HTTP/1.1 200 OK\r\nContent-Length: 5\r\n\r\nHELLO",
+      };
+      auto server = serve_sequence(listener, acceptor, responses, accept_count);
+
+      glz::http_client client;
+      // Force a pooled dead socket to be reused rather than culled by the acquire-time peek.
+      client.set_pool_active_liveness_check(false);
+
+      const std::string base = "http://127.0.0.1:" + std::to_string(port) + "/";
+
+      std::promise<void> stream_done;
+      auto stream_finished = stream_done.get_future();
+      std::string streamed;
+      auto conn = client.stream_request_v2({.url = base,
+                                            .on_data = [&](std::string_view data) { streamed.append(data); },
+                                            .on_error = [](std::error_code) {},
+                                            .on_disconnect = [&] { stream_done.set_value(); }});
+      expect(conn != nullptr) << "stream request should start";
+      expect(stream_finished.wait_for(std::chrono::seconds(5)) == std::future_status::ready)
+         << "stream should reach its end";
+
+      // POST, not GET: the transparent-retry path covers idempotent methods, so a GET
+      // would silently reopen on a dead socket and hide the bug this pins.
+      auto second = client.post_async(base, "two").get(); // must land on a fresh connection 2
+
+      server.join();
+
+      expect(streamed == "STREAMED") << "stream body should arrive intact, got: " << streamed;
+      expect(second.has_value()) << "after an EOF-framed stream the connection must not be pooled; the follow-up "
                                     "request must open a fresh connection instead of reusing a dead socket";
       if (second) {
          expect(second->status_code == 200);

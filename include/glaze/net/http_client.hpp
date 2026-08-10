@@ -902,6 +902,13 @@ namespace glz
       std::shared_ptr<asio::streambuf> buffer; // Use unified streambuf for all reads
       bool is_connected{false};
       std::atomic<bool> should_stop{false};
+      // Set only once the response has been read to its framed end, leaving the
+      // socket positioned at the start of whatever the server sends next. Every
+      // other way a stream ends - a timeout, a caller-initiated disconnect part way
+      // through the body, a read error, or a body framed by connection close -
+      // leaves either unread response bytes or a dead peer behind, so the socket
+      // must be closed rather than handed to the next request.
+      std::atomic<bool> response_complete{false};
       stream_read_strategy strategy{stream_read_strategy::bulk_transfer}; // Default strategy
       std::function<bool(int)> status_is_error{}; // Evaluated before treating status as failure
       bool is_https{false}; // Track if this is an HTTPS connection
@@ -1426,9 +1433,21 @@ namespace glz
             if (user_on_disconnect) {
                user_on_disconnect();
             }
-            // Return the connection to the pool for reuse
             if (connection->socket) {
-               connection_pool->return_connection(url.host, url.port, use_https, std::move(*connection->socket));
+               // Only a socket sitting at the end of a fully-read response can serve
+               // the next request. Pooling one that timed out, errored, or was
+               // abandoned part way through the body hands the next request a socket
+               // with the tail of this response still arriving on it, which that
+               // request reads as its own status line - the same desync a conflicting
+               // Content-Length produces, reached through the pool instead. A body
+               // framed by connection close leaves the socket at EOF, which is dead
+               // rather than dangerous, but equally unusable.
+               if (connection->response_complete.load(std::memory_order_relaxed)) {
+                  connection_pool->return_connection(url.host, url.port, use_https, std::move(*connection->socket));
+               }
+               else {
+                  detail::close_socket(*connection->socket, connection_pool->graceful_ssl_shutdown());
+               }
             }
          };
 
@@ -1726,7 +1745,9 @@ namespace glz
                      connection->buffer->consume(bytes_transferred);
 
                      if (chunk_size == 0) {
-                        // Last chunk
+                        // Terminal chunk: the response is framed to its end here, so this
+                        // is the one exit that leaves the socket reusable.
+                        connection->response_complete.store(true, std::memory_order_relaxed);
                         if (on_disconnect) on_disconnect();
                         return;
                      }
