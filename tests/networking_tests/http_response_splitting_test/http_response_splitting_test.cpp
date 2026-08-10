@@ -133,6 +133,86 @@ suite client_request_serializer_crlf = [] {
       expect(request.find("Smuggled-Header") == std::string::npos) << "CRLF-bearing header must be dropped";
       expect(request.find("X-Safe: kept") != std::string::npos) << "Benign header must still be written";
    };
+
+   // The request writer computes Content-Length from the body it is about to append,
+   // so a caller-supplied one can only contradict it. glz::http_headers keeps
+   // repeats, which makes a conflicting pair expressible in a single call - two
+   // lengths on the wire let a proxy and the origin split the stream at different
+   // offsets (RFC 9112 6.3, request smuggling).
+   "build_http_request_bytes drops caller-supplied body framing headers"_test = [] {
+      glz::url_parts url;
+      url.protocol = "http";
+      url.host = "example.com";
+      url.port = 80;
+      url.path = "/";
+
+      const glz::http_headers headers{
+         {"Content-Length", "0"},
+         {"Content-Length", "999"},
+         {"Transfer-Encoding", "chunked"},
+         {"X-Safe", "kept"},
+      };
+
+      const std::string request = glz::detail::build_http_request_bytes("POST", url, false, "BODY", headers);
+
+      expect(request.find("Transfer-Encoding") == std::string::npos)
+         << "A caller Transfer-Encoding must not frame a body the writer does not chunk";
+      expect(request.find("Content-Length: 999") == std::string::npos) << "A contradicting length must be dropped";
+      expect(request.find("Content-Length: 0\r\n") == std::string::npos) << "A contradicting length must be dropped";
+      expect(request.find("Content-Length: 4\r\n") != std::string::npos)
+         << "The writer's own length, matching the body it appends, must survive";
+      expect(request.find("X-Safe: kept") != std::string::npos) << "Unrelated headers must still be written";
+
+      // Exactly one Content-Length reaches the wire.
+      size_t count = 0;
+      for (size_t at = request.find("Content-Length"); at != std::string::npos;
+           at = request.find("Content-Length", at + 1)) {
+         ++count;
+      }
+      expect(count == 1) << "Exactly one Content-Length must be written, found " << count;
+
+      expect(request.ends_with("\r\n\r\nBODY")) << "The body must follow the header block unchanged";
+   };
+
+   // Dropping the caller's Content-Length has to be lossless. A method that
+   // anticipates content carries a Content-Length even when the body is empty
+   // (RFC 9110 8.6), or a caller who used to send "Content-Length: 0" by hand for
+   // an empty POST would be left with a request many origin servers answer 411.
+   "build_http_request_bytes frames an empty body for methods that anticipate content"_test = [] {
+      glz::url_parts url;
+      url.protocol = "http";
+      url.host = "example.com";
+      url.port = 80;
+      url.path = "/";
+
+      for (const auto* method : {"POST", "PUT", "PATCH"}) {
+         const std::string request = glz::detail::build_http_request_bytes(method, url, false, "", {});
+         expect(request.find("Content-Length: 0\r\n") != std::string::npos)
+            << method << " with an empty body must still frame it";
+      }
+
+      // A caller-supplied length is still dropped in favor of the writer's own.
+      const glz::http_headers headers{{"Content-Length", "999"}};
+      const std::string overridden = glz::detail::build_http_request_bytes("POST", url, false, "", headers);
+      expect(overridden.find("Content-Length: 0\r\n") != std::string::npos);
+      expect(overridden.find("999") == std::string::npos) << "The caller's contradicting length must not survive";
+   };
+
+   // A method that anticipates no content frames an empty body by carrying no field
+   // at all; inventing one would invite a body where none belongs.
+   "build_http_request_bytes omits Content-Length for a bodyless GET"_test = [] {
+      glz::url_parts url;
+      url.protocol = "http";
+      url.host = "example.com";
+      url.port = 80;
+      url.path = "/";
+
+      for (const auto* method : {"GET", "HEAD", "DELETE", "OPTIONS"}) {
+         const std::string request = glz::detail::build_http_request_bytes(method, url, false, "", {});
+         expect(request.find("Content-Length") == std::string::npos)
+            << method << " with no body must not carry a Content-Length";
+      }
+   };
 };
 
 suite http_response_splitting_suite = [] {

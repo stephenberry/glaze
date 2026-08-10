@@ -133,6 +133,7 @@ namespace glz
    enum class http_client_error {
       success = 0,
       response_too_large, // Response body exceeds max_response_body_size
+      unframed_response, // Response Content-Length is malformed or repeats with conflicting values
    };
 
    // HTTP client error category for std::error_code integration
@@ -148,6 +149,8 @@ namespace glz
             return "Success";
          case http_client_error::response_too_large:
             return "Response body size exceeds configured maximum";
+         case http_client_error::unframed_response:
+            return "Response Content-Length is malformed or repeats with conflicting values";
          default:
             return "Unknown HTTP client error";
          }
@@ -282,13 +285,33 @@ namespace glz
          }
          request_str.append("\r\n");
          request_str.append("Connection: keep-alive\r\n");
-         if (!body.empty()) {
+         // RFC 9110 8.6: a user agent SHOULD send Content-Length when the method
+         // anticipates content, even for an empty body - origin servers and proxies
+         // commonly answer a bodyless POST with 411 Length Required. Since a caller's
+         // own Content-Length is dropped below, omitting it here would leave them no
+         // way to frame an empty POST at all. For a method that anticipates no
+         // content, no field is the unambiguous encoding of an empty body
+         // (RFC 9112 6), so adding one would only invite a body where none belongs.
+         const bool anticipates_content = method == "POST" || method == "PUT" || method == "PATCH";
+         if (!body.empty() || anticipates_content) {
             request_str.append("Content-Length: ");
             request_str.append(std::to_string(body.size()));
             request_str.append("\r\n");
          }
          for (const auto& [name, value] : headers) {
             if (header_field_has_crlf(name, value)) [[unlikely]] {
+               continue;
+            }
+            // This builder owns the body framing: it has already written the
+            // Content-Length that matches the body it is about to append. A
+            // caller-supplied Content-Length or Transfer-Encoding would ride
+            // alongside it as a second, contradicting frame - and unlike the
+            // response side there is no correct value to keep, because the body
+            // length is whatever this function writes. Drop them rather than
+            // emit a request no two recipients would parse the same way
+            // (RFC 9112 6.3, request smuggling). glz::http_headers keeps
+            // repeats, so a single lookup would not have caught the second one.
+            if (header_field_frames_body(name)) [[unlikely]] {
                continue;
             }
             request_str.append(name);
@@ -299,6 +322,70 @@ namespace glz
          request_str.append("\r\n");
          request_str.append(body);
          return request_str;
+      }
+
+      // Outcome of reading the Content-Length of a response. `absent` and
+      // `unframed` are distinct because they lead to different reads: no
+      // Content-Length at all is a legitimate response whose body runs to the end
+      // of the connection, whereas one we cannot resolve to a single length has to
+      // fail the request.
+      enum struct content_length_state { absent, present, unframed };
+
+      struct parsed_content_length
+      {
+         content_length_state state{content_length_state::absent};
+         size_t value{};
+      };
+
+      // RFC 9112 6.3: a response whose Content-Length fields disagree has no
+      // recoverable body length. Picking one - first or last - lets a proxy that
+      // picked the other resume framing at a different offset, so the bytes this
+      // client reads as the start of the next response are chosen by whoever
+      // supplied the second field (response smuggling). Repeats that resolve to the
+      // same length are unambiguous and tolerated, in the same spirit as the
+      // server's rule for a request - though the server compares the raw field
+      // text, so it rejects the "3" and "03" pair this accepts. Both readings frame
+      // the body identically; only the strictness differs.
+      //
+      // A value that is not a bare decimal is rejected for the same reason: it
+      // resolves to no length at all, and defaulting it to zero would leave a real
+      // body sitting in the socket to be read as the next response.
+      [[nodiscard]] inline parsed_content_length read_content_length(const glz::http_headers& headers)
+      {
+         // RFC 9112 6.3: Transfer-Encoding overrides Content-Length, so a chunked
+         // response is framed by the chunk sizes and its Content-Length is never
+         // consulted. A field this client will not use must not be able to fail the
+         // request either - the framing is already unambiguous without it. Reporting
+         // `absent` says exactly that: there is no Content-Length framing to apply,
+         // whether or not such a field was sent.
+         //
+         // This also keeps the two framings from ever being weighed against each
+         // other. Whether a Content-Length parses cannot change how a chunked body
+         // is read, so the order these are evaluated in stops mattering.
+         if (headers.contains_token("Transfer-Encoding", "chunked")) {
+            return {content_length_state::absent, 0};
+         }
+
+         parsed_content_length result{};
+
+         for (const auto field_value : headers.values("Content-Length")) {
+            size_t length{};
+            const char* const first = field_value.data();
+            const char* const last = first + field_value.size();
+            const auto [stopped_at, ec] = std::from_chars(first, last, length);
+            if (ec != std::errc{} || stopped_at != last) {
+               return {content_length_state::unframed, 0};
+            }
+
+            if (result.state == content_length_state::absent) {
+               result = {content_length_state::present, length};
+            }
+            else if (result.value != length) {
+               return {content_length_state::unframed, 0};
+            }
+         }
+
+         return result;
       }
 
       // Sets the Content-Type header to application/json if the Content-Type
@@ -1592,10 +1679,9 @@ namespace glz
                         auto colon_pos = header_line.find(':');
                         if (colon_pos != std::string::npos) {
                            std::string_view name = header_line.substr(0, colon_pos);
-                           // Skip past ':' and any whitespace
-                           size_t value_start = header_line.find_first_not_of(" \t", colon_pos + 1);
-                           std::string_view value =
-                              (value_start != std::string::npos) ? header_line.substr(value_start) : "";
+                           // RFC 9110 5.5 / RFC 9112 5: strip both leading and trailing OWS,
+                           // so a value reaches the caller as the field value proper.
+                           std::string_view value = detail::trim_optional_whitespace(header_line.substr(colon_pos + 1));
 
                            response_headers.response_headers.add(std::string(name), std::string(value));
                         }
@@ -1989,20 +2075,27 @@ namespace glz
                auto colon_pos = header_line.find(':');
                if (colon_pos != std::string::npos) {
                   std::string_view name = header_line.substr(0, colon_pos);
-                  size_t value_start = header_line.find_first_not_of(" \t", colon_pos + 1);
-                  std::string_view value = (value_start != std::string::npos) ? header_line.substr(value_start) : "";
+                  // RFC 9110 5.5 / RFC 9112 5: a field value excludes both leading and
+                  // trailing OWS, and a recipient MUST strip them before evaluating it.
+                  // "Content-Length: 3 " is legal, so keeping the trailing space would
+                  // leave a value no strict parse of the field can accept.
+                  std::string_view value = detail::trim_optional_whitespace(header_line.substr(colon_pos + 1));
 
                   response_headers.add(std::string(name), std::string(value));
                }
             }
 
-            size_t content_length = 0;
-            const auto content_length_value = response_headers.first_value("Content-Length");
-            const bool has_content_length = content_length_value.has_value();
-            if (has_content_length) {
-               std::from_chars(content_length_value->data(),
-                               content_length_value->data() + content_length_value->size(), content_length);
+            const auto content_length_field = detail::read_content_length(response_headers);
+            if (content_length_field.state == detail::content_length_state::unframed) [[unlikely]] {
+               // The body boundary is unknowable, so the socket cannot be handed
+               // back to the pool: whatever is left on it would be read as the
+               // head of an unrelated response.
+               detail::close_socket(socket_var, connection_pool->graceful_ssl_shutdown());
+               r.outcome = std::unexpected(make_error_code(http_client_error::unframed_response));
+               return r;
             }
+            const size_t content_length = content_length_field.value;
+            const bool has_content_length = content_length_field.state == detail::content_length_state::present;
             const bool is_chunked = response_headers.contains_token("Transfer-Encoding", "chunked");
             bool connection_close = response_headers.contains_token("Connection", "close");
 
@@ -2644,21 +2737,27 @@ namespace glz
             auto colon_pos = header_line.find(':');
             if (colon_pos != std::string::npos) {
                std::string_view name = header_line.substr(0, colon_pos);
-               // Skip past ':' and any leading whitespace on the value.
-               size_t value_start = header_line.find_first_not_of(" \t", colon_pos + 1);
-               std::string_view value = (value_start != std::string::npos) ? header_line.substr(value_start) : "";
+               // RFC 9110 5.5 / RFC 9112 5: a field value excludes both leading and
+               // trailing OWS, and a recipient MUST strip them before evaluating it.
+               // "Content-Length: 3 " is legal, so keeping the trailing space would
+               // leave a value no strict parse of the field can accept.
+               std::string_view value = detail::trim_optional_whitespace(header_line.substr(colon_pos + 1));
 
                response_headers.add(std::string(name), std::string(value));
             }
          }
 
-         size_t content_length = 0;
-         const auto content_length_value = response_headers.first_value("Content-Length");
-         const bool has_content_length = content_length_value.has_value();
-         if (has_content_length) {
-            std::from_chars(content_length_value->data(), content_length_value->data() + content_length_value->size(),
-                            content_length);
+         const auto content_length_field = detail::read_content_length(response_headers);
+         if (content_length_field.state == detail::content_length_state::unframed) [[unlikely]] {
+            // The body boundary is unknowable, so the socket cannot be handed back
+            // to the pool: whatever is left on it would be read as the head of an
+            // unrelated response.
+            detail::close_socket(*socket_var, connection_pool->graceful_ssl_shutdown());
+            handler(std::unexpected(make_error_code(http_client_error::unframed_response)));
+            return;
          }
+         const size_t content_length = content_length_field.value;
+         const bool has_content_length = content_length_field.state == detail::content_length_state::present;
          const bool is_chunked = response_headers.contains_token("Transfer-Encoding", "chunked");
          const bool connection_close = response_headers.contains_token("Connection", "close");
 
