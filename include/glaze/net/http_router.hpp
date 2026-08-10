@@ -87,6 +87,14 @@ namespace glz
       }
 
       // Replaces any existing field with this name.
+      //
+      // A field-name or field-value carrying CR or LF would terminate the field on
+      // the wire, letting attacker-influenced data inject extra headers or a body
+      // (CWE-113); header_field_has_crlf carries the full rationale. Rejecting it
+      // here keeps it out of the container and, crucially, skips the
+      // mark_user_supplied bookkeeping below - see that function for why the order
+      // of these two lines is load-bearing. The wire serializers keep an
+      // independent drop as a backstop for fields that bypass this setter.
       inline response& header(std::string_view name, std::string_view value)
       {
          if (header_field_has_crlf(name, value)) [[unlikely]] {
@@ -109,7 +117,7 @@ namespace glz
 
          mark_user_supplied(name);
 
-         if (frames_the_body(name)) [[unlikely]] {
+         if (header_field_frames_body(name)) [[unlikely]] {
             response_headers.set(std::string(name), std::string(value));
          }
          else {
@@ -184,11 +192,11 @@ namespace glz
       }
 
      private:
-      [[nodiscard]] static bool frames_the_body(std::string_view name) noexcept
-      {
-         return glz::striequal(name, "content-length") || glz::striequal(name, "transfer-encoding");
-      }
-
+      // Records that the handler supplied one of the headers the wire serializer
+      // would otherwise generate, so the serializer leaves it alone. Only reached
+      // once the field has passed the CR/LF check: a field dropped there must not
+      // set its flag, or a rejected Content-Length or Connection would suppress
+      // the auto-generated counterpart and leave the response unframed.
       void mark_user_supplied(std::string_view name) noexcept
       {
          if (glz::striequal(name, "content-length"))
