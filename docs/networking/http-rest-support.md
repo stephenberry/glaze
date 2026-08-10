@@ -161,6 +161,65 @@ for (const auto& field : req.headers) {
 
 Both forms compile, so the first one fails silently.
 
+### Migrating from `std::unordered_map`
+
+`request::headers` and `response::response_headers` were `std::unordered_map<std::string, std::string>`. `glz::http_headers` keeps fields in arrival order and lets a name repeat, so the map operations that assumed one value per key are gone. Every replacement below is case-insensitive on the name.
+
+| Was | Now |
+| --- | --- |
+| `headers["Accept"]` (read) | `headers.first_value("Accept").value_or("")` |
+| `headers.at("Accept")` | `headers.first_value("Accept").value()` |
+| `headers["Accept"] = v` (on a response) | `res.header("Accept", v)` |
+| `headers.count("Accept")` as a presence test | `headers.contains("Accept")` |
+| `headers.count("Accept")` as a tally | `headers.count("Accept")` (same call, now counts repeats) |
+| `it->first` / `it->second` | `it->name` / `it->value` |
+| `headers.erase("Accept")` | `headers.erase("Accept")` (removes every match, but returns `void`) |
+
+Use `.value()` rather than `operator*` when replacing `at()`: `at()` threw `std::out_of_range` on a missing key, `.value()` throws `std::bad_optional_access`, but `operator*` on a missing field is undefined behavior.
+
+`first_value` returns `std::optional<std::string_view>` that borrows from the container, so copy into a `std::string` before the container is modified, moved, or goes out of scope.
+
+Reading every value of a repeated field:
+
+```cpp
+for (std::string_view cookie : req.headers.values("Cookie")) {
+    // ...
+}
+```
+
+Testing one item of a comma-separated list, rather than substring-matching the whole value:
+
+```cpp
+if (req.headers.contains_token("Connection", "upgrade")) {  // also matches "keep-alive, Upgrade"
+}
+```
+
+On a response, `header()` replaces any existing field of that name and `add_header()` appends one, which is what
+`Set-Cookie` and other repeatable fields need:
+
+```cpp
+res.add_header("Set-Cookie", "session=abc; Path=/; HttpOnly")
+   .add_header("Set-Cookie", "theme=dark; Path=/");
+```
+
+`Content-Length` and `Transfer-Encoding` are replaced even by `add_header`: a second, disagreeing copy would leave the
+body length ambiguous (RFC 9112 §6.3). That guard lives in `header()` and `add_header()`, so writing straight to the
+`response_headers` container with `.add()` bypasses it and can still put two conflicting fields on the wire.
+
+### Body Framing on Client Requests
+
+`http_client` owns the framing of the requests it sends. It writes the `Content-Length` matching the body it is about to
+send, and drops any `Content-Length` or `Transfer-Encoding` supplied in the caller's headers, which could only
+contradict it (RFC 9112 §6.3). Requests whose method anticipates content (`POST`, `PUT`, `PATCH`) always carry a
+`Content-Length`, including `Content-Length: 0` for an empty body.
+
+The client also rejects a *response* it cannot frame to a single body length: `Content-Length` fields that disagree, or
+a value that is not a bare decimal, fail the request with `glz::http_client_error::unframed_response` rather than
+guessing a boundary. Fields repeated with the same length are accepted.
+
+A chunked response is exempt. `Transfer-Encoding` overrides `Content-Length` (RFC 9112 §6.3), so the body comes from the
+chunk sizes and any `Content-Length` alongside it is never read — including one that would otherwise be rejected.
+
 ## HTTP Methods
 
 Glaze supports all standard HTTP methods:
