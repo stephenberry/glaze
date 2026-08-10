@@ -2226,6 +2226,36 @@ void cbor_to_json_tests()
       expect(json == "{\"a\":1,\"b\":2}" || json == "{\"b\":2,\"a\":1}");
    };
 
+   "cbor_to_json_integer_keys"_test = [] {
+      // COSE/CWT and many CBOR profiles key maps by integers. A JSON object key
+      // must be a string, so the integer key is emitted as a quoted decimal.
+      std::map<int, int> m = {{1, 2}, {500, 3}};
+      std::string cbor_buffer;
+      expect(not glz::write_cbor(m, cbor_buffer));
+
+      std::string json;
+      expect(not glz::cbor_to_json(cbor_buffer, json));
+      // Bare integer keys ("{1:2,...}") are not valid JSON; they must be quoted.
+      expect(json == "{\"1\":2,\"500\":3}");
+   };
+
+   "cbor_to_json_negative_key"_test = [] {
+      std::map<int, int> m = {{-1, 7}};
+      std::string cbor_buffer;
+      expect(not glz::write_cbor(m, cbor_buffer));
+
+      std::string json;
+      expect(not glz::cbor_to_json(cbor_buffer, json));
+      expect(json == "{\"-1\":7}");
+   };
+
+   "cbor_to_json_non_string_key_rejected"_test = [] {
+      // map(1){ [1]: 2 } -- an array key has no JSON string form.
+      const std::array<uint8_t, 4> cbor_buffer{0xa1, 0x81, 0x01, 0x02};
+      std::string json;
+      expect(bool(glz::cbor_to_json(cbor_buffer, json)));
+   };
+
    "cbor_to_json_bool"_test = [] {
       std::string cbor_buffer;
       expect(not glz::write_cbor(true, cbor_buffer));

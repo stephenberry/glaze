@@ -78,6 +78,9 @@ namespace glz
       }
 
       template <auto Opts, class Buffer>
+      inline void cbor_to_json_key(auto&& ctx, auto&& it, auto&& end, Buffer& out, auto&& ix, uint32_t recursive_depth);
+
+      template <auto Opts, class Buffer>
       inline void cbor_to_json_value(auto&& ctx, auto&& it, auto&& end, Buffer& out, auto&& ix,
                                      uint32_t recursive_depth)
       {
@@ -344,7 +347,7 @@ namespace glz
                   first = false;
 
                   // Key (must be string for JSON compatibility)
-                  cbor_to_json_value<Opts>(ctx, it, end, out, ix, recursive_depth + 1);
+                  cbor_to_json_key<Opts>(ctx, it, end, out, ix, recursive_depth + 1);
                   if (bool(ctx.error)) [[unlikely]]
                      return;
 
@@ -376,7 +379,7 @@ namespace glz
                   }
 
                   // Key
-                  cbor_to_json_value<Opts>(ctx, it, end, out, ix, recursive_depth + 1);
+                  cbor_to_json_key<Opts>(ctx, it, end, out, ix, recursive_depth + 1);
                   if (bool(ctx.error)) [[unlikely]]
                      return;
 
@@ -657,6 +660,59 @@ namespace glz
          default:
             ctx.error = error_code::syntax_error;
             break;
+         }
+      }
+
+      // A JSON object key must be a string. RFC 8949 section 6.1 maps a CBOR
+      // map's non-string keys onto their string form; integer keys (pervasive in
+      // COSE/CWT/WebAuthn) become quoted decimal strings. Emitting them bare
+      // produced structurally invalid JSON while reporting success. Text keys
+      // pass through, other key types have no JSON string form and are rejected.
+      // Mirrors the string/integer key handling in beve_to_json_value's object case.
+      template <auto Opts, class Buffer>
+      inline void cbor_to_json_key(auto&& ctx, auto&& it, auto&& end, Buffer& out, auto&& ix, uint32_t recursive_depth)
+      {
+         using namespace cbor;
+
+         if (it >= end) [[unlikely]] {
+            ctx.error = error_code::unexpected_end;
+            return;
+         }
+
+         uint8_t initial;
+         std::memcpy(&initial, it, 1);
+         const uint8_t major_type = get_major_type(initial);
+         const uint8_t additional_info = get_additional_info(initial);
+
+         switch (major_type) {
+         case major::tstr:
+            // Already a JSON string once written; emit with normal escaping.
+            cbor_to_json_value<Opts>(ctx, it, end, out, ix, recursive_depth);
+            return;
+         case major::uint: {
+            ++it;
+            const uint64_t value = cbor_to_json_decode_arg(ctx, it, end, additional_info);
+            if (bool(ctx.error)) [[unlikely]]
+               return;
+            dump('"', out, ix);
+            to<JSON, uint64_t>::template op<Opts>(value, ctx, out, ix);
+            dump('"', out, ix);
+            return;
+         }
+         case major::nint: {
+            ++it;
+            const uint64_t n = cbor_to_json_decode_arg(ctx, it, end, additional_info);
+            if (bool(ctx.error)) [[unlikely]]
+               return;
+            const int64_t value = static_cast<int64_t>(~n);
+            dump('"', out, ix);
+            to<JSON, int64_t>::template op<Opts>(value, ctx, out, ix);
+            dump('"', out, ix);
+            return;
+         }
+         default:
+            ctx.error = error_code::syntax_error;
+            return;
          }
       }
    }
