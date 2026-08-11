@@ -10,8 +10,8 @@
 #include "glaze/thread/shared_async_map.hpp"
 #include "glaze/thread/shared_async_vector.hpp"
 #include "glaze/thread/threadpool.hpp"
-#include "ut/ut.hpp"
 #include "scratch_directory.hpp"
+#include "ut/ut.hpp"
 
 using namespace ut;
 
@@ -35,7 +35,6 @@ struct glz::meta<my_struct>
       "arr", &T::arr //
    );
 };
-
 
 // Relative scratch paths in this file resolve inside a private directory rather than
 // wherever the binary was launched from. This must precede the first suite: ut runs a

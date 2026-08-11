@@ -30,8 +30,8 @@
 #include "glaze/json/json_ptr.hpp"
 #include "glaze/json/read.hpp"
 #include "glaze/trace/trace.hpp"
-#include "ut/ut.hpp"
 #include "scratch_directory.hpp"
+#include "ut/ut.hpp"
 
 using namespace ut;
 
@@ -1429,7 +1429,6 @@ void bench()
 }
 
 using namespace ut;
-
 
 // Relative scratch paths in this file resolve inside a private directory rather than
 // wherever the binary was launched from. This must precede the first suite: ut runs a

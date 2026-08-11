@@ -15,8 +15,8 @@
 #include "glaze/eetf/wrappers.hpp"
 #include "glaze/eetf/write.hpp"
 #include "glaze/trace/trace.hpp"
-#include "ut/ut.hpp"
 #include "scratch_directory.hpp"
+#include "ut/ut.hpp"
 
 using namespace glz::eetf;
 

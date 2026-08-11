@@ -24,8 +24,8 @@
 #include <vector>
 
 #include "glaze/json/generic.hpp"
-#include "ut/ut.hpp"
 #include "scratch_directory.hpp"
+#include "ut/ut.hpp"
 
 using namespace ut;
 
@@ -316,7 +316,6 @@ struct yaml_multi_empty_arrays_struct
    int x{42};
    bool operator==(const yaml_multi_empty_arrays_struct&) const = default;
 };
-
 
 // Relative scratch paths in this file resolve inside a private directory rather than
 // wherever the binary was launched from. This must precede the first suite: ut runs a

@@ -5,8 +5,8 @@
 #include <unordered_map>
 
 #include "glaze/glaze.hpp"
-#include "ut/ut.hpp"
 #include "scratch_directory.hpp"
+#include "ut/ut.hpp"
 
 static constexpr bool skip = false;
 
@@ -50,7 +50,6 @@ inline std::string generate_basic_string()
    }
    return result;
 }
-
 
 // Relative scratch paths in this file resolve inside a private directory rather than
 // wherever the binary was launched from. This must precede the first suite: ut runs a

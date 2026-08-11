@@ -40,8 +40,8 @@
 #include "glaze/record/recorder.hpp"
 #include "glaze/trace/trace.hpp"
 #include "json_test_shared_types.hpp"
-#include "ut/ut.hpp"
 #include "scratch_directory.hpp"
+#include "ut/ut.hpp"
 
 using namespace ut;
 
@@ -64,7 +64,6 @@ struct jsonc_comment_config
    std::vector<int> array_1{};
    std::vector<int> array_2{};
 };
-
 
 // Relative scratch paths in this file resolve inside a private directory rather than
 // wherever the binary was launched from. This must precede the first suite: ut runs a
