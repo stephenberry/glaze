@@ -6,6 +6,7 @@
 #include "glaze/glaze.hpp"
 #include "json_perf_common.hpp"
 #include "ut/ut.hpp"
+#include "scratch_directory.hpp"
 
 using namespace ut;
 using namespace glz::perf;
@@ -341,6 +342,12 @@ auto benchmark_tester()
 
    return r;
 }
+
+
+// Relative scratch paths in this file resolve inside a private directory rather than
+// wherever the binary was launched from. This must precede the first suite: ut runs a
+// suite from its constructor, during static initialization.
+const glz_test::scratch_directory scratch{"json_perf_benchmark"};
 
 suite benchmark_test = [] { "benchmark"_test = [] { benchmark_tester<glz::opts{}>(); }; };
 
