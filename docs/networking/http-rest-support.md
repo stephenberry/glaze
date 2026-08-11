@@ -161,6 +161,45 @@ for (const auto& field : req.headers) {
 
 Both forms compile, so the first one fails silently.
 
+### The `glz::http_headers` Container
+
+`request::headers` and `response::response_headers` are both `glz::http_headers`: `{name, value}` fields held in arrival order, where a name is allowed to repeat. Names match case-insensitively throughout, as described above.
+
+Reading:
+
+| Call | Result |
+| --- | --- |
+| `contains(name)` | whether any field carries that name |
+| `count(name)` | how many fields carry it |
+| `first_value(name)` | `std::optional<std::string_view>` of the first match |
+| `values(name)` | range over the value of every match |
+| `fields(name)` | range over every matching `http_header`, name included |
+| `contains_token(name, token)` | whether any match lists `token` in its comma-separated value |
+| `find(name)` | iterator to the first match, or `end()` |
+| `names()`, `values()` | range over every field in the container |
+
+Writing:
+
+| Call | Effect |
+| --- | --- |
+| `add(name, value)` | appends a field, always, even when the name is already present |
+| `set(name, value)` | leaves the name present exactly once (see below) |
+| `erase(name)` | removes every field with that name, returns `void` |
+| `append(other)` | appends every field of another container, without merging names |
+| `clear()` | removes every field |
+
+`set` is not an overwrite of the first match. It replaces the first field with that name and erases every other one:
+
+```cpp
+headers.add("Set-Cookie", "session=abc");
+headers.add("Set-Cookie", "theme=dark");
+headers.set("Set-Cookie", "session=xyz"); // both earlier cookies are gone
+```
+
+That is what a single-valued field like `Content-Type` wants and the opposite of what a repeatable field wants, where `add` is the correct call. `set` also adopts the casing of the name handed to it, so `set("content-type", v)` makes a field the client sent as `Content-Type` serialize lowercase.
+
+`first_value`, `values`, `fields`, and `names` all borrow from the container, so copy into a `std::string` before adding to, setting, erasing from, or destroying it.
+
 ### Migrating from `std::unordered_map`
 
 `request::headers` and `response::response_headers` were `std::unordered_map<std::string, std::string>`. `glz::http_headers` keeps fields in arrival order and lets a name repeat, so the map operations that assumed one value per key are gone. Every replacement below is case-insensitive on the name.
