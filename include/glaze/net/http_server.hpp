@@ -3048,6 +3048,19 @@ namespace glz
             if (header_field_has_crlf(name, value)) [[unlikely]] {
                continue;
             }
+            // This writer sends a complete, already-buffered body and frames it with
+            // the Content-Length below, so it never applies a transfer coding. A
+            // handler-set Transfer-Encoding would announce a framing the bytes do not
+            // follow: a recipient told "chunked" reads the body's first line as a
+            // chunk size, and alongside the Content-Length it is the two-framings
+            // shape behind response smuggling (RFC 9112 6.3). There is no value worth
+            // keeping - the field describes an encoding only this writer could have
+            // applied - so drop it rather than emit a self-contradicting response.
+            // Streaming responses declare their own through
+            // streaming_connection::send_headers, which does chunk what it sends.
+            if (glz::striequal(name, "transfer-encoding")) [[unlikely]] {
+               continue;
+            }
             h.append(name);
             h.append(": ");
             h.append(value);
