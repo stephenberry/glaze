@@ -327,8 +327,7 @@ class simple_test_client
       return perform_request("POST", *url_parts, body);
    }
 
-   std::expected<response, std::error_code> options(
-      const std::string& url, const glz::http_headers& extra_headers)
+   std::expected<response, std::error_code> options(const std::string& url, const glz::http_headers& extra_headers)
    {
       auto url_parts = parse_url(url);
       if (!url_parts) {
@@ -342,9 +341,9 @@ class simple_test_client
    asio::io_context io_context_;
    std::thread worker_thread_;
 
-   std::expected<response, std::error_code> perform_request(
-      const std::string& method, const url_parts& url, const std::string& body,
-      glz::http_headers extra_headers = {})
+   std::expected<response, std::error_code> perform_request(const std::string& method, const url_parts& url,
+                                                            const std::string& body,
+                                                            glz::http_headers extra_headers = {})
    {
       std::promise<std::expected<response, std::error_code>> promise;
       auto future = promise.get_future();
