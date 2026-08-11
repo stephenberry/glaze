@@ -277,7 +277,7 @@ int main()
    server.get("/test-cors", [](const glz::request& req, glz::response& res) {
       // The CORS middleware will automatically add the appropriate headers
       res.json({{"message", "CORS test endpoint"},
-                {"origin", req.headers.count("origin") ? req.headers.at("origin") : "none"},
+                {"origin", std::string{req.headers.first_value("origin").value_or("none")}},
                 {"method", glz::to_string(req.method)}});
    });
 
