@@ -9,7 +9,7 @@
 namespace glz
 {
    template <class... T>
-   struct meta<glz::tuple<T...>>
+   struct name_meta<glz::tuple<T...>>
    {
       static constexpr std::string_view name = []<size_t... I>(std::index_sequence<I...>) {
          return join_v<chars<"glz::tuple<">,

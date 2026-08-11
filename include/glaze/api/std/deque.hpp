@@ -10,7 +10,7 @@
 namespace glz
 {
    template <class T>
-   struct meta<std::deque<T>>
+   struct name_meta<std::deque<T>>
    {
       static constexpr std::string_view name = join_v<chars<"std::deque<">, name_v<T>, chars<">">>;
    };

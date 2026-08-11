@@ -142,7 +142,7 @@ namespace glz
    };
 
    template <class T>
-   struct meta<includer<T>>
+   struct name_meta<includer<T>>
    {
       static constexpr std::string_view name = join_v<chars<"includer<">, name_v<T>, chars<">">>;
    };
@@ -192,7 +192,7 @@ namespace glz
    using raw_json_view = basic_raw_json<std::string_view>;
 
    template <class T>
-   struct meta<basic_raw_json<T>>
+   struct name_meta<basic_raw_json<T>>
    {
       static constexpr std::string_view name = "raw_json";
    };

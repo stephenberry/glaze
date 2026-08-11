@@ -10,7 +10,7 @@
 namespace glz
 {
    template <class... T>
-   struct meta<std::variant<T...>>
+   struct name_meta<std::variant<T...>>
    {
       static constexpr std::string_view name = []<size_t... I>(std::index_sequence<I...>) {
          return join_v<chars<"std::variant<">,
@@ -19,7 +19,7 @@ namespace glz
    };
 
    template <>
-   struct meta<std::monostate>
+   struct name_meta<std::monostate>
    {
       static constexpr std::string_view name = "std::monostate";
    };
