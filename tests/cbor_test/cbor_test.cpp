@@ -2226,6 +2226,76 @@ void cbor_to_json_tests()
       expect(json == "{\"a\":1,\"b\":2}" || json == "{\"b\":2,\"a\":1}");
    };
 
+   "cbor_to_json_integer_keys"_test = [] {
+      // COSE/CWT and many CBOR profiles key maps by integers. A JSON object key
+      // must be a string, so the integer key is emitted as a quoted decimal.
+      std::map<int, int> m = {{1, 2}, {500, 3}};
+      std::string cbor_buffer;
+      expect(not glz::write_cbor(m, cbor_buffer));
+
+      std::string json;
+      expect(not glz::cbor_to_json(cbor_buffer, json));
+      // Bare integer keys ("{1:2,...}") are not valid JSON; they must be quoted.
+      expect(json == "{\"1\":2,\"500\":3}");
+   };
+
+   "cbor_to_json_negative_key"_test = [] {
+      std::map<int, int> m = {{-1, 7}};
+      std::string cbor_buffer;
+      expect(not glz::write_cbor(m, cbor_buffer));
+
+      std::string json;
+      expect(not glz::cbor_to_json(cbor_buffer, json));
+      expect(json == "{\"-1\":7}");
+   };
+
+   "cbor_to_json_non_string_key_rejected"_test = [] {
+      // map(1){ [1]: 2 } -- an array key has no JSON string form.
+      const std::array<uint8_t, 4> cbor_buffer{0xa1, 0x81, 0x01, 0x02};
+      std::string json;
+      expect(bool(glz::cbor_to_json(cbor_buffer, json)));
+   };
+
+   "cbor_to_json_byte_string_key"_test = [] {
+      // map(1){ h'01ff': 2 } -- a byte-string key emits as a quoted hex string,
+      // same as the value path.
+      const std::array<uint8_t, 5> cbor_buffer{0xa1, 0x42, 0x01, 0xff, 0x02};
+      std::string json;
+      expect(not glz::cbor_to_json(cbor_buffer, json));
+      expect(json == "{\"01ff\":2}");
+   };
+
+   "cbor_to_json_tagged_text_key"_test = [] {
+      // map(1){ 0("2013-03-21T20:04:00Z"): 1 } -- the tag is unwrapped and the
+      // tagged text key emits as a plain string.
+      const std::array<uint8_t, 24> cbor_buffer{0xa1, 0xc0, 0x74, '2', '0', '1', '3', '-',  '0', '3', '-', '2',
+                                                '1',  'T',  '2',  '0', ':', '0', '4', ':',  '0', '0', 'Z', 0x01};
+      std::string json;
+      expect(not glz::cbor_to_json(cbor_buffer, json));
+      expect(json == "{\"2013-03-21T20:04:00Z\":1}");
+   };
+
+   "cbor_to_json_typed_array_tag_key_rejected"_test = [] {
+      // map(1){ 64(h'01'): 2 } -- an RFC 8746 typed-array tag decodes to a JSON
+      // array, which has no string form as a key.
+      const std::array<uint8_t, 6> cbor_buffer{0xa1, 0xd8, 0x40, 0x41, 0x01, 0x02};
+      std::string json;
+      expect(bool(glz::cbor_to_json(cbor_buffer, json)));
+   };
+
+   "cbor_to_json_tag_chain_key_depth_limited"_test = [] {
+      // map(1){ 0(0(0(...(1)))): 2 } -- a long tag chain on a key must hit the
+      // recursion depth limit instead of recursing unboundedly.
+      std::vector<uint8_t> cbor_buffer{0xa1};
+      cbor_buffer.insert(cbor_buffer.end(), 300, 0xc0);
+      cbor_buffer.push_back(0x01);
+      cbor_buffer.push_back(0x02);
+      std::string json;
+      const auto ec = glz::cbor_to_json(cbor_buffer, json);
+      expect(bool(ec));
+      expect(ec.ec == glz::error_code::exceeded_max_recursive_depth);
+   };
+
    "cbor_to_json_bool"_test = [] {
       std::string cbor_buffer;
       expect(not glz::write_cbor(true, cbor_buffer));
