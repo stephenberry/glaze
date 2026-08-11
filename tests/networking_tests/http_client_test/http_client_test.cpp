@@ -6,6 +6,7 @@
 #include <chrono>
 #include <future>
 #include <optional>
+#include <ranges>
 #include <string_view>
 #include <thread>
 #include <unordered_map>
@@ -19,6 +20,7 @@
 
 using namespace ut;
 using namespace glz;
+using namespace std::string_view_literals;
 
 namespace test_http_client
 {
@@ -1641,6 +1643,55 @@ suite with_json_content_type_tests = [] {
 
       expect(!original.contains("Content-Type")) << "The caller's container is taken by value";
       expect(headers.contains("Content-Type"));
+   };
+};
+
+suite build_http_request_bytes_tests = [] {
+   const glz::url_parts url{.protocol = "http", .host = "127.0.0.1", .port = 8080, .path = "/"};
+
+   auto count_fields = [](std::string_view request, std::string_view name) {
+      const std::string prefix = std::string{name} + ": ";
+      return std::ranges::count_if(std::views::split(request, "\r\n"sv),
+                                   [&](auto line) { return std::string_view{line}.starts_with(prefix); });
+   };
+
+   "http_request_includes_host_and_connection"_test = [url, count_fields] {
+      const auto request = glz::detail::build_http_request_bytes("GET", url, false, "", {});
+
+      expect(count_fields(request, "Host") == 1);
+      expect(count_fields(request, "Connection") == 1);
+      expect(request.find("\r\nHost: 127.0.0.1:8080\r\n") != std::string::npos);
+      expect(request.find("\r\nConnection: keep-alive\r\n") != std::string::npos);
+   };
+
+   "http_request_uses_caller_host"_test = [url, count_fields] {
+      const auto request = glz::detail::build_http_request_bytes("GET", url, false, "", {{"Host", "example.com"}});
+
+      expect(count_fields(request, "Host") == 1) << "The derived Host must not be written alongside the caller's\n";
+      expect(request.find("\r\nHost: example.com\r\n") != std::string::npos);
+   };
+
+   "http_request_uses_caller_connection"_test = [url, count_fields] {
+      const auto request = glz::detail::build_http_request_bytes("GET", url, false, "", {{"Connection", "close"}});
+
+      expect(count_fields(request, "Connection") == 1);
+      expect(request.find("keep-alive") == std::string::npos) << "The caller asked to close\n";
+   };
+
+   "http_request_uses_lowercase_caller_headers"_test = [url] {
+      const auto request = glz::detail::build_http_request_bytes("GET", url, false, "",
+                                                                 {{"host", "example.com"}, {"connection", "close"}});
+
+      expect(request.find("127.0.0.1:8080") == std::string::npos) << "The derived Host should be suppressed\n";
+      expect(request.find("keep-alive") == std::string::npos) << "The derived Connection should be suppressed\n";
+   };
+
+   "http_request_content_length_matches_body_size"_test = [url, count_fields] {
+      const std::string body = "hello";
+      const auto request = glz::detail::build_http_request_bytes("POST", url, false, body, {{"Content-Length", "99"}});
+
+      expect(count_fields(request, "Content-Length") == 1);
+      expect(request.find("\r\nContent-Length: 5\r\n") != std::string::npos) << "The body is 5 bytes\n";
    };
 };
 

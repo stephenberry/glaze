@@ -274,17 +274,21 @@ namespace glz
          request_str.append(" ");
          request_str.append(url.path);
          request_str.append(" HTTP/1.1\r\n");
-         request_str.append("Host: ");
-         request_str.append(url.host);
-         if (!is_default_port) {
-            char
-               port_buf[8]; // a uint16_t port is at most 5 digits; pad so the sizing does not depend on itoa internals
-            auto* end = glz::to_chars(port_buf, url.port);
-            request_str.push_back(':');
-            request_str.append(port_buf, static_cast<size_t>(end - port_buf));
+         if (!headers.contains("Host")) {
+            request_str.append("Host: ");
+            request_str.append(url.host);
+            if (!is_default_port) {
+               // A uint16_t port is at most 5 digits; pad so the sizing does not depend on itoa internals
+               char port_buf[8];
+               auto* end = glz::to_chars(port_buf, url.port);
+               request_str.push_back(':');
+               request_str.append(port_buf, static_cast<size_t>(end - port_buf));
+            }
+            request_str.append("\r\n");
          }
-         request_str.append("\r\n");
-         request_str.append("Connection: keep-alive\r\n");
+         if (!headers.contains("Connection")) {
+            request_str.append("Connection: keep-alive\r\n");
+         }
          // RFC 9110 8.6: a user agent SHOULD send Content-Length when the method
          // anticipates content, even for an empty body - origin servers and proxies
          // commonly answer a bodyless POST with 411 Length Required. Since a caller's
