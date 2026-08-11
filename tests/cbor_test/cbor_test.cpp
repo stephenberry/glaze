@@ -2268,8 +2268,8 @@ void cbor_to_json_tests()
    "cbor_to_json_tagged_text_key"_test = [] {
       // map(1){ 0("2013-03-21T20:04:00Z"): 1 } -- the tag is unwrapped and the
       // tagged text key emits as a plain string.
-      const std::array<uint8_t, 24> cbor_buffer{0xa1, 0xc0, 0x74, '2', '0', '1', '3', '-',  '0', '3', '-', '2',
-                                                '1',  'T',  '2',  '0', ':', '0', '4', ':',  '0', '0', 'Z', 0x01};
+      const std::array<uint8_t, 24> cbor_buffer{0xa1, 0xc0, 0x74, '2', '0', '1', '3', '-', '0', '3', '-', '2',
+                                                '1',  'T',  '2',  '0', ':', '0', '4', ':', '0', '0', 'Z', 0x01};
       std::string json;
       expect(not glz::cbor_to_json(cbor_buffer, json));
       expect(json == "{\"2013-03-21T20:04:00Z\":1}");
