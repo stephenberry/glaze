@@ -631,11 +631,33 @@ namespace glz
       }
    }();
 
+   // Whether `meta<T>::skip` excludes any field at all from the given operation.
+   //
+   // `meta::skip` is answered at compile time, so a `skip()` that never fires for an operation costs
+   // that operation nothing. Asking this rather than whether `meta<T>::skip` merely exists is what
+   // lets a read-side skip leave the writers alone.
+   template <class T, operation Op>
+   inline constexpr bool any_skipped_by_meta = [] {
+      constexpr auto N = reflect<T>::size;
+      if constexpr (meta_has_skip<T> && N > 0) {
+         return []<size_t... I>(std::index_sequence<I...>) {
+            return (skipped_by_meta<T, I, Op> || ...);
+         }(std::make_index_sequence<N>{});
+      }
+      else {
+         return false;
+      }
+   }();
+
    template <auto Opts, class T>
    inline constexpr bool maybe_skipped = [] {
       if constexpr (reflect<T>::size > 0) {
          constexpr auto N = reflect<T>::size;
-         if constexpr (meta_has_skip<T> || meta_has_skip_if<T>) {
+         // skip_if decides per value at runtime, so its mere presence forces the dynamic path. skip
+         // decides at compile time, so it only forces the dynamic path when it actually excludes a
+         // field from serialization -- a skip() that only fires on parse leaves writing on the static
+         // path, where separators and member counts are placed at compile time.
+         if constexpr (meta_has_skip_if<T> || any_skipped_by_meta<T, operation::serialize>) {
             return true;
          }
          else {

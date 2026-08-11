@@ -13307,6 +13307,25 @@ suite error_on_missing_keys_with_skip_tests = [] {
       expect(obj.skipped_field == 42); // Unchanged because field is skipped during parse
       expect(obj.normal_field == 100);
    };
+
+   // A skip() that only fires on parse excludes nothing from serialization, so the writer places its
+   // separators at compile time as if no skip existed. Every field must still be written, with commas
+   // between all of them.
+   "meta::skip on parse leaves serialization untouched"_test = [] {
+      skip_on_parse_t obj{"test", 42, 100};
+      expect(glz::write_json(obj) == R"({"name":"test","skipped_field":42,"normal_field":100})")
+         << glz::write_json(obj).value();
+
+      // Prettified output carries the separators through indentation and newlines, so it is worth
+      // confirming that the statically placed ones land there too
+      std::string pretty{};
+      expect(!glz::write<glz::opts{.prettify = true}>(obj, pretty));
+      expect(pretty == R"({
+   "name": "test",
+   "skipped_field": 42,
+   "normal_field": 100
+})") << pretty;
+   };
 };
 
 struct large_struct_t
