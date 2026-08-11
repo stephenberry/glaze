@@ -11,6 +11,8 @@
 #include <string_view>
 #include <system_error>
 
+#include "glaze/util/compare.hpp"
+
 // To deconflict Windows.h
 #ifdef DELETE
 #undef DELETE
@@ -248,6 +250,17 @@ namespace glz
    {
       return name.find_first_of("\r\n") != std::string_view::npos ||
              value.find_first_of("\r\n") != std::string_view::npos;
+   }
+
+   // RFC 9112 6.3: Content-Length and Transfer-Encoding are the only fields that
+   // tell a recipient where a message body ends. Two of either, disagreeing, let
+   // an intermediary and an endpoint split the same byte stream at different
+   // offsets, so bytes one of them reads as the next message are chosen by
+   // whoever supplied the second field (request/response smuggling). Every other
+   // field name may repeat freely, so the serializers single out just these two.
+   [[nodiscard]] inline bool header_field_frames_body(std::string_view name) noexcept
+   {
+      return striequal(name, "content-length") || striequal(name, "transfer-encoding");
    }
 
    // RFC 7230 3.2.6: a header field-name is one or more token characters (tchar).
