@@ -349,13 +349,13 @@ router.use([](const glz::request& req, glz::response& res) {
 // Authentication middleware
 router.use([](const glz::request& req, glz::response& res) {
     if (requires_auth(req.target)) {
-        auto auth_header = req.headers.find("Authorization");
-        if (auth_header == req.headers.end()) {
+        auto auth_header = req.headers.first_value("Authorization");
+        if (!auth_header) {
             res.status(401).json({{"error", "Authentication required"}});
             return;
         }
         
-        if (!validate_token(auth_header->second)) {
+        if (!validate_token(*auth_header)) {
             res.status(403).json({{"error", "Invalid token"}});
             return;
         }

@@ -107,7 +107,7 @@ struct request {
     http_method method;                                    // GET, POST, etc.
     std::string target;                                    // "/users/123"
     std::unordered_map<std::string, std::string> params;   // Route parameters
-    std::unordered_map<std::string, std::string> headers;  // HTTP headers
+    glz::http_headers headers;                             // HTTP headers
     std::string body;                                      // Request body
     std::string remote_ip;                                 // Client IP
     uint16_t remote_port;                                  // Client port
@@ -119,12 +119,13 @@ struct request {
 ```cpp
 struct response {
     int status_code = 200;
-    std::unordered_map<std::string, std::string> response_headers;
+    glz::http_headers response_headers;
     std::string response_body;
     
     // Fluent interface
     response& status(int code);
-    response& header(std::string_view name, std::string_view value);
+    response& header(std::string_view name, std::string_view value);     // replaces any existing field
+    response& add_header(std::string_view name, std::string_view value); // appends, for Set-Cookie and friends
     response& body(std::string_view content);
     response& content_type(std::string_view type);
   
@@ -138,6 +139,125 @@ struct response {
 
 `glz::generic` is the dynamic JSON-compatible type (formerly `glz::json_t`) and remains the default payload for
 helpers like `response::json` when you need flexible data that can be serialized to JSON or equivalent formats.
+
+### Field Name Casing
+
+Field names keep the case they were written with. `request::headers` holds the names exactly as the client sent them,
+and `response::header` serializes fields exactly in the case the handler passed them in.
+
+Lookups are case-insensitive: `find`, `contains`, `first_value`, `values`, `count`, `contains_token`, `set` and `erase`
+all match regardless of case, so `req.headers.find("content-type")` finds a field the client sent as `Content-Type`.
+
+Code that iterates the container and compares names on its own has to do the same:
+
+```cpp
+for (const auto& field : req.headers) {
+    if (field.name == "content-type") {                // misses "Content-Type"
+    }
+    if (glz::striequal(field.name, "content-type")) {  // matches any casing
+    }
+}
+```
+
+Both forms compile, so the first one fails silently.
+
+### The `glz::http_headers` Container
+
+`request::headers` and `response::response_headers` are both `glz::http_headers`: `{name, value}` fields held in arrival order, where a name is allowed to repeat. Names match case-insensitively throughout, as described above.
+
+Reading:
+
+| Call | Result |
+| --- | --- |
+| `contains(name)` | whether any field carries that name |
+| `count(name)` | how many fields carry it |
+| `first_value(name)` | `std::optional<std::string_view>` of the first match |
+| `values(name)` | range over the value of every match |
+| `fields(name)` | range over every matching `http_header`, name included |
+| `contains_token(name, token)` | whether any match lists `token` in its comma-separated value |
+| `find(name)` | iterator to the first match, or `end()` |
+| `names()`, `values()` | range over every field in the container |
+
+Writing:
+
+| Call | Effect |
+| --- | --- |
+| `add(name, value)` | appends a field, always, even when the name is already present |
+| `set(name, value)` | leaves the name present exactly once (see below) |
+| `erase(name)` | removes every field with that name, returns `void` |
+| `append(other)` | appends every field of another container, without merging names |
+| `clear()` | removes every field |
+
+`set` is not an overwrite of the first match. It replaces the first field with that name and erases every other one:
+
+```cpp
+headers.add("Set-Cookie", "session=abc");
+headers.add("Set-Cookie", "theme=dark");
+headers.set("Set-Cookie", "session=xyz"); // both earlier cookies are gone
+```
+
+That is what a single-valued field like `Content-Type` wants and the opposite of what a repeatable field wants, where `add` is the correct call. `set` also adopts the casing of the name handed to it, so `set("content-type", v)` makes a field the client sent as `Content-Type` serialize lowercase.
+
+`first_value`, `values`, `fields`, and `names` all borrow from the container, so copy into a `std::string` before adding to, setting, erasing from, or destroying it.
+
+### Migrating from `std::unordered_map`
+
+`request::headers` and `response::response_headers` were `std::unordered_map<std::string, std::string>`. `glz::http_headers` keeps fields in arrival order and lets a name repeat, so the map operations that assumed one value per key are gone. Every replacement below is case-insensitive on the name.
+
+| Was | Now |
+| --- | --- |
+| `headers["Accept"]` (read) | `headers.first_value("Accept").value_or("")` |
+| `headers.at("Accept")` | `headers.first_value("Accept").value()` |
+| `headers["Accept"] = v` (on a response) | `res.header("Accept", v)` |
+| `headers.count("Accept")` as a presence test | `headers.contains("Accept")` |
+| `headers.count("Accept")` as a tally | `headers.count("Accept")` (same call, now counts repeats) |
+| `it->first` / `it->second` | `it->name` / `it->value` |
+| `headers.erase("Accept")` | `headers.erase("Accept")` (removes every match, but returns `void`) |
+
+Use `.value()` rather than `operator*` when replacing `at()`: `at()` threw `std::out_of_range` on a missing key, `.value()` throws `std::bad_optional_access`, but `operator*` on a missing field is undefined behavior.
+
+`first_value` returns `std::optional<std::string_view>` that borrows from the container, so copy into a `std::string` before the container is modified, moved, or goes out of scope.
+
+Reading every value of a repeated field:
+
+```cpp
+for (std::string_view cookie : req.headers.values("Cookie")) {
+    // ...
+}
+```
+
+Testing one item of a comma-separated list, rather than substring-matching the whole value:
+
+```cpp
+if (req.headers.contains_token("Connection", "upgrade")) {  // also matches "keep-alive, Upgrade"
+}
+```
+
+On a response, `header()` replaces any existing field of that name and `add_header()` appends one, which is what
+`Set-Cookie` and other repeatable fields need:
+
+```cpp
+res.add_header("Set-Cookie", "session=abc; Path=/; HttpOnly")
+   .add_header("Set-Cookie", "theme=dark; Path=/");
+```
+
+`Content-Length` and `Transfer-Encoding` are replaced even by `add_header`: a second, disagreeing copy would leave the
+body length ambiguous (RFC 9112 §6.3). That guard lives in `header()` and `add_header()`, so writing straight to the
+`response_headers` container with `.add()` bypasses it and can still put two conflicting fields on the wire.
+
+### Body Framing on Client Requests
+
+`http_client` owns the framing of the requests it sends. It writes the `Content-Length` matching the body it is about to
+send, and drops any `Content-Length` or `Transfer-Encoding` supplied in the caller's headers, which could only
+contradict it (RFC 9112 §6.3). Requests whose method anticipates content (`POST`, `PUT`, `PATCH`) always carry a
+`Content-Length`, including `Content-Length: 0` for an empty body.
+
+The client also rejects a *response* it cannot frame to a single body length: `Content-Length` fields that disagree, or
+a value that is not a bare decimal, fail the request with `glz::http_client_error::unframed_response` rather than
+guessing a boundary. Fields repeated with the same length are accepted.
+
+A chunked response is exempt. `Transfer-Encoding` overrides `Content-Length` (RFC 9112 §6.3), so the body comes from the
+chunk sizes and any `Content-Length` alongside it is never read — including one that would otherwise be rejected.
 
 ## HTTP Methods
 

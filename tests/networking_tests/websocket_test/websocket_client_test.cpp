@@ -223,9 +223,13 @@ void run_counting_server(std::atomic<bool>& server_ready, std::atomic<bool>& sho
    }
 }
 
-// Helper to run a server that returns a load-balancer-style connection header
-void run_lb_header_handshake_server(std::atomic<bool>& server_ready, std::atomic<bool>& should_stop,
-                                    std::atomic<uint16_t>& selected_port, std::string* host_header = nullptr)
+constexpr std::string_view lb_upgrade_fields =
+   "Upgrade: websocket\r\n"
+   "Connection: keep-alive, Upgrade\r\n";
+
+void run_handshake_response_server(std::atomic<bool>& server_ready, std::atomic<bool>& should_stop,
+                                   std::atomic<uint16_t>& selected_port, std::string_view upgrade_fields,
+                                   std::string* host_header = nullptr)
 {
    try {
       asio::io_context io_ctx;
@@ -269,12 +273,8 @@ void run_lb_header_handshake_server(std::atomic<bool>& server_ready, std::atomic
       if (websocket_key.empty()) return;
 
       const std::string accept_key = ws_util::generate_accept_key(websocket_key);
-      const std::string response =
-         "HTTP/1.1 101 Switching Protocols\r\n"
-         "Upgrade: websocket\r\n"
-         "Connection: keep-alive, Upgrade\r\n"
-         "Sec-WebSocket-Accept: " +
-         accept_key + "\r\n\r\n";
+      const std::string response = "HTTP/1.1 101 Switching Protocols\r\n" + std::string(upgrade_fields) +
+                                   "Sec-WebSocket-Accept: " + accept_key + "\r\n\r\n";
 
       asio::write(socket, asio::buffer(response), ec);
       if (ec) return;
@@ -285,8 +285,29 @@ void run_lb_header_handshake_server(std::atomic<bool>& server_ready, std::atomic
       }
    }
    catch (const std::exception& e) {
-      std::cerr << "[lb_header_server] Exception: " << e.what() << "\n";
+      std::cerr << "[handshake_response_server] Exception: " << e.what() << "\n";
       server_ready = true;
+   }
+}
+
+std::string send_raw_upgrade_request(uint16_t port, const std::string& request)
+{
+   try {
+      asio::io_context io_ctx;
+      asio::ip::tcp::socket socket(io_ctx);
+      asio::error_code ec;
+      socket.connect(asio::ip::tcp::endpoint(asio::ip::make_address("127.0.0.1"), port), ec);
+      if (ec) return "";
+
+      asio::write(socket, asio::buffer(request), ec);
+      if (ec) return "";
+
+      asio::streambuf response_buf;
+      asio::read_until(socket, response_buf, "\r\n\r\n", ec);
+      return {asio::buffers_begin(response_buf.data()), asio::buffers_end(response_buf.data())};
+   }
+   catch (const std::exception&) {
+      return "";
    }
 }
 
@@ -495,10 +516,8 @@ void run_auth_websocket_server(std::atomic<bool>& server_ready, std::atomic<bool
    http_server server;
    auto ws_server = std::make_shared<websocket_server>();
 
-   ws_server->on_validate([expected_auth](const request& req) {
-      auto it = req.headers.find("authorization");
-      return it != req.headers.end() && it->second == expected_auth;
-   });
+   ws_server->on_validate(
+      [expected_auth](const request& req) { return req.headers.first_value("authorization") == expected_auth; });
 
    ws_server->on_open([](auto /*conn*/, const request&) {});
    ws_server->on_message([](auto conn, std::string_view message, ws_opcode opcode) {
@@ -1341,8 +1360,8 @@ suite websocket_client_tests = [] {
       std::atomic<bool> stop_server{false};
       std::atomic<uint16_t> port{0};
 
-      std::thread server_thread(run_lb_header_handshake_server, std::ref(server_ready), std::ref(stop_server),
-                                std::ref(port), nullptr);
+      std::thread server_thread(run_handshake_response_server, std::ref(server_ready), std::ref(stop_server),
+                                std::ref(port), lb_upgrade_fields, nullptr);
 
       expect(wait_for_condition([&] { return server_ready.load() && port.load() != 0; })) << "Server failed to start";
 
@@ -1387,14 +1406,99 @@ suite websocket_client_tests = [] {
       server_thread.join();
    };
 
+   "handshake_upgrade_field_name_must_match_in_full_test"_test = [] {
+      std::atomic<bool> server_ready{false};
+      std::atomic<bool> stop_server{false};
+      std::atomic<uint16_t> port{0};
+
+      std::thread server_thread(run_handshake_response_server, std::ref(server_ready), std::ref(stop_server),
+                                std::ref(port),
+                                std::string_view{"Upgrade-Extra: websocket\r\n"
+                                                 "Connection: Upgrade\r\n"},
+                                nullptr);
+
+      expect(wait_for_condition([&] { return server_ready.load() && port.load() != 0; })) << "Server failed to start";
+
+      websocket_client client;
+      std::atomic<bool> open_called{false};
+      std::atomic<bool> protocol_error{false};
+
+      client.on_open([&]() {
+         open_called = true;
+         client.context()->stop();
+      });
+
+      client.on_message([](std::string_view, ws_opcode) {});
+
+      client.on_close([](ws_close_code, std::string_view) {});
+
+      client.on_error([&](std::error_code ec) {
+         if (ec == std::make_error_code(std::errc::protocol_error)) {
+            protocol_error = true;
+         }
+         client.context()->stop();
+      });
+
+      client.connect("ws://127.0.0.1:" + std::to_string(port.load()) + "/ws");
+
+      std::thread client_thread([&client]() { client.context()->run(); });
+
+      expect(wait_for_condition([&] { return open_called.load() || protocol_error.load(); }))
+         << "Handshake neither completed nor failed";
+      expect(!open_called.load()) << "Upgrade-Extra must not satisfy the Upgrade check\n";
+      expect(protocol_error.load()) << "A response without a real Upgrade field must fail the handshake\n";
+
+      if (!client.context()->stopped()) {
+         client.context()->stop();
+      }
+      if (client_thread.joinable()) {
+         client_thread.join();
+      }
+
+      stop_server = true;
+      server_thread.join();
+   };
+
+   "upgrade_accepted_with_connection_split_over_two_fields_test"_test = [] {
+      std::atomic<bool> server_ready{false};
+      std::atomic<bool> stop_server{false};
+      std::atomic<uint16_t> port{0};
+
+      std::thread server_thread(run_echo_server, std::ref(server_ready), std::ref(stop_server), std::ref(port));
+
+      expect(wait_for_condition([&] { return server_ready.load() && port.load() != 0; })) << "Server failed to start";
+
+      const std::string request =
+         "GET /ws HTTP/1.1\r\n"
+         "Host: 127.0.0.1:" +
+         std::to_string(port.load()) +
+         "\r\n"
+         "Upgrade: websocket\r\n"
+         "Connection: keep-alive\r\n"
+         "Connection: Upgrade\r\n"
+         "Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\n"
+         "Sec-WebSocket-Version: 13\r\n"
+         "\r\n";
+
+      const std::string response = send_raw_upgrade_request(port.load(), request);
+
+      expect(response.find("101") != std::string::npos)
+         << "Split Connection options must still be recognized as an upgrade, got: " << response << "\n";
+      expect(response.find("s3pPLMBiTxaQ9kYGzzhZRbK+xOo=") != std::string::npos)
+         << "The RFC 6455 accept key for the sample nonce should come back\n";
+
+      stop_server = true;
+      server_thread.join();
+   };
+
    "websocket_handshake_host_header_includes_port"_test = [] {
       std::atomic<bool> server_ready{false};
       std::atomic<bool> stop_server{false};
       std::atomic<uint16_t> port{0};
       std::string host_header;
 
-      std::thread server_thread(run_lb_header_handshake_server, std::ref(server_ready), std::ref(stop_server),
-                                std::ref(port), &host_header);
+      std::thread server_thread(run_handshake_response_server, std::ref(server_ready), std::ref(stop_server),
+                                std::ref(port), lb_upgrade_fields, &host_header);
 
       expect(wait_for_condition([&] { return server_ready.load() && port.load() != 0; })) << "Server failed to start";
 
