@@ -663,16 +663,23 @@ namespace glz
          }
       }
 
-      // A JSON object key must be a string. RFC 8949 section 6.1 maps a CBOR
-      // map's non-string keys onto their string form; integer keys (pervasive in
-      // COSE/CWT/WebAuthn) become quoted decimal strings. Emitting them bare
-      // produced structurally invalid JSON while reporting success. Text keys
-      // pass through, other key types have no JSON string form and are rejected.
+      // A JSON object key must be a string. Integer keys (pervasive in
+      // COSE/CWT/WebAuthn) become quoted decimal strings, one of the string
+      // forms RFC 8949 section 6.1 allows a converter to choose. Emitting them
+      // bare produced structurally invalid JSON while reporting success. Text
+      // and byte-string keys already emit as JSON strings via the value path,
+      // a tag on a key is unwrapped and the tagged content re-checked, and key
+      // types with no JSON string form (array, map, float, simple) are rejected.
       // Mirrors the string/integer key handling in beve_to_json_value's object case.
       template <auto Opts, class Buffer>
       inline void cbor_to_json_key(auto&& ctx, auto&& it, auto&& end, Buffer& out, auto&& ix, uint32_t recursive_depth)
       {
          using namespace cbor;
+
+         if (recursive_depth >= max_recursive_depth_limit) [[unlikely]] {
+            ctx.error = error_code::exceeded_max_recursive_depth;
+            return;
+         }
 
          if (it >= end) [[unlikely]] {
             ctx.error = error_code::unexpected_end;
@@ -686,9 +693,25 @@ namespace glz
 
          switch (major_type) {
          case major::tstr:
-            // Already a JSON string once written; emit with normal escaping.
+         case major::bstr:
+            // Both already emit as a JSON string (tstr escaped, bstr hex-quoted).
             cbor_to_json_value<Opts>(ctx, it, end, out, ix, recursive_depth);
             return;
+         case major::tag: {
+            // Unwrap the tag and key-check the tagged content, so e.g. a tag-0
+            // datetime text key still emits as a string. Typed-array tags
+            // (RFC 8746) decode to a JSON array and are rejected below.
+            ++it;
+            const uint64_t tag_num = cbor_to_json_decode_arg(ctx, it, end, additional_info);
+            if (bool(ctx.error)) [[unlikely]]
+               return;
+            if (typed_array::get_info(tag_num).valid) [[unlikely]] {
+               ctx.error = error_code::syntax_error;
+               return;
+            }
+            cbor_to_json_key<Opts>(ctx, it, end, out, ix, recursive_depth + 1);
+            return;
+         }
          case major::uint: {
             ++it;
             const uint64_t value = cbor_to_json_decode_arg(ctx, it, end, additional_info);
