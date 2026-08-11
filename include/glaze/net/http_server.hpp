@@ -2650,6 +2650,19 @@ namespace glz
                if (const auto last = value_sv.find_last_not_of(" \t"); last != std::string_view::npos) {
                   value_sv.remove_suffix(value_sv.size() - (last + 1));
                }
+               // RFC 9112 2.2 / RFC 7230 3.2: the field-name must be a token and the
+               // field-value must carry no bare CR/LF or other control byte. Splitting
+               // on CRLF alone leaves a bare LF inside a field line intact, so glaze reads
+               // "X: 1\nContent-Length: 40" as one X field while an LF-tolerant proxy reads
+               // two fields and frames those bytes as the body: the Content-Length lookup
+               // here misses and the trailing bytes reparse as a second request (CL.0
+               // request smuggling). Validate with the net stack's shared predicates,
+               // which the WebSocket handshake path already uses, and reject with 400 and close.
+               if (!glz::valid_header_name(name_sv) || !glz::valid_header_value(value_sv)) {
+                  result.status = parse_status::error;
+                  send_error_response_with_close(conn, 400, "Bad Request");
+                  return result;
+               }
                // RFC 7230 3.3.2: multiple Content-Length fields with differing values make the
                // body framing unrecoverable. Lookups resolve to the first field, so a second
                // Content-Length carrying another length would leave a proxy that frames the body
