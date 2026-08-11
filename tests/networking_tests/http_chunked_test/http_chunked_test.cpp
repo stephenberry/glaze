@@ -379,13 +379,13 @@ suite chunked_sync_tests = [] {
          auto custom = result->response_headers.find("x-custom-header");
          expect(custom != result->response_headers.end()) << "Custom header should be present";
          if (custom != result->response_headers.end()) {
-            expect(custom->second == "custom-value") << "Custom header value should match";
+            expect(custom->value == "custom-value") << "Custom header value should match";
          }
 
          auto te = result->response_headers.find("transfer-encoding");
          expect(te != result->response_headers.end()) << "Transfer-Encoding header should be present";
          if (te != result->response_headers.end()) {
-            expect(te->second.find("chunked") != std::string::npos) << "Transfer-Encoding should be chunked";
+            expect(te->value.find("chunked") != std::string::npos) << "Transfer-Encoding should be chunked";
          }
       }
 
