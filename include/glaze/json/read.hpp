@@ -276,49 +276,46 @@ namespace glz
             }
          }
 
-         // Check for operation-specific skipping
-         if constexpr (meta_has_skip<std::remove_cvref_t<T>>) {
-            if constexpr (meta<std::remove_cvref_t<T>>::skip(Key, {glz::operation::parse})) {
-               skip_value<JSON>::op<Opts>(ctx, it, end);
-               if (bool(ctx.error)) [[unlikely]]
-                  return; // Propagate error from skip_value
-               if constexpr (Opts.error_on_missing_keys || Opts.partial_read) {
-                  ((selected_index = I), ...); // Mark as handled even if skipped
-               }
-               return;
-            }
-         }
-
-         using V = refl_t<T, I>;
-
-         if constexpr (const_value_v<V>) {
-            if constexpr (check_error_on_const_read(Opts)) {
-               ctx.error = error_code::attempt_const_read;
-            }
-            else {
-               // do not read anything into the const value
-               skip_value<JSON>::op<Opts>(ctx, it, end);
-            }
-         }
-         else if constexpr (is_function_ptr_or_ref<V>) {
-            // Function pointers cannot be deserialized from JSON.
-            // When write_function_pointers is enabled the writer emits a type-name string,
-            // but there is nothing meaningful to reconstruct on read — just skip the value.
-            // When write_function_pointers is off the key is never written, so this branch
-            // is unreachable in that case.
+         // Check for operation-specific skipping. The field's reader must live in the else branch so
+         // that a skipped field is never instantiated -- see `skipped_by_meta`.
+         if constexpr (skipped_by_meta<std::remove_cvref_t<T>, I, operation::parse>) {
             skip_value<JSON>::op<Opts>(ctx, it, end);
+            if (bool(ctx.error)) [[unlikely]]
+               return; // Propagate error from skip_value
          }
          else {
-            if constexpr (glaze_object_t<T>) {
-               from<JSON, std::remove_cvref_t<V>>::template op<ws_handled<Opts>()>(
-                  get_member(value, get<I>(reflect<T>::values)), ctx, it, end);
+            using V = refl_t<T, I>;
+
+            if constexpr (const_value_v<V>) {
+               if constexpr (check_error_on_const_read(Opts)) {
+                  ctx.error = error_code::attempt_const_read;
+               }
+               else {
+                  // do not read anything into the const value
+                  skip_value<JSON>::op<Opts>(ctx, it, end);
+               }
+            }
+            else if constexpr (is_function_ptr_or_ref<V>) {
+               // Function pointers cannot be deserialized from JSON.
+               // When write_function_pointers is enabled the writer emits a type-name string,
+               // but there is nothing meaningful to reconstruct on read — just skip the value.
+               // When write_function_pointers is off the key is never written, so this branch
+               // is unreachable in that case.
+               skip_value<JSON>::op<Opts>(ctx, it, end);
             }
             else {
-               from<JSON, std::remove_cvref_t<V>>::template op<ws_handled<Opts>()>(
-                  get_member(value, get<I>(to_tie(value))), ctx, it, end);
+               if constexpr (glaze_object_t<T>) {
+                  from<JSON, std::remove_cvref_t<V>>::template op<ws_handled<Opts>()>(
+                     get_member(value, get<I>(reflect<T>::values)), ctx, it, end);
+               }
+               else {
+                  from<JSON, std::remove_cvref_t<V>>::template op<ws_handled<Opts>()>(
+                     get_member(value, get<I>(to_tie(value))), ctx, it, end);
+               }
             }
          }
 
+         // Mark as handled even when the field was skipped
          if constexpr (Opts.error_on_missing_keys || Opts.partial_read) {
             ((selected_index = I), ...);
          }
@@ -434,41 +431,37 @@ namespace glz
                }
             }
 
-            // Check for operation-specific skipping
-            if constexpr (meta_has_skip<std::remove_cvref_t<T>>) {
-               constexpr auto Key = get<I>(reflect<T>::keys);
-               if constexpr (meta<std::remove_cvref_t<T>>::skip(Key, {glz::operation::parse})) {
-                  skip_value<JSON>::op<Opts>(ctx, it, end);
-                  if (bool(ctx.error)) [[unlikely]]
-                     return;
-                  if constexpr (Opts.error_on_missing_keys || Opts.partial_read) {
-                     ((selected_index = I), ...);
-                  }
+            // Check for operation-specific skipping. The field's reader must live in the else branch
+            // so that a skipped field is never instantiated -- see `skipped_by_meta`.
+            if constexpr (skipped_by_meta<std::remove_cvref_t<T>, I, operation::parse>) {
+               skip_value<JSON>::op<Opts>(ctx, it, end);
+               if (bool(ctx.error)) [[unlikely]]
                   return;
-               }
-            }
-
-            using V = refl_t<T, I>;
-            if constexpr (const_value_v<V>) {
-               if constexpr (check_error_on_const_read(Opts)) {
-                  ctx.error = error_code::attempt_const_read;
-               }
-               else {
-                  skip_value<JSON>::op<Opts>(ctx, it, end);
-               }
             }
             else {
-               // For linear_search, use Opts directly to avoid duplicate template instantiations
-               // We've already skipped whitespace before reaching here
-               if constexpr (glaze_object_t<T>) {
-                  from<JSON, std::remove_cvref_t<V>>::template op<Opts>(get_member(value, get<I>(reflect<T>::values)),
-                                                                        ctx, it, end);
+               using V = refl_t<T, I>;
+               if constexpr (const_value_v<V>) {
+                  if constexpr (check_error_on_const_read(Opts)) {
+                     ctx.error = error_code::attempt_const_read;
+                  }
+                  else {
+                     skip_value<JSON>::op<Opts>(ctx, it, end);
+                  }
                }
                else {
-                  from<JSON, std::remove_cvref_t<V>>::template op<Opts>(get_member(value, get<I>(to_tie(value))), ctx,
-                                                                        it, end);
+                  // For linear_search, use Opts directly to avoid duplicate template instantiations
+                  // We've already skipped whitespace before reaching here
+                  if constexpr (glaze_object_t<T>) {
+                     from<JSON, std::remove_cvref_t<V>>::template op<Opts>(
+                        get_member(value, get<I>(reflect<T>::values)), ctx, it, end);
+                  }
+                  else {
+                     from<JSON, std::remove_cvref_t<V>>::template op<Opts>(get_member(value, get<I>(to_tie(value))),
+                                                                           ctx, it, end);
+                  }
                }
             }
+            // Mark as handled even when the field was skipped
             if constexpr (Opts.error_on_missing_keys || Opts.partial_read) {
                ((selected_index = I), ...);
             }

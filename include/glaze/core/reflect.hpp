@@ -612,6 +612,24 @@ namespace glz
       }
    }
 
+   // Whether `meta<T>::skip` excludes the field at index I from the given operation.
+   //
+   // Consume this as `if constexpr (skipped_by_meta<...>) { ... } else { serialize/parse }`, never as
+   // an early `return` inside an `if constexpr` block. A `return` stops the field from being touched
+   // at runtime, but the code that follows it in the same block is still instantiated -- so the
+   // skipped field's serializer is compiled anyway, and a field skipped precisely because its type
+   // cannot be serialized in this context (a type with no `to`/`from`, or a non-owning view that
+   // GLZ_ASSERT_OWNS_ITS_BYTES rejects for a streaming read) still breaks the build.
+   template <class T, size_t I, operation Op>
+   inline constexpr bool skipped_by_meta = [] {
+      if constexpr (meta_has_skip<T>) {
+         return meta<std::remove_cvref_t<T>>::skip(reflect<T>::keys[I], meta_context{.op = Op});
+      }
+      else {
+         return false;
+      }
+   }();
+
    template <auto Opts, class T>
    inline constexpr bool maybe_skipped = [] {
       if constexpr (reflect<T>::size > 0) {

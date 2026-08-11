@@ -12880,6 +12880,50 @@ suite skip_first_and_last_tests = [] {
    };
 };
 
+// A skipped field is not part of the parse or the serialization, so neither direction may instantiate
+// its reader or writer -- a field can only be skipped for being unserializable if skipping it stops
+// the build from demanding a serializer for it (issue #2780).
+class opaque_field_t
+{
+   int value_{7};
+
+  public:
+   opaque_field_t() = default;
+   int value() const { return value_; }
+};
+
+struct holds_opaque_field
+{
+   int i{1};
+   opaque_field_t opaque{};
+   std::string s{"end"};
+};
+
+template <>
+struct glz::meta<holds_opaque_field>
+{
+   static constexpr bool skip(const std::string_view key, const meta_context&) { return key == "opaque"; }
+};
+
+suite skip_unserializable_field_tests = [] {
+   "skipped field needs no serializer"_test = [] {
+      holds_opaque_field obj{};
+      expect(glz::write_json(obj) == R"({"i":1,"s":"end"})") << glz::write_json(obj).value();
+
+      holds_opaque_field parsed{};
+      expect(!glz::read_json(parsed, R"({"i":9,"opaque":{"value":1},"s":"tail"})"));
+      expect(parsed.i == 9);
+      expect(parsed.s == "tail");
+      expect(parsed.opaque.value() == 7);
+   };
+
+   "a skipped key is not a missing key"_test = [] {
+      holds_opaque_field parsed{};
+      expect(!glz::read<glz::opts{.error_on_missing_keys = true}>(parsed, R"({"i":9,"s":"tail"})"));
+      expect(parsed.i == 9);
+   };
+};
+
 template <size_t N>
 struct FixedName
 {

@@ -2347,29 +2347,29 @@ namespace glz
                for_each<N>([&]<size_t I>() {
                   using val_t = field_t<T, I>;
 
-                  if constexpr (meta_has_skip<T>) {
-                     static constexpr meta_context mctx{.op = operation::serialize};
-                     if constexpr (meta<T>::skip(reflect<T>::keys[I], mctx)) return;
-                  }
-                  if constexpr (meta_has_skip_if<T>) {
-                     static constexpr auto key = glz::get<I>(reflect<T>::keys);
-                     static constexpr meta_context mctx{.op = operation::serialize};
-                     decltype(auto) field_value = [&]() -> decltype(auto) {
-                        if constexpr (reflectable<T>) {
-                           return get<I>(t);
-                        }
-                        else {
-                           return get_member(value, glz::get<I>(reflect<T>::values));
-                        }
-                     }();
-                     if (meta<T>::skip_if(field_value, key, mctx)) return;
-                  }
-
+                  // `meta<T>::skip` joins the other compile-time exclusions here rather than returning
+                  // early, so that a skipped field's writer is never instantiated -- see
+                  // `skipped_by_meta`.
                   constexpr bool write_function_pointers = check_write_function_pointers(Opts);
-                  if constexpr (always_skipped<val_t> || (!write_function_pointers && is_any_function_ptr<val_t>)) {
+                  if constexpr (skipped_by_meta<T, I, operation::serialize> || always_skipped<val_t> ||
+                                (!write_function_pointers && is_any_function_ptr<val_t>)) {
                      return;
                   }
                   else {
+                     if constexpr (meta_has_skip_if<T>) {
+                        static constexpr auto skip_if_key = glz::get<I>(reflect<T>::keys);
+                        static constexpr meta_context mctx{.op = operation::serialize};
+                        decltype(auto) field_value = [&]() -> decltype(auto) {
+                           if constexpr (reflectable<T>) {
+                              return get<I>(t);
+                           }
+                           else {
+                              return get_member(value, glz::get<I>(reflect<T>::values));
+                           }
+                        }();
+                        if (meta<T>::skip_if(field_value, skip_if_key, mctx)) return;
+                     }
+
                      if constexpr (null_t<val_t> && Opts.skip_null_members) {
                         if constexpr (always_null_t<val_t>)
                            return;
