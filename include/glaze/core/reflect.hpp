@@ -622,8 +622,9 @@ namespace glz
    // GLZ_ASSERT_OWNS_ITS_BYTES rejects for a streaming read) still breaks the build.
    template <class T, size_t I, operation Op>
    inline constexpr bool skipped_by_meta = [] {
-      if constexpr (meta_has_skip<T>) {
-         return meta<std::remove_cvref_t<T>>::skip(reflect<T>::keys[I], meta_context{.op = Op});
+      using V = std::remove_cvref_t<T>;
+      if constexpr (meta_has_skip<V>) {
+         return meta<V>::skip(reflect<V>::keys[I], meta_context{.op = Op});
       }
       else {
          return false;
@@ -801,12 +802,9 @@ namespace glz
             }
 
             // Check if field is skipped during parse - if so, don't require it
-            if constexpr (meta_has_skip<T>) {
-               constexpr auto key = reflect<T>::keys[I];
-               if constexpr (meta<T>::skip(key, {operation::parse})) {
-                  fields[I] = false;
-                  return;
-               }
+            if constexpr (skipped_by_meta<T, I, operation::parse>) {
+               fields[I] = false;
+               return;
             }
 
             // Check if meta<T>::requires_key customization point exists
