@@ -25,6 +25,7 @@
 
 #include "glaze/json/generic.hpp"
 #include "ut/ut.hpp"
+#include "scratch_directory.hpp"
 
 using namespace ut;
 
@@ -315,6 +316,12 @@ struct yaml_multi_empty_arrays_struct
    int x{42};
    bool operator==(const yaml_multi_empty_arrays_struct&) const = default;
 };
+
+
+// Relative scratch paths in this file resolve inside a private directory rather than
+// wherever the binary was launched from. This must precede the first suite: ut runs a
+// suite from its constructor, during static initialization.
+const glz_test::scratch_directory scratch{"yaml_test"};
 
 suite yaml_write_tests = [] {
    "write_simple_struct"_test = [] {

@@ -31,6 +31,7 @@
 #include "glaze/json/read.hpp"
 #include "glaze/trace/trace.hpp"
 #include "ut/ut.hpp"
+#include "scratch_directory.hpp"
 
 using namespace ut;
 
@@ -1428,6 +1429,12 @@ void bench()
 }
 
 using namespace ut;
+
+
+// Relative scratch paths in this file resolve inside a private directory rather than
+// wherever the binary was launched from. This must precede the first suite: ut runs a
+// suite from its constructor, during static initialization.
+const glz_test::scratch_directory scratch{"beve_test"};
 
 suite beve_helpers = [] {
    "beve_helpers"_test = [] {

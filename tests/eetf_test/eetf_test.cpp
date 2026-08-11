@@ -16,12 +16,19 @@
 #include "glaze/eetf/write.hpp"
 #include "glaze/trace/trace.hpp"
 #include "ut/ut.hpp"
+#include "scratch_directory.hpp"
 
 using namespace glz::eetf;
 
 using namespace ut;
 
 glz::trace trace{};
+
+// Relative scratch paths in this file resolve inside a private directory rather than
+// wherever the binary was launched from. This must precede the first suite: ut runs a
+// suite from its constructor, during static initialization.
+const glz_test::scratch_directory scratch{"eetf_test"};
+
 suite start_trace = [] { trace.begin("eetf_test", "Full test suite duration."); };
 
 /*
