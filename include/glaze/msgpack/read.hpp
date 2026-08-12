@@ -856,6 +856,9 @@ namespace glz
                   }
                   const size_t len = payload.size();
                   if constexpr (resizable<std::remove_cvref_t<Range>>) {
+                     if (exceeds_capacity(value, len, ctx)) [[unlikely]] {
+                        return;
+                     }
                      value.clear();
                      if constexpr (has_reserve<std::remove_cvref_t<Range>>) {
                         value.reserve(len);
@@ -893,6 +896,9 @@ namespace glz
          }
 
          if constexpr (emplace_backable<std::decay_t<Value>>) {
+            if (exceeds_capacity(value, len, ctx)) [[unlikely]] {
+               return;
+            }
             value.clear();
             if constexpr (has_reserve<std::decay_t<Value>>) {
                // Each element occupies at least one byte on the wire, so a valid len can never
@@ -939,6 +945,9 @@ namespace glz
             return;
          }
          value.type = type;
+         if (exceeds_capacity(value.data, len, ctx)) [[unlikely]] {
+            return;
+         }
          value.data.resize(len);
          if (len > 0) {
             std::memcpy(value.data.data(), it, len);

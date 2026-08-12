@@ -721,6 +721,9 @@ namespace glz
 
                if constexpr (resizable<T>) {
                   const size_t old_size = value.size();
+                  if (exceeds_capacity(value, old_size + static_cast<size_t>(chunk_len), ctx)) [[unlikely]] {
+                     return;
+                  }
                   value.resize(old_size + static_cast<size_t>(chunk_len));
                   std::memcpy(value.data() + old_size, it, chunk_len);
                }
@@ -767,6 +770,9 @@ namespace glz
             }
 
             if constexpr (resizable<T>) {
+               if (exceeds_capacity(value, static_cast<size_t>(length), ctx)) [[unlikely]] {
+                  return;
+               }
                value.resize(static_cast<size_t>(length));
                std::memcpy(value.data(), it, length);
             }
@@ -881,6 +887,9 @@ namespace glz
                      value.clear();
                   }
                   else if constexpr (resizable<T>) {
+                     if (exceeds_capacity(value, count, ctx)) [[unlikely]] {
+                        return;
+                     }
                      value.resize(count);
                      if constexpr (check_shrink_to_fit(Opts) && has_shrink_to_fit<T>) {
                         value.shrink_to_fit();
@@ -1042,6 +1051,9 @@ namespace glz
                      value.clear();
                   }
                   else if constexpr (resizable<T>) {
+                     if (exceeds_capacity(value, count, ctx)) [[unlikely]] {
+                        return;
+                     }
                      value.resize(count);
                      if constexpr (check_shrink_to_fit(Opts) && has_shrink_to_fit<T>) {
                         value.shrink_to_fit();
@@ -1172,6 +1184,10 @@ namespace glz
                   }
                }
 
+               if (exceeds_capacity(value, i + 1, ctx)) [[unlikely]] {
+                  return;
+               }
+
                if constexpr (emplace_backable<T>) {
                   parse<CBOR>::op<Opts>(value.emplace_back(), ctx, it, end);
                }
@@ -1242,6 +1258,9 @@ namespace glz
             }
             else if constexpr (emplace_backable<T> && !resizable<T>) {
                // Append-only: there is no way to size the target up front even though the count is known.
+               if (exceeds_capacity(value, static_cast<size_t>(count), ctx)) [[unlikely]] {
+                  return;
+               }
                value.clear();
                for (size_t i = 0; i < count; ++i) {
                   parse<CBOR>::op<Opts>(value.emplace_back(), ctx, it, end);
@@ -1251,6 +1270,9 @@ namespace glz
             }
             else {
                if constexpr (resizable<T>) {
+                  if (exceeds_capacity(value, static_cast<size_t>(count), ctx)) [[unlikely]] {
+                     return;
+                  }
                   value.resize(static_cast<size_t>(count));
 
                   if constexpr (check_shrink_to_fit(Opts) && has_shrink_to_fit<T>) {
