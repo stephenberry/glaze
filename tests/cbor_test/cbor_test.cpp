@@ -2132,14 +2132,16 @@ inline std::string cbor_typed_array(uint8_t tag, const void* payload, size_t byt
 // one kind into a target of another is an error everywhere else in this reader, and is here too.
 void typed_array_kind_tests()
 {
-   constexpr uint8_t uint64_le = 71;
-   constexpr uint8_t sint64_le = 79;
-   constexpr uint8_t float64_le = 86;
-   constexpr uint8_t float128_le = 87;
+   // The payloads below are copied in this platform's byte order, so the tags have to say so: 71/79/86
+   // on a little-endian host, 67/75/82 on a big-endian one. Naming a fixed byte order here instead
+   // would tell the reader to byteswap a payload that was never swapped.
+   constexpr uint8_t uint64_native = glz::cbor::typed_array::native_tag<uint64_t>();
+   constexpr uint8_t sint64_native = glz::cbor::typed_array::native_tag<int64_t>();
+   constexpr uint8_t float64_native = glz::cbor::typed_array::native_tag<double>();
 
    "typed array kind must match the target"_test = [] {
       const uint64_t payload[]{1, 2};
-      const auto buffer = cbor_typed_array(uint64_le, payload, sizeof(payload));
+      const auto buffer = cbor_typed_array(uint64_native, payload, sizeof(payload));
 
       std::vector<uint64_t> matching{};
       expect(not glz::read_cbor(matching, buffer));
@@ -2155,7 +2157,7 @@ void typed_array_kind_tests()
 
    "float typed array does not read into an integer target"_test = [] {
       const double payload[]{1.5, 2.5};
-      const auto buffer = cbor_typed_array(float64_le, payload, sizeof(payload));
+      const auto buffer = cbor_typed_array(float64_native, payload, sizeof(payload));
 
       std::vector<double> matching{};
       expect(not glz::read_cbor(matching, buffer));
@@ -2170,7 +2172,7 @@ void typed_array_kind_tests()
 
    "integer typed array does not read into a float target"_test = [] {
       const int64_t payload[]{-1, 2};
-      const auto buffer = cbor_typed_array(sint64_le, payload, sizeof(payload));
+      const auto buffer = cbor_typed_array(sint64_native, payload, sizeof(payload));
 
       std::vector<int64_t> matching{};
       expect(not glz::read_cbor(matching, buffer));
@@ -2183,19 +2185,22 @@ void typed_array_kind_tests()
    // Tags 83 and 87 are IEEE binary128. Where long double is the 80-bit x86 type it shares that
    // 16-byte width without sharing the format, so width alone used to accept it -- and there is no
    // 16-byte byteswap either, so a big-endian binary128 array was read through unswapped.
+   // Neither byte order is a match, so both are named rather than just the host's.
    "binary128 typed array is rejected"_test = [] {
       const unsigned char payload[32]{};
-      const auto buffer = cbor_typed_array(float128_le, payload, sizeof(payload));
+      for (const uint8_t tag : {uint8_t(83), uint8_t(87)}) {
+         const auto buffer = cbor_typed_array(tag, payload, sizeof(payload));
 
-      std::vector<long double> as_long_double{};
-      expect(glz::read_cbor(as_long_double, buffer).ec == glz::error_code::syntax_error);
+         std::vector<long double> as_long_double{};
+         expect(glz::read_cbor(as_long_double, buffer).ec == glz::error_code::syntax_error);
+      }
    };
 
    // Non-contiguous targets take the element-wise decode rather than the bulk copy, and validate the
    // same way.
    "kind is checked for non-contiguous targets too"_test = [] {
       const uint64_t payload[]{1, 2};
-      const auto buffer = cbor_typed_array(uint64_le, payload, sizeof(payload));
+      const auto buffer = cbor_typed_array(uint64_native, payload, sizeof(payload));
 
       std::list<uint64_t> matching{};
       expect(not glz::read_cbor(matching, buffer));
