@@ -88,6 +88,32 @@ namespace glz
             return 0;
          }
       }
+
+      // Byteswap one typed-array element in place. An RFC 8746 tag names the producer's endianness,
+      // so an element whose tag disagrees with this platform is swapped through its bit pattern:
+      // V may be a floating point type, which has no byteswap of its own.
+      template <class V>
+      GLZ_ALWAYS_INLINE void byteswap_element(V& elem) noexcept
+      {
+         if constexpr (sizeof(V) == 2) {
+            uint16_t bits;
+            std::memcpy(&bits, &elem, sizeof(V));
+            bits = std::byteswap(bits);
+            std::memcpy(&elem, &bits, sizeof(V));
+         }
+         else if constexpr (sizeof(V) == 4) {
+            uint32_t bits;
+            std::memcpy(&bits, &elem, sizeof(V));
+            bits = std::byteswap(bits);
+            std::memcpy(&elem, &bits, sizeof(V));
+         }
+         else if constexpr (sizeof(V) == 8) {
+            uint64_t bits;
+            std::memcpy(&bits, &elem, sizeof(V));
+            bits = std::byteswap(bits);
+            std::memcpy(&elem, &bits, sizeof(V));
+         }
+      }
    }
 
    template <>
@@ -774,6 +800,14 @@ namespace glz
          using namespace cbor;
          using V = range_value_t<std::remove_cvref_t<T>>;
 
+         // Set-like containers (std::set, std::unordered_set, ...) can neither be resized nor
+         // back-inserted into: each element is parsed into a temporary and then emplaced.
+         constexpr bool set_like = !resizable<T> && !emplace_backable<T> && emplaceable<T>;
+         // Everything else either has a fixed size the input must fit, or grows to match the input.
+         // The definite- and indefinite-length branches below must agree on which is which, or the
+         // same container would accept one framing of an array and reject the other.
+         constexpr bool growable = resizable<T> || emplace_backable<T> || set_like;
+
          if (it >= end) [[unlikely]] {
             ctx.error = error_code::unexpected_end;
             return;
@@ -786,7 +820,7 @@ namespace glz
          const uint8_t additional_info = get_additional_info(initial);
 
          // Check for RFC 8746 typed array (tag + byte string)
-         if constexpr (num_t<V> && !std::same_as<V, bool> && contiguous<T>) {
+         if constexpr (num_t<V> && !std::same_as<V, bool>) {
             if (major_type == major::tag) {
                ++it; // consume the tag initial byte
 
@@ -843,7 +877,10 @@ namespace glz
                      }
                   }
 
-                  if constexpr (resizable<T>) {
+                  if constexpr (set_like) {
+                     value.clear();
+                  }
+                  else if constexpr (resizable<T>) {
                      value.resize(count);
                      if constexpr (check_shrink_to_fit(Opts) && has_shrink_to_fit<T>) {
                         value.shrink_to_fit();
@@ -859,38 +896,49 @@ namespace glz
                   // Check if we need to byteswap
                   const bool need_swap = typed_array::needs_byteswap(tag_num);
 
-                  if (need_swap && sizeof(V) > 1) {
-                     // Need to byteswap each element
-                     for (size_t i = 0; i < count; ++i) {
-                        V elem;
-                        std::memcpy(&elem, it, sizeof(V));
-                        if constexpr (sizeof(V) == 2) {
-                           uint16_t bits;
-                           std::memcpy(&bits, &elem, sizeof(V));
-                           bits = std::byteswap(bits);
-                           std::memcpy(&elem, &bits, sizeof(V));
+                  if constexpr (contiguous<T>) {
+                     if (need_swap && sizeof(V) > 1) {
+                        // Need to byteswap each element
+                        for (size_t i = 0; i < count; ++i) {
+                           V elem;
+                           std::memcpy(&elem, it, sizeof(V));
+                           cbor_detail::byteswap_element(elem);
+                           value[i] = elem;
+                           it += sizeof(V);
                         }
-                        else if constexpr (sizeof(V) == 4) {
-                           uint32_t bits;
-                           std::memcpy(&bits, &elem, sizeof(V));
-                           bits = std::byteswap(bits);
-                           std::memcpy(&elem, &bits, sizeof(V));
+                     }
+                     else {
+                        // Native endianness or single-byte: bulk read
+                        if (byte_len > 0) {
+                           std::memcpy(value.data(), it, byte_len);
+                           it += byte_len;
                         }
-                        else if constexpr (sizeof(V) == 8) {
-                           uint64_t bits;
-                           std::memcpy(&bits, &elem, sizeof(V));
-                           bits = std::byteswap(bits);
-                           std::memcpy(&elem, &bits, sizeof(V));
-                        }
-                        value[i] = elem;
-                        it += sizeof(V);
                      }
                   }
                   else {
-                     // Native endianness or single-byte: bulk read
-                     if (byte_len > 0) {
-                        std::memcpy(value.data(), it, byte_len);
-                        it += byte_len;
+                     // std::list, std::set and friends have no contiguous storage to bulk read into,
+                     // so each element is decoded on its own.
+                     const bool swap_each = need_swap && sizeof(V) > 1;
+                     const auto next_element = [&] {
+                        V elem;
+                        std::memcpy(&elem, it, sizeof(V));
+                        if (swap_each) {
+                           cbor_detail::byteswap_element(elem);
+                        }
+                        it += sizeof(V);
+                        return elem;
+                     };
+
+                     if constexpr (set_like) {
+                        for (size_t i = 0; i < count; ++i) {
+                           value.emplace(next_element());
+                        }
+                     }
+                     else {
+                        auto dest = value.begin();
+                        for (size_t i = 0; i < count; ++i, ++dest) {
+                           *dest = next_element();
+                        }
                      }
                   }
                   return; // Done with typed array
@@ -904,7 +952,7 @@ namespace glz
          }
 
          // Check for complex array (tag 43001 with nested typed array)
-         if constexpr (complex_t<V> && contiguous<T>) {
+         if constexpr (complex_t<V>) {
             if (major_type == major::tag) {
                ++it; // consume the tag initial byte
 
@@ -990,7 +1038,10 @@ namespace glz
                      }
                   }
 
-                  if constexpr (resizable<T>) {
+                  if constexpr (set_like) {
+                     value.clear();
+                  }
+                  else if constexpr (resizable<T>) {
                      value.resize(count);
                      if constexpr (check_shrink_to_fit(Opts) && has_shrink_to_fit<T>) {
                         value.shrink_to_fit();
@@ -1006,40 +1057,52 @@ namespace glz
                   // Check if we need to byteswap
                   const bool need_swap = typed_array::needs_byteswap(scalar_tag);
 
-                  if (need_swap && sizeof(Scalar) > 1) {
-                     // Need to byteswap each scalar in the interleaved data
-                     auto* dest = reinterpret_cast<Scalar*>(value.data());
-                     const size_t num_scalars = count * 2; // 2 scalars per complex
-                     for (size_t i = 0; i < num_scalars; ++i) {
-                        Scalar elem;
-                        std::memcpy(&elem, it, sizeof(Scalar));
-                        if constexpr (sizeof(Scalar) == 2) {
-                           uint16_t bits;
-                           std::memcpy(&bits, &elem, sizeof(Scalar));
-                           bits = std::byteswap(bits);
-                           std::memcpy(&elem, &bits, sizeof(Scalar));
+                  if constexpr (contiguous<T>) {
+                     if (need_swap && sizeof(Scalar) > 1) {
+                        // Need to byteswap each scalar in the interleaved data
+                        auto* dest = reinterpret_cast<Scalar*>(value.data());
+                        const size_t num_scalars = count * 2; // 2 scalars per complex
+                        for (size_t i = 0; i < num_scalars; ++i) {
+                           Scalar elem;
+                           std::memcpy(&elem, it, sizeof(Scalar));
+                           cbor_detail::byteswap_element(elem);
+                           dest[i] = elem;
+                           it += sizeof(Scalar);
                         }
-                        else if constexpr (sizeof(Scalar) == 4) {
-                           uint32_t bits;
-                           std::memcpy(&bits, &elem, sizeof(Scalar));
-                           bits = std::byteswap(bits);
-                           std::memcpy(&elem, &bits, sizeof(Scalar));
+                     }
+                     else {
+                        // Native endianness or single-byte: bulk read
+                        if (byte_len > 0) {
+                           std::memcpy(value.data(), it, byte_len);
+                           it += byte_len;
                         }
-                        else if constexpr (sizeof(Scalar) == 8) {
-                           uint64_t bits;
-                           std::memcpy(&bits, &elem, sizeof(Scalar));
-                           bits = std::byteswap(bits);
-                           std::memcpy(&elem, &bits, sizeof(Scalar));
-                        }
-                        dest[i] = elem;
-                        it += sizeof(Scalar);
                      }
                   }
                   else {
-                     // Native endianness or single-byte: bulk read
-                     if (byte_len > 0) {
-                        std::memcpy(value.data(), it, byte_len);
-                        it += byte_len;
+                     // No contiguous storage to bulk read into, so the interleaved [real, imag] pairs
+                     // are reassembled one element at a time.
+                     const bool swap_each = need_swap && sizeof(Scalar) > 1;
+                     const auto next_element = [&] {
+                        Scalar parts[2];
+                        std::memcpy(parts, it, sizeof(V));
+                        if (swap_each) {
+                           cbor_detail::byteswap_element(parts[0]);
+                           cbor_detail::byteswap_element(parts[1]);
+                        }
+                        it += sizeof(V);
+                        return V{parts[0], parts[1]};
+                     };
+
+                     if constexpr (set_like) {
+                        for (size_t i = 0; i < count; ++i) {
+                           value.emplace(next_element());
+                        }
+                     }
+                     else {
+                        auto dest = value.begin();
+                        for (size_t i = 0; i < count; ++i, ++dest) {
+                           *dest = next_element();
+                        }
                      }
                   }
                   return; // Done with complex array
@@ -1067,9 +1130,17 @@ namespace glz
          }
 
          if (additional_info == info::indefinite) {
-            // Indefinite-length array
-            if constexpr (resizable<T>) {
+            // Indefinite-length array. The resizable-only path below grows with resize() from index
+            // zero, which drops any prior contents on its own, so it needs no clear() of its own.
+            if constexpr (emplace_backable<T> || set_like) {
                value.clear();
+            }
+            // A target that cannot grow is filled in place, and it is walked with an iterator rather
+            // than a subscript because a non-resizable range need not be indexable. The growing cases
+            // leave this default constructed: insertion would invalidate it.
+            [[maybe_unused]] decltype(value.begin()) dest{};
+            if constexpr (not growable) {
+               dest = value.begin();
             }
             size_t i = 0;
             while (true) {
@@ -1086,18 +1157,48 @@ namespace glz
                   break;
                }
 
-               if constexpr (resizable<T>) {
-                  value.emplace_back();
-                  parse<CBOR>::op<Opts>(value.back(), ctx, it, end);
+               // A break code rather than a count ends this array, so the caller's element limit is
+               // enforced as the array grows instead of up front.
+               if constexpr (check_max_array_size(Opts) > 0) {
+                  if (i >= check_max_array_size(Opts)) [[unlikely]] {
+                     ctx.error = error_code::invalid_length;
+                     return;
+                  }
+               }
+               if constexpr (has_runtime_max_array_size<std::decay_t<decltype(ctx)>>) {
+                  if (ctx.max_array_size > 0 && i >= ctx.max_array_size) [[unlikely]] {
+                     ctx.error = error_code::invalid_length;
+                     return;
+                  }
+               }
+
+               if constexpr (emplace_backable<T>) {
+                  parse<CBOR>::op<Opts>(value.emplace_back(), ctx, it, end);
+               }
+               else if constexpr (set_like) {
+                  V element{};
+                  parse<CBOR>::op<Opts>(element, ctx, it, end);
+                  if (bool(ctx.error)) [[unlikely]]
+                     return;
+                  value.emplace(std::move(element));
+               }
+               else if constexpr (resizable<T>) {
+                  // Resizable but append-only through resize: grow by one and re-derive the write
+                  // position, since growing may invalidate any iterator held across it.
+                  value.resize(i + 1);
+                  auto slot = value.begin();
+                  std::advance(slot, i);
+                  parse<CBOR>::op<Opts>(*slot, ctx, it, end);
                }
                else {
                   if (i >= value.size()) [[unlikely]] {
                      ctx.error = error_code::exceeded_static_array_size;
                      return;
                   }
-                  parse<CBOR>::op<Opts>(value[i], ctx, it, end);
-                  ++i;
+                  parse<CBOR>::op<Opts>(*dest, ctx, it, end);
+                  ++dest;
                }
+               ++i;
 
                if (bool(ctx.error)) [[unlikely]]
                   return;
@@ -1129,24 +1230,47 @@ namespace glz
                }
             }
 
-            if constexpr (resizable<T>) {
-               value.resize(static_cast<size_t>(count));
-
-               if constexpr (check_shrink_to_fit(Opts) && has_shrink_to_fit<T>) {
-                  value.shrink_to_fit();
+            if constexpr (set_like) {
+               value.clear();
+               for (size_t i = 0; i < count; ++i) {
+                  V element{};
+                  parse<CBOR>::op<Opts>(element, ctx, it, end);
+                  if (bool(ctx.error)) [[unlikely]]
+                     return;
+                  value.emplace(std::move(element));
+               }
+            }
+            else if constexpr (emplace_backable<T> && !resizable<T>) {
+               // Append-only: there is no way to size the target up front even though the count is known.
+               value.clear();
+               for (size_t i = 0; i < count; ++i) {
+                  parse<CBOR>::op<Opts>(value.emplace_back(), ctx, it, end);
+                  if (bool(ctx.error)) [[unlikely]]
+                     return;
                }
             }
             else {
-               if (count > value.size()) [[unlikely]] {
-                  ctx.error = error_code::exceeded_static_array_size;
-                  return;
-               }
-            }
+               if constexpr (resizable<T>) {
+                  value.resize(static_cast<size_t>(count));
 
-            for (size_t i = 0; i < count; ++i) {
-               parse<CBOR>::op<Opts>(value[i], ctx, it, end);
-               if (bool(ctx.error)) [[unlikely]]
-                  return;
+                  if constexpr (check_shrink_to_fit(Opts) && has_shrink_to_fit<T>) {
+                     value.shrink_to_fit();
+                  }
+               }
+               else {
+                  if (count > value.size()) [[unlikely]] {
+                     ctx.error = error_code::exceeded_static_array_size;
+                     return;
+                  }
+               }
+
+               // Iteration rather than subscripting: std::list resizes but does not index.
+               auto dest = value.begin();
+               for (size_t i = 0; i < count; ++i, ++dest) {
+                  parse<CBOR>::op<Opts>(*dest, ctx, it, end);
+                  if (bool(ctx.error)) [[unlikely]]
+                     return;
+               }
             }
          }
       }
