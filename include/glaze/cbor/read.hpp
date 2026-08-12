@@ -306,8 +306,11 @@ namespace glz
    template <boolean_like T>
    struct from<CBOR, T>
    {
+      // A forwarding reference, not auto&: an element of std::vector<bool> is reached through a proxy
+      // that its container hands back by value, so binding the target as an lvalue reference would
+      // reject every bool that lives in one. The other formats' boolean readers take it the same way.
       template <auto Opts>
-      GLZ_ALWAYS_INLINE static void op(auto& value, is_context auto& ctx, auto& it, auto end) noexcept
+      GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto& ctx, auto& it, auto end) noexcept
       {
          using namespace cbor;
 
