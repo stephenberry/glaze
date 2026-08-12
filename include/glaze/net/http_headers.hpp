@@ -58,6 +58,102 @@ namespace glz
       using const_iterator = std::vector<value_type>::const_iterator;
       using size_type = std::vector<value_type>::size_type;
 
+     private:
+      template <bool IsConst>
+      class matching_iterator
+      {
+         using owner_type = std::conditional_t<IsConst, const http_headers*, http_headers*>;
+
+        public:
+         using iterator_concept = std::bidirectional_iterator_tag;
+         using iterator_category = std::bidirectional_iterator_tag;
+         using difference_type = ptrdiff_t;
+         using value_type = http_headers::value_type;
+         using reference = std::conditional_t<IsConst, const value_type&, value_type&>;
+         using pointer = std::conditional_t<IsConst, const value_type*, value_type*>;
+
+         matching_iterator() = default;
+         matching_iterator(const matching_iterator&) = default;
+         matching_iterator(matching_iterator&&) = default;
+         matching_iterator& operator=(const matching_iterator&) = default;
+         matching_iterator& operator=(matching_iterator&&) = default;
+         ~matching_iterator() = default;
+
+         matching_iterator(owner_type owner, size_t start_index, std::string_view key)
+            : owner_(owner), index_(start_index), key_(key)
+         {
+            seek_forward();
+         }
+
+         [[nodiscard]] reference operator*() const noexcept { return owner_->headers_[index_]; }
+         [[nodiscard]] pointer operator->() const noexcept { return std::addressof(owner_->headers_[index_]); }
+
+         matching_iterator& operator++() noexcept
+         {
+            if (index_ < owner_->headers_.size()) {
+               ++index_;
+               seek_forward();
+            }
+            return *this;
+         }
+
+         matching_iterator operator++(int) noexcept
+         {
+            auto copy = *this;
+            ++(*this);
+            return copy;
+         }
+
+         matching_iterator& operator--() noexcept
+         {
+            seek_backward();
+            return *this;
+         }
+
+         matching_iterator operator--(int) noexcept
+         {
+            auto copy = *this;
+            --(*this);
+            return copy;
+         }
+
+         [[nodiscard]] friend bool operator==(const matching_iterator& left, const matching_iterator& right) noexcept
+         {
+            return left.owner_ == right.owner_ && left.index_ == right.index_ && glz::striequal(left.key_, right.key_);
+         }
+
+        private:
+         void seek_forward() noexcept
+         {
+            while (index_ < owner_->headers_.size()) {
+               const auto& current = owner_->headers_[index_].name;
+               if (glz::striequal(current, key_)) {
+                  return;
+               }
+               ++index_;
+            }
+         }
+
+         // Precondition: a preceding match exists, as required of a bidirectional iterator
+         void seek_backward() noexcept
+         {
+            while (index_ > 0) {
+               --index_;
+               if (glz::striequal(owner_->headers_[index_].name, key_)) {
+                  return;
+               }
+            }
+         }
+
+         owner_type owner_{};
+         size_t index_{0};
+         std::string_view key_;
+      };
+
+     public:
+      using range_iterator = matching_iterator<false>;
+      using const_range_iterator = matching_iterator<true>;
+
       http_headers() = default;
       http_headers(std::initializer_list<http_header> fields) : headers_(fields) {}
 
@@ -92,14 +188,16 @@ namespace glz
 
       [[nodiscard]] auto fields(std::string_view name GLZ_LIFETIMEBOUND) &
       {
-         return headers_ |
-                std::views::filter([name](const http_header& field) { return glz::striequal(field.name, name); });
+         auto first = range_iterator{this, 0, name};
+         auto last = range_iterator{this, headers_.size(), name};
+         return std::ranges::subrange{first, last};
       }
 
       [[nodiscard]] auto fields(std::string_view name GLZ_LIFETIMEBOUND) const&
       {
-         return headers_ |
-                std::views::filter([name](const http_header& field) { return glz::striequal(field.name, name); });
+         auto first = const_range_iterator{this, 0, name};
+         auto last = const_range_iterator{this, headers_.size(), name};
+         return std::ranges::subrange{first, last};
       }
 
       [[nodiscard]] auto names() const&
@@ -116,10 +214,8 @@ namespace glz
 
       [[nodiscard]] auto values(std::string_view name GLZ_LIFETIMEBOUND) const&
       {
-         return headers_ |
-                std::views::filter([name](const http_header& field) { return glz::striequal(field.name, name); }) |
-                std::views::transform(
-                   [](const http_header& field) noexcept -> std::string_view { return field.value; });
+         return fields(name) | std::views::transform(
+                                  [](const http_header& field) noexcept -> std::string_view { return field.value; });
       }
 
       [[nodiscard]] size_t count(std::string_view name) const& noexcept
