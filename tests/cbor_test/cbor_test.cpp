@@ -2114,6 +2114,138 @@ void rfc8949_appendix_a_tests()
 }
 
 // Typed array tests (RFC 8746)
+// tag(n) then a byte string holding the payload, which is what an RFC 8746 typed array looks like on
+// the wire. The payload is written in this platform's byte order, so pick a tag that says so.
+inline std::string cbor_typed_array(uint8_t tag, const void* payload, size_t bytes)
+{
+   std::string buffer{};
+   buffer.push_back(char(0xD8)); // tag, one byte follows
+   buffer.push_back(char(tag));
+   buffer.push_back(char(0x58)); // byte string, one-byte length
+   buffer.push_back(char(bytes));
+   buffer.append(static_cast<const char*>(payload), bytes);
+   return buffer;
+}
+
+// A typed array is copied straight into its target, so a tag matched on element width alone
+// reinterprets the payload of a differently-typed array instead of converting it. Reading a value of
+// one kind into a target of another is an error everywhere else in this reader, and is here too.
+void typed_array_kind_tests()
+{
+   constexpr uint8_t uint64_le = 71;
+   constexpr uint8_t sint64_le = 79;
+   constexpr uint8_t float64_le = 86;
+   constexpr uint8_t float128_le = 87;
+
+   "typed array kind must match the target"_test = [] {
+      const uint64_t payload[]{1, 2};
+      const auto buffer = cbor_typed_array(uint64_le, payload, sizeof(payload));
+
+      std::vector<uint64_t> matching{};
+      expect(not glz::read_cbor(matching, buffer));
+      expect(matching == std::vector<uint64_t>{1, 2});
+
+      // Same width, different kind: reinterpreting these bytes would read 1 as 4.94e-324.
+      std::vector<double> as_double{};
+      expect(glz::read_cbor(as_double, buffer).ec == glz::error_code::syntax_error);
+
+      std::vector<int64_t> as_signed{};
+      expect(glz::read_cbor(as_signed, buffer).ec == glz::error_code::syntax_error);
+   };
+
+   "float typed array does not read into an integer target"_test = [] {
+      const double payload[]{1.5, 2.5};
+      const auto buffer = cbor_typed_array(float64_le, payload, sizeof(payload));
+
+      std::vector<double> matching{};
+      expect(not glz::read_cbor(matching, buffer));
+      expect(matching == std::vector<double>{1.5, 2.5});
+
+      std::vector<int64_t> as_signed{};
+      expect(glz::read_cbor(as_signed, buffer).ec == glz::error_code::syntax_error);
+
+      std::vector<uint64_t> as_unsigned{};
+      expect(glz::read_cbor(as_unsigned, buffer).ec == glz::error_code::syntax_error);
+   };
+
+   "integer typed array does not read into a float target"_test = [] {
+      const int64_t payload[]{-1, 2};
+      const auto buffer = cbor_typed_array(sint64_le, payload, sizeof(payload));
+
+      std::vector<int64_t> matching{};
+      expect(not glz::read_cbor(matching, buffer));
+      expect(matching == std::vector<int64_t>{-1, 2});
+
+      std::vector<double> as_double{};
+      expect(glz::read_cbor(as_double, buffer).ec == glz::error_code::syntax_error);
+   };
+
+   // Tags 83 and 87 are IEEE binary128. Where long double is the 80-bit x86 type it shares that
+   // 16-byte width without sharing the format, so width alone used to accept it -- and there is no
+   // 16-byte byteswap either, so a big-endian binary128 array was read through unswapped.
+   "binary128 typed array is rejected"_test = [] {
+      const unsigned char payload[32]{};
+      const auto buffer = cbor_typed_array(float128_le, payload, sizeof(payload));
+
+      std::vector<long double> as_long_double{};
+      expect(glz::read_cbor(as_long_double, buffer).ec == glz::error_code::syntax_error);
+   };
+
+   // Non-contiguous targets take the element-wise decode rather than the bulk copy, and validate the
+   // same way.
+   "kind is checked for non-contiguous targets too"_test = [] {
+      const uint64_t payload[]{1, 2};
+      const auto buffer = cbor_typed_array(uint64_le, payload, sizeof(payload));
+
+      std::list<uint64_t> matching{};
+      expect(not glz::read_cbor(matching, buffer));
+      expect(matching == std::list<uint64_t>{1, 2});
+
+      std::list<double> as_double{};
+      expect(glz::read_cbor(as_double, buffer).ec == glz::error_code::syntax_error);
+
+      std::set<double> as_set{};
+      expect(glz::read_cbor(as_set, buffer).ec == glz::error_code::syntax_error);
+   };
+
+   "every numeric round-trip still matches its own tag"_test = [] {
+      const auto round_trip = [](auto source) {
+         std::string buffer{};
+         expect(not glz::write_cbor(source, buffer));
+         decltype(source) result{};
+         expect(not glz::read_cbor(result, buffer));
+         expect(result == source);
+      };
+
+      round_trip(std::vector<uint8_t>{1, 2});
+      round_trip(std::vector<uint16_t>{1, 2});
+      round_trip(std::vector<uint32_t>{1, 2});
+      round_trip(std::vector<uint64_t>{1, 2});
+      round_trip(std::vector<int8_t>{-1, 2});
+      round_trip(std::vector<int16_t>{-1, 2});
+      round_trip(std::vector<int32_t>{-1, 2});
+      round_trip(std::vector<int64_t>{-1, 2});
+      round_trip(std::vector<float>{1.5f, -2.5f});
+      round_trip(std::vector<double>{1.5, -2.5});
+      round_trip(std::vector<std::complex<float>>{{1.0f, 2.0f}});
+      round_trip(std::vector<std::complex<double>>{{1.0, 2.0}, {3.0, 4.0}});
+   };
+
+   // The nested scalar tag of a complex array (tag 43001) is validated the same way.
+   "complex array scalar kind must match"_test = [] {
+      const std::vector<std::complex<double>> source{{1.0, 2.0}};
+      std::string buffer{};
+      expect(not glz::write_cbor(source, buffer));
+
+      std::vector<std::complex<double>> matching{};
+      expect(not glz::read_cbor(matching, buffer));
+      expect(matching == source);
+
+      std::vector<std::complex<float>> as_float{};
+      expect(glz::read_cbor(as_float, buffer).ec == glz::error_code::syntax_error);
+   };
+}
+
 void typed_array_tests()
 {
    "typed_array_uint8"_test = [] {
@@ -4051,6 +4183,7 @@ int main()
    large_data_tests();
    rfc8949_appendix_a_tests();
    typed_array_tests();
+   typed_array_kind_tests();
    cbor_to_json_tests();
    past_fuzzing_issues();
    error_tests();
