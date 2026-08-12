@@ -9,10 +9,13 @@
 #include <complex>
 #include <deque>
 #include <expected>
+#include <list>
 #include <map>
 #include <random>
+#include <set>
 #include <span>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 #include "glaze/base64/base64.hpp"
@@ -3626,13 +3629,300 @@ suite cbor_byte_uint8_unify_tests = [] {
    };
 };
 
+struct cbor_stl_members
+{
+   std::set<int> items{};
+   std::list<std::string> names{};
+};
+
+// Containers that grow by back-insertion or by emplacement rather than by subscript. The reader used
+// to index its target unconditionally, so these were a hard compile error rather than a bad read.
+suite cbor_non_indexable_container_tests = [] {
+   "list roundtrip"_test = [] {
+      const std::list<int> src{1, 2, 3};
+      std::string buffer{};
+      expect(not glz::write_cbor(src, buffer));
+
+      std::list<int> dst{9, 9, 9, 9, 9};
+      expect(not glz::read_cbor(dst, buffer));
+      expect(dst == src);
+   };
+
+   "list of strings roundtrip"_test = [] {
+      const std::list<std::string> src{"a", "bb", "ccc"};
+      std::string buffer{};
+      expect(not glz::write_cbor(src, buffer));
+
+      std::list<std::string> dst{};
+      expect(not glz::read_cbor(dst, buffer));
+      expect(dst == src);
+   };
+
+   "set roundtrip"_test = [] {
+      const std::set<int> src{3, 1, 2};
+      std::string buffer{};
+      expect(not glz::write_cbor(src, buffer));
+
+      std::set<int> dst{99};
+      expect(not glz::read_cbor(dst, buffer));
+      expect(dst == src);
+   };
+
+   "unordered_set roundtrip"_test = [] {
+      const std::unordered_set<std::string> src{"x", "y", "z"};
+      std::string buffer{};
+      expect(not glz::write_cbor(src, buffer));
+
+      std::unordered_set<std::string> dst{"stale"};
+      expect(not glz::read_cbor(dst, buffer));
+      expect(dst == src);
+   };
+
+   // 0x9F starts an indefinite-length array, terminated by the 0xFF break code.
+   "indefinite length array"_test = [] {
+      const std::string buffer{"\x9F\x01\x02\x03\xFF", 5};
+
+      std::list<int> lst{};
+      expect(not glz::read_cbor(lst, buffer));
+      expect(lst == std::list<int>{1, 2, 3});
+
+      std::set<int> st{9};
+      expect(not glz::read_cbor(st, buffer));
+      expect(st == std::set<int>{1, 2, 3});
+   };
+
+   // A vector of numbers is written as an RFC 8746 typed array, which these containers cannot bulk
+   // read into, so the reader decodes it one element at a time.
+   "typed array into non-contiguous containers"_test = [] {
+      const std::vector<int32_t> src{1, 2, 3};
+      std::string buffer{};
+      expect(not glz::write_cbor(src, buffer));
+
+      std::list<int32_t> lst{};
+      expect(not glz::read_cbor(lst, buffer));
+      expect(lst == std::list<int32_t>{1, 2, 3});
+
+      std::set<int32_t> st{99};
+      expect(not glz::read_cbor(st, buffer));
+      expect(st == std::set<int32_t>{1, 2, 3});
+
+      std::deque<int32_t> deq{};
+      expect(not glz::read_cbor(deq, buffer));
+      expect(deq == std::deque<int32_t>{1, 2, 3});
+   };
+
+   // Tag 66 is a big-endian uint32 typed array, so every element needs a byteswap on a little-endian
+   // platform. The swap is per-element here rather than over one contiguous block.
+   "byteswapped typed array into non-contiguous containers"_test = [] {
+      std::string buffer{};
+      buffer.push_back(char(0xD8)); // tag, one byte follows
+      buffer.push_back(char(66)); // uint32, big endian
+      buffer.push_back(char(0x48)); // byte string of 8
+      const unsigned char payload[] = {0, 0, 0, 1, 0, 0, 0, 2};
+      buffer.append(reinterpret_cast<const char*>(payload), sizeof(payload));
+
+      std::list<uint32_t> lst{};
+      expect(not glz::read_cbor(lst, buffer));
+      expect(lst == std::list<uint32_t>{1, 2});
+
+      std::set<uint32_t> st{};
+      expect(not glz::read_cbor(st, buffer));
+      expect(st == std::set<uint32_t>{1, 2});
+
+      std::vector<uint32_t> vec{};
+      expect(not glz::read_cbor(vec, buffer));
+      expect(vec == std::vector<uint32_t>{1, 2});
+   };
+
+   "struct member containers"_test = [] {
+      cbor_stl_members src{};
+      src.items = {1, 2, 3};
+      src.names = {"a", "b"};
+      std::string buffer{};
+      expect(not glz::write_cbor(src, buffer));
+
+      cbor_stl_members dst{};
+      expect(not glz::read_cbor(dst, buffer));
+      expect(dst.items == src.items);
+      expect(dst.names == src.names);
+   };
+
+   // A vector of std::complex is written under tag 43001 as an interleaved [real, imag] typed array,
+   // which these containers cannot bulk read into either.
+   "complex array into non-contiguous containers"_test = [] {
+      const std::vector<std::complex<double>> src{{1.0, 2.0}, {3.0, 4.0}};
+      std::string buffer{};
+      expect(not glz::write_cbor(src, buffer));
+
+      std::list<std::complex<double>> lst{};
+      expect(not glz::read_cbor(lst, buffer));
+      expect(lst == std::list<std::complex<double>>{{1.0, 2.0}, {3.0, 4.0}});
+
+      std::deque<std::complex<double>> deq{};
+      expect(not glz::read_cbor(deq, buffer));
+      expect(deq == std::deque<std::complex<double>>{{1.0, 2.0}, {3.0, 4.0}});
+   };
+};
+
+// Resizable but without back-insertion, and back-insertable but without resize. No standard container
+// is either, yet both reach the array reader, and the definite- and indefinite-length branches take
+// different routes for them: this pins the two framings to the same result.
+struct cbor_resize_only
+{
+   using value_type = int;
+   std::vector<int> data{};
+
+   auto begin() { return data.begin(); }
+   auto end() { return data.end(); }
+   auto begin() const { return data.begin(); }
+   auto end() const { return data.end(); }
+   size_t size() const { return data.size(); }
+   void resize(size_t n) { data.resize(n); }
+};
+
+struct cbor_append_only
+{
+   using value_type = int;
+   using reference = int&;
+   std::vector<int> data{};
+
+   auto begin() { return data.begin(); }
+   auto end() { return data.end(); }
+   auto begin() const { return data.begin(); }
+   auto end() const { return data.end(); }
+   size_t size() const { return data.size(); }
+   void clear() { data.clear(); }
+   int& emplace_back() { return data.emplace_back(); }
+};
+
+suite cbor_array_framing_agreement_tests = [] {
+   "definite and indefinite agree"_test = [] {
+      const std::string definite{"\x83\x01\x02\x03", 4};
+      const std::string indefinite{"\x9F\x01\x02\x03\xFF", 5};
+      const std::vector<int> expected{1, 2, 3};
+
+      cbor_resize_only a{};
+      expect(not glz::read_cbor(a, definite));
+      expect(a.data == expected);
+
+      cbor_resize_only b{};
+      expect(not glz::read_cbor(b, indefinite));
+      expect(b.data == expected);
+
+      cbor_append_only c{};
+      expect(not glz::read_cbor(c, definite));
+      expect(c.data == expected);
+
+      cbor_append_only d{};
+      expect(not glz::read_cbor(d, indefinite));
+      expect(d.data == expected);
+   };
+
+   // A prior read must not leave elements behind when the next one is shorter.
+   "growable targets are reset"_test = [] {
+      const std::string three{"\x83\x01\x02\x03", 4};
+      const std::string one{"\x9F\x07\xFF", 3};
+
+      cbor_resize_only a{};
+      expect(not glz::read_cbor(a, three));
+      expect(not glz::read_cbor(a, one));
+      expect(a.data == std::vector<int>{7});
+
+      cbor_append_only b{};
+      expect(not glz::read_cbor(b, three));
+      expect(not glz::read_cbor(b, one));
+      expect(b.data == std::vector<int>{7});
+   };
+};
+
+// An indefinite-length array is ended by a break code rather than a count, so the caller's limit has
+// to be enforced as it grows. It used to be checked only on the definite-length form, which left the
+// limit trivially bypassable by reframing the same array.
+suite cbor_indefinite_array_limit_tests = [] {
+   struct limited_opts : glz::opts
+   {
+      uint32_t format = glz::CBOR;
+      size_t max_array_size = 2;
+   };
+
+   "indefinite arrays honor max_array_size"_test = [] {
+      const std::string oversized{"\x9F\x01\x02\x03\x04\x05\xFF", 7};
+
+      std::vector<int> vec{};
+      expect(glz::read<limited_opts{}>(vec, oversized).ec == glz::error_code::invalid_length);
+
+      std::list<int> lst{};
+      expect(glz::read<limited_opts{}>(lst, oversized).ec == glz::error_code::invalid_length);
+
+      std::set<int> st{};
+      expect(glz::read<limited_opts{}>(st, oversized).ec == glz::error_code::invalid_length);
+   };
+
+   "indefinite arrays within max_array_size are accepted"_test = [] {
+      const std::string within{"\x9F\x01\x02\xFF", 4};
+
+      std::vector<int> vec{};
+      expect(not glz::read<limited_opts{}>(vec, within));
+      expect(vec == std::vector<int>{1, 2});
+   };
+};
+
+#if __cpp_exceptions
+// Assigning from this leaves the variant valueless, which has no alternative index to write. The
+// user-declared constructors make it a non-aggregate, so it needs a meta to be serializable at all.
+struct cbor_throws_on_copy
+{
+   int x{};
+   cbor_throws_on_copy() = default;
+   cbor_throws_on_copy(const cbor_throws_on_copy&) { throw std::runtime_error("copy"); }
+   cbor_throws_on_copy& operator=(const cbor_throws_on_copy&) { throw std::runtime_error("assign"); }
+};
+
+template <>
+struct glz::meta<cbor_throws_on_copy>
+{
+   using T = cbor_throws_on_copy;
+   static constexpr auto value = object(&T::x);
+};
+#endif
+
+// A variant that repeats an alternative type: the written index must be the active one, not the first
+// alternative that happens to match by type.
+suite cbor_variant_index_tests = [] {
+   "duplicate alternative types"_test = [] {
+      std::variant<int, int, double> src{std::in_place_index<1>, 7};
+      std::string buffer{};
+      expect(not glz::write_cbor(src, buffer));
+
+      std::variant<int, int, double> dst{};
+      expect(not glz::read_cbor(dst, buffer));
+      expect(dst.index() == 1);
+      expect(std::get<1>(dst) == 7);
+   };
+
+#if __cpp_exceptions
+   "valueless variant is rejected"_test = [] {
+      std::variant<int, cbor_throws_on_copy> v{};
+      try {
+         const cbor_throws_on_copy thrower{};
+         v = thrower;
+      }
+      catch (const std::runtime_error&) {
+      }
+      expect(v.valueless_by_exception());
+
+      std::string buffer{};
+      expect(glz::write_cbor(v, buffer).ec == glz::error_code::no_matching_variant_type);
+   };
+#endif
+};
+
 struct cbor_shrink_opts : glz::opts
 {
    bool shrink_to_fit = true;
 };
 
 // Resizable but deliberately without a shrink_to_fit member, like std::list.
-// std::list itself can't be used here: CBOR's array reader subscripts its target.
 // String elements keep this on the generic array path rather than the typed-array path.
 struct no_shrink_strings
 {
