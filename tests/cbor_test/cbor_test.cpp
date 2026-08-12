@@ -3772,6 +3772,162 @@ struct cbor_stl_members
    std::list<std::string> names{};
 };
 
+// A sequence of bytes has two legitimate CBOR encodings: a byte string (major type 2), which the
+// contiguous byte ranges write, and a plain array of small unsigned integers (major type 4), which
+// the others write. Each reader used to accept only its own, so Glaze could not read back its own
+// output whenever the container type differed.
+suite cbor_byte_sequence_encoding_tests = [] {
+   "byte string reads into non-contiguous byte ranges"_test = [] {
+      const std::vector<uint8_t> src{1, 2, 3};
+      std::string buffer{};
+      expect(not glz::write_cbor(src, buffer));
+      expect(buffer == std::string("\x43\x01\x02\x03", 4)) << "expected a byte string";
+
+      std::list<uint8_t> lst{9, 9, 9, 9, 9};
+      expect(not glz::read_cbor(lst, buffer));
+      expect(lst == std::list<uint8_t>{1, 2, 3});
+
+      std::deque<uint8_t> deq{};
+      expect(not glz::read_cbor(deq, buffer));
+      expect(deq == std::deque<uint8_t>{1, 2, 3});
+
+      std::set<uint8_t> st{7};
+      expect(not glz::read_cbor(st, buffer));
+      expect(st == std::set<uint8_t>{1, 2, 3});
+
+      std::list<std::byte> bytes{};
+      expect(not glz::read_cbor(bytes, buffer));
+      expect(bytes == std::list<std::byte>{std::byte{1}, std::byte{2}, std::byte{3}});
+   };
+
+   "array reads into contiguous byte ranges"_test = [] {
+      const std::list<uint8_t> src{1, 2, 3};
+      std::string buffer{};
+      expect(not glz::write_cbor(src, buffer));
+      expect(buffer == std::string("\x83\x01\x02\x03", 4)) << "expected a plain array";
+
+      std::vector<uint8_t> vec{9, 9};
+      expect(not glz::read_cbor(vec, buffer));
+      expect(vec == std::vector<uint8_t>{1, 2, 3});
+
+      std::vector<std::byte> bytes{};
+      expect(not glz::read_cbor(bytes, buffer));
+      expect(bytes == std::vector<std::byte>{std::byte{1}, std::byte{2}, std::byte{3}});
+
+      // A fixed-size target zero-fills its tail, as it does for a byte string.
+      std::array<uint8_t, 5> arr{9, 9, 9, 9, 9};
+      expect(not glz::read_cbor(arr, buffer));
+      expect(arr == std::array<uint8_t, 5>{1, 2, 3, 0, 0});
+
+      std::array<uint8_t, 2> too_small{};
+      expect(glz::read_cbor(too_small, buffer).ec == glz::error_code::exceeded_static_array_size);
+   };
+
+   "indefinite length forms of both encodings"_test = [] {
+      const std::string chunked_byte_string{"\x5F\x42\x01\x02\x41\x03\xFF", 7};
+
+      std::vector<uint8_t> vec{};
+      expect(not glz::read_cbor(vec, chunked_byte_string));
+      expect(vec == std::vector<uint8_t>{1, 2, 3});
+
+      std::list<uint8_t> lst{};
+      expect(not glz::read_cbor(lst, chunked_byte_string));
+      expect(lst == std::list<uint8_t>{1, 2, 3});
+
+      const std::string indefinite_array{"\x9F\x01\x02\x03\xFF", 5};
+
+      std::vector<uint8_t> vec2{};
+      expect(not glz::read_cbor(vec2, indefinite_array));
+      expect(vec2 == std::vector<uint8_t>{1, 2, 3});
+
+      std::array<uint8_t, 4> arr{9, 9, 9, 9};
+      expect(not glz::read_cbor(arr, indefinite_array));
+      expect(arr == std::array<uint8_t, 4>{1, 2, 3, 0});
+   };
+
+   "every byte container still round-trips"_test = [] {
+      const auto round_trip = [](auto source) {
+         std::string buffer{};
+         expect(not glz::write_cbor(source, buffer));
+         decltype(source) result{};
+         expect(not glz::read_cbor(result, buffer));
+         expect(result == source);
+      };
+
+      round_trip(std::vector<uint8_t>{1, 2, 3});
+      round_trip(std::vector<std::byte>{std::byte{1}, std::byte{2}});
+      round_trip(std::list<uint8_t>{1, 2, 3});
+      round_trip(std::deque<uint8_t>{1, 2, 3});
+      round_trip(std::set<uint8_t>{1, 2, 3});
+      round_trip(std::array<uint8_t, 3>{1, 2, 3});
+   };
+
+   "max_array_size applies to both encodings"_test = [] {
+      struct limited_opts : glz::opts
+      {
+         uint32_t format = glz::CBOR;
+         size_t max_array_size = 4;
+      };
+
+      std::string byte_string{};
+      expect(not glz::write_cbor(std::vector<uint8_t>(10, 1), byte_string));
+
+      std::vector<uint8_t> vec{};
+      expect(glz::read<limited_opts{}>(vec, byte_string).ec == glz::error_code::invalid_length);
+      std::list<uint8_t> lst{};
+      expect(glz::read<limited_opts{}>(lst, byte_string).ec == glz::error_code::invalid_length);
+
+      // Six bytes spread over three chunks: no single header exceeds the limit, the total does.
+      const std::string chunked{"\x5F\x42\x01\x02\x42\x03\x04\x42\x05\x06\xFF", 11};
+      std::vector<uint8_t> vec2{};
+      expect(glz::read<limited_opts{}>(vec2, chunked).ec == glz::error_code::invalid_length);
+      std::list<uint8_t> lst2{};
+      expect(glz::read<limited_opts{}>(lst2, chunked).ec == glz::error_code::invalid_length);
+
+      const std::string indefinite_array{"\x9F\x01\x02\x03\x04\x05\xFF", 7};
+      std::vector<uint8_t> vec3{};
+      expect(glz::read<limited_opts{}>(vec3, indefinite_array).ec == glz::error_code::invalid_length);
+   };
+
+   "truncated input is still rejected"_test = [] {
+      const std::string truncated_byte_string{"\x43\x01", 2};
+      std::vector<uint8_t> vec{};
+      expect(bool(glz::read_cbor(vec, truncated_byte_string)));
+      std::list<uint8_t> lst{};
+      expect(bool(glz::read_cbor(lst, truncated_byte_string)));
+
+      const std::string truncated_array{"\x83\x01", 2};
+      std::vector<uint8_t> vec2{};
+      expect(bool(glz::read_cbor(vec2, truncated_array)));
+   };
+
+   "non-byte element types are unaffected"_test = [] {
+      std::string buffer{};
+      expect(not glz::write_cbor(std::vector<std::string>{"a"}, buffer));
+
+      std::vector<uint8_t> vec{};
+      expect(bool(glz::read_cbor(vec, buffer)));
+   };
+};
+
+// RFC 8746 has no tag for an extended-precision float, so a container of them is written as a plain
+// array of numbers rather than failing to compile in the typed-array tag lookup.
+suite cbor_long_double_tests = [] {
+   "vector of long double round-trips"_test = [] {
+      const std::vector<long double> src{1.5L, 2.5L, -3.25L};
+      std::string buffer{};
+      expect(not glz::write_cbor(src, buffer));
+
+      std::vector<long double> dst{};
+      expect(not glz::read_cbor(dst, buffer));
+      expect(dst == src);
+
+      std::list<long double> lst{};
+      expect(not glz::read_cbor(lst, buffer));
+      expect(lst == std::list<long double>{1.5L, 2.5L, -3.25L});
+   };
+};
+
 struct cbor_flags_holder
 {
    std::vector<bool> flags{};

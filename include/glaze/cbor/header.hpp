@@ -237,6 +237,21 @@ namespace glz::cbor
    // RFC 8746 Typed Array helpers
    namespace typed_array
    {
+      // Whether RFC 8746 has a tag for T at all. The tags cover the fixed-width integers and IEEE
+      // binary32/binary64; a numeric type outside that set -- long double, where it is the 80-bit
+      // x86 type or any other extended format -- has no typed array representation and is written
+      // as a plain CBOR array of numbers instead.
+      template <class T>
+      concept taggable =
+         std::same_as<T, uint8_t> || std::same_as<T, uint16_t> || std::same_as<T, uint32_t> ||
+         std::same_as<T, uint64_t> || std::same_as<T, int8_t> || std::same_as<T, int16_t> || std::same_as<T, int32_t> ||
+         std::same_as<T, int64_t> || std::same_as<T, float> || std::same_as<T, double>;
+
+      // The same question for a std::complex, whose interleaved form is tagged by its scalar. The
+      // nested requires-clause guards the substitution, so this is valid to ask of any type.
+      template <class T>
+      concept taggable_scalar = requires { typename T::value_type; } && taggable<typename T::value_type>;
+
       // Select the appropriate tag for a type based on native endianness
       template <class T>
       [[nodiscard]] consteval uint64_t native_tag() noexcept

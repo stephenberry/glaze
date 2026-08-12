@@ -411,8 +411,10 @@ namespace glz
       {
          using V = range_value_t<std::remove_cvref_t<T>>;
 
-         // Use RFC 8746 typed arrays for numeric types (bulk memcpy)
-         if constexpr (num_t<V> && !std::same_as<V, bool> && contiguous<T>) {
+         // Use RFC 8746 typed arrays for numeric types (bulk memcpy). A numeric type RFC 8746 has no
+         // tag for -- long double, where it is an extended format -- falls through to the generic
+         // array below and is written element by element.
+         if constexpr (num_t<V> && !std::same_as<V, bool> && contiguous<T> && cbor::typed_array::taggable<V>) {
             // Write the tag for this type using native endianness
             constexpr uint64_t tag = cbor::typed_array::native_tag<V>();
             if (!cbor_detail::encode_arg(ctx, cbor::major::tag, tag, b, ix)) [[unlikely]] {
@@ -436,7 +438,7 @@ namespace glz
                ix += byte_len;
             }
          }
-         else if constexpr (complex_t<V> && contiguous<T>) {
+         else if constexpr (complex_t<V> && contiguous<T> && cbor::typed_array::taggable_scalar<V>) {
             // Complex array: tag 43001 with interleaved typed array [r0, i0, r1, i1, ...]
             // std::complex<T> stores data as [real, imag] pairs contiguously
             using Scalar = typename V::value_type;
