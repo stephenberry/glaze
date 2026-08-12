@@ -92,6 +92,10 @@ namespace glz
       // Byteswap one typed-array element in place. An RFC 8746 tag names the producer's endianness,
       // so an element whose tag disagrees with this platform is swapped through its bit pattern:
       // V may be a floating point type, which has no byteswap of its own.
+      //
+      // Only the widths RFC 8746 defines below binary128 are handled. A one-byte element has no
+      // endianness, and a wider one reaches here only if typed_array::matches accepted its tag, which
+      // it does not do for binary128 -- so the widths left unhandled are the widths never passed in.
       template <class V>
       GLZ_ALWAYS_INLINE void byteswap_element(V& elem) noexcept
       {
@@ -835,9 +839,8 @@ namespace glz
                if (bool(ctx.error)) [[unlikely]]
                   return;
 
-               // Verify it's a valid typed array tag for our element type
-               const auto ta_info = typed_array::get_info(tag_num);
-               if (ta_info.valid && ta_info.element_size == sizeof(V)) {
+               // Verify the tag describes exactly this element type, not merely one of its width
+               if (typed_array::matches<V>(typed_array::get_info(tag_num))) {
                   // Read the byte string
                   if (it >= end) [[unlikely]] {
                      ctx.error = error_code::unexpected_end;
@@ -993,9 +996,8 @@ namespace glz
                   if (bool(ctx.error)) [[unlikely]]
                      return;
 
-                  // Verify it's a valid typed array tag for the scalar type
-                  const auto ta_info = typed_array::get_info(scalar_tag);
-                  if (!ta_info.valid || ta_info.element_size != sizeof(Scalar)) [[unlikely]] {
+                  // Verify the tag describes exactly this scalar type, not merely one of its width
+                  if (!typed_array::matches<Scalar>(typed_array::get_info(scalar_tag))) [[unlikely]] {
                      ctx.error = error_code::syntax_error;
                      return;
                   }

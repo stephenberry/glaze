@@ -371,6 +371,33 @@ namespace glz::cbor
          return info;
       }
 
+      // Whether a typed array tag describes exactly the element type T.
+      //
+      // RFC 8746 encodes the element kind in the tag, not just its width, and a typed array is read
+      // by copying its payload straight into the target. Matching on width alone therefore
+      // reinterprets the bytes of a differently-typed array rather than converting them: a uint64
+      // array read into double yields 4.94e-324 rather than 1.
+      //
+      // Reading a CBOR value of one kind into a target of another is already an error everywhere
+      // else in this reader -- a uint does not read into a double, nor a float into an int -- so the
+      // typed-array fast path was the one place a kind mismatch was accepted, and it accepted it by
+      // reinterpreting the bytes. A mismatch is a syntax error here too.
+      template <class T>
+      [[nodiscard]] constexpr bool matches(const typed_array_info info) noexcept
+      {
+         if (!info.valid || info.element_size != sizeof(T)) {
+            return false;
+         }
+         if constexpr (std::floating_point<T>) {
+            // Tags 83 and 87 are IEEE binary128, which is not the 80-bit extended long double that
+            // shares its 16-byte storage on x86-64, so no float Glaze can write or read matches them.
+            return info.is_float && info.element_size <= 8;
+         }
+         else {
+            return !info.is_float && info.is_signed == std::is_signed_v<T>;
+         }
+      }
+
       // Check if we need to byteswap when reading a typed array
       [[nodiscard]] constexpr bool needs_byteswap(uint64_t tag) noexcept
       {
