@@ -567,18 +567,6 @@ namespace glz
          return is_valid_hostname(uri_host);
       }
 
-      inline bool is_tchar(char ch) noexcept
-      {
-         // RFC 9110, Section 5.6.2:
-         // token = 1*tchar
-         // tchar = "!" / "#" / "$" / "%" / "&" / "'" / "*"
-         //       / "+" / "-" / "." / "^" / "_" / "`" / "|" / "~"
-         //       / DIGIT / ALPHA
-         return (ch >= 'A' && ch <= 'Z') || (ch >= 'a' && ch <= 'z') || (ch >= '0' && ch <= '9') || ch == '!' ||
-                ch == '#' || ch == '$' || ch == '%' || ch == '&' || ch == '\'' || ch == '*' || ch == '+' || ch == '-' ||
-                ch == '.' || ch == '^' || ch == '_' || ch == '`' || ch == '|' || ch == '~';
-      }
-
       inline bool is_pct_encoded(std::string_view str) noexcept
       {
          // RFC 3986, Appendix A:
@@ -2631,16 +2619,6 @@ namespace glz
             auto colon_pos = line.find(':');
             if (colon_pos != std::string_view::npos) {
                std::string_view name_sv = line.substr(0, colon_pos);
-               // RFC 7230 3.2.4: no whitespace is allowed between the field-name and
-               // the colon. Tolerating it would store the name under a key with a
-               // trailing space/tab (e.g. "transfer-encoding ") that header lookups
-               // miss, so an obfuscated "Transfer-Encoding : chunked" would desync body
-               // framing (request smuggling). Reject with 400 and close.
-               if (!name_sv.empty() && (name_sv.back() == ' ' || name_sv.back() == '\t')) {
-                  result.status = parse_status::error;
-                  send_error_response_with_close(conn, 400, "Bad Request");
-                  return result;
-               }
                std::string_view value_sv = line.substr(colon_pos + 1);
                value_sv.remove_prefix((std::min)(value_sv.find_first_not_of(" \t"), value_sv.size()));
                // RFC 9110 §5.5 / RFC 9112 §5: a field value excludes trailing OWS as well;
@@ -2656,8 +2634,12 @@ namespace glz
                // "X: 1\nContent-Length: 40" as one X field while an LF-tolerant proxy reads
                // two fields and frames those bytes as the body: the Content-Length lookup
                // here misses and the trailing bytes reparse as a second request (CL.0
-               // request smuggling). Validate with the net stack's shared predicates,
-               // which the WebSocket handshake path already uses, and reject with 400 and close.
+               // request smuggling). The token rule also forbids whitespace before the
+               // colon (RFC 7230 3.2.4): tolerating it would store the name under a key
+               // with a trailing space/tab that header lookups miss, so an obfuscated
+               // "Transfer-Encoding : chunked" would desync body framing the same way.
+               // Validate with the net stack's shared predicates, which the WebSocket
+               // handshake path already uses, and reject with 400 and close.
                if (!glz::valid_header_name(name_sv) || !glz::valid_header_value(value_sv)) {
                   result.status = parse_status::error;
                   send_error_response_with_close(conn, 400, "Bad Request");
