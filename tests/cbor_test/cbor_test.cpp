@@ -4167,6 +4167,40 @@ struct cbor_append_only
    int& emplace_back() { return data.emplace_back(); }
 };
 
+// Append-only and contiguous: the typed-array reader sizes it through emplace_back but fills it in
+// bulk through data(), so the elements have to exist before the fill.
+struct cbor_append_only_contiguous
+{
+   using value_type = int32_t;
+   using reference = int32_t&;
+   std::vector<int32_t> storage{};
+
+   auto begin() { return storage.begin(); }
+   auto end() { return storage.end(); }
+   auto begin() const { return storage.begin(); }
+   auto end() const { return storage.end(); }
+   size_t size() const { return storage.size(); }
+   int32_t* data() { return storage.data(); }
+   const int32_t* data() const { return storage.data(); }
+   void clear() { storage.clear(); }
+   int32_t& emplace_back() { return storage.emplace_back(); }
+};
+
+struct cbor_append_only_complex
+{
+   using value_type = std::complex<double>;
+   using reference = std::complex<double>&;
+   std::vector<std::complex<double>> data{};
+
+   auto begin() { return data.begin(); }
+   auto end() { return data.end(); }
+   auto begin() const { return data.begin(); }
+   auto end() const { return data.end(); }
+   size_t size() const { return data.size(); }
+   void clear() { data.clear(); }
+   std::complex<double>& emplace_back() { return data.emplace_back(); }
+};
+
 suite cbor_array_framing_agreement_tests = [] {
    "definite and indefinite agree"_test = [] {
       const std::string definite{"\x83\x01\x02\x03", 4};
@@ -4204,6 +4238,55 @@ suite cbor_array_framing_agreement_tests = [] {
       expect(not glz::read_cbor(b, three));
       expect(not glz::read_cbor(b, one));
       expect(b.data == std::vector<int>{7});
+   };
+
+   // The third framing: a numeric array is written as an RFC 8746 typed array, so this is the shape
+   // Glaze itself produces for the equivalent vector. It has to agree with the two generic framings.
+   "typed array framing agrees"_test = [] {
+      std::string typed{};
+      expect(not glz::write_cbor(std::vector<int32_t>{1, 2, 3}, typed));
+      const std::vector<int> expected{1, 2, 3};
+
+      cbor_append_only a{};
+      expect(not glz::read_cbor(a, typed));
+      expect(a.data == expected);
+
+      cbor_resize_only b{};
+      expect(not glz::read_cbor(b, typed));
+      expect(b.data == expected);
+
+      cbor_append_only_contiguous c{};
+      expect(not glz::read_cbor(c, typed));
+      expect(c.storage == std::vector<int32_t>{1, 2, 3});
+   };
+
+   // Complex arrays travel under tag 43001 as interleaved [real, imag] pairs, on the same path.
+   "complex typed array framing agrees"_test = [] {
+      const std::vector<std::complex<double>> src{{1.0, 2.0}, {3.0, 4.0}};
+      std::string typed{};
+      expect(not glz::write_cbor(src, typed));
+
+      cbor_append_only_complex a{};
+      expect(not glz::read_cbor(a, typed));
+      expect(a.data == src);
+   };
+
+   // A shorter typed array must not leave the previous read's elements behind either.
+   "typed arrays reset append-only targets"_test = [] {
+      std::string three{};
+      expect(not glz::write_cbor(std::vector<int32_t>{1, 2, 3}, three));
+      std::string one{};
+      expect(not glz::write_cbor(std::vector<int32_t>{7}, one));
+
+      cbor_append_only a{};
+      expect(not glz::read_cbor(a, three));
+      expect(not glz::read_cbor(a, one));
+      expect(a.data == std::vector<int>{7});
+
+      cbor_append_only_contiguous b{};
+      expect(not glz::read_cbor(b, three));
+      expect(not glz::read_cbor(b, one));
+      expect(b.storage == std::vector<int32_t>{7});
    };
 };
 

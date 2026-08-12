@@ -1185,6 +1185,18 @@ namespace glz
                         value.shrink_to_fit();
                      }
                   }
+                  else if constexpr (emplace_backable<T>) {
+                     // Append-only: the count is known, but the only way to reach it is one element at
+                     // a time. Growing to count here rather than while filling leaves both fill paths
+                     // below writing into storage that already exists.
+                     if (exceeds_capacity(value, count, ctx)) [[unlikely]] {
+                        return;
+                     }
+                     value.clear();
+                     for (size_t i = 0; i < count; ++i) {
+                        value.emplace_back();
+                     }
+                  }
                   else {
                      if (count != value.size()) [[unlikely]] {
                         ctx.error = error_code::exceeded_static_array_size;
@@ -1197,12 +1209,15 @@ namespace glz
 
                   if constexpr (contiguous<T>) {
                      if (need_swap && sizeof(V) > 1) {
-                        // Need to byteswap each element
+                        // Need to byteswap each element. Written through data() rather than a
+                        // subscript: contiguous storage is what this branch relies on, and a
+                        // contiguous range need not also be indexable.
+                        auto* dest = value.data();
                         for (size_t i = 0; i < count; ++i) {
                            V elem;
                            std::memcpy(&elem, it, sizeof(V));
                            cbor_detail::byteswap_element(elem);
-                           value[i] = elem;
+                           dest[i] = elem;
                            it += sizeof(V);
                         }
                      }
@@ -1346,6 +1361,17 @@ namespace glz
                      value.resize(count);
                      if constexpr (check_shrink_to_fit(Opts) && has_shrink_to_fit<T>) {
                         value.shrink_to_fit();
+                     }
+                  }
+                  else if constexpr (emplace_backable<T>) {
+                     // Append-only, as above: grow to the known count so the fill paths below only
+                     // have to write into elements that already exist.
+                     if (exceeds_capacity(value, count, ctx)) [[unlikely]] {
+                        return;
+                     }
+                     value.clear();
+                     for (size_t i = 0; i < count; ++i) {
+                        value.emplace_back();
                      }
                   }
                   else {
