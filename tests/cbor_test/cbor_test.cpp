@@ -3772,6 +3772,85 @@ struct cbor_stl_members
    std::list<std::string> names{};
 };
 
+struct cbor_flags_holder
+{
+   std::vector<bool> flags{};
+   int count{};
+};
+
+// std::vector<bool> packs its elements, so one is reached only through a proxy the container returns
+// by value. The reader used to bind its target as an lvalue reference, which no proxy can satisfy, so
+// reading one was a compile error while std::deque<bool> and std::list<bool> read fine.
+suite cbor_vector_bool_tests = [] {
+   "roundtrip"_test = [] {
+      const std::vector<bool> src{true, false, true, true, false};
+      std::string buffer{};
+      expect(not glz::write_cbor(src, buffer));
+
+      std::vector<bool> dst{};
+      expect(not glz::read_cbor(dst, buffer));
+      expect(dst == src);
+
+      // A longer prior value must be replaced, not merely overwritten in part.
+      std::vector<bool> stale(20, true);
+      expect(not glz::read_cbor(stale, buffer));
+      expect(stale == src);
+   };
+
+   "indefinite length"_test = [] {
+      const std::string buffer{"\x9F\xF5\xF4\xF5\xFF", 5};
+
+      std::vector<bool> dst{};
+      expect(not glz::read_cbor(dst, buffer));
+      expect(dst == std::vector<bool>{true, false, true});
+   };
+
+   "struct member and nesting"_test = [] {
+      const cbor_flags_holder src{{true, false}, 7};
+      std::string buffer{};
+      expect(not glz::write_cbor(src, buffer));
+
+      cbor_flags_holder dst{};
+      expect(not glz::read_cbor(dst, buffer));
+      expect(dst.flags == src.flags);
+      expect(dst.count == 7);
+
+      const std::vector<std::vector<bool>> nested{{true}, {false, true}};
+      buffer.clear();
+      expect(not glz::write_cbor(nested, buffer));
+
+      std::vector<std::vector<bool>> nested_dst{};
+      expect(not glz::read_cbor(nested_dst, buffer));
+      expect(nested_dst == nested);
+   };
+
+   "other bool containers still read"_test = [] {
+      const std::vector<bool> src{true, false, true};
+      std::string buffer{};
+      expect(not glz::write_cbor(src, buffer));
+
+      std::deque<bool> deq{};
+      expect(not glz::read_cbor(deq, buffer));
+      expect(deq == std::deque<bool>{true, false, true});
+
+      std::list<bool> lst{};
+      expect(not glz::read_cbor(lst, buffer));
+      expect(lst == std::list<bool>{true, false, true});
+
+      std::array<bool, 3> arr{};
+      expect(not glz::read_cbor(arr, buffer));
+      expect(arr == std::array<bool, 3>{true, false, true});
+   };
+
+   // Accepting the proxy must not also start accepting non-boolean input.
+   "non-boolean element is still an error"_test = [] {
+      const std::string buffer{"\x82\xF5\x01", 3};
+
+      std::vector<bool> dst{};
+      expect(glz::read_cbor(dst, buffer).ec == glz::error_code::syntax_error);
+   };
+};
+
 // Containers that grow by back-insertion or by emplacement rather than by subscript. The reader used
 // to index its target unconditionally, so these were a hard compile error rather than a bad read.
 suite cbor_non_indexable_container_tests = [] {
