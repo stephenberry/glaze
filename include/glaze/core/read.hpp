@@ -13,6 +13,28 @@
 
 namespace glz
 {
+   // A container whose capacity is fixed at compile time -- glz::inplace_vector, std::inplace_vector --
+   // reports being full only through try_emplace_back. Its resize(), reserve() and emplace_back()
+   // throw std::bad_alloc past capacity, and abort outright when exceptions are disabled.
+   template <class T>
+   concept fixed_capacity_container = has_try_emplace_back<std::remove_cvref_t<T>> && requires(T& t) {
+      { t.max_size() } -> std::convertible_to<size_t>;
+   };
+
+   // Reject an element count a fixed-capacity target cannot hold, before it is grown to that count.
+   // Untrusted input decides these counts, so without this the container's own bad_alloc escapes the
+   // error-code API -- and terminates the process outright in a reader marked noexcept.
+   [[nodiscard]] GLZ_ALWAYS_INLINE bool exceeds_capacity(auto& value, const size_t n, is_context auto& ctx) noexcept
+   {
+      if constexpr (fixed_capacity_container<decltype(value)>) {
+         if (n > value.max_size()) [[unlikely]] {
+            ctx.error = error_code::exceeded_static_array_size;
+            return true;
+         }
+      }
+      return false;
+   }
+
    template <auto Opts, bool Padded = false>
    auto read_iterators(contiguous auto&& buffer) noexcept
    {
