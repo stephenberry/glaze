@@ -391,6 +391,36 @@ ut::suite struct_test_cases = [] {
          << response_vec[2].error->data.value_or("");
    };
 
+   "server batch response limit"_test = [] {
+      rpc::server<rpc::method<"foo", foo_params, foo_result>> limited{};
+      limited.on<"foo">([](const foo_params&) -> foo_result { return {.foo_c = true, .foo_d = "payload"}; });
+
+      std::string request = "[";
+      for (size_t i = 0; i < 64; ++i) {
+         if (i) {
+            request += ',';
+         }
+         request += R"({"jsonrpc":"2.0","method":"foo","params":{"foo_a":1,"foo_b":"x"},"id":)";
+         request += std::to_string(i);
+         request += '}';
+      }
+      request += ']';
+
+      limited.max_batch_response_size = 256;
+      auto response_vec = limited.call<std::vector<rpc::response_t<glz::raw_json>>>(request);
+      ut::expect(response_vec.size() == 1) << response_vec.size();
+      ut::expect(response_vec[0].error.has_value());
+      ut::expect(response_vec[0].error->code == glz::rpc::error_e::server_error_lower);
+      ut::expect(!response_vec[0].result.has_value());
+
+      limited.max_batch_response_size = glz::rpc::default_max_batch_response_size;
+      response_vec = limited.call<std::vector<rpc::response_t<glz::raw_json>>>(request);
+      ut::expect(response_vec.size() == 64) << response_vec.size();
+      for (auto& response : response_vec) {
+         ut::expect(!response.error.has_value());
+      }
+   };
+
    ut::test("server valid or error return") = [&server] {
       server.on<"foo">([](const foo_params& params) -> glz::expected<foo_result, glz::rpc::error> {
          if (params.foo_a == 10) // dummy invalid param case

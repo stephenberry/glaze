@@ -207,6 +207,42 @@ suite jsonrpc_batch_tests = [] {
       expect(obj.i == 99) << "Value should have been updated by notification";
    };
 
+   // A batch answers every element it holds, so a request of a fixed size can ask for an answer of
+   // any size. Only the server can bound that.
+   "batch_response_limit"_test = [] {
+      glz::registry<glz::opts{}, glz::JSONRPC> server{};
+
+      my_functions_t obj{};
+      server.on(obj);
+
+      std::string request = "[";
+      for (size_t i = 0; i < 512; ++i) {
+         if (i) {
+            request += ',';
+         }
+         request += R"({"jsonrpc":"2.0","method":"","id":)";
+         request += std::to_string(i);
+         request += '}';
+      }
+      request += ']';
+
+      // Every element reads the root endpoint, which answers with the whole object, so the batch is
+      // well over a kilobyte of response.
+      server.max_batch_response_size = 1024;
+      auto response = server.call(request);
+      expect(response.find(R"(-32000)") != std::string::npos) << response;
+      expect(response.find(R"("result")") == std::string::npos) << response;
+      expect(response[0] == '{') << "the batch is abandoned, not truncated to a partial array";
+      expect(response.size() < 4096u) << response.size();
+
+      // The same batch is answered in full once the limit allows it.
+      server.max_batch_response_size = glz::rpc::default_max_batch_response_size;
+      response = server.call(request);
+      expect(response[0] == '[') << response.substr(0, 64);
+      expect(response.find(R"(-32000)") == std::string::npos) << response.substr(0, 200);
+      expect(response.size() > 1024u) << response.size();
+   };
+
    "empty_batch_error"_test = [] {
       glz::registry<glz::opts{}, glz::JSONRPC> server{};
 

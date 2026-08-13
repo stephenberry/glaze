@@ -154,6 +154,15 @@ namespace glz
 
       typename protocol_storage<Proto>::type endpoints{};
 
+      // A batch answers every element it holds, so the response grows with the product of the batch
+      // length and the size of what each element reads -- a bounded request can ask for an unbounded
+      // answer. Nothing in the request caps that, so the server has to. Raise it for a service whose
+      // legitimate batches are larger than this, or lower it to keep a hostile one cheap; a batch
+      // that would exceed it is abandoned rather than truncated, so a client never mistakes a
+      // partial answer for a complete one. Single requests are not subject to it: one request yields
+      // one response, which is bounded by the registered data rather than by the caller.
+      size_t max_batch_response_size{rpc::default_max_batch_response_size};
+
       void clear() { endpoints.clear(); }
 
      private:
@@ -639,6 +648,14 @@ namespace glz
             auto response = process_single_request(req.str);
             if (response.has_value()) {
                total_size += response->size() + 1; // +1 for comma
+               // Checked as the batch is walked rather than after it, so the memory the limit is
+               // meant to bound is never allocated in the first place. The elements already run
+               // keep their effects -- a JSON RPC batch is not a transaction -- but the caller is
+               // told the batch failed rather than handed a partial array it cannot distinguish
+               // from a complete one.
+               if (total_size > max_batch_response_size) {
+                  return R"({"jsonrpc":"2.0","error":{"code":-32000,"message":"Server error","data":"Batch response exceeds max_batch_response_size"},"id":null})";
+               }
                responses.push_back(std::move(*response));
             }
          }

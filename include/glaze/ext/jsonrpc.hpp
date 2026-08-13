@@ -51,6 +51,13 @@ namespace glz::rpc
    using id_t = std::variant<glz::generic::null_t, std::string_view, std::int64_t>;
    inline constexpr std::string_view supported_version{"2.0"};
 
+   // Ceiling on what one batch may answer with. A batch response past this is already outside what
+   // a JSON RPC service does in normal operation -- it is roughly sixteen thousand kilobyte
+   // responses -- while still being small enough that a request built to be answered expensively is
+   // stopped while it is cheap. A service whose legitimate batches are larger raises it; both
+   // servers expose it as a per-instance setting.
+   inline constexpr size_t default_max_batch_response_size{16u * 1024u * 1024u};
+
    struct error final
    {
       error_e code{error_e::no_error};
@@ -314,6 +321,10 @@ namespace glz::rpc
 
       glz::tuple<server_method_t<Method>...> methods{};
 
+      // See rpc::default_max_batch_response_size. A batch answers every element it holds, so a
+      // bounded request can ask for an unbounded answer; only the server can cap that.
+      size_t max_batch_response_size{rpc::default_max_batch_response_size};
+
       template <string_literal name>
       constexpr void on(const auto& callback) // std::function<expected<result_t, rpc::error>(params_t const&)>
       {
@@ -432,13 +443,40 @@ namespace glz::rpc
          return return_v;
       };
 
+      // What a response will cost once written. Exact serialization is not needed here -- this only
+      // has to track the payload the caller controls, which is the result body and the error text.
+      static size_t response_cost(const raw_response_t& response)
+      {
+         size_t cost = 64; // envelope: version, id and the surrounding punctuation
+         if (response.result) {
+            cost += response.result->str.size();
+         }
+         if (response.error) {
+            cost += response.error->message.size();
+            if (response.error->data) {
+               cost += response.error->data->size();
+            }
+         }
+         return cost;
+      }
+
       auto batch_request(const std::vector<glz::raw_json_view>& batch_requests)
       {
          std::vector<response_t<glz::raw_json>> return_vec;
          return_vec.reserve(batch_requests.size());
+         size_t total_size{2}; // []
          for (auto&& request : batch_requests) {
             auto response{per_request(request.str)};
             if (response.has_value()) {
+               total_size += response_cost(response.value()) + 1; // +1 for comma
+               // Checked as the batch is walked, so the memory the limit bounds is never allocated.
+               // The batch is abandoned rather than truncated -- a caller must not mistake a partial
+               // array for a complete one.
+               if (total_size > max_batch_response_size) {
+                  return std::vector<response_t<glz::raw_json>>{
+                     raw_response_t{rpc::error{error_e::server_error_lower, "Batch response exceeds "
+                                                                           "max_batch_response_size"}}};
+               }
                return_vec.emplace_back(std::move(response.value()));
             }
          }

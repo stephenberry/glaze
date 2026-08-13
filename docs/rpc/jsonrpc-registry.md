@@ -174,6 +174,24 @@ std::string response = server.call(R"([
 
 Notifications in a batch are processed but excluded from the response array. If all requests in a batch are notifications, an empty string is returned.
 
+### Batch Response Limit
+
+A batch answers every element it holds, so a request of a fixed size can ask for an answer of any size — a hundred-byte batch of root reads returns a hundred copies of the registered object. Only the server can bound that, so it does:
+
+```cpp
+server.max_batch_response_size = 1024 * 1024; // default is 16 MiB
+```
+
+A batch whose responses would exceed the limit is **abandoned rather than truncated**, so a client never mistakes a partial array for a complete one:
+
+```json
+{"jsonrpc":"2.0","error":{"code":-32000,"message":"Server error","data":"Batch response exceeds max_batch_response_size"},"id":null}
+```
+
+Elements already processed keep their effects — a JSON-RPC batch is not a transaction. Single requests are not subject to the limit: one request yields one response, whose size is bounded by the registered data rather than by the caller. Raise it for a service whose legitimate batches are larger, or lower it to keep a hostile one cheap.
+
+`glz::rpc::server` exposes the same setting.
+
 ## Error Handling
 
 The registry returns standard JSON-RPC 2.0 error codes:
@@ -185,6 +203,7 @@ The registry returns standard JSON-RPC 2.0 error codes:
 | -32601 | Method not found | The method does not exist |
 | -32602 | Invalid params | Invalid method parameter(s) |
 | -32603 | Internal error | Internal JSON-RPC error |
+| -32000 | Server error | Batch response exceeded `max_batch_response_size` |
 
 ### Examples
 
