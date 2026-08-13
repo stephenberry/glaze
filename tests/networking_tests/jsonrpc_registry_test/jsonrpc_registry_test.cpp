@@ -291,7 +291,8 @@ suite jsonrpc_error_tests = [] {
       auto response = server.call(R"({"jsonrpc":"2.0","id":1})");
       expect(response.find(R"(-32600)") != std::string::npos) << response; // Invalid Request
       expect(response.find(R"("result")") == std::string::npos) << response;
-      expect(response.find(R"(55)") == std::string::npos) << "must not dispatch to the root endpoint: " << response;
+      // The root endpoint answers with the whole object, so its members must not appear.
+      expect(response.find(R"("i":)") == std::string::npos) << "must not dispatch to the root endpoint: " << response;
    };
 
    "bare_id_is_not_a_request"_test = [] {
@@ -304,27 +305,44 @@ suite jsonrpc_error_tests = [] {
       auto response = server.call(R"({"id":1})");
       expect(response.find(R"(-32600)") != std::string::npos) << response; // Invalid Request
       expect(response.find(R"("result")") == std::string::npos) << response;
-      expect(response.find(R"(55)") == std::string::npos) << "must not dispatch to the root endpoint: " << response;
+      // The root endpoint answers with the whole object, so its members must not appear.
+      expect(response.find(R"("i":)") == std::string::npos) << "must not dispatch to the root endpoint: " << response;
    };
 
-   // Every element of a batch is validated on its own, so a batch of bare ids cannot turn one small
-   // request into one whole-object response per element.
+   // Every element of a batch is validated on its own. A bare id used to reach the root endpoint,
+   // which answers with the whole registered object -- so a batch of them returned one whole-object
+   // response per element, and the response grew with the product of the batch length and the size
+   // of the registered object rather than with the length of the request.
    "batch_of_bare_ids_is_not_amplified"_test = [] {
       glz::registry<glz::opts{}, glz::JSONRPC> server{};
 
       my_functions_t obj{};
       server.on(obj);
 
-      const std::string_view request = R"([{"id":1},{"id":2},{"id":3}])";
+      std::string request = "[";
+      for (size_t i = 0; i < 256; ++i) {
+         if (i) {
+            request += ',';
+         }
+         request += R"({"id":)";
+         request += std::to_string(i);
+         request += '}';
+      }
+      request += ']';
+
       auto response = server.call(request);
       expect(response[0] == '[') << response;
       expect(response.find(R"("result")") == std::string::npos) << response;
+
       size_t errors = 0;
-      for (size_t pos = response.find("-32600"); pos != std::string::npos;
-           pos = response.find("-32600", pos + 1)) {
+      for (size_t pos = response.find("-32600"); pos != std::string::npos; pos = response.find("-32600", pos + 1)) {
          ++errors;
       }
-      expect(errors == 3u) << response;
+      expect(errors == 256u) << errors;
+
+      // Each element answers with a fixed-size error rather than a copy of the registered object,
+      // so the response stays a constant multiple of the request no matter what is registered.
+      expect(response.size() < 16 * request.size()) << response.size() << " vs " << request.size();
    };
 };
 
