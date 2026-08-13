@@ -174,6 +174,26 @@ std::string response = server.call(R"([
 
 Notifications in a batch are processed but excluded from the response array. If all requests in a batch are notifications, an empty string is returned.
 
+### Batch Response Limit
+
+A batch answers every element it holds, so a request of a fixed size can ask for an answer of any size — a hundred-byte batch of root reads returns a hundred copies of the registered object. Only the server can bound that, so it does:
+
+```cpp
+server.max_batch_response_size = 1024 * 1024; // default is 16 MiB
+```
+
+A batch whose responses would exceed the limit is **abandoned rather than truncated**, so a client never mistakes a partial array for a complete one:
+
+```json
+{"jsonrpc":"2.0","error":{"code":-32000,"message":"Server error","data":"Batch response exceeds max_batch_response_size"},"id":null}
+```
+
+Elements already processed keep their effects — a JSON-RPC batch is not a transaction. The element that trips the limit has already been built when the check runs, so the peak is the limit plus one response rather than the limit exactly. Raise it for a service whose legitimate batches are larger, or lower it to keep a hostile one cheap.
+
+Single requests are not subject to the limit, because one request yields one response. Note what that does and does not bound: a single response is bounded by the size of the registered data, not by the size of the request — and where writable members are registered, a caller can grow that data itself. Register large mutable members with that in mind.
+
+`glz::rpc::server` exposes the same setting, with two differences. Its responses are still structured when the limit is applied, so their size is estimated rather than summed; escaping can push the written response past the limit by a small constant factor. And it reports the failure as a single-element array, `[{"jsonrpc":"2.0","error":{"code":-32000,...},"id":null}]`, rather than the bare object the registry returns.
+
 ## Error Handling
 
 The registry returns standard JSON-RPC 2.0 error codes:
@@ -185,6 +205,7 @@ The registry returns standard JSON-RPC 2.0 error codes:
 | -32601 | Method not found | The method does not exist |
 | -32602 | Invalid params | Invalid method parameter(s) |
 | -32603 | Internal error | Internal JSON-RPC error |
+| -32000 | Server error | Batch response exceeded `max_batch_response_size` |
 
 ### Examples
 
@@ -204,6 +225,11 @@ server.call(R"({"jsonrpc":"2.0","method":"counter","params":"not_an_int","id":1}
 // Invalid version
 server.call(R"({"jsonrpc":"1.0","method":"greet","id":1})");
 // Returns: {"jsonrpc":"2.0","error":{"code":-32600,"message":"Invalid Request",...},"id":1}
+
+// Missing a required member. `jsonrpc` and `method` must both be present -- note that omitting
+// `method` is not the same as sending `"method":""`, which addresses the root endpoint.
+server.call(R"({"id":1})");
+// Returns: {"jsonrpc":"2.0","error":{"code":-32600,"message":"Invalid Request","data":"Missing 'jsonrpc' member"},"id":1}
 ```
 
 ## ID Types
