@@ -9,7 +9,9 @@
 #include <span>
 #include <stdexcept>
 
-#include "glaze/api/std/string.hpp"
+// The naming metas must match glaze/api/impl.hpp: a client computes trait<T>::hash from this
+// header and compares it against the hash the loaded library computed from impl.hpp.
+#include "glaze/api/std/names.hpp"
 #include "glaze/api/trait.hpp"
 #include "glaze/core/context.hpp"
 #include "glaze/core/opts.hpp"

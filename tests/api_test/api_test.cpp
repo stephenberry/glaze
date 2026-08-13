@@ -1,14 +1,16 @@
 // Glaze Library
 // For the license information refer to glaze.hpp
 
+#include <deque>
 #include <iostream>
+#include <list>
+#include <set>
+#include <span>
 #include <tuple>
+#include <unordered_map>
+#include <unordered_set>
 
 #include "glaze/api/impl.hpp"
-#include "glaze/api/std/deque.hpp"
-#include "glaze/api/std/span.hpp"
-#include "glaze/api/std/unordered_map.hpp"
-#include "glaze/api/std/unordered_set.hpp"
 #include "ut/ut.hpp"
 
 struct my_struct
@@ -181,6 +183,20 @@ void tests()
          std::string_view u = glz::name_v<std::unordered_map<uint64_t, std::string_view>>;
          expect(u == "std::unordered_map<uint64_t,std::string_view>");
       }
+      {
+         std::string_view u = glz::name_v<std::unordered_set<std::string>>;
+         expect(u == "std::unordered_set<std::string>");
+      }
+   };
+
+   "set type name"_test = [] {
+      std::string_view s = glz::name_v<std::set<std::string>>;
+      expect(s == "std::set<std::string>");
+   };
+
+   "list type name"_test = [] {
+      std::string_view l = glz::name_v<std::list<int32_t>>;
+      expect(l == "std::list<int32_t>");
    };
 
    "double type name"_test = [] {

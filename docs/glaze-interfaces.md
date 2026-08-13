@@ -278,6 +278,10 @@ Concepts exist for naming `const`, pointer (`*`), and reference (`&`), versions 
 expect(glz::name_v<std::vector<float>> == "std::vector<float>");
 ```
 
+The names for standard library types come from `glaze/api/std/names.hpp`, which `glaze/api/api.hpp` and `glaze/api/impl.hpp` both include. Without a name, `glz::name_v<T>` falls back to a compiler-derived spelling that differs across compilers and standard libraries.
+
+Include the aggregate rather than the individual `glaze/api/std/*.hpp` headers. `glz::name_v<T>` is an inline variable, so a translation unit that sees `glz::meta<T>` and one that does not will initialize it differently, which is an ODR violation that no compiler diagnoses. Because these names feed `glz::trait<T>::hash`, a split set is how a client and the library it loads end up computing different hashes for the same type.
+
 To add a name for your class, include it in the `glz::meta`:
 
 ```c++
