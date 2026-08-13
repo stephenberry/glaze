@@ -90,6 +90,16 @@ if (msg.has_value()) {
 }
 ```
 
+The request must carry both members JSON-RPC 2.0 requires. A request that omits `jsonrpc` or `method`, or that names a version other than `2.0`, is rejected rather than converted:
+
+| request | error |
+|---------|-------|
+| `{"method":"add","id":1}` | `Missing 'jsonrpc' member` |
+| `{"jsonrpc":"1.0","method":"add","id":1}` | `Unsupported 'jsonrpc' version: "1.0"` |
+| `{"jsonrpc":"2.0","id":1}` | `Missing 'method' member` |
+
+This matters because the conversion is otherwise lossless in the wrong direction: an absent `method` would become the query `"/"`, and the REPE message that came out would be indistinguishable from one whose client really asked for it. Only absence is an error, so an explicit `"method":""` still converts, to the query `"/"`.
+
 #### Response Conversion
 
 **Function:** `expected<message, std::string> from_jsonrpc_response(std::string_view json_response)`
@@ -169,6 +179,7 @@ auto msg2 = repe::from_jsonrpc_request(jsonrpc2);
 - REPE message body must be in JSON format for conversion to JSON-RPC requests
 - REPE message body should be in JSON or UTF8 format for conversion to JSON-RPC responses
 - The query field in REPE requests is treated as the method name (leading slash is optional)
+- JSON-RPC requests must carry `jsonrpc` and `method`; see the request conversion section above
 
 ### Bridging Protocols Example
 
