@@ -45,6 +45,25 @@ struct my_nested_functions_t
    std::string my_string{};
 };
 
+// Counts how many elements of a batch actually ran, which is how the limit is shown to be enforced
+// as the batch is walked rather than after it has been built.
+struct counting_functions_t
+{
+   size_t calls{};
+   std::string blob = std::string(4096, 'x');
+   std::string fetch()
+   {
+      ++calls;
+      return blob;
+   }
+
+   struct glaze
+   {
+      using T = counting_functions_t;
+      static constexpr auto value = glz::object(&T::calls, &T::blob, &T::fetch);
+   };
+};
+
 struct example_functions_t
 {
    std::string name{};
@@ -241,6 +260,40 @@ suite jsonrpc_batch_tests = [] {
       expect(response[0] == '[') << response.substr(0, 64);
       expect(response.find(R"(-32000)") == std::string::npos) << response.substr(0, 200);
       expect(response.size() > 1024u) << response.size();
+   };
+
+   // The limit is checked as the batch is walked, so the elements past it are never run. A check
+   // that ran only after the loop would answer with the same error while still having built the
+   // whole oversized response first, which is the case this pins.
+   "batch_response_limit_stops_early"_test = [] {
+      glz::registry<glz::opts{}, glz::JSONRPC> server{};
+
+      counting_functions_t obj{};
+      server.on(obj);
+
+      std::string request = "[";
+      for (size_t i = 0; i < 512; ++i) {
+         if (i) {
+            request += ',';
+         }
+         request += R"({"jsonrpc":"2.0","method":"fetch","id":)";
+         request += std::to_string(i);
+         request += '}';
+      }
+      request += ']';
+
+      // Each element answers with the 4 KB blob, so the limit is reached within the first few.
+      server.max_batch_response_size = 8 * 1024;
+      auto response = server.call(request);
+      expect(response.find(R"(-32000)") != std::string::npos) << response;
+      expect(obj.calls > 0u) << "the batch should have started";
+      expect(obj.calls < 8u) << "elements past the limit must never run, ran " << obj.calls;
+
+      obj.calls = 0;
+      server.max_batch_response_size = glz::rpc::default_max_batch_response_size;
+      response = server.call(request);
+      expect(response[0] == '[') << response.substr(0, 64);
+      expect(obj.calls == 512u) << obj.calls;
    };
 
    "empty_batch_error"_test = [] {

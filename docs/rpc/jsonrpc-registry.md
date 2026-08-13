@@ -188,9 +188,11 @@ A batch whose responses would exceed the limit is **abandoned rather than trunca
 {"jsonrpc":"2.0","error":{"code":-32000,"message":"Server error","data":"Batch response exceeds max_batch_response_size"},"id":null}
 ```
 
-Elements already processed keep their effects — a JSON-RPC batch is not a transaction. Single requests are not subject to the limit: one request yields one response, whose size is bounded by the registered data rather than by the caller. Raise it for a service whose legitimate batches are larger, or lower it to keep a hostile one cheap.
+Elements already processed keep their effects — a JSON-RPC batch is not a transaction. The element that trips the limit has already been built when the check runs, so the peak is the limit plus one response rather than the limit exactly. Raise it for a service whose legitimate batches are larger, or lower it to keep a hostile one cheap.
 
-`glz::rpc::server` exposes the same setting.
+Single requests are not subject to the limit, because one request yields one response. Note what that does and does not bound: a single response is bounded by the size of the registered data, not by the size of the request — and where writable members are registered, a caller can grow that data itself. Register large mutable members with that in mind.
+
+`glz::rpc::server` exposes the same setting, with two differences. Its responses are still structured when the limit is applied, so their size is estimated rather than summed; escaping can push the written response past the limit by a small constant factor. And it reports the failure as a single-element array, `[{"jsonrpc":"2.0","error":{"code":-32000,...},"id":null}]`, rather than the bare object the registry returns.
 
 ## Error Handling
 

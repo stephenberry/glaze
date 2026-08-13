@@ -443,11 +443,22 @@ namespace glz::rpc
          return return_v;
       };
 
-      // What a response will cost once written. Exact serialization is not needed here -- this only
-      // has to track the payload the caller controls, which is the result body and the error text.
+      // What a response will cost once written. The registry can sum finished strings; here the
+      // responses are still structured, so this has to account for every part the caller can grow.
+      // Three of them can: the result body, the error text, and -- the one that is easy to miss --
+      // the id, which is echoed back verbatim from the request and is not otherwise bounded.
+      //
+      // Escaping is not modelled. A result body is raw JSON and is written as-is, but error text and
+      // a string id are escaped on the way out, which can double them at worst: glaze rejects raw
+      // control bytes, so the only escapes reachable from a legal request are the two-byte kind. The
+      // limit therefore bounds the written response within a small constant factor rather than
+      // exactly, which is what it is for.
       static size_t response_cost(const raw_response_t& response)
       {
-         size_t cost = 64; // envelope: version, id and the surrounding punctuation
+         size_t cost = 64; // envelope: version and the surrounding punctuation
+         if (auto* id = std::get_if<std::string_view>(&response.id)) {
+            cost += id->size();
+         }
          if (response.result) {
             cost += response.result->str.size();
          }
