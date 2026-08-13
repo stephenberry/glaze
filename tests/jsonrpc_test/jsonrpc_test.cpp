@@ -425,9 +425,8 @@ ut::suite struct_test_cases = [] {
    // of these only trips if the part of the response it names is actually being counted.
    "server batch limit counts the result body"_test = [] {
       rpc::server<rpc::method<"foo", foo_params, foo_result>> limited{};
-      limited.on<"foo">([](const foo_params&) -> foo_result {
-         return {.foo_c = true, .foo_d = std::string(8192, 'x')};
-      });
+      limited.on<"foo">(
+         [](const foo_params&) -> foo_result { return {.foo_c = true, .foo_d = std::string(8192, 'x')}; });
       limited.max_batch_response_size = 4096;
 
       auto response_vec = limited.call<std::vector<rpc::response_t<glz::raw_json>>>(

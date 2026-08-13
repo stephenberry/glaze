@@ -484,9 +484,9 @@ namespace glz::rpc
                // The batch is abandoned rather than truncated -- a caller must not mistake a partial
                // array for a complete one.
                if (total_size > max_batch_response_size) {
-                  return std::vector<response_t<glz::raw_json>>{
-                     raw_response_t{rpc::error{error_e::server_error_lower, "Batch response exceeds "
-                                                                           "max_batch_response_size"}}};
+                  return std::vector<response_t<glz::raw_json>>{raw_response_t{rpc::error{error_e::server_error_lower,
+                                                                                          "Batch response exceeds "
+                                                                                          "max_batch_response_size"}}};
                }
                return_vec.emplace_back(std::move(response.value()));
             }
