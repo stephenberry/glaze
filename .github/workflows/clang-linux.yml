@@ -18,12 +18,12 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
 
     strategy:
       fail-fast: false
       matrix:
-        clang: [17, 18]
+        clang: [21, 22]
         build_type: [Debug]
         std: [23]
 

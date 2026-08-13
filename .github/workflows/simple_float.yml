@@ -18,12 +18,12 @@ on:
 
 jobs:
   clang:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
 
     strategy:
       fail-fast: false
       matrix:
-        clang: [18]
+        clang: [22]
         build_type: [Release]
         std: [23]
 
@@ -57,12 +57,12 @@ jobs:
       run: ctest -R simple_float_test --output-on-failure
 
   gcc:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
 
     strategy:
       fail-fast: false
       matrix:
-        gcc: [14]
+        gcc: [15]
         build_type: [Release]
         std: [23]
 

@@ -11,11 +11,11 @@ on:
 
 jobs:
   skip_ws_benchmark:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
 
     env:
-      CC: gcc-14
-      CXX: g++-14
+      CC: gcc-15
+      CXX: g++-15
 
     steps:
     - uses: actions/checkout@v6
@@ -45,11 +45,11 @@ jobs:
         fi
 
   string_write_benchmark:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
 
     env:
-      CC: gcc-14
-      CXX: g++-14
+      CC: gcc-15
+      CXX: g++-15
 
     steps:
     - uses: actions/checkout@v6

@@ -8,24 +8,24 @@ env:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
 
     steps:
     - uses: actions/checkout@v6
     
     - name: Set up environment
       run: |
-        echo "CXX=clang++-16" >> "$GITHUB_ENV"
-        echo "CC=clang-16" >> "$GITHUB_ENV"
+        echo "CXX=clang++-22" >> "$GITHUB_ENV"
+        echo "CC=clang-22" >> "$GITHUB_ENV"
         echo "CXXFLAGS="-fprofile-instr-generate -fcoverage-mapping"" >> "$GITHUB_ENV"
         echo "LDFLAGS="-fprofile-instr-generate"" >> "$GITHUB_ENV"
         echo "LLVM_PROFILE_FILE="code-%p.profraw"" >> "$GITHUB_ENV"
 
-    - name: Have llvm-cov point to llvm-cov-16
+    - name: Have llvm-cov point to llvm-cov-22
       run: |
         mkdir -p /home/runner/.local/bin
-        ln -s `which llvm-cov-16` /home/runner/.local/bin/llvm-cov
-        ln -s `which llvm-profdata-16` /home/runner/.local/bin/llvm-profdata
+        ln -s `which llvm-cov-22` /home/runner/.local/bin/llvm-cov
+        ln -s `which llvm-profdata-22` /home/runner/.local/bin/llvm-profdata
 
     - name: Configure CMake
       run: cmake -B ${{github.workspace}}/build -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}}
@@ -37,7 +37,7 @@ jobs:
       run: cmake --build build --config ${{env.BUILD_TYPE}} --target ccov-all -j 2
 
     - name: Archive code coverage results
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v7
       with:
         name: code-coverage-report
         path: ${{github.workspace}}/build/ccov/all-merged
