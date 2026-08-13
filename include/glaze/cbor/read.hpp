@@ -662,6 +662,127 @@ namespace glz
       requires(contiguous_byte_range<std::remove_cvref_t<T>> && !str_t<T>)
    struct from<CBOR, T>
    {
+      // The same bytes are also legitimately carried as a plain array of small unsigned integers
+      // (major type 4). That is what a non-contiguous byte range such as std::list<uint8_t> writes,
+      // and what CBOR producers that treat a byte sequence as an array of numbers emit, so read
+      // either encoding into the same target. The initial byte has already been consumed.
+      template <auto Opts>
+      static void read_as_array(auto& value, is_context auto& ctx, auto& it, auto end, const uint8_t additional_info)
+      {
+         using namespace cbor;
+
+         depth_guard guard{ctx};
+         if (!guard) [[unlikely]] {
+            return;
+         }
+
+         // Grow to i + 1 elements, or bounds-check a fixed-size target. Returns false on failure.
+         const auto make_room = [&](const size_t i) {
+            if constexpr (resizable<T>) {
+               if (exceeds_capacity(value, i + 1, ctx)) [[unlikely]] {
+                  return false;
+               }
+               value.resize(i + 1);
+            }
+            else {
+               if (i >= value.size()) [[unlikely]] {
+                  ctx.error = error_code::exceeded_static_array_size;
+                  return false;
+               }
+            }
+            return true;
+         };
+
+         size_t count = 0;
+         if (additional_info == info::indefinite) {
+            if constexpr (resizable<T>) {
+               value.clear();
+            }
+            while (true) {
+               if (it >= end) [[unlikely]] {
+                  ctx.error = error_code::unexpected_end;
+                  return;
+               }
+
+               uint8_t peek;
+               std::memcpy(&peek, it, 1);
+               if (peek == initial_byte(major::simple, simple::break_code)) {
+                  ++it;
+                  break;
+               }
+
+               if constexpr (check_max_array_size(Opts) > 0) {
+                  if (count >= check_max_array_size(Opts)) [[unlikely]] {
+                     ctx.error = error_code::invalid_length;
+                     return;
+                  }
+               }
+               if constexpr (has_runtime_max_array_size<std::decay_t<decltype(ctx)>>) {
+                  if (ctx.max_array_size > 0 && count >= ctx.max_array_size) [[unlikely]] {
+                     ctx.error = error_code::invalid_length;
+                     return;
+                  }
+               }
+               if (!make_room(count)) [[unlikely]] {
+                  return;
+               }
+               parse<CBOR>::op<Opts>(value[count], ctx, it, end);
+               if (bool(ctx.error)) [[unlikely]]
+                  return;
+               ++count;
+            }
+         }
+         else {
+            const uint64_t n = cbor_detail::decode_arg(ctx, it, end, additional_info);
+            if (bool(ctx.error)) [[unlikely]]
+               return;
+
+            // Every element occupies at least one byte, so a valid count cannot exceed the input.
+            if (n > static_cast<uint64_t>(end - it)) [[unlikely]] {
+               ctx.error = error_code::unexpected_end;
+               return;
+            }
+            if constexpr (check_max_array_size(Opts) > 0) {
+               if (n > check_max_array_size(Opts)) [[unlikely]] {
+                  ctx.error = error_code::invalid_length;
+                  return;
+               }
+            }
+            if constexpr (has_runtime_max_array_size<std::decay_t<decltype(ctx)>>) {
+               if (ctx.max_array_size > 0 && n > ctx.max_array_size) [[unlikely]] {
+                  ctx.error = error_code::invalid_length;
+                  return;
+               }
+            }
+
+            if constexpr (resizable<T>) {
+               if (exceeds_capacity(value, static_cast<size_t>(n), ctx)) [[unlikely]] {
+                  return;
+               }
+               value.resize(static_cast<size_t>(n));
+            }
+            else {
+               if (n > value.size()) [[unlikely]] {
+                  ctx.error = error_code::exceeded_static_array_size;
+                  return;
+               }
+            }
+
+            for (; count < n; ++count) {
+               parse<CBOR>::op<Opts>(value[count], ctx, it, end);
+               if (bool(ctx.error)) [[unlikely]]
+                  return;
+            }
+         }
+
+         if constexpr (!resizable<T>) {
+            // Zero-fill any unused tail, as the byte string path does.
+            if (count < value.size()) {
+               std::memset(value.data() + count, 0, value.size() - count);
+            }
+         }
+      }
+
       template <auto Opts>
       static void op(auto& value, is_context auto& ctx, auto& it, auto end)
       {
@@ -679,6 +800,11 @@ namespace glz
          const uint8_t major_type = get_major_type(initial);
          const uint8_t additional_info = get_additional_info(initial);
 
+         if (major_type == major::array) {
+            read_as_array<Opts>(value, ctx, it, end, additional_info);
+            return;
+         }
+
          if (major_type != major::bstr) [[unlikely]] {
             ctx.error = error_code::syntax_error;
             return;
@@ -690,6 +816,7 @@ namespace glz
                value.clear();
             }
             size_t offset = 0; // fill position for fixed-size targets
+            uint64_t total = 0; // bytes accumulated so far, across chunks
             while (true) {
                if (it >= end) [[unlikely]] {
                   ctx.error = error_code::unexpected_end;
@@ -724,6 +851,22 @@ namespace glz
                if (static_cast<uint64_t>(end - it) < chunk_len) [[unlikely]] {
                   ctx.error = error_code::unexpected_end;
                   return;
+               }
+
+               // A break code rather than a length ends this byte string, so the caller's limit is
+               // enforced against the running total instead of a single header.
+               total += chunk_len;
+               if constexpr (check_max_array_size(Opts) > 0) {
+                  if (total > check_max_array_size(Opts)) [[unlikely]] {
+                     ctx.error = error_code::invalid_length;
+                     return;
+                  }
+               }
+               if constexpr (has_runtime_max_array_size<std::decay_t<decltype(ctx)>>) {
+                  if (ctx.max_array_size > 0 && total > ctx.max_array_size) [[unlikely]] {
+                     ctx.error = error_code::invalid_length;
+                     return;
+                  }
                }
 
                if constexpr (resizable<T>) {
@@ -807,6 +950,86 @@ namespace glz
       requires(!eigen_t<T> && !contiguous_byte_range<std::remove_cvref_t<T>>)
    struct from<CBOR, T> final
    {
+      // A sequence of bytes is also legitimately carried as a CBOR byte string (major type 2). That
+      // is what a contiguous byte range such as std::vector<uint8_t> writes, so a byte-like range
+      // reads either encoding. `append` takes one decoded byte and returns false once the target is
+      // full; the initial byte has already been consumed.
+      template <auto Opts>
+      static void read_byte_string(is_context auto& ctx, auto& it, auto end, const uint8_t additional_info,
+                                   auto&& append)
+      {
+         using namespace cbor;
+
+         // An indefinite-length byte string is ended by a break code rather than a length, so the
+         // caller's limit is enforced against the running total rather than a single header.
+         uint64_t total = 0;
+
+         // Copy `length` bytes out of the input, having checked they are all present.
+         const auto take = [&](const uint64_t length) {
+            if (static_cast<uint64_t>(end - it) < length) [[unlikely]] {
+               ctx.error = error_code::unexpected_end;
+               return false;
+            }
+            total += length;
+            if constexpr (check_max_array_size(Opts) > 0) {
+               if (total > check_max_array_size(Opts)) [[unlikely]] {
+                  ctx.error = error_code::invalid_length;
+                  return false;
+               }
+            }
+            if constexpr (has_runtime_max_array_size<std::decay_t<decltype(ctx)>>) {
+               if (ctx.max_array_size > 0 && total > ctx.max_array_size) [[unlikely]] {
+                  ctx.error = error_code::invalid_length;
+                  return false;
+               }
+            }
+            for (uint64_t i = 0; i < length; ++i, ++it) {
+               uint8_t byte;
+               std::memcpy(&byte, it, 1);
+               if (!append(byte)) [[unlikely]] {
+                  return false;
+               }
+            }
+            return true;
+         };
+
+         if (additional_info == info::indefinite) {
+            while (true) {
+               if (it >= end) [[unlikely]] {
+                  ctx.error = error_code::unexpected_end;
+                  return;
+               }
+
+               uint8_t chunk_initial;
+               std::memcpy(&chunk_initial, it, 1);
+               if (chunk_initial == initial_byte(major::simple, simple::break_code)) {
+                  ++it;
+                  return;
+               }
+
+               // Chunks of an indefinite-length byte string are themselves definite byte strings.
+               if (get_major_type(chunk_initial) != major::bstr ||
+                   get_additional_info(chunk_initial) == info::indefinite) [[unlikely]] {
+                  ctx.error = error_code::syntax_error;
+                  return;
+               }
+               ++it;
+
+               const uint64_t chunk_len = cbor_detail::decode_arg(ctx, it, end, get_additional_info(chunk_initial));
+               if (bool(ctx.error)) [[unlikely]]
+                  return;
+               if (!take(chunk_len)) [[unlikely]]
+                  return;
+            }
+         }
+
+         const uint64_t length = cbor_detail::decode_arg(ctx, it, end, additional_info);
+         if (bool(ctx.error)) [[unlikely]]
+            return;
+
+         (void)take(length);
+      }
+
       template <auto Opts>
       static void op(auto& value, is_context auto& ctx, auto& it, auto end)
       {
@@ -831,6 +1054,67 @@ namespace glz
 
          const uint8_t major_type = get_major_type(initial);
          const uint8_t additional_info = get_additional_info(initial);
+
+         // A byte-like range also accepts a CBOR byte string, which is what the contiguous byte
+         // ranges write for the same bytes.
+         if constexpr (byte_like<V>) {
+            if (major_type == major::bstr) {
+               ++it; // consume the initial byte
+
+               depth_guard guard{ctx};
+               if (!guard) [[unlikely]] {
+                  return;
+               }
+
+               if constexpr (growable) {
+                  value.clear();
+               }
+
+               size_t filled = 0;
+               // Only a target that cannot grow is filled in place; growing would invalidate this.
+               [[maybe_unused]] decltype(value.begin()) dest{};
+               if constexpr (not growable) {
+                  dest = value.begin();
+               }
+               read_byte_string<Opts>(ctx, it, end, additional_info, [&](const uint8_t byte) {
+                  if (exceeds_capacity(value, filled + 1, ctx)) [[unlikely]] {
+                     return false;
+                  }
+                  if constexpr (set_like) {
+                     value.emplace(static_cast<V>(byte));
+                  }
+                  else if constexpr (emplace_backable<T>) {
+                     value.emplace_back(static_cast<V>(byte));
+                  }
+                  else if constexpr (resizable<T>) {
+                     value.resize(filled + 1);
+                     auto slot = value.begin();
+                     std::advance(slot, filled);
+                     *slot = static_cast<V>(byte);
+                  }
+                  else {
+                     if (filled >= value.size()) [[unlikely]] {
+                        ctx.error = error_code::exceeded_static_array_size;
+                        return false;
+                     }
+                     *dest = static_cast<V>(byte);
+                     ++dest;
+                  }
+                  ++filled;
+                  return true;
+               });
+
+               if constexpr (!growable) {
+                  // Zero-fill any unused tail, as the byte string reader does for std::array.
+                  if (not bool(ctx.error)) {
+                     for (; filled < value.size(); ++filled, ++dest) {
+                        *dest = V{};
+                     }
+                  }
+               }
+               return;
+            }
+         }
 
          // Check for RFC 8746 typed array (tag + byte string)
          if constexpr (num_t<V> && !std::same_as<V, bool>) {
