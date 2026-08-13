@@ -3772,6 +3772,39 @@ struct cbor_stl_members
    std::list<std::string> names{};
 };
 
+// Contiguous byte ranges that are deliberately not indexable. A contiguous range owes the reader
+// size() and data(); nothing obliges it to carry a subscript operator as well, and the array form of
+// the byte sequence reader used to reach its elements through one.
+struct cbor_resizable_byte_range_no_subscript
+{
+   using value_type = uint8_t;
+   std::vector<uint8_t> storage{};
+   auto begin() { return storage.begin(); }
+   auto end() { return storage.end(); }
+   auto begin() const { return storage.begin(); }
+   auto end() const { return storage.end(); }
+   size_t size() const { return storage.size(); }
+   uint8_t* data() { return storage.data(); }
+   const uint8_t* data() const { return storage.data(); }
+   void resize(size_t n) { storage.resize(n); }
+   void clear() { storage.clear(); }
+   bool operator==(const cbor_resizable_byte_range_no_subscript&) const = default;
+};
+
+struct cbor_fixed_byte_range_no_subscript
+{
+   using value_type = uint8_t;
+   std::array<uint8_t, 5> storage{};
+   auto begin() { return storage.begin(); }
+   auto end() { return storage.end(); }
+   auto begin() const { return storage.begin(); }
+   auto end() const { return storage.end(); }
+   size_t size() const { return storage.size(); }
+   uint8_t* data() { return storage.data(); }
+   const uint8_t* data() const { return storage.data(); }
+   bool operator==(const cbor_fixed_byte_range_no_subscript&) const = default;
+};
+
 // A sequence of bytes has two legitimate CBOR encodings: a byte string (major type 2), which the
 // contiguous byte ranges write, and a plain array of small unsigned integers (major type 4), which
 // the others write. Each reader used to accept only its own, so Glaze could not read back its own
@@ -3843,6 +3876,31 @@ suite cbor_byte_sequence_encoding_tests = [] {
       std::array<uint8_t, 4> arr{9, 9, 9, 9};
       expect(not glz::read_cbor(arr, indefinite_array));
       expect(arr == std::array<uint8_t, 4>{1, 2, 3, 0});
+   };
+
+   // The array form fills its target one element at a time, which is where a subscript used to be
+   // assumed. Both framings and both kinds of target are covered because they take different paths:
+   // the definite one sizes the target once up front, the indefinite one grows it per element.
+   "array reads into contiguous byte ranges that are not indexable"_test = [] {
+      const std::string definite_array{"\x83\x01\x02\x03", 4};
+      const std::string indefinite_array{"\x9F\x01\x02\x03\xFF", 5};
+
+      for (const auto& buffer : {definite_array, indefinite_array}) {
+         cbor_resizable_byte_range_no_subscript resizable{{9, 9}};
+         expect(not glz::read_cbor(resizable, buffer));
+         expect(resizable.storage == std::vector<uint8_t>{1, 2, 3});
+
+         // A fixed-size target zero-fills its tail rather than growing.
+         cbor_fixed_byte_range_no_subscript fixed{{9, 9, 9, 9, 9}};
+         expect(not glz::read_cbor(fixed, buffer));
+         expect(fixed.storage == std::array<uint8_t, 5>{1, 2, 3, 0, 0});
+      }
+
+      // A byte string reaches the same targets through the bulk copy, which never indexed.
+      const std::string byte_string{"\x43\x01\x02\x03", 4};
+      cbor_resizable_byte_range_no_subscript resizable{};
+      expect(not glz::read_cbor(resizable, byte_string));
+      expect(resizable.storage == std::vector<uint8_t>{1, 2, 3});
    };
 
    "every byte container still round-trips"_test = [] {

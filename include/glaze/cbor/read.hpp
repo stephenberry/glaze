@@ -726,7 +726,11 @@ namespace glz
                if (!make_room(count)) [[unlikely]] {
                   return;
                }
-               parse<CBOR>::op<Opts>(value[count], ctx, it, end);
+               // Reached through data() rather than a subscript: contiguous storage is what this
+               // reader relies on, and a contiguous range need not also be indexable. Re-read on
+               // every pass, since make_room grows a resizable target one element at a time and any
+               // pointer taken before that is stale.
+               parse<CBOR>::op<Opts>(value.data()[count], ctx, it, end);
                if (bool(ctx.error)) [[unlikely]]
                   return;
                ++count;
@@ -768,8 +772,11 @@ namespace glz
                }
             }
 
+            // As above, through data() rather than a subscript. The target reached its full size
+            // before the loop, so one pointer serves the whole of it.
+            auto* dest = value.data();
             for (; count < n; ++count) {
-               parse<CBOR>::op<Opts>(value[count], ctx, it, end);
+               parse<CBOR>::op<Opts>(dest[count], ctx, it, end);
                if (bool(ctx.error)) [[unlikely]]
                   return;
             }
