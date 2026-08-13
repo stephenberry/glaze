@@ -364,6 +364,33 @@ ut::suite struct_test_cases = [] {
       }
    };
 
+   // `jsonrpc` and `method` are both required. An absent one used to read back as the default the
+   // request type carries, so a request that never named a version was answered as if it had asked
+   // for 2.0, and one that never named a method was matched against the registered names as "".
+   "server missing required members"_test = [&server] {
+      server.on<"foo">([](const foo_params&) -> foo_result { return {}; });
+
+      auto response_vec = server.call<std::vector<rpc::response_t<glz::raw_json>>>(R"(
+      [
+          {"method":"foo","params":{"foo_a":1337,"foo_b":"hello world"},"id": 1},
+          {"jsonrpc":"2.0","params":{"foo_a":1337,"foo_b":"hello world"},"id": 2},
+          {"id": 3}
+      ]
+      )");
+      ut::expect(response_vec.size() == 3);
+      for (auto& response : response_vec) {
+         ut::expect(response.error.has_value());
+         ut::expect(response.error->code == glz::rpc::error_e::invalid_request);
+         ut::expect(!response.result.has_value());
+      }
+      ut::expect(response_vec[0].error->data.value_or("") == "Missing 'jsonrpc' member")
+         << response_vec[0].error->data.value_or("");
+      ut::expect(response_vec[1].error->data.value_or("") == "Missing 'method' member")
+         << response_vec[1].error->data.value_or("");
+      ut::expect(response_vec[2].error->data.value_or("") == "Missing 'jsonrpc' member")
+         << response_vec[2].error->data.value_or("");
+   };
+
    ut::test("server valid or error return") = [&server] {
       server.on<"foo">([](const foo_params& params) -> glz::expected<foo_result, glz::rpc::error> {
          if (params.foo_a == 10) // dummy invalid param case

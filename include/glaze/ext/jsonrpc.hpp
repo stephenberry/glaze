@@ -87,6 +87,11 @@ namespace glz::rpc
          return {error_e::method_not_found, "Method: '" + std::string(presumed_method) + "' not found",
                  std::string(code_as_sv(error_e::method_not_found))};
       }
+      static error missing_member(std::string_view member)
+      {
+         return {error_e::invalid_request, "Missing '" + std::string(member) + "' member",
+                 std::string(code_as_sv(error_e::invalid_request))};
+      }
 
       operator bool() const noexcept { return code != rpc::error_e::no_error; }
 
@@ -121,6 +126,32 @@ namespace glz::rpc
    request_t(id_t&&, std::string_view, Params&&) -> request_t<std::decay_t<Params>>;
 
    using generic_request_t = request_t<glz::raw_json_view>;
+
+   // The request as received, for validating the envelope before any default stands in for a member
+   // that was never sent.
+   //
+   // request_t defaults `jsonrpc` to "2.0" and `method` to "", so a request that omits either reads
+   // back indistinguishable from one that sent the default: a missing version passes for 2.0, and a
+   // missing method names "" -- which is a live endpoint in the registry, where it addresses the
+   // root object. JSON RPC 2.0 requires both members, so absence has to stay separable from
+   // present-and-empty. Params are left raw; they are read against the target's own type once the
+   // envelope is known to be well formed.
+   struct request_envelope_t
+   {
+      id_t id{};
+      std::optional<std::string_view> method{};
+      glz::raw_json_view params{};
+      std::optional<std::string_view> version{};
+
+      struct glaze
+      {
+         using T = request_envelope_t;
+         static constexpr auto value = glz::object("jsonrpc", &T::version, //
+                                                   &T::method, //
+                                                   &T::params, //
+                                                   &T::id);
+      };
+   };
 
    template <class Result>
    struct response_t
@@ -334,7 +365,7 @@ namespace glz::rpc
      private:
       auto per_request(std::string_view json_request) -> std::optional<response_t<glz::raw_json>>
       {
-         expected<generic_request_t, glz::error_ctx> request{glz::read_json<generic_request_t>(json_request)};
+         expected<request_envelope_t, glz::error_ctx> request{glz::read_json<request_envelope_t>(json_request)};
 
          if (!request.has_value()) {
             // Failed, but let's try to extract the `id`
@@ -346,14 +377,24 @@ namespace glz::rpc
          }
 
          auto& req{request.value()};
-         if (req.version != rpc::supported_version) {
-            return raw_response_t{std::move(req.id), rpc::error::version(req.version)};
+         // `jsonrpc` and `method` are both required. Neither may fall through to a default: an
+         // absent version would pass for 2.0, and an absent method would be matched against the
+         // registered names as if the caller had asked for "".
+         if (!req.version) {
+            return raw_response_t{std::move(req.id), rpc::error::missing_member("jsonrpc")};
          }
+         if (*req.version != rpc::supported_version) {
+            return raw_response_t{std::move(req.id), rpc::error::version(*req.version)};
+         }
+         if (!req.method) {
+            return raw_response_t{std::move(req.id), rpc::error::missing_member("method")};
+         }
+         const std::string_view method_name{*req.method};
 
          std::optional<response_t<glz::raw_json>> return_v{};
-         bool method_found = methods.any([&json_request, &req, &return_v](auto&& method) -> bool {
+         bool method_found = methods.any([&json_request, &req, method_name, &return_v](auto&& method) -> bool {
             using meth_t = std::remove_reference_t<decltype(method)>;
-            if (req.method != meth_t::name_v) {
+            if (method_name != meth_t::name_v) {
                return false;
             }
             const auto& params_request{glz::read_json<typename meth_t::request_t>(json_request)};
@@ -386,7 +427,7 @@ namespace glz::rpc
             return true;
          });
          if (!method_found) {
-            return raw_response_t{std::move(req.id), rpc::error::method(req.method)};
+            return raw_response_t{std::move(req.id), rpc::error::method(method_name)};
          }
          return return_v;
       };

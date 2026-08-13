@@ -204,6 +204,11 @@ server.call(R"({"jsonrpc":"2.0","method":"counter","params":"not_an_int","id":1}
 // Invalid version
 server.call(R"({"jsonrpc":"1.0","method":"greet","id":1})");
 // Returns: {"jsonrpc":"2.0","error":{"code":-32600,"message":"Invalid Request",...},"id":1}
+
+// Missing a required member. `jsonrpc` and `method` must both be present -- note that omitting
+// `method` is not the same as sending `"method":""`, which addresses the root endpoint.
+server.call(R"({"id":1})");
+// Returns: {"jsonrpc":"2.0","error":{"code":-32600,"message":"Invalid Request","data":"Missing 'jsonrpc' member"},"id":1}
 ```
 
 ## ID Types

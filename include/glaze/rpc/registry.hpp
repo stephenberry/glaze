@@ -527,7 +527,7 @@ namespace glz
       std::optional<std::string> process_single_request(std::string_view json_request)
          requires(Proto == JSONRPC)
       {
-         rpc::generic_request_t request{};
+         rpc::request_envelope_t request{};
          if (const auto read_ec = glz::read<read_opts>(request, json_request); read_ec) {
             // Check if it's a JSON syntax error vs schema error
             static constexpr registry_validate_opts<read_opts> validate_opts{{read_opts}};
@@ -547,32 +547,45 @@ namespace glz
 
          auto& req = request;
 
-         // Validate version
-         if (req.version != rpc::supported_version) {
+         const auto invalid_request = [&req](const std::string& data) {
             std::string id_json = glz::write_json(req.id).value_or("null");
             return R"({"jsonrpc":"2.0","error":{"code":-32600,"message":"Invalid Request","data":)" +
-                   write_json("Invalid version: " + std::string(req.version)).value_or("null") + R"(},"id":)" +
-                   id_json + "}";
+                   write_json(data).value_or("null") + R"(},"id":)" + id_json + "}";
+         };
+
+         // `jsonrpc` and `method` are both required members, and an absent one cannot be allowed to
+         // fall through to a default: an absent version would pass for 2.0, and an absent method
+         // names "", which is the root endpoint -- so `{"id":1}` would answer with the whole
+         // registered object rather than being rejected.
+         if (!req.version) {
+            return invalid_request("Missing 'jsonrpc' member");
          }
+         if (*req.version != rpc::supported_version) {
+            return invalid_request("Invalid version: " + std::string(*req.version));
+         }
+         if (!req.method) {
+            return invalid_request("Missing 'method' member");
+         }
+         const std::string_view method_name = *req.method;
 
          // Check if this is a notification (id is null)
          bool is_notification = std::holds_alternative<glz::generic::null_t>(req.id);
 
          // Look up the endpoint - try direct lookup first (handles methods that already start with /)
-         auto it = endpoints.find(req.method);
+         auto it = endpoints.find(method_name);
          if (it == endpoints.end()) {
-            if (!req.method.empty()) {
+            if (!method_name.empty()) {
                // Try with leading slash using stack buffer for common case
                char buf[256];
-               if (req.method.size() < sizeof(buf) - 1) {
+               if (method_name.size() < sizeof(buf) - 1) {
                   buf[0] = '/';
-                  std::memcpy(buf + 1, req.method.data(), req.method.size());
-                  it = endpoints.find(std::string_view{buf, req.method.size() + 1});
+                  std::memcpy(buf + 1, method_name.data(), method_name.size());
+                  it = endpoints.find(std::string_view{buf, method_name.size() + 1});
                }
                else {
                   // Fallback for very long method names
                   std::string method_path = "/";
-                  method_path += req.method;
+                  method_path += method_name;
                   it = endpoints.find(method_path);
                }
             }
@@ -586,7 +599,7 @@ namespace glz
                }
                std::string id_json = glz::write_json(req.id).value_or("null");
                return R"({"jsonrpc":"2.0","error":{"code":-32601,"message":"Method not found","data":)" +
-                      write_json(req.method).value_or("null") + R"(},"id":)" + id_json + "}";
+                      write_json(method_name).value_or("null") + R"(},"id":)" + id_json + "}";
             }
          }
 

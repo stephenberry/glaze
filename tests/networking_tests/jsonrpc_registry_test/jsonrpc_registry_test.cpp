@@ -265,6 +265,67 @@ suite jsonrpc_error_tests = [] {
       expect(response.find(R"("error")") != std::string::npos) << response;
       expect(response.find(R"(-32600)") != std::string::npos) << response; // Invalid Request
    };
+
+   // `jsonrpc` and `method` are both required members. An absent one used to read back as the
+   // default the request type carries, which made `{"id":1}` a version 2.0 call on the empty method
+   // -- and the empty method is the root endpoint, so it answered with the whole registered object.
+   "missing_version"_test = [] {
+      glz::registry<glz::opts{}, glz::JSONRPC> server{};
+
+      my_functions_t obj{};
+      server.on(obj);
+
+      auto response = server.call(R"({"method":"hello","id":1})");
+      expect(response.find(R"(-32600)") != std::string::npos) << response; // Invalid Request
+      expect(response.find(R"("result")") == std::string::npos) << response;
+      expect(response.find(R"("id":1)") != std::string::npos) << response;
+   };
+
+   "missing_method"_test = [] {
+      glz::registry<glz::opts{}, glz::JSONRPC> server{};
+
+      my_functions_t obj{};
+      obj.i = 55;
+      server.on(obj);
+
+      auto response = server.call(R"({"jsonrpc":"2.0","id":1})");
+      expect(response.find(R"(-32600)") != std::string::npos) << response; // Invalid Request
+      expect(response.find(R"("result")") == std::string::npos) << response;
+      expect(response.find(R"(55)") == std::string::npos) << "must not dispatch to the root endpoint: " << response;
+   };
+
+   "bare_id_is_not_a_request"_test = [] {
+      glz::registry<glz::opts{}, glz::JSONRPC> server{};
+
+      my_functions_t obj{};
+      obj.i = 55;
+      server.on(obj);
+
+      auto response = server.call(R"({"id":1})");
+      expect(response.find(R"(-32600)") != std::string::npos) << response; // Invalid Request
+      expect(response.find(R"("result")") == std::string::npos) << response;
+      expect(response.find(R"(55)") == std::string::npos) << "must not dispatch to the root endpoint: " << response;
+   };
+
+   // Every element of a batch is validated on its own, so a batch of bare ids cannot turn one small
+   // request into one whole-object response per element.
+   "batch_of_bare_ids_is_not_amplified"_test = [] {
+      glz::registry<glz::opts{}, glz::JSONRPC> server{};
+
+      my_functions_t obj{};
+      server.on(obj);
+
+      const std::string_view request = R"([{"id":1},{"id":2},{"id":3}])";
+      auto response = server.call(request);
+      expect(response[0] == '[') << response;
+      expect(response.find(R"("result")") == std::string::npos) << response;
+      size_t errors = 0;
+      for (size_t pos = response.find("-32600"); pos != std::string::npos;
+           pos = response.find("-32600", pos + 1)) {
+         ++errors;
+      }
+      expect(errors == 3u) << response;
+   };
 };
 
 suite jsonrpc_id_types_tests = [] {
