@@ -337,8 +337,7 @@ suite client_request_serializer_crlf = [] {
       expect(count_header_fields(request, "Host") == 1) << "The request must still carry exactly one Host";
       expect(request.find("Host: example.com\r\n") != std::string::npos) << "The derived Host must survive";
       expect(count_header_fields(request, "Connection") == 1) << "The request must still carry one Connection";
-      expect(request.find("Connection: keep-alive\r\n") != std::string::npos)
-         << "The default Connection must survive";
+      expect(request.find("Connection: keep-alive\r\n") != std::string::npos) << "The default Connection must survive";
    };
 
    // RFC 9112 5: a user agent SHOULD generate Host as the first field after the
@@ -374,8 +373,7 @@ suite client_request_serializer_crlf = [] {
 
       url.port = 80;
       const std::string default_port = glz::detail::build_http_request_bytes("GET", url, false, "", {});
-      expect(default_port.find("Host: example.com\r\n") != std::string::npos)
-         << "The scheme's default port is omitted";
+      expect(default_port.find("Host: example.com\r\n") != std::string::npos) << "The scheme's default port is omitted";
 
       url.port = 443;
       const std::string https = glz::detail::build_http_request_bytes("GET", url, true, "", {});
