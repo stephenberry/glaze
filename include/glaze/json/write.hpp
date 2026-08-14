@@ -2594,6 +2594,25 @@ namespace glz
       }
    };
 
+#if defined(__cpp_lib_chrono) && __cpp_lib_chrono >= 201907L
+   // utc_clock::time_point: serialize as ISO 8601 string (UTC), same wire form as sys_time.
+   template <is_utc_time_point T>
+      requires(not custom_write<T>)
+   struct to<JSON, T>
+   {
+      template <auto Opts, class B>
+      static void op(auto&& value, is_context auto&& ctx, B&& b, auto& ix) noexcept
+      {
+         using Period = typename std::remove_cvref_t<T>::duration::period;
+         if (!ensure_space(ctx, b, ix + chrono_detail::iso_time_point_max_size<Period>)) [[unlikely]] {
+            return;
+         }
+         const auto sys = std::chrono::clock_cast<std::chrono::system_clock>(value);
+         chrono_detail::write_iso_time_point<not check_unquoted(Opts)>(sys, ctx, b, ix);
+      }
+   };
+#endif
+
    // year_month_day: serialize as "YYYY-MM-DD" JSON string
    template <is_year_month_day T>
       requires(not custom_write<T>)
