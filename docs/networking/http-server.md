@@ -338,7 +338,7 @@ server.use([](const glz::request& req, glz::response& res) {
 // Authentication middleware
 server.use([](const glz::request& req, glz::response& res) {
     // Note: Header names are case-insensitive (RFC 7230)
-    if (req.headers.find("authorization") == req.headers.end()) {
+    if (!req.headers.contains("authorization")) {
         res.status(401).json({{"error", "Authorization required"}});
         return;
     }

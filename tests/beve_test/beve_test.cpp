@@ -30,6 +30,7 @@
 #include "glaze/json/json_ptr.hpp"
 #include "glaze/json/read.hpp"
 #include "glaze/trace/trace.hpp"
+#include "scratch_directory.hpp"
 #include "ut/ut.hpp"
 
 using namespace ut;
@@ -1429,6 +1430,11 @@ void bench()
 
 using namespace ut;
 
+// Relative scratch paths in this file resolve inside a private directory rather than
+// wherever the binary was launched from. This must precede the first suite: ut runs a
+// suite from its constructor, during static initialization.
+const glz_test::scratch_directory scratch{"beve_test"};
+
 suite beve_helpers = [] {
    "beve_helpers"_test = [] {
       my_struct v{22, 5.76, "ufo", {9, 5, 1}};
@@ -2080,6 +2086,22 @@ struct nothing
    };
 };
 
+struct parse_skipped_t
+{
+   int a{};
+   double skipped_on_parse{};
+   std::string s{};
+};
+
+template <>
+struct glz::meta<parse_skipped_t>
+{
+   static constexpr bool skip(const std::string_view key, const meta_context& ctx)
+   {
+      return key == "skipped_on_parse" && ctx.op == operation::parse;
+   }
+};
+
 suite skip_test = [] {
    "skip"_test = [] {
       full f{};
@@ -2099,6 +2121,24 @@ suite skip_test = [] {
 
       nothing obj{};
       expect(!glz::read<glz::opts{.format = glz::BEVE, .error_on_unknown_keys = false}>(obj, s));
+   };
+
+   // A skip() that only fires on parse excludes nothing from serialization, so the object writes all
+   // three members and the member count in the header has to say three. The count and the members
+   // themselves are decided by separate code, and this is what catches them disagreeing.
+   //
+   // meta::skip is a JSON/YAML customization point; BEVE does not consult it in either direction, so
+   // the skipped member also survives the read here.
+   "a parse-only meta::skip writes every member"_test = [] {
+      parse_skipped_t obj{7, 2.5, "written"};
+      std::string s{};
+      expect(not glz::write_beve(obj, s));
+
+      parse_skipped_t restored{};
+      expect(!glz::read_beve(restored, s));
+      expect(restored.a == 7);
+      expect(restored.skipped_on_parse == 2.5);
+      expect(restored.s == "written");
    };
 };
 

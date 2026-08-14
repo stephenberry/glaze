@@ -34,6 +34,8 @@ option(glaze_ENABLE_SANITIZERS "Enable AddressSanitizer and UndefinedBehaviorSan
 add_library(glz_test_common INTERFACE)
 target_compile_features(glz_test_common INTERFACE cxx_std_23)
 target_link_libraries(glz_test_common INTERFACE ut::ut glaze::glaze glaze::asio)
+# scratch_directory.hpp, included by the suites that write files to isolate themselves
+target_include_directories(glz_test_common INTERFACE ${CMAKE_CURRENT_SOURCE_DIR})
 
 if(MSVC)
     target_compile_options(glz_test_common INTERFACE /GR- /bigobj)
@@ -58,6 +60,7 @@ endif()
 add_library(glz_test_exceptions INTERFACE)
 target_compile_features(glz_test_exceptions INTERFACE cxx_std_23)
 target_link_libraries(glz_test_exceptions INTERFACE ut::ut glaze::glaze glaze::asio)
+target_include_directories(glz_test_exceptions INTERFACE ${CMAKE_CURRENT_SOURCE_DIR})
 if(MSVC)
     target_compile_options(glz_test_exceptions INTERFACE /GR- /bigobj)
     target_compile_options(glz_test_exceptions INTERFACE /W4 /wd4459 /wd4805)

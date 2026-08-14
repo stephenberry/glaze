@@ -1414,6 +1414,9 @@ namespace glz
             }
          }
          else {
+            if (exceeds_capacity(value, n, ctx)) [[unlikely]] {
+               return;
+            }
             value.resize(n);
             std::memcpy(value.data(), it, n);
          }
@@ -1820,6 +1823,9 @@ namespace glz
             }
 
             if constexpr (resizable<T>) {
+               if (exceeds_capacity(value, n, ctx)) [[unlikely]] {
+                  return;
+               }
                value.resize(n);
 
                if constexpr (check_shrink_to_fit(Opts) && has_shrink_to_fit<T>) {
@@ -1866,6 +1872,9 @@ namespace glz
                }
 
                if constexpr (resizable<T>) {
+                  if (exceeds_capacity(value, n, ctx)) [[unlikely]] {
+                     return false;
+                  }
                   value.resize(n);
 
                   if constexpr (check_shrink_to_fit(Opts) && has_shrink_to_fit<T>) {
@@ -2131,6 +2140,9 @@ namespace glz
             }
 
             if constexpr (resizable<T>) {
+               if (exceeds_capacity(value, n, ctx)) [[unlikely]] {
+                  return;
+               }
                value.resize(n);
 
                if constexpr (check_shrink_to_fit(Opts) && has_shrink_to_fit<T>) {
@@ -2215,6 +2227,9 @@ namespace glz
             }
 
             if constexpr (resizable<T>) {
+               if (exceeds_capacity(value, n, ctx)) [[unlikely]] {
+                  return;
+               }
                value.resize(n);
 
                if constexpr (check_shrink_to_fit(Opts) && has_shrink_to_fit<T>) {
@@ -2303,6 +2318,9 @@ namespace glz
             }
 
             if constexpr (resizable<T>) {
+               if (exceeds_capacity(value, n, ctx)) [[unlikely]] {
+                  return;
+               }
                value.resize(n);
 
                if constexpr (check_shrink_to_fit(Opts) && has_shrink_to_fit<T>) {
@@ -2384,6 +2402,9 @@ namespace glz
 
          constexpr uint8_t key_tag = beve_key_traits<Key>::key_tag;
          for (size_t i = 0; i < n; ++i) {
+            if (exceeds_capacity(value, i + 1, ctx)) [[unlikely]] {
+               return;
+            }
             auto& item = value.emplace_back();
             parse<BEVE>::op<no_header_on<Opts>()>(item.first, key_tag, ctx, it, end);
             if (bool(ctx.error)) [[unlikely]] {
@@ -3295,6 +3316,9 @@ namespace glz
          }
 
          if constexpr (emplace_backable<Container>) {
+            if (exceeds_capacity(values, index + 1, ctx)) [[unlikely]] {
+               break;
+            }
             auto& value = values.emplace_back();
             parse<BEVE>::template op<set_beve<Opts>()>(value, ctx, it, end);
          }

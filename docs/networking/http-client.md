@@ -140,7 +140,7 @@ Notes:
 ```cpp
 std::expected<response, std::error_code> get(
     std::string_view url,
-    const std::unordered_map<std::string, std::string>& headers = {}
+    const glz::http_headers& headers = {}
 );
 ```
 
@@ -149,7 +149,7 @@ std::expected<response, std::error_code> get(
 std::expected<response, std::error_code> post(
     std::string_view url, 
     std::string_view body,
-    const std::unordered_map<std::string, std::string>& headers = {}
+    const glz::http_headers& headers = {}
 );
 ```
 
@@ -159,7 +159,7 @@ template<class T>
 std::expected<response, std::error_code> post_json(
     std::string_view url, 
     const T& data,
-    const std::unordered_map<std::string, std::string>& headers = {}
+    const glz::http_headers& headers = {}
 );
 ```
 
@@ -176,7 +176,7 @@ All asynchronous methods come in two variants:
 ```cpp
 std::future<std::expected<response, std::error_code>> get_async(
     std::string_view url,
-    const std::unordered_map<std::string, std::string>& headers = {}
+    const glz::http_headers& headers = {}
 );
 ```
 
@@ -185,7 +185,7 @@ std::future<std::expected<response, std::error_code>> get_async(
 template<typename CompletionHandler>
 void get_async(
     std::string_view url,
-    const std::unordered_map<std::string, std::string>& headers,
+    const glz::http_headers& headers,
     CompletionHandler&& handler
 );
 ```
@@ -197,7 +197,7 @@ void get_async(
 std::future<std::expected<response, std::error_code>> post_async(
     std::string_view url, 
     std::string_view body,
-    const std::unordered_map<std::string, std::string>& headers = {}
+    const glz::http_headers& headers = {}
 );
 ```
 
@@ -207,7 +207,7 @@ template<typename CompletionHandler>
 void post_async(
     std::string_view url, 
     std::string_view body,
-    const std::unordered_map<std::string, std::string>& headers,
+    const glz::http_headers& headers,
     CompletionHandler&& handler
 );
 ```
@@ -220,7 +220,7 @@ template<class T>
 std::future<std::expected<response, std::error_code>> post_json_async(
     std::string_view url, 
     const T& data,
-    const std::unordered_map<std::string, std::string>& headers = {}
+    const glz::http_headers& headers = {}
 );
 ```
 
@@ -230,7 +230,7 @@ template<class T, typename CompletionHandler>
 void post_json_async(
     std::string_view url, 
     const T& data,
-    const std::unordered_map<std::string, std::string>& headers,
+    const glz::http_headers& headers,
     CompletionHandler&& handler
 );
 ```
@@ -253,7 +253,7 @@ struct stream_request_params_v2 {
     stream_read_strategy strategy{stream_read_strategy::bulk_transfer};
     size_t max_buffer_size{1024 * 1024};
     std::string body;
-    std::unordered_map<std::string, std::string> headers;
+    glz::http_headers headers;
     http_connect_handler on_connect;
     http_disconnect_handler on_disconnect;
     http_data_handler on_data;
@@ -313,7 +313,7 @@ The `response` object contains:
 ```cpp
 struct response {
     uint16_t status_code;                                      // HTTP status code
-    std::unordered_map<std::string, std::string> response_headers; // Response headers
+    glz::http_headers response_headers; // Response headers
     std::string response_body;                                 // Response body
 };
 ```
@@ -350,7 +350,7 @@ int main() {
 
     if (response) {
         std::cout << "Status: " << response->status_code << std::endl;
-        std::cout << "Content-Type: " << response->response_headers["Content-Type"] << std::endl;
+        std::cout << "Content-Type: " << response->response_headers.first_value("Content-Type").value_or("") << std::endl;
         std::cout << "Body: " << response->response_body << std::endl;
     } else {
         std::cerr << "Error: " << response.error().message() << std::endl;
@@ -368,7 +368,7 @@ int main() {
 int main() {
     glz::http_client client;
 
-    std::unordered_map<std::string, std::string> headers = {
+    glz::http_headers headers = {
         {"Content-Type", "text/plain"},
         {"Authorization", "Bearer your-token"}
     };

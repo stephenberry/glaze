@@ -24,6 +24,7 @@
 #include <vector>
 
 #include "glaze/json/generic.hpp"
+#include "scratch_directory.hpp"
 #include "ut/ut.hpp"
 
 using namespace ut;
@@ -315,6 +316,11 @@ struct yaml_multi_empty_arrays_struct
    int x{42};
    bool operator==(const yaml_multi_empty_arrays_struct&) const = default;
 };
+
+// Relative scratch paths in this file resolve inside a private directory rather than
+// wherever the binary was launched from. This must precede the first suite: ut runs a
+// suite from its constructor, during static initialization.
+const glz_test::scratch_directory scratch{"yaml_test"};
 
 suite yaml_write_tests = [] {
    "write_simple_struct"_test = [] {
@@ -8900,6 +8906,15 @@ suite yaml_skip_tests = [] {
       expect(yaml.find("id: abc") != std::string::npos);
       expect(yaml.find("count: 42") != std::string::npos);
       expect(yaml.find("secret") == std::string::npos) << "secret field should be skipped";
+   };
+
+   // Flow style writes the same fields as block style, so a field meta::skip excludes is excluded
+   // from both -- and the excluded field's writer is never instantiated in either.
+   "yaml_write_skip_excludes_field_in_flow_style"_test = [] {
+      yaml_skip_struct obj{"abc", "top_secret", 42};
+      std::string yaml;
+      expect(!glz::write<glz::yaml::yaml_opts{.flow_style = true}>(obj, yaml));
+      expect(yaml == R"({id: abc, count: 42})") << yaml;
    };
 
    "yaml_write_skip_if_excludes_default_value"_test = [] {
