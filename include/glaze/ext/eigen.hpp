@@ -68,11 +68,16 @@ namespace glz
             return;
          }
          ++it;
-         std::array<Eigen::Index, 2> extents;
+         std::array<Eigen::Index, 2> extents{};
          parse<BEVE>::op<Opts>(extents, ctx, it, end);
+         if (bool(ctx.error)) [[unlikely]] {
+            return;
+         }
 
          value.resize(extents[0], extents[1]);
-         std::span<typename T::Scalar> view(value.data(), extents[0] * extents[1]);
+         // Size the data span from the matrix's own storage, not the wire
+         // dimensions, matching from<CBOR, T>.
+         std::span<typename T::Scalar> view(value.data(), static_cast<size_t>(value.size()));
          parse<BEVE>::op<Opts>(view, ctx, it, end);
       }
    };
@@ -324,9 +329,18 @@ namespace glz
          if (match_invalid_end<'[', Opts>(ctx, it, end)) {
             return;
          }
-         std::array<Eigen::Index, 2> extents; // NOLINT
+         std::array<Eigen::Index, 2> extents{};
          parse<JSON>::op<Opts>(extents, ctx, it, end);
+         if (bool(ctx.error)) [[unlikely]] {
+            return;
+         }
          value.resize(extents[0], extents[1]);
+         if constexpr (not Opts.null_terminated) {
+            if (it == end) [[unlikely]] {
+               ctx.error = error_code::unexpected_end;
+               return;
+            }
+         }
          if (*it == ',') {
             // we have data
             ++it;
@@ -336,8 +350,19 @@ namespace glz
                   return;
                }
             }
-            std::span<typename T::Scalar> view(value.data(), extents[0] * extents[1]);
+            // Size the data span from the matrix's own storage, not the wire
+            // dimensions, matching from<CBOR, T>.
+            std::span<typename T::Scalar> view(value.data(), static_cast<size_t>(value.size()));
             parse<JSON>::op<Opts>(view, ctx, it, end);
+            if (bool(ctx.error)) [[unlikely]] {
+               return;
+            }
+            if constexpr (not Opts.null_terminated) {
+               if (it == end) [[unlikely]] {
+                  ctx.error = error_code::unexpected_end;
+                  return;
+               }
+            }
          }
          match<']'>(ctx, it);
       }

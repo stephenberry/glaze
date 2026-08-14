@@ -661,4 +661,40 @@ int main()
       expect(bool(glz::read_cbor(e, b)));
       expect(e == (Eigen::Matrix<double, 2, 2>::Zero()));
    };
+
+   // A dynamic matrix read from JSON that ends right after the [rows,cols] header
+   // used to read one byte past a non-null-terminated buffer while probing for the
+   // ',' that introduces the data. Over an exact-size view it must error, not read
+   // past the end.
+   "json dynamic matrix truncated after dimensions"_test = [] {
+      std::vector<char> storage{'[', '[', '2', ',', '3', ']'};
+      std::string_view src{storage.data(), storage.size()};
+      Eigen::MatrixXd m;
+      const auto ec = glz::read<glz::opts{.format = glz::JSON, .null_terminated = false}>(m, src);
+      expect(bool(ec));
+   };
+
+   "json dynamic matrix non null terminated roundtrip"_test = [] {
+      std::vector<char> storage{'[', '[', '1', ',', '1', ']', ',', '[', '7', ']', ']'};
+      std::string_view src{storage.data(), storage.size()};
+      Eigen::MatrixXd m;
+      expect(not glz::read<glz::opts{.format = glz::JSON, .null_terminated = false}>(m, src));
+      expect(m.rows() == 1);
+      expect(m.cols() == 1);
+      expect(m(0, 0) == 7);
+   };
+
+   // A dynamic matrix read from BEVE whose dimension header is truncated left the
+   // extents uninitialized and resized the matrix to those bytes. It must error.
+   "beve dynamic matrix truncated header"_test = [] {
+      Eigen::MatrixXd m(2, 2);
+      m << 1, 2, 3, 4;
+      std::string b;
+      expect(not glz::write_beve(m, b));
+
+      std::vector<char> storage{b.begin(), b.begin() + 2};
+      std::string_view src{storage.data(), storage.size()};
+      Eigen::MatrixXd e;
+      expect(bool(glz::read<glz::opts{.format = glz::BEVE, .null_terminated = false}>(e, src)));
+   };
 }
