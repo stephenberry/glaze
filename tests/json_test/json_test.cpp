@@ -12886,6 +12886,50 @@ suite skip_first_and_last_tests = [] {
    };
 };
 
+// A skipped field is not part of the parse or the serialization, so neither direction may instantiate
+// its reader or writer -- a field can only be skipped for being unserializable if skipping it stops
+// the build from demanding a serializer for it (issue #2780).
+class opaque_field_t
+{
+   int value_{7};
+
+  public:
+   opaque_field_t() = default;
+   int value() const { return value_; }
+};
+
+struct holds_opaque_field
+{
+   int i{1};
+   opaque_field_t opaque{};
+   std::string s{"end"};
+};
+
+template <>
+struct glz::meta<holds_opaque_field>
+{
+   static constexpr bool skip(const std::string_view key, const meta_context&) { return key == "opaque"; }
+};
+
+suite skip_unserializable_field_tests = [] {
+   "skipped field needs no serializer"_test = [] {
+      holds_opaque_field obj{};
+      expect(glz::write_json(obj) == R"({"i":1,"s":"end"})") << glz::write_json(obj).value();
+
+      holds_opaque_field parsed{};
+      expect(!glz::read_json(parsed, R"({"i":9,"opaque":{"value":1},"s":"tail"})"));
+      expect(parsed.i == 9);
+      expect(parsed.s == "tail");
+      expect(parsed.opaque.value() == 7);
+   };
+
+   "a skipped key is not a missing key"_test = [] {
+      holds_opaque_field parsed{};
+      expect(!glz::read<glz::opts{.error_on_missing_keys = true}>(parsed, R"({"i":9,"s":"tail"})"));
+      expect(parsed.i == 9);
+   };
+};
+
 template <size_t N>
 struct FixedName
 {
@@ -13268,6 +13312,25 @@ suite error_on_missing_keys_with_skip_tests = [] {
       expect(obj.name == "test");
       expect(obj.skipped_field == 42); // Unchanged because field is skipped during parse
       expect(obj.normal_field == 100);
+   };
+
+   // A skip() that only fires on parse excludes nothing from serialization, so the writer places its
+   // separators at compile time as if no skip existed. Every field must still be written, with commas
+   // between all of them.
+   "meta::skip on parse leaves serialization untouched"_test = [] {
+      skip_on_parse_t obj{"test", 42, 100};
+      expect(glz::write_json(obj) == R"({"name":"test","skipped_field":42,"normal_field":100})")
+         << glz::write_json(obj).value();
+
+      // Prettified output carries the separators through indentation and newlines, so it is worth
+      // confirming that the statically placed ones land there too
+      std::string pretty{};
+      expect(!glz::write<glz::opts{.prettify = true}>(obj, pretty));
+      expect(pretty == R"({
+   "name": "test",
+   "skipped_field": 42,
+   "normal_field": 100
+})") << pretty;
    };
 };
 

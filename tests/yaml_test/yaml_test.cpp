@@ -8908,6 +8908,15 @@ suite yaml_skip_tests = [] {
       expect(yaml.find("secret") == std::string::npos) << "secret field should be skipped";
    };
 
+   // Flow style writes the same fields as block style, so a field meta::skip excludes is excluded
+   // from both -- and the excluded field's writer is never instantiated in either.
+   "yaml_write_skip_excludes_field_in_flow_style"_test = [] {
+      yaml_skip_struct obj{"abc", "top_secret", 42};
+      std::string yaml;
+      expect(!glz::write<glz::yaml::yaml_opts{.flow_style = true}>(obj, yaml));
+      expect(yaml == R"({id: abc, count: 42})") << yaml;
+   };
+
    "yaml_write_skip_if_excludes_default_value"_test = [] {
       yaml_skip_if_struct obj{"Alice", 0, "NYC"};
       std::string yaml;

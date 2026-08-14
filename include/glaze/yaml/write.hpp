@@ -1133,7 +1133,10 @@ namespace glz
 
             using val_t = field_t<V, I>;
 
-            if constexpr (!always_skipped<val_t>) {
+            // meta::skip (compile-time) gates the field here rather than returning from inside the
+            // block, so that a skipped field's writer is never instantiated -- see `skipped_by_meta`.
+            // meta::skip_if is a runtime check and stays below.
+            if constexpr (!always_skipped<val_t> && !skipped_by_meta<V, I, operation::serialize>) {
                static constexpr sv key = get<I>(reflect<V>::keys);
 
                // Get member value (supports both glaze_object_t and reflectable)
@@ -1146,11 +1149,7 @@ namespace glz
                   }
                }();
 
-               // Skip fields based on meta::skip (compile-time) and meta::skip_if (runtime)
-               if constexpr (meta_has_skip<V>) {
-                  static constexpr meta_context mctx{.op = operation::serialize};
-                  if constexpr (meta<V>::skip(reflect<V>::keys[I], mctx)) return;
-               }
+               // Skip fields based on meta::skip_if (runtime)
                if constexpr (meta_has_skip_if<V>) {
                   static constexpr auto k = glz::get<I>(reflect<V>::keys);
                   static constexpr meta_context mctx{.op = operation::serialize};
@@ -1370,7 +1369,9 @@ namespace glz
 
             using val_t = field_t<V, I>;
 
-            if constexpr (!always_skipped<val_t>) {
+            // A field excluded by meta::skip is excluded from flow style too, and gating it here keeps
+            // its writer uninstantiated -- see `skipped_by_meta`.
+            if constexpr (!always_skipped<val_t> && !skipped_by_meta<V, I, operation::serialize>) {
                static constexpr sv key = get<I>(reflect<V>::keys);
 
                // Get member value (supports both glaze_object_t and reflectable)
