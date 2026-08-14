@@ -7,9 +7,14 @@
 // hostname verification, and everything to do with locating and loading CA trust anchors.
 //
 // This is where the platform- and OpenSSL-specific warts are deliberately concentrated.
-// Trust-anchor discovery differs per operating system and per OpenSSL packaging, and none
-// of it is exercised by CI (no workflow defines GLZ_ENABLE_SSL), so keeping it in one
-// auditable place matters more than usual.
+// Trust-anchor discovery differs per operating system and per OpenSSL packaging, so keeping
+// it in one auditable place matters more than usual.
+//
+// On what CI covers, because the glaze_ENABLE_SSL option is misleading: no workflow sets
+// that option, but the SSL test targets define GLZ_ENABLE_SSL directly and glaze_BUILD_SSL_TESTS
+// defaults to ON, so this header is compiled, linked and run on every job that builds the
+// networking tests - Windows included, where the ROOT-store read below executes against a
+// live certificate store. Jobs that pass -Dglaze_BUILD_SSL_TESTS=OFF are the exception.
 //
 // Included by http_client.hpp and websocket_client.hpp. Everything here is inert unless
 // GLZ_ENABLE_SSL is defined, apart from the ssl_error category, which stays available so
