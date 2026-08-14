@@ -378,10 +378,32 @@ struct glz::meta<Eigen::Matrix<Scalar, Rows, Cols>>
                                                    chars<">">>;
 };
 
+template <class Scalar, int Rows, int Cols>
+struct glz::meta<Eigen::Array<Scalar, Rows, Cols>>
+{
+   static constexpr std::string_view name = join_v<chars<"Eigen::Array<">, name_v<Scalar>, chars<",">, //
+                                                   chars<num_to_string<Rows>::value>, chars<",">, //
+                                                   chars<num_to_string<Cols>::value>, chars<",">, //
+                                                   chars<">">>;
+};
+
+template <class Scalar, int Dim, int Mode>
+struct glz::meta<Eigen::Transform<Scalar, Dim, Mode>>
+{
+   static constexpr std::string_view name = join_v<chars<"Eigen::Transform<">, name_v<Scalar>, chars<",">, //
+                                                   chars<num_to_string<Dim>::value>, chars<",">, //
+                                                   chars<num_to_string<Mode>::value>, chars<",">, //
+                                                   chars<">">>;
+};
+
 // Register Eigen types as having specified Glaze serialization
 // This prevents P2996 automatic reflection from creating ambiguous specializations
 template <typename Scalar, int Rows, int Cols, int Options, int MaxRows, int MaxCols>
 struct glz::specified<Eigen::Matrix<Scalar, Rows, Cols, Options, MaxRows, MaxCols>> : std::true_type
+{};
+
+template <typename Scalar, int Rows, int Cols, int Options, int MaxRows, int MaxCols>
+struct glz::specified<Eigen::Array<Scalar, Rows, Cols, Options, MaxRows, MaxCols>> : std::true_type
 {};
 
 template <typename Scalar, int Dim, int Mode>
