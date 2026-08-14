@@ -213,6 +213,44 @@ suite client_request_serializer_crlf = [] {
             << method << " with no body must not carry a Content-Length";
       }
    };
+
+   // Caller-supplied Host / Connection must replace the writer's defaults (#2777),
+   // not ride alongside them as a second field on the wire.
+   "build_http_request_bytes prefers caller Host and Connection"_test = [] {
+      glz::url_parts url;
+      url.protocol = "http";
+      url.host = "example.com";
+      url.port = 80;
+      url.path = "/";
+
+      const glz::http_headers headers{
+         {"Host", "custom.example"},
+         {"Connection", "close"},
+         {"X-Safe", "kept"},
+      };
+
+      const std::string request = glz::detail::build_http_request_bytes("GET", url, false, "", headers);
+
+      expect(request.find("Host: custom.example\r\n") != std::string::npos) << "Caller Host must be written";
+      expect(request.find("Host: example.com") == std::string::npos) << "Default Host must not also be written";
+      expect(request.find("Connection: close\r\n") != std::string::npos) << "Caller Connection must be written";
+      expect(request.find("Connection: keep-alive") == std::string::npos)
+         << "Default Connection must not also be written";
+      expect(request.find("X-Safe: kept") != std::string::npos);
+
+      size_t host_count = 0;
+      for (size_t at = request.find("Host:"); at != std::string::npos; at = request.find("Host:", at + 1)) {
+         ++host_count;
+      }
+      expect(host_count == 1) << "Exactly one Host must be written, found " << host_count;
+
+      size_t conn_count = 0;
+      for (size_t at = request.find("Connection:"); at != std::string::npos;
+           at = request.find("Connection:", at + 1)) {
+         ++conn_count;
+      }
+      expect(conn_count == 1) << "Exactly one Connection must be written, found " << conn_count;
+   };
 };
 
 suite http_response_splitting_suite = [] {
