@@ -268,23 +268,43 @@ namespace glz
       {
          const bool is_default_port = (!use_https && url.port == 80) || (use_https && url.port == 443);
 
+         // Prefer a single Host / Connection on the wire. If the caller already
+         // supplied either, skip our defaults so we do not emit duplicates (#2777).
+         bool caller_has_host = false;
+         bool caller_has_connection = false;
+         for (const auto& [name, value] : headers) {
+            if (header_field_has_crlf(name, value)) [[unlikely]] {
+               continue;
+            }
+            if (glz::striequal(name, "host")) {
+               caller_has_host = true;
+            }
+            else if (glz::striequal(name, "connection")) {
+               caller_has_connection = true;
+            }
+         }
+
          std::string request_str;
          request_str.reserve(512 + body.size());
          request_str.append(method);
          request_str.append(" ");
          request_str.append(url.path);
          request_str.append(" HTTP/1.1\r\n");
-         request_str.append("Host: ");
-         request_str.append(url.host);
-         if (!is_default_port) {
-            char
-               port_buf[8]; // a uint16_t port is at most 5 digits; pad so the sizing does not depend on itoa internals
-            auto* end = glz::to_chars(port_buf, url.port);
-            request_str.push_back(':');
-            request_str.append(port_buf, static_cast<size_t>(end - port_buf));
+         if (!caller_has_host) {
+            request_str.append("Host: ");
+            request_str.append(url.host);
+            if (!is_default_port) {
+               char
+                  port_buf[8]; // a uint16_t port is at most 5 digits; pad so the sizing does not depend on itoa internals
+               auto* end = glz::to_chars(port_buf, url.port);
+               request_str.push_back(':');
+               request_str.append(port_buf, static_cast<size_t>(end - port_buf));
+            }
+            request_str.append("\r\n");
          }
-         request_str.append("\r\n");
-         request_str.append("Connection: keep-alive\r\n");
+         if (!caller_has_connection) {
+            request_str.append("Connection: keep-alive\r\n");
+         }
          // RFC 9110 8.6: a user agent SHOULD send Content-Length when the method
          // anticipates content, even for an empty body - origin servers and proxies
          // commonly answer a bodyless POST with 411 Length Required. Since a caller's
