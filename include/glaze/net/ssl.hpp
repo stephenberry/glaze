@@ -63,6 +63,19 @@
 #undef PKCS7_SIGNER_INFO
 #undef OCSP_REQUEST
 #undef OCSP_RESPONSE
+// The Cert* calls below live in crypt32, so this header - not the build system - is what
+// creates that link dependency. Declaring it here keeps the requirement attached to the
+// code that causes it, which matters because GLZ_ENABLE_SSL can be defined without going
+// through Glaze's CMake at all: the SSL test targets set it directly on the target, and so
+// can any consumer. Relying on the glaze_ENABLE_SSL option to name crypt32 leaves every one
+// of those routes with an unlinkable header.
+//
+// MSVC and clang-cl honor this; MinGW ignores it, so a MinGW build that defines
+// GLZ_ENABLE_SSL by hand must also link crypt32 by hand, exactly as it already must for
+// OpenSSL.
+#ifdef _MSC_VER
+#pragma comment(lib, "crypt32.lib")
+#endif
 #endif
 
 #include <openssl/err.h>

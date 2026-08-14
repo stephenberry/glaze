@@ -104,6 +104,11 @@ if(glaze_ENABLE_SSL)
   # crypt32 is needed to read the Windows ROOT certificate store; see
   # detail::load_os_ca_certificates in include/glaze/net/ssl.hpp for why that is necessary.
   #
+  # This is the MinGW half of the requirement. MSVC and clang-cl get crypt32 from the
+  # #pragma comment(lib) in ssl.hpp, which reaches consumers that define GLZ_ENABLE_SSL
+  # without going through this option; MinGW ignores that pragma, so the option names the
+  # library too. Consumers who set the macro by hand under MinGW must do the same.
+  #
   # Consumers that supply their own trust bundle can define GLZ_DISABLE_WINDOWS_CERT_STORE
   # to compile that code out; crypt32 (a Windows system library) stays on the link line
   # either way, since a consumer-defined macro is not visible here.

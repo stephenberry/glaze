@@ -4,6 +4,18 @@
 option(glaze_BUILD_SSL_TESTS "Build SSL/TLS tests (requires OpenSSL headers matching target architecture)" ON)
 option(glaze_BUILD_WEBSOCKET_AUTOBAHN_TEST "Build Autobahn WebSocket compliance test" OFF)
 
+# The SSL tests below turn on GLZ_ENABLE_SSL per target and link OpenSSL themselves, rather
+# than going through the glaze_ENABLE_SSL option, so they do not inherit that option's link
+# libraries either. glaze/net/ssl.hpp reads the Windows ROOT certificate store through
+# crypt32; MSVC and clang-cl pick that library up from the #pragma comment(lib) in the
+# header, but MinGW ignores it. Naming it here keeps those targets linkable under MinGW too,
+# and keeps the rule in one place instead of four.
+function(glz_link_windows_cert_store target)
+    if(WIN32)
+        target_link_libraries(${target} PRIVATE crypt32)
+    endif()
+endfunction()
+
 # HTTP Examples
 add_subdirectory(http_examples)
 add_subdirectory(http_server_post_test)
