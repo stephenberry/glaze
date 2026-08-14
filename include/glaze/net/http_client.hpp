@@ -18,6 +18,7 @@
 #include <optional>
 #include <shared_mutex>
 #include <source_location>
+#include <system_error>
 #include <thread>
 #include <unordered_map>
 #include <vector>
@@ -25,13 +26,10 @@
 #include "glaze/ext/glaze_asio.hpp"
 #include "glaze/net/http_headers.hpp"
 #include "glaze/net/http_router.hpp"
+#include "glaze/net/ssl.hpp"
 #include "glaze/util/env.hpp"
 #include "glaze/util/itoa.hpp"
 #include "glaze/util/key_transformers.hpp"
-
-#ifdef GLZ_ENABLE_SSL
-#include <openssl/ssl.h> // For SSL_set_tlsext_host_name
-#endif
 
 namespace glz
 {
@@ -68,67 +66,11 @@ namespace glz
    // Socket type aliases for HTTP client
    using tcp_socket = asio::ip::tcp::socket;
 #ifdef GLZ_ENABLE_SSL
-   using ssl_socket = asio::ssl::stream<asio::ip::tcp::socket>;
    using socket_variant = std::variant<std::shared_ptr<tcp_socket>, std::shared_ptr<ssl_socket>>;
 #else
    using socket_variant = std::variant<std::shared_ptr<tcp_socket>>;
 #endif
 
-   // SSL error codes for detailed error reporting
-   enum class ssl_error {
-      success = 0,
-      ssl_not_supported, // HTTPS requested but SSL support not compiled in
-      sni_hostname_failed // Failed to set SNI hostname (SSL_set_tlsext_host_name)
-      // Note: Handshake and certificate errors propagate as native ASIO/OpenSSL error codes
-      // for more detailed error information
-   };
-
-   // SSL error category for std::error_code integration
-   class ssl_error_category : public std::error_category
-   {
-     public:
-      const char* name() const noexcept override { return "glaze.ssl"; }
-
-      std::string message(int ev) const override
-      {
-         switch (static_cast<ssl_error>(ev)) {
-         case ssl_error::success:
-            return "Success";
-         case ssl_error::ssl_not_supported:
-            return "SSL/TLS not supported: GLZ_ENABLE_SSL not defined";
-         case ssl_error::sni_hostname_failed:
-            return "Failed to set SNI hostname for TLS connection";
-         default:
-            return "Unknown SSL error";
-         }
-      }
-
-      // Map to equivalent standard error conditions where applicable
-      std::error_condition default_error_condition(int ev) const noexcept override
-      {
-         switch (static_cast<ssl_error>(ev)) {
-         case ssl_error::ssl_not_supported:
-            return std::errc::protocol_not_supported;
-         case ssl_error::sni_hostname_failed:
-            return std::errc::protocol_error;
-         default:
-            return std::error_condition(ev, *this);
-         }
-      }
-   };
-
-   // Get the singleton instance of the SSL error category
-   inline const ssl_error_category& get_ssl_error_category() noexcept
-   {
-      static ssl_error_category instance;
-      return instance;
-   }
-
-   // Create std::error_code from ssl_error
-   inline std::error_code make_error_code(ssl_error e) noexcept
-   {
-      return {static_cast<int>(e), get_ssl_error_category()};
-   }
    // HTTP client error codes
    enum class http_client_error {
       success = 0,
@@ -168,11 +110,6 @@ namespace glz
       return {static_cast<int>(e), get_http_client_error_category()};
    }
 } // namespace glz
-
-// Enable automatic conversion from glz::ssl_error to std::error_code
-template <>
-struct std::is_error_code_enum<glz::ssl_error> : std::true_type
-{};
 
 template <>
 struct std::is_error_code_enum<glz::http_client_error> : std::true_type
@@ -397,99 +334,6 @@ namespace glz
          }
          return headers;
       }
-
-#ifdef GLZ_ENABLE_SSL
-      // Configure SNI and hostname verification for client TLS connections.
-      inline bool configure_ssl_client_hostname(ssl_socket& sock, const std::string& host)
-      {
-         if (!SSL_set_tlsext_host_name(sock.native_handle(), host.c_str())) {
-            return false;
-         }
-
-         sock.set_verify_callback(asio::ssl::host_name_verification(host));
-         return true;
-      }
-
-      enum class ssl_ca_source { explicit_file, env_ssl_cert_file, env_ssl_cert_dir, default_verify_paths };
-
-      inline std::optional<std::string_view> non_empty_path(std::optional<std::string_view> value)
-      {
-         if (value && !value->empty()) {
-            return value;
-         }
-         return std::nullopt;
-      }
-
-      inline std::optional<std::string> env_path(const char* name) { return getenv_nonempty(name); }
-
-      inline std::optional<std::string_view> to_sv_opt(const std::optional<std::string>& value)
-      {
-         if (value && !value->empty()) {
-            return std::string_view{*value};
-         }
-         return std::nullopt;
-      }
-
-      std::optional<std::string_view> to_sv_opt(std::optional<std::string>&&) = delete;
-
-      template <typename Loader>
-      concept ssl_ca_path_loader = requires(Loader&& loader, std::string_view path) {
-         { std::forward<Loader>(loader)(path) } -> std::convertible_to<std::error_code>;
-      };
-
-      template <typename Loader>
-      concept ssl_ca_default_loader = requires(Loader&& loader) {
-         { std::forward<Loader>(loader)() } -> std::convertible_to<std::error_code>;
-      };
-
-      template <ssl_ca_path_loader LoadFile, ssl_ca_path_loader LoadDir, ssl_ca_default_loader LoadDefault>
-      inline std::expected<ssl_ca_source, std::error_code> configure_ssl_ca_fallback(
-         std::optional<std::string_view> explicit_file, std::optional<std::string_view> env_cert_file,
-         std::optional<std::string_view> env_cert_dir, LoadFile&& load_file, LoadDir&& load_dir,
-         LoadDefault&& load_default)
-      {
-         std::optional<std::error_code> last_error{};
-
-         const auto try_file = [&](std::optional<std::string_view> path,
-                                   ssl_ca_source source) -> std::optional<ssl_ca_source> {
-            if (auto non_empty = non_empty_path(path)) {
-               if (const std::error_code ec = load_file(*non_empty); ec) {
-                  last_error = ec;
-               }
-               else {
-                  return source;
-               }
-            }
-            return std::nullopt;
-         };
-
-         if (auto source = try_file(explicit_file, ssl_ca_source::explicit_file)) {
-            return *source;
-         }
-
-         if (auto source = try_file(env_cert_file, ssl_ca_source::env_ssl_cert_file)) {
-            return *source;
-         }
-
-         if (auto non_empty = non_empty_path(env_cert_dir)) {
-            if (const std::error_code ec = load_dir(*non_empty); ec) {
-               last_error = ec;
-            }
-            else {
-               return ssl_ca_source::env_ssl_cert_dir;
-            }
-         }
-
-         if (const std::error_code ec = load_default(); ec) {
-            if (last_error) {
-               return std::unexpected(*last_error);
-            }
-            return std::unexpected(ec);
-         }
-
-         return ssl_ca_source::default_verify_paths;
-      }
-#endif
 
       // Helper to close a socket variant with optional SSL shutdown
       // graceful_shutdown: if true, performs SSL shutdown before closing (recommended for proper TLS termination)
@@ -743,10 +587,7 @@ namespace glz
          // Use tls_client to allow negotiation of TLS 1.2/1.3 (highest mutually supported version)
          // This automatically disables insecure protocols (SSLv3, TLS 1.0, TLS 1.1)
          ssl_context = std::make_shared<asio::ssl::context>(asio::ssl::context::tls_client);
-         // Best effort: if default trust paths are not available on this platform,
-         // callers can still configure explicit trust roots later.
-         asio::error_code ec;
-         ssl_context->set_default_verify_paths(ec);
+         detail::seed_platform_trust_anchors(*ssl_context);
          ssl_context->set_verify_mode(asio::ssl::verify_peer);
 #endif
       }
@@ -922,6 +763,32 @@ namespace glz
          func(*ssl_context);
       }
 
+      // Trust-anchor configuration. See the http_client methods of the same names for the
+      // documented behavior; these are the locking wrappers around it.
+      std::expected<void, std::error_code> add_ca_certificate_file(std::string_view path)
+      {
+         std::unique_lock<std::shared_mutex> lock(ssl_mtx);
+         return detail::add_ca_file(*ssl_context, path);
+      }
+
+      std::expected<void, std::error_code> add_ca_certificate_directory(std::string_view path)
+      {
+         std::unique_lock<std::shared_mutex> lock(ssl_mtx);
+         return detail::add_ca_directory(*ssl_context, path);
+      }
+
+      std::expected<void, std::error_code> add_ca_certificates_pem(std::string_view pem)
+      {
+         std::unique_lock<std::shared_mutex> lock(ssl_mtx);
+         return detail::add_ca_pem(*ssl_context, pem);
+      }
+
+      std::expected<size_t, std::error_code> add_os_ca_certificates()
+      {
+         std::unique_lock<std::shared_mutex> lock(ssl_mtx);
+         return detail::load_os_ca_certificates(*ssl_context);
+      }
+
       // Configure CA trust roots for server certificate verification.
       // Fallback order:
       // 1) explicit cert bundle path (if provided)
@@ -933,8 +800,8 @@ namespace glz
       {
          std::unique_lock<std::shared_mutex> lock(ssl_mtx);
 
-         const auto env_cert_file = detail::env_path("SSL_CERT_FILE");
-         const auto env_cert_dir = detail::env_path("SSL_CERT_DIR");
+         const auto env_cert_file = getenv_nonempty("SSL_CERT_FILE");
+         const auto env_cert_dir = getenv_nonempty("SSL_CERT_DIR");
 
          auto result = detail::configure_ssl_ca_fallback(
             cert_bundle_file, detail::to_sv_opt(env_cert_file), detail::to_sv_opt(env_cert_dir),
@@ -1134,6 +1001,48 @@ namespace glz
       void configure_ssl_context(Func&& func)
       {
          connection_pool->configure_ssl_context(std::forward<Func>(func));
+      }
+
+      // Add the certificates in a PEM bundle file to the set of trusted CAs (thread-safe).
+      // Additive: existing trust anchors, including those loaded at construction, are kept.
+      // Example: client.add_ca_certificate_file("cacert.pem");
+      std::expected<void, std::error_code> add_ca_certificate_file(std::string_view path)
+      {
+         return connection_pool->add_ca_certificate_file(path);
+      }
+
+      // Add an OpenSSL-style hashed certificate directory to the set of trusted CAs.
+      // The directory must be indexed with c_rehash/`openssl rehash`.
+      //
+      // A bad path is not reported here: OpenSSL reads the directory lazily during the
+      // handshake, so it surfaces as a verification failure instead. Prefer
+      // add_ca_certificate_file() when you want the path validated up front.
+      //
+      // Unlike the other adders, call this before issuing any request. OpenSSL appends to
+      // the lookup list without a lock and reads that list unlocked during verification,
+      // so adding a directory while a handshake is in flight is a race inside OpenSSL that
+      // no lock on this side can close.
+      std::expected<void, std::error_code> add_ca_certificate_directory(std::string_view path)
+      {
+         return connection_pool->add_ca_certificate_directory(path);
+      }
+
+      // Add trusted CAs from an in-memory PEM bundle (thread-safe). Accepts any number of
+      // concatenated PEM certificates, so a trust bundle can be embedded in the binary
+      // instead of shipped as a file next to it.
+      // Example: client.add_ca_certificates_pem(embedded_cacert_pem);
+      std::expected<void, std::error_code> add_ca_certificates_pem(std::string_view pem)
+      {
+         return connection_pool->add_ca_certificates_pem(pem);
+      }
+
+      // Add the operating system's native trust anchors, returning how many were added
+      // (thread-safe). Windows only; returns 0 on platforms where OpenSSL's default verify
+      // paths already resolve to the system bundle. The constructor already does this, so
+      // it is only needed to restore OS trust after replacing the context's anchors.
+      std::expected<size_t, std::error_code> add_os_ca_certificates()
+      {
+         return connection_pool->add_os_ca_certificates();
       }
 
       // Configure CA trust roots with explicit/env/default fallback order.

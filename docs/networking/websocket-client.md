@@ -667,13 +667,39 @@ client.connect("wss://secure-server.com/socket");
 
 The client automatically:
 - Creates an SSL context with TLS 1.2 client configuration
-- Sets default certificate verification paths
+- Loads the platform's trust anchors (OpenSSL's default verify paths, plus the Windows `ROOT` certificate store on Windows)
+- Verifies the server certificate (`verify_peer` by default)
 - Configures SNI (Server Name Indication) for the target host
 - Performs SSL/TLS handshake before the WebSocket upgrade
 
+### Adding CA Certificates
+
+To trust a certificate the platform does not know about, such as a private CA or a self-signed development server, add it before calling `connect()`. All of these are additive, so the platform's own anchors are kept:
+
+```cpp
+glz::websocket_client client;
+
+// From a PEM bundle file
+if (auto result = client.add_ca_certificate_file("cacert.pem"); !result) {
+    std::cerr << "Failed to add CA: " << result.error().message() << std::endl;
+}
+
+// From an in-memory PEM bundle (any number of concatenated certificates)
+client.add_ca_certificates_pem(embedded_cacert_pem);
+
+// From an OpenSSL hashed directory (must be indexed with `openssl rehash`)
+client.add_ca_certificate_directory("/etc/ssl/certs");
+
+client.connect("wss://secure-server.com/socket");
+```
+
+Prefer this over `set_ssl_verify_mode(asio::ssl::verify_none)`, which disables certificate verification entirely and exposes the connection to man-in-the-middle attacks.
+
+If a WSS handshake fails with `certificate verify failed` against an ordinary public server, the trust store is most likely empty rather than the server untrustworthy. See [Troubleshooting `certificate verify failed`](http-client.md#troubleshooting-certificate-verify-failed) in the HTTP client documentation, which covers the same causes and the `add_os_ca_certificates()` and `GLZ_DISABLE_WINDOWS_CERT_STORE` escape hatches.
+
 ### Custom SSL Configuration
 
-For advanced SSL configuration, you would need to modify the client's SSL context. This is currently handled automatically, but future versions may expose more configuration options.
+`set_ssl_verify_mode()` adjusts verification, and takes effect at `connect()` time regardless of whether trust anchors were added first.
 
 ## Error Handling
 

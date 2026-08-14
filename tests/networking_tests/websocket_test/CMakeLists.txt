@@ -67,6 +67,7 @@ if(OpenSSL_FOUND)
         )
 
         target_compile_definitions(${PROJECT_NAME} PRIVATE GLZ_ENABLE_SSL)
+        glz_link_windows_cert_store(${PROJECT_NAME})
 
         add_test(NAME ${PROJECT_NAME} COMMAND ${PROJECT_NAME})
 
