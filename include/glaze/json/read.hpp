@@ -431,9 +431,8 @@ namespace glz
          // For linear_search, pass Opts through to the field parser to avoid duplicate template
          // instantiations; the whitespace before the value has already been skipped either way.
          [&]<size_t... Is>(std::index_sequence<Is...>) {
-            (void)(((index == Is
-                        ? (decode_field_value<Opts, Opts, T, Is>(value, ctx, it, end, selected_index...), true)
-                        : false) ||
+            (void)(((index == Is ? (decode_field_value<Opts, Opts, T, Is>(value, ctx, it, end, selected_index...), true)
+                                 : false) ||
                     ...));
          }(std::make_index_sequence<N>{});
       }
