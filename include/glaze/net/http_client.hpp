@@ -205,23 +205,65 @@ namespace glz
       {
          const bool is_default_port = (!use_https && url.port == 80) || (use_https && url.port == 443);
 
+         // This builder owns the single Host and Connection field on the wire, the
+         // same way it owns the body framing below. A caller's value replaces the
+         // writer's default instead of riding alongside it, and only the first
+         // usable one is kept: RFC 9112 3.2 admits exactly one Host, and a second
+         // one lets an intermediary and the origin resolve the same request to
+         // different authorities (request smuggling) - glaze's own server answers a
+         // repeat with 400. Connection is likewise reduced to one field, since a
+         // "close" and a "keep-alive" on the same message leave each hop to pick a
+         // different connection lifetime. glz::http_headers keeps repeats, so a
+         // single lookup would not have caught the second one.
+         //
+         // A field carrying CR or LF is not usable, because the loop below drops it
+         // rather than write a split message. Taking one here would suppress the
+         // writer's default and send an HTTP/1.1 request with no Host at all.
+         const std::string* caller_host = nullptr;
+         const std::string* caller_connection = nullptr;
+         for (const auto& [name, value] : headers) {
+            if (header_field_has_crlf(name, value)) [[unlikely]] {
+               continue;
+            }
+            if (glz::striequal(name, "host")) {
+               if (!caller_host) {
+                  caller_host = &value;
+               }
+            }
+            else if (glz::striequal(name, "connection")) {
+               if (!caller_connection) {
+                  caller_connection = &value;
+               }
+            }
+         }
+
          std::string request_str;
          request_str.reserve(512 + body.size());
          request_str.append(method);
          request_str.append(" ");
          request_str.append(url.path);
          request_str.append(" HTTP/1.1\r\n");
+         // RFC 9112 5: a user agent SHOULD generate Host as the first field after
+         // the request-line, so a caller's value is written in this slot rather
+         // than wherever it happened to sit among their headers.
          request_str.append("Host: ");
-         request_str.append(url.host);
-         if (!is_default_port) {
-            char
-               port_buf[8]; // a uint16_t port is at most 5 digits; pad so the sizing does not depend on itoa internals
-            auto* end = glz::to_chars(port_buf, url.port);
-            request_str.push_back(':');
-            request_str.append(port_buf, static_cast<size_t>(end - port_buf));
+         if (caller_host) {
+            request_str.append(*caller_host);
+         }
+         else {
+            request_str.append(url.host);
+            if (!is_default_port) {
+               // A uint16_t port is at most 5 digits; pad so the sizing does not depend on itoa internals
+               char port_buf[8];
+               auto* end = glz::to_chars(port_buf, url.port);
+               request_str.push_back(':');
+               request_str.append(port_buf, static_cast<size_t>(end - port_buf));
+            }
          }
          request_str.append("\r\n");
-         request_str.append("Connection: keep-alive\r\n");
+         request_str.append("Connection: ");
+         request_str.append(caller_connection ? std::string_view{*caller_connection} : "keep-alive");
+         request_str.append("\r\n");
          // RFC 9110 8.6: a user agent SHOULD send Content-Length when the method
          // anticipates content, even for an empty body - origin servers and proxies
          // commonly answer a bodyless POST with 411 Length Required. Since a caller's
@@ -249,6 +291,12 @@ namespace glz
             // (RFC 9112 6.3, request smuggling). glz::http_headers keeps
             // repeats, so a single lookup would not have caught the second one.
             if (header_field_frames_body(name)) [[unlikely]] {
+               continue;
+            }
+            // Host and Connection were resolved above and written once; whatever
+            // the caller supplied is already on the wire (or was rejected there),
+            // so every field of either name is skipped here.
+            if (glz::striequal(name, "host") || glz::striequal(name, "connection")) {
                continue;
             }
             request_str.append(name);

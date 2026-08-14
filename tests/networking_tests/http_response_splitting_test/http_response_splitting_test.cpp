@@ -15,6 +15,7 @@
 #include <chrono>
 #include <future>
 #include <string>
+#include <string_view>
 #include <thread>
 #include <ut/ut.hpp>
 
@@ -75,6 +76,29 @@ namespace
          return f.get();
       }
       return "TIMEOUT";
+   }
+
+   // Counts whole field lines rather than substrings: a plain find("Host:") would
+   // also count an "X-Forwarded-Host:" that a later test happens to add.
+   size_t count_header_fields(std::string_view message, std::string_view name)
+   {
+      const std::string field_start = "\r\n" + std::string{name} + ": ";
+      size_t count = 0;
+      for (size_t at = message.find(field_start); at != std::string_view::npos;
+           at = message.find(field_start, at + 1)) {
+         ++count;
+      }
+      return count;
+   }
+
+   glz::url_parts test_url()
+   {
+      glz::url_parts url;
+      url.protocol = "http";
+      url.host = "example.com";
+      url.port = 80;
+      url.path = "/";
+      return url;
    }
 
 } // namespace
@@ -212,6 +236,150 @@ suite client_request_serializer_crlf = [] {
          expect(request.find("Content-Length") == std::string::npos)
             << method << " with no body must not carry a Content-Length";
       }
+   };
+
+   // The writer owns one Host and one Connection field. A caller who supplies
+   // either replaces the writer's default rather than adding a second field to
+   // the wire.
+   "build_http_request_bytes prefers caller Host and Connection"_test = [] {
+      const glz::url_parts url = test_url();
+
+      const glz::http_headers headers{
+         {"Host", "custom.example"},
+         {"Connection", "close"},
+         {"X-Safe", "kept"},
+      };
+
+      const std::string request = glz::detail::build_http_request_bytes("GET", url, false, "", headers);
+
+      expect(count_header_fields(request, "Host") == 1) << "Exactly one Host must reach the wire";
+      expect(count_header_fields(request, "Connection") == 1) << "Exactly one Connection must reach the wire";
+      expect(request.find("Host: custom.example\r\n") != std::string::npos) << "The caller's Host must be written";
+      expect(request.find("example.com") == std::string::npos) << "The derived Host must not also be written";
+      expect(request.find("Connection: close\r\n") != std::string::npos) << "The caller's Connection must be written";
+      expect(request.find("keep-alive") == std::string::npos) << "The default Connection must not also be written";
+      expect(request.find("X-Safe: kept") != std::string::npos) << "Unrelated headers must still be written";
+   };
+
+   // Field names are case-insensitive (RFC 9110 5.1), so a lowercase caller field
+   // has to suppress the default just as an exactly-cased one does.
+   "build_http_request_bytes matches caller Host and Connection case-insensitively"_test = [] {
+      const glz::url_parts url = test_url();
+
+      const glz::http_headers headers{
+         {"host", "custom.example"},
+         {"CONNECTION", "close"},
+      };
+
+      const std::string request = glz::detail::build_http_request_bytes("GET", url, false, "", headers);
+
+      expect(count_header_fields(request, "Host") == 1);
+      expect(count_header_fields(request, "Connection") == 1);
+      expect(request.find("example.com") == std::string::npos) << "The derived Host must be suppressed";
+      expect(request.find("keep-alive") == std::string::npos) << "The default Connection must be suppressed";
+   };
+
+   // RFC 9112 3.2 admits exactly one Host. glz::http_headers keeps repeats, so a
+   // caller can express two - and two authorities on one request let an
+   // intermediary and the origin resolve it differently (request smuggling).
+   // glaze's own server answers a repeated Host with 400, so the writer must not
+   // be able to generate one.
+   "build_http_request_bytes writes one Host when the caller repeats it"_test = [] {
+      const glz::url_parts url = test_url();
+
+      const glz::http_headers headers{
+         {"Host", "first.example"},
+         {"Host", "second.example"},
+      };
+
+      const std::string request = glz::detail::build_http_request_bytes("GET", url, false, "", headers);
+
+      expect(count_header_fields(request, "Host") == 1) << "A repeated caller Host must not reach the wire twice";
+      expect(request.find("Host: first.example\r\n") != std::string::npos) << "The first caller Host is the one kept";
+      expect(request.find("second.example") == std::string::npos) << "The repeat must be dropped";
+   };
+
+   // A "close" and a "keep-alive" on one message leave each hop free to pick a
+   // different connection lifetime, so Connection is reduced to a single field
+   // the same way Host is.
+   "build_http_request_bytes writes one Connection when the caller repeats it"_test = [] {
+      const glz::url_parts url = test_url();
+
+      const glz::http_headers headers{
+         {"Connection", "close"},
+         {"Connection", "keep-alive"},
+      };
+
+      const std::string request = glz::detail::build_http_request_bytes("GET", url, false, "", headers);
+
+      expect(count_header_fields(request, "Connection") == 1)
+         << "A repeated caller Connection must not reach the wire twice";
+      expect(request.find("Connection: close\r\n") != std::string::npos)
+         << "The first caller Connection is the one kept";
+      expect(request.find("keep-alive") == std::string::npos) << "The contradicting repeat must be dropped";
+   };
+
+   // The CRLF guard drops a caller field carrying CR or LF, so such a field must
+   // not count as having supplied a Host either: suppressing the derived one
+   // would put an HTTP/1.1 request with no Host at all on the wire (RFC 9112 3.2),
+   // which glaze's own server answers with 400.
+   "build_http_request_bytes keeps its Host when the caller's carries CRLF"_test = [] {
+      const glz::url_parts url = test_url();
+
+      const glz::http_headers headers{
+         {"Host", "evil.example\r\nX-Injected: 1"},
+         {"Connection", "close\r\nX-Injected: 2"},
+      };
+
+      const std::string request = glz::detail::build_http_request_bytes("GET", url, false, "", headers);
+
+      expect(request.find("X-Injected") == std::string::npos) << "A CRLF-bearing field must be dropped";
+      expect(count_header_fields(request, "Host") == 1) << "The request must still carry exactly one Host";
+      expect(request.find("Host: example.com\r\n") != std::string::npos) << "The derived Host must survive";
+      expect(count_header_fields(request, "Connection") == 1) << "The request must still carry one Connection";
+      expect(request.find("Connection: keep-alive\r\n") != std::string::npos)
+         << "The default Connection must survive";
+   };
+
+   // RFC 9112 5: a user agent SHOULD generate Host as the first field after the
+   // request-line. That holds whether the value is derived or caller-supplied,
+   // so a caller's Host is written in the Host slot rather than wherever it sat
+   // among their headers.
+   "build_http_request_bytes writes Host first"_test = [] {
+      const glz::url_parts url = test_url();
+
+      const glz::http_headers headers{
+         {"X-First", "1"},
+         {"Host", "custom.example"},
+      };
+
+      const std::string derived = glz::detail::build_http_request_bytes("GET", url, false, "", {});
+      expect(derived.starts_with("GET / HTTP/1.1\r\nHost: example.com\r\n")) << "A derived Host leads the field block";
+
+      const std::string overridden = glz::detail::build_http_request_bytes("POST", url, false, "B", headers);
+      expect(overridden.starts_with("POST / HTTP/1.1\r\nHost: custom.example\r\n"))
+         << "A caller Host leads the field block too";
+      expect(overridden.find("X-First: 1") != std::string::npos) << "The caller's other headers must still be written";
+   };
+
+   // The derived Host still carries the port whenever it is not the scheme
+   // default, and only then.
+   "build_http_request_bytes derives Host from the url when the caller supplies none"_test = [] {
+      glz::url_parts url = test_url();
+      url.port = 8080;
+
+      const std::string request = glz::detail::build_http_request_bytes("GET", url, false, "", {});
+      expect(request.find("Host: example.com:8080\r\n") != std::string::npos)
+         << "A non-default port belongs in the Host";
+
+      url.port = 80;
+      const std::string default_port = glz::detail::build_http_request_bytes("GET", url, false, "", {});
+      expect(default_port.find("Host: example.com\r\n") != std::string::npos)
+         << "The scheme's default port is omitted";
+
+      url.port = 443;
+      const std::string https = glz::detail::build_http_request_bytes("GET", url, true, "", {});
+      expect(https.find("Host: example.com\r\n") != std::string::npos) << "443 is the default port for https";
    };
 };
 
