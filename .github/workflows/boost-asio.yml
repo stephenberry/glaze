@@ -16,6 +16,13 @@ on:
       - 'docs/**'
   workflow_dispatch:
 
+concurrency:
+  # Supersede an in-flight run when a branch is pushed again, so a fixup commit
+  # does not leave the previous run competing for the same runners. Pushes to main
+  # are exempt: every merged commit keeps a completed CI record.
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
 jobs:
   build:
     runs-on: ubuntu-latest

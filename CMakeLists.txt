@@ -25,11 +25,20 @@ if (MSVC)
     # for a C++ standards compliant preprocessor, not needed for clang-cl
     target_compile_options(glaze_glaze INTERFACE "/Zc:preprocessor" /permissive- /Zc:lambda)
     
-    if(PROJECT_IS_TOP_LEVEL)
-      target_compile_options(glaze_glaze INTERFACE 
+    # Whole-program optimization changes codegen quality, never correctness, and the
+    # top-level build is glaze's own test suite -- correctness checks that gain nothing
+    # from it. Because glaze is header-only, every test executable pays a full link-time
+    # code generation pass, and there are ~70 of them: /GL /LTCG more than doubled the
+    # MSVC Release CI build (32 min of compiling versus 13 min without). The benchmarks
+    # in benchmarks/ configure as their own top-level project, so they never saw these
+    # flags anyway, and published numbers are measured on GCC. Opt in when profiling
+    # glaze itself on MSVC.
+    option(glaze_ENABLE_LTCG "Build with MSVC whole-program optimization (/GL /LTCG)" OFF)
+    if(PROJECT_IS_TOP_LEVEL AND glaze_ENABLE_LTCG)
+      target_compile_options(glaze_glaze INTERFACE
         $<$<CONFIG:Release>:/GL>
         $<$<CONFIG:MinSizeRel>:/GL>)
-      target_link_options(glaze_glaze INTERFACE 
+      target_link_options(glaze_glaze INTERFACE
         $<$<CONFIG:Release>:/LTCG /INCREMENTAL:NO>
         $<$<CONFIG:MinSizeRel>:/LTCG /INCREMENTAL:NO>)
     endif()
