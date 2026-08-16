@@ -11,7 +11,7 @@
 #include "glaze/json/read.hpp"
 #include "glaze/json/skip.hpp"
 #include "glaze/json/write.hpp"
-#include "glaze/tuplet/tuple.hpp" // GLZ_NO_UNIQUE_ADDRESS
+#include "glaze/util/attributes.hpp"
 #include "glaze/util/expected.hpp"
 
 namespace glz
