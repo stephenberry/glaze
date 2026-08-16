@@ -17,6 +17,8 @@
 #include <utility>
 #include <vector>
 
+#include "glaze/util/attributes.hpp"
+
 #ifndef GLZ_THROW_OR_ABORT
 #if __cpp_exceptions
 #define GLZ_THROW_OR_ABORT(EXC) (throw(EXC))
@@ -86,8 +88,8 @@ namespace glz
       uint32_t load_threshold_ = 0;
       float max_load_factor_ = default_max_load_factor;
 
-      [[no_unique_address]] Hash hash_;
-      [[no_unique_address]] KeyEqual equal_;
+      GLZ_NO_UNIQUE_ADDRESS Hash hash_;
+      GLZ_NO_UNIQUE_ADDRESS KeyEqual equal_;
 
       template <class...>
       struct first_emplace_arg;
