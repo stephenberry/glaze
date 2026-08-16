@@ -10,12 +10,14 @@
 #include <limits>
 #include <memory>
 #include <new>
+#include <optional>
 #include <stdexcept>
 #include <string>
 #include <string_view>
 #include <tuple>
 #include <utility>
 
+#include "glaze/core/feature_test.hpp"
 #include "glaze/hash/sweethash.hpp"
 
 #ifndef GLZ_THROW_OR_ABORT
@@ -966,6 +968,24 @@ namespace glz
          }
          return it->second;
       }
+
+#if GLZ_HAS_OPTIONAL_REF
+      template <class K>
+      std::optional<mapped_type&> lookup(const K& key)
+      {
+         auto it = find(key);
+         if (it == end()) return std::nullopt;
+         return it->second;
+      }
+
+      template <class K>
+      std::optional<const mapped_type&> lookup(const K& key) const
+      {
+         auto it = find(key);
+         if (it == end()) return std::nullopt;
+         return it->second;
+      }
+#endif
 
       // Direct access to underlying data
       value_type* data() noexcept { return data_; }
