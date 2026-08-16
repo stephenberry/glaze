@@ -46,6 +46,7 @@ m.insert_or_assign("key", value);
 auto it = m.find("key");       // accepts string_view
 bool has = m.contains("key");
 T& val = m.at("key");          // throws if missing
+auto opt = m.lookup("key");    // C++26 only, see lookup() below
 
 // Removal
 m.erase(it);
@@ -104,6 +105,7 @@ m.insert_or_assign(key, value);
 auto it = m.find(key);
 bool has = m.contains(key);
 T& val = m.at(key);           // throws if missing
+auto opt = m.lookup(key);     // C++26 only, see lookup() below
 
 // Ordered removal (preserves insertion order, O(n))
 m.erase(it);
@@ -130,6 +132,31 @@ m.max_load_factor(0.8f);
 // Iteration (insertion order)
 for (auto& [key, value] : m) { ... }
 ```
+
+## lookup()
+
+`lookup(key)` returns `std::optional<mapped_type&>`, following [P3091R6](https://wg21.link/p3091r6). It replaces the `contains` + `at` pair with a single search, and the result composes with the monadic operations of `std::optional`:
+
+```cpp
+glz::ordered_map<std::string, int> m{};
+m["a"] = 1;
+
+int doubled = m.lookup("a").transform([](int v) { return v * 2; }).value_or(0);
+
+if (auto slot = m.lookup("a")) {
+   *slot = 42;  // writes through to the stored value
+}
+```
+
+`std::optional<T&>` is a C++26 addition, so the method is compiled only when the standard library provides it. Guard uses of it with `GLZ_HAS_OPTIONAL_REF` (or `glz::has_optional_ref` in a constant expression), both from `glaze/core/feature_test.hpp`:
+
+```cpp
+#if GLZ_HAS_OPTIONAL_REF
+auto slot = m.lookup(key);
+#endif
+```
+
+On `ordered_map` the heterogeneous overload participates only when both `Hash` and `KeyEqual` declare `is_transparent`, matching `find` and `at`. `ordered_small_map` accepts anything convertible to `std::string_view`, as it does everywhere else.
 
 ## Choosing Between Them
 
