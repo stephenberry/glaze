@@ -3,6 +3,8 @@
 
 #pragma once
 
+#include <version>
+
 // Detect constexpr std::string support
 // The old GCC ABI (_GLIBCXX_USE_CXX11_ABI=0) does not have constexpr std::string::size()
 // This affects features like rename_key returning std::string
