@@ -10,11 +10,13 @@
 #include <initializer_list>
 #include <iterator>
 #include <memory>
+#include <optional>
 #include <stdexcept>
 #include <type_traits>
 #include <utility>
 #include <vector>
 
+#include "glaze/core/feature_test.hpp"
 
 #ifndef GLZ_THROW_OR_ABORT
 #if __cpp_exceptions
@@ -236,6 +238,24 @@ namespace glz
       {
          return find(key) != end();
       }
+
+#if GLZ_HAS_OPTIONAL_REF
+      template <typename K>
+      std::optional<mapped_type&> lookup(const K& key)
+      {
+         auto it = find(key);
+         if (it == end()) return std::nullopt;
+         return it->second;
+      }
+
+      template <typename K>
+      std::optional<const mapped_type&> lookup(const K& key) const
+      {
+         auto it = find(key);
+         if (it == end()) return std::nullopt;
+         return it->second;
+      }
+#endif
 
       template <typename K>
       iterator lower_bound(const K& key)
