@@ -34,6 +34,24 @@
 
 namespace glz
 {
+   namespace detail
+   {
+      // Options for emitting an untrusted byte payload as a JSON string literal through
+      // to<JSON, string_view>. A binary-to-JSON converter turns someone else's blob into
+      // JSON text, so it cannot inherit the three writer options that each let payload bytes
+      // reach the document unescaped:
+      //   * escape_control_characters (off by default) leaves raw 0x00-0x1F bytes in place,
+      //   * raw_string emits the payload without escaping it at all,
+      //   * unquoted drops the surrounding quotes as well.
+      // Each default is reasonable for a program serializing its own string; none is
+      // reasonable for a foreign blob. Pinning all three keeps the converter's output strict
+      // JSON. Mirrors jsonb_to_json's raw_string_emit_opts.
+      template <auto Opts>
+      inline constexpr auto raw_string_emit_opts =
+         opt_false<opt_false<opt_true<Opts, escape_control_characters_opt_tag{}>, raw_string_opt_tag{}>,
+                   unquoted_opt_tag{}>;
+   }
+
    // This serialize<JSON> indirection only exists to call std::remove_cvref_t on the type
    // so that type matching doesn't depend on qualifiers.
    // It is recommended to directly call to<JSON, std::remove_cvref_t<T>> to reduce compilation overhead.

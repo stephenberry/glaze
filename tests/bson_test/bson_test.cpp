@@ -1447,6 +1447,20 @@ namespace
          expect(json.value() == R"({"a":1,"b":9000000000,"c":1.5,"d":true,"e":"hi"})");
       };
 
+      "convert-escapes-control-characters"_test = [] {
+         // A control byte is legal in a BSON string value but must be escaped so the
+         // converter output re-parses as JSON.
+         std::map<std::string, std::string> v{{"k", std::string("a\001b")}};
+         auto bson = glz::write_bson(v);
+         expect(bson.has_value());
+         auto json = glz::bson_to_json(bson.value());
+         expect(json.has_value());
+         expect(json.value() == "{\"k\":\"a\\u0001b\"}") << json.value();
+         std::map<std::string, std::string> round_trip{};
+         expect(!glz::read_json(round_trip, json.value())) << json.value();
+         expect(round_trip == v);
+      };
+
       "convert-nested-document"_test = [] {
          outer_s v{inner_s{42}};
          auto bson = glz::write_bson(v);

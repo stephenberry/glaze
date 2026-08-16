@@ -2345,6 +2345,21 @@ void cbor_to_json_tests()
       expect(json == "\"hello\"");
    };
 
+   "cbor_to_json_escapes_control_characters"_test = [] {
+      // A control byte is legal in a CBOR text string but must be escaped so the JSON
+      // output re-parses. Covers both a value and a map key.
+      std::map<std::string, std::string> v{{std::string("k\001"), std::string("a\001b")}};
+      std::string cbor_buffer;
+      expect(not glz::write_cbor(v, cbor_buffer));
+
+      std::string json;
+      expect(not glz::cbor_to_json(cbor_buffer, json));
+      expect(json == "{\"k\\u0001\":\"a\\u0001b\"}") << json;
+      std::map<std::string, std::string> round_trip{};
+      expect(not glz::read_json(round_trip, json)) << json;
+      expect(round_trip == v);
+   };
+
    "cbor_to_json_array"_test = [] {
       std::vector<int> v = {1, 2, 3};
       std::string cbor_buffer;
