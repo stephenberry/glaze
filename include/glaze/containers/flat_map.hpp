@@ -167,6 +167,7 @@ namespace glz
       iterator erase(const_iterator first, const_iterator last) { return data_.erase(first, last); }
 
       template <typename K>
+         requires(!std::convertible_to<K, iterator> && !std::convertible_to<K, const_iterator>)
       size_type erase(const K& key)
       {
          auto it = find(key);
