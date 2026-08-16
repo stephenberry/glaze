@@ -12,11 +12,13 @@
 #include <initializer_list>
 #include <iterator>
 #include <limits>
+#include <optional>
 #include <stdexcept>
 #include <type_traits>
 #include <utility>
 #include <vector>
 
+#include "glaze/core/feature_test.hpp"
 #include "glaze/util/attributes.hpp"
 
 #ifndef GLZ_THROW_OR_ABORT
@@ -774,6 +776,40 @@ namespace glz
          }
          return it->second;
       }
+
+#if GLZ_HAS_OPTIONAL_REF
+      std::optional<mapped_type&> lookup(const key_type& key)
+      {
+         auto it = find(key);
+         if (it == end()) return std::nullopt;
+         return it->second;
+      }
+
+      std::optional<const mapped_type&> lookup(const key_type& key) const
+      {
+         auto it = find(key);
+         if (it == end()) return std::nullopt;
+         return it->second;
+      }
+
+      template <class K>
+         requires detail::transparent_lookup<Hash, KeyEqual>
+      std::optional<mapped_type&> lookup(const K& key)
+      {
+         auto it = find(key);
+         if (it == end()) return std::nullopt;
+         return it->second;
+      }
+
+      template <class K>
+         requires detail::transparent_lookup<Hash, KeyEqual>
+      std::optional<const mapped_type&> lookup(const K& key) const
+      {
+         auto it = find(key);
+         if (it == end()) return std::nullopt;
+         return it->second;
+      }
+#endif
 
       mapped_type& operator[](const key_type& key)
       {
