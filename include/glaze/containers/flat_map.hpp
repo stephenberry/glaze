@@ -312,7 +312,7 @@ namespace glz
    template <class Key, class T, class Compare, class Container>
    bool operator==(const flat_map<Key, T, Compare, Container>& lhs, const flat_map<Key, T, Compare, Container>& rhs)
    {
-      return lhs.data_ == rhs.data_;
+      return lhs.size() == rhs.size() && std::equal(lhs.begin(), lhs.end(), rhs.begin());
    }
 
    template <class Key, class T, class Compare, class Container>
