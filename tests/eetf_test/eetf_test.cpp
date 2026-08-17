@@ -644,7 +644,7 @@ suite eetf_to_json_tests = [] {
    "eetf_to_json truncated binary"_test = [] {
       constexpr std::array<std::uint8_t, 2> no_size{uint8_t(glz::eetf_magic_version), uint8_t(ERL_BINARY_EXT)};
       constexpr std::array<std::uint8_t, 3> truncated_size{uint8_t(glz::eetf_magic_version), uint8_t(ERL_BINARY_EXT),
-                                                          0x1};
+                                                           0x1};
       constexpr std::array<std::uint8_t, 6> truncated_body{
          uint8_t(glz::eetf_magic_version), uint8_t(ERL_BINARY_EXT), 0x0, 0x0, 0x0, 0x1};
 
@@ -655,23 +655,23 @@ suite eetf_to_json_tests = [] {
 
    "eetf_to_json binary key map"_test = [] {
       constexpr std::array<std::uint8_t, 18> buffer{uint8_t(glz::eetf_magic_version),
-                                                uint8_t(ERL_MAP_EXT),
-                                                0,
-                                                0,
-                                                0,
-                                                1,
-                                                uint8_t(ERL_BINARY_EXT),
-                                                0,
-                                                0,
-                                                0,
-                                                1,
-                                                'a',
-                                                uint8_t(ERL_BINARY_EXT),
-                                                0,
-                                                0,
-                                                0,
-                                                1,
-                                                '1'};
+                                                    uint8_t(ERL_MAP_EXT),
+                                                    0,
+                                                    0,
+                                                    0,
+                                                    1,
+                                                    uint8_t(ERL_BINARY_EXT),
+                                                    0,
+                                                    0,
+                                                    0,
+                                                    1,
+                                                    'a',
+                                                    uint8_t(ERL_BINARY_EXT),
+                                                    0,
+                                                    0,
+                                                    0,
+                                                    1,
+                                                    '1'};
 
       std::string json{};
       expect(!glz::eetf_to_json(buffer, json));
@@ -680,23 +680,23 @@ suite eetf_to_json_tests = [] {
 
    "eetf_to_json binary key map explicit convert"_test = [] {
       constexpr std::array<std::uint8_t, 18> buffer{uint8_t(glz::eetf_magic_version),
-                                                uint8_t(ERL_MAP_EXT),
-                                                0,
-                                                0,
-                                                0,
-                                                1,
-                                                uint8_t(ERL_BINARY_EXT),
-                                                0,
-                                                0,
-                                                0,
-                                                1,
-                                                '0',
-                                                uint8_t(ERL_BINARY_EXT),
-                                                0,
-                                                0,
-                                                0,
-                                                1,
-                                                1};
+                                                    uint8_t(ERL_MAP_EXT),
+                                                    0,
+                                                    0,
+                                                    0,
+                                                    1,
+                                                    uint8_t(ERL_BINARY_EXT),
+                                                    0,
+                                                    0,
+                                                    0,
+                                                    1,
+                                                    '0',
+                                                    uint8_t(ERL_BINARY_EXT),
+                                                    0,
+                                                    0,
+                                                    0,
+                                                    1,
+                                                    1};
 
       std::string json{};
       expect(!glz::eetf_to_json(buffer, json));
