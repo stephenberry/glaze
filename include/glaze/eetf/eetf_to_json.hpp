@@ -296,7 +296,7 @@ namespace glz
             }
             else {
                const sv value{reinterpret_cast<const char*>(it), len};
-               to<JSON, sv>::template op<Opts>(value, ctx, out, ix);
+               to<JSON, sv>::template op<raw_string_emit_opts<Opts>>(value, ctx, out, ix);
             }
             std::advance(it, len);
             break;

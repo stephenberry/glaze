@@ -14,6 +14,7 @@
 #include "glaze/eetf/read.hpp"
 #include "glaze/eetf/wrappers.hpp"
 #include "glaze/eetf/write.hpp"
+#include "glaze/json/read.hpp"
 #include "glaze/trace/trace.hpp"
 #include "scratch_directory.hpp"
 #include "ut/ut.hpp"
@@ -700,7 +701,23 @@ suite eetf_to_json_tests = [] {
 
       std::string json{};
       expect(!glz::eetf_to_json(buffer, json));
-      expect(json == "{\"0\":\"\001\"}") << json;
+      // A binary holds arbitrary bytes, so a control byte must be escaped for the output to be JSON.
+      expect(json == "{\"0\":\"\\u0001\"}") << json;
+   };
+
+   "eetf_to_json binary escapes control characters"_test = [] {
+      // binary_as_base64 is off by default, so an ERL_BINARY_EXT payload is emitted as a JSON
+      // string. Its bytes are arbitrary, so any control byte among them has to be escaped.
+      constexpr std::array<std::uint8_t, 9> buffer{
+         uint8_t(glz::eetf_magic_version), uint8_t(ERL_BINARY_EXT), 0, 0, 0, 3, 'a', 1, 'b'};
+
+      std::string json{};
+      expect(!glz::eetf_to_json(buffer, json));
+      expect(json == "\"a\\u0001b\"") << json;
+
+      std::string round_trip{};
+      expect(!glz::read_json(round_trip, json)) << json;
+      expect(round_trip == std::string("a\001b"));
    };
 };
 

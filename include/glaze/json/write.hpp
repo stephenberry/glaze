@@ -45,7 +45,7 @@ namespace glz
       //   * unquoted drops the surrounding quotes as well.
       // Each default is reasonable for a program serializing its own string; none is
       // reasonable for a foreign blob. Pinning all three keeps the converter's output strict
-      // JSON. Mirrors jsonb_to_json's raw_string_emit_opts.
+      // JSON.
       template <auto Opts>
       inline constexpr auto raw_string_emit_opts =
          opt_false<opt_false<opt_true<Opts, escape_control_characters_opt_tag{}>, raw_string_opt_tag{}>,
