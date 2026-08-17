@@ -5,14 +5,18 @@
 
 #include <algorithm>
 #include <concepts>
+#include <cstdlib>
 #include <functional>
 #include <initializer_list>
 #include <iterator>
+#include <memory>
+#include <optional>
 #include <stdexcept>
+#include <type_traits>
 #include <utility>
 #include <vector>
 
-#include "glaze/util/expected.hpp"
+#include "glaze/core/feature_test.hpp"
 
 #ifndef GLZ_THROW_OR_ABORT
 #if __cpp_exceptions
@@ -165,6 +169,7 @@ namespace glz
       iterator erase(const_iterator first, const_iterator last) { return data_.erase(first, last); }
 
       template <typename K>
+         requires(!std::convertible_to<K, iterator> && !std::convertible_to<K, const_iterator>)
       size_type erase(const K& key)
       {
          auto it = find(key);
@@ -233,6 +238,24 @@ namespace glz
       {
          return find(key) != end();
       }
+
+#if GLZ_HAS_OPTIONAL_REF
+      template <typename K>
+      std::optional<mapped_type&> lookup(const K& key)
+      {
+         auto it = find(key);
+         if (it == end()) return std::nullopt;
+         return it->second;
+      }
+
+      template <typename K>
+      std::optional<const mapped_type&> lookup(const K& key) const
+      {
+         auto it = find(key);
+         if (it == end()) return std::nullopt;
+         return it->second;
+      }
+#endif
 
       template <typename K>
       iterator lower_bound(const K& key)
@@ -309,7 +332,7 @@ namespace glz
    template <class Key, class T, class Compare, class Container>
    bool operator==(const flat_map<Key, T, Compare, Container>& lhs, const flat_map<Key, T, Compare, Container>& rhs)
    {
-      return lhs.data_ == rhs.data_;
+      return lhs.size() == rhs.size() && std::equal(lhs.begin(), lhs.end(), rhs.begin());
    }
 
    template <class Key, class T, class Compare, class Container>
