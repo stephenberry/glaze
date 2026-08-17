@@ -65,8 +65,8 @@ namespace glz
          using owner_type = std::conditional_t<IsConst, const http_headers*, http_headers*>;
 
         public:
-         using iterator_concept = std::forward_iterator_tag;
-         using iterator_category = std::forward_iterator_tag;
+         using iterator_concept = std::bidirectional_iterator_tag;
+         using iterator_category = std::bidirectional_iterator_tag;
          using difference_type = ptrdiff_t;
          using value_type = http_headers::value_type;
          using reference = std::conditional_t<IsConst, const value_type&, value_type&>;
@@ -104,6 +104,19 @@ namespace glz
             return copy;
          }
 
+         matching_iterator& operator--() noexcept
+         {
+            seek_backward();
+            return *this;
+         }
+
+         matching_iterator operator--(int) noexcept
+         {
+            auto copy = *this;
+            --(*this);
+            return copy;
+         }
+
          [[nodiscard]] friend bool operator==(const matching_iterator& left, const matching_iterator& right) noexcept
          {
             return left.owner_ == right.owner_ && left.index_ == right.index_ && glz::striequal(left.key_, right.key_);
@@ -118,6 +131,17 @@ namespace glz
                   return;
                }
                ++index_;
+            }
+         }
+
+         // Precondition: a preceding match exists, as required of a bidirectional iterator
+         void seek_backward() noexcept
+         {
+            while (index_ > 0) {
+               --index_;
+               if (glz::striequal(owner_->headers_[index_].name, key_)) {
+                  return;
+               }
             }
          }
 
@@ -320,7 +344,7 @@ namespace glz
       std::vector<value_type> headers_;
    };
 
-   static_assert(std::ranges::forward_range<decltype(std::declval<http_headers&>().fields(""))>);
-   static_assert(std::ranges::forward_range<decltype(std::declval<http_headers&>().names())>);
-   static_assert(std::ranges::forward_range<decltype(std::declval<http_headers&>().values(""))>);
+   static_assert(std::ranges::bidirectional_range<decltype(std::declval<http_headers&>().fields(""))>);
+   static_assert(std::ranges::bidirectional_range<decltype(std::declval<http_headers&>().names())>);
+   static_assert(std::ranges::bidirectional_range<decltype(std::declval<http_headers&>().values(""))>);
 }
