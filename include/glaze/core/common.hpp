@@ -163,6 +163,56 @@ namespace glz
    template <class T>
    concept is_includer = requires(T t) { requires T::glaze_includer == true; };
 
+   // Identity of the type an object's key bits belong to (see context::include_key_type). The
+   // address of each instantiation is unique, so comparing addresses compares types.
+   template <class T>
+   inline constexpr char include_key_tag{};
+
+   // Publishes an object's missing-key bits on the context while it is parsed, so that an includer
+   // member can hand them to the read of its file, and restores the previous value on the way out.
+   template <class Ctx>
+   struct key_bits_scope final
+   {
+      Ctx& ctx;
+      void* previous;
+
+      key_bits_scope(Ctx& ctx, void* bits) noexcept : ctx(ctx), previous(ctx.key_bits) { ctx.key_bits = bits; }
+      key_bits_scope(const key_bits_scope&) = delete;
+      key_bits_scope& operator=(const key_bits_scope&) = delete;
+      ~key_bits_scope() noexcept { ctx.key_bits = previous; }
+   };
+
+   // Stands in for key_bits_scope in objects that cannot include a file, so they do not touch the
+   // context at all.
+   struct inert_key_bits_scope final
+   {
+      constexpr inert_key_bits_scope(auto&&, void*) noexcept {}
+   };
+
+   // Hands the including object's key bits to the read of an included file, and clears them
+   // afterwards in case that read never claimed them (an included document whose top level is not
+   // the including object, or one that failed before reaching its closing brace).
+   template <class Ctx>
+   struct include_key_scope final
+   {
+      Ctx& ctx;
+
+      include_key_scope(Ctx& ctx, const void* type_tag) noexcept : ctx(ctx)
+      {
+         if (ctx.key_bits) {
+            ctx.include_key_bits = ctx.key_bits;
+            ctx.include_key_type = type_tag;
+         }
+      }
+      include_key_scope(const include_key_scope&) = delete;
+      include_key_scope& operator=(const include_key_scope&) = delete;
+      ~include_key_scope() noexcept
+      {
+         ctx.include_key_bits = nullptr;
+         ctx.include_key_type = nullptr;
+      }
+   };
+
    template <class T>
    concept is_member_function_pointer = std::is_member_function_pointer_v<T>;
 
