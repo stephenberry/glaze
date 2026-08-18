@@ -147,6 +147,18 @@ namespace glz
       // NOTE: The default constructor is valid for std::string_view, so we use this rather than {}
       // because debuggers like jumping to std::string_view initialization calls
       std::string scratch{}; // Reusable scratch buffer for intermediate parsing (key lookup, etc.)
+      // A file include (glz::file_include, glz::hostname_include) merges an external document into
+      // the object that names it, which makes that document a fragment: some of the object's keys
+      // come from it and the rest come from the including document. With error_on_missing_keys the
+      // check therefore belongs to the including object, over the union of both. These carry the
+      // including object's key bits across the nested read: an object publishes its bits in
+      // key_bits while it parses, an includer member hands them to the read of its file in
+      // include_key_bits, and that file's top level merges its own keys into them instead of
+      // running a check of its own. include_key_type identifies the type the bits belong to so an
+      // included document of some other type never reinterprets them. See glz::include_key_scope.
+      void* key_bits{};
+      void* include_key_bits{};
+      const void* include_key_type{};
    };
 
    // Concept for any context type (base or streaming)
