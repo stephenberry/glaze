@@ -285,6 +285,8 @@ Control string quoting and escape sequence handling. Useful for embedding pre-fo
 #### `escape_control_characters`
 When `true`, control characters (0x00-0x1F) are escaped as `\uXXXX` sequences. The default (`false`) does not escape these characters for performance and safety (embedding nulls can cause issues, especially with C APIs). Glaze will error when parsing non-escaped control characters per the JSON spec—this option allows writing them as escaped unicode to avoid such errors on re-read.
 
+The binary-to-JSON converters (`beve_to_json`, `cbor_to_json`, `bson_to_json`, `eetf_to_json`, `jsonb_to_json`) always escape control characters and ignore this option, along with `raw_string` and `unquoted`. Their input is a foreign blob rather than the program's own strings, so inheriting these would let a caller turn the converter's output into invalid JSON.
+
 ### Performance Options
 
 #### `partial_read`

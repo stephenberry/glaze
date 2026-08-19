@@ -242,7 +242,7 @@ namespace glz
                   str.append(reinterpret_cast<const char*>(it), chunk_len);
                   it += chunk_len;
                }
-               to<JSON, std::string_view>::template op<raw_string_emit_opts<Opts>>(str, ctx, out, ix);
+               to<JSON, std::string_view>::template op<detail::untrusted_string_emit_opts<Opts>>(str, ctx, out, ix);
             }
             else {
                const uint64_t length = cbor_to_json_decode_arg(ctx, it, end, additional_info);
@@ -255,7 +255,7 @@ namespace glz
                }
 
                const sv value{reinterpret_cast<const char*>(it), static_cast<size_t>(length)};
-               to<JSON, sv>::template op<raw_string_emit_opts<Opts>>(value, ctx, out, ix);
+               to<JSON, sv>::template op<detail::untrusted_string_emit_opts<Opts>>(value, ctx, out, ix);
                it += length;
             }
             break;

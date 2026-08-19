@@ -23,7 +23,7 @@ namespace glz
    {
       // Emit a JSON string literal from a raw UTF-8 byte payload. Uses the JSON writer so all
       // control characters and structural JSON chars are correctly escaped. The option pinning
-      // that keeps a caller's opts from reopening that hole lives in detail::raw_string_emit_opts,
+      // that keeps a caller's opts from reopening that hole lives in detail::untrusted_string_emit_opts,
       // which every binary-to-JSON converter shares.
       template <auto Opts, class B>
       inline void emit_raw_string_as_json(is_context auto& ctx, const char* data, size_t size, B& out, size_t& ix)
@@ -36,7 +36,7 @@ namespace glz
             return;
          }
          const sv s{data, size};
-         to<JSON, sv>::template op<detail::raw_string_emit_opts<Opts>>(s, ctx, out, ix);
+         to<JSON, sv>::template op<detail::untrusted_string_emit_opts<Opts>>(s, ctx, out, ix);
       }
 
       // The spec marks several payloads as "already valid JSON text" so that a converter can

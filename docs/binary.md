@@ -480,6 +480,10 @@ Writing is Version 2 only. Version 2 output is not decodable as a variant by a G
 
 `glaze/binary/beve_to_json.hpp` provides `glz::beve_to_json`, which directly converts a buffer of BEVE data to a buffer of JSON data.
 
+### String Escaping
+
+A BEVE string may hold any byte, including a control character (0x00–0x1F), which JSON may not. The converter escapes those as `\uXXXX` so its output re-parses, and it does so regardless of the options you pass: `escape_control_characters`, `raw_string`, and `unquoted` are inheritable, so honoring them here would hand you a switch that turns the converter's output into something Glaze's own JSON reader rejects. `glz::cbor_to_json`, `glz::bson_to_json`, `glz::eetf_to_json`, and `glz::jsonb_to_json` behave the same way.
+
 ### Function Pointers
 
 Objects that expose function pointers (both member and non-member) through `glz::meta` are skipped by the BEVE writer by default. This mirrors JSON/TOML behaviour and avoids emitting unusable callable placeholders in binary payloads.

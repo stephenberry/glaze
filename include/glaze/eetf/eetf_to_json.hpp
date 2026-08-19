@@ -147,7 +147,7 @@ namespace glz
             if (bool(ctx.error)) return;
             if (check_invalid_offset(ctx, it, end, len)) return;
             const sv value{reinterpret_cast<const char*>(it), len};
-            to<JSON, sv>::template op<raw_string_emit_opts<Opts>>(value, ctx, out, ix);
+            to<JSON, sv>::template op<detail::untrusted_string_emit_opts<Opts>>(value, ctx, out, ix);
             std::advance(it, len);
             break;
          }
@@ -166,7 +166,7 @@ namespace glz
                dump("false", out, ix);
             }
             else {
-               to<JSON, sv>::template op<raw_string_emit_opts<Opts>>(value, ctx, out, ix);
+               to<JSON, sv>::template op<detail::untrusted_string_emit_opts<Opts>>(value, ctx, out, ix);
             }
             std::advance(it, len);
             break;
@@ -296,7 +296,7 @@ namespace glz
             }
             else {
                const sv value{reinterpret_cast<const char*>(it), len};
-               to<JSON, sv>::template op<raw_string_emit_opts<Opts>>(value, ctx, out, ix);
+               to<JSON, sv>::template op<detail::untrusted_string_emit_opts<Opts>>(value, ctx, out, ix);
             }
             std::advance(it, len);
             break;

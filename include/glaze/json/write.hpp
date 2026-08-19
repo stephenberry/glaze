@@ -45,9 +45,15 @@ namespace glz
       //   * unquoted drops the surrounding quotes as well.
       // Each default is reasonable for a program serializing its own string; none is
       // reasonable for a foreign blob. Pinning all three keeps the converter's output strict
-      // JSON.
+      // JSON, and pins it for the caller too: these are inheritable options, so a converter
+      // that read them from the caller's opts would hand the caller a switch that turns the
+      // converter's output into something its own JSON reader rejects. There is deliberately
+      // no opt-out.
+      //
+      // Every binary-to-JSON converter (beve, cbor, bson, eetf, jsonb) routes its string
+      // emits through this, so a new converter should too.
       template <auto Opts>
-      inline constexpr auto raw_string_emit_opts =
+      inline constexpr auto untrusted_string_emit_opts =
          opt_false<opt_false<opt_true<Opts, escape_control_characters_opt_tag{}>, raw_string_opt_tag{}>,
                    unquoted_opt_tag{}>;
    }
