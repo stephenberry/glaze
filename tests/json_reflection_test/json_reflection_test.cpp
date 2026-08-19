@@ -1382,4 +1382,51 @@ suite rename_tests = [] {
    };
 };
 
+struct ctor_only_member
+{
+   ctor_only_member(int v) : v{v} {}
+   int v;
+};
+
+template <>
+struct glz::meta<ctor_only_member>
+{
+   static constexpr auto value = glz::object(&ctor_only_member::v);
+};
+
+struct non_default_constructible_second
+{
+   double a;
+   ctor_only_member b;
+};
+static_assert(glz::detail::count_members<non_default_constructible_second> == 2,
+              "a non-default-constructible member at position >=2 must not zero the count");
+
+// An unbraced sub-object can absorb extra initializers
+struct elision_inner
+{
+   int a, b;
+};
+
+struct elision_outer
+{
+   elision_inner i;
+   int c;
+};
+static_assert(glz::detail::count_members<elision_outer> == 2,
+              "brace elision must not overcount");
+
+suite non_default_constructible_member_tests = [] {
+   "non-default-constructible member at position 2"_test = [] {
+      std::string buffer{};
+      expect(not glz::write_json(non_default_constructible_second{2.0, ctor_only_member{1}}, buffer));
+      expect(buffer == R"({"a":2,"b":{"v":1}})") << buffer;
+
+      non_default_constructible_second obj{0.0, ctor_only_member{0}};
+      expect(not glz::read_json(obj, buffer));
+      expect(obj.a == 2.0);
+      expect(obj.b.v == 1);
+   };
+};
+
 int main() { return 0; }
