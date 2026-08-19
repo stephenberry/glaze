@@ -705,6 +705,48 @@ suite eetf_to_json_tests = [] {
       expect(json == "{\"0\":\"\\u0001\"}") << json;
    };
 
+   "eetf_to_json quotes an atom object key"_test = [] {
+      // A JSON object key must be a string. The true/false atoms emit as bare literals in value
+      // position, which is right, but as a key that produced `{true:1}` and reported success.
+      constexpr std::array<std::uint8_t, 14> buffer{uint8_t(glz::eetf_magic_version),
+                                                    ERL_MAP_EXT,
+                                                    0,
+                                                    0,
+                                                    0,
+                                                    1,
+                                                    uint8_t(ERL_SMALL_ATOM_UTF8_EXT),
+                                                    4,
+                                                    't',
+                                                    'r',
+                                                    'u',
+                                                    'e',
+                                                    uint8_t(ERL_SMALL_INTEGER_EXT),
+                                                    1};
+
+      std::string json{};
+      expect(!glz::eetf_to_json(buffer, json));
+      expect(json == R"({"true":1})") << json;
+
+      std::map<std::string, int> round_trip{};
+      expect(!glz::read_json(round_trip, json)) << json;
+      expect(round_trip == std::map<std::string, int>{{"true", 1}});
+   };
+
+   "eetf_to_json leaves byte-defined payloads unchecked"_test = [] {
+      // ERL_ATOM_EXT is latin1 by spec and a binary is arbitrary bytes by definition, so neither
+      // is claiming to be UTF-8 and neither is held to it. binary_as_base64 is how a payload that
+      // is not JSON text crosses intact.
+      constexpr std::array<std::uint8_t, 7> latin1_atom{
+         uint8_t(glz::eetf_magic_version), uint8_t(ERL_ATOM_EXT), 0, 3, 'a', 0x80, 'z'};
+      std::string atom_json{};
+      expect(!glz::eetf_to_json(latin1_atom, atom_json));
+
+      constexpr std::array<std::uint8_t, 9> binary{
+         uint8_t(glz::eetf_magic_version), uint8_t(ERL_BINARY_EXT), 0, 0, 0, 3, 'a', 0x80, 'z'};
+      std::string binary_json{};
+      expect(!glz::eetf_to_json(binary, binary_json));
+   };
+
    "eetf_to_json binary escapes control characters"_test = [] {
       // binary_as_base64 is off by default, so an ERL_BINARY_EXT payload is emitted as a JSON
       // string. Its bytes are arbitrary, so any control byte among them has to be escaped.

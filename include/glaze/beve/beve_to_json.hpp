@@ -157,7 +157,7 @@ namespace glz
                return;
             }
             const sv value{reinterpret_cast<const char*>(it), n};
-            to<JSON, sv>::template op<detail::untrusted_string_emit_opts<Opts>>(value, ctx, out, ix);
+            detail::emit_untrusted_string<Opts>(ctx, value, out, ix);
             it += n;
             break;
          }
@@ -193,7 +193,7 @@ namespace glz
                      return;
                   }
                   const sv key{reinterpret_cast<const char*>(it), n};
-                  to<JSON, sv>::template op<detail::untrusted_string_emit_opts<Opts>>(key, ctx, out, ix);
+                  detail::emit_untrusted_string<Opts>(ctx, key, out, ix);
                   if constexpr (Opts.prettify) {
                      dump(": ", out, ix);
                   }
@@ -517,7 +517,7 @@ namespace glz
                         return;
                      }
                      const sv value{reinterpret_cast<const char*>(it), n};
-                     to<JSON, sv>::template op<detail::untrusted_string_emit_opts<Opts>>(value, ctx, out, ix);
+                     detail::emit_untrusted_string<Opts>(ctx, value, out, ix);
                      it += n;
                      if (i != n_strings - 1) {
                         dump(',', out, ix);

@@ -73,7 +73,9 @@ namespace glz
          }
       }
 
-      template <auto Opts, class Buffer>
+      // Key marks the term as an object key rather than a value. JSON keys must be strings, so
+      // the atoms that would otherwise emit as bare `true` / `false` stay quoted there.
+      template <auto Opts, bool Key = false, class Buffer>
       void term_to_json_value(auto&& ctx, auto&& it, auto&& end, Buffer& out, auto&& ix, uint32_t recursive_depth)
       {
          // Check recursion depth limit
@@ -147,7 +149,14 @@ namespace glz
             if (bool(ctx.error)) return;
             if (check_invalid_offset(ctx, it, end, len)) return;
             const sv value{reinterpret_cast<const char*>(it), len};
-            to<JSON, sv>::template op<detail::untrusted_string_emit_opts<Opts>>(value, ctx, out, ix);
+            // Only the UTF8 tag states its payload is UTF-8. ERL_ATOM_EXT is latin1 by spec and
+            // ERL_STRING_EXT is a list of bytes, so neither is held to a claim it never made.
+            if (type == ERL_ATOM_UTF8_EXT) {
+               detail::emit_untrusted_string<Opts>(ctx, value, out, ix);
+            }
+            else {
+               detail::emit_untrusted_bytes<Opts>(ctx, value, out, ix);
+            }
             std::advance(it, len);
             break;
          }
@@ -159,14 +168,20 @@ namespace glz
             if (bool(ctx.error)) return;
             if (check_invalid_offset(ctx, it, end, len)) return;
             const sv value{reinterpret_cast<const char*>(it), len};
-            if (len == 4 && std::memcmp(it, "true", 4) == 0) {
+            // A JSON object key must be a string, so an atom in key position stays quoted.
+            // Dumping the bare literal there produced `{true:1}`, which reports success and
+            // then fails to re-parse.
+            if (not Key && value == "true") {
                dump("true", out, ix);
             }
-            else if (len == 5 && std::memcmp(it, "false", 5) == 0) {
+            else if (not Key && value == "false") {
                dump("false", out, ix);
             }
+            else if (type == ERL_SMALL_ATOM_UTF8_EXT) {
+               detail::emit_untrusted_string<Opts>(ctx, value, out, ix);
+            }
             else {
-               to<JSON, sv>::template op<detail::untrusted_string_emit_opts<Opts>>(value, ctx, out, ix);
+               detail::emit_untrusted_bytes<Opts>(ctx, value, out, ix); // latin1 by spec
             }
             std::advance(it, len);
             break;
@@ -251,7 +266,7 @@ namespace glz
                   ctx.custom_error_message = "unsupported key type";
                   return;
                }
-               term_to_json_value<Opts>(ctx, it, end, out, ix, recursive_depth + 1);
+               term_to_json_value<Opts, true>(ctx, it, end, out, ix, recursive_depth + 1);
                if (bool(ctx.error)) return;
                if constexpr (Opts.prettify) {
                   dump(": ", out, ix);
@@ -295,8 +310,10 @@ namespace glz
                dump('"', out, ix);
             }
             else {
+               // A binary holds arbitrary bytes by definition, so it is never claiming UTF-8.
+               // binary_as_base64 is how a payload that is not JSON text crosses intact.
                const sv value{reinterpret_cast<const char*>(it), len};
-               to<JSON, sv>::template op<detail::untrusted_string_emit_opts<Opts>>(value, ctx, out, ix);
+               detail::emit_untrusted_bytes<Opts>(ctx, value, out, ix);
             }
             std::advance(it, len);
             break;

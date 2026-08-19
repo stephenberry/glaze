@@ -2803,6 +2803,11 @@ suite beve_custom_key_tests = [] {
    "vector pair CastModuleID"_test = [] { verify_vector_pair_roundtrip<CastModuleID>(); };
 };
 
+struct beve_no_utf8_opts : glz::opts
+{
+   bool validate_utf8 = false;
+};
+
 suite beve_to_json_tests = [] {
    "beve_to_json bool"_test = [] {
       bool b = true;
@@ -2850,6 +2855,21 @@ suite beve_to_json_tests = [] {
       std::map<std::string, std::string> round_trip{};
       expect(!glz::read_json(round_trip, json)) << json;
       expect(round_trip == v);
+   };
+
+   "beve_to_json validates UTF-8"_test = [] {
+      // A BEVE string is UTF-8 by spec, and RFC 8259 requires JSON text to be UTF-8, so the
+      // converter checks the claim rather than copying a lone continuation byte into the output.
+      // Honors validate_utf8 like the reader does, so it can still be turned off.
+      std::map<std::string, std::string> v{{"k", std::string("a\x80z")}};
+      std::string buffer{};
+      expect(not glz::write_beve(v, buffer));
+
+      std::string json{};
+      expect(glz::beve_to_json(buffer, json).ec == glz::error_code::invalid_utf8);
+
+      std::string unchecked{};
+      expect(not glz::beve_to_json<beve_no_utf8_opts{}>(buffer, unchecked));
    };
 
    "beve_to_json std::map"_test = [] {

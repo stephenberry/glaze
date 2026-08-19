@@ -387,6 +387,11 @@ using namespace bson_test;
 
 namespace
 {
+   struct bson_no_utf8_opts : glz::opts
+   {
+      bool validate_utf8 = false;
+   };
+
    suite bson_interop_tests = [] {
       "spec-canonical-hello-world"_test = [] {
          // {"hello": "world"} — the canonical example from bsonspec.org.
@@ -1459,6 +1464,16 @@ namespace
          std::map<std::string, std::string> round_trip{};
          expect(!glz::read_json(round_trip, json.value())) << json.value();
          expect(round_trip == v);
+      };
+
+      "convert-validates-utf8"_test = [] {
+         // A BSON string is UTF-8 by spec, so the converter holds it to that rather than
+         // copying a lone continuation byte into JSON text.
+         std::map<std::string, std::string> v{{"k", std::string("a\x80z")}};
+         auto bson = glz::write_bson(v);
+         expect(bson.has_value());
+         expect(not glz::bson_to_json(bson.value()).has_value());
+         expect(glz::bson_to_json<bson_no_utf8_opts{}>(bson.value()).has_value());
       };
 
       "convert-nested-document"_test = [] {

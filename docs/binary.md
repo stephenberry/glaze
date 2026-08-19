@@ -480,9 +480,22 @@ Writing is Version 2 only. Version 2 output is not decodable as a variant by a G
 
 `glaze/binary/beve_to_json.hpp` provides `glz::beve_to_json`, which directly converts a buffer of BEVE data to a buffer of JSON data.
 
-### String Escaping
+### Untrusted Strings
 
-A BEVE string may hold any byte, including a control character (0x00–0x1F), which JSON may not. The converter escapes those as `\uXXXX` so its output re-parses, and it does so regardless of the options you pass: `escape_control_characters`, `raw_string`, and `unquoted` are inheritable, so honoring them here would hand you a switch that turns the converter's output into something Glaze's own JSON reader rejects. `glz::cbor_to_json`, `glz::bson_to_json`, `glz::eetf_to_json`, and `glz::jsonb_to_json` behave the same way.
+A converter transforms a document you received, not data your program owns, so its string handling follows the reader's defaults rather than the writer's. This applies to `glz::cbor_to_json`, `glz::bson_to_json`, `glz::eetf_to_json`, and `glz::jsonb_to_json` as well.
+
+**Control characters are always escaped.** A BEVE string may hold any byte, including a control character (0x00–0x1F), which JSON may not. Those are escaped as `\uXXXX` so the output re-parses, regardless of the options you pass: `escape_control_characters`, `raw_string`, and `unquoted` are inheritable, so honoring them here would hand you a switch that turns the converter's output into something Glaze's own JSON reader rejects. There is no opt-out. Escaping itself is not what costs anything — the same scan runs either way — so this is not a performance trade you are making silently.
+
+**UTF-8 is validated where the source format promises it.** RFC 8259 requires JSON text to be UTF-8, so payloads a format states are text get the same check `glz::read_json` gives its own input, failing with `error_code::invalid_utf8`. This honors `validate_utf8`, which is on by default and compiles the check away when off.
+
+Payloads whose format defines them as *bytes* are exempt, because they never claimed to be UTF-8 and checking them would reject data their producer encoded correctly:
+
+| Payload | Checked |
+|---|---|
+| BEVE strings, CBOR text strings, BSON strings, `ERL_ATOM_UTF8_EXT` | yes |
+| `ERL_ATOM_EXT` (latin1 by spec), `ERL_STRING_EXT` (byte list), `ERL_BINARY_EXT` | no |
+
+An exempt payload can still carry bytes that are not JSON text. For Erlang binaries, `binary_as_base64` is how those cross intact.
 
 ### Function Pointers
 

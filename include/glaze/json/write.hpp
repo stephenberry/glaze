@@ -51,7 +51,9 @@ namespace glz
       // no opt-out.
       //
       // Every binary-to-JSON converter (beve, cbor, bson, eetf, jsonb) routes its string
-      // emits through this, so a new converter should too.
+      // emits through this, so a new converter should too. Prefer the two functions below,
+      // which apply it; reach for the options directly only to emit through something other
+      // than to<JSON, string_view>.
       template <auto Opts>
       inline constexpr auto untrusted_string_emit_opts =
          opt_false<opt_false<opt_true<Opts, escape_control_characters_opt_tag{}>, raw_string_opt_tag{}>,
@@ -1105,6 +1107,32 @@ namespace glz
          }
       }
    };
+
+   namespace detail
+   {
+      // Emit an untrusted payload that the source format defines as bytes rather than as text.
+      // An Erlang binary or a latin1 ERL_ATOM_EXT never claimed to be UTF-8, so checking it as
+      // UTF-8 would reject data its producer encoded correctly. Such a payload can still hold
+      // bytes that are not JSON text at all; eetf's binary_as_base64 is how those cross intact.
+      template <auto Opts, class B>
+      GLZ_ALWAYS_INLINE void emit_untrusted_bytes(is_context auto& ctx, const std::string_view s, B& out, size_t& ix)
+      {
+         to<JSON, std::string_view>::template op<untrusted_string_emit_opts<Opts>>(s, ctx, out, ix);
+      }
+
+      // Emit an untrusted payload that the source format states is UTF-8 text, checking that
+      // claim first. RFC 8259 section 8.1 requires JSON text to be UTF-8, and these bytes came
+      // out of a blob rather than out of the program, so they get the check the JSON reader
+      // gives its own input. Honors validate_utf8, which compiles the check away.
+      template <auto Opts, class B>
+      GLZ_ALWAYS_INLINE void emit_untrusted_string(is_context auto& ctx, const std::string_view s, B& out, size_t& ix)
+      {
+         if (validate_utf8_span<Opts>(ctx, s.data(), s.data() + s.size())) [[unlikely]] {
+            return;
+         }
+         emit_untrusted_bytes<Opts>(ctx, s, out, ix);
+      }
+   }
 
    template <class T>
       requires((glaze_enum_t<T> || (meta_keys<T> && std::is_enum_v<std::decay_t<T>>)) && not custom_write<T>)

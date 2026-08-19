@@ -2308,6 +2308,11 @@ void typed_array_tests()
 }
 
 // CBOR-to-JSON conversion tests
+struct cbor_no_utf8_opts : glz::opts
+{
+   bool validate_utf8 = false;
+};
+
 void cbor_to_json_tests()
 {
    "cbor_to_json_integer"_test = [] {
@@ -2358,6 +2363,21 @@ void cbor_to_json_tests()
       std::map<std::string, std::string> round_trip{};
       expect(not glz::read_json(round_trip, json)) << json;
       expect(round_trip == v);
+   };
+
+   "cbor_to_json_validates_utf8"_test = [] {
+      // A CBOR text string (major type 3) is UTF-8 by spec, so the converter holds it to that
+      // rather than copying a lone continuation byte into JSON text. Byte strings are unaffected;
+      // they already go out as hex.
+      std::map<std::string, std::string> v{{"k", std::string("a\x80z")}};
+      std::string cbor_buffer;
+      expect(not glz::write_cbor(v, cbor_buffer));
+
+      std::string json;
+      expect(glz::cbor_to_json(cbor_buffer, json).ec == glz::error_code::invalid_utf8);
+
+      std::string unchecked;
+      expect(not glz::cbor_to_json<cbor_no_utf8_opts{}>(cbor_buffer, unchecked));
    };
 
    "cbor_to_json_array"_test = [] {
