@@ -6208,6 +6208,26 @@ suite beve_bounded_buffer_overflow_tests = [] {
       expect(!ec) << "read should succeed";
       expect(decoded == obj) << "decoded map should match";
    };
+
+   "beve_to_json into a bounded buffer reserves what the strings escape to"_test = [] {
+      // The converter always escapes control characters, whose worst-case reservation is
+      // 6 bytes per character. A fixed buffer cannot grow, so it is sized by what the string
+      // actually escapes to and a payload that fits is not rejected.
+      std::map<std::string, std::string> v{{"k", std::string("a\001b") + std::string(200, 'c')}};
+      std::string beve{};
+      expect(not glz::write_beve(v, beve));
+
+      std::string reference{};
+      expect(not glz::beve_to_json(beve, reference));
+      expect(reference.size() == 216) << reference.size(); // 1222 of worst case
+
+      std::array<char, 512> buffer{};
+      expect(not glz::beve_to_json(beve, buffer)) << "216 bytes of output should fit in 512";
+      expect(std::string_view(buffer.data(), reference.size()) == reference);
+
+      std::array<char, 16> tiny{};
+      expect(glz::beve_to_json(beve, tiny).ec == glz::error_code::buffer_overflow);
+   };
 };
 
 // Structs for DoS prevention tests

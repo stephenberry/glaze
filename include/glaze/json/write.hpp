@@ -56,6 +56,56 @@ namespace glz
       inline constexpr auto untrusted_string_emit_opts =
          opt_false<opt_false<opt_true<Opts, escape_control_characters_opt_tag{}>, raw_string_opt_tag{}>,
                    unquoted_opt_tag{}>;
+
+      // Bytes the JSON string writer emits for `str` under escape_control_characters, excluding
+      // the surrounding quotes. Only a buffer that cannot grow has any use for this; see the
+      // reservation in to<JSON, str_t>::op. A byte-at-a-time count costs about as much as the
+      // escaping write it is sizing, so this reuses the writer's own 8-byte scan: a block with
+      // nothing to escape adds nothing to the size and is skipped whole.
+      inline size_t escaped_string_size(const std::string_view str) noexcept
+      {
+         const size_t n = str.size();
+         size_t size = n;
+         const char* c = str.data();
+         const char* const e = c + n;
+
+         if (n > 7) {
+            for (const char* const end_m7 = e - 7; c < end_m7;) {
+               uint64_t swar;
+               std::memcpy(&swar, c, 8);
+               if constexpr (std::endian::native == std::endian::big) {
+                  swar = std::byteswap(swar);
+               }
+
+               constexpr uint64_t lo7_mask = repeat_byte8(0b01111111);
+               const uint64_t lo7 = swar & lo7_mask;
+               const uint64_t quote = (lo7 ^ repeat_byte8('"')) + lo7_mask;
+               const uint64_t backslash = (lo7 ^ repeat_byte8('\\')) + lo7_mask;
+               const uint64_t less_32 = (swar & repeat_byte8(0b01100000)) + lo7_mask;
+               uint64_t next = ~((quote & backslash & less_32) | swar);
+
+               next &= repeat_byte8(0b10000000);
+               if (next == 0) {
+                  c += 8;
+                  continue;
+               }
+
+               c += (countr_zero(next) >> 3);
+               size += char_escape_table[uint8_t(*c)] ? 1 : 5; // two-character escape, or \u00XX
+               ++c;
+            }
+         }
+
+         for (; c < e; ++c) {
+            if (char_escape_table[uint8_t(*c)]) {
+               size += 1;
+            }
+            else if (uint8_t(*c) < 0x20) {
+               size += 5;
+            }
+         }
+         return size;
+      }
    }
 
    // This serialize<JSON> indirection only exists to call std::remove_cvref_t on the type
@@ -901,8 +951,28 @@ namespace glz
                // For each individual character we need room for two characters to handle escapes.
                // When using Unicode escapes, we might need up to 6 characters (\uXXXX) per character
                if constexpr (check_escape_control_characters(Opts)) {
+                  if constexpr (has_bounded_capacity<B>) {
+                     // 6 bytes per character is a ceiling only a string of nothing but control
+                     // characters reaches. A resizable buffer merely over-allocates against it,
+                     // but a fixed buffer has nowhere to grow, so the ceiling would reject output
+                     // that fits. Measuring the string answers exactly, at the cost of a pass over
+                     // it, so bracket the measurement between two O(1) bounds and only pay it when
+                     // the answer is still in doubt: the ceiling fitting means yes, and the floor
+                     // of one byte per character not fitting means no.
+                     const size_t capacity = buffer_traits<std::remove_cvref_t<B>>::capacity(b);
+                     size_t required = ix + 10 + 6 * n;
+                     if (required > capacity) [[unlikely]] {
+                        required = ix + 10 + n;
+                        if (required <= capacity) {
+                           required = ix + 10 + detail::escaped_string_size(str);
+                        }
+                     }
+                     if (!ensure_space(ctx, b, required)) [[unlikely]] {
+                        return;
+                     }
+                  }
                   // We need 2 + 6 * n characters in the worst case (all control chars)
-                  if (!ensure_space(ctx, b, ix + 10 + 6 * n)) [[unlikely]] {
+                  else if (!ensure_space(ctx, b, ix + 10 + 6 * n)) [[unlikely]] {
                      return;
                   }
                }

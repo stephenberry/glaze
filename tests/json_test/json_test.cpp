@@ -15049,6 +15049,12 @@ namespace bounded_buffer_test_types
       std::vector<int> data = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20};
       int b = 2;
    };
+
+   // escape_control_characters is an inheritable option rather than a member of glz::opts.
+   struct escape_control_opts : glz::opts
+   {
+      bool escape_control_characters = true;
+   };
 }
 
 suite bounded_buffer_overflow_tests = [] {
@@ -15073,6 +15079,59 @@ suite bounded_buffer_overflow_tests = [] {
 
       auto result = glz::write_json(obj, buffer);
       expect(result.ec == glz::error_code::buffer_overflow) << "should return buffer_overflow error";
+   };
+
+   "bounded buffer reserves what an escaped string escapes to"_test = [] {
+      // escape_control_characters reserves 6 bytes per character, a ceiling only a string of
+      // nothing but control characters reaches. A resizable buffer over-allocates against it,
+      // but a fixed one has nowhere to grow, so the ceiling would reject output that fits.
+      const std::string value = std::string(100, 'a') + '\001' + std::string(100, 'b');
+      std::array<char, 512> buffer{}; // 208 bytes of output, 1216 of worst case
+
+      auto result = glz::write<escape_control_opts{}>(value, buffer);
+      expect(not result) << "208 bytes of output should fit in a 512 byte buffer";
+      expect(std::string_view(buffer.data(), result.count) ==
+             '"' + std::string(100, 'a') + "\\u0001" + std::string(100, 'b') + '"');
+   };
+
+   "escaped_string_size matches what the writer emits"_test = [] {
+      // The bounded buffer reservation is only correct while this stays exact, and it skips
+      // whole 8-byte blocks, so cover every byte value at offsets landing in the block scan
+      // and in the scalar tail.
+      constexpr std::array lengths{size_t(1), size_t(7), size_t(8), size_t(9), size_t(16), size_t(40)};
+      size_t mismatches = 0;
+      size_t checked = 0;
+      size_t expected = 0;
+      for (int byte = 0; byte < 256; ++byte) {
+         for (size_t len : lengths) {
+            expected += len;
+            for (size_t pos = 0; pos < len; ++pos) {
+               std::string value(len, 'x');
+               value[pos] = char(byte);
+               std::string out{};
+               if (glz::write<escape_control_opts{}>(value, out)) {
+                  ++mismatches;
+                  continue;
+               }
+               ++checked;
+               if (glz::detail::escaped_string_size(value) != out.size() - 2) { // less the quotes
+                  ++mismatches;
+               }
+            }
+         }
+      }
+      expect(checked == expected) << checked << " of " << expected;
+      expect(mismatches == 0) << mismatches;
+   };
+
+   "bounded buffer still overflows when the escaped string does not fit"_test = [] {
+      // Measuring the string must not lose the overflow error for output that genuinely
+      // does not fit: every character here escapes to 6 bytes.
+      const std::string value(100, '\001');
+      std::array<char, 128> buffer{};
+
+      auto result = glz::write<escape_control_opts{}>(value, buffer);
+      expect(result.ec == glz::error_code::buffer_overflow) << "600 bytes of escapes must not fit in 128";
    };
 
    "write to std::span with sufficient space succeeds"_test = [] {
