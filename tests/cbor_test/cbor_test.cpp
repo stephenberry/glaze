@@ -3570,6 +3570,58 @@ void cbor_skip_marker_tests_run()
    };
 }
 
+namespace cbor_skip_wellformed_tests
+{
+   struct one_member
+   {
+      int a{};
+   };
+
+   inline constexpr glz::opts skip_opts{.format = glz::CBOR, .error_on_unknown_keys = false};
+
+   // A one-pair map whose key "zz" is not a member, so its value goes through skip_value<CBOR>.
+   template <class... Bytes>
+   std::vector<uint8_t> unknown_value(Bytes... value_bytes)
+   {
+      return {0xA1, 0x62, 'z', 'z', static_cast<uint8_t>(value_bytes)...};
+   }
+}
+
+suite cbor_skip_wellformed = [] {
+   using namespace cbor_skip_wellformed_tests;
+
+   // additional_info 31 marks indefinite length, which is only well-formed for byte/text
+   // strings, arrays, and maps. On major type 0 (uint), 1 (nint), or 6 (tag) it is not
+   // well-formed (RFC 8949 Appendix C). The reader's decode_arg already rejects it; the
+   // skip path must agree instead of consuming the item and reporting success.
+   "skip rejects indefinite marker on uint"_test = [] {
+      one_member v{};
+      expect(glz::read<skip_opts>(v, unknown_value(0x1F)).ec == glz::error_code::syntax_error);
+   };
+
+   "skip rejects indefinite marker on nint"_test = [] {
+      one_member v{};
+      expect(glz::read<skip_opts>(v, unknown_value(0x3F)).ec == glz::error_code::syntax_error);
+   };
+
+   "skip rejects indefinite marker on tag"_test = [] {
+      one_member v{};
+      // Tag (0xDF) followed by a well-formed uint so the failure is the marker, not a short read.
+      expect(glz::read<skip_opts>(v, unknown_value(0xDF, 0x05)).ec == glz::error_code::syntax_error);
+   };
+
+   "skip accepts well-formed unknown values"_test = [] {
+      one_member a{};
+      expect(not glz::read<skip_opts>(a, unknown_value(0x05))); // uint 5
+      one_member b{};
+      expect(not glz::read<skip_opts>(b, unknown_value(0x19, 0x01, 0x2C))); // uint 300
+      one_member c{};
+      expect(not glz::read<skip_opts>(c, unknown_value(0x7F, 0x61, 'a', 0x61, 'b', 0xFF))); // indefinite text
+      one_member d{};
+      expect(not glz::read<skip_opts>(d, unknown_value(0x9F, 0x01, 0x02, 0xFF))); // indefinite array
+   };
+};
+
 // A std::variant whose own meta opts into custom_read/custom_write (with full from/to
 // specializations) must not be ambiguous with the built-in CBOR variant handlers.
 // Parity with the JSON fix in #2591.
