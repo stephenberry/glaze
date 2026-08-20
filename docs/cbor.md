@@ -61,6 +61,17 @@ Glaze CBOR implements the following standards:
 | [RFC 8746](https://www.rfc-editor.org/rfc/rfc8746.html) | Typed arrays and multi-dimensional arrays |
 | [IANA CBOR Tags](https://www.iana.org/assignments/cbor-tags/cbor-tags.xhtml) | Registered semantic tags |
 
+## CBOR to JSON Conversion
+
+`glz::cbor_to_json` converts a buffer of CBOR directly to a buffer of JSON.
+
+```c++
+std::string json{};
+auto ec = glz::cbor_to_json(cbor, json);
+```
+
+A CBOR text string may hold a control character (0x00 to 0x1F), which JSON may not. Those without a two-character escape make the conversion fail with `error_code::invalid_control_character` rather than produce output that will not re-parse; set `escape_control_characters` to carry them across instead. See [Untrusted Strings](binary.md#untrusted-strings) for what that trade buys and costs.
+
 ## Typed Arrays (RFC 8746)
 
 Glaze automatically uses RFC 8746 typed arrays for contiguous numeric containers, enabling bulk memory operations for maximum performance.
