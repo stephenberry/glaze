@@ -49,7 +49,6 @@ These options are **not** in `glz::opts` by default. Add them to a custom option
 | `bool error_on_const_read` | `false` | Error when attempting to read into a const value |
 | `bool hide_non_invocable` | `true` | Hide non-invocable members from `cli_menu` |
 | `bool escape_control_characters` | `false` | Escape control characters as unicode sequences |
-| `bool reject_control_characters` | `false` | Error rather than write a control character that has no two-character escape |
 | `char indentation_char` | `' '` | Prettified JSON indentation character |
 | `uint8_t indentation_width` | `3` | Prettified JSON indentation size |
 | `bool new_lines_in_arrays` | `true` | Whether prettified arrays have new lines per element |
@@ -288,8 +287,6 @@ When `true`, control characters (0x00-0x1F) are escaped as `\uXXXX` sequences. T
 
 The binary-to-JSON converters use this option to decide what to do with control characters in a converted value. Off, they fail with `error_code::invalid_control_character`. On, the bytes are escaped. They ignore `raw_string` and `unquoted` either way. See [String Escaping](binary.md#string-escaping).
 
-#### `reject_control_characters`
-Off by default. When on, writing a control character with no short JSON escape fails with `error_code::invalid_control_character` instead of emitting bytes that will not parse. Only applies when `escape_control_characters` is off, since that option makes every control character writable. The binary-to-JSON converters turn it on.
 
 ### Performance Options
 

@@ -43,8 +43,10 @@ namespace glz
       // drops the surrounding quotes as well. Neither default is reasonable for a foreign blob.
       //
       // Control characters are the caller's decision, so escape_control_characters is inherited
-      // rather than pinned, and reject_control_characters is pinned on to give the default a
-      // defined meaning:
+      // rather than pinned. The opts_internal::reject_control_characters flag is set alongside it
+      // to give the default a defined meaning. It is internal because no user sets it: the knob
+      // they reach for is escape_control_characters, and this only says which way its absence
+      // should be read at a converter emit site.
       //   * off (default) -- a decoded value carrying a control character with no two-character
       //     escape fails with error_code::invalid_control_character. Nothing is written that
       //     would not re-parse, and nothing is quietly reshaped.
@@ -56,8 +58,7 @@ namespace glz
       // through emit_untrusted_string below, so a new converter should too.
       template <auto Opts>
       inline constexpr auto untrusted_string_emit_opts =
-         opt_true<opt_false<opt_false<Opts, raw_string_opt_tag{}>, unquoted_opt_tag{}>,
-                  reject_control_characters_opt_tag{}>;
+         glz::reject_control_characters<opt_false<opt_false<Opts, raw_string_opt_tag{}>, unquoted_opt_tag{}>>();
 
       // Bytes the JSON string writer emits for `str` under escape_control_characters, excluding
       // the surrounding quotes. Only a buffer that cannot grow has any use for this; see the
