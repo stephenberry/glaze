@@ -2464,6 +2464,36 @@ void cbor_to_json_tests()
       expect(not glz::cbor_to_json(cbor_buffer, json));
       expect(json == "[100,200,300]");
    };
+
+   // Prettified output breaks the line before '}' only when the map holds pairs. The emptiness of
+   // a map is not decided by its additional info: an indefinite map ends at the break code, and a
+   // definite one may carry a zero count in a following byte.
+   "cbor_to_json_prettify_empty_map"_test = [] {
+      constexpr glz::opts pretty{.prettify = true};
+
+      const std::array<uint8_t, 1> definite{0xa0}; // map(0)
+      expect(glz::cbor_to_json<pretty>(definite).value() == "{}");
+
+      const std::array<uint8_t, 2> indefinite{0xbf, 0xff}; // map(*) with an immediate break
+      expect(glz::cbor_to_json<pretty>(indefinite).value() == "{}");
+
+      const std::array<uint8_t, 2> definite_wide{0xb8, 0x00}; // map(0) with a 1-byte count
+      expect(glz::cbor_to_json<pretty>(definite_wide).value() == "{}");
+   };
+
+   "cbor_to_json_prettify_non_empty_map"_test = [] {
+      constexpr glz::opts pretty{.prettify = true};
+
+      const std::array<uint8_t, 4> definite{0xa1, 0x61, 'a', 0x01}; // map(1){ "a": 1 }
+      expect(glz::cbor_to_json<pretty>(definite).value() == "{\n   \"a\": 1\n}");
+
+      const std::array<uint8_t, 5> indefinite{0xbf, 0x61, 'a', 0x01, 0xff}; // map(*){ "a": 1 }
+      expect(glz::cbor_to_json<pretty>(indefinite).value() == "{\n   \"a\": 1\n}");
+
+      // An empty nested map must not disturb the indentation of the map holding it.
+      const std::array<uint8_t, 5> nested{0xa1, 0x61, 'a', 0xbf, 0xff}; // map(1){ "a": map(*){} }
+      expect(glz::cbor_to_json<pretty>(nested).value() == "{\n   \"a\": {}\n}");
+   };
 }
 
 void past_fuzzing_issues()
