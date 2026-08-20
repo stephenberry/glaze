@@ -318,6 +318,9 @@ namespace glz
    struct escape_control_characters_opt_tag
    {};
 
+   struct reject_control_characters_opt_tag
+   {};
+
    struct quoted_num_opt_tag
    {};
 
@@ -351,6 +354,10 @@ namespace glz
    template <auto member_ptr>
    concept is_escape_control_characters_tag =
       std::same_as<std::decay_t<decltype(member_ptr)>, escape_control_characters_opt_tag>;
+
+   template <auto member_ptr>
+   concept is_reject_control_characters_tag =
+      std::same_as<std::decay_t<decltype(member_ptr)>, reject_control_characters_opt_tag>;
 
    template <auto member_ptr>
    concept is_quoted_num_tag = std::same_as<std::decay_t<decltype(member_ptr)>, quoted_num_opt_tag>;
@@ -534,6 +541,20 @@ namespace glz
    {
       if constexpr (requires { Opts.escape_control_characters; }) {
          return Opts.escape_control_characters;
+      }
+      else {
+         return false;
+      }
+   }
+
+   // Error instead of writing a control character that has no two-character JSON escape. Only
+   // consulted when escape_control_characters is off, which is the case where the writer would
+   // otherwise emit bytes that do not re-parse. The binary-to-JSON converters pin it on: a
+   // decoded value is someone else's bytes, and silently mangling one is worse than refusing it.
+   consteval bool check_reject_control_characters(auto&& Opts)
+   {
+      if constexpr (requires { Opts.reject_control_characters; }) {
+         return Opts.reject_control_characters;
       }
       else {
          return false;
@@ -1084,6 +1105,20 @@ namespace glz
             return opts_escape_control_characters{{Opts}, static_cast<bool>(value)};
          }
       }
+      else if constexpr (is_reject_control_characters_tag<member_ptr>) {
+         if constexpr (requires { Opts.reject_control_characters; }) {
+            auto ret = Opts;
+            ret.reject_control_characters = static_cast<bool>(value);
+            return ret;
+         }
+         else {
+            struct opts_reject_control_characters : std::decay_t<decltype(Opts)>
+            {
+               bool reject_control_characters{};
+            };
+            return opts_reject_control_characters{{Opts}, static_cast<bool>(value)};
+         }
+      }
       else if constexpr (is_quoted_num_tag<member_ptr>) {
          if constexpr (requires { Opts.quoted_num; }) {
             auto ret = Opts;
@@ -1224,6 +1259,20 @@ namespace glz
                bool escape_control_characters = true;
             };
             return opts_escape_control_characters{{Opts}};
+         }
+      }
+      else if constexpr (is_reject_control_characters_tag<member_ptr>) {
+         if constexpr (requires { Opts.reject_control_characters; }) {
+            auto ret = Opts;
+            ret.reject_control_characters = true;
+            return ret;
+         }
+         else {
+            struct opts_reject_control_characters : std::decay_t<decltype(Opts)>
+            {
+               bool reject_control_characters = true;
+            };
+            return opts_reject_control_characters{{Opts}};
          }
       }
       else if constexpr (is_quoted_num_tag<member_ptr>) {
@@ -1367,6 +1416,16 @@ namespace glz
          if constexpr (requires { Opts.escape_control_characters; }) {
             auto ret = Opts;
             ret.escape_control_characters = false;
+            return ret;
+         }
+         else {
+            return Opts;
+         }
+      }
+      else if constexpr (is_reject_control_characters_tag<member_ptr>) {
+         if constexpr (requires { Opts.reject_control_characters; }) {
+            auto ret = Opts;
+            ret.reject_control_characters = false;
             return ret;
          }
          else {

@@ -37,27 +37,27 @@ namespace glz
    namespace detail
    {
       // Options for emitting an untrusted byte payload as a JSON string literal through
-      // to<JSON, string_view>. A binary-to-JSON converter turns someone else's blob into
-      // JSON text, so it cannot inherit the three writer options that each let payload bytes
-      // reach the document unescaped:
-      //   * escape_control_characters (off by default) leaves raw 0x00-0x1F bytes in place,
-      //   * raw_string emits the payload without escaping it at all,
-      //   * unquoted drops the surrounding quotes as well.
-      // Each default is reasonable for a program serializing its own string; none is
-      // reasonable for a foreign blob. Pinning all three keeps the converter's output strict
-      // JSON, and pins it for the caller too: these are inheritable options, so a converter
-      // that read them from the caller's opts would hand the caller a switch that turns the
-      // converter's output into something its own JSON reader rejects. There is deliberately
-      // no opt-out.
+      // to<JSON, string_view>. A binary-to-JSON converter turns someone else's blob into JSON
+      // text, so two writer options that would let payload bytes reach the document unescaped
+      // are pinned off: raw_string emits the payload without escaping it at all, and unquoted
+      // drops the surrounding quotes as well. Neither default is reasonable for a foreign blob.
       //
-      // Every binary-to-JSON converter (beve, cbor, bson, eetf, jsonb) routes its string
-      // emits through this, so a new converter should too. Prefer the two functions below,
-      // which apply it; reach for the options directly only to emit through something other
-      // than to<JSON, string_view>.
+      // Control characters are the caller's decision, so escape_control_characters is inherited
+      // rather than pinned, and reject_control_characters is pinned on to give the default a
+      // defined meaning:
+      //   * off (default) -- a decoded value carrying a control character with no two-character
+      //     escape fails with error_code::invalid_control_character. Nothing is written that
+      //     would not re-parse, and nothing is quietly reshaped.
+      //   * on -- the byte is escaped as \uXXXX and the output round-trips. This is the opt-in
+      //     for payloads that legitimately carry control characters, and it does mean a NUL in
+      //     a decoded value becomes a NUL in whatever reads the JSON back.
+      //
+      // Every binary-to-JSON converter (beve, cbor, bson, eetf, jsonb) routes its string emits
+      // through emit_untrusted_string below, so a new converter should too.
       template <auto Opts>
       inline constexpr auto untrusted_string_emit_opts =
-         opt_false<opt_false<opt_true<Opts, escape_control_characters_opt_tag{}>, raw_string_opt_tag{}>,
-                   unquoted_opt_tag{}>;
+         opt_true<opt_false<opt_false<Opts, raw_string_opt_tag{}>, unquoted_opt_tag{}>,
+                  reject_control_characters_opt_tag{}>;
 
       // Bytes the JSON string writer emits for `str` under escape_control_characters, excluding
       // the surrounding quotes. Only a buffer that cannot grow has any use for this; see the
@@ -896,6 +896,11 @@ namespace glz
                   }
                }
                else {
+                  if constexpr (check_reject_control_characters(Opts)) {
+                     if (uint8_t(value) < 0x20) [[unlikely]] {
+                        ctx.error = error_code::invalid_control_character;
+                     }
+                  }
                   std::memcpy(&b[ix], &value, 1);
                   ++ix;
                }
@@ -1023,6 +1028,16 @@ namespace glz
                         }
                      }
                      else {
+                        if constexpr (check_reject_control_characters(Opts)) {
+                           // A control character with no two-character escape cannot be written
+                           // without \uXXXX. The table entry is zero, so the memcpy below would
+                           // put two NULs where one byte was. Flag it and let the loop finish:
+                           // returning early here would leave c un-advanced and the SIMD scan
+                           // would find the same byte forever. The output is abandoned anyway.
+                           if (char_escape_table[uint8_t(*c)] == 0) [[unlikely]] {
+                              ctx.error = error_code::invalid_control_character;
+                           }
+                        }
                         std::memcpy(data, &char_escape_table[uint8_t(*c)], 2);
                         data += 2;
                      }
@@ -1093,6 +1108,11 @@ namespace glz
                         }
                      }
                      else {
+                        if constexpr (check_reject_control_characters(Opts)) {
+                           if (uint8_t(*c) < 0x20) [[unlikely]] {
+                              ctx.error = error_code::invalid_control_character;
+                           }
+                        }
                         std::memcpy(data, c, 1);
                         ++data;
                      }
@@ -1110,27 +1130,14 @@ namespace glz
 
    namespace detail
    {
-      // Emit an untrusted payload that the source format defines as bytes rather than as text.
-      // An Erlang binary or a latin1 ERL_ATOM_EXT never claimed to be UTF-8, so checking it as
-      // UTF-8 would reject data its producer encoded correctly. Such a payload can still hold
-      // bytes that are not JSON text at all; eetf's binary_as_base64 is how those cross intact.
-      template <auto Opts, class B>
-      GLZ_ALWAYS_INLINE void emit_untrusted_bytes(is_context auto& ctx, const std::string_view s, B& out, size_t& ix)
-      {
-         to<JSON, std::string_view>::template op<untrusted_string_emit_opts<Opts>>(s, ctx, out, ix);
-      }
-
-      // Emit an untrusted payload that the source format states is UTF-8 text, checking that
-      // claim first. RFC 8259 section 8.1 requires JSON text to be UTF-8, and these bytes came
-      // out of a blob rather than out of the program, so they get the check the JSON reader
-      // gives its own input. Honors validate_utf8, which compiles the check away.
+      // Emit an untrusted byte payload as a JSON string literal. See untrusted_string_emit_opts
+      // for what is pinned and why. UTF-8 is deliberately not checked here: that is the reader's
+      // job, it is on by default there, and unlike the escaping decision it costs a real pass
+      // over every string.
       template <auto Opts, class B>
       GLZ_ALWAYS_INLINE void emit_untrusted_string(is_context auto& ctx, const std::string_view s, B& out, size_t& ix)
       {
-         if (validate_utf8_span<Opts>(ctx, s.data(), s.data() + s.size())) [[unlikely]] {
-            return;
-         }
-         emit_untrusted_bytes<Opts>(ctx, s, out, ix);
+         to<JSON, std::string_view>::template op<untrusted_string_emit_opts<Opts>>(s, ctx, out, ix);
       }
    }
 

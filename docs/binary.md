@@ -482,20 +482,30 @@ Writing is Version 2 only. Version 2 output is not decodable as a variant by a G
 
 ### Untrusted Strings
 
-A converter transforms a document you received, not data your program owns, so its string handling follows the reader's defaults rather than the writer's. This applies to `glz::cbor_to_json`, `glz::bson_to_json`, `glz::eetf_to_json`, and `glz::jsonb_to_json` as well.
+A converter turns a document you received into JSON text. Two of its string options are pinned, because inheriting them would let a caller produce output that is not JSON at all: `raw_string` (emit the payload unescaped) and `unquoted` (drop the quotes). This applies to `glz::cbor_to_json`, `glz::bson_to_json`, and `glz::eetf_to_json` as well.
 
-**Control characters are always escaped.** A BEVE string may hold any byte, including a control character (0x00–0x1F), which JSON may not. Those are escaped as `\uXXXX` so the output re-parses, regardless of the options you pass: `escape_control_characters`, `raw_string`, and `unquoted` are inheritable, so honoring them here would hand you a switch that turns the converter's output into something Glaze's own JSON reader rejects. There is no opt-out. Escaping itself is not what costs anything — the same scan runs either way — so this is not a performance trade you are making silently.
+**Control characters are refused by default.** A BEVE string may hold any byte, including a control character (0x00–0x1F). Most have a two-character JSON escape — `\n`, `\t`, `\b`, `\f`, `\r` — and those pass through normally. The rest cannot be written without `\uXXXX`, so rather than emit bytes that will not re-parse, the conversion fails with `error_code::invalid_control_character`.
 
-**UTF-8 is validated where the source format promises it.** RFC 8259 requires JSON text to be UTF-8, so payloads a format states are text get the same check `glz::read_json` gives its own input, failing with `error_code::invalid_utf8`. This honors `validate_utf8`, which is on by default and compiles the check away when off.
+```c++
+// a BEVE string holding a 0x01 byte
+auto ec = glz::beve_to_json(beve, json);   // ec == invalid_control_character
+```
 
-Payloads whose format defines them as *bytes* are exempt, because they never claimed to be UTF-8 and checking them would reject data their producer encoded correctly:
+**`escape_control_characters` opts into carrying them across.** The byte is written as `\uXXXX`, the document round-trips, and a value that legitimately contains control bytes survives:
 
-| Payload | Checked |
-|---|---|
-| BEVE strings, CBOR text strings, BSON strings, `ERL_ATOM_UTF8_EXT` | yes |
-| `ERL_ATOM_EXT` (latin1 by spec), `ERL_STRING_EXT` (byte list), `ERL_BINARY_EXT` | no |
+```c++
+struct escaping : glz::opts {
+   bool escape_control_characters = true;
+};
 
-An exempt payload can still carry bytes that are not JSON text. For Erlang binaries, `binary_as_base64` is how those cross intact.
+auto ec = glz::beve_to_json<escaping{}>(beve, json);   // {"k":"a\u0001b"}
+```
+
+Worth knowing what that buys and costs. A control character is legal inside a length-prefixed BEVE, CBOR, or BSON string, so `std::string("a\0b", 3)` round-trips through `write_beve`/`read_beve`, and escaping is the only way the JSON form can represent it. But escaping also means a NUL in the source becomes a NUL in whatever reads the JSON back, where an embedded null can truncate a C API or split a log line. The default refuses so the choice is yours to make explicitly.
+
+For Erlang binaries, which hold arbitrary bytes by definition, `binary_as_base64` is usually the better answer than escaping: it carries any payload across without putting raw bytes in a JSON string at all.
+
+**UTF-8 is not checked.** That is the reader's job, it is on by default there via `validate_utf8`, and unlike the escaping decision it costs a real pass over every string. `glz::jsonb_to_json` is the exception on both counts: it validates UTF-8 and escapes control characters by default, because a JSONB blob is the storage form of a JSON document that could itself have carried `\uXXXX`.
 
 ### Function Pointers
 

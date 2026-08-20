@@ -108,6 +108,10 @@ namespace glz
       invalid_length, // Length exceeds allowed limit (buffer size or user-configured max)
       // Encoding errors
       invalid_utf8, // Malformed UTF-8 in a string; checked on read unless validate_utf8 is disabled
+      invalid_control_character, // A string carries a control character with no two-character JSON
+                                 // escape, and escape_control_characters is off so it cannot be
+                                 // written. Raised by the binary-to-JSON converters, which refuse
+                                 // to emit a byte they would have to corrupt or hide.
       // Streaming errors
       streaming_unsupported, // Document outruns the buffer window and this format's reader cannot refill
       // Expansion errors

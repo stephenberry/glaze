@@ -387,9 +387,9 @@ using namespace bson_test;
 
 namespace
 {
-   struct bson_no_utf8_opts : glz::opts
+   struct bson_escape_opts : glz::opts
    {
-      bool validate_utf8 = false;
+      bool escape_control_characters = true;
    };
 
    suite bson_interop_tests = [] {
@@ -1452,28 +1452,27 @@ namespace
          expect(json.value() == R"({"a":1,"b":9000000000,"c":1.5,"d":true,"e":"hi"})");
       };
 
-      "convert-escapes-control-characters"_test = [] {
-         // A control byte is legal in a BSON string value but must be escaped so the
-         // converter output re-parses as JSON.
+      "convert-rejects-control-characters-by-default"_test = [] {
+         // A control byte is legal in a BSON string but cannot be written as JSON without
+         // \uXXXX, so the default refuses it rather than emitting output that will not re-parse.
          std::map<std::string, std::string> v{{"k", std::string("a\001b")}};
          auto bson = glz::write_bson(v);
          expect(bson.has_value());
          auto json = glz::bson_to_json(bson.value());
+         expect(not json.has_value());
+         expect(json.error().ec == glz::error_code::invalid_control_character);
+      };
+
+      "convert-escapes-control-characters-when-asked"_test = [] {
+         std::map<std::string, std::string> v{{"k", std::string("a\001b")}};
+         auto bson = glz::write_bson(v);
+         expect(bson.has_value());
+         auto json = glz::bson_to_json<bson_escape_opts{}>(bson.value());
          expect(json.has_value());
          expect(json.value() == "{\"k\":\"a\\u0001b\"}") << json.value();
          std::map<std::string, std::string> round_trip{};
          expect(!glz::read_json(round_trip, json.value())) << json.value();
          expect(round_trip == v);
-      };
-
-      "convert-validates-utf8"_test = [] {
-         // A BSON string is UTF-8 by spec, so the converter holds it to that rather than
-         // copying a lone continuation byte into JSON text.
-         std::map<std::string, std::string> v{{"k", std::string("a\x80z")}};
-         auto bson = glz::write_bson(v);
-         expect(bson.has_value());
-         expect(not glz::bson_to_json(bson.value()).has_value());
-         expect(glz::bson_to_json<bson_no_utf8_opts{}>(bson.value()).has_value());
       };
 
       "convert-nested-document"_test = [] {

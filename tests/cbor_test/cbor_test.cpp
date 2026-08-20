@@ -2308,9 +2308,9 @@ void typed_array_tests()
 }
 
 // CBOR-to-JSON conversion tests
-struct cbor_no_utf8_opts : glz::opts
+struct cbor_escape_opts : glz::opts
 {
-   bool validate_utf8 = false;
+   bool escape_control_characters = true;
 };
 
 void cbor_to_json_tests()
@@ -2350,34 +2350,29 @@ void cbor_to_json_tests()
       expect(json == "\"hello\"");
    };
 
-   "cbor_to_json_escapes_control_characters"_test = [] {
-      // A control byte is legal in a CBOR text string but must be escaped so the JSON
-      // output re-parses. Covers both a value and a map key.
+   "cbor_to_json_rejects_control_characters_by_default"_test = [] {
+      // A control byte is legal in a CBOR text string but cannot be written as JSON without
+      // \uXXXX, so the default refuses it rather than emitting output that will not re-parse.
       std::map<std::string, std::string> v{{std::string("k\001"), std::string("a\001b")}};
       std::string cbor_buffer;
       expect(not glz::write_cbor(v, cbor_buffer));
 
       std::string json;
-      expect(not glz::cbor_to_json(cbor_buffer, json));
-      expect(json == "{\"k\\u0001\":\"a\\u0001b\"}") << json;
-      std::map<std::string, std::string> round_trip{};
-      expect(not glz::read_json(round_trip, json)) << json;
-      expect(round_trip == v);
+      expect(glz::cbor_to_json(cbor_buffer, json).ec == glz::error_code::invalid_control_character);
    };
 
-   "cbor_to_json_validates_utf8"_test = [] {
-      // A CBOR text string (major type 3) is UTF-8 by spec, so the converter holds it to that
-      // rather than copying a lone continuation byte into JSON text. Byte strings are unaffected;
-      // they already go out as hex.
-      std::map<std::string, std::string> v{{"k", std::string("a\x80z")}};
+   "cbor_to_json_escapes_control_characters_when_asked"_test = [] {
+      // escape_control_characters opts into carrying them across. Covers a value and a map key.
+      std::map<std::string, std::string> v{{std::string("k\001"), std::string("a\001b")}};
       std::string cbor_buffer;
       expect(not glz::write_cbor(v, cbor_buffer));
 
       std::string json;
-      expect(glz::cbor_to_json(cbor_buffer, json).ec == glz::error_code::invalid_utf8);
-
-      std::string unchecked;
-      expect(not glz::cbor_to_json<cbor_no_utf8_opts{}>(cbor_buffer, unchecked));
+      expect(not glz::cbor_to_json<cbor_escape_opts{}>(cbor_buffer, json));
+      expect(json == "{\"k\\u0001\":\"a\\u0001b\"}") << json;
+      std::map<std::string, std::string> round_trip{};
+      expect(not glz::read_json(round_trip, json)) << json;
+      expect(round_trip == v);
    };
 
    "cbor_to_json_array"_test = [] {

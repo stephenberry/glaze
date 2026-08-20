@@ -149,14 +149,7 @@ namespace glz
             if (bool(ctx.error)) return;
             if (check_invalid_offset(ctx, it, end, len)) return;
             const sv value{reinterpret_cast<const char*>(it), len};
-            // Only the UTF8 tag states its payload is UTF-8. ERL_ATOM_EXT is latin1 by spec and
-            // ERL_STRING_EXT is a list of bytes, so neither is held to a claim it never made.
-            if (type == ERL_ATOM_UTF8_EXT) {
-               detail::emit_untrusted_string<Opts>(ctx, value, out, ix);
-            }
-            else {
-               detail::emit_untrusted_bytes<Opts>(ctx, value, out, ix);
-            }
+            detail::emit_untrusted_string<Opts>(ctx, value, out, ix);
             std::advance(it, len);
             break;
          }
@@ -177,11 +170,8 @@ namespace glz
             else if (not Key && value == "false") {
                dump("false", out, ix);
             }
-            else if (type == ERL_SMALL_ATOM_UTF8_EXT) {
-               detail::emit_untrusted_string<Opts>(ctx, value, out, ix);
-            }
             else {
-               detail::emit_untrusted_bytes<Opts>(ctx, value, out, ix); // latin1 by spec
+               detail::emit_untrusted_string<Opts>(ctx, value, out, ix);
             }
             std::advance(it, len);
             break;
@@ -310,10 +300,11 @@ namespace glz
                dump('"', out, ix);
             }
             else {
-               // A binary holds arbitrary bytes by definition, so it is never claiming UTF-8.
-               // binary_as_base64 is how a payload that is not JSON text crosses intact.
+               // A binary holds arbitrary bytes by definition, so a control character among them
+               // is expected rather than exceptional. binary_as_base64 carries such a payload
+               // across without involving the escaping decision at all.
                const sv value{reinterpret_cast<const char*>(it), len};
-               detail::emit_untrusted_bytes<Opts>(ctx, value, out, ix);
+               detail::emit_untrusted_string<Opts>(ctx, value, out, ix);
             }
             std::advance(it, len);
             break;

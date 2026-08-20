@@ -49,6 +49,7 @@ These options are **not** in `glz::opts` by default. Add them to a custom option
 | `bool error_on_const_read` | `false` | Error when attempting to read into a const value |
 | `bool hide_non_invocable` | `true` | Hide non-invocable members from `cli_menu` |
 | `bool escape_control_characters` | `false` | Escape control characters as unicode sequences |
+| `bool reject_control_characters` | `false` | Error rather than write a control character that has no two-character escape |
 | `char indentation_char` | `' '` | Prettified JSON indentation character |
 | `uint8_t indentation_width` | `3` | Prettified JSON indentation size |
 | `bool new_lines_in_arrays` | `true` | Whether prettified arrays have new lines per element |
@@ -175,7 +176,7 @@ Performs full JSON validation on values that are skipped (unknown keys). Without
 Validates that content after the parsed value contains only valid whitespace.
 
 #### `validate_utf8`
-On by default, because RFC 8259 section 8.1 requires JSON text to be UTF-8. Every string the reader materializes is checked, including map keys, unknown keys, and values that are skipped; malformed input fails with `error_code::invalid_utf8`. The binary-to-JSON converters honor it too, for the payloads their source format states are text; see [Untrusted Strings](binary.md#untrusted-strings).
+On by default, because RFC 8259 section 8.1 requires JSON text to be UTF-8. Every string the reader materializes is checked, including map keys, unknown keys, and values that are skipped; malformed input fails with `error_code::invalid_utf8`. Of the binary-to-JSON converters, only `jsonb_to_json` checks UTF-8; see [Untrusted Strings](binary.md#untrusted-strings).
 
 ```cpp
 struct unchecked_opts : glz::opts {
@@ -285,7 +286,10 @@ Control string quoting and escape sequence handling. Useful for embedding pre-fo
 #### `escape_control_characters`
 When `true`, control characters (0x00-0x1F) are escaped as `\uXXXX` sequences. The default (`false`) does not escape these characters for performance and safety (embedding nulls can cause issues, especially with C APIs). Glaze will error when parsing non-escaped control characters per the JSON spec—this option allows writing them as escaped unicode to avoid such errors on re-read.
 
-The binary-to-JSON converters (`beve_to_json`, `cbor_to_json`, `bson_to_json`, `eetf_to_json`, `jsonb_to_json`) always escape control characters and ignore this option, along with `raw_string` and `unquoted`. Their input is a foreign document rather than the program's own strings, so inheriting these would let a caller turn the converter's output into invalid JSON. They do honor `validate_utf8`. See [Untrusted Strings](binary.md#untrusted-strings).
+The binary-to-JSON converters honor this option, and it is how you opt into carrying control characters across. Without it they fail with `error_code::invalid_control_character` rather than writing bytes that will not re-parse. `raw_string` and `unquoted` stay pinned off there regardless. See [Untrusted Strings](binary.md#untrusted-strings).
+
+#### `reject_control_characters`
+Off by default. When on, writing a control character that has no two-character JSON escape fails with `error_code::invalid_control_character` instead of emitting bytes that do not re-parse. Only consulted when `escape_control_characters` is off, since that option makes every control character writable. The binary-to-JSON converters pin it on; it costs a predictable branch on a path only reached when such a byte is present.
 
 ### Performance Options
 

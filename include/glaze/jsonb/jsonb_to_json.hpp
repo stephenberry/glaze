@@ -21,14 +21,26 @@ namespace glz
 {
    namespace jsonb_detail
    {
-      // Emit a JSON string literal from a raw UTF-8 byte payload. The UTF-8 check and the option
-      // pinning that keeps a caller's opts from reopening the escaping hole both live in
-      // detail::emit_untrusted_string, which every binary-to-JSON converter shares. No
-      // accumulator is passed: nothing has scanned this payload yet.
+      // Emit a JSON string literal from a raw UTF-8 byte payload, sharing the option pinning in
+      // detail::emit_untrusted_string with every other binary-to-JSON converter.
+      //
+      // JSONB differs from those converters in one respect: a control character in a payload is
+      // expected rather than anomalous, because a JSONB blob is the storage form of a JSON
+      // document that could itself have carried \uXXXX. Escaping is pinned on here so the
+      // converter keeps round-tripping such a document instead of refusing it, which is also the
+      // behavior this converter shipped with.
       template <auto Opts, class B>
       inline void emit_raw_string_as_json(is_context auto& ctx, const char* data, size_t size, B& out, size_t& ix)
       {
-         detail::emit_untrusted_string<Opts>(ctx, sv{data, size}, out, ix);
+         // RFC 8259 section 8.1 requires JSON text to be UTF-8, and these bytes came out of a
+         // blob rather than out of the program, so they get the same treatment the JSON reader
+         // gives its input. Honors the `validate_utf8` option, which compiles the check away.
+         // No accumulator is available here: nothing has scanned this payload yet.
+         if (validate_utf8_span<Opts>(ctx, data, data + size)) [[unlikely]] {
+            return;
+         }
+         detail::emit_untrusted_string<opt_true<Opts, escape_control_characters_opt_tag{}>>(ctx, sv{data, size}, out,
+                                                                                            ix);
       }
 
       // The spec marks several payloads as "already valid JSON text" so that a converter can
