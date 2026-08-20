@@ -480,32 +480,42 @@ Writing is Version 2 only. Version 2 output is not decodable as a variant by a G
 
 `glaze/binary/beve_to_json.hpp` provides `glz::beve_to_json`, which directly converts a buffer of BEVE data to a buffer of JSON data.
 
-### Untrusted Strings
+### String Escaping
 
-A converter turns a document you received into JSON text. Two of its string options are pinned, because inheriting them would let a caller produce output that is not JSON at all: `raw_string` (emit the payload unescaped) and `unquoted` (drop the quotes). This applies to `glz::cbor_to_json`, `glz::bson_to_json`, and `glz::eetf_to_json` as well.
-
-**Control characters are refused by default.** A BEVE string may hold any byte, including a control character (0x00–0x1F). Most have a two-character JSON escape — `\n`, `\t`, `\b`, `\f`, `\r` — and those pass through normally. The rest cannot be written without `\uXXXX`, so rather than emit bytes that will not re-parse, the conversion fails with `error_code::invalid_control_character`.
+A BEVE string can hold any byte, including control characters (0x00–1F). JSON cannot. `\n`, `\t`, `\b`, `\f` and `\r` are escaped normally, but the rest have no short escape, and by default the conversion fails rather than write something that will not parse:
 
 ```c++
 // a BEVE string holding a 0x01 byte
-auto ec = glz::beve_to_json(beve, json);   // ec == invalid_control_character
+std::string json{};
+auto ec = glz::beve_to_json(beve, json);
+// ec.ec == glz::error_code::invalid_control_character
 ```
 
-**`escape_control_characters` opts into carrying them across.** The byte is written as `\uXXXX`, the document round-trips, and a value that legitimately contains control bytes survives:
+To keep those bytes, turn on `escape_control_characters`. They are written as `\uXXXX` and the document round-trips:
 
 ```c++
 struct escaping : glz::opts {
    bool escape_control_characters = true;
 };
 
+std::string json{};
 auto ec = glz::beve_to_json<escaping{}>(beve, json);   // {"k":"a\u0001b"}
 ```
 
-Worth knowing what that buys and costs. A control character is legal inside a length-prefixed BEVE, CBOR, or BSON string, so `std::string("a\0b", 3)` round-trips through `write_beve`/`read_beve`, and escaping is the only way the JSON form can represent it. But escaping also means a NUL in the source becomes a NUL in whatever reads the JSON back, where an embedded null can truncate a C API or split a log line. The default refuses so the choice is yours to make explicitly.
+Which to pick:
 
-For Erlang binaries, which hold arbitrary bytes by definition, `binary_as_base64` is usually the better answer than escaping: it carries any payload across without putting raw bytes in a JSON string at all.
+- **Your data legitimately contains control bytes.** Use `escape_control_characters`. A `std::string` holding a `\0` round-trips through BEVE, and escaping is the only way JSON can carry it.
+- **The bytes are arbitrary,** as in an Erlang binary. Use `binary_as_base64` instead, so no raw bytes end up in a JSON string at all.
+- **You want to know when they appear.** Keep the default and check for `invalid_control_character`.
 
-**UTF-8 is not checked.** That is the reader's job, it is on by default there via `validate_utf8`, and unlike the escaping decision it costs a real pass over every string. `glz::jsonb_to_json` is the exception on both counts: it validates UTF-8 and escapes control characters by default, because a JSONB blob is the storage form of a JSON document that could itself have carried `\uXXXX`.
+One thing to weigh when escaping: `\u0000` is valid JSON that every parser accepts, so a NUL in your data reaches whatever reads the JSON back. Embedded nulls can truncate C strings and split log lines.
+
+The same applies to `glz::cbor_to_json`, `glz::bson_to_json`, and `glz::eetf_to_json`. `glz::jsonb_to_json` always escapes, because a JSONB blob stores a JSON document that may have contained `\uXXXX` to begin with.
+
+**Other notes**
+
+- `raw_string` and `unquoted` are ignored by these converters. Both would produce output that is not JSON.
+- UTF-8 is not checked, except by `glz::jsonb_to_json`. Reading the JSON checks it, and `validate_utf8` is on by default there.
 
 ### Function Pointers
 

@@ -19,7 +19,7 @@ std::string json{};
 auto ec = glz::eetf_to_json(term, json);
 ```
 
-An Erlang binary holds arbitrary bytes by definition, and `binary_as_base64` is off by default, so a binary is emitted as a JSON string. A control character (0x00 to 0x1F) among those bytes has no two-character JSON escape, so the conversion fails with `error_code::invalid_control_character` rather than produce output that will not re-parse.
+`binary_as_base64` is off by default, so an Erlang binary is written as a JSON string. Binaries hold arbitrary bytes, and a control character (0x00–1F) among them has no short JSON escape, so the conversion fails with `error_code::invalid_control_character`.
 
 Two ways across:
 
@@ -36,6 +36,6 @@ struct escaping : glz::eetf::eetf_opts {
 glz::eetf_to_json<escaping{}>(term, json);
 ```
 
-See [Untrusted Strings](../binary.md#untrusted-strings) for what that trade buys and costs.
+See [String Escaping](../binary.md#string-escaping).
 
-Only strings, atoms, and binaries are accepted as object keys, since a JSON key must be a string. The atoms `true` and `false` emit as bare JSON literals in value position, and stay quoted in key position.
+Only strings, atoms, and binaries work as object keys, since a JSON key must be a string. The atoms `true` and `false` are written as bare JSON literals, except as a key, where they stay quoted.
