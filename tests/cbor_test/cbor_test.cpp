@@ -3618,7 +3618,9 @@ suite cbor_skip_wellformed = [] {
       one_member c{};
       expect(not glz::read<skip_opts>(c, unknown_value(0x7F, 0x61, 'a', 0x61, 'b', 0xFF))); // indefinite text
       one_member d{};
-      expect(not glz::read<skip_opts>(d, unknown_value(0x9F, 0x01, 0x02, 0xFF))); // indefinite array
+      expect(not glz::read<skip_opts>(d, unknown_value(0x5F, 0x41, 0x01, 0x41, 0x02, 0xFF))); // indefinite bytes
+      one_member e{};
+      expect(not glz::read<skip_opts>(e, unknown_value(0x9F, 0x01, 0x02, 0xFF))); // indefinite array
    };
 };
 
