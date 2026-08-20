@@ -2868,6 +2868,28 @@ suite beve_to_json_tests = [] {
       expect(round_trip == v);
    };
 
+   "beve_to_json passes through control characters that have a short escape"_test = [] {
+      // The default refuses only control characters with no two-character JSON escape. Backspace,
+      // tab, newline, form feed and carriage return have one, so they keep converting normally.
+      // The reject sits in the else of the escape table lookup and cannot see them. The long
+      // value puts the run past the scalar tail and into the writer's block scan, which rejects
+      // at a separate site.
+      const std::string shorts = "\b\t\n\f\r";
+      std::map<std::string, std::string> v = {{"k" + shorts, shorts},
+                                              {"long", std::string(64, 'a') + shorts + std::string(64, 'b')}};
+      std::string buffer{};
+      expect(not glz::write_beve(v, buffer));
+
+      std::string json{};
+      expect(!glz::beve_to_json(buffer, json)) << json;
+      expect(json.find("\\b\\t\\n\\f\\r") != std::string::npos) << json;
+      expect(json.find_first_of(shorts) == std::string::npos) << json;
+
+      std::map<std::string, std::string> round_trip{};
+      expect(!glz::read_json(round_trip, json)) << json;
+      expect(round_trip == v);
+   };
+
    "beve_to_json std::map"_test = [] {
       std::map<std::string, int> v = {{"first", 1}, {"second", 2}, {"third", 3}};
       std::string buffer{};

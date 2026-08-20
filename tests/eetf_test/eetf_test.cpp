@@ -774,6 +774,35 @@ suite eetf_to_json_tests = [] {
       expect(!glz::read_json(round_trip, escaped)) << escaped;
       expect(round_trip == std::string("a\001b"));
    };
+   "eetf_to_json binary passes through control characters that have a short escape"_test = [] {
+      // The default refuses only control characters with no two-character JSON escape. Backspace,
+      // tab, newline, form feed and carriage return have one, so they keep converting normally.
+      // The reject sits in the else of the escape table lookup and cannot see them.
+      constexpr std::array<std::uint8_t, 11> tail{
+         uint8_t(glz::eetf_magic_version), uint8_t(ERL_BINARY_EXT), 0, 0, 0, 5, '\b', '\t', '\n', '\f', '\r'};
+
+      std::string tail_json{};
+      expect(!glz::eetf_to_json(tail, tail_json)) << tail_json;
+      expect(tail_json == R"("\b\t\n\f\r")") << tail_json;
+
+      // Long enough that the run lands past the scalar tail, in the writer's block scan, which
+      // rejects at a separate site.
+      const std::string payload = std::string(64, 'a') + "\b\t\n\f\r" + std::string(64, 'b');
+      std::string buffer{};
+      buffer.push_back(char(glz::eetf_magic_version));
+      buffer.push_back(char(ERL_BINARY_EXT));
+      for (int shift = 24; shift >= 0; shift -= 8) {
+         buffer.push_back(char(uint8_t(payload.size() >> shift)));
+      }
+      buffer += payload;
+
+      std::string json{};
+      expect(!glz::eetf_to_json(buffer, json)) << json;
+
+      std::string round_trip{};
+      expect(!glz::read_json(round_trip, json)) << json;
+      expect(round_trip == payload);
+   };
 };
 
 int main()

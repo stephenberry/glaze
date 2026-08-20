@@ -2375,6 +2375,28 @@ void cbor_to_json_tests()
       expect(round_trip == v);
    };
 
+   "cbor_to_json_passes_through_short_escape_control_characters"_test = [] {
+      // The default refuses only control characters with no two-character JSON escape. Backspace,
+      // tab, newline, form feed and carriage return have one, so they keep converting normally.
+      // The reject sits in the else of the escape table lookup and cannot see them. The long
+      // value puts the run past the scalar tail and into the writer's block scan, which rejects
+      // at a separate site.
+      const std::string shorts = "\b\t\n\f\r";
+      std::map<std::string, std::string> v{{"k" + shorts, shorts},
+                                           {"long", std::string(64, 'a') + shorts + std::string(64, 'b')}};
+      std::string cbor_buffer;
+      expect(not glz::write_cbor(v, cbor_buffer));
+
+      std::string json;
+      expect(not glz::cbor_to_json(cbor_buffer, json)) << json;
+      expect(json.find("\\b\\t\\n\\f\\r") != std::string::npos) << json;
+      expect(json.find_first_of(shorts) == std::string::npos) << json;
+
+      std::map<std::string, std::string> round_trip{};
+      expect(not glz::read_json(round_trip, json)) << json;
+      expect(round_trip == v);
+   };
+
    "cbor_to_json_array"_test = [] {
       std::vector<int> v = {1, 2, 3};
       std::string cbor_buffer;
