@@ -2803,6 +2803,11 @@ suite beve_custom_key_tests = [] {
    "vector pair CastModuleID"_test = [] { verify_vector_pair_roundtrip<CastModuleID>(); };
 };
 
+struct beve_escape_opts : glz::opts
+{
+   bool escape_control_characters = true;
+};
+
 suite beve_to_json_tests = [] {
    "beve_to_json bool"_test = [] {
       bool b = true;
@@ -2835,6 +2840,54 @@ suite beve_to_json_tests = [] {
       std::string json{};
       expect(!glz::beve_to_json(buffer, json));
       expect(json == R"("Hello World")") << json;
+   };
+
+   "beve_to_json rejects control characters by default"_test = [] {
+      // A control byte is legal in a BEVE string but cannot be written as JSON without \uXXXX.
+      // The default refuses it rather than emitting bytes that will not re-parse, so the caller
+      // gets a signal instead of a malformed document.
+      std::map<std::string, std::string> v = {{std::string("k\001"), std::string("a\001b")}};
+      std::string buffer{};
+      expect(not glz::write_beve(v, buffer));
+
+      std::string json{};
+      expect(glz::beve_to_json(buffer, json).ec == glz::error_code::invalid_control_character);
+   };
+
+   "beve_to_json escapes control characters when asked"_test = [] {
+      // escape_control_characters opts into carrying them across. Covers a value and a map key.
+      std::map<std::string, std::string> v = {{std::string("k\001"), std::string("a\001b")}};
+      std::string buffer{};
+      expect(not glz::write_beve(v, buffer));
+
+      std::string json{};
+      expect(!glz::beve_to_json<beve_escape_opts{}>(buffer, json));
+      expect(json == "{\"k\\u0001\":\"a\\u0001b\"}") << json;
+      std::map<std::string, std::string> round_trip{};
+      expect(!glz::read_json(round_trip, json)) << json;
+      expect(round_trip == v);
+   };
+
+   "beve_to_json passes through control characters that have a short escape"_test = [] {
+      // The default refuses only control characters with no two-character JSON escape. Backspace,
+      // tab, newline, form feed and carriage return have one, so they keep converting normally.
+      // The reject sits in the else of the escape table lookup and cannot see them. The long
+      // value puts the run past the scalar tail and into the writer's block scan, which rejects
+      // at a separate site.
+      const std::string shorts = "\b\t\n\f\r";
+      std::map<std::string, std::string> v = {{"k" + shorts, shorts},
+                                              {"long", std::string(64, 'a') + shorts + std::string(64, 'b')}};
+      std::string buffer{};
+      expect(not glz::write_beve(v, buffer));
+
+      std::string json{};
+      expect(!glz::beve_to_json(buffer, json)) << json;
+      expect(json.find("\\b\\t\\n\\f\\r") != std::string::npos) << json;
+      expect(json.find_first_of(shorts) == std::string::npos) << json;
+
+      std::map<std::string, std::string> round_trip{};
+      expect(!glz::read_json(round_trip, json)) << json;
+      expect(round_trip == v);
    };
 
    "beve_to_json std::map"_test = [] {
@@ -6192,6 +6245,26 @@ suite beve_bounded_buffer_overflow_tests = [] {
       auto ec = glz::read_beve(decoded, std::string_view{buffer.data(), result.count});
       expect(!ec) << "read should succeed";
       expect(decoded == obj) << "decoded map should match";
+   };
+
+   "beve_to_json into a bounded buffer reserves what the strings escape to"_test = [] {
+      // Under escape_control_characters the worst-case reservation is 6 bytes per character.
+      // A fixed buffer cannot grow, so it is sized by what the string actually escapes to and
+      // a payload that fits is not rejected.
+      std::map<std::string, std::string> v{{"k", std::string("a\001b") + std::string(200, 'c')}};
+      std::string beve{};
+      expect(not glz::write_beve(v, beve));
+
+      std::string reference{};
+      expect(not glz::beve_to_json<beve_escape_opts{}>(beve, reference));
+      expect(reference.size() == 216) << reference.size(); // 1222 of worst case
+
+      std::array<char, 512> buffer{};
+      expect(not glz::beve_to_json<beve_escape_opts{}>(beve, buffer)) << "216 bytes should fit in 512";
+      expect(std::string_view(buffer.data(), reference.size()) == reference);
+
+      std::array<char, 16> tiny{};
+      expect(glz::beve_to_json<beve_escape_opts{}>(beve, tiny).ec == glz::error_code::buffer_overflow);
    };
 };
 

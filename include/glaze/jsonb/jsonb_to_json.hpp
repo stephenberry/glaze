@@ -21,23 +21,14 @@ namespace glz
 {
    namespace jsonb_detail
    {
-      // Emit a JSON string literal from a raw UTF-8 byte payload. Uses the JSON writer so all
-      // control characters and structural JSON chars are correctly escaped.
+      // Emit a JSON string literal from a raw UTF-8 byte payload, sharing the option pinning in
+      // detail::emit_untrusted_string with every other binary-to-JSON converter.
       //
-      // Three writer options would each let payload bytes reach the output document unescaped,
-      // and all three are inheritable, so a caller's opts would otherwise silently reopen the
-      // hole this converter exists to close:
-      //   * escape_control_characters (off by default) leaves raw control bytes in place,
-      //   * raw_string emits the payload without escaping it at all,
-      //   * unquoted drops the surrounding quotes as well.
-      // Each default is reasonable for a C++ string being serialized, because that is the
-      // program's own data. None of them is reasonable for a blob, which is someone else's.
-      // The converter promises strict JSON, so it pins all three rather than inheriting them.
-      template <auto Opts>
-      inline constexpr auto raw_string_emit_opts =
-         opt_false<opt_false<opt_true<Opts, escape_control_characters_opt_tag{}>, raw_string_opt_tag{}>,
-                   unquoted_opt_tag{}>;
-
+      // JSONB differs from those converters in one respect: a control character in a payload is
+      // expected rather than anomalous, because a JSONB blob is the storage form of a JSON
+      // document that could itself have carried \uXXXX. Escaping is pinned on here so the
+      // converter keeps round-tripping such a document instead of refusing it, which is also the
+      // behavior this converter shipped with.
       template <auto Opts, class B>
       inline void emit_raw_string_as_json(is_context auto& ctx, const char* data, size_t size, B& out, size_t& ix)
       {
@@ -48,8 +39,8 @@ namespace glz
          if (validate_utf8_span<Opts>(ctx, data, data + size)) [[unlikely]] {
             return;
          }
-         const sv s{data, size};
-         to<JSON, sv>::template op<raw_string_emit_opts<Opts>>(s, ctx, out, ix);
+         detail::emit_untrusted_string<opt_true<Opts, escape_control_characters_opt_tag{}>>(ctx, sv{data, size}, out,
+                                                                                            ix);
       }
 
       // The spec marks several payloads as "already valid JSON text" so that a converter can

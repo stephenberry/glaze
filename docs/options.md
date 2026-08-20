@@ -175,7 +175,7 @@ Performs full JSON validation on values that are skipped (unknown keys). Without
 Validates that content after the parsed value contains only valid whitespace.
 
 #### `validate_utf8`
-On by default, because RFC 8259 section 8.1 requires JSON text to be UTF-8. Every string the reader materializes is checked, including map keys, unknown keys, and values that are skipped; malformed input fails with `error_code::invalid_utf8`.
+On by default, because RFC 8259 section 8.1 requires JSON text to be UTF-8. Every string the reader materializes is checked, including map keys, unknown keys, and values that are skipped; malformed input fails with `error_code::invalid_utf8`. Of the binary-to-JSON converters, only `jsonb_to_json` checks UTF-8; see [String Escaping](binary.md#string-escaping).
 
 ```cpp
 struct unchecked_opts : glz::opts {
@@ -284,6 +284,9 @@ Control string quoting and escape sequence handling. Useful for embedding pre-fo
 
 #### `escape_control_characters`
 When `true`, control characters (0x00-0x1F) are escaped as `\uXXXX` sequences. The default (`false`) does not escape these characters for performance and safety (embedding nulls can cause issues, especially with C APIs). Glaze will error when parsing non-escaped control characters per the JSON spec—this option allows writing them as escaped unicode to avoid such errors on re-read.
+
+The binary-to-JSON converters use this option to decide what to do with control characters in a converted value. Off, they fail with `error_code::invalid_control_character`. On, the bytes are escaped. They ignore `raw_string` and `unquoted` either way. See [String Escaping](binary.md#string-escaping).
+
 
 ### Performance Options
 

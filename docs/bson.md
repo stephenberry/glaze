@@ -308,6 +308,17 @@ auto encoded = glz::write_bson(h);
 // *encoded equals the 22 bytes above, byte-for-byte.
 ```
 
+## BSON to JSON Conversion
+
+`glz::bson_to_json` converts a buffer of BSON directly to a buffer of JSON.
+
+```c++
+std::string json{};
+auto ec = glz::bson_to_json(bson, json);
+```
+
+A BSON string can hold control characters (0x00–1F), which JSON cannot. Those without a short escape make the conversion fail with `error_code::invalid_control_character`. To keep them, turn on `escape_control_characters`. See [String Escaping](binary.md#string-escaping).
+
 ## Unsupported / Future Work
 
 - **MongoDB Extended JSON** (canonical / relaxed modes) — follow-up; this documentation covers the binary wire format only.
