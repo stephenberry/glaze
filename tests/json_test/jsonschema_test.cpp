@@ -573,7 +573,7 @@ suite value_type_variant_schema = [] {
       auto schema = glz::write_json_schema<tuple_t>().value();
       expect(
          schema ==
-         R"({"type":"array","prefixItems":[{"type":"integer","minimum":-2147483648,"maximum":2147483647},{"type":"string"},{"type":"boolean"}],"items":false,"title":"std::tuple<int32_t,std::string,bool>","maxItems":3})")
+         R"({"type":"array","prefixItems":[{"type":"integer","minimum":-2147483648,"maximum":2147483647},{"type":"string"},{"type":"boolean"}],"items":false,"title":"std::tuple<int32_t,std::string,bool>","minItems":3,"maxItems":3})")
          << schema;
    };
 
@@ -1173,6 +1173,76 @@ suite schema_round_trip_test = [] {
       expect(!ec);
       expect(re_serialized == schema_str)
          << "round-trip mismatch:\n  original: " << schema_str << "\n  re-serialized: " << re_serialized;
+   };
+};
+
+namespace schema_purpose_fixtures
+{
+   struct partial_person
+   {
+      std::string name{};
+      int age{};
+      std::optional<std::string> nickname{};
+   };
+}
+
+suite schema_purpose_test = [] {
+   using namespace schema_purpose_fixtures;
+
+   "input schema for tuple omits minItems"_test = [] {
+      using tuple_t = std::tuple<int, std::string, bool>;
+      auto s = glz::write_json_input_schema<tuple_t>().value();
+      glz::schema obj{};
+      auto err = glz::read<glz::opts{.error_on_unknown_keys = false}>(obj, s);
+      expect(!err) << glz::format_error(err, s);
+      expect(obj.maxItems.has_value());
+      expect(*obj.maxItems == 3UL);
+      expect(!obj.minItems.has_value()) << "input schema should not set minItems on a tuple: " << s;
+   };
+
+   "output schema for tuple sets minItems == maxItems"_test = [] {
+      using tuple_t = std::tuple<int, std::string, bool>;
+      auto s = glz::write_json_output_schema<tuple_t>().value();
+      glz::schema obj{};
+      auto err = glz::read<glz::opts{.error_on_unknown_keys = false}>(obj, s);
+      expect(!err) << glz::format_error(err, s);
+      expect(obj.maxItems.has_value());
+      expect(obj.minItems.has_value()) << "output schema should set minItems on a tuple: " << s;
+      expect(*obj.minItems == *obj.maxItems);
+      expect(*obj.minItems == 3UL);
+   };
+
+   "input schema for object omits required from non-optional members"_test = [] {
+      auto s = glz::write_json_input_schema<partial_person,
+                                            glz::opts{.error_on_missing_keys = true}>()
+                  .value();
+      glz::schema obj{};
+      auto err = glz::read<glz::opts{.error_on_unknown_keys = false}>(obj, s);
+      expect(!err) << glz::format_error(err, s);
+      expect(!obj.required.has_value())
+         << "input schema must allow partial parsing - required must be absent: " << s;
+   };
+
+   "output schema for object emits required for non-optional members"_test = [] {
+      auto s = glz::write_json_output_schema<partial_person,
+                                             glz::opts{.error_on_missing_keys = true}>()
+                  .value();
+      glz::schema obj{};
+      auto err = glz::read<glz::opts{.error_on_unknown_keys = false}>(obj, s);
+      expect(!err) << glz::format_error(err, s);
+      expect(obj.required.has_value()) << "output schema must list required keys: " << s;
+      auto& req = *obj.required;
+      expect(std::find(req.begin(), req.end(), "name") != req.end());
+      expect(std::find(req.begin(), req.end(), "age") != req.end());
+      expect(std::find(req.begin(), req.end(), "nickname") == req.end())
+         << "nullable members must not appear in required";
+   };
+
+   "default write_json_schema matches output purpose"_test = [] {
+      using tuple_t = std::tuple<int, double>;
+      auto def = glz::write_json_schema<tuple_t>().value();
+      auto out = glz::write_json_output_schema<tuple_t>().value();
+      expect(def == out) << "default purpose should be output: \n  default: " << def << "\n  output:  " << out;
    };
 };
 
