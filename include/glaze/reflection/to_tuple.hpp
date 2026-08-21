@@ -173,6 +173,9 @@ namespace glz
       template <class V>
       consteval size_t count_members_impl()
       {
+       static_assert(!initializable_with_n<V, max_pure_reflection_count + 1>,
+                     "glaze: this type has more members than pure reflection supports "
+                     "(max_pure_reflection_count); provide a glz::meta<T> specialization.");
        constexpr size_t low = count_low<V, 0, max_pure_reflection_count>();
        if constexpr (low == 0)
        {
