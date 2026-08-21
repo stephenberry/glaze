@@ -31,9 +31,13 @@ if (MSVC)
   # consumer only gets these flags if *it* is actually compiling with real MSVC. (Note
   # $<CXX_COMPILER_FRONTEND_VARIANT:MSVC> would not work here: it evaluates to true for
   # clang-cl too, since matching MSVC's driver interface is the entire premise of clang-cl.)
+  # The compile options narrow further to CXX, for the same reason the else() branch below
+  # guards on COMPILE_LANGUAGE: a consumer that compiles C, ISPC or CUDA alongside its C++
+  # should not have /Zc:lambda handed to those compilers. Link options have no per-language
+  # form, so they stay on CXX_COMPILER_ID alone.
   target_compile_options(glaze_glaze INTERFACE
     # for a C++ standards compliant preprocessor, not needed for clang-cl
-    $<$<CXX_COMPILER_ID:MSVC>:/Zc:preprocessor /permissive- /Zc:lambda>)
+    $<$<COMPILE_LANG_AND_ID:CXX,MSVC>:/Zc:preprocessor /permissive- /Zc:lambda>)
 
   # Whole-program optimization changes codegen quality, never correctness, and the
   # top-level build is glaze's own test suite -- correctness checks that gain nothing
@@ -46,8 +50,8 @@ if (MSVC)
   option(glaze_ENABLE_LTCG "Build with MSVC whole-program optimization (/GL /LTCG)" OFF)
   if(PROJECT_IS_TOP_LEVEL AND glaze_ENABLE_LTCG)
     target_compile_options(glaze_glaze INTERFACE
-      $<$<AND:$<CXX_COMPILER_ID:MSVC>,$<CONFIG:Release>>:/GL>
-      $<$<AND:$<CXX_COMPILER_ID:MSVC>,$<CONFIG:MinSizeRel>>:/GL>)
+      $<$<AND:$<COMPILE_LANG_AND_ID:CXX,MSVC>,$<CONFIG:Release>>:/GL>
+      $<$<AND:$<COMPILE_LANG_AND_ID:CXX,MSVC>,$<CONFIG:MinSizeRel>>:/GL>)
     target_link_options(glaze_glaze INTERFACE
       $<$<AND:$<CXX_COMPILER_ID:MSVC>,$<CONFIG:Release>>:/LTCG /INCREMENTAL:NO>
       $<$<AND:$<CXX_COMPILER_ID:MSVC>,$<CONFIG:MinSizeRel>>:/LTCG /INCREMENTAL:NO>)
