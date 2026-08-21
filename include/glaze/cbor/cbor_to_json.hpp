@@ -321,9 +321,12 @@ namespace glz
                ctx.depth += check_indentation_width(Opts);
             }
 
+            // A prettified map only breaks the line before its '}' when it holds at least one
+            // pair, so an empty map stays "{}" whether its length was definite or indefinite.
+            bool wrote_pair = false;
+
             if (additional_info == info::indefinite) {
                // Indefinite-length map
-               bool first = true;
                while (true) {
                   if (it >= end) [[unlikely]] {
                      ctx.error = error_code::unexpected_end;
@@ -337,14 +340,14 @@ namespace glz
                      break;
                   }
 
-                  if (!first) {
+                  if (wrote_pair) {
                      dump(',', out, ix);
                   }
                   if constexpr (Opts.prettify) {
                      dump('\n', out, ix);
                      dumpn(check_indentation_char(Opts), ctx.depth, out, ix);
                   }
-                  first = false;
+                  wrote_pair = true;
 
                   // Key (must be string for JSON compatibility)
                   cbor_to_json_key<Opts>(ctx, it, end, out, ix, recursive_depth + 1);
@@ -368,6 +371,8 @@ namespace glz
                const uint64_t count = cbor_to_json_decode_arg(ctx, it, end, additional_info);
                if (bool(ctx.error)) [[unlikely]]
                   return;
+
+               wrote_pair = count > 0;
 
                for (uint64_t i = 0; i < count; ++i) {
                   if (i > 0) {
@@ -399,7 +404,7 @@ namespace glz
 
             if constexpr (Opts.prettify) {
                ctx.depth -= check_indentation_width(Opts);
-               if (additional_info != 0 || additional_info == info::indefinite) {
+               if (wrote_pair) {
                   dump('\n', out, ix);
                   dumpn(check_indentation_char(Opts), ctx.depth, out, ix);
                }
