@@ -3,6 +3,9 @@ name: code_coverage
 on:
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 env:
   BUILD_TYPE: Debug
 

@@ -28,6 +28,9 @@ on:
         type: boolean
         default: false
 
+permissions:
+  contents: read
+
 env:
   # Suites that exercise UTF-8 validation. Kept narrow so the emulated job stays quick.
   UTF8_TESTS: "^(utf8_validation_test|json_conformance|json_test)$"
