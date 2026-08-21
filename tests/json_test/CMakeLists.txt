@@ -56,6 +56,14 @@ target_link_libraries(jsonschema_test PRIVATE glz_test_common)
 
 add_test(NAME jsonschema_test COMMAND jsonschema_test)
 
+## Constrained meta test - test for issue #2775
+
+add_executable(constrained_meta_test constrained_meta_test.cpp)
+
+target_link_libraries(constrained_meta_test PRIVATE glz_test_common)
+
+add_test(NAME constrained_meta_test COMMAND constrained_meta_test)
+
 ## Variant ambiguous test - test for ambiguous variant handling
 
 add_executable(variant_ambiguous_test variant_ambiguous_test.cpp)

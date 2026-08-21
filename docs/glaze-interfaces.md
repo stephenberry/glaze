@@ -270,9 +270,9 @@ This makes the 128-bit hash more than sufficient for any practical application.
 
 ## Name
 
-By default custom type names from `glz::name_v` will be `"Unnamed"`. It is best practice to give types the same name as it has in C++, including the namespace (at least the local namespace).
+Without a name of its own, a type falls back to the name the compiler gives it, which varies between compilers. It is best practice to give types the same name as they have in C++, including the namespace (at least the local namespace).
 
-Concepts exist for naming `const`, pointer (`*`), and reference (`&`), versions of types as they are used. Many standard library containers are also supported.
+Glaze names `const`, pointer (`*`), and reference (`&`) versions of types as they are used, along with many standard library containers. These names live in `glz::name_meta` rather than `glz::meta` — see [Customizing Type Names](./advanced-api-usage.md#customizing-type-names).
 
 ```c++
 expect(glz::name_v<std::vector<float>> == "std::vector<float>");

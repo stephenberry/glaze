@@ -439,7 +439,7 @@ namespace glz
 }
 
 template <class Scalar, int Rows, int Cols>
-struct glz::meta<Eigen::Matrix<Scalar, Rows, Cols>>
+struct glz::name_meta<Eigen::Matrix<Scalar, Rows, Cols>>
 {
    static constexpr std::string_view name = join_v<chars<"Eigen::Matrix<">, name_v<Scalar>, chars<",">, //
                                                    chars<num_to_string<Rows>::value>, chars<",">, //

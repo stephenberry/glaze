@@ -1439,7 +1439,8 @@ suite qualified_type_names_tests = [] {
    };
 
    // =========================================================================
-   // name_for_opts tests - priority: meta<T>::name > T::glaze::name > type_name_for_opts
+   // name_for_opts tests - priority: T::glaze::name > meta<T>::name > name_meta<T>::name >
+   // type_name_for_opts
    // =========================================================================
 
    "name_for_opts falls back to type_name_for_opts"_test = [] {

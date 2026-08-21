@@ -34,14 +34,26 @@ namespace glz
 
    // Primary template for glz::meta lives in glaze/forward.hpp.
 
+   // `name_meta` is how Glaze itself names types, and is deliberately separate from `glz::meta`.
+   // `meta` belongs to the user: Glaze declaring broadly constrained partial specializations of it
+   // (for `const T`, `T&`, `T*`, ...) makes any user specialization that is constrained on a concept
+   // rather than written for an exact type ambiguous with Glaze's, which is a hard error.
+   // Specialize this trait with a `name` member to give a type its Glaze name; `name_v` consults it
+   // only after the user's own `meta<T>::name` and `T::glaze::name`.
+   template <class T>
+   struct name_meta
+   {};
+
    template <>
-   struct meta<std::string_view>
+   struct name_meta<std::string_view>
    {
       static constexpr std::string_view name = "std::string_view";
    };
 
+   // Spelled out rather than left to the generic const specialization in glaze/api/type_support.hpp,
+   // which a translation unit that includes only core headers never sees.
    template <>
-   struct meta<const std::string_view>
+   struct name_meta<const std::string_view>
    {
       static constexpr std::string_view name = "const std::string_view";
    };
@@ -627,7 +639,7 @@ namespace glz
       !std::is_same_v<std::decay_t<decltype(self_constraint_v<std::decay_t<T>>)>, empty>;
 
    template <class T>
-   concept named = requires { meta<T>::name; } || requires { T::glaze::name; };
+   concept named = requires { meta<T>::name; } || requires { T::glaze::name; } || requires { name_meta<T>::name; };
 
    template <class T>
    inline constexpr std::string_view name_v = [] {
@@ -635,8 +647,11 @@ namespace glz
          if constexpr (requires { T::glaze::name; }) {
             return T::glaze::name;
          }
-         else {
+         else if constexpr (requires { meta<T>::name; }) {
             return meta<T>::name;
+         }
+         else {
+            return name_meta<T>::name;
          }
       }
       else if constexpr (std::is_void_v<T>) {
@@ -668,7 +683,7 @@ namespace glz
    }
 
    // Opts-aware name: like name_v but respects qualified_type_names option for the fallback.
-   // Priority: meta<T>::name > T::glaze::name > type_name_for_opts
+   // Priority: T::glaze::name > meta<T>::name > name_meta<T>::name > type_name_for_opts
    template <class T, auto Opts>
    consteval auto name_for_opts()
    {
@@ -676,8 +691,11 @@ namespace glz
          if constexpr (requires { T::glaze::name; }) {
             return std::string_view{T::glaze::name};
          }
-         else {
+         else if constexpr (requires { meta<T>::name; }) {
             return std::string_view{meta<T>::name};
+         }
+         else {
+            return std::string_view{name_meta<T>::name};
          }
       }
       else if constexpr (std::is_void_v<T>) {

@@ -10,7 +10,7 @@
 namespace glz
 {
    template <class T>
-   struct meta<std::list<T>>
+   struct name_meta<std::list<T>>
    {
       static constexpr std::string_view name = join_v<chars<"std::list<">, name_v<T>, chars<">">>;
    };
