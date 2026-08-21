@@ -99,6 +99,7 @@ namespace glz
       }(std::make_index_sequence<N>{});
 
       inline constexpr size_t max_pure_reflection_count = 128;
+      inline constexpr size_t no_proven_upper_bound = max_pure_reflection_count + 1;
 
       // Lowest n for which initializable_with_n is true
       template<class V, size_t K, size_t Max>
@@ -123,7 +124,7 @@ namespace glz
       {
           if constexpr (Low * 2 > Max)
           {
-              return Max;
+              return no_proven_upper_bound;
           }
           else if constexpr (initializable_with_n<V, Low * 2>)
           {
@@ -157,6 +158,18 @@ namespace glz
           }
       }
 
+      // Largest true value in [Low, Max], given Low is true.
+      template<class V, size_t Low, size_t High, size_t Max>
+      consteval size_t resolve_count()
+      {
+          if constexpr (High > Max && initializable_with_n<V, Max>) {
+              return Max;
+          }
+          else {
+              return count_between<V, Low, High>();
+          }
+      }
+
       template <class V>
       consteval size_t count_members_impl()
       {
@@ -166,12 +179,12 @@ namespace glz
            // Every member is default-constructible. If false for n=1 that means the struct has no members.
            if constexpr (!initializable_with_n<V, 1>) return 0;
            constexpr size_t high = count_high<V, 1, max_pure_reflection_count>();
-           return count_between<V, 1, high>();
+           return resolve_count<V, 1, high, max_pure_reflection_count>();
        }
        else
        {
            constexpr size_t high = count_high<V, low, max_pure_reflection_count>();
-           return count_between<V, low, high>();
+           return resolve_count<V, low, high, max_pure_reflection_count>();
        }
       }
 

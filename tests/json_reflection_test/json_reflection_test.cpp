@@ -1425,7 +1425,7 @@ struct max_members_t
 
    #undef FIELDS_64
    #undef FIELD_8
-}
+};
 static_assert(glz::detail::count_members<max_members_t> == glz::detail::max_pure_reflection_count,
               "a struct with exactly max_pure_reflection_count members must not count one short");
 
