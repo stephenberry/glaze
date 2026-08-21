@@ -649,9 +649,25 @@ suite content_length_connection_reuse = [] {
          asio::write(socket, asio::buffer(std::string("X-Checksum: 1234\r\n\r\n")), ec);
 
          // Second request, on this same connection if the socket was pooled correctly.
+         // Polled against a deadline rather than blocking: if a regression stops the socket
+         // being reused, the request never arrives here and an unbounded read would hang the
+         // thread, and with it join() and the whole test, until ctest times it out.
          req_buf.consume(req_buf.size());
-         asio::read_until(socket, req_buf, "\r\n\r\n", ec);
-         if (!ec) {
+         socket.non_blocking(true, ec);
+         const auto request_deadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
+         bool second_request_arrived = false;
+         while (std::chrono::steady_clock::now() < request_deadline) {
+            ec = {};
+            asio::read_until(socket, req_buf, "\r\n\r\n", ec);
+            if (!ec) {
+               second_request_arrived = true;
+               break;
+            }
+            if (ec != asio::error::would_block && ec != asio::error::try_again) break;
+            std::this_thread::sleep_for(std::chrono::milliseconds(5));
+         }
+         socket.non_blocking(false, ec);
+         if (second_request_arrived) {
             asio::write(socket, asio::buffer(std::string("HTTP/1.1 200 OK\r\nContent-Length: 5\r\n\r\nWORLD")), ec);
          }
          socket.shutdown(asio::ip::tcp::socket::shutdown_both, ec);
@@ -674,17 +690,24 @@ suite content_length_connection_reuse = [] {
       expect(stream_finished.wait_for(std::chrono::seconds(5)) == std::future_status::ready)
          << "stream should reach its end";
 
-      // POST so a failed read can't be masked by the idempotent-method retry path.
-      auto second = client.post_async(base, "two").get();
+      // POST so a failed read can't be masked by the idempotent-method retry path. Waited
+      // on with a deadline for the same reason the server polls: a socket that was not
+      // reused leaves this request talking to a server that has stopped accepting.
+      auto second_future = client.post_async(base, "two");
+      const bool second_answered = second_future.wait_for(std::chrono::seconds(10)) == std::future_status::ready;
+      expect(second_answered) << "follow-up request never completed; the pooled socket was not reused";
 
       server.join();
 
       expect(streamed == "STREAMED") << "stream body should arrive intact, got: " << streamed;
-      expect(second.has_value()) << "the pooled socket must sit at the start of the next response, not on the "
-                                    "trailer section that follows the terminal chunk";
-      if (second) {
-         expect(second->status_code == 200);
-         expect(second->response_body == "WORLD");
+      if (second_answered) {
+         auto second = second_future.get();
+         expect(second.has_value()) << "the pooled socket must sit at the start of the next response, not on the "
+                                       "trailer section that follows the terminal chunk";
+         if (second) {
+            expect(second->status_code == 200);
+            expect(second->response_body == "WORLD");
+         }
       }
       expect(accept_count->load() == 1) << "a stream read to its framed end should be reused, not reopened; got "
                                         << accept_count->load() << " connections";

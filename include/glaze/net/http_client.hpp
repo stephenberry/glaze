@@ -1433,10 +1433,12 @@ namespace glz
          auto internal_on_disconnect = [this, user_on_disconnect = std::move(on_disconnect), connection, url,
                                         use_https]() {
             connection->is_connected = false;
-            // Call the user's handler if provided
-            if (user_on_disconnect) {
-               user_on_disconnect();
-            }
+            // Settle the socket before telling the caller the stream ended, matching the
+            // non-streaming paths, which return the connection and only then run the
+            // completion handler. The other order publishes "finished" while the socket is
+            // still in hand, so a caller that starts its next request from on_disconnect
+            // finds an empty pool and dials a second connection - never reusing the very
+            // socket the code below is about to make reusable.
             if (connection->socket) {
                // Only a socket sitting at the end of a fully-read response can serve
                // the next request. Pooling one that timed out, errored, or was
@@ -1452,6 +1454,12 @@ namespace glz
                else {
                   detail::close_socket(*connection->socket, connection_pool->graceful_ssl_shutdown());
                }
+            }
+            // Returning the socket leaves a null shared_ptr in the variant; every accessor
+            // guards on it, so the disconnect() that http_stream_connection runs from its
+            // destructor is a no-op rather than a dereference of a moved-from socket.
+            if (user_on_disconnect) {
+               user_on_disconnect();
             }
          };
 
