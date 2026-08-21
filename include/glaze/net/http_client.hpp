@@ -979,10 +979,14 @@ namespace glz
       size_t max_buffer_size{1024 * 1024};
       std::string body;
       glz::http_headers headers;
-      http_connect_handler on_connect;
-      http_disconnect_handler on_disconnect;
+      // Declared in the order callers reach for them. Designators must appear in
+      // declaration order (gcc and MSVC enforce this; clang accepts any order as an
+      // extension), so the spelling that comes naturally - on_data and on_error first,
+      // the optional on_connect and on_disconnect after - has to be the declared one.
       http_data_handler on_data;
       http_error_handler on_error;
+      http_connect_handler on_connect;
+      http_disconnect_handler on_disconnect;
       std::function<bool(int)> status_is_error{[](int status) { return status >= 400; }};
    };
 

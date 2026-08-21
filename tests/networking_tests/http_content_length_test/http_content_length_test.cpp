@@ -576,11 +576,10 @@ suite content_length_connection_reuse = [] {
       std::promise<void> stream_done;
       auto stream_finished = stream_done.get_future();
       std::string streamed;
-      // Designator order has to match declaration order; gcc and MSVC reject it otherwise.
       auto conn = client.stream_request_v2({.url = base,
-                                            .on_disconnect = [&] { stream_done.set_value(); },
                                             .on_data = [&](std::string_view data) { streamed.append(data); },
-                                            .on_error = [](std::error_code) {}});
+                                            .on_error = [](std::error_code) {},
+                                            .on_disconnect = [&] { stream_done.set_value(); }});
       expect(conn != nullptr) << "stream request should start";
       expect(stream_finished.wait_for(std::chrono::seconds(5)) == std::future_status::ready)
          << "stream should reach its end";
@@ -683,9 +682,9 @@ suite content_length_connection_reuse = [] {
       auto stream_finished = stream_done.get_future();
       std::string streamed;
       auto conn = client.stream_request_v2({.url = base,
-                                            .on_disconnect = [&] { stream_done.set_value(); },
                                             .on_data = [&](std::string_view data) { streamed.append(data); },
-                                            .on_error = [](std::error_code) {}});
+                                            .on_error = [](std::error_code) {},
+                                            .on_disconnect = [&] { stream_done.set_value(); }});
       expect(conn != nullptr) << "stream request should start";
       expect(stream_finished.wait_for(std::chrono::seconds(5)) == std::future_status::ready)
          << "stream should reach its end";
