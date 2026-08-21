@@ -173,6 +173,8 @@ namespace glz
       template <class V>
       consteval size_t count_members_impl()
       {
+       // Note: this assertion will not catch every violation.
+       // Example: struct with max_pure_reflection_count + 2 fields with the last one non-default constructible
        static_assert(!initializable_with_n<V, max_pure_reflection_count + 1>,
                      "glaze: this type has more members than pure reflection supports "
                      "(max_pure_reflection_count); provide a glz::meta<T> specialization.");
