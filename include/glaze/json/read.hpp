@@ -5168,6 +5168,29 @@ namespace glz
       }
    };
 
+#if defined(__cpp_lib_chrono) && __cpp_lib_chrono >= 201907L
+   // utc_clock::time_point: parse from ISO 8601 string via clock_cast from sys_time.
+   template <is_utc_time_point T>
+      requires(not custom_read<T>)
+   struct from<JSON, T>
+   {
+      template <auto Opts, class It0, class It1>
+      static void op(auto&& value, is_context auto&& ctx, It0&& it, It1 end) noexcept
+      {
+         std::string_view str;
+         parse_transient_string_view<Opts>(str, ctx, it, end);
+         if (bool(ctx.error)) [[unlikely]]
+            return;
+
+         std::chrono::system_clock::time_point sys{};
+         chrono_detail::parse_iso8601(str, sys, ctx.error);
+         if (bool(ctx.error)) [[unlikely]]
+            return;
+         value = std::chrono::clock_cast<std::chrono::utc_clock>(sys);
+      }
+   };
+#endif
+
    // year_month_day: parse from "YYYY-MM-DD" JSON string
    template <is_year_month_day T>
       requires(not custom_read<T>)
