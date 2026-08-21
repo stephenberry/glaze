@@ -902,6 +902,17 @@ namespace glz
       std::shared_ptr<asio::streambuf> buffer; // Use unified streambuf for all reads
       bool is_connected{false};
       std::atomic<bool> should_stop{false};
+      // Set only once the response has been read to its framed end - terminal chunk,
+      // trailer section and the final CRLF all consumed - leaving the socket
+      // positioned at the start of whatever the server sends next. Every other way a
+      // stream ends - a timeout, a caller-initiated disconnect part way through the
+      // body, a read error, or a body framed by connection close - leaves either
+      // unread response bytes or a dead peer behind, so the socket must be closed
+      // rather than handed to the next request.
+      std::atomic<bool> response_complete{false};
+      // The response asked for the connection to be closed once it is delivered, so
+      // the socket is single-use no matter how cleanly the body ends.
+      std::atomic<bool> peer_will_close{false};
       stream_read_strategy strategy{stream_read_strategy::bulk_transfer}; // Default strategy
       std::function<bool(int)> status_is_error{}; // Evaluated before treating status as failure
       bool is_https{false}; // Track if this is an HTTPS connection
@@ -1422,13 +1433,33 @@ namespace glz
          auto internal_on_disconnect = [this, user_on_disconnect = std::move(on_disconnect), connection, url,
                                         use_https]() {
             connection->is_connected = false;
-            // Call the user's handler if provided
+            // Settle the socket before telling the caller the stream ended, matching the
+            // non-streaming paths, which return the connection and only then run the
+            // completion handler. The other order publishes "finished" while the socket is
+            // still in hand, so a caller that starts its next request from on_disconnect
+            // finds an empty pool and dials a second connection - never reusing the very
+            // socket the code below is about to make reusable.
+            if (connection->socket) {
+               // Only a socket sitting at the end of a fully-read response can serve
+               // the next request. Pooling one that timed out, errored, or was
+               // abandoned part way through the body hands the next request a socket
+               // with the tail of this response still arriving on it, which that
+               // request reads as its own status line - the same desync a conflicting
+               // Content-Length produces, reached through the pool instead. A body
+               // framed by connection close leaves the socket at EOF, which is dead
+               // rather than dangerous, but equally unusable.
+               if (connection->response_complete.load(std::memory_order_relaxed)) {
+                  connection_pool->return_connection(url.host, url.port, use_https, std::move(*connection->socket));
+               }
+               else {
+                  detail::close_socket(*connection->socket, connection_pool->graceful_ssl_shutdown());
+               }
+            }
+            // Returning the socket leaves a null shared_ptr in the variant; every accessor
+            // guards on it, so the disconnect() that http_stream_connection runs from its
+            // destructor is a no-op rather than a dereference of a moved-from socket.
             if (user_on_disconnect) {
                user_on_disconnect();
-            }
-            // Return the connection to the pool for reuse
-            if (connection->socket) {
-               connection_pool->return_connection(url.host, url.port, use_https, std::move(*connection->socket));
             }
          };
 
@@ -1650,6 +1681,10 @@ namespace glz
                      connection->is_connected = true;
                      connection->timer->cancel();
 
+                     connection->peer_will_close.store(
+                        response_headers.response_headers.contains_token("connection", "close"),
+                        std::memory_order_relaxed);
+
                      if (on_connect) {
                         on_connect(response_headers);
                      }
@@ -1726,14 +1761,52 @@ namespace glz
                      connection->buffer->consume(bytes_transferred);
 
                      if (chunk_size == 0) {
-                        // Last chunk
-                        if (on_disconnect) on_disconnect();
+                        // Terminal chunk. The trailer section and the final CRLF still sit in
+                        // front of the next response, so the socket is only reusable once they
+                        // have been consumed too (RFC 9112 7.1).
+                        consume_trailers(connection, std::move(on_disconnect));
                         return;
                      }
 
                      read_chunk_body(connection, chunk_size, std::move(on_data), std::move(on_error),
                                      std::move(on_disconnect));
                   });
+            },
+            *connection->socket);
+      }
+
+      // After the terminal chunk, skip the optional trailer section and the final CRLF
+      // (RFC 9112 7.1.2). Only then does the socket sit at the start of whatever the
+      // server sends next, which is the one state that makes it reusable.
+      void consume_trailers(std::shared_ptr<http_stream_connection> connection, http_disconnect_handler on_disconnect)
+      {
+         std::visit(
+            [&, this](auto& sock) {
+               asio::async_read_until(*sock, *connection->buffer, "\r\n",
+                                      [this, connection, on_disconnect = std::move(on_disconnect)](
+                                         asio::error_code ec, std::size_t bytes_transferred) mutable {
+                                         // The body is already delivered in full, so a failure here is not reported
+                                         // to the caller - it only means the socket cannot be reused.
+                                         if (ec || connection->should_stop) {
+                                            if (on_disconnect) on_disconnect();
+                                            return;
+                                         }
+
+                                         const bool end_of_trailers = (bytes_transferred == 2); // just "\r\n"
+                                         connection->buffer->consume(bytes_transferred);
+
+                                         if (!end_of_trailers) {
+                                            consume_trailers(connection,
+                                                             std::move(on_disconnect)); // trailer field line
+                                            return;
+                                         }
+
+                                         // A response that asked to close is single-use however cleanly it ended.
+                                         if (!connection->peer_will_close.load(std::memory_order_relaxed)) {
+                                            connection->response_complete.store(true, std::memory_order_relaxed);
+                                         }
+                                         if (on_disconnect) on_disconnect();
+                                      });
             },
             *connection->socket);
       }
