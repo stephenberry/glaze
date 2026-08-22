@@ -748,6 +748,13 @@ namespace glz
                   }
                }
             }
+            else if constexpr (custom_getter_returns_nullable<val_t>()) {
+               // See is_null_field in write_toml_object_with_path: a null glz::custom getter
+               // result leaves nothing to write, so the key is dropped.
+               if (is_custom_field_null<Type, I>(value, t, ctx)) {
+                  return;
+               }
+            }
 
             static constexpr auto key = glz::get<I>(reflect<Type>::keys);
             static constexpr auto padding = key.size() + 16;
@@ -947,6 +954,11 @@ namespace glz
                else
                   return !bool(get_member(value, element()));
             }
+         }
+         else if constexpr (custom_getter_returns_nullable<val_t>()) {
+            // A glz::custom getter yielding a null optional has nothing to put to the right of
+            // `=`, so the key is dropped exactly as a plain nullable field would be.
+            return is_custom_field_null<T, I>(value, t, ctx);
          }
          else { // else used to fix MSVC unreachable code warning
             return false;

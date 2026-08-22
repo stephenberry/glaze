@@ -6,6 +6,7 @@
 #if defined GLZ_ENABLE_EETF
 
 #include "glaze/eetf/read.hpp"
+#include "glaze/eetf/wrappers.hpp"
 #include "glaze/eetf/write.hpp"
 
 #endif

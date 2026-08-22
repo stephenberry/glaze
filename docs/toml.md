@@ -269,6 +269,51 @@ glz::write_toml(c, toml);  // Regular write_toml, but products uses inline synta
 
 This is useful when you want a more compact representation or when the array contains simple objects with few fields.
 
+## Custom Read/Write
+
+`glz::custom<Read, Write>` works for TOML exactly as it does for JSON. It binds a key to a setter used on read and a getter used on write, so a member can be transformed, validated, or hidden behind an accessor:
+
+```cpp
+struct settings
+{
+   uint64_t port{};
+
+   void set_port(const std::string& s) { port = std::stoull(s); }
+   uint64_t get_port() const { return port; }
+};
+
+template <>
+struct glz::meta<settings>
+{
+   using T = settings;
+   static constexpr auto value = object("port", custom<&T::set_port, &T::get_port>);
+};
+```
+
+```toml
+port = "8080"   # read as a string, stored as a uint64_t
+```
+
+Member pointers, member functions, `std::function` members, and lambdas are all accepted, along with the three-parameter lambda form that also takes a `glz::context&` so a setter can report its own error:
+
+```cpp
+static constexpr auto read_port = [](settings& s, int port, glz::context& ctx) {
+   if (port < 1024) {
+      ctx.error = glz::error_code::constraint_violated;
+      ctx.custom_error_message = "port is reserved";
+   }
+   else {
+      s.port = port;
+   }
+};
+```
+
+Use `glz::skip{}` as the read handler for a key that is written but never read back.
+
+A custom getter that exposes a nested object is written as a `[table]`, matching the layout of a plain field of the same type. A custom getter that exposes a sequence of objects is written as an inline array rather than `[[array_of_tables]]`, because the reader cannot feed an array-of-tables section back into a setter.
+
+TOML has no null, so a custom getter returning a disengaged `std::optional` (or a null pointer) omits its key entirely, exactly as a plain nullable field does.
+
 ## Using the Generic API
 
 The convenience wrappers call into the generic `glz::read`/`glz::write` pipeline. You can reuse the same options struct you already use for JSON while switching the format to TOML:
