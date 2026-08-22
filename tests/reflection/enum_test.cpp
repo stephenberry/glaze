@@ -3,7 +3,11 @@
 
 #include <array>
 
+#include "glaze/beve.hpp"
 #include "glaze/glaze.hpp"
+#include "glaze/msgpack.hpp"
+#include "glaze/toml.hpp"
+#include "glaze/yaml.hpp"
 #include "ut/ut.hpp"
 
 using namespace ut;
@@ -1154,6 +1158,147 @@ suite random_enum_hash_tests = [] {
    "RandomU32Enum3_roundtrip"_test = [] { test_enum_roundtrip<RandomU32Enum3>(); };
    "RandomI64Enum1_roundtrip"_test = [] { test_enum_roundtrip<RandomI64Enum1>(); };
    "RandomI64Enum2_roundtrip"_test = [] { test_enum_roundtrip<RandomI64Enum2>(); };
+};
+
+// Issue #2672: a named enum value that is not in the enumerate map has no string name. The text
+// formats (JSON, TOML, YAML, MessagePack) validate names on read, so the writer must error rather
+// than silently emit the underlying integer it could not read back. Binary formats (BEVE/CBOR/BSON)
+// intentionally round-trip integers and are unaffected.
+enum class Issue2672Enum : uint8_t { A = 1, B = 2 }; // a default-constructed value (0) is un-enumerated
+
+template <>
+struct glz::meta<Issue2672Enum>
+{
+   using T = Issue2672Enum;
+   static constexpr auto value = enumerate("A", T::A, "B", T::B);
+};
+
+struct Issue2672Wrapper
+{
+   Issue2672Enum e{};
+};
+
+suite issue_2672_write_error_tests = [] {
+   // ---- JSON ----
+   "json_unenumerated_write_errors"_test = [] {
+      std::string s;
+      expect(glz::write_json(Issue2672Enum{}, s) == glz::error_code::unexpected_enum);
+   };
+
+   "json_enumerated_write_ok"_test = [] {
+      std::string s;
+      expect(not glz::write_json(Issue2672Enum::A, s));
+      expect(s == "\"A\"") << s;
+   };
+
+   "json_error_propagates_through_struct"_test = [] {
+      std::string s;
+      expect(glz::write_json(Issue2672Wrapper{}, s) == glz::error_code::unexpected_enum);
+   };
+
+   "json_error_propagates_through_vector"_test = [] {
+      // First element is valid, second is un-enumerated: the error must surface from the container.
+      std::vector<Issue2672Enum> v{Issue2672Enum::A, Issue2672Enum{}};
+      std::string s;
+      expect(glz::write_json(v, s) == glz::error_code::unexpected_enum);
+   };
+
+   "json_valid_still_roundtrips"_test = [] {
+      std::string s;
+      expect(not glz::write_json(Issue2672Enum::B, s));
+      Issue2672Enum r{};
+      expect(not glz::read_json(r, s));
+      expect(r == Issue2672Enum::B);
+   };
+
+   // ---- TOML ----
+   "toml_unenumerated_write_errors"_test = [] {
+      std::string s;
+      expect(glz::write_toml(Issue2672Enum{}, s) == glz::error_code::unexpected_enum);
+   };
+
+   "toml_enumerated_write_ok"_test = [] {
+      std::string s;
+      expect(not glz::write_toml(Issue2672Enum::A, s));
+   };
+
+   // ---- YAML ----
+   "yaml_unenumerated_write_errors"_test = [] {
+      std::string s;
+      expect(glz::write_yaml(Issue2672Enum{}, s) == glz::error_code::unexpected_enum);
+   };
+
+   "yaml_enumerated_write_ok"_test = [] {
+      std::string s;
+      expect(not glz::write_yaml(Issue2672Enum::A, s));
+   };
+
+   // ---- MessagePack ----
+   "msgpack_unenumerated_write_errors"_test = [] {
+      std::string s;
+      expect(glz::write_msgpack(Issue2672Enum{}, s) == glz::error_code::unexpected_enum);
+   };
+
+   "msgpack_enumerated_roundtrips"_test = [] {
+      std::string s;
+      expect(not glz::write_msgpack(Issue2672Enum::B, s));
+      Issue2672Enum r{};
+      expect(not glz::read_msgpack(r, s));
+      expect(r == Issue2672Enum::B);
+   };
+
+   // ---- BEVE (binary): intentionally round-trips integers, so the fix must NOT make it error ----
+   "beve_unenumerated_still_roundtrips"_test = [] {
+      std::string s;
+      expect(not glz::write_beve(Issue2672Enum{}, s));
+      Issue2672Enum r{static_cast<Issue2672Enum>(2)};
+      expect(not glz::read_beve(r, s));
+      expect(static_cast<uint8_t>(r) == 0);
+   };
+};
+
+// The inheritable enum_int_fallback option restores the previous behavior (emit the
+// underlying integer instead of erroring) for code that intentionally serializes sentinel/unmapped
+// enum values. Default (option absent) is the new erroring behavior, verified above.
+struct legacy_enum_opts : glz::opts
+{
+   bool enum_int_fallback = true;
+};
+
+suite issue_2672_legacy_option_tests = [] {
+   "json_option_writes_integer"_test = [] {
+      std::string s;
+      expect(not glz::write<legacy_enum_opts{}>(Issue2672Enum{}, s));
+      expect(s == "0") << s;
+   };
+
+   "json_option_enumerated_still_string"_test = [] {
+      // Values that DO have a name are unaffected by the option.
+      std::string s;
+      expect(not glz::write<legacy_enum_opts{}>(Issue2672Enum::A, s));
+      expect(s == "\"A\"") << s;
+   };
+
+   "json_option_struct_writes_integer"_test = [] {
+      std::string s;
+      expect(not glz::write<legacy_enum_opts{}>(Issue2672Wrapper{}, s));
+      expect(s == R"({"e":0})") << s;
+   };
+
+   "toml_option_writes_without_error"_test = [] {
+      std::string s;
+      expect(not glz::write<legacy_enum_opts{{.format = glz::TOML}}>(Issue2672Enum{}, s));
+   };
+
+   "yaml_option_writes_without_error"_test = [] {
+      std::string s;
+      expect(not glz::write<legacy_enum_opts{{.format = glz::YAML}}>(Issue2672Enum{}, s));
+   };
+
+   "msgpack_option_writes_without_error"_test = [] {
+      std::string s;
+      expect(not glz::write<legacy_enum_opts{{.format = glz::MSGPACK}}>(Issue2672Enum{}, s));
+   };
 };
 
 int main() { return 0; }
