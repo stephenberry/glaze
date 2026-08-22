@@ -348,6 +348,24 @@ namespace glz
    concept writable_array_t = (range<T> && !custom_write<T> && !meta_value_t<T> && !str_t<T> && !writable_map_t<T> &&
                                !filesystem_path<T> && !has_value_method<T>);
 
+   // Static-extent arrays whose elements are reached through `volatile`, such as
+   // glz::volatile_array<some_class, N>.
+   //
+   // `volatile T*` is not a `std::input_iterator` when `T` is a class type:
+   // `std::indirectly_readable` requires `T` be constructible from `volatile T&`, and an
+   // implicit copy constructor takes `const T&`, to which no volatile lvalue binds. Scalar
+   // elements copy through a built-in conversion instead, so those arrays remain iterable and
+   // keep taking the ordinary `range` paths. Only the class-element case lands here, and it
+   // must be traversed by index rather than by iterator.
+   template <class T>
+   concept volatile_indexed_array = is_volatile_array<T> && !range<T> && !meta_value_t<T>;
+
+   template <class T>
+   concept readable_volatile_array_t = volatile_indexed_array<T> && !custom_read<T>;
+
+   template <class T>
+   concept writable_volatile_array_t = volatile_indexed_array<T> && !custom_write<T>;
+
    template <class T>
    concept fixed_array_value_t =
       array_t<std::decay_t<decltype(std::declval<T>()[0])>> && !resizable<std::decay_t<decltype(std::declval<T>()[0])>>;

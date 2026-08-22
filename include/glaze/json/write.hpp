@@ -1346,6 +1346,55 @@ namespace glz
       to<JSON, V>::template op<opening_and_closing_handled_off<Opts>()>(value, ctx, b, ix);
    }
 
+   // Writes a JSON array by indexing rather than by iterating.
+   //
+   // Needed wherever the elements are reached through `volatile`: `volatile T*` is not an
+   // iterator for a class-type `T` (see `volatile_indexed_array`), and `std::span` cannot be
+   // formed over volatile storage either. `N` is the compile-time extent; elements are visited
+   // with `value[i]`, which keeps every access volatile-qualified.
+   template <auto Opts, size_t N, class... Args>
+   void write_json_indexed_array(auto&& value, is_context auto&& ctx, Args&&... args)
+   {
+      if constexpr (N == 0) {
+         dump("[]", args...);
+      }
+      else {
+         using val_t = std::remove_cvref_t<decltype(value[0])>;
+
+         dump('[', args...);
+         if constexpr (Opts.prettify && check_new_lines_in_arrays(Opts)) {
+            ctx.depth += check_indentation_width(Opts);
+            dump_newline_indent(check_indentation_char(Opts), ctx.depth, args...);
+         }
+
+         for (size_t i = 0; i < N; ++i) {
+            if (i) {
+               write_array_entry_separator<Opts>(ctx, args...);
+            }
+            to<JSON, val_t>::template op<Opts>(value[i], ctx, args...);
+            if (bool(ctx.error)) [[unlikely]] {
+               return;
+            }
+         }
+
+         if constexpr (Opts.prettify && check_new_lines_in_arrays(Opts)) {
+            ctx.depth -= check_indentation_width(Opts);
+            dump_newline_indent(check_indentation_char(Opts), ctx.depth, args...);
+         }
+         dump(']', args...);
+      }
+   }
+
+   template <writable_volatile_array_t T>
+   struct to<JSON, T>
+   {
+      template <auto Opts, class... Args>
+      static void op(auto&& value, is_context auto&& ctx, Args&&... args)
+      {
+         write_json_indexed_array<Opts, std::remove_cvref_t<T>::length>(value, ctx, std::forward<Args>(args)...);
+      }
+   };
+
    template <class T>
    concept array_padding_known = requires { typename T::value_type; } &&
                                  (required_padding<typename T::value_type>() > 0 ||
@@ -1719,7 +1768,14 @@ namespace glz
       template <auto Opts, class V, size_t N, class... Args>
       GLZ_ALWAYS_INLINE static void op(const V (&value)[N], is_context auto&& ctx, Args&&... args)
       {
-         serialize<JSON>::op<Opts>(std::span{value, N}, ctx, std::forward<Args>(args)...);
+         if constexpr (requires { std::span{value, N}; }) {
+            serialize<JSON>::op<Opts>(std::span{value, N}, ctx, std::forward<Args>(args)...);
+         }
+         else {
+            // A class-type element reached through `volatile` gives a pointer that is neither a
+            // contiguous_iterator nor spannable, so index the array directly instead.
+            write_json_indexed_array<Opts, N>(value, ctx, std::forward<Args>(args)...);
+         }
       }
    };
 
