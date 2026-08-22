@@ -2,7 +2,10 @@
 #include <cstdint>
 #include <glaze/json.hpp>
 #include <glaze/json/schema.hpp>
+#include <set>
 #include <string>
+#include <unordered_map>
+#include <unordered_set>
 #include <ut/ut.hpp>
 
 using namespace ut;
@@ -654,6 +657,29 @@ suite value_type_variant_schema = [] {
       expect(
          schema ==
          R"({"type":"object","additionalProperties":{"type":"string"},"title":"std::map<std::string,std::string>"})")
+         << schema;
+   };
+
+   // The titles below are compiler-derived unless schema.hpp pulls in the matching naming meta.
+   // glaze/api/std/names.hpp supplies the whole set so no container is left spelling itself
+   // differently on libc++, libstdc++, and MSVC.
+
+   "unordered_map<string,string> additionalProperties inlined"_test = [] {
+      auto schema = glz::write_json_schema<std::unordered_map<std::string, std::string>>().value();
+      expect(
+         schema ==
+         R"({"type":"object","additionalProperties":{"type":"string"},"title":"std::unordered_map<std::string,std::string>"})")
+         << schema;
+   };
+
+   "set<string> items inlined"_test = [] {
+      auto schema = glz::write_json_schema<std::set<std::string>>().value();
+      expect(schema == R"({"type":"array","items":{"type":"string"},"title":"std::set<std::string>"})") << schema;
+   };
+
+   "unordered_set<string> items inlined"_test = [] {
+      auto schema = glz::write_json_schema<std::unordered_set<std::string>>().value();
+      expect(schema == R"({"type":"array","items":{"type":"string"},"title":"std::unordered_set<std::string>"})")
          << schema;
    };
 
