@@ -1450,6 +1450,12 @@ suite non_default_constructible_member_tests = [] {
       expect(obj.a == 2.0);
       expect(obj.b.v == 1);
    };
+
+    "non-default-constructible member at position 2 writes correctly"_test = [] {
+        std::string buffer{};
+        expect(not glz::write_json(non_default_constructible_second{2.0, ctor_only_member{1}}, buffer));
+        expect(buffer == R"({"a":2,"b":{"v":1}})") << buffer;
+    };
 };
 
 int main() { return 0; }
