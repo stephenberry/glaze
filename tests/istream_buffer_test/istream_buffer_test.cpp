@@ -3701,9 +3701,12 @@ suite streaming_state_unit_tests = [] {
       auto state = glz::make_streaming_state(buffer);
       size_t original_size = state.size();
 
+      expect(state.bytes_consumed() == 0u);
       state.consume_bytes(5);
 
       expect(buffer.bytes_consumed() == 5u);
+      // The window's own stream offset, which is what makes a position survive a refill.
+      expect(state.bytes_consumed() == 5u);
       // After consume, size should be reduced
       expect(state.size() == original_size - 5u);
    };
@@ -5002,6 +5005,249 @@ suite tagged_variant_streaming_tests = [] {
       expect(!reader.read_next(value));
       expect(std::holds_alternative<put_action_t>(value));
       expect(std::get<put_action_t>(value).data.at("k") == 2);
+   };
+};
+
+// A variant deduced by shape or by a tag re-reads the object from its opening brace once it knows
+// which alternative it holds. Under a streaming read the bytes it wants to go back to may already
+// have been released: the scan that found the tag skips values, and a streaming skip refills.
+//
+// The position is anchored as a stream offset rather than kept as a pointer (see glz::rewind_anchor),
+// so the re-read either lands where it meant to or reports that the window is too small. Before that
+// the reader returned to a pointer into relocated bytes, which surfaced as a syntax error naming a
+// position the document does not have.
+struct wide_alpha_t
+{
+   int a{};
+   std::vector<int> data{};
+};
+
+struct wide_beta_t
+{
+   int b{};
+   std::vector<int> data{};
+};
+
+using wide_tagged_t = std::variant<wide_alpha_t, wide_beta_t>;
+
+template <>
+struct glz::meta<wide_tagged_t>
+{
+   static constexpr std::string_view tag = "t";
+   static constexpr auto ids = std::array{"a", "b"};
+};
+
+// Distinct alternatives, not an alias of the pair above: a using-alias would name the same type and
+// pick up its glz::meta, which would quietly send these through the tagged reader instead.
+struct plain_alpha_t
+{
+   int a{};
+   std::vector<int> data{};
+};
+
+struct plain_beta_t
+{
+   int b{};
+   std::vector<int> data{};
+};
+
+using wide_untagged_t = std::variant<plain_alpha_t, plain_beta_t>; // deduced by the unique keys "a"/"b"
+static_assert(glz::tag_v<wide_untagged_t>.empty(), "this pair must reach the shape-deduction path");
+
+// The discriminator names a scalar alternative while the content is an object, so every read of
+// this shape has to fail. That makes it a probe for the re-read landing somewhere it should not:
+// a success means the second pass parsed bytes the document does not have there.
+struct nested_payload_t
+{
+   std::vector<int> data{};
+   int value{};
+};
+
+using adjacent_probe_t = std::variant<int, nested_payload_t>;
+
+template <>
+struct glz::meta<adjacent_probe_t>
+{
+   static constexpr std::string_view tag = "kind";
+   static constexpr std::string_view content = "value";
+   static constexpr auto ids = std::array{"a", "b"};
+};
+
+// Adjacent tagging reads the object twice however the keys are ordered, so both orders need the
+// object to still be in the window for the second pass. Its own alternatives again, for the same
+// reason: a variant of the pair above would be the same type as wide_untagged_t.
+struct adj_alpha_t
+{
+   int a{};
+   std::vector<int> data{};
+};
+
+struct adj_beta_t
+{
+   int b{};
+   std::vector<int> data{};
+};
+
+using wide_adjacent_t = std::variant<adj_alpha_t, adj_beta_t>;
+
+template <>
+struct glz::meta<wide_adjacent_t>
+{
+   static constexpr std::string_view tag = "kind";
+   static constexpr std::string_view content = "value";
+   static constexpr auto ids = std::array{"a", "b"};
+};
+
+// Wide enough that a 512 byte window cannot hold one, but built from values that each fit, so the
+// only thing standing in the way is the re-read.
+inline std::string wide_int_array(int n)
+{
+   std::string s = "[";
+   for (int i = 0; i < n; ++i) {
+      if (i) {
+         s += ',';
+      }
+      s += std::to_string(i % 10);
+   }
+   return s + ']';
+}
+
+suite variant_rewind_streaming_tests = [] {
+   // The re-read that can be done is still done: the object fits, so the anchor is still in the
+   // window and the tag being the last key costs nothing but a second pass.
+   "a variant that fits the window is re-read"_test = [] {
+      const std::string doc = R"({"b":7,"data":)" + wide_int_array(400) + R"(,"t":"b"})";
+      std::istringstream in{doc};
+      glz::basic_istream_buffer<std::istringstream, 65536> buffer{in};
+      wide_tagged_t value{};
+      expect(!glz::read_json(value, buffer));
+      expect(std::holds_alternative<wide_beta_t>(value));
+      expect(std::get<wide_beta_t>(value).b == 7);
+      expect(std::get<wide_beta_t>(value).data.size() == 400u);
+   };
+
+   "an object wider than the window says so"_test = [] {
+      const std::string doc = R"({"b":7,"data":)" + wide_int_array(400) + R"(,"t":"b"})";
+      expect(doc.size() > 512u);
+
+      std::istringstream in{doc};
+      glz::basic_istream_buffer<std::istringstream, 512> buffer{in};
+      wide_tagged_t value{};
+      const auto ec = glz::read_json(value, buffer);
+      expect(ec == glz::error_code::streaming_unsupported)
+         << "a syntax error would blame the document for a window that was too small";
+   };
+
+   // Shape deduction re-reads for the same reason a tag does, and has done so since long before
+   // tagged variants could be streamed at all.
+   "an untagged deduced variant reports the same limit"_test = [] {
+      const std::string doc = R"({"data":)" + wide_int_array(400) + R"(,"b":7})";
+      expect(doc.size() > 512u);
+
+      std::istringstream in{doc};
+      glz::basic_istream_buffer<std::istringstream, 512> buffer{in};
+      wide_untagged_t value{};
+      const auto ec = glz::read_json(value, buffer);
+      expect(ec == glz::error_code::streaming_unsupported)
+         << "a syntax error would blame the document for a window that was too small";
+   };
+
+   // The direction that has to keep working. A tag in front resolves the alternative without any
+   // lookback, so the object body streams through refills like any other object and its width is
+   // no longer the reader's business.
+   "a tag that comes first needs no re-read"_test = [] {
+      const std::string doc = R"({"t":"b","b":7,"data":)" + wide_int_array(400) + "}";
+      expect(doc.size() > 512u);
+
+      std::istringstream in{doc};
+      glz::basic_istream_buffer<std::istringstream, 512> buffer{in};
+      wide_tagged_t value{};
+      expect(!glz::read_json(value, buffer));
+      expect(std::holds_alternative<wide_beta_t>(value));
+      expect(std::get<wide_beta_t>(value).b == 7);
+      expect(std::get<wide_beta_t>(value).data.size() == 400u) << std::get<wide_beta_t>(value).data.size();
+   };
+
+   "an adjacently tagged object that fits is re-read"_test = [] {
+      const std::string doc = R"({"value":{"b":7,"data":)" + wide_int_array(300) + R"(},"kind":"b"})";
+      std::istringstream in{doc};
+      glz::basic_istream_buffer<std::istringstream, 65536> buffer{in};
+      wide_adjacent_t value{};
+      expect(!glz::read_json(value, buffer));
+      expect(std::holds_alternative<adj_beta_t>(value));
+      expect(std::get<adj_beta_t>(value).b == 7);
+      expect(std::get<adj_beta_t>(value).data.size() == 300u);
+   };
+
+   // Unlike an internal tag, putting the discriminator first buys nothing here -- the content is
+   // read on a second pass either way -- so both orders have to report the window rather than
+   // blame the document.
+   "an adjacently tagged object wider than the window says so"_test = [] {
+      for (const std::string& doc : {R"({"kind":"b","value":{"b":7,"data":)" + wide_int_array(300) + "}}",
+                                     R"({"value":{"b":7,"data":)" + wide_int_array(300) + R"(},"kind":"b"})"}) {
+         expect(doc.size() > 512u);
+         std::istringstream in{doc};
+         glz::basic_istream_buffer<std::istringstream, 512> buffer{in};
+         wide_adjacent_t value{};
+         const auto ec = glz::read_json(value, buffer);
+         expect(ec == glz::error_code::streaming_unsupported) << doc.substr(0, 12);
+      }
+   };
+
+   // Sweeping the size walks the object's end across the window edge. Before the second pass was
+   // anchored, one size in this range returned a plain `int` scraped out of the nested object --
+   // a successful read of a document that cannot be read at all.
+   "a re-read never succeeds where the document forbids it"_test = [] {
+      size_t succeeded = 0;
+      for (int n = 200; n <= 300; ++n) {
+         const std::string arr = wide_int_array(n);
+         for (const std::string& doc : {R"({"kind":"a","value":{"data":)" + arr + R"(,"value":7}})",
+                                        R"({"value":{"data":)" + arr + R"(,"value":7},"kind":"a"})"}) {
+            adjacent_probe_t buffered{};
+            expect(bool(glz::read_json(buffered, doc))) << "the content is not an int";
+
+            std::istringstream in{doc};
+            glz::basic_istream_buffer<std::istringstream, 512> buffer{in};
+            adjacent_probe_t streamed{};
+            if (!glz::read_json(streamed, buffer)) {
+               ++succeeded;
+            }
+         }
+      }
+      expect(succeeded == 0u) << succeeded << " streaming reads succeeded where the buffered read failed";
+   };
+
+   // Many variants in one document, each needing a re-read, with the window moving between them.
+   // The anchor is re-taken per object, so what matters is that every one of them lands on its own
+   // opening brace rather than on a stale offset from the object before it.
+   "re-read variants stay correct across refills"_test = [] {
+      std::string doc = "[";
+      for (int i = 0; i < 20; ++i) {
+         if (i) {
+            doc += ',';
+         }
+         // The discriminating key comes last, so every element takes the re-read path.
+         doc += R"({"data":)" + wide_int_array(20) + R"(,")" + (i % 2 ? "b" : "a") + R"(":)" + std::to_string(i) + "}";
+      }
+      doc += ']';
+
+      std::istringstream in{doc};
+      glz::basic_istream_buffer<std::istringstream, 512> buffer{in};
+      std::vector<wide_untagged_t> values{};
+      expect(!glz::read_json(values, buffer));
+      expect(values.size() == 20u) << values.size();
+      for (size_t i = 0; i < values.size(); ++i) {
+         if (i % 2) {
+            expect(std::holds_alternative<plain_beta_t>(values[i])) << i;
+            expect(std::get<plain_beta_t>(values[i]).b == int(i)) << i;
+            expect(std::get<plain_beta_t>(values[i]).data.size() == 20u) << i;
+         }
+         else {
+            expect(std::holds_alternative<plain_alpha_t>(values[i])) << i;
+            expect(std::get<plain_alpha_t>(values[i]).a == int(i)) << i;
+            expect(std::get<plain_alpha_t>(values[i]).data.size() == 20u) << i;
+         }
+      }
    };
 };
 

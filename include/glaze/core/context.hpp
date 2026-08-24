@@ -113,7 +113,10 @@ namespace glz
       // written. Raised by the binary-to-JSON converters, which refuse
       // to emit a byte they would have to corrupt or hide.
       // Streaming errors
-      streaming_unsupported, // Document outruns the buffer window and this format's reader cannot refill
+      // The buffer window is too small for what the read needs: either the format's reader has no
+      // refill points and the document outruns one window, or a value has to be re-read from its
+      // start and is longer than the window. custom_error_message says which.
+      streaming_unsupported,
       // Expansion errors
       // A YAML read produced more text than its budgets allow. Both budgets bound the same thing
       // -- text a small document can multiply into an unbounded amount -- and both call for the
