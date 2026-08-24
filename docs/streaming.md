@@ -135,7 +135,7 @@ Read into the owning equivalent (`std::string`, `glz::raw_json`, `glz::text`) wh
 
 The check is on the readers that point into the buffer rather than on the shape of the destination, so it applies equally to a view reached through a container, a `std::tuple`, a map key, or a `glz::custom` setter. A `std::span` over your own storage is not affected — only `std::span<const T>` is ever aimed at the input.
 
-What the check is aimed at is a view the *caller* keeps. A reader that borrows a view of the string it just parsed and turns it into a value before returning — how `std::chrono::system_clock::time_point`, `std::chrono::year_month_day`, and `glz::date_format` fields are read — holds it across nothing that refills, so those types stream normally.
+What the check is aimed at is a view the *caller* keeps. A reader that borrows a view of the string it just parsed and turns it into a value before returning — how `std::chrono::system_clock::time_point`, `std::chrono::year_month_day`, and `glz::date_format` fields are read, and how a tagged variant turns its discriminator into an alternative index — holds it across nothing that refills, so those types stream normally.
 
 Buffered reads are unaffected. A buffer holds the whole document for the duration of the call, so views into it stay valid and remain a supported zero-copy idiom.
 

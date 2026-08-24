@@ -3968,7 +3968,9 @@ namespace glz
                       from<JSON, id_type>::template op<ws_handled<Opts>()>(type_id, ctx, it, end);
                    }
                    else {
-                      from<JSON, sv>::template op<ws_handled<Opts>()>(type_id, ctx, it, end);
+                      // The id is turned into an index below and never leaves this reader, so the
+                      // view of the window it borrows cannot outlive that window.
+                      parse_transient_string_view<ws_handled<Opts>()>(type_id, ctx, it, end);
                    }
                    if (bool(ctx.error)) [[unlikely]] {
                       return false;
@@ -4180,7 +4182,9 @@ namespace glz
                                  from<JSON, id_type>::template op<ws_handled<Opts>()>(type_id, ctx, it, end);
                               }
                               else {
-                                 from<JSON, sv>::template op<ws_handled<Opts>()>(type_id, ctx, it, end);
+                                 // The id is turned into an index below and never leaves this
+                                 // reader, so the view of the window it borrows cannot outlive it.
+                                 parse_transient_string_view<ws_handled<Opts>()>(type_id, ctx, it, end);
                               }
                               if (bool(ctx.error)) [[unlikely]]
                                  return;
@@ -4410,8 +4414,10 @@ namespace glz
                               return;
                            }
 
+                           // The id is turned into an index below and never leaves this reader,
+                           // so the view of the window it borrows cannot outlive that window.
                            std::string_view type_id{};
-                           parse<JSON>::op<ws_handled<Opts>()>(type_id, ctx, it, end);
+                           parse_transient_string_view<ws_handled<Opts>()>(type_id, ctx, it, end);
                            if (bool(ctx.error)) [[unlikely]]
                               return;
                            if (skip_ws<Opts>(ctx, it, end)) {
