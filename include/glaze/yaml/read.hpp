@@ -4282,6 +4282,11 @@ namespace glz
                return; // Empty pair
             }
 
+            if (it == end) [[unlikely]] {
+               ctx.error = error_code::unexpected_end;
+               return;
+            }
+
             // Parse key
             if constexpr (str_t<first_type>) {
                // Skip anchor on key
