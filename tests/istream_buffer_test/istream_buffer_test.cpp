@@ -4791,4 +4791,218 @@ suite streaming_view_rejection_tests = [] {
    };
 };
 
+// A variant's discriminator is read as a view of the window and immediately turned into an
+// alternative index -- it never leaves the reader that parsed it, so it cannot outlive the window
+// the way a view handed back to the caller would. Reading it through the guarded string_view reader
+// nonetheless failed to compile for every tagged variant under a streaming context (issue #2823),
+// including a plain buffered read that merely passed a glz::streaming_context.
+struct put_action_t
+{
+   std::map<std::string, int> data{};
+};
+
+struct delete_action_t
+{
+   std::string data{};
+};
+
+using tagged_action_t = std::variant<put_action_t, delete_action_t>;
+
+template <>
+struct glz::meta<tagged_action_t>
+{
+   static constexpr std::string_view tag = "action";
+   static constexpr auto ids = std::array{"PUT", "DELETE"};
+};
+
+struct numbered_a_t
+{
+   int x{};
+};
+
+struct numbered_b_t
+{
+   int x{};
+};
+
+using numbered_variant_t = std::variant<numbered_a_t, numbered_b_t>;
+
+template <>
+struct glz::meta<numbered_variant_t>
+{
+   static constexpr std::string_view tag = "t";
+   static constexpr auto ids = std::array{1, 2};
+};
+
+struct adjacent_a_t
+{
+   int x{};
+};
+
+struct adjacent_b_t
+{
+   std::string y{};
+};
+
+using adjacent_variant_t = std::variant<adjacent_a_t, adjacent_b_t>;
+
+template <>
+struct glz::meta<adjacent_variant_t>
+{
+   static constexpr std::string_view tag = "kind";
+   static constexpr std::string_view content = "value";
+   static constexpr auto ids = std::array{"a", "b"};
+};
+
+struct unit_alternative_t
+{};
+
+struct valued_alternative_t
+{
+   int x{};
+};
+
+using unit_variant_t = std::variant<unit_alternative_t, valued_alternative_t>;
+
+template <>
+struct glz::meta<unit_variant_t>
+{
+   static constexpr std::string_view tag = "t";
+   static constexpr auto ids = std::array{"unit", "valued"};
+};
+
+// The tag name is also a field on each alternative, which sends the reader down the re-parse path
+// so the discriminator lands in the struct as well as selecting the alternative.
+struct tag_as_field_a_t
+{
+   std::string t{};
+   int x{};
+};
+
+struct tag_as_field_b_t
+{
+   std::string t{};
+   double y{};
+};
+
+using tag_as_field_variant_t = std::variant<tag_as_field_a_t, tag_as_field_b_t>;
+
+template <>
+struct glz::meta<tag_as_field_variant_t>
+{
+   static constexpr std::string_view tag = "t";
+   static constexpr auto ids = std::array{"a", "b"};
+};
+
+suite tagged_variant_streaming_tests = [] {
+   // The shape reported in issue #2823: an ordinary buffered read that happens to be handed a
+   // streaming_context. Nothing streams here -- ctx.stream is not enabled -- but the guard keys off
+   // the context type, so this has to compile as much as it has to produce the right answer.
+   "a buffered read with a streaming_context reads a tagged variant"_test = [] {
+      const std::string doc = R"([{"action":"DELETE","data":"x"},{"action":"PUT","data":{"k":1}}])";
+      std::vector<tagged_action_t> values{};
+      glz::streaming_context ctx{};
+      expect(!glz::read<glz::opts{}>(values, doc, ctx));
+      expect(values.size() == 2u);
+      expect(std::holds_alternative<delete_action_t>(values[0]));
+      expect(std::get<delete_action_t>(values[0]).data == "x");
+      expect(std::holds_alternative<put_action_t>(values[1]));
+      expect(std::get<put_action_t>(values[1]).data.at("k") == 1);
+   };
+
+   "a tagged variant streams"_test = [] {
+      std::istringstream in{R"({"action":"DELETE","data":"the_internet"})"};
+      glz::basic_istream_buffer<std::istringstream, 512> buffer{in};
+      tagged_action_t value{};
+      expect(!glz::read_json(value, buffer));
+      expect(std::holds_alternative<delete_action_t>(value));
+      expect(std::get<delete_action_t>(value).data == "the_internet");
+   };
+
+   "an integral discriminator streams"_test = [] {
+      std::istringstream in{R"({"t":2,"x":5})"};
+      glz::basic_istream_buffer<std::istringstream, 512> buffer{in};
+      numbered_variant_t value{};
+      expect(!glz::read_json(value, buffer));
+      expect(std::holds_alternative<numbered_b_t>(value));
+      expect(std::get<numbered_b_t>(value).x == 5);
+   };
+
+   "an adjacently tagged variant streams"_test = [] {
+      std::istringstream in{R"({"kind":"b","value":{"y":"hello"}})"};
+      glz::basic_istream_buffer<std::istringstream, 512> buffer{in};
+      adjacent_variant_t value{};
+      expect(!glz::read_json(value, buffer));
+      expect(std::holds_alternative<adjacent_b_t>(value));
+      expect(std::get<adjacent_b_t>(value).y == "hello");
+   };
+
+   "a unit alternative streams"_test = [] {
+      std::istringstream in{R"({"t":"unit"})"};
+      glz::basic_istream_buffer<std::istringstream, 512> buffer{in};
+      unit_variant_t value{valued_alternative_t{}};
+      expect(!glz::read_json(value, buffer));
+      expect(std::holds_alternative<unit_alternative_t>(value));
+   };
+
+   "a tag that is also a field streams"_test = [] {
+      std::istringstream in{R"({"t":"b","y":1.5})"};
+      glz::basic_istream_buffer<std::istringstream, 512> buffer{in};
+      tag_as_field_variant_t value{};
+      expect(!glz::read_json(value, buffer));
+      expect(std::holds_alternative<tag_as_field_b_t>(value));
+      expect(std::get<tag_as_field_b_t>(value).t == "b");
+      expect(std::get<tag_as_field_b_t>(value).y == 1.5);
+   };
+
+   // The discriminator is a view of the window, so the case that would catch it outliving that
+   // window is one where the window moves between alternatives. A 512 byte buffer holds only a few
+   // of these records, so the read refills repeatedly and a stale view would surface as a wrong
+   // alternative rather than as a crash.
+   "discriminators stay correct across refills"_test = [] {
+      std::string doc = "[";
+      for (int i = 0; i < 24; ++i) {
+         if (i) {
+            doc += ',';
+         }
+         if (i % 2) {
+            doc += R"({"action":"DELETE","data":")" + std::string(48, 'd') + std::to_string(i) + R"("})";
+         }
+         else {
+            doc += R"({"action":"PUT","data":{"n)" + std::to_string(i) + R"(":)" + std::to_string(i) + R"(}})";
+         }
+      }
+      doc += ']';
+
+      std::istringstream in{doc};
+      glz::basic_istream_buffer<std::istringstream, 512> buffer{in};
+      std::vector<tagged_action_t> values{};
+      expect(!glz::read_json(values, buffer));
+      expect(values.size() == 24u) << values.size();
+      for (size_t i = 0; i < values.size(); ++i) {
+         if (i % 2) {
+            expect(std::holds_alternative<delete_action_t>(values[i])) << i;
+            expect(std::get<delete_action_t>(values[i]).data == std::string(48, 'd') + std::to_string(i)) << i;
+         }
+         else {
+            expect(std::holds_alternative<put_action_t>(values[i])) << i;
+            expect(std::get<put_action_t>(values[i]).data.at("n" + std::to_string(i)) == int(i)) << i;
+         }
+      }
+   };
+
+   // json_stream_reader drives the same readers through its own streaming context.
+   "a stream reader yields tagged variants"_test = [] {
+      std::istringstream in{"{\"action\":\"DELETE\",\"data\":\"a\"}\n{\"action\":\"PUT\",\"data\":{\"k\":2}}\n"};
+      glz::json_stream_reader<tagged_action_t, std::istringstream, 512> reader{in};
+      tagged_action_t value{};
+      expect(!reader.read_next(value));
+      expect(std::holds_alternative<delete_action_t>(value));
+      expect(std::get<delete_action_t>(value).data == "a");
+      expect(!reader.read_next(value));
+      expect(std::holds_alternative<put_action_t>(value));
+      expect(std::get<put_action_t>(value).data.at("k") == 2);
+   };
+};
+
 int main() { return 0; }
