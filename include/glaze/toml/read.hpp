@@ -1616,13 +1616,18 @@ namespace glz
       }
 
       // Whether a "[array.sub]" header can descend into this value's last element: a growable array
-      // whose elements are tables.
+      // whose elements are tables, seen through any nullable wrapper. resolve_array_of_tables
+      // unwraps the member before it classifies it, so this has to as well or "[[a]]" and "[a.sub]"
+      // disagree about whether the same optional<vector<T>> is tracked.
       template <class T>
       consteval bool is_toml_array_of_tables()
       {
          using U = std::remove_cvref_t<T>;
          if constexpr (glaze_object_t<U> || reflectable<U> || custom_read<U>) {
             return false; // a struct that happens to have emplace_back is still a struct
+         }
+         else if constexpr (nullable_like<U>) {
+            return is_toml_array_of_tables<std::remove_cvref_t<decltype(*std::declval<U&>())>>();
          }
          else if constexpr (emplace_backable<U> && requires { typename U::value_type; }) {
             return toml_table_like<typename U::value_type>();
@@ -1632,12 +1637,17 @@ namespace glz
          }
       }
 
-      // Element type of an array of tables, unwrapped the same way, so its node can be sized.
+      // Element type of an array of tables, unwrapped the same way, so its node can be sized. The
+      // nullable case has to come first: std::optional<std::vector<T>> has a value_type of its own,
+      // and reading that one would size every element node at zero.
       template <class T>
       consteval size_t tracked_element_count()
       {
          using U = std::remove_cvref_t<T>;
-         if constexpr (requires { typename U::value_type; }) {
+         if constexpr (nullable_like<U>) {
+            return tracked_element_count<std::remove_cvref_t<decltype(*std::declval<U&>())>>();
+         }
+         else if constexpr (requires { typename U::value_type; }) {
             return tracked_member_count<typename U::value_type>();
          }
          else {
@@ -1818,14 +1828,16 @@ namespace glz
    inline bool resolve_nested(T& root, std::span<std::string> path, auto& ctx, auto& it, auto& end,
                               detail::missing_key_record* node)
    {
-      if constexpr (detail::is_toml_array_of_tables<T>()) {
+      if constexpr (not nullable_like<T> && detail::is_toml_array_of_tables<T>()) {
          // "[array.sub]" names a sub-table of the last element "[[array]]" defined, per TOML
          // v1.0.0. Without descending here the header resolves to nothing and the body under it is
          // read as though it belonged to the enclosing table.
          if (root.empty()) {
-            // Nothing has defined an element yet, which is malformed. Start one rather than reach
-            // past the end; resolve_array_of_tables takes the same permissive route.
-            root.emplace_back();
+            // Nothing has opened an element for this to belong to. No TOML document reaches here:
+            // "[a.sub]" requires a preceding "[[a]]", and a dotted "a.sub = 1" cannot address an
+            // array at all. Inventing an element would accept both.
+            ctx.error = error_code::syntax_error;
+            return false;
          }
          [[maybe_unused]] detail::missing_key_record* element_node = nullptr;
          if constexpr (check_error_on_missing_keys(Opts)) {
@@ -2544,6 +2556,14 @@ namespace glz
       static void op(auto&& value, is_context auto&& ctx, It&& it, auto end)
       {
          if constexpr (check_error_on_missing_keys(Opts)) {
+            // An inline table settles its own required keys where it is parsed, so a record built
+            // for one is never read -- and an array of inline tables would allocate one per element.
+            auto peek = it;
+            skip_ws_newlines_and_comments(peek, end);
+            if (peek != end && *peek == '{') {
+               op_tracked<Opts>(value, ctx, it, end, nullptr);
+               return;
+            }
             // Entered without a record of what the enclosing document has already assigned, so this
             // parse owns the whole tree and resolves it once the value is complete.
             detail::missing_key_record record{reflect<std::remove_cvref_t<decltype(value)>>::size};
@@ -2902,8 +2922,13 @@ namespace glz
          };
 
          attempt.template operator()<deduced>();
-         if (not bool(ctx.error) || ctx.error == error_code::missing_key ||
-             ctx.error == error_code::exceeded_max_recursive_depth) {
+         // missing_key is the caller's own strictness rather than a sign the alternative is wrong --
+         // but only while a wrong alternative would announce itself as unknown_key. With unknown
+         // keys skipped the two are indistinguishable, so the others still have to be tried; when
+         // none of them fits, the restore below hands back the strictness error either way.
+         constexpr bool missing_key_is_final = Opts.error_on_unknown_keys;
+         if (not bool(ctx.error) || ctx.error == error_code::exceeded_max_recursive_depth ||
+             (missing_key_is_final && ctx.error == error_code::missing_key)) {
             return;
          }
 

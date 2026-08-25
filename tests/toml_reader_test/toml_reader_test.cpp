@@ -373,6 +373,47 @@ max = 2
       expect((*value.items)[0].secure.cert == "c");
    };
 
+   "a nullable array is tracked the same as a plain one"_test = [] {
+      // resolve_array_of_tables unwraps the member before classifying it and resolve_nested does
+      // not, so "[[items]]" and "[items.secure]" once disagreed about whether the same
+      // optional<vector<T>> was being tracked: a complete document was rejected, and one missing
+      // "name" was accepted.
+      static constexpr glz::opts strict{.format = glz::TOML, .error_on_missing_keys = true};
+      const std::string complete = "[[items]]\nname = \"a\"\n\n[items.secure]\nenabled = true\ncert = \"c\"\n";
+      const std::string no_name = "[[items]]\n\n[items.secure]\nenabled = true\ncert = \"c\"\n";
+
+      optional_inventory value{};
+      expect(!glz::read<strict>(value, complete)) << complete;
+      expect(value.items.has_value());
+      expect((*value.items)[0].secure.cert == "c");
+
+      optional_inventory partial{};
+      const auto ec = glz::read<strict>(partial, no_name);
+      expect(ec.ec == glz::error_code::missing_key);
+      expect(ec.custom_error_message == "name") << ec.custom_error_message;
+
+      inventory plain{};
+      const auto plain_ec = glz::read<strict>(plain, no_name);
+      expect(plain_ec.ec == ec.ec);
+      expect(plain_ec.custom_error_message == ec.custom_error_message);
+   };
+
+   "a sub-table with no element to belong to is rejected"_test = [] {
+      // "[items.secure]" without a preceding "[[items]]" is not a document TOML can produce.
+      // Opening an element for it would accept the malformed input and hide a missing "name".
+      const std::string toml = "[items.secure]\nenabled = true\ncert = \"c\"\n";
+      inventory value{};
+      expect(glz::read_toml(value, toml).ec == glz::error_code::syntax_error);
+      expect(value.items.empty());
+   };
+
+   "a dotted key cannot address an array of tables"_test = [] {
+      const std::string toml = "items.name = \"a\"\n";
+      inventory value{};
+      expect(glz::read_toml(value, toml).ec == glz::error_code::syntax_error);
+      expect(value.items.empty());
+   };
+
    "a sub-table counts toward required keys"_test = [] {
       static constexpr glz::opts strict{.format = glz::TOML, .error_on_missing_keys = true};
       const std::string complete = "[[items]]\nname = \"a\"\n\n[items.secure]\nenabled = true\ncert = \"c\"\n";
@@ -502,6 +543,32 @@ suite variant_object_alternative_tests = [] {
       const std::string toml = "name = \"n\"\nv = { x = 1 }\n";
       holder value{};
       const auto ec = glz::read<strict>(value, toml);
+      expect(ec.ec == glz::error_code::missing_key);
+      expect(ec.custom_error_message == "y") << ec.custom_error_message;
+   };
+
+   "retrying survives unknown keys being skipped"_test = [] {
+      // With error_on_unknown_keys off, a wrong alternative fails with missing_key rather than
+      // unknown_key, so treating missing_key as final would stop the retry before it started and
+      // leave "pair" unreachable. JSON accepts this same input.
+      static constexpr glz::opts opts{
+         .format = glz::TOML, .error_on_unknown_keys = false, .error_on_missing_keys = true};
+      const std::string toml = "name = \"n\"\nv = { a = \"s\", b = 2 }\n";
+      holder value{};
+      const auto ec = glz::read<opts>(value, toml);
+      expect(!ec) << glz::format_error(ec, toml);
+      expect(value.v.index() == 1);
+      expect(std::get<1>(value.v).b == 2);
+   };
+
+   "an incomplete alternative still reports its own strictness"_test = [] {
+      // The retry above must not turn a merely incomplete "point" into a "pair": when nothing
+      // fits, the deduced alternative's error is what comes back.
+      static constexpr glz::opts opts{
+         .format = glz::TOML, .error_on_unknown_keys = false, .error_on_missing_keys = true};
+      const std::string toml = "name = \"n\"\nv = { x = 1 }\n";
+      holder value{};
+      const auto ec = glz::read<opts>(value, toml);
       expect(ec.ec == glz::error_code::missing_key);
       expect(ec.custom_error_message == "y") << ec.custom_error_message;
    };

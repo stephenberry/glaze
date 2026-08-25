@@ -601,13 +601,22 @@ An inline table tells Glaze the value is an object, but not which object alterna
 struct point { int x{}; int y{}; };
 struct pair { std::string a{}; int b{}; };
 
-std::variant<point, pair> v{};
-glz::read_toml(v, R"(v = { a = "s", b = 2 })");  // v holds pair
+struct config
+{
+   std::variant<point, pair> v{};
+};
+
+config cfg{};
+glz::read_toml(cfg, R"(v = { a = "s", b = 2 })");  // cfg.v holds pair
 ```
 
-A `missing_key` failure is not retried past: that is your own `error_on_missing_keys` strictness being enforced, so an incomplete `point` is reported as incomplete rather than answered with a `pair`. When no alternative fits, the error reported is the one from the first object alternative.
+When no alternative fits, the error reported is the one from the first object alternative.
+
+With `error_on_unknown_keys = true` a `missing_key` failure is not retried past: that is your own `error_on_missing_keys` strictness being enforced, so an incomplete `point` is reported as incomplete rather than answered with a `pair`. With unknown keys skipped the two cases are indistinguishable — a wrong alternative also fails with `missing_key` — so the remaining alternatives are still tried, and an alternative that is merely incomplete still reports its own error because nothing else fits.
 
 Retrying is bounded by a per-read speculation budget, so an ambiguous nest of variants cannot cost exponential time. Once the budget is spent, the remaining alternatives are not tried and the failure stands.
+
+Because any alternative may be tried, every object alternative's reader is instantiated. A variant holding an alternative that Glaze cannot read as TOML at all will not compile, even if no document ever selects it — the same as for JSON.
 
 ### Generic JSON Types
 
