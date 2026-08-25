@@ -162,6 +162,15 @@ glz::basic_istream_buffer<std::ifstream, 1 << 20> buffer(file);  // 1 MB window
 
 Leading whitespace is also read without refilling, so whitespace wider than the window stops a read before it reaches the value behind it.
 
+A `std::variant` of objects adds one more case. When the alternative is decided by the shape of the object, or by a tag that is not the first key, the reader scans the object once to work out which alternative it is and then reads it again from the opening brace. Adjacent tagging (`tag` plus `content`) always reads it twice, whatever the key order.
+
+That second pass needs the opening brace to still be in the window. A refill releases whatever the parse has stepped over, so the object has to fit in the room the window has left *at the point it starts* — not in the window's full capacity, since the reader tops the window up between elements rather than at every byte. Where it does not fit, the read stops with `error_code::streaming_unsupported` rather than re-reading relocated bytes. Give the window several times the size of the largest such object, or put an internal tag first, which skips the second pass entirely and streams at any size:
+
+```jsonc
+{"type":"circle","points":[ ... a megabyte of them ... ]}  // streams in a 64 KB window
+{"points":[ ... a megabyte of them ... ],"type":"circle"}  // needs room for the whole object
+```
+
 ## See Also
 
 - [Writing](writing.md) - Writing to buffers and error handling
