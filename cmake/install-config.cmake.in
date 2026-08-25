@@ -7,6 +7,21 @@ include(CMakeFindDependencyMacro)
 set(_glaze_EETF_FORMAT "@glaze_EETF_FORMAT@")
 if(_glaze_EETF_FORMAT)
 @glaze_FIND_ERLANG_SCRIPT@
+    # glaze::glaze links Erlang::EI unconditionally once built with EETF, so a
+    # consumer that cannot resolve Erlang cannot use this package at all. Report
+    # it as a failed find_package, which REQUIRED turns into a clear error and a
+    # plain find_package can test with glaze_FOUND. Without this the missing
+    # Erlang::EI target only surfaces from glazeTargets.cmake at generate time,
+    # after configure has already reported success.
+    if(NOT Erlang_FOUND)
+        set(glaze_FOUND FALSE)
+        set(glaze_NOT_FOUND_MESSAGE
+            "glaze was built with glaze_EETF_FORMAT=ON but Erlang/OTP's erl_interface \
+library was not found. Install Erlang/OTP, or point the build at it with \
+ERLANG_EI_LIB and ERLANG_EI_INCLUDE.")
+        unset(_glaze_EETF_FORMAT)
+        return()
+    endif()
 endif()
 unset(_glaze_EETF_FORMAT)
 
