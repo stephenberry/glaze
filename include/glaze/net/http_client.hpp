@@ -1200,6 +1200,16 @@ namespace glz
          return perform_sync_request("PUT", *url_result, body, headers);
       }
 
+      // Synchronous PATCH request - truly synchronous, no promises/futures
+      std::expected<response, std::error_code> patch(std::string_view url, const std::string& body, const glz::http_headers& headers = {}) {
+         auto url_result = parse_url(url);
+         if (!url_result) {
+            return std::unexpected(url_result.error());
+         }
+
+         return perform_sync_request("PATCH", *url_result, body, headers);
+      }
+
       // Synchronous JSON POST request
       template <class T>
       std::expected<response, std::error_code> post_json(std::string_view url, const T& data,
@@ -1226,6 +1236,18 @@ namespace glz
          }
 
          return put(url, json_str, detail::with_json_content_type(headers));
+      }
+
+      // Synchronous JSON PATCH request
+      template <class T> 
+      std::expected<response, std::error_code> patch_json(std::string_view url, const T& data, const glz::http_headers& headers = {}) {
+         std::string json_str;
+         auto ec = glz::write_json(data, json_str);
+         if (ec) {
+            return std::unexpected(std::make_error_code(std::errc::invalid_argument));
+         }
+
+         return patch(url, json_str, detail::with_json_content_type(headers));
       }
 
       [[deprecated("use stream_request_v2 instead")]]

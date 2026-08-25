@@ -153,6 +153,26 @@ std::expected<response, std::error_code> post(
 );
 ```
 
+### PUT Request
+
+```cpp
+std::expected<response, std::error_code> put(
+    std::string_view url, 
+    const std::string& body,
+    const glz::http_headers& headers = {}
+);
+```
+
+### PATCH Request
+
+```cpp
+std::expected<response, std::error_code> patch(
+    std::string_view url, 
+    const std::string& body,
+    const glz::http_headers& headers = {}
+);
+```
+
 ### JSON POST Request
 ```cpp
 template<class T>
@@ -162,6 +182,28 @@ std::expected<response, std::error_code> post_json(
     const glz::http_headers& headers = {}
 );
 ```
+
+### JSON PUT Request
+```cpp
+template<class T>
+std::expected<response, std::error_code> put_json(
+    std::string_view url, 
+    const T& data,
+    const glz::http_headers& headers = {}
+);
+```
+
+
+### JSON PATCH Request
+```cpp
+template<class T>
+std::expected<response, std::error_code> patch_json(
+    std::string_view url, 
+    const T& data,
+    const glz::http_headers& headers = {}
+);
+```
+
 
 ## Asynchronous Methods
 
