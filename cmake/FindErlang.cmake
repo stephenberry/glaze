@@ -218,10 +218,16 @@ if(Erlang_EI_LIBRARY)
   get_filename_component(Erlang_EI_LIBRARY_PATH "${Erlang_EI_LIBRARY}" DIRECTORY)
 endif()
 
+# glaze embeds this module verbatim into glazeConfig.cmake rather than
+# installing it as a file (see install-rules.cmake), so the call below can run
+# while CMAKE_FIND_PACKAGE_NAME is "glaze". FPHSA flags that as a likely typo
+# and warns every consumer at configure time; the mismatch is deliberate here.
+set(FPHSA_NAME_MISMATCHED TRUE)
 find_package_handle_standard_args(Erlang
   REQUIRED_VARS Erlang_EI_LIBRARY Erlang_EI_INCLUDE_DIRS
   VERSION_VAR Erlang_OTP_VERSION
 )
+unset(FPHSA_NAME_MISMATCHED)
 
 if(Erlang_FOUND)
   if(CMAKE_VERBOSE_MAKEFILE)
