@@ -4488,6 +4488,31 @@ ship-to: *id001)";
       expect(!ec) << glz::format_error(ec, view);
       expect(glz::write_json(parsed).value_or("WRITE_ERR") == R"("x")");
    };
+
+   "pair_flow_mapping_truncated_stays_in_bounds"_test = [] {
+      static constexpr glz::opts options{.format = glz::YAML, .null_terminated = false};
+      // A flow-mapping pair whose input ends right after the opening '{' (once any inline
+      // whitespace is consumed) leaves the cursor at the end of the buffer. The key peek must
+      // stop there rather than read the byte past a non-null-terminated buffer.
+      for (const std::string_view s : {"{", "{ ", "{\t", "{  "}) {
+         std::vector<char> buf{s.begin(), s.end()};
+         const std::string_view view{buf.data(), buf.data() + buf.size()};
+         std::pair<std::string, int> p{};
+         const auto ec = glz::read<options>(p, view);
+         expect(ec.ec == glz::error_code::unexpected_end) << s;
+         expect(ec.count <= view.size()) << s;
+      }
+
+      // A complete flow-mapping pair still parses.
+      const std::string_view valid = "{answer: 42}";
+      std::vector<char> buf{valid.begin(), valid.end()};
+      const std::string_view view{buf.data(), buf.data() + buf.size()};
+      std::pair<std::string, int> p{};
+      const auto ec = glz::read<options>(p, view);
+      expect(!ec) << glz::format_error(ec, view);
+      expect(p.first == "answer");
+      expect(p.second == 42);
+   };
 };
 
 // ============================================================
