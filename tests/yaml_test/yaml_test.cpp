@@ -277,6 +277,23 @@ struct glz::meta<yaml_skip_struct>
    static constexpr bool skip(const std::string_view key, const glz::meta_context&) { return key == "secret"; }
 };
 
+// Struct whose skip fires only while parsing, so writing is left untouched
+struct yaml_skip_on_parse_struct
+{
+   std::string name{};
+   std::string computed{};
+   int version{};
+};
+
+template <>
+struct glz::meta<yaml_skip_on_parse_struct>
+{
+   static constexpr bool skip(const std::string_view key, const glz::meta_context& ctx)
+   {
+      return key == "computed" && ctx.op == glz::operation::parse;
+   }
+};
+
 // Struct with runtime skip_if for YAML
 struct yaml_skip_if_struct
 {
@@ -8935,6 +8952,200 @@ suite yaml_skip_tests = [] {
       expect(yaml.find("name: Bob") != std::string::npos);
       expect(yaml.find("age: 30") != std::string::npos);
       expect(yaml.find("city: LA") != std::string::npos);
+   };
+
+   // A field meta::skip excludes from parsing still owns its key: its entry is consumed and
+   // discarded, leaving the member at whatever value it already held.
+   "yaml_read_skip_ignores_field"_test = [] {
+      yaml_skip_struct obj{"", "untouched", 0};
+      const std::string yaml = "id: abc\nsecret: leaked\ncount: 42\n";
+      auto ec = glz::read_yaml(obj, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(obj.id == "abc");
+      expect(obj.secret == "untouched") << obj.secret;
+      expect(obj.count == 42);
+   };
+
+   "yaml_read_skip_ignores_field_in_flow_style"_test = [] {
+      yaml_skip_struct obj{"", "untouched", 0};
+      const std::string yaml = "{id: abc, secret: leaked, count: 42}";
+      auto ec = glz::read_yaml(obj, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(obj.id == "abc");
+      expect(obj.secret == "untouched") << obj.secret;
+      expect(obj.count == 42);
+   };
+
+   // The skipped entry's value may be a block that spans following lines. All of it belongs to the
+   // skipped key, and the sibling entry after it must still be parsed.
+   "yaml_read_skip_ignores_nested_block_value"_test = [] {
+      yaml_skip_struct obj{"", "untouched", 0};
+      const std::string yaml = R"(id: abc
+secret:
+  nested: value
+  items:
+    - 1
+    - 2
+count: 42
+)";
+      auto ec = glz::read_yaml(obj, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(obj.id == "abc");
+      expect(obj.secret == "untouched") << obj.secret;
+      expect(obj.count == 42);
+   };
+
+   // A skipped key is a known key, so it is accepted rather than rejected as unknown
+   "yaml_read_skip_with_error_on_unknown_keys"_test = [] {
+      yaml_skip_struct obj{"", "untouched", 0};
+      const std::string yaml = "id: abc\nsecret: leaked\ncount: 42\n";
+      expect(!glz::read<glz::yaml::yaml_opts{.error_on_unknown_keys = true}>(obj, yaml));
+      expect(obj.id == "abc");
+      expect(obj.secret == "untouched") << obj.secret;
+      expect(obj.count == 42);
+   };
+
+   // error_on_missing_keys must not require a field that parsing skips
+   "yaml_read_skip_not_required_by_error_on_missing_keys"_test = [] {
+      yaml_skip_struct obj{"", "untouched", 0};
+      const std::string yaml = "id: abc\ncount: 42\n";
+      expect(!glz::read<glz::yaml::yaml_opts{.error_on_missing_keys = true}>(obj, yaml));
+      expect(obj.id == "abc");
+      expect(obj.secret == "untouched") << obj.secret;
+      expect(obj.count == 42);
+   };
+
+   // An implicit "key: value" pair inside a flow collection is read by the block-mapping parser in
+   // flow context, where the value ends at ',' or ']' rather than at a column. A skipped value must
+   // stop at those delimiters too, or the rest of the collection goes with it.
+   "yaml_read_skip_in_implicit_flow_pair"_test = [] {
+      std::vector<yaml_skip_struct> v;
+      const std::string yaml = "[secret: leaked, id: abc]";
+      auto ec = glz::read_yaml(v, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(v.size() == 2u) << v.size();
+      if (v.size() == 2u) {
+         expect(v[0].secret == "") << v[0].secret;
+         expect(v[1].id == "abc") << v[1].id;
+      }
+   };
+
+   // A skipped key that begins mid-line ("- key: value") is measured against the enclosing
+   // mapping's column, not its own, so its value must not swallow the siblings that follow it.
+   "yaml_read_skip_first_key_of_sequence_entry"_test = [] {
+      std::vector<yaml_skip_struct> v;
+      const std::string yaml = R"(- secret: leaked
+  id: abc
+  count: 42
+- secret: also_leaked
+  id: def
+  count: 7
+)";
+      auto ec = glz::read_yaml(v, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(v.size() == 2u) << v.size();
+      if (v.size() == 2u) {
+         expect(v[0].id == "abc") << v[0].id;
+         expect(v[0].count == 42);
+         expect(v[0].secret == "") << v[0].secret;
+         expect(v[1].id == "def") << v[1].id;
+         expect(v[1].count == 7);
+      }
+   };
+
+   // Same shape, but the skipped value is a block that begins on the following lines
+   "yaml_read_skip_nested_value_in_sequence_entry"_test = [] {
+      std::vector<yaml_skip_struct> v;
+      const std::string yaml = R"(- secret:
+    nested: value
+  id: abc
+  count: 42
+)";
+      auto ec = glz::read_yaml(v, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(v.size() == 1u) << v.size();
+      if (v.size() == 1u) {
+         expect(v[0].id == "abc") << v[0].id;
+         expect(v[0].count == 42);
+      }
+   };
+
+   // A multi-line plain scalar under a skipped key folds its deeper continuation lines, then ends
+   // at the first line that reads as a sibling entry
+   "yaml_read_skip_multiline_plain_scalar"_test = [] {
+      yaml_skip_struct obj{};
+      const std::string yaml = R"(secret: first
+  continued
+id: abc
+count: 42
+)";
+      auto ec = glz::read_yaml(obj, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(obj.id == "abc") << obj.id;
+      expect(obj.count == 42);
+   };
+
+   // The skipped value's own deeper entries belong to it, including a nested block that returns to
+   // the value's column. Under error_on_unknown_keys a value cut short would surface as a spurious
+   // unknown key, so this pins the skip to consume exactly the value and no more.
+   "yaml_read_skip_nested_value_returning_to_its_column"_test = [] {
+      yaml_skip_struct obj{};
+      const std::string yaml = R"(secret:
+  first:
+    deep: 1
+  second: 2
+id: abc
+count: 42
+)";
+      expect(!glz::read<glz::yaml::yaml_opts{.error_on_unknown_keys = true}>(obj, yaml))
+         << "the skipped value's own entries must not be reported as unknown keys";
+      expect(obj.id == "abc") << obj.id;
+      expect(obj.count == 42);
+   };
+
+   // An indentless sequence sits at its key's column, where only the dash separates it from the
+   // skipped key's siblings
+   "yaml_read_skip_indentless_sequence_value"_test = [] {
+      yaml_skip_struct obj{};
+      const std::string yaml = R"(secret:
+- 1
+- 2
+id: abc
+count: 42
+)";
+      auto ec = glz::read_yaml(obj, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(obj.id == "abc") << obj.id;
+      expect(obj.count == 42);
+   };
+
+   // A plain scalar in flow context folds across lines, so a skipped one must consume its
+   // continuation rather than leave it to be read as the mapping's next entry
+   "yaml_read_skip_multiline_flow_scalar"_test = [] {
+      yaml_skip_struct obj{};
+      const std::string yaml = "{id: abc, secret: foo\n  bar, count: 42}";
+      auto ec = glz::read_yaml(obj, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(obj.id == "abc") << obj.id;
+      expect(obj.count == 42);
+      expect(obj.secret == "") << obj.secret;
+   };
+
+   // A skip() that fires only on parse excludes nothing from serialization
+   "yaml_skip_on_parse_leaves_serialization_untouched"_test = [] {
+      yaml_skip_on_parse_struct obj{"data", "computed_value", 1};
+      std::string yaml;
+      expect(!glz::write_yaml(obj, yaml));
+      expect(yaml.find("name: data") != std::string::npos) << yaml;
+      expect(yaml.find("computed: computed_value") != std::string::npos) << yaml;
+      expect(yaml.find("version: 1") != std::string::npos) << yaml;
+
+      const std::string input = "name: new\ncomputed: ignored\nversion: 2\n";
+      auto ec = glz::read_yaml(obj, input);
+      expect(!ec) << glz::format_error(ec, input);
+      expect(obj.name == "new");
+      expect(obj.computed == "computed_value") << obj.computed;
+      expect(obj.version == 2);
    };
 };
 
