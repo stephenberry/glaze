@@ -37,7 +37,9 @@ if (MSVC)
   # form, so they stay on CXX_COMPILER_ID alone.
   target_compile_options(glaze_glaze INTERFACE
     # for a C++ standards compliant preprocessor, not needed for clang-cl
-    $<$<COMPILE_LANG_AND_ID:CXX,MSVC>:/Zc:preprocessor /permissive- /Zc:lambda>)
+    $<$<COMPILE_LANG_AND_ID:CXX,MSVC>:/Zc:preprocessor>
+    $<$<COMPILE_LANG_AND_ID:CXX,MSVC>:/permissive->
+    $<$<COMPILE_LANG_AND_ID:CXX,MSVC>:/Zc:lambda>)
 
   # Whole-program optimization changes codegen quality, never correctness, and the
   # top-level build is glaze's own test suite -- correctness checks that gain nothing
@@ -53,8 +55,10 @@ if (MSVC)
       $<$<AND:$<COMPILE_LANG_AND_ID:CXX,MSVC>,$<CONFIG:Release>>:/GL>
       $<$<AND:$<COMPILE_LANG_AND_ID:CXX,MSVC>,$<CONFIG:MinSizeRel>>:/GL>)
     target_link_options(glaze_glaze INTERFACE
-      $<$<AND:$<CXX_COMPILER_ID:MSVC>,$<CONFIG:Release>>:/LTCG /INCREMENTAL:NO>
-      $<$<AND:$<CXX_COMPILER_ID:MSVC>,$<CONFIG:MinSizeRel>>:/LTCG /INCREMENTAL:NO>)
+      $<$<AND:$<CXX_COMPILER_ID:MSVC>,$<CONFIG:Release>>:/LTCG>
+      $<$<AND:$<CXX_COMPILER_ID:MSVC>,$<CONFIG:Release>>:/INCREMENTAL:NO>
+      $<$<AND:$<CXX_COMPILER_ID:MSVC>,$<CONFIG:MinSizeRel>>:/LTCG>
+      $<$<AND:$<CXX_COMPILER_ID:MSVC>,$<CONFIG:MinSizeRel>>:/INCREMENTAL:NO>)
   endif()
 else()
   # Only apply -Wno-missing-braces for C and C++ compilation to avoid breaking ISPC and other language builds
