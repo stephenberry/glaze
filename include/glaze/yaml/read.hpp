@@ -2917,17 +2917,26 @@ namespace glz
                   visit<N>(
                      [&]<size_t I>() {
                         if (I == index) {
-                           decltype(auto) member = [&]() -> decltype(auto) {
-                              if constexpr (reflectable<U>) {
-                                 return get<I>(to_tie(value));
-                              }
-                              else {
-                                 return get_member(value, get<I>(reflect<U>::values));
-                              }
-                           }();
+                           // A field that `meta::skip` excludes from parsing still owns its key, so
+                           // the entry is consumed and discarded rather than rejected as unknown.
+                           // The branch is `if constexpr`/`else` so the skipped field's parser is
+                           // never instantiated -- see `skipped_by_meta`.
+                           if constexpr (skipped_by_meta<U, I, operation::parse>) {
+                              skip_yaml_value<Opts>(ctx, it, end, 0, true);
+                           }
+                           else {
+                              decltype(auto) member = [&]() -> decltype(auto) {
+                                 if constexpr (reflectable<U>) {
+                                    return get<I>(to_tie(value));
+                                 }
+                                 else {
+                                    return get_member(value, get<I>(reflect<U>::values));
+                                 }
+                              }();
 
-                           using member_type = std::decay_t<decltype(member)>;
-                           from<YAML, member_type>::template op<flow_context_on<Opts>()>(member, ctx, it, end);
+                              using member_type = std::decay_t<decltype(member)>;
+                              from<YAML, member_type>::template op<flow_context_on<Opts>()>(member, ctx, it, end);
+                           }
                         }
                         return !bool(ctx.error);
                      },
@@ -3551,20 +3560,40 @@ namespace glz
          }
       }
 
-      // Skip the value of an unknown block-mapping entry, whether it is inline (on the key's line)
-      // or begins on a following, more-indented line (a nested block sequence or mapping).
-      // `key_indent` is the column of the entry's key; deeper lines belong to the value.
+      // Skip the value of a block-mapping entry the reader does not store, whether it is inline (on
+      // the key's line) or begins on a following, more-indented line (a nested block sequence or
+      // mapping). `key_indent` is the column of the entry's key; deeper lines belong to the value.
+      //
+      // An implicit "key: value" pair inside a flow collection ([a: 1, b: 2]) also reaches this
+      // through parse_block_mapping's flow arm, and there the value ends at ',', ']' or '}' rather
+      // than at a column. Skipping such a value as a block scalar would run straight through those
+      // delimiters and swallow the rest of the collection, so the flow context is passed on to the
+      // scalar skipper -- mirroring the parse path, which reads the same value in flow context.
       template <auto Opts, class Ctx, class It, class End>
       inline void skip_unknown_block_value(Ctx& ctx, It& it, End end, int32_t key_indent) noexcept
       {
+         constexpr bool in_flow = yaml::check_flow_context(Opts);
+
          if (it != end && !yaml::line_end_or_comment_table[static_cast<uint8_t>(*it)]) {
-            skip_yaml_value<Opts>(ctx, it, end, key_indent, false);
+            skip_yaml_value<Opts>(ctx, it, end, in_flow ? 0 : key_indent, in_flow);
          }
          else {
             const int32_t nested_indent = detect_nested_value_indent(ctx, it, end, key_indent);
             if (nested_indent >= 0) {
                skip_to_content(it, end);
-               skip_yaml_value<Opts>(ctx, it, end, key_indent, false);
+               // Every line of a value that begins below its key sits at nested_indent or deeper,
+               // and the first line shallower than that ends it -- so the block is judged against
+               // nested_indent - 1 rather than against the key's column. The two differ when the
+               // key began mid-line ("- key:" as a sequence entry), where the column reaching this
+               // function is the enclosing mapping's, which every line of the value is deeper than;
+               // measuring against it would swallow the entries that follow the skipped one. This
+               // mirrors the parse path, which pushes the same detected indent for the member.
+               //
+               // An indentless sequence sits at its key's own column rather than deeper, so the
+               // key's column is the floor: there the sequence's dashes and the skipped key's
+               // siblings share a column, and only the dash tells them apart.
+               const int32_t value_indent = (nested_indent - 1) > key_indent ? (nested_indent - 1) : key_indent;
+               skip_yaml_value<Opts>(ctx, it, end, in_flow ? 0 : value_indent, in_flow);
             }
          }
       }
@@ -3888,41 +3917,50 @@ namespace glz
                   visit<N>(
                      [&]<size_t I>() {
                         if (I == index) {
-                           decltype(auto) member = [&]() -> decltype(auto) {
-                              if constexpr (reflectable<U>) {
-                                 return get<I>(to_tie(value));
-                              }
-                              else {
-                                 return get_member(value, get<I>(reflect<U>::values));
-                              }
-                           }();
-
-                           using member_type = std::decay_t<decltype(member)>;
-
-                           // Check if value is on same line or next line
-                           if (it != end && !yaml::line_end_or_comment_table[static_cast<uint8_t>(*it)]) {
-                              if (!ctx.push_indent(line_indent + 1)) [[unlikely]]
-                                 return false;
-                              from<YAML, member_type>::template op<Opts>(member, ctx, it, end);
-                              ctx.pop_indent();
+                           // A field that `meta::skip` excludes from parsing still owns its key, so
+                           // the entry is consumed and discarded rather than rejected as unknown.
+                           // The branch is `if constexpr`/`else` so the skipped field's parser is
+                           // never instantiated -- see `skipped_by_meta`.
+                           if constexpr (skipped_by_meta<U, I, operation::parse>) {
+                              skip_unknown_block_value<Opts>(ctx, it, end, line_indent);
                            }
                            else {
-                              int32_t nested_indent = detect_nested_value_indent(ctx, it, end, line_indent);
-                              if (nested_indent >= 0) {
-                                 skip_to_content(it, end);
-                                 if constexpr (discovers_own_block_mapping_indent<member_type>()) {
-                                    if (!ctx.push_indent(nested_indent - 1)) [[unlikely]]
-                                       return false;
+                              decltype(auto) member = [&]() -> decltype(auto) {
+                                 if constexpr (reflectable<U>) {
+                                    return get<I>(to_tie(value));
                                  }
                                  else {
-                                    if (!ctx.push_indent(nested_indent)) [[unlikely]]
-                                       return false;
+                                    return get_member(value, get<I>(reflect<U>::values));
                                  }
-                                 const bool prev_allow_indentless_sequence = ctx.allow_indentless_sequence;
-                                 ctx.allow_indentless_sequence = (nested_indent <= line_indent);
+                              }();
+
+                              using member_type = std::decay_t<decltype(member)>;
+
+                              // Check if value is on same line or next line
+                              if (it != end && !yaml::line_end_or_comment_table[static_cast<uint8_t>(*it)]) {
+                                 if (!ctx.push_indent(line_indent + 1)) [[unlikely]]
+                                    return false;
                                  from<YAML, member_type>::template op<Opts>(member, ctx, it, end);
-                                 ctx.allow_indentless_sequence = prev_allow_indentless_sequence;
                                  ctx.pop_indent();
+                              }
+                              else {
+                                 int32_t nested_indent = detect_nested_value_indent(ctx, it, end, line_indent);
+                                 if (nested_indent >= 0) {
+                                    skip_to_content(it, end);
+                                    if constexpr (discovers_own_block_mapping_indent<member_type>()) {
+                                       if (!ctx.push_indent(nested_indent - 1)) [[unlikely]]
+                                          return false;
+                                    }
+                                    else {
+                                       if (!ctx.push_indent(nested_indent)) [[unlikely]]
+                                          return false;
+                                    }
+                                    const bool prev_allow_indentless_sequence = ctx.allow_indentless_sequence;
+                                    ctx.allow_indentless_sequence = (nested_indent <= line_indent);
+                                    from<YAML, member_type>::template op<Opts>(member, ctx, it, end);
+                                    ctx.allow_indentless_sequence = prev_allow_indentless_sequence;
+                                    ctx.pop_indent();
+                                 }
                               }
                            }
                         }
