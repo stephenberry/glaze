@@ -20,29 +20,46 @@ add_library(glaze::glaze ALIAS glaze_glaze)
 
 
 if (MSVC)
-  string(REGEX MATCH "\/cl(.exe)?$" matched_cl ${CMAKE_CXX_COMPILER})
-  if (matched_cl)
+  # glaze_glaze is an INTERFACE library, so these target_compile_options/target_link_options
+  # calls set properties that get applied to whatever *consumes* glaze::glaze, evaluated at
+  # each consumer's own generate time -- not to glaze's own build. A plain CMAKE_CXX_COMPILER_ID
+  # check here would instead freeze the *current* (glaze's own configure-time) compiler identity
+  # into those properties, which then leaks onto every consumer regardless of what compiler that
+  # consumer itself uses (see #2814): a consumer built with clang-cl, or with any compiler other
+  # than the one glaze happened to be configured with, would silently inherit MSVC-only flags.
+  # $<CXX_COMPILER_ID:MSVC> is a generator expression, re-evaluated per consumer, so each
+  # consumer only gets these flags if *it* is actually compiling with real MSVC. (Note
+  # $<CXX_COMPILER_FRONTEND_VARIANT:MSVC> would not work here: it evaluates to true for
+  # clang-cl too, since matching MSVC's driver interface is the entire premise of clang-cl.)
+  # The compile options narrow further to CXX, for the same reason the else() branch below
+  # guards on COMPILE_LANGUAGE: a consumer that compiles C, ISPC or CUDA alongside its C++
+  # should not have /Zc:lambda handed to those compilers. Link options have no per-language
+  # form, so they stay on CXX_COMPILER_ID alone.
+  target_compile_options(glaze_glaze INTERFACE
     # for a C++ standards compliant preprocessor, not needed for clang-cl
-    target_compile_options(glaze_glaze INTERFACE "/Zc:preprocessor" /permissive- /Zc:lambda)
-    
-    # Whole-program optimization changes codegen quality, never correctness, and the
-    # top-level build is glaze's own test suite -- correctness checks that gain nothing
-    # from it. Because glaze is header-only, every test executable pays a full link-time
-    # code generation pass, and there are ~70 of them: /GL /LTCG more than doubled the
-    # MSVC Release CI build (32 min of compiling versus 13 min without). The benchmarks
-    # in benchmarks/ configure as their own top-level project, so they never saw these
-    # flags anyway, and published numbers are measured on GCC. Opt in when profiling
-    # glaze itself on MSVC.
-    option(glaze_ENABLE_LTCG "Build with MSVC whole-program optimization (/GL /LTCG)" OFF)
-    if(PROJECT_IS_TOP_LEVEL AND glaze_ENABLE_LTCG)
-      target_compile_options(glaze_glaze INTERFACE
-        $<$<CONFIG:Release>:/GL>
-        $<$<CONFIG:MinSizeRel>:/GL>)
-      target_link_options(glaze_glaze INTERFACE
-        $<$<CONFIG:Release>:/LTCG /INCREMENTAL:NO>
-        $<$<CONFIG:MinSizeRel>:/LTCG /INCREMENTAL:NO>)
-    endif()
-   endif()
+    $<$<COMPILE_LANG_AND_ID:CXX,MSVC>:/Zc:preprocessor>
+    $<$<COMPILE_LANG_AND_ID:CXX,MSVC>:/permissive->
+    $<$<COMPILE_LANG_AND_ID:CXX,MSVC>:/Zc:lambda>)
+
+  # Whole-program optimization changes codegen quality, never correctness, and the
+  # top-level build is glaze's own test suite -- correctness checks that gain nothing
+  # from it. Because glaze is header-only, every test executable pays a full link-time
+  # code generation pass, and there are ~70 of them: /GL /LTCG more than doubled the
+  # MSVC Release CI build (32 min of compiling versus 13 min without). The benchmarks
+  # in benchmarks/ configure as their own top-level project, so they never saw these
+  # flags anyway, and published numbers are measured on GCC. Opt in when profiling
+  # glaze itself on MSVC.
+  option(glaze_ENABLE_LTCG "Build with MSVC whole-program optimization (/GL /LTCG)" OFF)
+  if(PROJECT_IS_TOP_LEVEL AND glaze_ENABLE_LTCG)
+    target_compile_options(glaze_glaze INTERFACE
+      $<$<AND:$<COMPILE_LANG_AND_ID:CXX,MSVC>,$<CONFIG:Release>>:/GL>
+      $<$<AND:$<COMPILE_LANG_AND_ID:CXX,MSVC>,$<CONFIG:MinSizeRel>>:/GL>)
+    target_link_options(glaze_glaze INTERFACE
+      $<$<AND:$<CXX_COMPILER_ID:MSVC>,$<CONFIG:Release>>:/LTCG>
+      $<$<AND:$<CXX_COMPILER_ID:MSVC>,$<CONFIG:Release>>:/INCREMENTAL:NO>
+      $<$<AND:$<CXX_COMPILER_ID:MSVC>,$<CONFIG:MinSizeRel>>:/LTCG>
+      $<$<AND:$<CXX_COMPILER_ID:MSVC>,$<CONFIG:MinSizeRel>>:/INCREMENTAL:NO>)
+  endif()
 else()
   # Only apply -Wno-missing-braces for C and C++ compilation to avoid breaking ISPC and other language builds
   target_compile_options(${PROJECT_NAME}_${PROJECT_NAME} INTERFACE
