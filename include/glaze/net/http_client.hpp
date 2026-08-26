@@ -1201,7 +1201,9 @@ namespace glz
       }
 
       // Synchronous PATCH request - truly synchronous, no promises/futures
-      std::expected<response, std::error_code> patch(std::string_view url, const std::string& body, const glz::http_headers& headers = {}) {
+      std::expected<response, std::error_code> patch(std::string_view url, const std::string& body,
+                                                     const glz::http_headers& headers = {})
+      {
          auto url_result = parse_url(url);
          if (!url_result) {
             return std::unexpected(url_result.error());
@@ -1239,8 +1241,10 @@ namespace glz
       }
 
       // Synchronous JSON PATCH request
-      template <class T> 
-      std::expected<response, std::error_code> patch_json(std::string_view url, const T& data, const glz::http_headers& headers = {}) {
+      template <class T>
+      std::expected<response, std::error_code> patch_json(std::string_view url, const T& data,
+                                                          const glz::http_headers& headers = {})
+      {
          std::string json_str;
          auto ec = glz::write_json(data, json_str);
          if (ec) {

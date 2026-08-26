@@ -1023,7 +1023,8 @@ suite glz_http_client_tests = [] {
       expect(result.has_value()) << "PATCH request should succeed";
       if (result.has_value()) {
          expect(result->status_code == 200) << "PATCH status should be 200";
-         expect(result->response_body == "PATCH:payload:header-value") << "Response body should echo payload and header";
+         expect(result->response_body == "PATCH:payload:header-value")
+            << "Response body should echo payload and header";
       }
 
       server.stop();
