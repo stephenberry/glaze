@@ -186,6 +186,7 @@ Glaze reads array-of-tables syntax correctly, including:
 - Multiple `[[name]]` sections that append to the same array
 - Empty table entries (`[[name]]` followed immediately by another `[[name]]`)
 - Nested dotted paths like `[[parent.child]]`
+- Sub-tables of an element, written `[name.sub]`, which fill in the most recent `[[name]]`
 
 ```cpp
 std::string input = R"(
@@ -203,6 +204,22 @@ sku = 284758393
 catalog c{};
 glz::read_toml(c, input);
 // c.products.size() == 3 (second entry is empty/default)
+```
+
+A `[name.sub]` header names a sub-table of the element the most recent `[[name]]` opened, per TOML v1.0.0:
+
+```toml
+[[products]]
+name = "Hammer"
+
+[products.origin]     # belongs to "Hammer"
+country = "US"
+
+[[products]]
+name = "Nail"
+
+[products.origin]     # belongs to "Nail"
+country = "DE"
 ```
 
 ### Write Ordering
@@ -291,6 +308,46 @@ if (ec) {
 ```
 
 Setting `.error_on_unknown_keys = false` allows dotted keys that do not correspond to reflected members to be skipped gracefully. Any other option in `glz::opts` (for example `.skip_null_members` or `.error_on_missing_keys`) can be combined the same way.
+
+## Required Keys
+
+`.error_on_missing_keys = true` requires every non-nullable reflected field to be assigned by the document, and reports `glz::error_code::missing_key` naming the first one that was not:
+
+```cpp
+struct config
+{
+   std::string host{};
+   uint16_t port{};
+   std::string topic{};
+};
+
+std::string_view toml = R"(
+host = "localhost"
+port = 1883
+)";
+
+config cfg{};
+auto ec = glz::read<glz::opts{.format = glz::TOML, .error_on_missing_keys = true}>(cfg, toml);
+// ec.ec == glz::error_code::missing_key, ec.custom_error_message == "topic"
+```
+
+Which fields count as required follows the same rules as every other format, including the `glz::meta<T>::requires_key` customization point. See [Field Validation](field-validation.md).
+
+A key counts as assigned however TOML lets the document reach it: a key-value line, a dotted key, a `[table]` header, or an inline table. Because a struct can be filled from more than one place in a document, the check runs once the whole document has been read rather than where a table body ends:
+
+```toml
+[server]
+host = "h"
+port = 1
+
+[logging]      # an unrelated table between the two halves of [server]
+level = "info"
+
+[server.tls]   # still fills in server.tls
+enabled = true
+```
+
+Each element of an array of tables is checked on its own, so a single incomplete `[[items]]` entry is an error even when the others are complete.
 
 The write side uses the same mechanism:
 
@@ -537,6 +594,29 @@ glz::read_toml(value, "3.14");      // value holds double{3.14}
 glz::read_toml(value, "\"text\"");  // value holds std::string{"text"}
 glz::read_toml(value, "true");      // value holds bool{true}
 ```
+
+An inline table tells Glaze the value is an object, but not which object alternative it is. Glaze parses the first object alternative and, if that does not fit, rewinds and tries each of the others, taking the first that reads cleanly:
+
+```cpp
+struct point { int x{}; int y{}; };
+struct pair { std::string a{}; int b{}; };
+
+struct config
+{
+   std::variant<point, pair> v{};
+};
+
+config cfg{};
+glz::read_toml(cfg, R"(v = { a = "s", b = 2 })");  // cfg.v holds pair
+```
+
+When no alternative fits, the error reported is the one from the first object alternative.
+
+With `error_on_unknown_keys = true` a `missing_key` failure is not retried past: that is your own `error_on_missing_keys` strictness being enforced, so an incomplete `point` is reported as incomplete rather than answered with a `pair`. With unknown keys skipped the two cases are indistinguishable — a wrong alternative also fails with `missing_key` — so the remaining alternatives are still tried, and an alternative that is merely incomplete still reports its own error because nothing else fits.
+
+Retrying is bounded by a per-read speculation budget, so an ambiguous nest of variants cannot cost exponential time. Once the budget is spent, the remaining alternatives are not tried and the failure stands.
+
+Because any alternative may be tried, every object alternative's reader is instantiated. A variant holding an alternative that Glaze cannot read as TOML at all will not compile, even if no document ever selects it — the same as for JSON.
 
 ### Generic JSON Types
 
