@@ -135,6 +135,10 @@ namespace glz
       ix += n;
    }
 
+   // A memset of zero bytes touches no memory, but forming &b[ix] with ix == b.size() is already
+   // out of range for a bounded buffer, and an indentation of zero reaches exactly that. The
+   // address is therefore only formed when there is something to write.
+
    template <auto c, class B>
    [[deprecated("use dumpn(c, n, b, ix) instead of dumpn<c>(n, b, ix) to reduce template instantiations")]]
    GLZ_ALWAYS_INLINE void dumpn(size_t n, B& b, size_t& ix) noexcept(not vector_like<B>)
@@ -145,8 +149,10 @@ namespace glz
             b.resize(2 * k);
          }
       }
-      std::memset(&b[ix], c, n);
-      ix += n;
+      if (n) {
+         std::memset(&b[ix], c, n);
+         ix += n;
+      }
    }
 
    template <class B>
@@ -158,8 +164,10 @@ namespace glz
             b.resize(2 * k);
          }
       }
-      std::memset(&b[ix], c, n);
-      ix += n;
+      if (n) {
+         std::memset(&b[ix], c, n);
+         ix += n;
+      }
    }
 
    template <auto c, class B>
@@ -167,15 +175,19 @@ namespace glz
       "use dumpn_unchecked(c, n, b, ix) instead of dumpn_unchecked<c>(n, b, ix) to reduce template instantiations")]]
    GLZ_ALWAYS_INLINE void dumpn_unchecked(size_t n, B& b, size_t& ix) noexcept
    {
-      std::memset(&b[ix], c, n);
-      ix += n;
+      if (n) {
+         std::memset(&b[ix], c, n);
+         ix += n;
+      }
    }
 
    template <class B>
    GLZ_ALWAYS_INLINE void dumpn_unchecked(const byte_sized auto c, size_t n, B& b, size_t& ix) noexcept
    {
-      std::memset(&b[ix], c, n);
-      ix += n;
+      if (n) {
+         std::memset(&b[ix], c, n);
+         ix += n;
+      }
    }
 
    template <char IndentChar, class B>
@@ -192,8 +204,10 @@ namespace glz
 
       assign_maybe_cast<'\n'>(b, ix);
       ++ix;
-      std::memset(&b[ix], IndentChar, n);
-      ix += n;
+      if (n) {
+         std::memset(&b[ix], IndentChar, n);
+         ix += n;
+      }
    }
 
    template <class B>
@@ -208,8 +222,10 @@ namespace glz
 
       assign_maybe_cast('\n', b, ix);
       ++ix;
-      std::memset(&b[ix], c, n);
-      ix += n;
+      if (n) {
+         std::memset(&b[ix], c, n);
+         ix += n;
+      }
    }
 
    template <const sv& str, bool Checked = true, class B>

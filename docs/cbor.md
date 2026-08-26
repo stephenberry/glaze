@@ -72,6 +72,26 @@ auto ec = glz::cbor_to_json(cbor, json);
 
 A CBOR text string can hold control characters (0x00–1F), which JSON cannot. Those without a short escape make the conversion fail with `error_code::invalid_control_character`. To keep them, turn on `escape_control_characters`. See [String Escaping](binary.md#string-escaping).
 
+On success the returned `error_ctx::count` is the number of bytes written. A resizable buffer is resized to fit, but a fixed-size one (`std::array`, `std::span`) has no other way to learn how much of it now holds JSON. The same applies to `glz::beve_to_json`, `glz::bson_to_json`, `glz::jsonb_to_json`, and `glz::eetf_to_json`.
+
+The buffer must hold exactly one CBOR data item, which is what a CBOR document is. An empty buffer fails with `error_code::unexpected_end`, and bytes left over after the first item (a CBOR sequence, RFC 8742) fail with `error_code::syntax_error` rather than running the items together into text no JSON parser accepts.
+
+### What CBOR Types Become
+
+CBOR says more than JSON can, so a few types are mapped rather than translated:
+
+| CBOR | JSON | Note |
+|------|------|------|
+| Byte string | String of hex digit pairs | Two lowercase hex digits per byte. Applies to byte-string keys too. |
+| `undefined` | `null` | JSON has one empty value where CBOR has two, so `undefined` and `null` become the same thing. |
+| Integer key | Quoted decimal string | A JSON object key must be a string. RFC 8949 section 6.1 allows a converter to pick a string form. |
+| Tag | The tagged value | The tag number is dropped, except for typed arrays (RFC 8746), which become JSON arrays. |
+| Simple value | Its number | Values other than `false`, `true`, `null`, and `undefined` have no JSON form. |
+
+A typed array of IEEE binary128 elements (tags 83 and 87) fails with `error_code::feature_not_supported`; no C++ floating point type Glaze reads or writes represents it. Half precision elements (tags 80 and 84) widen to double.
+
+A key that has no JSON string form at all, such as an array, a map, or a float, fails with `error_code::syntax_error`.
+
 ## Typed Arrays (RFC 8746)
 
 Glaze automatically uses RFC 8746 typed arrays for contiguous numeric containers, enabling bulk memory operations for maximum performance.
