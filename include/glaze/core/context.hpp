@@ -172,15 +172,19 @@ namespace glz
    // ctx.depth as a completion counter (a value that closed cleanly ends at depth 0, which is how
    // finalize_read_context tells "the buffer ended exactly here" from "the buffer was truncated"),
    // so they count by hand and enforce the same limit inline.
+   //
+   // `limit` defaults to the shared cap but is a parameter because the cap is a stack budget, not a
+   // document property: a reader whose levels cost several times what a JSON level costs has to
+   // stop several times sooner to stay inside the same stack. See `yaml::max_yaml_recursive_depth`.
    template <class Ctx>
    struct depth_guard
    {
       Ctx& ctx;
       bool entered = false;
 
-      depth_guard(Ctx& c) noexcept : ctx(c)
+      depth_guard(Ctx& c, const size_t limit = max_recursive_depth_limit) noexcept : ctx(c)
       {
-         if (ctx.depth >= max_recursive_depth_limit) [[unlikely]] {
+         if (ctx.depth >= limit) [[unlikely]] {
             ctx.error = error_code::exceeded_max_recursive_depth;
             return;
          }

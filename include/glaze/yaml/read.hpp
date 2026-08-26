@@ -311,7 +311,7 @@ namespace glz
          // depth guard, so this is the only depth accounting a chain of aliases into a
          // non-variant target gets. The cycle check above stops the unbounded case; this bounds
          // a legitimate but deeply chained one.
-         depth_guard guard{ctx};
+         depth_guard guard{ctx, yaml::max_yaml_recursive_depth};
          if (!guard) [[unlikely]]
             return true;
 
@@ -5629,7 +5629,7 @@ namespace glz
          // Every nested generic/variant value routes back through this reader, so bounding
          // depth here caps flow-collection and flow-embedded mapping recursion that the
          // indent stack does not cover.
-         depth_guard guard{ctx};
+         depth_guard guard{ctx, yaml::max_yaml_recursive_depth};
          if (!guard) [[unlikely]]
             return;
 
