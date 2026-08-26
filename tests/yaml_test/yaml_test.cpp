@@ -10862,8 +10862,9 @@ suite recursion_depth_tests = [] {
    "flow nesting at the depth limit boundary"_test = [] {
       // Pin the exact contract against the named constant: a generic value nested exactly to the
       // limit parses, one level deeper is rejected. The bracket-count-based deep tests above sit far
-      // from the boundary and would not catch an off-by-one in the guard.
-      constexpr size_t limit = glz::max_recursive_depth_limit;
+      // from the boundary and would not catch an off-by-one in the guard. YAML caps lower than the
+      // shared limit because a YAML level costs several times the stack a JSON one does.
+      constexpr size_t limit = glz::yaml::max_yaml_recursive_depth;
       {
          const std::string yaml = std::string(limit, '[') + std::string(limit, ']');
          glz::generic value{};
@@ -10872,6 +10873,37 @@ suite recursion_depth_tests = [] {
       }
       {
          const std::string yaml = std::string(limit + 1, '[') + std::string(limit + 1, ']');
+         glz::generic value{};
+         auto ec = glz::read_yaml(value, yaml);
+         expect(ec.ec == glz::error_code::exceeded_max_recursive_depth);
+      }
+   };
+
+   "block mapping nesting at the depth limit boundary"_test = [] {
+      // Block mappings are the expensive shape: every level runs the variant reader's speculative
+      // mapping probe, so one level is a chain of large frames rather than a single small one. This
+      // is what exhausted the stack before the limit could report itself back when YAML shared the
+      // JSON cap. The innermost scalar is a level of its own, so `limit - 1` mappings is the
+      // deepest document that fits.
+      constexpr size_t limit = glz::yaml::max_yaml_recursive_depth;
+      const auto nested = [](const size_t mappings) {
+         std::string yaml{};
+         for (size_t i = 0; i < mappings; ++i) {
+            yaml += std::string(2 * i, ' ');
+            yaml += "k:\n";
+         }
+         yaml += std::string(2 * mappings, ' ');
+         yaml += "v\n";
+         return yaml;
+      };
+      {
+         const std::string yaml = nested(limit - 1);
+         glz::generic value{};
+         auto ec = glz::read_yaml(value, yaml);
+         expect(!ec) << glz::format_error(ec, yaml);
+      }
+      {
+         const std::string yaml = nested(limit);
          glz::generic value{};
          auto ec = glz::read_yaml(value, yaml);
          expect(ec.ec == glz::error_code::exceeded_max_recursive_depth);

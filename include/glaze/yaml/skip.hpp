@@ -134,7 +134,7 @@ namespace glz::yaml
       // Nested flow collections with alternating delimiters ("[{[{...") recurse one frame per
       // delimiter, so bound the recursion to stop adversarial skipped input from overflowing the
       // stack. Same-delimiter nesting ("[[[[") is handled by the loop below without recursing.
-      depth_guard guard{ctx};
+      depth_guard guard{ctx, yaml::max_yaml_recursive_depth};
       if (!guard) [[unlikely]] {
          return;
       }

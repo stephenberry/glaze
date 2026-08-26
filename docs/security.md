@@ -270,7 +270,7 @@ If the payload legitimately contains control bytes, opt in with `escape_control_
 
 When parsing JSON from untrusted sources:
 
-1. **Recursion depth is bounded**: the readers, skippers, and format converters cap nesting at `max_recursive_depth_limit` (256 levels) and return `error_code::exceeded_max_recursive_depth`, so deeply nested input cannot overflow the stack. Every object and every array counts as a level, so a struct holding a vector of itself reaches the cap at 128 struct levels. Flatten your data structures if you legitimately need to exceed that.
+1. **Recursion depth is bounded**: the readers, skippers, and format converters cap nesting at `max_recursive_depth_limit` (256 levels) and return `error_code::exceeded_max_recursive_depth`, so deeply nested input cannot overflow the stack. Every object and every array counts as a level, so a struct holding a vector of itself reaches the cap at 128 struct levels. YAML caps lower, at `glz::yaml::max_yaml_recursive_depth` (64 levels): a YAML level routes through the variant reader's speculative mapping probe and costs several times the stack a JSON level does, so it has to stop sooner to stay inside the same stack. Flatten your data structures if you legitimately need to exceed that.
 
 2. **Limit string sizes**: Very large strings can consume excessive memory. Control this through input buffer size limits.
 
