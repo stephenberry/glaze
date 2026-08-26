@@ -3807,10 +3807,19 @@ namespace glz
 
             // Process this mapping entry (key + colon + value)
             int32_t effective_line_indent = line_indent;
-            if (discover_indent && established_mapping_indent_this_line && discovered_first_key_mid_line &&
-                parent_indent >= 0 && discovered_first_key_visual_indent > effective_line_indent) {
-               // First discovered key may begin mid-line (e.g. sequence entry "- key: value");
-               // pass visual key indent so same-line values compute block-scalar indentation correctly.
+            if (discover_indent && established_mapping_indent_this_line &&
+                discovered_first_key_visual_indent > effective_line_indent &&
+                !(discovered_first_key_mid_line && parent_indent < 0)) {
+               // The first discovered key has no indentation of its own left to measure: it may
+               // begin mid-line (a sequence entry's "- key: value"), or the caller may have already
+               // consumed the line's indentation before handing the mapping over. Pass its visual
+               // column so the entry judges its value against the key's real indent -- otherwise a
+               // key with an empty value takes the following sibling line for nested content
+               // (issue #2827) and same-line block scalars compute the wrong indentation.
+               // The exception is a ROOT mapping whose first key begins mid-line, which means node
+               // properties sit ahead of it (`!!str &a1 "foo":`): those belong to the document node
+               // rather than to the key's column, so the measured indent stands. Conformance tests
+               // 7FWL and HMQ5 pin that case.
                effective_line_indent = discovered_first_key_visual_indent;
             }
 
