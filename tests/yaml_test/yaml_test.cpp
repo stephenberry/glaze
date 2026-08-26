@@ -12057,4 +12057,351 @@ suite issue_2829_pair_block_layout = [] {
    };
 };
 
+namespace i2827
+{
+   struct member_t
+   {
+      std::optional<int> chance{};
+      bool operator==(const member_t&) const = default;
+   };
+
+   struct slot_t
+   {
+      std::map<std::string, member_t> members{};
+      bool operator==(const slot_t&) const = default;
+   };
+
+   struct slots_t
+   {
+      std::optional<std::vector<slot_t>> slots{};
+      bool operator==(const slots_t&) const = default;
+   };
+
+   struct containers_t
+   {
+      std::map<std::string, int> mapping{};
+      std::vector<int> sequence{};
+      std::optional<std::map<std::string, int>> optional_mapping{};
+      bool operator==(const containers_t&) const = default;
+   };
+
+   struct all_optional_t
+   {
+      std::optional<int> a{};
+      bool operator==(const all_optional_t&) const = default;
+   };
+
+   struct holds_all_optional_t
+   {
+      all_optional_t inner{};
+      int after{};
+      bool operator==(const holds_all_optional_t&) const = default;
+   };
+
+   // The collapsed mapping is the LAST thing written, so nothing overwrites what the rewind
+   // abandoned -- the shape that exposes stale bytes in a buffer that is never truncated.
+   struct trailing_all_optional_t
+   {
+      int before{};
+      all_optional_t inner{};
+      bool operator==(const trailing_all_optional_t&) const = default;
+   };
+
+   // A tagged variant alternative whose members are all skipped: the discriminator entry is the
+   // whole mapping, so the writer must NOT also emit `{}` under it.
+   struct empty_alt_t
+   {
+      std::optional<int> unset{};
+      bool operator==(const empty_alt_t&) const = default;
+   };
+   struct filled_alt_t
+   {
+      int a{};
+      bool operator==(const filled_alt_t&) const = default;
+   };
+   using tagged_t = std::variant<empty_alt_t, filled_alt_t>;
+
+   // Both glaze_value_t and custom_write (the float_format_t pattern): the custom writer owns the
+   // representation, including when the wrapped container is empty.
+   struct custom_joined_t
+   {
+      std::vector<int> data{};
+   };
+
+   struct holds_custom_t
+   {
+      custom_joined_t joined{};
+      int after{};
+   };
+}
+
+template <>
+struct glz::meta<i2827::empty_alt_t>
+{
+   using T = i2827::empty_alt_t;
+   static constexpr auto value = object("unset", &T::unset);
+};
+template <>
+struct glz::meta<i2827::filled_alt_t>
+{
+   using T = i2827::filled_alt_t;
+   static constexpr auto value = object("a", &T::a);
+};
+template <>
+struct glz::meta<i2827::tagged_t>
+{
+   static constexpr std::string_view tag = "kind";
+   static constexpr auto ids = std::array{"EMPTY", "FILLED"};
+};
+template <>
+struct glz::meta<i2827::custom_joined_t>
+{
+   static constexpr auto value = &i2827::custom_joined_t::data;
+   static constexpr bool custom_write = true;
+};
+
+namespace glz
+{
+   template <uint32_t Format>
+   struct to<Format, i2827::custom_joined_t>
+   {
+      template <auto Opts, class B>
+      static void op(auto&& value, is_context auto&& ctx, B&& b, auto& ix)
+      {
+         std::string joined{};
+         for (size_t i = 0; i < value.data.size(); ++i) {
+            if (i) joined += ',';
+            joined += std::to_string(value.data[i]);
+         }
+         serialize<Format>::template op<Opts>(joined, ctx, b, ix);
+      }
+   };
+}
+
+// An empty mapping has no block form: a bare `key:` reads back as null, not as an empty
+// mapping, so the writer emits the flow token `{}` (as it already did for `[]`).
+suite issue_2827_empty_mapping_round_trip = [] {
+   using namespace i2827;
+
+   "generic empty mapping round trips"_test = [] {
+      glz::generic_u64 document{};
+      expect(!glz::read_yaml(document, std::string{"a: {}\n"}));
+      expect(document["a"].is_object());
+
+      const auto written = glz::write_yaml(document);
+      expect(written.has_value());
+      expect(written.value() == "a: {}\n") << written.value();
+
+      glz::generic_u64 reread{};
+      expect(!glz::read_yaml(reread, written.value()));
+      expect(reread["a"].is_object());
+      expect(!reread["a"].is_null());
+   };
+
+   "generic empty sequence round trips"_test = [] {
+      glz::generic_u64 document{};
+      expect(!glz::read_yaml(document, std::string{"a: []\n"}));
+
+      const auto written = glz::write_yaml(document);
+      expect(written.has_value());
+      expect(written.value() == "a: []\n") << written.value();
+
+      glz::generic_u64 reread{};
+      expect(!glz::read_yaml(reread, written.value()));
+      expect(reread["a"].is_array());
+   };
+
+   "empty containers as map values"_test = [] {
+      const std::map<std::string, std::map<std::string, int>> nested{{"a", {}}, {"z", {{"k", 1}}}};
+      const auto written = glz::write_yaml(nested);
+      expect(written.has_value());
+      expect(written.value() == "a: {}\nz:\n  k: 1\n") << written.value();
+
+      std::map<std::string, std::map<std::string, int>> parsed{};
+      const auto ec = glz::read_yaml(parsed, written.value());
+      expect(!ec) << glz::format_error(ec, written.value());
+      expect(parsed == nested);
+   };
+
+   "empty containers as object members"_test = [] {
+      const containers_t original{};
+      const auto written = glz::write_yaml(original);
+      expect(written.has_value());
+      expect(written.value() == "mapping: {}\nsequence: []\n") << written.value();
+
+      // Reading a mapping MERGES (like JSON and BEVE), so a pre-existing key the document does
+      // not mention survives; a sequence is replaced outright.
+      containers_t parsed{.mapping = {{"stale", 1}}, .sequence = {9}};
+      const auto ec = glz::read_yaml(parsed, written.value());
+      expect(!ec) << glz::format_error(ec, written.value());
+      expect(parsed.mapping.size() == 1);
+      expect(parsed.mapping.contains("stale"));
+      expect(parsed.sequence.empty());
+   };
+
+   "empty container behind an optional"_test = [] {
+      const containers_t original{.optional_mapping = std::map<std::string, int>{}};
+      const auto written = glz::write_yaml(original);
+      expect(written.has_value());
+      expect(written.value() == "mapping: {}\nsequence: []\noptional_mapping: {}\n") << written.value();
+
+      containers_t parsed{};
+      const auto ec = glz::read_yaml(parsed, written.value());
+      expect(!ec) << glz::format_error(ec, written.value());
+      expect(parsed.optional_mapping.has_value());
+      expect(parsed.optional_mapping->empty());
+   };
+
+   "empty mapping as a sequence element"_test = [] {
+      const std::vector<std::map<std::string, int>> sequence{{}, {{"k", 1}}};
+      const auto written = glz::write_yaml(sequence);
+      expect(written.has_value());
+      expect(written.value() == "- {}\n-\n  k: 1\n") << written.value();
+
+      std::vector<std::map<std::string, int>> parsed{};
+      const auto ec = glz::read_yaml(parsed, written.value());
+      expect(!ec) << glz::format_error(ec, written.value());
+      expect(parsed == sequence);
+   };
+
+   "an object whose members are all skipped is an empty mapping"_test = [] {
+      const holds_all_optional_t original{.inner = {}, .after = 5};
+      const auto written = glz::write_yaml(original);
+      expect(written.has_value());
+      expect(written.value() == "inner: {}\nafter: 5\n") << written.value();
+
+      holds_all_optional_t parsed{};
+      const auto ec = glz::read_yaml(parsed, written.value());
+      expect(!ec) << glz::format_error(ec, written.value());
+      expect(parsed == original);
+   };
+
+   "empty documents"_test = [] {
+      expect(glz::write_yaml(std::map<std::string, int>{}).value() == "{}");
+      expect(glz::write_yaml(all_optional_t{}).value() == "{}");
+      expect(glz::write_yaml(std::vector<int>{}).value() == "[]");
+   };
+
+   "nested struct target round trips"_test = [] {
+      const std::string source{"slots:\n  - members:\n      '17186822': {}\n      '17186837': {}\n"};
+
+      glz::generic_u64 document{};
+      expect(!glz::read_yaml(document, source));
+
+      const auto written = glz::write_yaml(document);
+      expect(written.has_value());
+
+      slots_t parsed{};
+      const auto ec = glz::read_yaml(parsed, written.value());
+      expect(!ec) << glz::format_error(ec, written.value());
+      expect(parsed.slots.has_value());
+      if (parsed.slots.has_value() && parsed.slots->size() == 1) {
+         expect(parsed.slots->front().members.size() == 2);
+      }
+      else {
+         expect(false) << written.value();
+      }
+   };
+
+   // The first key of a nested mapping has no indentation left to measure (the enclosing reader
+   // consumed it), so its column has to be recovered; otherwise an entry with an empty value
+   // swallows the sibling line that follows it.
+   "an empty value does not consume the next sibling"_test = [] {
+      const std::string source{"members:\n  '1':\n  '2':\n"};
+
+      slot_t parsed{};
+      const auto ec = glz::read_yaml(parsed, source);
+      expect(!ec) << glz::format_error(ec, source);
+      expect(parsed.members.size() == 2);
+      expect(parsed.members.contains("1"));
+      expect(parsed.members.contains("2"));
+   };
+
+   "an empty value does not consume the next sibling in a nested map"_test = [] {
+      const std::string source{"outer:\n  a:\n  b:\n"};
+
+      std::map<std::string, std::map<std::string, int>> parsed{};
+      const auto ec = glz::read_yaml(parsed, source);
+      expect(!ec) << glz::format_error(ec, source);
+      expect(parsed.size() == 1);
+      expect(parsed["outer"].size() == 2) << glz::write_json(parsed).value_or("");
+   };
+
+   // The empty-mapping collapse rewinds the write buffer, so it must leave nothing behind in a
+   // buffer that is never truncated to the written length (finalize is a no-op for std::array).
+   "the collapse leaves no stale bytes in a fixed buffer"_test = [] {
+      std::array<char, 512> buffer{};
+      const auto ec = glz::write<glz::yaml::yaml_opts{}>(trailing_all_optional_t{.before = 5}, buffer);
+      expect(!ec);
+      expect(std::string_view{buffer.data(), ec.count} == "before: 5\ninner: {}\n");
+      // The repo reads fixed buffers through data(); stale bytes past the length show up here.
+      expect(std::string_view{buffer.data()} == "before: 5\ninner: {}\n") << std::string_view{buffer.data()};
+   };
+
+   "an all-skipped object nests in every position"_test = [] {
+      const std::map<std::string, all_optional_t> as_map_value{{"k", {}}};
+      expect(glz::write_yaml(as_map_value).value() == "k: {}\n") << glz::write_yaml(as_map_value).value();
+
+      const std::vector<all_optional_t> as_sequence_element{{}, {}};
+      expect(glz::write_yaml(as_sequence_element).value() == "- {}\n- {}\n")
+         << glz::write_yaml(as_sequence_element).value();
+
+      const std::optional<all_optional_t> behind_optional{all_optional_t{}};
+      const std::map<std::string, std::optional<all_optional_t>> optional_value{{"k", behind_optional}};
+      expect(glz::write_yaml(optional_value).value() == "k: {}\n") << glz::write_yaml(optional_value).value();
+
+      // Each form must read back as the same (default) object.
+      std::map<std::string, all_optional_t> parsed{};
+      const auto ec = glz::read_yaml(parsed, std::string{"k: {}\n"});
+      expect(!ec);
+      expect(parsed.size() == 1);
+   };
+
+   // A discriminator entry IS the mapping's content, so an alternative with nothing left to write
+   // must not get a `{}` appended under it -- that document does not read back.
+   "a tagged alternative with no members written keeps just its discriminator"_test = [] {
+      const tagged_t root{empty_alt_t{}};
+      const auto written = glz::write_yaml(root);
+      expect(written.has_value());
+      expect(written.value() == "kind: EMPTY\n") << written.value();
+
+      tagged_t reread{filled_alt_t{}};
+      const auto ec = glz::read_yaml(reread, written.value());
+      expect(!ec) << glz::format_error(ec, written.value());
+      expect(std::holds_alternative<empty_alt_t>(reread));
+
+      const std::map<std::string, tagged_t> as_value{{"entry", empty_alt_t{}}};
+      const auto nested = glz::write_yaml(as_value);
+      expect(nested.has_value());
+      expect(nested.value() == "entry:\n  kind: EMPTY\n") << nested.value();
+
+      std::map<std::string, tagged_t> nested_reread{};
+      const auto nested_ec = glz::read_yaml(nested_reread, nested.value());
+      expect(!nested_ec) << glz::format_error(nested_ec, nested.value());
+      expect(std::holds_alternative<empty_alt_t>(nested_reread.at("entry")));
+   };
+
+   // A type that is both glaze_value_t and custom_write writes itself, empty payload included:
+   // classifying it by the container it wraps would bypass its writer.
+   "a custom writer keeps its representation when empty"_test = [] {
+      const auto written = glz::write_yaml(holds_custom_t{});
+      expect(written.has_value());
+      expect(written.value() == "joined: ''\nafter: 0\n") << written.value();
+
+      const auto filled = glz::write_yaml(holds_custom_t{{{1, 2, 3}}, 7});
+      expect(filled.has_value());
+      expect(filled.value() == "joined: '1,2,3'\nafter: 7\n") << filled.value();
+   };
+
+   "an indented document keeps its top-level keys as siblings"_test = [] {
+      const std::string source{"  a:\n  b: 1\n"};
+
+      glz::generic_u64 document{};
+      const auto ec = glz::read_yaml(document, source);
+      expect(!ec) << glz::format_error(ec, source);
+      expect(document["a"].is_null());
+      expect(document["b"].as<int>() == 1);
+   };
+};
+
 int main() { return 0; }

@@ -199,6 +199,17 @@ person:
 person: {name: John, age: 30}
 ```
 
+### Empty Collections
+
+An empty mapping or sequence has no block form, so it is written with the flow token. A bare `key:` is null, not an empty collection:
+
+```yaml
+mapping: {}
+sequence: []
+```
+
+An object writes `{}` too when nothing is left to emit for it, which includes a struct whose every member was dropped by `skip_null_members` or `meta::skip_if`.
+
 ## Document Markers
 
 Glaze supports YAML document markers:
