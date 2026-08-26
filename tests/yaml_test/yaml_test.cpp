@@ -11683,4 +11683,346 @@ suite yaml_under_indented_block_value_tests = [] {
    };
 };
 
+namespace i2829
+{
+   struct pair_wrapper
+   {
+      std::pair<double, double> value{};
+      bool operator==(const pair_wrapper&) const = default;
+   };
+
+   struct inner
+   {
+      int a{};
+      std::string b{};
+      bool operator==(const inner&) const = default;
+   };
+
+   struct map_wrapper
+   {
+      std::map<std::string, int> value{};
+      bool operator==(const map_wrapper&) const = default;
+   };
+
+   struct str_pair_wrapper
+   {
+      std::pair<std::string, int> value{};
+      bool operator==(const str_pair_wrapper&) const = default;
+   };
+
+   // Struct members used to reach the pair reader through the struct dispatcher, which pushes a
+   // different indent than the map dispatcher does.
+   struct pair_of_string
+   {
+      std::pair<std::string, std::string> p{};
+      bool operator==(const pair_of_string&) const = default;
+   };
+
+   struct pair_of_object
+   {
+      std::pair<std::string, inner> p{};
+      bool operator==(const pair_of_object&) const = default;
+   };
+
+   struct pair_of_map
+   {
+      std::pair<std::string, std::map<std::string, int>> p{};
+      bool operator==(const pair_of_map&) const = default;
+   };
+
+   struct pair_of_seq
+   {
+      std::pair<std::string, std::vector<int>> p{};
+      bool operator==(const pair_of_seq&) const = default;
+   };
+
+   // Transparent write wrapper over a sequence; `mimic` makes it serialize exactly as its
+   // single member, so the pair writer must lay it out by the resolved type.
+   struct mimic_seq
+   {
+      std::vector<int> v{};
+      bool operator==(const mimic_seq&) const = default;
+   };
+
+   struct nested_pairs
+   {
+      std::pair<std::string, std::vector<int>> seq{};
+      std::pair<std::string, std::map<std::string, int>> mapping{};
+      std::pair<std::string, inner> object{};
+      std::pair<std::string, std::pair<std::string, int>> nested{};
+      bool operator==(const nested_pairs&) const = default;
+   };
+}
+
+template <>
+struct glz::meta<i2829::mimic_seq>
+{
+   using mimic = std::vector<int>;
+   static constexpr auto value = &i2829::mimic_seq::v;
+};
+
+// A pair is a single-entry mapping, so in block style it nests under its key rather than
+// running onto the key's line (which produced the invalid "value: 0.5: -3.25").
+suite issue_2829_pair_block_layout = [] {
+   using namespace i2829;
+
+   "pair member nests under its key"_test = [] {
+      const pair_wrapper w{{0.5, -3.25}};
+      const auto written = glz::write_yaml(w);
+      expect(written.has_value());
+      expect(written.value() == "value:\n  0.5: -3.25\n") << written.value();
+
+      pair_wrapper parsed{};
+      const auto ec = glz::read_yaml(parsed, written.value());
+      expect(!ec) << glz::format_error(ec, written.value());
+      expect(parsed == w);
+   };
+
+   "pair member matches a single-entry map member"_test = [] {
+      const map_wrapper m{{{"answer", 42}}};
+      const str_pair_wrapper p{{"answer", 42}};
+
+      const auto ms = glz::write_yaml(m);
+      const auto ps = glz::write_yaml(p);
+      expect(ms.has_value());
+      expect(ps.has_value());
+      expect(ms.value() == ps.value()) << ps.value();
+   };
+
+   "pair values that are containers or objects nest one level deeper"_test = [] {
+      nested_pairs original{};
+      original.seq = {"nums", {1, 2, 3}};
+      original.mapping = {"m", {{"x", 1}, {"y", 2}}};
+      original.object = {"o", {7, "seven"}};
+      original.nested = {"outer", {"inner", 3}};
+
+      const auto written = glz::write_yaml(original);
+      expect(written.has_value());
+      expect(written.value() ==
+             "seq:\n"
+             "  nums:\n"
+             "    - 1\n"
+             "    - 2\n"
+             "    - 3\n"
+             "mapping:\n"
+             "  m:\n"
+             "    x: 1\n"
+             "    y: 2\n"
+             "object:\n"
+             "  o:\n"
+             "    a: 7\n"
+             "    b: seven\n"
+             "nested:\n"
+             "  outer:\n"
+             "    inner: 3\n")
+         << written.value();
+
+      nested_pairs parsed{};
+      const auto ec = glz::read_yaml(parsed, written.value());
+      expect(!ec) << glz::format_error(ec, written.value());
+      expect(parsed == original);
+   };
+
+   "block sequence of pairs uses the compact dash form"_test = [] {
+      const std::vector<std::pair<std::string, int>> original{{"a", 1}, {"b", 2}};
+      const auto written = glz::write_yaml(original);
+      expect(written.has_value());
+      expect(written.value() == "- a: 1\n- b: 2\n") << written.value();
+
+      std::vector<std::pair<std::string, int>> parsed{};
+      const auto ec = glz::read_yaml(parsed, written.value());
+      expect(!ec) << glz::format_error(ec, written.value());
+      expect(parsed == original);
+   };
+
+   "block sequence of pairs holding sequences"_test = [] {
+      const std::vector<std::pair<std::string, std::vector<int>>> original{{"a", {1, 2}}, {"b", {3}}};
+      const auto written = glz::write_yaml(original);
+      expect(written.has_value());
+      expect(written.value() ==
+             "- a:\n"
+             "    - 1\n"
+             "    - 2\n"
+             "- b:\n"
+             "    - 3\n")
+         << written.value();
+
+      std::vector<std::pair<std::string, std::vector<int>>> parsed{};
+      const auto ec = glz::read_yaml(parsed, written.value());
+      expect(!ec) << glz::format_error(ec, written.value());
+      expect(parsed == original);
+   };
+
+   "map value that is a pair nests under its key"_test = [] {
+      const std::map<std::string, std::pair<std::string, int>> original{{"x", {"a", 1}}};
+      const auto written = glz::write_yaml(original);
+      expect(written.has_value());
+      expect(written.value() == "x:\n  a: 1\n") << written.value();
+
+      std::map<std::string, std::pair<std::string, int>> parsed{};
+      const auto ec = glz::read_yaml(parsed, written.value());
+      expect(!ec) << glz::format_error(ec, written.value());
+      expect(parsed == original);
+   };
+
+   "empty container pair value stays inline"_test = [] {
+      const std::pair<std::string, std::vector<int>> original{"e", {}};
+      const auto written = glz::write_yaml(original);
+      expect(written.has_value());
+      expect(written.value() == "e: []\n") << written.value();
+
+      std::pair<std::string, std::vector<int>> parsed{"", {9}};
+      const auto ec = glz::read_yaml(parsed, written.value());
+      expect(!ec) << glz::format_error(ec, written.value());
+      expect(parsed == original);
+   };
+
+   // The struct, map, and sequence dispatchers each push an indent before handing off to the
+   // pair reader; all three must agree that what they pushed is the pair's key column, or the
+   // pair rejects layouts the equivalent map accepts.
+   "reader accepts every child column the equivalent map accepts"_test = [] {
+      {
+         pair_of_string v{};
+         const std::string yaml = "p:\n  k: foo\n   bar\n";
+         const auto ec = glz::read_yaml(v, yaml);
+         expect(!ec) << glz::format_error(ec, yaml);
+         expect(v.p.first == "k");
+         expect(v.p.second == "foo bar");
+      }
+      {
+         pair_of_string v{};
+         const std::string yaml = "p:\n  k: |\n   a\n";
+         const auto ec = glz::read_yaml(v, yaml);
+         expect(!ec) << glz::format_error(ec, yaml);
+         expect(v.p.second == "a\n");
+      }
+      {
+         pair_of_object v{};
+         const std::string yaml = "p:\n  k:\n   a: 1\n   b: x\n";
+         const auto ec = glz::read_yaml(v, yaml);
+         expect(!ec) << glz::format_error(ec, yaml);
+         expect(v.p.second == inner{1, "x"});
+      }
+      {
+         pair_of_map v{};
+         const std::string yaml = "p:\n  k:\n   x: 1\n";
+         const auto ec = glz::read_yaml(v, yaml);
+         expect(!ec) << glz::format_error(ec, yaml);
+         expect(v.p.second.at("x") == 1);
+      }
+      {
+         // An indentless sequence under a pair key. This used to "succeed" while silently
+         // dropping every element.
+         pair_of_seq v{};
+         const std::string yaml = "p:\n  k:\n  - 1\n  - 2\n";
+         const auto ec = glz::read_yaml(v, yaml);
+         expect(!ec) << glz::format_error(ec, yaml);
+         expect(v.p.second == std::vector{1, 2});
+      }
+      {
+         pair_of_seq v{};
+         const std::string yaml = "p:\n  k:\n   - 1\n   - 2\n";
+         const auto ec = glz::read_yaml(v, yaml);
+         expect(!ec) << glz::format_error(ec, yaml);
+         expect(v.p.second == std::vector{1, 2});
+      }
+   };
+
+   "pair value behind a transparent write wrapper nests by its resolved type"_test = [] {
+      {
+         // Resolves to an object.
+         const std::pair<std::string, i2595::mimic_leaf> original{"k", {{"asdf", 7}}};
+         const auto written = glz::write_yaml(original);
+         expect(written.has_value());
+         expect(written.value() == "k:\n  name: asdf\n  id: 7\n") << written.value();
+
+         std::pair<std::string, i2595::mimic_leaf> parsed{};
+         const auto ec = glz::read_yaml(parsed, written.value());
+         expect(!ec) << glz::format_error(ec, written.value());
+         expect(parsed == original);
+      }
+      {
+         // Resolves to a sequence.
+         const std::pair<std::string, mimic_seq> original{"k", {{1, 2}}};
+         const auto written = glz::write_yaml(original);
+         expect(written.has_value());
+         expect(written.value() == "k:\n  - 1\n  - 2\n") << written.value();
+
+         std::pair<std::string, mimic_seq> parsed{};
+         const auto ec = glz::read_yaml(parsed, written.value());
+         expect(!ec) << glz::format_error(ec, written.value());
+         expect(parsed == original);
+      }
+   };
+
+   // A pair's key is a runtime value, so unlike a struct's compile-time key the writer cannot
+   // fold its length into the up-front reservation. A fixed buffer must report an error rather
+   // than run past its end.
+   "bounded buffer write reports an error instead of overflowing"_test = [] {
+      constexpr glz::yaml::yaml_opts opts{};
+      {
+         const std::pair<bool, std::vector<int>> p{false, {}};
+         std::array<char, 8> buffer{};
+         const auto ec = glz::write<opts>(p, buffer);
+         expect(ec.ec == glz::error_code::buffer_overflow);
+      }
+      {
+         const std::pair<char, std::map<std::string, int>> p{'x', {}};
+         std::array<char, 8> buffer{};
+         const auto ec = glz::write<opts>(p, buffer);
+         expect(ec.ec == glz::error_code::buffer_overflow);
+      }
+      {
+         // Enough room for the whole document, so it must succeed.
+         const std::pair<bool, std::vector<int>> p{false, {}};
+         std::array<char, 32> buffer{};
+         const auto ec = glz::write<opts>(p, buffer);
+         expect(!ec);
+         expect(std::string_view{buffer.data()} == "false: []\n");
+      }
+   };
+
+   "glz::pair matches std::pair"_test = [] {
+      const glz::pair<std::string, std::vector<int>> original{"k", {1, 2}};
+      const auto written = glz::write_yaml(original);
+      expect(written.has_value());
+      expect(written.value() == glz::write_yaml(std::pair<std::string, std::vector<int>>{"k", {1, 2}}).value())
+         << written.value();
+      expect(written.value() == "k:\n  - 1\n  - 2\n") << written.value();
+   };
+
+   "non-string key with a nested value"_test = [] {
+      const std::pair<int, std::vector<int>> original{7, {1, 2}};
+      const auto written = glz::write_yaml(original);
+      expect(written.has_value());
+      expect(written.value() == "7:\n  - 1\n  - 2\n") << written.value();
+
+      std::pair<int, std::vector<int>> parsed{};
+      const auto ec = glz::read_yaml(parsed, written.value());
+      expect(!ec) << glz::format_error(ec, written.value());
+      expect(parsed == original);
+   };
+
+   "flow style is unchanged"_test = [] {
+      nested_pairs original{};
+      original.seq = {"nums", {1, 2, 3}};
+      original.mapping = {"m", {{"x", 1}}};
+      original.object = {"o", {7, "seven"}};
+      original.nested = {"outer", {"inner", 3}};
+
+      std::string buffer{};
+      constexpr glz::yaml::yaml_opts opts{.flow_style = true};
+      expect(!glz::write<opts>(original, buffer));
+      expect(buffer ==
+             "{seq: {nums: [1, 2, 3]}, mapping: {m: {x: 1}}, object: {o: {a: 7, b: seven}}, "
+             "nested: {outer: {inner: 3}}}")
+         << buffer;
+
+      nested_pairs parsed{};
+      const auto ec = glz::read_yaml(parsed, buffer);
+      expect(!ec) << glz::format_error(ec, buffer);
+      expect(parsed == original);
+   };
+};
+
 int main() { return 0; }
