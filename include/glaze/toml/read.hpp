@@ -1665,7 +1665,7 @@ namespace glz
       void check_missing_keys_at(T&& value, const missing_key_record& node, Ctx& ctx);
 
       template <auto Opts, class T, class It, class End, class Ctx>
-      inline void parse_toml_object_members(T&& value, It&& it, End end, Ctx&& ctx, bool is_inline_table)
+      inline void parse_inline_table_members(T&& value, It&& it, End end, Ctx&& ctx)
       {
          using U = std::remove_cvref_t<T>;
          static constexpr auto N = reflect<U>::size;
@@ -1674,7 +1674,6 @@ namespace glz
          // adding to it from anywhere else in the document -- so its required keys are settled here
          // rather than deferred to the whole-document walk.
          [[maybe_unused]] bit_array<N> fields{};
-         // TODO: Think if we should make inline table a constexpr to reduce runtime checks
          // TODO: Think if it's feasible to write a function to find out the deepest nested structure
          // and use it instead of vector
 
@@ -1682,40 +1681,23 @@ namespace glz
             skip_ws_and_comments(it, end);
 
             if (it == end) {
-               if (is_inline_table) ctx.error = error_code::unexpected_end; // Inline table must end with '}'
-               break;
+               break; // Truncated; settled below the loop
             }
 
-            if (is_inline_table && (*it == '\n' || *it == '\r')) {
+            if (*it == '\n' || *it == '\r') {
                skip_to_next_line(ctx, it, end);
                continue;
             }
 
-            if (is_inline_table && *it == '}') {
+            if (*it == '}') {
                ++it; // Consume '}'
                check_required_fields<Opts, U>(fields, ctx);
                return; // End of inline table
             }
 
-            // Skip empty lines (only if not in an inline table, inline tables don't have newlines)
-            if (!is_inline_table && (*it == '\n' || *it == '\r')) {
-               skip_to_next_line(ctx, it, end);
-               continue;
-            }
-
             std::string key_str;
             // std::vector<std::string> key_str; // TODO: std::string is used temporarily, we may swap it to view later
             // on or as said before completely switch to array
-
-            // Handle section headers [section] (only if not in an inline table)
-            if (!is_inline_table && *it == '[') {
-               // For now, skip section headers - we'll implement nested object support later
-               // Or, this could be where we handle table arrays or nested tables.
-               // For the current task, we are focusing on inline tables.
-               // This part might need to be more sophisticated for full TOML table support.
-               skip_to_next_line(ctx, it, end);
-               continue;
-            }
 
             if (!parse_toml_key(key_str, ctx, it, end)) {
                return;
@@ -1787,40 +1769,32 @@ namespace glz
 
             skip_ws_and_comments(it, end);
             if (it == end) {
-               if (is_inline_table) ctx.error = error_code::unexpected_end; // Inline table must end with '}'
-               break;
+               break; // Truncated; settled below the loop
             }
 
-            if (is_inline_table) {
-               if (*it == '}') {
-                  // Handled at the start of the loop
-                  continue;
-               }
-               else if (*it == ',') {
-                  ++it; // Consume comma
-                  skip_ws_and_comments(it, end);
-                  if (it != end && *it == '}') { // Trailing comma case like { key = "val", }
-                     // This is allowed by TOML v1.0.0 for inline tables
-                     // The '}' will be consumed at the start of the next iteration.
-                  }
-               }
-               else {
-                  ctx.error = error_code::syntax_error; // Expected comma or '}'
-                  return;
+            if (*it == '}') {
+               // Handled at the start of the loop
+               continue;
+            }
+            else if (*it == ',') {
+               ++it; // Consume comma
+               skip_ws_and_comments(it, end);
+               if (it != end && *it == '}') { // Trailing comma case like { key = "val", }
+                  // This is allowed by TOML v1.0.0 for inline tables
+                  // The '}' will be consumed at the start of the next iteration.
                }
             }
             else {
-               // For top-level or standard tables, expect newline or EOF
-               if (it != end && (*it == '\n' || *it == '\r')) {
-                  skip_to_next_line(ctx, it, end);
-               }
-               else if (it != end && *it != '#') { // If not a comment, it's an error unless it's EOF
-                  // Could be an issue if there's no newline before EOF for the last key-value
-               }
+               ctx.error = error_code::syntax_error; // Expected comma or '}'
+               return;
             }
          }
 
-         check_required_fields<Opts, U>(fields, ctx);
+         // A well-formed inline table returns at its '}' above, so falling out of the loop means
+         // the document ended inside it.
+         if (not bool(ctx.error)) {
+            ctx.error = error_code::unexpected_end;
+         }
       }
    }
 
@@ -2597,7 +2571,7 @@ namespace glz
 
             // TODO: We probably should reorder that so that we dont check against less used inline table more often
             if (*it == '{') { // Check if it's an inline table
-               // parse_toml_object_members settles required keys itself, so keep the document walk
+               // parse_inline_table_members settles required keys itself, so keep the document walk
                // off this node rather than reporting every member of it as missing.
                if constexpr (check_error_on_missing_keys(Opts)) {
                   if (node) {
@@ -2612,8 +2586,8 @@ namespace glz
                   return;
                }
                // TODO: Rewrite logic here, for now it works just fine so we leave it.
-               detail::parse_toml_object_members<Opts>(value, it, end, ctx, true); // true for is_inline_table
-               // parse_toml_object_members consumes the final '}'. The inline table is the
+               detail::parse_inline_table_members<Opts>(value, it, end, ctx);
+               // parse_inline_table_members consumes the final '}'. The inline table is the
                // entire value for this struct, so return rather than looping; otherwise an
                // enclosing inline table's ',' or '}' would be misparsed as the start of a key.
                return;
