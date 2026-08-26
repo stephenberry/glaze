@@ -476,6 +476,19 @@ namespace variant_alternatives
    {
       std::variant<outer, alt_outer> v{};
    };
+
+   // Shares outer's nested "in" table so that the deduced alternative descends into it, and back
+   // out of it, before reaching the key that does not fit.
+   struct alt_nested
+   {
+      inner in{};
+      std::string w{};
+   };
+
+   struct rewind_holder
+   {
+      std::variant<outer, alt_nested> v{};
+   };
 }
 
 suite variant_object_alternative_tests = [] {
@@ -527,6 +540,24 @@ suite variant_object_alternative_tests = [] {
       expect(!ec) << glz::format_error(ec, toml);
       expect(value.v.index() == 1);
       expect(std::get<1>(value.v).s == "str");
+   };
+
+   "a failed alternative that descended into a nested table rewinds cleanly"_test = [] {
+      // "outer" is deduced and consumes "in = { k = 5 }" -- entering a nesting level and leaving it
+      // again -- before failing on "w". Only ctx.error, the message and the iterator are reset
+      // between attempts, so the retry is correct only because every level of the abandoned parse
+      // was entered through an RAII depth_guard that restored ctx.depth on the way out. Were any
+      // level to leak, the retry would start deeper than the first attempt did and the leak would
+      // accumulate over the read.
+      const std::string toml = "v = { in = { k = 5 }, w = \"s\" }\n";
+      rewind_holder value{};
+      glz::context ctx{};
+      const auto ec = glz::read<glz::opts{.format = glz::TOML}>(value, toml, ctx);
+      expect(!ec) << glz::format_error(ec, toml);
+      expect(value.v.index() == 1);
+      expect(std::get<1>(value.v).in.k == 5);
+      expect(std::get<1>(value.v).w == "s");
+      expect(ctx.depth == 0) << ctx.depth;
    };
 
    "when nothing fits, the deduced alternative's error is reported"_test = [] {
