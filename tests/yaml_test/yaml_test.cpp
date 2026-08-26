@@ -12404,4 +12404,119 @@ suite issue_2827_empty_mapping_round_trip = [] {
    };
 };
 
+namespace indent_width_tests
+{
+   struct leaf_t
+   {
+      int x{1};
+      std::vector<int> list{7, 8};
+      bool operator==(const leaf_t&) const = default;
+   };
+
+   struct doc_t
+   {
+      leaf_t nested{};
+      std::map<std::string, int> mapping{{"a", 1}};
+      std::map<std::string, int> empty_mapping{};
+      std::vector<int> empty_sequence{};
+      std::string block{"l1\nl2"};
+      bool operator==(const doc_t&) const = default;
+   };
+
+   struct item_t
+   {
+      int a{};
+      int b{};
+      bool operator==(const item_t&) const = default;
+   };
+
+   struct seq_doc_t
+   {
+      std::vector<item_t> items{{1, 2}, {3, 4}};
+      bool operator==(const seq_doc_t&) const = default;
+   };
+
+   // Round trips `value` at the given width, both under the writing options and under the default
+   // ones -- YAML indentation is self describing, so a reader needs no matching width.
+   template <uint8_t Width, class T>
+   void expect_round_trip(const T& value)
+   {
+      constexpr glz::yaml::yaml_opts opts{.indent_width = Width};
+
+      std::string buffer{};
+      expect(!glz::write<opts>(value, buffer)) << "width " << int(Width);
+
+      T same_width{};
+      const auto ec = glz::read<opts>(same_width, buffer);
+      expect(!ec) << "width " << int(Width) << ": " << glz::format_error(ec, buffer);
+      expect(same_width == value) << buffer;
+
+      T default_width{};
+      const auto default_ec = glz::read_yaml(default_width, buffer);
+      expect(!default_ec) << "width " << int(Width) << ": " << glz::format_error(default_ec, buffer);
+      expect(default_width == value) << buffer;
+   }
+}
+
+// yaml_opts::indent_width reached every writer as a default-constructed yaml_opts, so it was always
+// 2 no matter what the caller asked for.
+suite yaml_indent_width_tests = [] {
+   using namespace indent_width_tests;
+
+   "the default width is unchanged"_test = [] {
+      const auto written = glz::write_yaml(doc_t{});
+      expect(written.has_value());
+      expect(written.value() ==
+             "nested:\n  x: 1\n  list:\n    - 7\n    - 8\nmapping:\n  a: 1\nempty_mapping: {}\n"
+             "empty_sequence: []\nblock: |-\n  l1\n  l2\n\n")
+         << written.value();
+   };
+
+   "block indentation follows the requested width"_test = [] {
+      constexpr glz::yaml::yaml_opts opts{.indent_width = 4};
+      std::string buffer{};
+      expect(!glz::write<opts>(doc_t{}, buffer));
+      expect(buffer ==
+             "nested:\n    x: 1\n    list:\n        -   7\n        -   8\nmapping:\n    a: 1\n"
+             "empty_mapping: {}\nempty_sequence: []\nblock: |-\n    l1\n    l2\n\n")
+         << buffer;
+   };
+
+   // The dash takes the first column of the element's indent, so a mapping continued on following
+   // lines has to line up with its own first key -- `- a: 1` only happens to do that at width 2.
+   "a sequence dash is padded to the width"_test = [] {
+      constexpr glz::yaml::yaml_opts four{.indent_width = 4};
+      std::string buffer{};
+      expect(!glz::write<four>(seq_doc_t{}, buffer));
+      expect(buffer == "items:\n    -   a: 1\n        b: 2\n    -   a: 3\n        b: 4\n") << buffer;
+
+      constexpr glz::yaml::yaml_opts three{.indent_width = 3};
+      std::string odd{};
+      expect(!glz::write<three>(seq_doc_t{}, odd));
+      expect(odd == "items:\n   -  a: 1\n      b: 2\n   -  a: 3\n      b: 4\n") << odd;
+
+      // Unchanged at the default width.
+      expect(glz::write_yaml(seq_doc_t{}).value() == "items:\n  - a: 1\n    b: 2\n  - a: 3\n    b: 4\n");
+   };
+
+   "documents round trip at every width"_test = [] {
+      expect_round_trip<2>(doc_t{});
+      expect_round_trip<3>(doc_t{});
+      expect_round_trip<4>(doc_t{});
+      expect_round_trip<8>(doc_t{});
+
+      expect_round_trip<2>(seq_doc_t{});
+      expect_round_trip<3>(seq_doc_t{});
+      expect_round_trip<4>(seq_doc_t{});
+      expect_round_trip<8>(seq_doc_t{});
+   };
+
+   "flow style ignores the width"_test = [] {
+      constexpr glz::yaml::yaml_opts opts{.indent_width = 8, .flow_style = true};
+      std::string buffer{};
+      expect(!glz::write<opts>(seq_doc_t{}, buffer));
+      expect(buffer == "{items: [{a: 1, b: 2}, {a: 3, b: 4}]}") << buffer;
+   };
+};
+
 int main() { return 0; }

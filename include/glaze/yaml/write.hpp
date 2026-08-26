@@ -285,7 +285,7 @@ namespace glz
       inline void write_yaml_string(std::string_view str, is_context auto&& ctx, B&& b, auto& ix,
                                     int32_t indent_level = 0)
       {
-         constexpr uint8_t indent_width = check_indent_width(yaml_opts{});
+         constexpr uint8_t indent_width = check_indent_width<Opts>();
 
          // Use literal block style for multiline strings
          if (str.find('\n') != std::string_view::npos) {
@@ -535,11 +535,11 @@ namespace glz
       // Write a flow token (`{}` / `[]`) as a line of its own: indentation, the token, and a
       // newline unless the token IS the document. This is what an empty mapping or sequence
       // renders as when the caller could not place it on the key's line.
-      template <class B>
+      template <auto Opts, class B>
       inline void write_empty_block_line(const sv token, is_context auto&& ctx, B&& b, auto& ix, int32_t indent_level,
                                          bool skip_first_indent = false)
       {
-         constexpr uint8_t indent_width = check_indent_width(yaml_opts{});
+         constexpr uint8_t indent_width = check_indent_width<Opts>();
          const int32_t spaces = skip_first_indent ? 0 : indent_level * indent_width;
          if (!ensure_space(ctx, b, ix + spaces + 8)) [[unlikely]] {
             return;
@@ -608,21 +608,32 @@ namespace glz
          }
       }
 
-      // Emit `{}` / `[]` inline after an already-written `key:` or `-`. Returns true when the
-      // value was written, in which case the caller must not open a nested block for it.
-      template <class T, class B>
-      inline bool write_empty_block_inline(const T& value, B&& b, auto& ix)
+      // The separator between a sequence dash and same-line content: one space at the default
+      // indent width of 2, and otherwise enough to fill the indent width, so that a mapping
+      // continued on following lines aligns with its own first key.
+      template <class B>
+      inline void dump_dash_padding(B&& b, auto& ix, uint8_t indent_width)
       {
-         switch (block_empty_kind(value)) {
-         case block_emptiness::mapping:
-            dump(" {}\n", b, ix);
-            return true;
-         case block_emptiness::sequence:
-            dump(" []\n", b, ix);
-            return true;
-         default:
+         for (uint8_t i = 1; i < indent_width; ++i) {
+            dump(' ', b, ix);
+         }
+      }
+
+      // Emit `{}` / `[]` inline after an already-written `key:` or `-`. Returns true when the
+      // value was written, in which case the caller must not open a nested block for it. `pad` is
+      // the separator width: one space after a key, the dash padding after a dash.
+      template <class T, class B>
+      inline bool write_empty_block_inline(const T& value, B&& b, auto& ix, int32_t pad = 1)
+      {
+         const auto kind = block_empty_kind(value);
+         if (kind == block_emptiness::non_empty) {
             return false;
          }
+         for (int32_t i = 0; i < pad; ++i) {
+            dump(' ', b, ix);
+         }
+         dump(kind == block_emptiness::mapping ? sv{"{}\n"} : sv{"[]\n"}, b, ix);
+         return true;
       }
 
       // Write `value` as the nested block of an already-written `key:` or `-`, at `indent_level`.
@@ -702,7 +713,7 @@ namespace glz
       template <auto Opts, class T, class B>
       inline void write_block_sequence(T&& value, is_context auto&& ctx, B&& b, auto& ix, int32_t indent_level)
       {
-         constexpr uint8_t indent_width = check_indent_width(yaml_opts{});
+         constexpr uint8_t indent_width = check_indent_width<Opts>();
 
          bool is_empty = false;
          if constexpr (requires { value.empty(); }) {
@@ -716,7 +727,7 @@ namespace glz
          }
 
          if (is_empty) {
-            write_empty_block_line("[]", ctx, b, ix, indent_level);
+            write_empty_block_line<Opts>("[]", ctx, b, ix, indent_level);
             return;
          }
 
@@ -732,9 +743,12 @@ namespace glz
             }
             first = false;
 
-            // Write indentation and dash
+            // Write indentation and dash. The dash occupies the first column of the element's indent
+            // and the remaining columns are padding, so a mapping continued on following lines lines
+            // up with its own first key (`-   a: 1` above `    b: 2`). At the default width of 2 this
+            // is exactly "- ".
             const int32_t spaces = indent_level * indent_width;
-            if (!ensure_space(ctx, b, ix + spaces + 8)) [[unlikely]] {
+            if (!ensure_space(ctx, b, ix + spaces + indent_width + 8)) [[unlikely]] {
                return;
             }
             for (int32_t i = 0; i < spaces; ++i) {
@@ -743,37 +757,37 @@ namespace glz
             dump('-', b, ix);
 
             if constexpr (str_t<element_t>) {
-               dump(' ', b, ix);
+               dump_dash_padding(b, ix, indent_width);
                write_yaml_string<Opts>(str_view<element_t>(element), ctx, b, ix, indent_level);
                dump('\n', b, ix);
             }
             else if constexpr (is_simple_type<element_t>()) {
-               dump(' ', b, ix);
+               dump_dash_padding(b, ix, indent_width);
                serialize<YAML>::op<Opts>(element, ctx, b, ix);
                dump('\n', b, ix);
             }
             else if constexpr (nullable_like<element_t>) {
                using inner_t = std::remove_cvref_t<decltype(*element)>;
                if (!element) {
-                  dump(' ', b, ix);
+                  dump_dash_padding(b, ix, indent_width);
                   dump("null", b, ix);
                   dump('\n', b, ix);
                }
                else if constexpr (str_t<inner_t>) {
-                  dump(' ', b, ix);
+                  dump_dash_padding(b, ix, indent_width);
                   write_yaml_string<Opts>(str_view<inner_t>(*element), ctx, b, ix, indent_level);
                   dump('\n', b, ix);
                }
                else if constexpr (is_simple_type<inner_t>()) {
-                  dump(' ', b, ix);
+                  dump_dash_padding(b, ix, indent_width);
                   serialize<YAML>::op<Opts>(*element, ctx, b, ix);
                   dump('\n', b, ix);
                }
                else {
                   // Complex inner type - an empty container has no block form
-                  if (!write_empty_block_inline(*element, b, ix)) {
+                  if (!write_empty_block_inline(*element, b, ix, indent_width - 1)) {
                      if constexpr (glaze_object_t<inner_t> || reflectable<inner_t>) {
-                        dump(' ', b, ix);
+                        dump_dash_padding(b, ix, indent_width);
                         write_block_mapping<Opts>(*element, ctx, b, ix, indent_level + 1, true);
                      }
                      else {
@@ -785,11 +799,11 @@ namespace glz
             else if constexpr (is_or_wraps_variant<element_t>()) {
                // For variants, check at runtime if they hold a simple type
                if (variant_holds_simple_type(element)) {
-                  dump(' ', b, ix);
+                  dump_dash_padding(b, ix, indent_width);
                   write_variant_value<Opts>(element, ctx, b, ix, indent_level);
                   dump('\n', b, ix);
                }
-               else if (write_empty_block_inline(element, b, ix)) {
+               else if (write_empty_block_inline(element, b, ix, indent_width - 1)) {
                   // An empty mapping/sequence alternative has no block form
                }
                else {
@@ -804,7 +818,7 @@ namespace glz
                            if constexpr ((glaze_object_t<inner_t> || reflectable<inner_t>) &&
                                          not custom_write<inner_t>) {
                               // Compact form: first key (or the discriminator tag) inline after dash
-                              dump(' ', b, ix);
+                              dump_dash_padding(b, ix, indent_width);
                               if constexpr (check_write_type_info(Opts) && not tag_v<element_t>.empty()) {
                                  write_tagged_block_object<Opts, element_t>(inner, index, ctx, b, ix, indent_level + 1,
                                                                             true);
@@ -816,7 +830,7 @@ namespace glz
                            else if constexpr (custom_write<inner_t> && check_write_type_info(Opts) &&
                                               not tag_v<element_t>.empty()) {
                               // Custom alternative: discriminator tag inline after the dash, body merged.
-                              dump(' ', b, ix);
+                              dump_dash_padding(b, ix, indent_width);
                               write_tagged_block_custom<Opts, element_t>(inner, index, ctx, b, ix, indent_level + 1,
                                                                          true);
                            }
@@ -837,31 +851,31 @@ namespace glz
             }
             else if constexpr (glaze_object_t<element_t> || reflectable<element_t>) {
                // Compact form: first key inline after dash
-               dump(' ', b, ix);
+               dump_dash_padding(b, ix, indent_width);
                write_block_mapping<Opts>(element, ctx, b, ix, indent_level + 1, true);
             }
             else if constexpr (pair_t<element_t>) {
                // A pair is a single-entry mapping - compact form, entry inline after dash
-               dump(' ', b, ix);
+               dump_dash_padding(b, ix, indent_width);
                write_block_pair<Opts>(element, ctx, b, ix, indent_level + 1, true);
             }
             else if constexpr (has_custom_meta_v<element_t>) {
                // Types with top-level custom serialization produce scalar output -
                // write inline after dash
-               dump(' ', b, ix);
+               dump_dash_padding(b, ix, indent_width);
                serialize<YAML>::op<Opts>(element, ctx, b, ix);
                dump('\n', b, ix);
             }
             else if constexpr (writable_map_t<element_t> || writable_array_t<element_t> || glaze_value_t<element_t>) {
                // Containers and glaze_value_t (which may wrap containers) - write on next line
                // with increased indent, unless empty, which has no block form
-               if (!write_empty_block_inline(element, b, ix)) {
+               if (!write_empty_block_inline(element, b, ix, indent_width - 1)) {
                   write_nested_block<Opts>(element, ctx, b, ix, indent_level + 1);
                }
             }
             else {
                // Other types (tuples, custom scalars, etc.) - write inline after dash
-               dump(' ', b, ix);
+               dump_dash_padding(b, ix, indent_width);
                serialize<YAML>::op<Opts>(element, ctx, b, ix);
                dump('\n', b, ix);
             }
@@ -966,7 +980,7 @@ namespace glz
          }
          else {
             // Block style: - a\n- b\n- c
-            constexpr uint8_t indent_width = yaml::check_indent_width(yaml::yaml_opts{});
+            constexpr uint8_t indent_width = yaml::check_indent_width<Opts>();
             int32_t indent_level = 0;
             if constexpr (requires { ctx.indent_level; }) {
                indent_level = ctx.indent_level;
@@ -1164,7 +1178,7 @@ namespace glz
          using V = std::remove_cvref_t<T>;
          using first_type = typename V::first_type;
          using second_type = std::remove_cvref_t<typename V::second_type>;
-         constexpr uint8_t indent_width = check_indent_width(yaml_opts{});
+         constexpr uint8_t indent_width = check_indent_width<Opts>();
 
          if (bool(ctx.error)) [[unlikely]]
             return;
@@ -1218,7 +1232,7 @@ namespace glz
       {
          using V = std::remove_cvref_t<T>;
          constexpr auto N = reflect<V>::size;
-         constexpr uint8_t indent_width = check_indent_width(yaml_opts{});
+         constexpr uint8_t indent_width = check_indent_width<Opts>();
 
          bool wrote_member = false;
 
@@ -1307,7 +1321,7 @@ namespace glz
          if (!wrote_member && !entry_already_written && !bool(ctx.error)) {
             // Every member was skipped, or the object has none: writing nothing would read back
             // as null (or as an empty document at the root), so emit `{}` (issue #2827).
-            write_empty_block_line("{}", ctx, b, ix, indent_level, skip_first_indent);
+            write_empty_block_line<Opts>("{}", ctx, b, ix, indent_level, skip_first_indent);
          }
       }
 
@@ -1354,14 +1368,14 @@ namespace glz
          }
          else if constexpr (writable_map_t<V>) {
             // Map handling
-            constexpr uint8_t indent_width = check_indent_width(yaml_opts{});
+            constexpr uint8_t indent_width = check_indent_width<Opts>();
 
             if constexpr (has_empty<V>) {
                if (value.empty()) {
                   // A mapping with no entries has no block form: writing nothing would read back
                   // as null (or as an empty document at the root), so emit `{}` (issue #2827).
                   // Callers that can place the token on the key's line do so before getting here.
-                  write_empty_block_line("{}", ctx, b, ix, indent_level);
+                  write_empty_block_line<Opts>("{}", ctx, b, ix, indent_level);
                   return;
                }
             }
@@ -1557,7 +1571,7 @@ namespace glz
       inline void write_tagged_block_object(T&& inner, size_t index, is_context auto&& ctx, B&& b, auto& ix,
                                             int32_t indent_level, bool skip_first_indent)
       {
-         constexpr uint8_t indent_width = check_indent_width(yaml_opts{});
+         constexpr uint8_t indent_width = check_indent_width<Opts>();
          static constexpr sv tag = tag_v<Variant>;
 
          if (!skip_first_indent) {
@@ -1605,7 +1619,7 @@ namespace glz
       inline void write_tagged_block_custom(T&& inner, size_t index, is_context auto&& ctx, B&& b, auto& ix,
                                             int32_t indent_level, bool skip_first_indent)
       {
-         constexpr uint8_t indent_width = check_indent_width(yaml_opts{});
+         constexpr uint8_t indent_width = check_indent_width<Opts>();
          static constexpr sv tag = tag_v<Variant>;
 
          if (!skip_first_indent) {
