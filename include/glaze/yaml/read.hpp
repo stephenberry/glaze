@@ -2529,7 +2529,9 @@ namespace glz
       constexpr bool receives_block_mapping_column()
       {
          using V = std::remove_cvref_t<T>;
-         if constexpr (glaze_object_t<V> || reflectable<V>) {
+         // A pair is a single-entry mapping and reads the pushed indent as its own key column,
+         // exactly like a struct -- see from<YAML, pair_t>.
+         if constexpr (glaze_object_t<V> || reflectable<V> || pair_t<V>) {
             return true;
          }
          else if constexpr (glaze_value_t<V>) {
@@ -4410,8 +4412,34 @@ namespace glz
             ++it;
             yaml::skip_inline_ws(it, end);
 
-            // Parse value
-            from<YAML, second_type>::template op<Opts>(value.second, ctx, it, end);
+            // Parse value. A pair is a single-entry mapping, so its value half follows the same
+            // same-line / next-line layout rules as a map entry (see parse_map_value in the map
+            // reader). Without the next-line arm a nested value -- a container, object, or another
+            // pair, all of which the writer indents onto the following line -- fails to parse.
+            // Like a struct, a pair reads the pushed indent as its own key column
+            // (receives_block_mapping_column), so every dispatcher agrees on what was pushed.
+            const int32_t line_indent = (ctx.current_indent() < 0) ? 0 : ctx.current_indent();
+
+            if (it != end && !yaml::line_end_or_comment_table[static_cast<uint8_t>(*it)]) {
+               if (!ctx.push_indent(line_indent + 1)) [[unlikely]]
+                  return;
+               from<YAML, second_type>::template op<Opts>(value.second, ctx, it, end);
+               ctx.pop_indent();
+            }
+            else {
+               const int32_t nested_indent = yaml::detect_nested_value_indent(ctx, it, end, line_indent);
+               if (nested_indent >= 0) {
+                  yaml::skip_to_content(it, end);
+                  // A struct value reads the pushed indent as its own key column;
+                  // every other value type reads it as the enclosing baseline.
+                  const int32_t value_indent =
+                     yaml::receives_block_mapping_column<second_type>() ? nested_indent : nested_indent - 1;
+                  if (!ctx.push_indent(value_indent)) [[unlikely]]
+                     return;
+                  from<YAML, second_type>::template op<Opts>(value.second, ctx, it, end);
+                  ctx.pop_indent();
+               }
+            }
          }
       }
    };

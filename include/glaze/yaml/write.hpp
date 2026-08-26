@@ -467,6 +467,12 @@ namespace glz
       inline void write_block_mapping(T&& value, is_context auto&& ctx, B&& b, auto& ix, int32_t indent_level,
                                       bool skip_first_indent = false);
 
+      // Forward declaration for pairs written as single-entry block mappings
+      // (definition needs write_block_mapping_value).
+      template <auto Opts, class T, class B>
+      inline void write_block_pair(T&& value, is_context auto&& ctx, B&& b, auto& ix, int32_t indent_level,
+                                   bool skip_first_indent = false);
+
       // Forward declaration for tagged-variant block output (definition needs write_block_mapping).
       template <auto Opts, class Variant, class T, class B>
       inline void write_tagged_block_object(T&& inner, size_t index, is_context auto&& ctx, B&& b, auto& ix,
@@ -733,6 +739,11 @@ namespace glz
                dump(' ', b, ix);
                write_block_mapping<Opts>(element, ctx, b, ix, indent_level + 1, true);
             }
+            else if constexpr (pair_t<element_t>) {
+               // A pair is a single-entry mapping - compact form, entry inline after dash
+               dump(' ', b, ix);
+               write_block_pair<Opts>(element, ctx, b, ix, indent_level + 1, true);
+            }
             else if constexpr (has_custom_meta_v<element_t>) {
                // Types with top-level custom serialization produce scalar output -
                // write inline after dash
@@ -747,7 +758,7 @@ namespace glz
                write_block_mapping_nested<Opts>(element, ctx, b, ix, indent_level + 1);
             }
             else {
-               // Other types (pairs, tuples, etc.) - write inline after dash
+               // Other types (tuples, custom scalars, etc.) - write inline after dash
                dump(' ', b, ix);
                serialize<YAML>::op<Opts>(element, ctx, b, ix);
                dump('\n', b, ix);
@@ -919,13 +930,11 @@ namespace glz
       template <auto Opts, class B>
       static void op(auto&& value, is_context auto&& ctx, B&& b, auto& ix)
       {
-         const auto& [key, val] = value;
-
-         using first_type = typename std::remove_cvref_t<T>::first_type;
-         using second_type = typename std::remove_cvref_t<T>::second_type;
-
          if constexpr (yaml::check_flow_style(Opts) || yaml::check_flow_context(Opts)) {
             // Flow style: {key: value}
+            using first_type = typename std::remove_cvref_t<T>::first_type;
+            const auto& [key, val] = value;
+
             if (!ensure_space(ctx, b, ix + 8)) [[unlikely]] {
                return;
             }
@@ -947,41 +956,12 @@ namespace glz
             dump('}', b, ix);
          }
          else {
-            // Block style: key: value
-            constexpr uint8_t indent_width = yaml::check_indent_width(yaml::yaml_opts{});
+            // Block style: a pair is a single-entry mapping
             int32_t indent_level = 0;
             if constexpr (requires { ctx.indent_level; }) {
                indent_level = ctx.indent_level;
             }
-
-            // Write indentation
-            const int32_t spaces = indent_level * indent_width;
-            if (!ensure_space(ctx, b, ix + spaces + 64)) [[unlikely]] {
-               return;
-            }
-            for (int32_t i = 0; i < spaces; ++i) {
-               b[ix++] = ' ';
-            }
-
-            // Write key
-            if constexpr (str_t<first_type>) {
-               yaml::write_yaml_string<Opts>(str_view<first_type>(key), ctx, b, ix);
-            }
-            else {
-               serialize<YAML>::op<Opts>(key, ctx, b, ix);
-            }
-
-            dump(':', b, ix);
-
-            if constexpr (yaml::is_simple_type<second_type>()) {
-               dump(' ', b, ix);
-               serialize<YAML>::op<Opts>(val, ctx, b, ix);
-               dump('\n', b, ix);
-            }
-            else {
-               dump('\n', b, ix);
-               serialize<YAML>::op<Opts>(val, ctx, b, ix);
-            }
+            yaml::write_block_pair<Opts>(value, ctx, b, ix, indent_level);
          }
       }
    };
@@ -1095,8 +1075,9 @@ namespace glz
             }
          }
          else if constexpr (writable_map_t<val_t> || writable_array_t<val_t> || glaze_object_t<val_t> ||
-                            reflectable<val_t>) {
-            // Complex types go on next line with increased indent
+                            reflectable<val_t> || pair_t<val_t>) {
+            // Complex types go on next line with increased indent. A pair is a single-entry
+            // mapping, so it nests like a map rather than sharing the key's line (issue #2829).
             dump('\n', b, ix);
 
             // Create a modified context with incremented indent level
@@ -1115,6 +1096,64 @@ namespace glz
             dump(' ', b, ix);
             serialize<YAML>::op<Opts>(member, ctx, b, ix);
             dump('\n', b, ix);
+         }
+      }
+
+      // Write a pair as a single-entry block mapping: `key: value`. Layout of the value half is
+      // shared with object members and map entries, so a pair whose second type is a container or
+      // object nests on the following line instead of running onto the key's line (issue #2829).
+      // `skip_first_indent` suppresses the leading indentation for the compact `- key: value` form.
+      template <auto Opts, class T, class B>
+      inline void write_block_pair(T&& value, is_context auto&& ctx, B&& b, auto& ix, int32_t indent_level,
+                                   bool skip_first_indent)
+      {
+         using V = std::remove_cvref_t<T>;
+         using first_type = typename V::first_type;
+         using second_type = std::remove_cvref_t<typename V::second_type>;
+         constexpr uint8_t indent_width = check_indent_width(yaml_opts{});
+
+         if (bool(ctx.error)) [[unlikely]]
+            return;
+
+         const auto& [key, val] = value;
+
+         const int32_t spaces = skip_first_indent ? 0 : indent_level * indent_width;
+         if (!ensure_space(ctx, b, ix + spaces + 8)) [[unlikely]] {
+            return;
+         }
+         for (int32_t i = 0; i < spaces; ++i) {
+            b[ix++] = ' ';
+         }
+
+         // Write key
+         if constexpr (str_t<first_type>) {
+            write_yaml_string<Opts>(str_view<first_type>(key), ctx, b, ix);
+         }
+         else {
+            serialize<YAML>::op<Opts>(key, ctx, b, ix);
+         }
+
+         // write_block_mapping reserves `key.size() + 8` up front because its keys are known at
+         // compile time. A pair's key is a runtime value whose writer reserves only what the key
+         // itself needs (as little as 8 bytes total for a bool/char/null key), so the slack the
+         // ':' and the unguarded leading dumps in write_block_mapping_value rely on has to be
+         // re-established here.
+         if (!ensure_space(ctx, b, ix + 8)) [[unlikely]] {
+            return;
+         }
+
+         dump(':', b, ix);
+
+         // A value exposed through a transparent write wrapper is laid out by the type it resolves
+         // to, matching write_block_mapping's handling of such members (issue #2595).
+         if constexpr (transparent_write_wrapper<second_type> && !is_or_wraps_variant<second_type>()) {
+            unwrap_write_value(val, ctx, [&]<class Inner>(Inner&& inner) {
+               write_block_mapping_value<Opts, std::remove_cvref_t<Inner>>(std::forward<Inner>(inner), ctx, b, ix,
+                                                                           indent_level);
+            });
+         }
+         else {
+            write_block_mapping_value<Opts, second_type>(val, ctx, b, ix, indent_level);
          }
       }
 
@@ -1245,6 +1284,9 @@ namespace glz
          }
          else if constexpr (writable_array_t<V>) {
             write_block_sequence<Opts>(value, ctx, b, ix, indent_level);
+         }
+         else if constexpr (pair_t<V>) {
+            write_block_pair<Opts>(value, ctx, b, ix, indent_level);
          }
          else if constexpr (writable_map_t<V>) {
             // Map handling
