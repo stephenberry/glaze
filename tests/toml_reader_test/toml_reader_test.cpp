@@ -677,4 +677,60 @@ suite variant_alternative_budget_tests = [] {
    };
 };
 
+// An inline table's body is parsed by a loop that returns at '}'. Falling out of it any other way
+// means the document ended mid-table, which used to be silently accepted.
+namespace truncated_inline
+{
+   struct point
+   {
+      int x{};
+      int y{};
+   };
+
+   struct holder
+   {
+      point v{};
+   };
+}
+
+suite truncated_inline_table_tests = [] {
+   using namespace truncated_inline;
+
+   "an inline table with no closing brace is an error"_test = [] {
+      for (const std::string toml : {"v = {", "v = {\n", "v = { x = 1", "v = { x = 1,", "v = { x = 1, y = 2"}) {
+         holder value{};
+         const auto ec = glz::read_toml(value, toml);
+         expect(ec.ec == glz::error_code::unexpected_end) << toml;
+      }
+   };
+
+   "truncation is reported as truncation, not as a missing key"_test = [] {
+      // The required-key check belongs to the '}' path; reaching the end of the document instead
+      // is a malformed document, and saying "missing key" of it would send the caller looking for
+      // a key they did in fact write.
+      static constexpr glz::opts strict{.format = glz::TOML, .error_on_missing_keys = true};
+      const std::string toml = "v = { x = 1";
+      holder value{};
+      const auto ec = glz::read<strict>(value, toml);
+      expect(ec.ec == glz::error_code::unexpected_end) << glz::format_error(ec, toml);
+   };
+
+   "a complete inline table still reads"_test = [] {
+      const std::string toml = "v = { x = 1, y = 2 }\n";
+      holder value{};
+      const auto ec = glz::read_toml(value, toml);
+      expect(!ec) << glz::format_error(ec, toml);
+      expect(value.v.x == 1);
+      expect(value.v.y == 2);
+   };
+
+   "a trailing comma before the brace is still accepted"_test = [] {
+      const std::string toml = "v = { x = 1, y = 2, }\n";
+      holder value{};
+      const auto ec = glz::read_toml(value, toml);
+      expect(!ec) << glz::format_error(ec, toml);
+      expect(value.v.y == 2);
+   };
+};
+
 int main() { return 0; }
