@@ -198,6 +198,26 @@ namespace glz
       explicit operator bool() const noexcept { return entered; }
    };
 
+   // Raises the indentation depth for the lifetime of a container being written, so that every way
+   // out of it -- including an error return from a nested value -- puts the depth back. The step is
+   // the writer's indentation width, passed in because it is a formatting option the context knows
+   // nothing about.
+   template <class Ctx>
+   struct indent_guard
+   {
+      Ctx& ctx;
+      size_t step;
+
+      indent_guard(Ctx& c, const size_t indentation_step) noexcept : ctx(c), step(indentation_step)
+      {
+         ctx.depth += step;
+      }
+      ~indent_guard() { ctx.depth -= step; }
+
+      indent_guard(const indent_guard&) = delete;
+      indent_guard& operator=(const indent_guard&) = delete;
+   };
+
    // A variant read is speculative: an alternative is parsed to find out whether it fits, and a
    // rejected one is rewound and the next tried. Nest that -- a variant whose alternatives contain
    // variants -- and the re-parses multiply, so a failure at the bottom of an ambiguous nest costs

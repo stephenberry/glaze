@@ -22,17 +22,17 @@ namespace glz::toml
          return;
       }
 
-      if ((it + 2) < end && *it == '"' && *(it + 1) == '"' && *(it + 2) == '"') {
+      if (size_t(end - it) > 2 && *it == '"' && *(it + 1) == '"' && *(it + 2) == '"') {
          it += 3;
          if (it != end && *it == '\n') {
             ++it;
          }
-         else if ((it + 1) < end && *it == '\r' && *(it + 1) == '\n') {
+         else if (size_t(end - it) > 1 && *it == '\r' && *(it + 1) == '\n') {
             it += 2;
          }
 
          while (true) {
-            if ((it + 2) >= end) [[unlikely]] {
+            if (size_t(end - it) <= 2) [[unlikely]] {
                ctx.error = error_code::syntax_error;
                return;
             }
@@ -84,17 +84,17 @@ namespace glz::toml
          return;
       }
 
-      if ((it + 2) < end && *it == '\'' && *(it + 1) == '\'' && *(it + 2) == '\'') {
+      if (size_t(end - it) > 2 && *it == '\'' && *(it + 1) == '\'' && *(it + 2) == '\'') {
          it += 3;
          if (it != end && *it == '\n') {
             ++it;
          }
-         else if ((it + 1) < end && *it == '\r' && *(it + 1) == '\n') {
+         else if (size_t(end - it) > 1 && *it == '\r' && *(it + 1) == '\n') {
             it += 2;
          }
 
          while (true) {
-            if ((it + 2) >= end) [[unlikely]] {
+            if (size_t(end - it) <= 2) [[unlikely]] {
                ctx.error = error_code::syntax_error;
                return;
             }

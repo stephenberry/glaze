@@ -352,6 +352,8 @@ namespace glz
          out.resize(ix);
       }
 
-      return {};
+      // count is the number of bytes written. A resizable buffer carries its own size, but a
+      // fixed-size one has no other way to learn how much of it now holds JSON.
+      return {ix};
    }
 } // namespace glz

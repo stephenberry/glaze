@@ -181,7 +181,7 @@ namespace glz
          constexpr auto Length = byte_length<T>();
          uint8_t data[Length];
 
-         if ((it + Length) > end) [[unlikely]] {
+         if (size_t(end - it) < Length) [[unlikely]] {
             ctx.error = error_code::unexpected_end;
             return;
          }
@@ -223,7 +223,7 @@ namespace glz
                   }
 
                   auto decode = [&](auto&& i) {
-                     if ((it + sizeof(i)) > end) [[unlikely]] {
+                     if (size_t(end - it) < sizeof(i)) [[unlikely]] {
                         ctx.error = error_code::unexpected_end;
                         return;
                      }
@@ -306,7 +306,7 @@ namespace glz
             }
          }
 
-         if ((it + sizeof(V)) > end) [[unlikely]] {
+         if (size_t(end - it) < sizeof(V)) [[unlikely]] {
             ctx.error = error_code::unexpected_end;
             return;
          }
@@ -366,7 +366,7 @@ namespace glz
          using V = std::underlying_type_t<std::decay_t<T>>;
 
          if constexpr (check_no_header(Opts)) {
-            if ((it + sizeof(V)) > end) [[unlikely]] {
+            if (size_t(end - it) < sizeof(V)) [[unlikely]] {
                ctx.error = error_code::unexpected_end;
                return;
             }
@@ -396,7 +396,7 @@ namespace glz
             }
 
             ++it;
-            if ((it + sizeof(V)) > end) [[unlikely]] {
+            if (size_t(end - it) < sizeof(V)) [[unlikely]] {
                ctx.error = error_code::unexpected_end;
                return;
             }
@@ -424,7 +424,7 @@ namespace glz
       {
          if constexpr (check_no_header(Opts)) {
             using V = std::decay_t<T>;
-            if ((it + sizeof(V)) > end) [[unlikely]] {
+            if (size_t(end - it) < sizeof(V)) [[unlikely]] {
                ctx.error = error_code::unexpected_end;
                return;
             }
@@ -473,7 +473,7 @@ namespace glz
             }
             ++it;
 
-            if ((it + 2 * sizeof(V)) > end) [[unlikely]] {
+            if (size_t(end - it) < 2 * sizeof(V)) [[unlikely]] {
                ctx.error = error_code::unexpected_end;
                return;
             }
@@ -1564,7 +1564,7 @@ namespace glz
             value.clear();
 
             for (size_t i = 0; i < n; ++i) {
-               if ((it + sizeof(V)) > end) [[unlikely]] {
+               if (size_t(end - it) < sizeof(V)) [[unlikely]] {
                   ctx.error = error_code::unexpected_end;
                   return;
                }
@@ -2048,7 +2048,7 @@ namespace glz
 
                if constexpr (is_volatile) {
                   for (size_t i = 0; i < n; ++i) {
-                     if ((it + sizeof(V)) > end) [[unlikely]] {
+                     if (size_t(end - it) < sizeof(V)) [[unlikely]] {
                         ctx.error = error_code::unexpected_end;
                         return;
                      }
@@ -2086,7 +2086,7 @@ namespace glz
             }
             else {
                for (auto&& x : value) {
-                  if ((it + sizeof(V)) > end) [[unlikely]] {
+                  if (size_t(end - it) < sizeof(V)) [[unlikely]] {
                      ctx.error = error_code::unexpected_end;
                      return;
                   }
