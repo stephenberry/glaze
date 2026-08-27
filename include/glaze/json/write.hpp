@@ -1155,7 +1155,7 @@ namespace glz
          if (!ensure_space(ctx, out, ix + 1)) [[unlikely]] {
             return false;
          }
-         dump(c, out, ix);
+         dump<false>(c, out, ix);
          return true;
       }
 
@@ -1166,7 +1166,7 @@ namespace glz
          if (!ensure_space(ctx, out, ix + s.size())) [[unlikely]] {
             return false;
          }
-         dump(s, out, ix);
+         dump<false>(s, out, ix);
          return true;
       }
 
@@ -1177,7 +1177,8 @@ namespace glz
          if (!ensure_space(ctx, out, ix + 1 + ctx.depth)) [[unlikely]] {
             return false;
          }
-         dump_newline_indent(check_indentation_char(Opts), ctx.depth, out, ix);
+         dump<false>('\n', out, ix);
+         dumpn_unchecked(check_indentation_char(Opts), ctx.depth, out, ix);
          return true;
       }
 
@@ -1196,8 +1197,8 @@ namespace glz
          for (uint64_t i = 0; i < n; ++i) {
             uint8_t b;
             std::memcpy(&b, data + i, 1);
-            dump(digits[(b >> 4) & 0xf], out, ix);
-            dump(digits[b & 0xf], out, ix);
+            dump<false>(digits[(b >> 4) & 0xf], out, ix);
+            dump<false>(digits[b & 0xf], out, ix);
          }
          return true;
       }
