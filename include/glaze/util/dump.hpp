@@ -63,6 +63,22 @@ namespace glz
       }
    }
 
+   // The address of the write position, formed without subscripting so that a full buffer
+   // (ix == size()) yields a one-past-the-end pointer instead of an out of range access. A memset or
+   // memcpy of zero bytes through that pointer is well defined, so a length of zero needs no branch.
+   template <class B>
+   GLZ_ALWAYS_INLINE auto data_at(B& b, const size_t ix) noexcept
+   {
+      if constexpr (std::is_pointer_v<std::remove_cvref_t<B>>) {
+         return b + ix;
+      }
+      else {
+         static_assert(has_data<std::remove_cvref_t<B>>,
+                       "an output buffer must be contiguous: dump writes through memset and memcpy");
+         return b.data() + ix;
+      }
+   }
+
    // Low-level buffer write primitives (dump functions)
    // ================================================
    // These functions write directly to the buffer WITHOUT bounds checking for bounded buffers.
@@ -135,10 +151,6 @@ namespace glz
       ix += n;
    }
 
-   // A memset of zero bytes touches no memory, but forming &b[ix] with ix == b.size() is already
-   // out of range for a bounded buffer, and an indentation of zero reaches exactly that. The
-   // address is therefore only formed when there is something to write.
-
    template <auto c, class B>
    [[deprecated("use dumpn(c, n, b, ix) instead of dumpn<c>(n, b, ix) to reduce template instantiations")]]
    GLZ_ALWAYS_INLINE void dumpn(size_t n, B& b, size_t& ix) noexcept(not vector_like<B>)
@@ -149,10 +161,8 @@ namespace glz
             b.resize(2 * k);
          }
       }
-      if (n) {
-         std::memset(&b[ix], c, n);
-         ix += n;
-      }
+      std::memset(data_at(b, ix), c, n);
+      ix += n;
    }
 
    template <class B>
@@ -164,10 +174,8 @@ namespace glz
             b.resize(2 * k);
          }
       }
-      if (n) {
-         std::memset(&b[ix], c, n);
-         ix += n;
-      }
+      std::memset(data_at(b, ix), c, n);
+      ix += n;
    }
 
    template <auto c, class B>
@@ -175,19 +183,15 @@ namespace glz
       "use dumpn_unchecked(c, n, b, ix) instead of dumpn_unchecked<c>(n, b, ix) to reduce template instantiations")]]
    GLZ_ALWAYS_INLINE void dumpn_unchecked(size_t n, B& b, size_t& ix) noexcept
    {
-      if (n) {
-         std::memset(&b[ix], c, n);
-         ix += n;
-      }
+      std::memset(data_at(b, ix), c, n);
+      ix += n;
    }
 
    template <class B>
    GLZ_ALWAYS_INLINE void dumpn_unchecked(const byte_sized auto c, size_t n, B& b, size_t& ix) noexcept
    {
-      if (n) {
-         std::memset(&b[ix], c, n);
-         ix += n;
-      }
+      std::memset(data_at(b, ix), c, n);
+      ix += n;
    }
 
    template <char IndentChar, class B>
@@ -204,10 +208,8 @@ namespace glz
 
       assign_maybe_cast<'\n'>(b, ix);
       ++ix;
-      if (n) {
-         std::memset(&b[ix], IndentChar, n);
-         ix += n;
-      }
+      std::memset(data_at(b, ix), IndentChar, n);
+      ix += n;
    }
 
    template <class B>
@@ -222,10 +224,8 @@ namespace glz
 
       assign_maybe_cast('\n', b, ix);
       ++ix;
-      if (n) {
-         std::memset(&b[ix], c, n);
-         ix += n;
-      }
+      std::memset(data_at(b, ix), c, n);
+      ix += n;
    }
 
    template <const sv& str, bool Checked = true, class B>
