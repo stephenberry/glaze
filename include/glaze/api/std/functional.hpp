@@ -40,7 +40,7 @@ namespace glz
    concept function = is_specialization_v<T, std::function>;
 
    template <function T>
-   struct meta<T>
+   struct name_meta<T>
    {
       static constexpr auto impl() noexcept
       {

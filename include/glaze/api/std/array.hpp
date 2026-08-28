@@ -31,7 +31,7 @@ namespace glz
    {};
 
    template <class T, size_t N>
-   struct meta<std::array<T, N>>
+   struct name_meta<std::array<T, N>>
    {
       static constexpr std::string_view name =
          join_v<chars<"std::array<">, name_v<T>, chars<",">, chars<num_to_string<N>::value>, chars<">">>;

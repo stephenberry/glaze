@@ -164,17 +164,11 @@ suite tagged_variant_tests = [] {
 #if !defined(_MSC_VER)
    "tagged_variant_schema_tests"_test = [] {
       auto s = glz::write_json_schema<tagged_variant>().value_or("error");
-      // P2996 reflection: Bloomberg Clang returns unqualified names, GCC returns qualified names
-      // Accept both forms for the title
-      auto expected_qualified =
-         R"({"type":"object","$defs":{"int32_t":{"type":"integer","minimum":-2147483648,"maximum":2147483647}},"oneOf":[{"type":"object","properties":{"action":{"const":"PUT"},"data":{"type":"object","additionalProperties":{"$ref":"#/$defs/int32_t"}}},"additionalProperties":false,"required":["action"],"title":"PUT"},{"type":"object","properties":{"action":{"const":"DELETE"},"data":{"type":"string"}},"additionalProperties":false,"required":["action"],"title":"DELETE"}],"title":"std::variant<put_action, delete_action>"})";
-#if GLZ_REFLECTION26
-      auto expected_unqualified =
-         R"({"type":"object","$defs":{"int32_t":{"type":"integer","minimum":-2147483648,"maximum":2147483647}},"oneOf":[{"type":"object","properties":{"action":{"const":"PUT"},"data":{"type":"object","additionalProperties":{"$ref":"#/$defs/int32_t"}}},"additionalProperties":false,"required":["action"],"title":"PUT"},{"type":"object","properties":{"action":{"const":"DELETE"},"data":{"type":"string"}},"additionalProperties":false,"required":["action"],"title":"DELETE"}],"title":"variant<put_action, delete_action>"})";
-      expect(s == expected_qualified || s == expected_unqualified) << s;
-#else
-      expect(s == expected_qualified) << s;
-#endif
+      // Glaze names std::variant itself (glz::name_meta), so the title no longer varies with the
+      // compiler's spelling of the type, even though glz::meta<tagged_variant> is specialized.
+      auto expected =
+         R"({"type":"object","$defs":{"int32_t":{"type":"integer","minimum":-2147483648,"maximum":2147483647}},"oneOf":[{"type":"object","properties":{"action":{"const":"PUT"},"data":{"type":"object","additionalProperties":{"$ref":"#/$defs/int32_t"}}},"additionalProperties":false,"required":["action"],"title":"PUT"},{"type":"object","properties":{"action":{"const":"DELETE"},"data":{"type":"string"}},"additionalProperties":false,"required":["action"],"title":"DELETE"}],"title":"std::variant<put_action,delete_action>"})";
+      expect(s == expected) << s;
    };
 #endif
 
@@ -208,17 +202,10 @@ suite tagged_variant_tests = [] {
 #if !defined(_MSC_VER)
    "shared_ptr variant schema"_test = [] {
       const auto schema = glz::write_json_schema<std::shared_ptr<tagged_variant2>>().value_or("error");
-      // P2996 reflection: Bloomberg Clang returns unqualified names, GCC returns qualified names
-      // Accept both forms for the title
-      auto expected_qualified =
-         R"({"type":["object","null"],"$defs":{"int32_t":{"type":"integer","minimum":-2147483648,"maximum":2147483647}},"oneOf":[{"type":"object","properties":{"data":{"type":"object","additionalProperties":{"$ref":"#/$defs/int32_t"}},"type":{"const":"put_action"}},"additionalProperties":false,"required":["type"],"title":"put_action"},{"type":"object","properties":{"data":{"type":"string"},"type":{"const":"delete_action"}},"additionalProperties":false,"required":["type"],"title":"delete_action"},{"type":"object","properties":{"type":{"const":"std::monostate"}},"additionalProperties":false,"required":["type"],"title":"std::monostate"}],"title":"std::shared_ptr<std::variant<put_action, delete_action, std::monostate>>"})";
-#if GLZ_REFLECTION26
-      auto expected_unqualified =
-         R"({"type":["object","null"],"$defs":{"int32_t":{"type":"integer","minimum":-2147483648,"maximum":2147483647}},"oneOf":[{"type":"object","properties":{"data":{"type":"object","additionalProperties":{"$ref":"#/$defs/int32_t"}},"type":{"const":"put_action"}},"additionalProperties":false,"required":["type"],"title":"put_action"},{"type":"object","properties":{"data":{"type":"string"},"type":{"const":"delete_action"}},"additionalProperties":false,"required":["type"],"title":"delete_action"},{"type":"object","properties":{"type":{"const":"std::monostate"}},"additionalProperties":false,"required":["type"],"title":"std::monostate"}],"title":"std::shared_ptr<variant<put_action, delete_action, monostate>>"})";
-      expect(schema == expected_qualified || schema == expected_unqualified) << schema;
-#else
-      expect(schema == expected_qualified) << schema;
-#endif
+      // As above: std::shared_ptr, std::variant, and std::monostate are all named by Glaze.
+      auto expected =
+         R"({"type":["object","null"],"$defs":{"int32_t":{"type":"integer","minimum":-2147483648,"maximum":2147483647}},"oneOf":[{"type":"object","properties":{"data":{"type":"object","additionalProperties":{"$ref":"#/$defs/int32_t"}},"type":{"const":"put_action"}},"additionalProperties":false,"required":["type"],"title":"put_action"},{"type":"object","properties":{"data":{"type":"string"},"type":{"const":"delete_action"}},"additionalProperties":false,"required":["type"],"title":"delete_action"},{"type":"object","properties":{"type":{"const":"std::monostate"}},"additionalProperties":false,"required":["type"],"title":"std::monostate"}],"title":"std::shared_ptr<std::variant<put_action,delete_action,std::monostate>>"})";
+      expect(schema == expected) << schema;
    };
 #endif
 };

@@ -434,7 +434,7 @@ The type hash for a type `T` includes:
 ```c++
 // Pseudo-code showing what gets hashed
 hash = hash128(
-  name,                        // Type name from glz::meta
+  name,                        // Type name from glz::name_v
   sizeof(T),                   // Size in bytes
   version.major,               // Version components
   version.minor,
@@ -479,6 +479,27 @@ glz::name_v<std::function<void()>>                      // "std::function<void()
 glz::name_v<std::function<double(const int&, const double&)>>
   // "std::function<double(const int32_t&,const double&)>"
 ```
+
+### Customizing Type Names
+
+`glz::name_v<T>` resolves in this order:
+
+1. `T::glaze::name`
+2. `glz::meta<T>::name`
+3. `glz::name_meta<T>::name` — the built-in names above
+4. the compiler's name for `T`
+
+`glz::name_meta` is where Glaze names fundamental types, `const`/reference/pointer types, and standard containers. Naming these through `glz::name_meta` rather than through partial specializations of `glz::meta` keeps `glz::meta` entirely yours: a specialization written against a concept rather than an exact type, such as
+
+```c++
+template <std::derived_from<my_base> T>
+struct glz::meta<T>
+{
+   static constexpr auto value = /* ... */;
+};
+```
+
+claims every type it matches, including `const T`, without becoming ambiguous with a Glaze specialization.
 
 ### Debugging Type Mismatches
 

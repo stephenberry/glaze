@@ -27,7 +27,7 @@ namespace glz
    }
 
    template <class T>
-   struct meta<detail::hostname_includer<T>>
+   struct name_meta<detail::hostname_includer<T>>
    {
       static constexpr std::string_view name = join_v<chars<"hostname_includer<">, name_v<T>, chars<">">>;
    };
