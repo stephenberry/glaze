@@ -2,19 +2,9 @@
 // For the license information refer to glaze.hpp
 #pragma once
 
-// We include naming metas for standard types for consistency across compilers
-#include "glaze/api/std/array.hpp"
-#include "glaze/api/std/deque.hpp"
-#include "glaze/api/std/functional.hpp"
-#include "glaze/api/std/list.hpp"
-#include "glaze/api/std/map.hpp"
-#include "glaze/api/std/optional.hpp"
-#include "glaze/api/std/shared_ptr.hpp"
-#include "glaze/api/std/string.hpp"
-#include "glaze/api/std/tuple.hpp"
-#include "glaze/api/std/unique_ptr.hpp"
-#include "glaze/api/std/variant.hpp"
-#include "glaze/api/std/vector.hpp"
+// We include naming metas for standard types for consistency across compilers.
+// $defs keys and $ref targets are built from name_v, so the set must not vary by translation unit.
+#include "glaze/api/std/names.hpp"
 #include "glaze/api/tuplet.hpp"
 #include "glaze/api/type_support.hpp"
 #include "glaze/core/custom_meta.hpp"

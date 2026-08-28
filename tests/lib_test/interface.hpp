@@ -3,12 +3,10 @@
 #pragma once
 
 #include <iostream>
+#include <span>
 #include <tuple>
 
 #include "glaze/api/impl.hpp"
-#include "glaze/api/std/deque.hpp"
-#include "glaze/api/std/span.hpp"
-#include "glaze/api/std/unordered_set.hpp"
 
 struct my_api
 {
