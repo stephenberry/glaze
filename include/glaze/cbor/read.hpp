@@ -2320,30 +2320,9 @@ namespace glz
       }
    };
 
-   // Enums with glaze reflection
-   template <glaze_enum_t T>
-   struct from<CBOR, T>
-   {
-      template <auto Opts>
-      GLZ_ALWAYS_INLINE static void op(auto& value, is_context auto& ctx, auto& it, auto end) noexcept
-      {
-         // Read the ordinal through the range-checked integer reader so an out-of-range wire
-         // value is rejected instead of being silently truncated into the underlying type.
-         // bool is a legal fixed underlying type, and the writer emits such an enum as a CBOR
-         // integer, so route it through the uint8_t reader rather than the boolean reader.
-         using underlying = std::underlying_type_t<std::decay_t<T>>;
-         using U = std::conditional_t<std::same_as<underlying, bool>, uint8_t, underlying>;
-         U u{};
-         from<CBOR, U>::template op<Opts>(u, ctx, it, end);
-         if (bool(ctx.error)) [[unlikely]]
-            return;
-         value = static_cast<std::decay_t<T>>(u);
-      }
-   };
-
-   // Plain enums
+   // Enums, reflected or plain: both are read as the ordinal, so one reader covers them
    template <class T>
-      requires(std::is_enum_v<T> && !glaze_enum_t<T>)
+      requires(std::is_enum_v<T>)
    struct from<CBOR, T>
    {
       template <auto Opts>
