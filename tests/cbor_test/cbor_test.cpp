@@ -1060,6 +1060,14 @@ void enum_tests()
       expect(not glz::read_cbor(result, buffer));
       expect(result == bool_enum::on);
    };
+
+   "bool_underlying_enum_out_of_range"_test = [] {
+      // The ordinal is read through the uint8_t reader, whose bound is wider than bool's domain,
+      // so 2 has to be rejected here rather than cast into a bool-backed enum.
+      const std::string buffer = {char(0x02)};
+      bool_enum result{};
+      expect(bool(glz::read_cbor(result, buffer)));
+   };
 }
 
 void variant_tests()

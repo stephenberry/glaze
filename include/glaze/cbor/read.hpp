@@ -2338,6 +2338,14 @@ namespace glz
          from<CBOR, U>::template op<Opts>(u, ctx, it, end);
          if (bool(ctx.error)) [[unlikely]]
             return;
+         if constexpr (std::same_as<underlying, bool>) {
+            // The uint8_t bound is wider than bool's domain, so anything above 1 has to be
+            // rejected here: casting it into a bool-backed enum would be undefined behavior.
+            if (u > 1) [[unlikely]] {
+               ctx.error = error_code::parse_number_failure;
+               return;
+            }
+         }
          value = static_cast<std::decay_t<T>>(u);
       }
    };
