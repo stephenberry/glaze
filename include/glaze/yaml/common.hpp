@@ -60,6 +60,33 @@ namespace glz::yaml
    // stays far above what real documents nest.
    inline constexpr size_t max_yaml_recursive_depth = 64;
 
+   // How far ahead a probe may look while deciding whether the text at a position is an implicit
+   // mapping key, that is, whether a ':' separator follows it. YAML 1.2.2 bounds this for exactly
+   // the same reason these probes need it bounded: "To limit the amount of lookahead required, the
+   // ':' indicator must appear at most 1024 Unicode characters beyond the start of the key"
+   // (7.4.2, 8.2.2). Unbounded, each probe is O(line), and the block reader runs one per entry per
+   // nesting level, so a document written as one very long line parses in quadratic time -- 220 KB
+   // on a single line spent 300 million bytes of scanning inside one of these probes alone.
+   //
+   // Counted in bytes rather than characters so the scan needs no UTF-8 decoding. A conforming
+   // 1024-character key is at most 4096 bytes wide, which puts its ':' at offset 4096, so the
+   // budget has to reach that byte -- hence the + 1, and hence nothing the spec permits is cut
+   // short. Beyond it a ':' no longer reads as a mapping separator, so a document that puts one
+   // there, which the spec does not allow, reads as the plain scalar the line now is.
+   inline constexpr size_t max_implicit_key_lookahead = 4 * 1024 + 1;
+
+   // End position for an implicit-key probe: `end`, or `max_implicit_key_lookahead` bytes past
+   // `it`, whichever comes first. Returned as an iterator of `it`'s own type so a scan can swap it
+   // in for `end` in its loop conditions unchanged. A scan must still test the real `end` where it
+   // asks "is there a character after this one" -- the returned position is only a scan bound, and
+   // dereferencing it is safe whenever it differs from `end`.
+   template <class It, class End>
+   inline It implicit_key_scan_end(It it, End end)
+   {
+      const size_t remaining = size_t(end - it);
+      return it + (remaining < max_implicit_key_lookahead ? remaining : max_implicit_key_lookahead);
+   }
+
    // YAML-specific context extending the base context
    // Adds indent tracking needed for block-style parsing
    struct yaml_context : context
@@ -203,6 +230,104 @@ namespace glz::yaml
       // Start of the YAML buffer, set by top-level parse entry.
       const char* stream_begin = nullptr;
 
+      // What lies between a position and the start of its line: how far along the line it sits,
+      // whether a tab precedes it (never legal in indentation), and whether anything other than
+      // indentation does (which makes it a mid-line position rather than the start of content).
+      struct line_prefix
+      {
+         int32_t column{};
+         bool has_tab{};
+         bool has_content{};
+      };
+
+      // Memo over one line of the buffer: `memo_line_begin` is a known line start, no line break
+      // lies in [memo_line_begin, memo_verified_end), and the last two pointers hold where that
+      // span's first tab and first non-indentation character were found (null for neither).
+      // Positions rather than flags, so a query covering less of the line than an earlier one
+      // still gets its own answer. All four are derived purely from the buffer, so they are safe
+      // to copy into a speculative context and safe to discard with one.
+      mutable const char* memo_line_begin = nullptr;
+      mutable const char* memo_verified_end = nullptr;
+      mutable const char* memo_first_tab = nullptr;
+      mutable const char* memo_first_content = nullptr;
+
+      // Bring the memo up to `p`, which must point into the buffer beginning at `stream_begin`.
+      //
+      // Block parsing needs to know where a position sits on its line often -- to judge a key's
+      // visual indent, to place a sequence dash, to tell content from indentation, to reject a tab
+      // used as one -- and each of those walks back to the preceding line break. That walk is
+      // O(line length), paid once per entry per nesting level, so a document written as one very
+      // long line costs quadratic time before any of it is parsed. Memoizing turns a query that has
+      // moved forward into a walk over only the bytes parsing advanced past since the last one,
+      // which makes the total linear; a query that moves backward off the memo falls back to the
+      // plain walk and re-seeds it. The walk collects the tab and the content position on its way,
+      // since it reads exactly the bytes they are found in.
+      void memoize_line(const char* p) const noexcept
+      {
+         if (memo_line_begin && p >= memo_line_begin && p <= memo_verified_end) {
+            return;
+         }
+         // A query past the memoized span only has to walk the new bytes; one before it (or with
+         // no memo yet) walks all the way back.
+         const bool extends = memo_line_begin && p > memo_verified_end;
+         const char* const floor = extends ? memo_verified_end : stream_begin;
+         const char* first_tab = nullptr;
+         const char* first_content = nullptr;
+         const char* q = p;
+         while (q > floor) {
+            const char c = *(q - 1);
+            if (c == '\n' || c == '\r') break;
+            --q;
+            // Walking backward, the last one seen is the earliest one on the line.
+            if (c == '\t')
+               first_tab = q;
+            else if (c != ' ')
+               first_content = q;
+         }
+         if (extends && q == floor) {
+            // The new bytes continue the memoized line, so anything it already found is earlier.
+            if (memo_first_tab) first_tab = memo_first_tab;
+            if (memo_first_content) first_content = memo_first_content;
+         }
+         else {
+            memo_line_begin = q;
+         }
+         memo_verified_end = p;
+         memo_first_tab = first_tab;
+         memo_first_content = first_content;
+      }
+
+      // Start of the line containing `p` (`p` itself when there is no buffer to walk).
+      const char* line_begin_of(const char* p) const noexcept
+      {
+         if (!stream_begin || p < stream_begin) {
+            return p;
+         }
+         memoize_line(p);
+         return memo_line_begin;
+      }
+
+      line_prefix line_prefix_before(const char* p) const noexcept
+      {
+         const char* const begin = line_begin_of(p);
+         if (begin >= p) {
+            return {};
+         }
+         return {int32_t(p - begin), memo_first_tab && memo_first_tab < p,
+                 memo_first_content && memo_first_content < p};
+      }
+
+      // Drop the memo. Every pointer in it addresses the buffer of the read that filled it, so a
+      // context reused for a second document must not carry it into one; the outermost parse calls
+      // this as it takes ownership of a new buffer.
+      void reset_line_memo() const noexcept
+      {
+         memo_line_begin = nullptr;
+         memo_verified_end = nullptr;
+         memo_first_tab = nullptr;
+         memo_first_content = nullptr;
+      }
+
       // Set when `%TAG !! ...` remaps the secondary handle away from the core schema.
       // In that case `!!foo` must not be treated as built-in core tags.
       bool secondary_tag_handle_overridden = false;
@@ -227,6 +352,11 @@ namespace glz::yaml
          c.explicit_mapping_key_context = explicit_mapping_key_context;
          c.allow_indentless_sequence = allow_indentless_sequence;
          c.stream_begin = stream_begin;
+         // The line memo only records what the buffer says, so a probe may keep using it.
+         c.memo_line_begin = memo_line_begin;
+         c.memo_verified_end = memo_verified_end;
+         c.memo_first_tab = memo_first_tab;
+         c.memo_first_content = memo_first_content;
          c.secondary_tag_handle_overridden = secondary_tag_handle_overridden;
          // Carry the recursion depth so a speculative type-probe shares the parent's budget
          // and can't reset the stack-overflow guard partway down a deeply nested value.
@@ -798,14 +928,16 @@ namespace glz::yaml
    }
 
    // Quick check if current line contains a colon that could indicate a block mapping key.
-   // Only scans to end of line (bounded by newline), so O(line length) not O(input).
+   // Scans no further than the end of the line or `max_implicit_key_lookahead` bytes, whichever
+   // comes first, so the cost of a probe is bounded by a constant rather than by the line.
    // Returns false for obvious non-mappings to avoid expensive full parse attempts.
    template <class It, class End>
    inline bool line_could_be_block_mapping(It it, End end)
    {
+      const auto stop = implicit_key_scan_end(it, end);
       bool prev_was_whitespace = true; // Start of value acts like after whitespace
       int flow_depth = 0;
-      while (it != end) {
+      while (it != stop) {
          const char c = *it;
          if (c == '\n' || c == '\r') {
             return false;
@@ -831,10 +963,10 @@ namespace glz::yaml
          if ((c == '"' || c == '\'') && prev_was_whitespace) {
             const char quote = c;
             ++it;
-            while (it != end && *it != quote) {
+            while (it != stop && *it != quote) {
                if (*it == '\\' && quote == '"') {
                   ++it; // Skip escape character
-                  if (it != end) ++it; // Skip escaped character
+                  if (it != stop) ++it; // Skip escaped character
                }
                else if (*it == '\n' || *it == '\r') {
                   // Unterminated quote on this line
@@ -844,7 +976,7 @@ namespace glz::yaml
                   ++it;
                }
             }
-            if (it != end) ++it; // Skip closing quote
+            if (it != stop) ++it; // Skip closing quote
             prev_was_whitespace = false;
             continue;
          }
