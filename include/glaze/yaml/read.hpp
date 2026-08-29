@@ -70,6 +70,11 @@ namespace glz
          if constexpr (requires { ctx.stream_begin; }) {
             if (!ctx.stream_begin && it != end) {
                ctx.stream_begin = &*it;
+               // The line memo holds pointers into whatever buffer filled it, so a reused
+               // context must not carry a previous read's into this one.
+               if constexpr (requires { ctx.reset_line_memo(); }) {
+                  ctx.reset_line_memo();
+               }
                // Seed the alias replay budget from the document this read was handed. Done here
                // rather than in glz::read so every YAML entry point is covered, and only on the
                // outermost parse so a nested document does not hand itself a fresh budget.
@@ -145,6 +150,24 @@ namespace glz
                   }
                   return false;
                };
+
+               // The scan below reads the tail a line at a time, which only means anything if the
+               // tail starts at one. A root node can stop mid-line -- a plain scalar ends at a
+               // ':' it is not allowed to take as a separator, a flow collection ends at its
+               // bracket -- and what sits after it there is leftover content on that line, not
+               // the opening of a new one. Only inline whitespace and a comment may follow. Let
+               // the line scan see anything else and it misreads it: a leftover ':' passes as an
+               // explicit-key continuation and the remainder of the document falls on the floor.
+               if constexpr (requires { ctx.line_prefix_before(it); }) {
+                  if (it != end && ctx.line_prefix_before(it).has_content) {
+                     auto rest = it;
+                     while (rest != end && (*rest == ' ' || *rest == '\t')) ++rest;
+                     if (rest != end && *rest != '\n' && *rest != '\r' && *rest != '#') {
+                        ctx.error = error_code::syntax_error;
+                        return;
+                     }
+                  }
+               }
 
                auto tail_scan = it;
                bool seen_document_end_marker = false;
@@ -3006,26 +3029,29 @@ namespace glz
 
       // Detects a plain "key: value" mapping indicator in an inline block-map
       // value segment, while ignoring quoted strings and nested flow collections.
+      // The separator it looks for terminates an implicit key, so the scan is bounded by the
+      // longest implicit key the spec allows rather than by the length of the line.
       template <class It, class End>
       inline bool inline_value_has_plain_mapping_indicator(It pos, End end) noexcept
       {
+         const auto stop = yaml::implicit_key_scan_end(pos, end);
          int flow_depth = 0;
-         while (pos != end) {
+         while (pos != stop) {
             const char c = *pos;
             if (c == '\n' || c == '\r' || c == '#') return false;
             if (c == '"' || c == '\'') {
                const char quote = c;
                ++pos;
-               while (pos != end && *pos != quote) {
+               while (pos != stop && *pos != quote) {
                   if (*pos == '\\' && quote == '"') {
                      ++pos;
-                     if (pos != end) ++pos;
+                     if (pos != stop) ++pos;
                   }
                   else {
                      ++pos;
                   }
                }
-               if (pos != end) ++pos;
+               if (pos != stop) ++pos;
                continue;
             }
             if (c == '[' || c == '{') {
@@ -3251,12 +3277,7 @@ namespace glz
             dash_col = line_indent;
             if constexpr (std::is_pointer_v<std::decay_t<It>>) {
                if (ctx.stream_begin) {
-                  auto p = &*it;
-                  dash_col = 0;
-                  while (p > ctx.stream_begin && *(p - 1) != '\n' && *(p - 1) != '\r') {
-                     --p;
-                     ++dash_col;
-                  }
+                  dash_col = ctx.line_prefix_before(&*it).column;
                }
             }
 
@@ -3722,27 +3743,15 @@ namespace glz
                discovered_first_key_visual_indent = line_indent;
                if constexpr (std::is_pointer_v<std::decay_t<It>>) {
                   if (ctx.stream_begin && line_start > ctx.stream_begin) {
-                     auto line_begin = line_start;
-                     while (line_begin > ctx.stream_begin && *(line_begin - 1) != '\n' && *(line_begin - 1) != '\r') {
-                        --line_begin;
+                     const auto prefix = ctx.line_prefix_before(line_start);
+                     if (prefix.has_tab) {
+                        ctx.error = error_code::syntax_error;
+                        return;
                      }
 
-                     bool seen_non_whitespace = false;
-                     int32_t visual_indent = 0;
-                     for (auto p = line_begin; p != line_start; ++p) {
-                        if (*p == '\t') {
-                           ctx.error = error_code::syntax_error;
-                           return;
-                        }
-                        if (*p != ' ') {
-                           seen_non_whitespace = true;
-                        }
-                        ++visual_indent;
-                     }
-
-                     discovered_first_key_mid_line = seen_non_whitespace;
-                     if (mapping_indent == 0 && visual_indent > 0) {
-                        discovered_first_key_visual_indent = visual_indent;
+                     discovered_first_key_mid_line = prefix.has_content;
+                     if (mapping_indent == 0 && prefix.column > 0) {
+                        discovered_first_key_visual_indent = prefix.column;
                      }
                   }
                }
@@ -3870,6 +3879,18 @@ namespace glz
                skip_comment(it, end);
                if (it != end && (*it == '\n' || *it == '\r')) {
                   skip_newline(it, end);
+               }
+               else if (it != end) {
+                  // The entry stopped part way along its line with something other than
+                  // whitespace or a comment after it -- a ':' its value could not take as a
+                  // separator, say. The next pass measures indent as though this were the start
+                  // of a line, so what is left of the real one is lost; reject it instead.
+                  if constexpr (requires { ctx.line_prefix_before(it); }) {
+                     if (ctx.line_prefix_before(it).has_content) {
+                        ctx.error = error_code::syntax_error;
+                        return;
+                     }
+                  }
                }
             }
          }
@@ -4764,27 +4785,12 @@ namespace glz
                         // delimiters ({...} / [...]) or quoted.
                         if constexpr (std::is_pointer_v<std::decay_t<decltype(it)>>) {
                            if (ctx.stream_begin) {
-                              const auto begin = static_cast<std::remove_cvref_t<decltype(it)>>(ctx.stream_begin);
                               auto is_line_content_start = [&](auto pos) {
-                                 auto line = pos;
-                                 while (line != begin) {
-                                    auto prev = line - 1;
-                                    if (*prev == '\n' || *prev == '\r') break;
-                                    line = prev;
-                                 }
-                                 for (auto p = line; p != pos; ++p) {
-                                    if (*p != ' ' && *p != '\t') return false;
-                                 }
-                                 return true;
+                                 return !ctx.line_prefix_before(pos).has_content;
                               };
 
                               auto line_has_explicit_value_indicator = [&](auto pos) {
-                                 auto line = pos;
-                                 while (line != begin) {
-                                    auto prev = line - 1;
-                                    if (*prev == '\n' || *prev == '\r') break;
-                                    line = prev;
-                                 }
+                                 const char* line = ctx.line_begin_of(pos);
                                  while (line != end && (*line == ' ' || *line == '\t')) ++line;
                                  return line != end && *line == ':';
                               };
@@ -5280,15 +5286,17 @@ namespace glz
    };
 
    // Quick check for implicit single-pair flow mappings used as sequence entries
-   // (e.g. `"k":v`, `{k: v}:v`, `k: v`) up to the next top-level flow delimiter.
+   // (e.g. `"k":v`, `{k: v}:v`, `k: v`) up to the next top-level flow delimiter, and no further
+   // than the longest implicit key the spec allows.
    template <class It, class End>
    inline bool line_could_be_flow_mapping(It it, End end)
    {
+      const auto stop = yaml::implicit_key_scan_end(it, end);
       int flow_depth = 0;
       bool prev_was_whitespace = true;
       bool key_supports_adjacent_value = false;
 
-      while (it != end) {
+      while (it != stop) {
          const char c = *it;
          if (c == '\n' || c == '\r') {
             return false;
@@ -5302,10 +5310,10 @@ namespace glz
          if ((c == '"' || c == '\'') && prev_was_whitespace) {
             const char quote = c;
             ++it;
-            while (it != end && *it != quote) {
+            while (it != stop && *it != quote) {
                if (*it == '\\' && quote == '"') {
                   ++it;
-                  if (it != end) ++it;
+                  if (it != stop) ++it;
                }
                else if (*it == '\n' || *it == '\r') {
                   return false;
@@ -5314,7 +5322,7 @@ namespace glz
                   ++it;
                }
             }
-            if (it != end) ++it;
+            if (it != stop) ++it;
             key_supports_adjacent_value = true;
             prev_was_whitespace = false;
             continue;
@@ -5417,22 +5425,25 @@ namespace glz
          // In flow context, only treat plain content as an implicit "key: value"
          // when a mapping separator appears before the next top-level flow delimiter.
          auto could_be_implicit_flow_pair = [&](auto pos) {
+            // Bounded by the longest implicit key the spec allows: unbounded, this probe runs
+            // once per entry per nesting level over the whole remaining flow collection.
+            const auto stop = yaml::implicit_key_scan_end(pos, end);
             int depth = 0;
-            while (pos != end) {
+            while (pos != stop) {
                const char c = *pos;
                if (c == '"' || c == '\'') {
                   const char quote = c;
                   ++pos;
-                  while (pos != end && *pos != quote) {
+                  while (pos != stop && *pos != quote) {
                      if (*pos == '\\' && quote == '"') {
                         ++pos;
-                        if (pos != end) ++pos;
+                        if (pos != stop) ++pos;
                      }
                      else {
                         ++pos;
                      }
                   }
-                  if (pos != end) ++pos;
+                  if (pos != stop) ++pos;
                   continue;
                }
                if (c == '[' || c == '{') {
@@ -5484,16 +5495,12 @@ namespace glz
    // longer reflects the mapping's true column; recovering it from the buffer gives a single
    // context-independent value (root, struct member, sequence item all differ) that drives both the
    // tag scan and the indent under which the chosen alternative is parsed.
-   template <class It>
-   inline int32_t tagged_mapping_visual_indent(It it, const char* stream_begin, int32_t fallback) noexcept
+   template <class Ctx, class It>
+   inline int32_t tagged_mapping_visual_indent(const Ctx& ctx, It it, int32_t fallback) noexcept
    {
       if constexpr (std::is_pointer_v<std::decay_t<It>>) {
-         if (stream_begin && it >= stream_begin) {
-            auto line_begin = it;
-            while (line_begin > stream_begin && *(line_begin - 1) != '\n' && *(line_begin - 1) != '\r') {
-               --line_begin;
-            }
-            return static_cast<int32_t>(it - line_begin);
+         if (ctx.stream_begin && it >= ctx.stream_begin) {
+            return ctx.line_prefix_before(it).column;
          }
       }
       return fallback;
@@ -5667,8 +5674,7 @@ namespace glz
                // The mapping's keys sit at the column of `it`. Recover that column from the buffer:
                // the indent stack carries the parent context's indent (a struct member, a sequence
                // item, etc. each push a different offset), not this mapping's true column (see helper).
-               const int32_t mapping_column =
-                  tagged_mapping_visual_indent(it, ctx.stream_begin, ctx.current_indent() + 1);
+               const int32_t mapping_column = tagged_mapping_visual_indent(ctx, it, ctx.current_indent() + 1);
                auto tag_ctx = ctx.make_speculative();
                const size_t index = scan_variant_tag_index<V, Opts>(tag_ctx, it, end, mapping_column);
                ctx.alias_expansion_budget = tag_ctx.alias_expansion_budget; // charged even if no tag matched

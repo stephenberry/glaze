@@ -4513,6 +4513,76 @@ ship-to: *id001)";
       expect(p.first == "answer");
       expect(p.second == 42);
    };
+
+   "content_left_over_on_a_line_is_rejected"_test = [] {
+      // A node can stop part way along its line: a plain scalar ends at a ':' it is not allowed
+      // to take as a separator, a flow collection ends at its bracket. Both the root tail scan
+      // and the block mapping loop then read the rest of that line as though it were the start of
+      // a new one, which let a leftover ':' pass as an explicit-key continuation and dropped
+      // everything after it -- silently, with no error. `"'q' zz"` read as "q" and `"a: 1 b: 2"`
+      // as its first pair. Whatever the reader could not use has to be an error instead.
+      for (const std::string_view doc :
+           {"'q' zz", "'q' zz\n", "[1, 2] zz\n", "- 'q' zz\n", "outer:\n  'q' zz\n", "a: 1 b: 2\n"}) {
+         glz::generic parsed{};
+         expect(bool(glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, doc))) << doc;
+      }
+
+      // Only what the line may legitimately end with still passes: nothing, whitespace, or a
+      // comment -- and a following line is still a following line.
+      for (const std::string_view doc :
+           {"'q'", "'q'   \n", "'q' # c\n", "[1, 2] # c\n", "a: 1 # c\n", "a: 1\nb: 2\n", "? a : b\n",
+            "- a: 1\n  b: 2\n", "a: 1\n...\n", "a: 1\n---\nb: 2\n", "url: http://x.y/z\n"}) {
+         glz::generic parsed{};
+         expect(!glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, doc)) << doc;
+      }
+   };
+
+   "implicit_key_lookahead_is_bounded"_test = [] {
+      // What bounds those probes is the spec's own bound on how far a ':' may sit from the key it
+      // terminates: at most 1024 characters (7.4.2, 8.2.2). The widest conforming key is 1024
+      // four-byte characters, which puts its ':' at byte offset 4096, and it must still parse.
+      const auto is_mapping = [](size_t characters) {
+         std::string doc;
+         for (size_t i = 0; i < characters; ++i) doc += "\xF0\x9F\x98\x80"; // U+1F600, four bytes
+         doc += ": v";
+         glz::generic parsed{};
+         const auto ec = glz::read_yaml(parsed, doc);
+         expect(!ec) << characters << ' ' << glz::format_error(ec, doc);
+         return parsed.is_object();
+      };
+      expect(is_mapping(1024));
+
+      // One character further and that ':' is past the bound, so it no longer separates a key
+      // from a value. Nothing else on the line can, either, which leaves the line with content
+      // the document has no reading for -- so it is rejected rather than quietly reinterpreted.
+      // The spec does not allow a key this long in the first place.
+      std::string over(glz::yaml::max_implicit_key_lookahead, 'k');
+      over += ": v";
+      for (const std::string& doc : {over, over + "\nsecond: 2\n", "outer:\n  " + over + "\n", "- " + over + "\n"}) {
+         glz::generic parsed{};
+         expect(bool(glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, doc))) << doc.size();
+      }
+   };
+
+   "long_line_columns_are_measured_correctly"_test = [] {
+      // The column of a position is memoized across queries rather than recomputed by walking
+      // back to the line start. Long lines are where that memo does the work, so they are where
+      // a stale one would show: an indent misread by one changes the shape of the result.
+      const std::string key(2000, 'k');
+      const std::string value(20000, 'v');
+
+      glz::generic nested{};
+      const std::string doc = "outer:\n  " + key + ": " + value + "\n  second: 2\n";
+      const auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(nested, doc);
+      expect(!ec) << glz::format_error(ec, doc);
+      expect(nested["outer"][key].as<std::string>() == value);
+      expect(nested["outer"]["second"].as<int>() == 2);
+
+      // A tab in the indentation of a long line is still rejected.
+      glz::generic tabbed{};
+      const std::string tab_doc = "outer:\n\t" + key + ": " + value + "\n";
+      expect(bool(glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(tabbed, tab_doc)));
+   };
 };
 
 // ============================================================
