@@ -310,6 +310,9 @@ struct signal_t
 // Enum with underlying type
 enum class sub : uint8_t { START, END, UPDATE_ITEM, UPDATE_PRICE };
 
+// bool is a legal fixed underlying type
+enum class bool_enum : bool { off, on };
+
 struct enum_struct
 {
    sub b;
@@ -1045,6 +1048,17 @@ void enum_tests()
       const std::string buffer = {char(0x20)};
       sub result = sub::START;
       expect(bool(glz::read_cbor(result, buffer)));
+   };
+
+   "bool_underlying_enum"_test = [] {
+      // The writer emits a bool-backed enum as a CBOR integer, so the reader must not route it
+      // through the boolean reader, which only accepts the simple true/false values.
+      std::string buffer{};
+      expect(not glz::write_cbor(bool_enum::on, buffer));
+
+      bool_enum result{};
+      expect(not glz::read_cbor(result, buffer));
+      expect(result == bool_enum::on);
    };
 }
 

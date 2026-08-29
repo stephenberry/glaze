@@ -2329,7 +2329,10 @@ namespace glz
       {
          // Read the ordinal through the range-checked integer reader so an out-of-range wire
          // value is rejected instead of being silently truncated into the underlying type.
-         using U = std::underlying_type_t<std::decay_t<T>>;
+         // bool is a legal fixed underlying type, and the writer emits such an enum as a CBOR
+         // integer, so route it through the uint8_t reader rather than the boolean reader.
+         using underlying = std::underlying_type_t<std::decay_t<T>>;
+         using U = std::conditional_t<std::same_as<underlying, bool>, uint8_t, underlying>;
          U u{};
          from<CBOR, U>::template op<Opts>(u, ctx, it, end);
          if (bool(ctx.error)) [[unlikely]]
@@ -2348,7 +2351,10 @@ namespace glz
       {
          // Read the ordinal through the range-checked integer reader so an out-of-range wire
          // value is rejected instead of being silently truncated into the underlying type.
-         using U = std::underlying_type_t<std::decay_t<T>>;
+         // bool is a legal fixed underlying type, and the writer emits such an enum as a CBOR
+         // integer, so route it through the uint8_t reader rather than the boolean reader.
+         using underlying = std::underlying_type_t<std::decay_t<T>>;
+         using U = std::conditional_t<std::same_as<underlying, bool>, uint8_t, underlying>;
          U u{};
          from<CBOR, U>::template op<Opts>(u, ctx, it, end);
          if (bool(ctx.error)) [[unlikely]]
