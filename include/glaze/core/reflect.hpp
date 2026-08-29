@@ -397,7 +397,7 @@ namespace glz
          return result;
       }();
 
-      // Flat values tuple built directly — avoids tuplet::tuple_cat (which has GCC issues)
+      // Flat values tuple built directly — avoids tuple_cat (which has GCC issues)
       static constexpr auto values = []<size_t... I>(std::index_sequence<I...>) {
          return tuple{detail::merge_accessor<V, flat_layout[I].outer, flat_layout[I].inner>{}...};
       }(std::make_index_sequence<size>{});

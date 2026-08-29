@@ -53,6 +53,28 @@ namespace glz
 
 // Glaze Feature Test Macros for breaking changes
 
+// v8.3.0 fixes GLZ_NO_UNIQUE_ADDRESS on the MSVC ABI
+//
+// The macro tested the standard [[no_unique_address]] before [[msvc::no_unique_address]].
+// MSVC accepts the standard spelling but gives it no layout effect, so a front end that
+// reports it through __has_cpp_attribute would select the inert form and lose the empty
+// member optimization. This can shrink glz::tuple, glz::lazy_document and glz::ordered_map
+// on MSVC, which is a layout change for object files built against an older Glaze.
+#define glaze_v8_3_0_msvc_no_unique_address
+
+// v8.3.0 reimplements glz::tuple and moves it to <glaze/core/tuple.hpp>
+//
+// glz::tuple keeps its API but is now a fresh implementation with no third-party
+// lineage, so <glaze/glaze.hpp> no longer carries a non-MIT dependency. Element
+// access is a base-class cast rather than an operator[] overload set, which cuts
+// tuple compile time without changing generated code.
+//
+// <glaze/tuplet/tuple.hpp> still forwards to the new location and will be removed
+// in a future major release. The glz::tuplet namespace retains make_tuple,
+// forward_as_tuple, tuple_cat and convert; its internal metaprogramming helpers
+// (tag, type_list, base_list, tuple_elem, ...) are gone.
+#define glaze_v8_3_0_tuple
+
 // v7.7.0 drops glaze/msgpack.hpp from the glaze/glaze.hpp aggregate header.
 //
 // MessagePack support is opt-in. Users who relied on the umbrella include

@@ -566,7 +566,7 @@ namespace glz
    template <auto Arr, std::size_t... Is>
    constexpr auto make_arrays(std::index_sequence<Is...>)
    {
-      return glz::tuplet::make_tuple(pair{sv{}, std::array<sv, Arr[Is]>{}}...);
+      return glz::make_tuple(pair{sv{}, std::array<sv, Arr[Is]>{}}...);
    }
 
    template <size_t N, auto& Arr>
