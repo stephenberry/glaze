@@ -366,6 +366,14 @@ namespace glz
          if (bool(ctx.error)) [[unlikely]]
             return;
 
+         // Reject a value that does not fit in T, matching the signed reader below and the
+         // JSON/MessagePack integer readers. Without this a uint16/uint32/uint64 argument is
+         // silently truncated into a narrower target (e.g. 300 -> uint8_t 44) with success.
+         if (result > static_cast<uint64_t>((std::numeric_limits<T>::max)())) [[unlikely]] {
+            ctx.error = error_code::parse_number_failure;
+            return;
+         }
+
          value = static_cast<T>(result);
       }
    };
@@ -2312,82 +2320,33 @@ namespace glz
       }
    };
 
-   // Enums with glaze reflection
-   template <glaze_enum_t T>
-   struct from<CBOR, T>
-   {
-      template <auto Opts>
-      GLZ_ALWAYS_INLINE static void op(auto& value, is_context auto& ctx, auto& it, auto end) noexcept
-      {
-         using namespace cbor;
-
-         if (it >= end) [[unlikely]] {
-            ctx.error = error_code::unexpected_end;
-            return;
-         }
-
-         uint8_t initial;
-         std::memcpy(&initial, it, 1);
-         ++it;
-
-         const uint8_t major_type = get_major_type(initial);
-         const uint8_t additional_info = get_additional_info(initial);
-
-         if (major_type == major::uint) {
-            uint64_t n = cbor_detail::decode_arg(ctx, it, end, additional_info);
-            if (bool(ctx.error)) [[unlikely]]
-               return;
-            value = static_cast<std::decay_t<T>>(n);
-         }
-         else if (major_type == major::nint) {
-            uint64_t n = cbor_detail::decode_arg(ctx, it, end, additional_info);
-            if (bool(ctx.error)) [[unlikely]]
-               return;
-            value = static_cast<std::decay_t<T>>(~n);
-         }
-         else [[unlikely]] {
-            ctx.error = error_code::syntax_error;
-         }
-      }
-   };
-
-   // Plain enums
+   // Enums, reflected or plain: both are read as the ordinal, so one reader covers them
    template <class T>
-      requires(std::is_enum_v<T> && !glaze_enum_t<T>)
+      requires(std::is_enum_v<T>)
    struct from<CBOR, T>
    {
       template <auto Opts>
       GLZ_ALWAYS_INLINE static void op(auto& value, is_context auto& ctx, auto& it, auto end) noexcept
       {
-         using namespace cbor;
-
-         if (it >= end) [[unlikely]] {
-            ctx.error = error_code::unexpected_end;
+         // Read the ordinal through the range-checked integer reader so an out-of-range wire
+         // value is rejected instead of being silently truncated into the underlying type.
+         // bool is a legal fixed underlying type, and the writer emits such an enum as a CBOR
+         // integer, so route it through the uint8_t reader rather than the boolean reader.
+         using underlying = std::underlying_type_t<std::decay_t<T>>;
+         using U = std::conditional_t<std::same_as<underlying, bool>, uint8_t, underlying>;
+         U u{};
+         from<CBOR, U>::template op<Opts>(u, ctx, it, end);
+         if (bool(ctx.error)) [[unlikely]]
             return;
-         }
-
-         uint8_t initial;
-         std::memcpy(&initial, it, 1);
-         ++it;
-
-         const uint8_t major_type = get_major_type(initial);
-         const uint8_t additional_info = get_additional_info(initial);
-
-         if (major_type == major::uint) {
-            uint64_t n = cbor_detail::decode_arg(ctx, it, end, additional_info);
-            if (bool(ctx.error)) [[unlikely]]
+         if constexpr (std::same_as<underlying, bool>) {
+            // The uint8_t bound is wider than bool's domain, so anything above 1 has to be
+            // rejected here: casting it into a bool-backed enum would be undefined behavior.
+            if (u > 1) [[unlikely]] {
+               ctx.error = error_code::parse_number_failure;
                return;
-            value = static_cast<std::decay_t<T>>(n);
+            }
          }
-         else if (major_type == major::nint) {
-            uint64_t n = cbor_detail::decode_arg(ctx, it, end, additional_info);
-            if (bool(ctx.error)) [[unlikely]]
-               return;
-            value = static_cast<std::decay_t<T>>(~n);
-         }
-         else [[unlikely]] {
-            ctx.error = error_code::syntax_error;
-         }
+         value = static_cast<std::decay_t<T>>(u);
       }
    };
 

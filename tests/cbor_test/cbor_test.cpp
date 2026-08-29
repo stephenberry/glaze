@@ -310,6 +310,9 @@ struct signal_t
 // Enum with underlying type
 enum class sub : uint8_t { START, END, UPDATE_ITEM, UPDATE_PRICE };
 
+// bool is a legal fixed underlying type
+enum class bool_enum : bool { off, on };
+
 struct enum_struct
 {
    sub b;
@@ -497,6 +500,35 @@ void integer_tests()
       int64_t result{};
       expect(not glz::read_cbor(result, buffer));
       expect(result == v);
+   };
+
+   "uint8_out_of_range"_test = [] {
+      // 300 (0x19 0x01 0x2C) does not fit in a uint8_t; the reader must reject it rather
+      // than truncate to 44, matching the signed reader and the JSON/MessagePack readers.
+      const std::string buffer = {char(0x19), char(0x01), char(0x2C)};
+      uint8_t result = 7;
+      expect(bool(glz::read_cbor(result, buffer)));
+   };
+
+   "uint16_out_of_range"_test = [] {
+      const std::string buffer = {char(0x1A), char(0x00), char(0x01), char(0x00), char(0x00)}; // 65536
+      uint16_t result = 7;
+      expect(bool(glz::read_cbor(result, buffer)));
+   };
+
+   "uint8_max_in_range"_test = [] {
+      const std::string buffer = {char(0x18), char(0xFF)}; // 255
+      uint8_t result{};
+      expect(not glz::read_cbor(result, buffer));
+      expect(result == 255u);
+   };
+
+   "uint64_max_in_range"_test = [] {
+      const std::string buffer = {char(0x1B), char(0xFF), char(0xFF), char(0xFF), char(0xFF),
+                                  char(0xFF), char(0xFF), char(0xFF), char(0xFF)};
+      uint64_t result{};
+      expect(not glz::read_cbor(result, buffer));
+      expect(result == (std::numeric_limits<uint64_t>::max)());
    };
 }
 
@@ -1001,6 +1033,40 @@ void enum_tests()
       obj = {};
       expect(not glz::read_cbor(obj, buffer));
       expect(obj.b == sub::END);
+   };
+
+   "enum_out_of_range"_test = [] {
+      // sub has a uint8_t underlying type; 300 does not fit and must be rejected rather than
+      // truncated into the enum, the way the JSON and MessagePack enum readers reject it.
+      const std::string buffer = {char(0x19), char(0x01), char(0x2C)}; // 300
+      sub result = sub::START;
+      expect(bool(glz::read_cbor(result, buffer)));
+   };
+
+   "enum_negative_into_unsigned"_test = [] {
+      // A negative ordinal (0x20 = -1) cannot be represented by a uint8_t-backed enum.
+      const std::string buffer = {char(0x20)};
+      sub result = sub::START;
+      expect(bool(glz::read_cbor(result, buffer)));
+   };
+
+   "bool_underlying_enum"_test = [] {
+      // The writer emits a bool-backed enum as a CBOR integer, so the reader must not route it
+      // through the boolean reader, which only accepts the simple true/false values.
+      std::string buffer{};
+      expect(not glz::write_cbor(bool_enum::on, buffer));
+
+      bool_enum result{};
+      expect(not glz::read_cbor(result, buffer));
+      expect(result == bool_enum::on);
+   };
+
+   "bool_underlying_enum_out_of_range"_test = [] {
+      // The ordinal is read through the uint8_t reader, whose bound is wider than bool's domain,
+      // so 2 has to be rejected here rather than cast into a bool-backed enum.
+      const std::string buffer = {char(0x02)};
+      bool_enum result{};
+      expect(bool(glz::read_cbor(result, buffer)));
    };
 }
 
