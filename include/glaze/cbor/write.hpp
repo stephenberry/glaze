@@ -952,32 +952,9 @@ namespace glz
       }
    };
 
-   // Enums with glaze reflection
-   template <glaze_enum_t T>
-   struct to<CBOR, T> final
-   {
-      template <auto Opts>
-      GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&& b, auto& ix)
-      {
-         using V = std::underlying_type_t<std::decay_t<T>>;
-         if constexpr (std::is_signed_v<V>) {
-            const auto v = static_cast<V>(value);
-            if (v >= 0) {
-               cbor_detail::encode_arg(ctx, cbor::major::uint, static_cast<uint64_t>(v), b, ix);
-            }
-            else {
-               cbor_detail::encode_arg(ctx, cbor::major::nint, static_cast<uint64_t>(~v), b, ix);
-            }
-         }
-         else {
-            cbor_detail::encode_arg(ctx, cbor::major::uint, static_cast<uint64_t>(value), b, ix);
-         }
-      }
-   };
-
-   // Plain enums (non-glaze)
+   // Enums, reflected or plain: both are written as the ordinal, so one writer covers them
    template <class T>
-      requires(std::is_enum_v<T> && !glaze_enum_t<T>)
+      requires(std::is_enum_v<T>)
    struct to<CBOR, T> final
    {
       template <auto Opts>
