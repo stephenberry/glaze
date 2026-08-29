@@ -106,7 +106,7 @@ namespace glz
       // other stateless aggregates continue to satisfy concepts written in terms of get.
       template <class T>
       concept indexable = is_tuple<std::remove_cvref_t<T>> || std::is_empty_v<std::remove_cvref_t<T>> ||
-                          requires(T&& t) { static_cast<T&&>(t)[size_t{}]; };
+                          requires(T&& t) { static_cast<T &&>(t)[size_t{}]; };
    }
 
    // A single overload keeps every call site to one candidate and one deduction, which matters
