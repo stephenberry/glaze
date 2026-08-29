@@ -10,7 +10,7 @@
 #include <utility>
 
 #include "glaze/core/feature_test.hpp"
-#include "glaze/tuplet/tuple.hpp"
+#include "glaze/core/tuple.hpp"
 #include "glaze/util/inline.hpp"
 #include "glaze/util/type_traits.hpp"
 
