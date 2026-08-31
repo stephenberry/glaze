@@ -917,6 +917,221 @@ suite streaming_special_types_output_tests = [] {
 };
 
 // ============================================================================
+// BOUNDED OSTREAM BUFFER TESTS
+// ============================================================================
+
+// Test struct for bounded buffer tests
+struct LargeStringObject
+{
+   std::string large_string{};
+};
+
+template <>
+struct glz::meta<LargeStringObject>
+{
+   using T = LargeStringObject;
+   static constexpr auto value = object("large_string", &T::large_string);
+};
+
+suite bounded_ostream_buffer_tests = [] {
+   "bounded_ostream_buffer traits"_test = [] {
+      using buffer_t = glz::bounded_ostream_buffer<std::ostringstream, 1024>;
+      using traits = glz::buffer_traits<buffer_t>;
+
+      static_assert(!traits::is_resizable);
+      static_assert(traits::has_bounded_capacity);
+      static_assert(traits::is_output_streaming);
+      static_assert(glz::is_bounded_output_streaming<buffer_t>);
+   };
+
+   "bounded_ostream_buffer basic operation"_test = [] {
+      std::ostringstream oss;
+      glz::bounded_ostream_buffer<std::ostringstream, 512> buf{oss};
+
+      expect(buf.physical_capacity() == 512u);
+      expect(buf.effective_capacity() == 512u);
+      expect(buf.bytes_flushed() == 0u);
+   };
+
+   "bounded_ostream_buffer simple write"_test = [] {
+      std::ostringstream oss;
+      glz::bounded_ostream_buffer<std::ostringstream, 512> buf{oss};
+
+      TestObject obj{42, "test", 3.14};
+      auto ec = glz::write_json(obj, buf);
+
+      expect(!ec);
+      expect(oss.str() == R"({"id":42,"name":"test","value":3.14})");
+   };
+
+   "bounded_ostream_buffer large string exceeds buffer"_test = [] {
+      std::ostringstream oss;
+      // Use 512 byte buffer for a 2000 character string
+      glz::bounded_ostream_buffer<std::ostringstream, 512> buf{oss};
+
+      // Create a string larger than the buffer
+      LargeStringObject obj{.large_string = std::string(2000, 'a')};
+
+      auto ec = glz::write_json(obj, buf);
+      expect(!ec) << "Write should succeed with incremental flushing";
+
+      // Verify round-trip
+      LargeStringObject parsed;
+      auto parse_ec = glz::read_json(parsed, oss.str());
+      expect(!parse_ec) << "Parse should succeed";
+      expect(parsed.large_string == obj.large_string) << "Round-trip should preserve data";
+
+      // Verify flushing occurred
+      expect(buf.bytes_flushed() > 512u) << "Buffer should have flushed data";
+   };
+
+   "bounded_ostream_buffer string with escapes exceeds buffer"_test = [] {
+      std::ostringstream oss;
+      glz::bounded_ostream_buffer<std::ostringstream, 512> buf{oss};
+
+      // Create string with escape characters that exceeds buffer
+      std::string s;
+      for (int i = 0; i < 200; ++i) {
+         s += "a\"b\\c\n"; // Contains characters that need escaping
+      }
+      LargeStringObject obj{.large_string = s};
+
+      auto ec = glz::write_json(obj, buf);
+      expect(!ec) << "Write with escapes should succeed";
+
+      // Verify round-trip
+      LargeStringObject parsed;
+      auto parse_ec = glz::read_json(parsed, oss.str());
+      expect(!parse_ec) << "Parse should succeed";
+      expect(parsed.large_string == obj.large_string) << "Round-trip should preserve escaped data";
+   };
+
+   "bounded_ostream_buffer capacity grows with flush"_test = [] {
+      std::ostringstream oss;
+      glz::bounded_ostream_buffer<std::ostringstream, 512> buf{oss};
+
+      LargeStringObject obj{.large_string = std::string(2000, 'x')};
+
+      size_t initial_capacity = buf.effective_capacity();
+      expect(initial_capacity == 512u);
+
+      auto ec = glz::write_json(obj, buf);
+      expect(!ec);
+
+      // After flushing, effective capacity should have grown
+      size_t final_capacity = buf.effective_capacity();
+      expect(final_capacity > initial_capacity) << "Capacity should grow with flushing";
+      expect(final_capacity == buf.bytes_flushed() + 512u);
+   };
+
+   "bounded_ostream_buffer reset"_test = [] {
+      std::ostringstream oss;
+      glz::bounded_ostream_buffer<std::ostringstream, 512> buf{oss};
+
+      LargeStringObject obj{.large_string = std::string(1000, 'y')};
+      auto ec = glz::write_json(obj, buf);
+      expect(!ec);
+
+      expect(buf.bytes_flushed() > 0u);
+
+      buf.reset();
+
+      expect(buf.bytes_flushed() == 0u);
+      expect(buf.effective_capacity() == 512u);
+   };
+
+   "bounded_ostream_buffer good and fail"_test = [] {
+      std::ostringstream oss;
+      glz::bounded_ostream_buffer<std::ostringstream, 512> buf{oss};
+
+      expect(buf.good());
+      expect(!buf.fail());
+      expect(buf.stream() == &oss);
+   };
+
+   "bounded_ostream_buffer large array"_test = [] {
+      std::ostringstream oss;
+      glz::bounded_ostream_buffer<std::ostringstream, 512> buf{oss};
+
+      // Large array that exceeds buffer
+      std::vector<int> arr(500);
+      for (int i = 0; i < 500; ++i) {
+         arr[i] = i;
+      }
+
+      auto ec = glz::write_json(arr, buf);
+      expect(!ec);
+
+      // Verify round-trip
+      std::vector<int> parsed;
+      auto parse_ec = glz::read_json(parsed, oss.str());
+      expect(!parse_ec);
+      expect(parsed == arr);
+   };
+
+   "bounded_ostream_buffer nested structure"_test = [] {
+      std::ostringstream oss;
+      glz::bounded_ostream_buffer<std::ostringstream, 512> buf{oss};
+
+      std::map<std::string, std::vector<std::string>> nested;
+      for (int i = 0; i < 20; ++i) {
+         std::vector<std::string> values;
+         for (int j = 0; j < 10; ++j) {
+            values.push_back(std::string(50, 'a' + j));
+         }
+         nested["key" + std::to_string(i)] = values;
+      }
+
+      auto ec = glz::write_json(nested, buf);
+      expect(!ec);
+
+      // Verify round-trip
+      std::map<std::string, std::vector<std::string>> parsed;
+      auto parse_ec = glz::read_json(parsed, oss.str());
+      expect(!parse_ec);
+      expect(parsed == nested);
+   };
+
+   "bounded_ostream_buffer stream error detection"_test = [] {
+      // Create a stream that will fail after some writes
+      class failing_streambuf : public std::streambuf
+      {
+         size_t bytes_written_ = 0;
+         size_t fail_after_;
+
+        public:
+         failing_streambuf(size_t fail_after) : fail_after_(fail_after) {}
+
+        protected:
+         std::streamsize xsputn(const char*, std::streamsize n) override
+         {
+            if (bytes_written_ + static_cast<size_t>(n) > fail_after_) {
+               return 0; // Simulate write failure
+            }
+            bytes_written_ += static_cast<size_t>(n);
+            return n;
+         }
+
+         int overflow(int) override { return EOF; }
+      };
+
+      // Create stream that fails after 100 bytes
+      failing_streambuf sbuf(100);
+      std::ostream failing_stream(&sbuf);
+
+      glz::bounded_ostream_buffer<std::ostream, 512> buf{failing_stream};
+
+      // Try to write a large string that will trigger flush and fail
+      LargeStringObject obj{.large_string = std::string(2000, 'x')};
+
+      auto ec = glz::write_json(obj, buf);
+
+      // Should detect the stream write error
+      expect(ec.ec == glz::error_code::send_error) << "Expected send_error, got: " << static_cast<int>(ec.ec);
+   };
+};
+
+// ============================================================================
 // DOCUMENTATION EXAMPLES AS TESTS
 // ============================================================================
 
