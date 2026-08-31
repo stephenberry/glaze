@@ -15,6 +15,7 @@
 #include <iostream>
 #include <list>
 #include <map>
+#include <memory>
 #include <numbers>
 #include <random>
 #include <ranges>
@@ -4678,6 +4679,96 @@ suite file_include_test_auto = [] {
       expect(!glz::read_file_json(obj, "./auto.json", std::string{}));
       expect(obj.str == "Hello") << obj.str;
       expect(obj.i == 55) << obj.i;
+   };
+};
+
+struct missing_keys_sub
+{
+   int a{};
+   int b{};
+};
+
+struct missing_keys_includer
+{
+   glz::file_include include{};
+   std::string str{};
+   int i{};
+   missing_keys_sub sub{};
+};
+
+struct recursive_includer
+{
+   glz::file_include include{};
+   std::string str{};
+   std::unique_ptr<recursive_includer> child{};
+};
+
+// An included file fills in part of the object that names it, so with error_on_missing_keys the
+// check belongs to the including object, over the union of both documents.
+suite file_include_missing_keys_test = [] {
+   static constexpr glz::opts strict{.error_on_missing_keys = true};
+
+   "include supplies a missing key"_test = [] {
+      expect(glz::buffer_to_file(std::string{R"({"str":"Hello","sub":{"a":1,"b":2}})"}, "./include_fragment.json") ==
+             glz::error_code::none);
+
+      missing_keys_includer obj{};
+      std::string s = R"({"include": "./include_fragment.json", "i": 100})";
+      const auto ec = glz::read<strict>(obj, s);
+      expect(!ec) << glz::format_error(ec, s);
+      expect(obj.str == "Hello") << obj.str;
+      expect(obj.i == 100) << obj.i;
+      expect(obj.sub.b == 2);
+   };
+
+   "keys absent from both documents still error"_test = [] {
+      expect(glz::buffer_to_file(std::string{R"({"str":"Hello","sub":{"a":1,"b":2}})"}, "./include_fragment.json") ==
+             glz::error_code::none);
+
+      missing_keys_includer obj{};
+      std::string s = R"({"include": "./include_fragment.json"})"; // "i" is in neither document
+      expect(glz::read<strict>(obj, s) == glz::error_code::missing_key);
+   };
+
+   "objects nested within an include are still checked"_test = [] {
+      expect(glz::buffer_to_file(std::string{R"({"str":"Hello","sub":{"a":1}})"}, "./include_partial_sub.json") ==
+             glz::error_code::none);
+
+      missing_keys_includer obj{};
+      std::string s = R"({"include": "./include_partial_sub.json", "i": 100})";
+      expect(glz::read<strict>(obj, s) == glz::error_code::includer_error);
+   };
+
+   "unknown keys within an include are still checked"_test = [] {
+      expect(glz::buffer_to_file(std::string{R"({"str":"Hello","sub":{"a":1,"b":2},"nope":1})"},
+                                 "./include_unknown_key.json") == glz::error_code::none);
+
+      missing_keys_includer obj{};
+      std::string s = R"({"include": "./include_unknown_key.json", "i": 100})";
+      expect(glz::read<strict>(obj, s) == glz::error_code::includer_error);
+   };
+
+   "keys accumulate across nested includes"_test = [] {
+      expect(glz::buffer_to_file(std::string{R"({"sub":{"a":1,"b":2}})"}, "./include_inner.json") ==
+             glz::error_code::none);
+      expect(glz::buffer_to_file(std::string{R"({"include":"./include_inner.json","str":"Hello"})"},
+                                 "./include_outer.json") == glz::error_code::none);
+
+      missing_keys_includer obj{};
+      std::string s = R"({"include": "./include_outer.json", "i": 100})";
+      const auto ec = glz::read<strict>(obj, s);
+      expect(!ec) << glz::format_error(ec, s);
+      expect(obj.str == "Hello") << obj.str;
+      expect(obj.sub.b == 2);
+   };
+
+   "a nested value of the same type is checked on its own"_test = [] {
+      recursive_includer obj{};
+      std::string s = R"({"str": "a", "child": {}})";
+      expect(glz::read<strict>(obj, s) == glz::error_code::missing_key);
+
+      std::string t = R"({"child": {"str": "b"}})"; // the child's keys do not satisfy the parent
+      expect(glz::read<strict>(obj, t) == glz::error_code::missing_key);
    };
 };
 

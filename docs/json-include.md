@@ -24,6 +24,10 @@ This will read the `./obj.json` file into the `obj` as it is parsed. Since glaze
 
 > Paths are always relative to the location of the previously loaded file. For nested includes this means the user only needs to consider the relative path to the file in which the include is written.
 
+## Missing Keys
+
+An included file is a fragment of the object that names it: some of the object's keys come from the include and the rest come from the including document. With `error_on_missing_keys` the check is therefore made by the including object over the union of both documents, so the example above reads without error even though neither document lists every key on its own. Keys that appear in neither document are still reported, as are missing keys of objects nested inside an included file.
+
 ## Hostname Include
 
 Similar to `glz::file_include`, glaze provides `glz::hostname_include`. This is used for host-specific configuration files.
