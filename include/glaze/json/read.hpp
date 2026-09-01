@@ -2298,6 +2298,98 @@ namespace glz
       }
    };
 
+   // Reads a JSON array by indexing rather than by iterating.
+   //
+   // The counterpart of `write_json_indexed_array`: the elements are reached through `volatile`,
+   // so `value.begin()` is not an iterator (see `volatile_indexed_array`) and `std::span` cannot
+   // be formed over the storage. `N` is the compile-time extent, and the fixed-extent semantics
+   // match those of `std::array`: a short array leaves the trailing elements untouched, and more
+   // input elements than `N` is `exceeded_static_array_size`.
+   template <auto Options, size_t N>
+   void read_json_indexed_array(auto&& value, is_context auto&& ctx, auto&& it, auto end)
+   {
+      constexpr auto Opts = ws_handled_off<Options>();
+      if constexpr (!check_ws_handled(Options)) {
+         if (skip_ws<Opts>(ctx, it, end)) {
+            return;
+         }
+      }
+
+      if (match_invalid_end<'[', Opts>(ctx, it, end)) {
+         return;
+      }
+      // one nesting level (see enter_depth), released at each syntactic close below
+      if (enter_depth(ctx)) [[unlikely]] {
+         return;
+      }
+
+      const auto ws_start = it;
+      if (skip_ws<Opts>(ctx, it, end)) {
+         return;
+      }
+
+      if (*it == ']') {
+         --ctx.depth;
+         ++it;
+         return;
+      }
+
+      const size_t ws_size = size_t(it - ws_start);
+
+      using val_t = std::remove_cvref_t<decltype(value[0])>;
+
+      for (size_t i = 0; i < N; ++i) {
+         from<JSON, val_t>::template op<ws_handled<Opts>()>(value[i], ctx, it, end);
+         if (bool(ctx.error)) [[unlikely]] {
+            return;
+         }
+         if (skip_ws<Opts>(ctx, it, end)) {
+            return;
+         }
+         if (*it == ',') {
+            ++it;
+
+            if constexpr (!Opts.minified && !Opts.comments) {
+               if (ws_size && ws_size < size_t(end - it)) {
+                  skip_matching_ws(ws_start, it, ws_size);
+               }
+            }
+
+            if (skip_ws<Opts>(ctx, it, end)) {
+               return;
+            }
+         }
+         else if (*it == ']') {
+            --ctx.depth;
+            ++it;
+            return;
+         }
+         else [[unlikely]] {
+            ctx.error = error_code::expected_bracket;
+            return;
+         }
+      }
+
+      if constexpr (check_partial_read(Opts)) {
+         // partial_read stops early on a success path, so give the level back like the
+         // syntactic-close paths do; otherwise it accumulates across reads sharing a context.
+         --ctx.depth;
+      }
+      else {
+         ctx.error = error_code::exceeded_static_array_size;
+      }
+   }
+
+   template <readable_volatile_array_t T>
+   struct from<JSON, T>
+   {
+      template <auto Opts>
+      static void op(auto&& value, is_context auto&& ctx, auto&& it, auto end)
+      {
+         read_json_indexed_array<Opts, std::remove_cvref_t<T>::length>(value, ctx, it, end);
+      }
+   };
+
    // for types like std::vector, std::array, std::deque, etc.
    template <class T>
       requires(readable_array_t<T> && (emplace_backable<T> || is_inplace_vector<T> || !resizable<T>) && !emplaceable<T>)
@@ -5073,7 +5165,14 @@ namespace glz
       template <auto Opts, class V, size_t N>
       GLZ_ALWAYS_INLINE static void op(V (&value)[N], is_context auto&& ctx, auto&& it, auto end) noexcept
       {
-         parse<JSON>::op<Opts>(std::span{value, N}, ctx, it, end);
+         if constexpr (requires { std::span{value, N}; }) {
+            parse<JSON>::op<Opts>(std::span{value, N}, ctx, it, end);
+         }
+         else {
+            // A class-type element reached through `volatile` gives a pointer that is neither a
+            // contiguous_iterator nor spannable, so index the array directly instead.
+            read_json_indexed_array<Opts, N>(value, ctx, it, end);
+         }
       }
    };
 

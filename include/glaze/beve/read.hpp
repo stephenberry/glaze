@@ -1772,6 +1772,71 @@ namespace glz
       }
    };
 
+   // Reads a BEVE array by indexing rather than by iterating.
+   //
+   // The counterpart of `write_beve_indexed_array`: the elements are reached through `volatile`,
+   // so `value.begin()` is not an iterator (see `volatile_indexed_array`) and `std::span` cannot
+   // be formed over the storage. Like the fixed-extent branch of the iterator-based reader, the
+   // encoded count is validated but the extent `N` is what gets parsed.
+   template <auto Opts, size_t N>
+   void read_beve_indexed_array(auto&& value, is_context auto&& ctx, auto&& it, auto end)
+   {
+      if (invalid_end(ctx, it, end)) {
+         return;
+      }
+      if ((uint8_t(*it) & 0b00000'111) != tag::generic_array) [[unlikely]] {
+         ctx.error = error_code::syntax_error;
+         return;
+      }
+
+      depth_guard guard{ctx};
+      if (!guard) [[unlikely]] {
+         return;
+      }
+
+      ++it;
+      const size_t n = int_from_compressed(ctx, it, end);
+      if (bool(ctx.error)) [[unlikely]] {
+         return;
+      }
+
+      // Each element needs at least 1 byte for its tag
+      if (uint64_t(end - it) < n) [[unlikely]] {
+         ctx.error = error_code::invalid_length;
+         return;
+      }
+      if constexpr (check_max_array_size(Opts) > 0) {
+         if (n > check_max_array_size(Opts)) [[unlikely]] {
+            ctx.error = error_code::invalid_length;
+            return;
+         }
+      }
+      if constexpr (has_runtime_max_array_size<std::decay_t<decltype(ctx)>>) {
+         if (ctx.max_array_size > 0 && n > ctx.max_array_size) [[unlikely]] {
+            ctx.error = error_code::invalid_length;
+            return;
+         }
+      }
+
+      using val_t = std::remove_cvref_t<decltype(value[0])>;
+      for (size_t i = 0; i < N; ++i) {
+         from<BEVE, val_t>::template op<Opts>(value[i], ctx, it, end);
+         if (bool(ctx.error)) [[unlikely]] {
+            return;
+         }
+      }
+   }
+
+   template <readable_volatile_array_t T>
+   struct from<BEVE, T> final
+   {
+      template <auto Opts>
+      static void op(auto&& value, is_context auto&& ctx, auto&& it, auto end)
+      {
+         read_beve_indexed_array<Opts, std::remove_cvref_t<T>::length>(value, ctx, it, end);
+      }
+   };
+
    template <readable_array_t T>
    struct from<BEVE, T> final
    {
@@ -2689,7 +2754,14 @@ namespace glz
       template <auto Opts, class V, size_t N>
       GLZ_ALWAYS_INLINE static void op(V (&value)[N], is_context auto&& ctx, auto&& it, auto end) noexcept
       {
-         parse<BEVE>::op<Opts>(std::span{value, N}, ctx, it, end);
+         if constexpr (requires { std::span{value, N}; }) {
+            parse<BEVE>::op<Opts>(std::span{value, N}, ctx, it, end);
+         }
+         else {
+            // A class-type element reached through `volatile` gives a pointer that is neither a
+            // contiguous_iterator nor spannable, so index the array directly instead.
+            read_beve_indexed_array<Opts, N>(value, ctx, it, end);
+         }
       }
    };
 

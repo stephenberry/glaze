@@ -9,11 +9,10 @@
 #include <initializer_list>
 #include <type_traits>
 
+#include "glaze/concepts/container_concepts.hpp" // for is_volatile_array
+
 namespace glz
 {
-   template <class T>
-   concept is_volatile_array = requires { std::decay_t<T>::glaze_volatile_array; };
-
    template <typename T, std::size_t N>
    class volatile_array
    {
