@@ -1382,4 +1382,80 @@ suite rename_tests = [] {
    };
 };
 
+struct ctor_only_member
+{
+   ctor_only_member(int v) : v{v} {}
+   int v;
+};
+
+template <>
+struct glz::meta<ctor_only_member>
+{
+   static constexpr auto value = glz::object(&ctor_only_member::v);
+};
+
+struct non_default_constructible_second
+{
+   double a;
+   ctor_only_member b;
+};
+static_assert(glz::detail::count_members<non_default_constructible_second> == 2,
+              "a non-default-constructible member at position >=2 must not zero the count");
+
+// An unbraced sub-object can absorb extra initializers
+struct elision_inner
+{
+   int a, b;
+};
+
+struct elision_outer
+{
+   elision_inner i;
+   int c;
+};
+static_assert(glz::detail::count_members<elision_outer> == 2,
+              "brace elision must not overcount");
+
+#define MEMBERS_8(p) int p##0, p##1, p##2, p##3, p##4, p##5, p##6, p##7;
+#define MEMBERS_64(p) MEMBERS_8(p##a) MEMBERS_8(p##b) MEMBERS_8(p##c) MEMBERS_8(p##d) MEMBERS_8(p##e) MEMBERS_8(p##f) MEMBERS_8(p##g) MEMBERS_8(p##h)
+
+struct max_members_t
+{
+   MEMBERS_64(x) MEMBERS_64(y)
+};
+static_assert(glz::detail::count_members<max_members_t> == glz::detail::max_pure_reflection_count,
+              "a struct with exactly max_pure_reflection_count members must not count one short");
+
+struct over_max_members_t
+{
+   int extra_member;
+   MEMBERS_64(x) MEMBERS_64(y)
+};
+static_assert(glz::detail::initializable_with_n<over_max_members_t, glz::detail::max_pure_reflection_count + 1>,
+              "a type over the limit must be detectable one past the limit");
+static_assert(not glz::detail::initializable_with_n<max_members_t, glz::detail::max_pure_reflection_count + 1>,
+              "a type exactly at the limit must not be mistaken for one over it");
+
+#undef MEMBERS_64
+#undef MEMBERS_8
+
+suite non_default_constructible_member_tests = [] {
+   "non-default-constructible member at position 2"_test = [] {
+      std::string buffer{};
+      expect(not glz::write_json(non_default_constructible_second{2.0, ctor_only_member{1}}, buffer));
+      expect(buffer == R"({"a":2,"b":{"v":1}})") << buffer;
+
+      non_default_constructible_second obj{0.0, ctor_only_member{0}};
+      expect(not glz::read_json(obj, buffer));
+      expect(obj.a == 2.0);
+      expect(obj.b.v == 1);
+   };
+
+    "non-default-constructible member at position 2 writes correctly"_test = [] {
+        std::string buffer{};
+        expect(not glz::write_json(non_default_constructible_second{2.0, ctor_only_member{1}}, buffer));
+        expect(buffer == R"({"a":2,"b":{"v":1}})") << buffer;
+    };
+};
+
 int main() { return 0; }
