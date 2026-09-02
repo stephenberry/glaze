@@ -5787,6 +5787,11 @@ suite issue_2595_transparent_wrappers = [] {
    };
 };
 
+struct skipped_value_doc
+{
+   int keep{};
+};
+
 suite recursion_depth_tests = [] {
    "deeply nested array is bounded"_test = [] {
       const std::string toml = "a = " + std::string(100000, '[');
@@ -5835,6 +5840,16 @@ suite recursion_depth_tests = [] {
       std::string json{};
       expect(!glz::write_json(value, json));
       expect(json == R"({"a":{"b":{"c":1}}})") << json;
+   };
+
+   // A skipped value nests through the bracket skipper, which alternates bracket types to defeat
+   // a single matching counter. It must be bounded rather than recursing per level.
+   "deeply nested skipped value is bounded"_test = [] {
+      std::string toml = "unknown = ";
+      for (int i = 0; i < 100000; ++i) toml += (i % 2) ? '{' : '[';
+      skipped_value_doc value{};
+      auto ec = glz::read<glz::opts{.format = glz::TOML, .error_on_unknown_keys = false}>(value, toml);
+      expect(ec.ec == glz::error_code::exceeded_max_recursive_depth);
    };
 };
 
