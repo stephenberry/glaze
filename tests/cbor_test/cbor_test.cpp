@@ -20,6 +20,7 @@
 
 #include "glaze/base64/base64.hpp"
 #include "glaze/glaze_exceptions.hpp"
+#include "glaze/json/generic.hpp"
 #include "ut/ut.hpp"
 
 using namespace ut;
@@ -4784,6 +4785,130 @@ namespace cbor_depth
       return glz::write_cbor(root).value();
    }
 }
+
+// glz::generic is a glaze_value_t over a variant of exactly the JSON value categories, which CBOR
+// already distinguishes in its major type. Without a dedicated writer it took the variant writer's
+// [index, value] shape, which cost bytes on every element and made the output unreadable by any
+// CBOR library that does not know Glaze's variant convention.
+suite cbor_generic_tests = [] {
+   "generic writes native CBOR, not a variant wrapper"_test = [] {
+      glz::generic_u64 g;
+      expect(not glz::read_json(g, R"({"a":[1,2,3],"c":"txt"})"));
+
+      std::string buffer{};
+      expect(not glz::write_cbor(g, buffer));
+      // map(2) "a" array(3) 1 2 3 "c" text(3) "txt"
+      expect(buffer == std::string{"\xa2\x61\x61\x83\x01\x02\x03\x61\x63\x63txt", 13});
+
+      glz::generic_u64 out;
+      expect(not glz::read_cbor(out, buffer));
+      std::string dumped{};
+      expect(not glz::write_json(out, dumped));
+      expect(dumped == R"({"a":[1,2,3],"c":"txt"})");
+   };
+
+   "generic round-trips every JSON value category"_test = [] {
+      const std::string json =
+         R"({"null":null,"true":true,"false":false,"int":64,"neg":-7,"double":6.28,"str":"text","arr":[1,"two",null],"obj":{"k":1}})";
+      glz::generic_u64 g;
+      expect(not glz::read_json(g, json));
+
+      std::string buffer{};
+      expect(not glz::write_cbor(g, buffer));
+      expect(buffer.size() < json.size());
+
+      glz::generic_u64 out;
+      expect(not glz::read_cbor(out, buffer));
+      expect(out["int"].is_uint64());
+      expect(out["neg"].is_int64());
+      expect(out["double"].is_double());
+
+      std::string dumped{};
+      expect(not glz::write_json(out, dumped));
+      expect(dumped == json);
+   };
+
+   "which numeric alternative an integer lands in follows the mode"_test = [] {
+      glz::generic_u64 wide;
+      wide.data = (std::numeric_limits<uint64_t>::max)();
+      std::string buffer{};
+      expect(not glz::write_cbor(wide, buffer));
+
+      glz::generic_u64 as_u64;
+      expect(not glz::read_cbor(as_u64, buffer));
+      expect(as_u64.is_uint64());
+      expect(as_u64.get<uint64_t>() == (std::numeric_limits<uint64_t>::max)());
+
+      // No exact alternative for that magnitude in i64 mode, so it falls back to double
+      glz::generic_i64 as_i64;
+      expect(not glz::read_cbor(as_i64, buffer));
+      expect(as_i64.is_double());
+
+      glz::generic as_f64;
+      expect(not glz::read_cbor(as_f64, buffer));
+      expect(as_f64.is_number());
+   };
+
+   // A negative CBOR head encodes -1 - arg, so the whole negative int64_t range needs arg up to
+   // int64_t's max, and an arg past that names a magnitude no integer alternative can hold.
+   "a negative integer past int64_t falls back to double"_test = [] {
+      const std::string buffer{"\x3b\xff\xff\xff\xff\xff\xff\xff\xff", 9}; // -1 - (2^64 - 1)
+
+      glz::generic_u64 as_u64;
+      expect(not glz::read_cbor(as_u64, buffer));
+      expect(as_u64.is_double());
+      expect(as_u64.get<double>() == -1.0 - static_cast<double>((std::numeric_limits<uint64_t>::max)()));
+
+      // int64_t's most negative value is still exact
+      glz::generic_u64 at_limit;
+      expect(not glz::read_cbor(at_limit, std::string{"\x3b\x7f\xff\xff\xff\xff\xff\xff\xff", 9}));
+      expect(at_limit.is_int64());
+      expect(at_limit.get<int64_t>() == (std::numeric_limits<int64_t>::min)());
+   };
+
+   "every generic mode round trips"_test = [] {
+      const std::string json = R"({"a":-7,"b":[1,2.5,null,true,"s"],"c":{},"d":[]})";
+
+      glz::generic as_f64;
+      expect(not glz::read_json(as_f64, json));
+      std::string buffer{};
+      expect(not glz::write_cbor(as_f64, buffer));
+      glz::generic f64_out;
+      expect(not glz::read_cbor(f64_out, buffer));
+      std::string dumped{};
+      expect(not glz::write_json(f64_out, dumped));
+      expect(dumped == R"({"a":-7,"b":[1,2.5,null,true,"s"],"c":{},"d":[]})");
+
+      glz::generic_i64 as_i64;
+      expect(not glz::read_json(as_i64, json));
+      buffer.clear();
+      expect(not glz::write_cbor(as_i64, buffer));
+      glz::generic_i64 i64_out;
+      expect(not glz::read_cbor(i64_out, buffer));
+      expect(i64_out["a"].is_int64());
+      dumped.clear();
+      expect(not glz::write_json(i64_out, dumped));
+      expect(dumped == json);
+   };
+
+   // The readers build the alternative separately and move it in, so a value that fails to parse is
+   // left as it was rather than half-filled.
+   "a failed read leaves the destination untouched"_test = [] {
+      glz::generic_u64 out;
+      out.data = std::string{"unchanged"};
+      // array(1) with the element truncated away
+      expect(glz::read_cbor(out, std::string{"\x81", 1}));
+      expect(out.is_string());
+      expect(out.get<std::string>() == "unchanged");
+   };
+
+   "a CBOR item with no JSON counterpart is rejected"_test = [] {
+      glz::generic_u64 out;
+      expect(glz::read_cbor(out, std::string{"\x41\x00", 2})); // byte string
+      expect(glz::read_cbor(out, std::string{"\xf7", 1})); // undefined
+      expect(glz::read_cbor(out, std::string{"\xc1\x01", 2})); // semantic tag
+   };
+};
 
 suite cbor_recursion_depth_limit = [] {
    using namespace cbor_depth;

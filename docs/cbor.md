@@ -61,6 +61,20 @@ Glaze CBOR implements the following standards:
 | [RFC 8746](https://www.rfc-editor.org/rfc/rfc8746.html) | Typed arrays and multi-dimensional arrays |
 | [IANA CBOR Tags](https://www.iana.org/assignments/cbor-tags/cbor-tags.xhtml) | Registered semantic tags |
 
+## Variants and `glz::generic`
+
+A `std::variant` is written as the two element array `[index, value]`, where `index` is the active alternative's index. `glz::generic` (and the other generic types) is not wrapped at all: its alternatives are exactly the JSON value categories, which CBOR already distinguishes in its major type, so it is written and read as plain CBOR that any CBOR implementation can consume.
+
+```c++
+glz::generic_u64 value;
+auto ec = glz::read_json(value, R"({"a":[1,2,3],"c":"text"})");
+
+std::string buffer;
+ec = glz::write_cbor(value, buffer); // map(2), no per-element type information
+```
+
+Reading into a `glz::generic` accepts every CBOR major type that has a JSON counterpart. Byte strings, semantic tags, and the simple values other than `false`, `true`, and `null` do not, and fail with `error_code::syntax_error` — so a tagged item (a date, a bignum, a COSE structure) has to be read into a type that models it rather than into a `glz::generic`.
+
 ## CBOR to JSON Conversion
 
 `glz::cbor_to_json` converts a buffer of CBOR directly to a buffer of JSON.

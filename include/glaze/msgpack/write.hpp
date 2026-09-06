@@ -15,6 +15,7 @@
 #include "glaze/core/seek.hpp"
 #include "glaze/core/to.hpp"
 #include "glaze/core/write.hpp"
+#include "glaze/json/generic_fwd.hpp"
 #include "glaze/msgpack/common.hpp"
 #include "glaze/util/dump.hpp"
 #include "glaze/util/for_each.hpp"
@@ -1008,6 +1009,14 @@ namespace glz
       }
    };
 
+   // A variant is written as the two element array [index, value].
+   //
+   // The discriminator is the alternative's index, not its id. An id is only a name when glz::meta
+   // declares one; without that declaration ids_v falls back to glz::name_v, which for a type with no
+   // meta::name is the compiler's own spelling of it -- MSVC's
+   // "glz::ordered_small_map<struct glz::generic_json<2,struct glz::ordered_small_map> >" is not
+   // GCC's. Writing that made the output both large and unreadable by a build using another
+   // compiler. The index is neither, and it matches CBOR.
    template <is_variant T>
       requires(not custom_write<T>)
    struct to<MSGPACK, T>
@@ -1015,23 +1024,19 @@ namespace glz
       template <auto Opts, class Value, is_context Ctx, class B, class IX>
       GLZ_ALWAYS_INLINE static void op(Value&& value, Ctx&& ctx, B&& b, IX&& ix)
       {
+         // Taken from the variant rather than recovered by matching the visited type, which is
+         // ambiguous for a variant that repeats an alternative type. A valueless variant has no
+         // alternative to name, and variant_npos is not an index any reader could resolve.
+         const size_t index = value.index();
+         if (index >= std::variant_size_v<std::remove_cvref_t<Value>>) [[unlikely]] {
+            ctx.error = error_code::no_matching_variant_type;
+            return;
+         }
+
          if (!msgpack::detail::write_array_header(ctx, 2, b, ix)) [[unlikely]] {
             return;
          }
-         static constexpr auto ids = ids_v<T>;
-         // `ids` may declare fewer entries than the variant has alternatives -- the readers treat the
-         // first unlabeled alternative as the default for an unrecognized id -- so an alternative past
-         // the end of `ids` has no id to write. Indexing there reads past a static array.
-         if (value.index() >= ids.size()) [[unlikely]] {
-            ctx.error = error_code::no_matching_variant_type;
-            ctx.custom_error_message = variant_ids_string_v<T>;
-            return;
-         }
-         if (!msgpack::detail::write_str_header(ctx, ids[value.index()].size(), b, ix)) [[unlikely]] {
-            return;
-         }
-         if (!msgpack::detail::dump_raw_bytes(ctx, ids[value.index()].data(), ids[value.index()].size(), b, ix))
-            [[unlikely]] {
+         if (!msgpack::detail::write_unsigned(ctx, index, b, ix)) [[unlikely]] {
             return;
          }
          std::visit([&](auto&& v) { serialize<MSGPACK>::op<Opts>(v, ctx, b, ix); }, value);
@@ -1149,6 +1154,23 @@ namespace glz
             return;
          }
          msgpack::detail::dump_raw_bytes(ctx, name.data(), name.size(), b, ix);
+      }
+   };
+
+   // Generic JSON value -- write the active alternative as its native MessagePack type.
+   //
+   // glz::generic is a glaze_value_t over a variant, so without this it would take the variant
+   // writer's [index, value] shape. That is wasteful for a type whose alternatives are exactly the
+   // JSON value categories, which MessagePack already distinguishes in its own type byte, and it
+   // makes the output unreadable by any MessagePack library that does not know Glaze's convention.
+   // JSONB writes glz::generic natively for the same reason.
+   template <num_mode Mode, template <class> class MapType>
+   struct to<MSGPACK, generic_json<Mode, MapType>> final
+   {
+      template <auto Opts, class Value, is_context Ctx, class B, class IX>
+      static void op(Value&& value, Ctx&& ctx, B&& b, IX&& ix)
+      {
+         std::visit([&](auto&& v) { serialize<MSGPACK>::op<Opts>(v, ctx, b, ix); }, value.data);
       }
    };
 

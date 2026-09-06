@@ -10,6 +10,7 @@
 #include "glaze/core/reflect.hpp"
 #include "glaze/core/to.hpp"
 #include "glaze/core/write.hpp"
+#include "glaze/json/generic_fwd.hpp"
 #include "glaze/util/dump.hpp"
 #include "glaze/util/for_each.hpp"
 #include "glaze/util/variant.hpp"
@@ -1195,6 +1196,22 @@ namespace glz
                to<CBOR, double>::template op<Opts>(secs, ctx, b, ix);
             }
          }
+      }
+   };
+
+   // Generic JSON value -- write the active alternative as its native CBOR type.
+   //
+   // glz::generic is a glaze_value_t over a variant, so without this it would take the variant
+   // writer's [index, value] shape. Its alternatives are exactly the JSON value categories, which
+   // CBOR already distinguishes in its own major type, so the wrapper costs bytes and makes the
+   // output unreadable by any CBOR library that does not know Glaze's variant convention.
+   template <num_mode Mode, template <class> class MapType>
+   struct to<CBOR, generic_json<Mode, MapType>> final
+   {
+      template <auto Opts>
+      static void op(auto&& value, is_context auto&& ctx, auto&& b, auto& ix)
+      {
+         std::visit([&](auto&& v) { serialize<CBOR>::op<Opts>(v, ctx, b, ix); }, value.data);
       }
    };
 

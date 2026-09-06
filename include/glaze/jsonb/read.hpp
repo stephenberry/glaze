@@ -1358,24 +1358,38 @@ namespace glz
          }
          case jsonb::type::int_:
          case jsonb::type::int5: {
-            // Prefer the widest integer alternative available in this Mode, fall back to double.
+            // Which alternative an integer lands in follows the JSON reader, where the alternatives
+            // are tried in declaration order: the widest exact one for the mode, falling back to the
+            // next when the magnitude or the sign does not fit. JSONB stores an integer as its ASCII
+            // text, so a mismatch shows up as a parse failure and the element is re-read from the
+            // start rather than partially consumed.
+            const auto start = it;
+            const auto try_alternative = [&]<class V>(std::type_identity<V>) {
+               ctx.error = error_code::none;
+               ctx.custom_error_message = {}; // else the rejected attempt's message outlives its error
+               it = start;
+               V v{};
+               from<JSONB, V>::template op<Opts>(v, ctx, it, end);
+               if (bool(ctx.error)) return false;
+               value.data = v;
+               return true;
+            };
+
             if constexpr (Mode == num_mode::u64) {
-               uint64_t u{};
-               from<JSONB, uint64_t>::template op<Opts>(u, ctx, it, end);
-               if (bool(ctx.error)) return;
-               value.data = u;
+               // A negative value has no unsigned alternative, and a magnitude past uint64_t has no
+               // integer alternative at all, so the search runs to the end of the list either way.
+               if (!try_alternative(std::type_identity<uint64_t>{}) &&
+                   !try_alternative(std::type_identity<int64_t>{})) {
+                  try_alternative(std::type_identity<double>{});
+               }
             }
             else if constexpr (Mode == num_mode::i64) {
-               int64_t i{};
-               from<JSONB, int64_t>::template op<Opts>(i, ctx, it, end);
-               if (bool(ctx.error)) return;
-               value.data = i;
+               if (!try_alternative(std::type_identity<int64_t>{})) {
+                  try_alternative(std::type_identity<double>{}); // past int64_t's range
+               }
             }
             else {
-               double d{};
-               from<JSONB, double>::template op<Opts>(d, ctx, it, end);
-               if (bool(ctx.error)) return;
-               value.data = d;
+               try_alternative(std::type_identity<double>{});
             }
             return;
          }

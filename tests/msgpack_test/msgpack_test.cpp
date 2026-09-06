@@ -23,6 +23,7 @@
 #include <variant>
 #include <vector>
 
+#include "glaze/json/generic.hpp"
 #include "glaze/json/ptr.hpp"
 #include "ut/ut.hpp"
 
@@ -633,10 +634,9 @@ suite msgpack_reserve_amplification_tests = [] {
 };
 
 // A variant whose `ids` array is shorter than its alternative list. That is a supported read-side
-// feature -- the first unlabeled alternative is the default for an unrecognized id -- so it is
-// reachable from a legal glz::meta. Writing the unlabeled alternative has no id to emit; indexing
-// ids_v there read past the end of a static array and emitted the adjacent static data as the tag
-// value (~4 GB read under ASan). The writer must report an error instead.
+// feature for the formats that write ids -- the first unlabeled alternative is the default for an
+// unrecognized id -- so it is reachable from a legal glz::meta. MessagePack discriminates by index
+// and never indexes ids_v, so neither alternative depends on the declaration being complete.
 namespace short_ids_guard
 {
    struct labeled
@@ -658,12 +658,243 @@ struct glz::meta<short_ids_guard::v_t>
 };
 
 suite short_ids_write_guard = [] {
-   "writing an alternative with no declared id errors instead of reading out of bounds"_test = [] {
+   "an alternative with no declared id round trips on its index"_test = [] {
       using namespace short_ids_guard;
       std::string buffer{};
-      expect(bool(glz::write_msgpack(v_t{unlabeled{7}}, buffer)));
+      expect(not glz::write_msgpack(v_t{unlabeled{7}}, buffer));
+      v_t decoded{};
+      expect(not glz::read_msgpack(decoded, buffer));
+      expect(decoded.index() == 1);
+      expect(std::get<unlabeled>(decoded).b == 7);
+
       buffer.clear();
-      expect(not glz::write_msgpack(v_t{labeled{3}}, buffer)); // the labeled alternative is unaffected
+      expect(not glz::write_msgpack(v_t{labeled{3}}, buffer));
+      expect(not glz::read_msgpack(decoded, buffer));
+      expect(decoded.index() == 0);
+      expect(std::get<labeled>(decoded).a == 3);
+   };
+};
+
+namespace wide_variant
+{
+   template <size_t>
+   using alt = int;
+
+   template <class>
+   struct build;
+
+   template <size_t... I>
+   struct build<std::index_sequence<I...>>
+   {
+      using type = std::variant<alt<I>...>;
+   };
+
+   using v_t = build<std::make_index_sequence<200>>::type;
+}
+
+// The variant discriminator is the alternative's index, not its id. ids_v falls back to glz::name_v
+// when glz::meta declares no ids, and for a type with no meta::name that is the compiler's own
+// spelling of it -- so writing the id made the output large and, worse, compiler specific: msgpack
+// written by MSVC could not be read by a GCC build.
+suite msgpack_variant_index_discriminator = [] {
+   "the discriminator is a small integer, not a type name"_test = [] {
+      std::variant<int, std::string> v{std::string{"x"}};
+      std::string buffer{};
+      expect(not glz::write_msgpack(v, buffer));
+      // fixarray(2), positive fixint 1, fixstr(1), 'x'
+      expect(buffer == std::string{"\x92\x01\xa1x", 4});
+
+      std::variant<int, std::string> decoded{};
+      expect(not glz::read_msgpack(decoded, buffer));
+      expect(decoded == v);
+   };
+
+   // An index past 127 leaves the positive fixint range, so the writer must widen it.
+   "an index past the fixint range widens"_test = [] {
+      wide_variant::v_t v{};
+      v.emplace<150>(7);
+      std::string buffer{};
+      expect(not glz::write_msgpack(v, buffer));
+      // fixarray(2), the index as uint8 because 150 is past the positive fixint range, then the value
+      expect(buffer == std::string{"\x92\xcc\x96\x07", 4});
+
+      wide_variant::v_t decoded{};
+      expect(not glz::read_msgpack(decoded, buffer));
+      expect(decoded.index() == 150);
+      expect(std::get<150>(decoded) == 7);
+   };
+
+   "a discriminator naming no alternative is rejected"_test = [] {
+      std::variant<int, std::string> decoded{};
+      // index 7 against a two alternative variant
+      expect(glz::read_msgpack(decoded, std::string{"\x92\x07\x01", 3}) == glz::error_code::no_matching_variant_type);
+      // a negative discriminator is not an index either
+      expect(glz::read_msgpack(decoded, std::string{"\x92\xff\x01", 3}) == glz::error_code::no_matching_variant_type);
+   };
+};
+
+// glz::generic is a glaze_value_t over a variant of exactly the JSON value categories, which
+// MessagePack already distinguishes in its own type byte. Without a dedicated writer it took the
+// variant writer's [index, value] shape, which cost bytes on every element and made the output
+// unreadable by any MessagePack library that does not know Glaze's variant convention.
+suite msgpack_generic_tests = [] {
+   "generic writes native MessagePack, not a variant wrapper"_test = [] {
+      glz::generic_u64 g;
+      expect(not glz::read_json(g, R"({"a":[1,2,3],"c":"txt"})"));
+
+      std::string buffer{};
+      expect(not glz::write_msgpack(g, buffer));
+      // fixmap(2) 'a' fixarray(3) 1 2 3 'c' fixstr(3) "txt"
+      expect(buffer == std::string{"\x82\xa1\x61\x93\x01\x02\x03\xa1\x63\xa3txt", 13});
+
+      glz::generic_u64 out;
+      expect(not glz::read_msgpack(out, buffer));
+      std::string dumped{};
+      expect(not glz::write_json(out, dumped));
+      expect(dumped == R"({"a":[1,2,3],"c":"txt"})");
+   };
+
+   "generic round-trips every JSON value category"_test = [] {
+      const std::string json =
+         R"({"null":null,"true":true,"false":false,"int":64,"neg":-7,"double":6.28,"str":"text","arr":[1,"two",null],"obj":{"k":1}})";
+      glz::generic_u64 g;
+      expect(not glz::read_json(g, json));
+
+      std::string buffer{};
+      expect(not glz::write_msgpack(g, buffer));
+      // Smaller than the JSON it came from, which the variant wrapper's per-element type name was not
+      expect(buffer.size() < json.size());
+
+      glz::generic_u64 out;
+      expect(not glz::read_msgpack(out, buffer));
+      expect(out["int"].is_uint64());
+      expect(out["neg"].is_int64());
+      expect(out["double"].is_double());
+
+      std::string dumped{};
+      expect(not glz::write_json(out, dumped));
+      expect(dumped == json);
+   };
+
+   "which numeric alternative an integer lands in follows the mode"_test = [] {
+      glz::generic_u64 wide;
+      wide.data = (std::numeric_limits<uint64_t>::max)();
+      std::string buffer{};
+      expect(not glz::write_msgpack(wide, buffer));
+
+      glz::generic_u64 as_u64;
+      expect(not glz::read_msgpack(as_u64, buffer));
+      expect(as_u64.is_uint64());
+      expect(as_u64.get<uint64_t>() == (std::numeric_limits<uint64_t>::max)());
+
+      // No exact alternative for that magnitude in i64 mode, so it falls back to double
+      glz::generic_i64 as_i64;
+      expect(not glz::read_msgpack(as_i64, buffer));
+      expect(as_i64.is_double());
+
+      glz::generic as_f64;
+      expect(not glz::read_msgpack(as_f64, buffer));
+      expect(as_f64.is_number());
+   };
+
+   "every generic mode round trips"_test = [] {
+      const std::string json = R"({"a":-7,"b":[1,2.5,null,true,"s"],"c":{},"d":[]})";
+
+      glz::generic as_f64;
+      expect(not glz::read_json(as_f64, json));
+      std::string buffer{};
+      expect(not glz::write_msgpack(as_f64, buffer));
+      glz::generic f64_out;
+      expect(not glz::read_msgpack(f64_out, buffer));
+      std::string dumped{};
+      expect(not glz::write_json(f64_out, dumped));
+      expect(dumped == R"({"a":-7,"b":[1,2.5,null,true,"s"],"c":{},"d":[]})");
+
+      glz::generic_i64 as_i64;
+      expect(not glz::read_json(as_i64, json));
+      buffer.clear();
+      expect(not glz::write_msgpack(as_i64, buffer));
+      glz::generic_i64 i64_out;
+      expect(not glz::read_msgpack(i64_out, buffer));
+      expect(i64_out["a"].is_int64());
+      dumped.clear();
+      expect(not glz::write_json(i64_out, dumped));
+      expect(dumped == json);
+   };
+
+   // The readers build the alternative separately and move it in, so a value that fails to parse is
+   // left as it was rather than half-filled.
+   "a failed read leaves the destination untouched"_test = [] {
+      glz::generic_u64 out;
+      out.data = std::string{"unchanged"};
+      // fixarray(1) with the element truncated away
+      expect(glz::read_msgpack(out, std::string{"\x91", 1}));
+      expect(out.is_string());
+      expect(out.get<std::string>() == "unchanged");
+   };
+
+   "a MessagePack item with no JSON counterpart is rejected"_test = [] {
+      glz::generic_u64 out;
+      expect(glz::read_msgpack(out, std::string{"\xc4\x01\x00", 3})); // bin8
+      expect(glz::read_msgpack(out, std::string{"\xd4\x00\x00", 3})); // fixext1
+   };
+};
+
+// glz::cast and other glaze_value_t wrappers hand the already-read type byte to the wrapped
+// reader by turning on no_header. That says the tag of THAT value was consumed, not the tags of its
+// children -- leaving it set made the header-reading parse overload not viable one level down, so
+// any such wrapper around a container or an aggregate failed to compile on read.
+namespace value_wrapper
+{
+   struct point
+   {
+      int x{};
+      int y{};
+   };
+
+   struct wraps_container
+   {
+      std::vector<int> v{};
+   };
+
+   struct wraps_struct
+   {
+      point p{};
+   };
+}
+
+template <>
+struct glz::meta<value_wrapper::wraps_container>
+{
+   using T = value_wrapper::wraps_container;
+   static constexpr auto value = &T::v;
+};
+
+template <>
+struct glz::meta<value_wrapper::wraps_struct>
+{
+   using T = value_wrapper::wraps_struct;
+   static constexpr auto value = &T::p;
+};
+
+suite msgpack_glaze_value_wrapper_tests = [] {
+   "a glaze_value_t wrapping a container reads back"_test = [] {
+      using namespace value_wrapper;
+      std::string buffer{};
+      expect(not glz::write_msgpack(wraps_container{{1, 2, 3}}, buffer));
+      wraps_container out{};
+      expect(not glz::read_msgpack(out, buffer));
+      expect(out.v == std::vector<int>{1, 2, 3});
+   };
+
+   "a glaze_value_t wrapping a struct reads back"_test = [] {
+      using namespace value_wrapper;
+      std::string buffer{};
+      expect(not glz::write_msgpack(wraps_struct{{4, 5}}, buffer));
+      wraps_struct out{};
+      expect(not glz::read_msgpack(out, buffer));
+      expect(out.p.x == 4);
+      expect(out.p.y == 5);
    };
 };
 

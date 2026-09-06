@@ -150,6 +150,24 @@ std::chrono::milliseconds decoded{};
 glz::read_msgpack(decoded, buffer); // decoded.count() == 12345
 ```
 
+## Variants and `glz::generic`
+
+A `std::variant` is written as the two element array `[index, value]`, where `index` is the active alternative's index. `glz::meta`'s `tag` and `ids` are deliberately not used here: an id is only a name when you declare one, and without a declaration it falls back to the compiler's spelling of the type, which differs between compilers. An index is the same everywhere.
+
+> **Wire format change.** Glaze 8.3.0 and earlier wrote the id rather than the index, so msgpack containing a variant written by an older Glaze will not read back.
+
+`glz::generic` (and the other generic types) is not wrapped at all: its alternatives are exactly the JSON value categories, which MessagePack already distinguishes in its own type byte, so it is written and read as plain MessagePack data that any MessagePack implementation can consume.
+
+```cpp
+glz::generic_u64 value;
+auto ec = glz::read_json(value, R"({"a":[1,2,3],"c":"text"})");
+
+std::string buffer;
+ec = glz::write_msgpack(value, buffer); // fixmap(2), no per-element type information
+```
+
+Reading into a `glz::generic` accepts every MessagePack type that has a JSON counterpart. `bin`, `ext` (including the timestamp extension), and the reserved `0xC1` do not, and fail with `error_code::syntax_error`; read those into the type that models them, such as `glz::msgpack::ext`.
+
 ## Recursion Depth
 
 A `fixarray` or `fixmap` nesting level costs a single byte, so a small hostile buffer could otherwise drive the reader deep enough to overflow the stack. The readers and the value skipper cap nesting at `max_recursive_depth_limit` (256 levels) and return `error_code::exceeded_max_recursive_depth` beyond it. Structs are written as arrays, so a struct holding a vector of itself counts two levels per struct and reaches the cap at 128 struct levels.

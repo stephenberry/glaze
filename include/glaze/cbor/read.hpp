@@ -10,6 +10,7 @@
 #include "glaze/core/read.hpp"
 #include "glaze/core/reflect.hpp"
 #include "glaze/file/file_ops.hpp"
+#include "glaze/json/generic_fwd.hpp"
 #include "glaze/util/dump.hpp"
 #include "glaze/util/for_each.hpp"
 
@@ -2625,6 +2626,112 @@ namespace glz
          if (bool(ctx.error)) [[unlikely]]
             return;
          wrapper.value = tp;
+      }
+   };
+
+   // Generic JSON value -- resolve the alternative from CBOR's own major type.
+   //
+   // The counterpart of to<CBOR, generic_json>: the value is a bare CBOR item with no variant
+   // wrapper, and CBOR's major type already names the JSON value category it belongs to. Which
+   // numeric alternative an integer lands in follows the JSON reader, where the alternatives are
+   // tried in declaration order: the widest exact one for the mode, falling back to double when the
+   // magnitude does not fit.
+   template <num_mode Mode, template <class> class MapType>
+   struct from<CBOR, generic_json<Mode, MapType>> final
+   {
+      template <auto Opts>
+      static void op(auto& value, is_context auto& ctx, auto& it, auto end) noexcept
+      {
+         using namespace cbor;
+
+         if (it >= end) [[unlikely]] {
+            ctx.error = error_code::unexpected_end;
+            return;
+         }
+
+         using array_t = typename generic_json<Mode, MapType>::array_t;
+         using object_t = typename generic_json<Mode, MapType>::object_t;
+
+         // Read into a fresh alternative and move it in, rather than emplacing first and parsing in
+         // place: a failed parse then leaves `value` as it was instead of half-filled.
+         const auto read_into = [&]<class V>(std::type_identity<V>) {
+            V v{};
+            from<CBOR, V>::template op<Opts>(v, ctx, it, end);
+            if (bool(ctx.error)) [[unlikely]] {
+               return;
+            }
+            value.data = std::move(v);
+         };
+
+         // Peek only: every reader below consumes the head itself.
+         const uint8_t initial = static_cast<uint8_t>(*it);
+         switch (get_major_type(initial)) {
+         case major::uint:
+         case major::nint: {
+            // Decoded here rather than delegated: the integer readers reject a magnitude that does
+            // not fit their target, and no alternative but double is left to fall back to -- and the
+            // floating point reader in turn rejects an integer major type, so it cannot be handed the
+            // same bytes. One decode of the argument answers both questions.
+            const bool negative = get_major_type(initial) == major::nint;
+            ++it;
+            const uint64_t arg = cbor_detail::decode_arg(ctx, it, end, get_additional_info(initial));
+            if (bool(ctx.error)) [[unlikely]] {
+               return;
+            }
+            if (negative) {
+               // A negative head encodes -1 - arg, which is int64_t's whole negative range at
+               // arg == int64_t max and runs past it beyond that. ~arg is that value's bit pattern.
+               if (arg <= static_cast<uint64_t>((std::numeric_limits<int64_t>::max)())) {
+                  assign_number(value, static_cast<int64_t>(~arg));
+               }
+               else {
+                  assign_number(value, -1.0 - static_cast<double>(arg));
+               }
+            }
+            else {
+               assign_number(value, arg);
+            }
+            return;
+         }
+         case major::tstr: {
+            read_into(std::type_identity<std::string>{});
+            return;
+         }
+         case major::array: {
+            read_into(std::type_identity<array_t>{});
+            return;
+         }
+         case major::map: {
+            read_into(std::type_identity<object_t>{});
+            return;
+         }
+         case major::simple: {
+            switch (get_additional_info(initial)) {
+            case simple::false_value:
+            case simple::true_value:
+               read_into(std::type_identity<bool>{});
+               return;
+            case simple::null_value:
+               ++it; // no payload
+               value.data = nullptr;
+               return;
+            case simple::float16:
+            case simple::float32:
+            case simple::float64:
+               read_into(std::type_identity<double>{});
+               return;
+            default:
+               // `undefined`, a break code outside any indefinite item, and the unassigned simple
+               // values have no JSON counterpart.
+               ctx.error = error_code::syntax_error;
+               return;
+            }
+         }
+         default:
+            // Byte strings and semantic tags are CBOR items with no JSON value category.
+            ctx.error = error_code::syntax_error;
+            return;
+         }
       }
    };
 

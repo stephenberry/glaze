@@ -5,6 +5,7 @@
 
 #include <chrono>
 #include <cstring>
+#include <limits>
 #include <ranges>
 #include <string>
 #include <string_view>
@@ -19,6 +20,7 @@
 #include "glaze/core/read.hpp"
 #include "glaze/core/reflect.hpp"
 #include "glaze/file/file_ops.hpp"
+#include "glaze/json/generic_fwd.hpp"
 #include "glaze/msgpack/common.hpp"
 #include "glaze/msgpack/skip.hpp"
 #include "glaze/util/bit_array.hpp"
@@ -199,9 +201,15 @@ namespace glz
                                              end);
       }
 
-      // 4-parameter version without tag - reads header first
+      // 4-parameter version without tag - reads header first.
+      //
+      // Accepts a no_header Opts and clears it for the callee. no_header says that the tag of the
+      // value being read was already consumed and is passed alongside it -- a statement about that
+      // one value, not about its children, which carry their own tags and reach the reader through
+      // here. from<MSGPACK, glaze_value_t> turns it on so that glz::cast's tag overload is viable;
+      // leaving it set made this overload not viable one level down, so a glaze_value_t wrapping a
+      // container or an aggregate failed to compile on read.
       template <auto Opts, class T, is_context Ctx, class It, class End>
-         requires(not check_no_header(Opts))
       GLZ_ALWAYS_INLINE static void op(T&& value, Ctx&& ctx, It& it, const End& end) noexcept
       {
          if constexpr (const_value_v<T>) {
@@ -220,7 +228,8 @@ namespace glz
          }
 
          const uint8_t tag = static_cast<uint8_t>(*it++);
-         from<MSGPACK, std::remove_cvref_t<T>>::template op<Opts>(std::forward<T>(value), tag, ctx, it, end);
+         from<MSGPACK, std::remove_cvref_t<T>>::template op<no_header_off<Opts>()>(std::forward<T>(value), tag, ctx, it,
+                                                                                   end);
       }
    };
 
@@ -1135,43 +1144,26 @@ namespace glz
             ctx.error = error_code::unexpected_end;
             return;
          }
+         // The discriminator is the alternative's index -- see to<MSGPACK, is_variant> for why it is
+         // not the id. A negative or out of range discriminator names no alternative.
          const uint8_t key_tag = static_cast<uint8_t>(*it++);
-         std::string_view type_sv{};
-         if (!msgpack::detail::read_string_view(ctx, key_tag, it, end, type_sv)) {
+         bool is_signed{};
+         int64_t signed_index{};
+         uint64_t unsigned_index{};
+         if (!msgpack::detail::read_integer_value(ctx, key_tag, it, end, is_signed, signed_index, unsigned_index)) {
             return;
          }
-
-         static constexpr auto ids = ids_v<T>;
-         size_t variant_index = static_cast<size_t>(-1);
-         for (size_t i = 0; i < ids.size(); ++i) {
-            if (type_sv == ids[i]) {
-               variant_index = i;
-               break;
-            }
-         }
-
-         if (variant_index >= ids.size()) {
+         if (is_signed || unsigned_index >= std::variant_size_v<T>) {
             ctx.error = error_code::no_matching_variant_type;
             skip_value<MSGPACK>::template op<Opts>(ctx, it, end);
             return;
          }
+         const size_t variant_index = static_cast<size_t>(unsigned_index);
 
-         bool parsed = false;
-         auto try_parse = [&](auto index_constant) {
-            constexpr size_t I = decltype(index_constant)::value;
-            if (variant_index == I) {
-               value.template emplace<I>();
-               parse<MSGPACK>::template op<Opts>(std::get<I>(value), ctx, it, end);
-               parsed = true;
-            }
-         };
-         [&]<size_t... I>(std::index_sequence<I...>) {
-            (try_parse(std::integral_constant<size_t, I>{}), ...);
-         }(std::make_index_sequence<std::variant_size_v<T>>{});
-
-         if (!parsed && ctx.error == error_code::none) {
-            ctx.error = error_code::no_matching_variant_type;
+         if (value.index() != variant_index) {
+            emplace_runtime_variant(value, variant_index);
          }
+         std::visit([&](auto&& v) { parse<MSGPACK>::template op<Opts>(v, ctx, it, end); }, value);
       }
    };
 
@@ -1313,6 +1305,76 @@ namespace glz
          if (msgpack::detail::read_string_view(ctx, tag, it, end, sv)) {
             return;
          }
+      }
+   };
+
+   // Generic JSON value -- resolve the alternative from MessagePack's own type byte.
+   //
+   // The counterpart of to<MSGPACK, generic_json>: the value is a bare MessagePack item with no
+   // variant wrapper, and its type byte already names the JSON value category. Which numeric
+   // alternative an integer lands in follows the JSON reader, where the alternatives are tried in
+   // declaration order: the widest exact one for the mode, falling back to double when the magnitude
+   // does not fit. MessagePack keeps signedness in the type byte, so the choice needs no retry.
+   template <num_mode Mode, template <class> class MapType>
+   struct from<MSGPACK, generic_json<Mode, MapType>> final
+   {
+      template <auto Opts, class Value, is_context Ctx, class It, class End>
+      static void op(Value&& value, uint8_t tag, Ctx&& ctx, It& it, const End& end) noexcept
+      {
+         using array_t = typename generic_json<Mode, MapType>::array_t;
+         using object_t = typename generic_json<Mode, MapType>::object_t;
+
+         // Read into a fresh alternative and move it in, rather than emplacing first and parsing in
+         // place: a failed parse then leaves `value` as it was instead of half-filled.
+         const auto read_into = [&]<class V>(std::type_identity<V>) {
+            V v{};
+            from<MSGPACK, V>::template op<Opts>(v, tag, ctx, it, end);
+            if (bool(ctx.error)) [[unlikely]] {
+               return;
+            }
+            value.data = std::move(v);
+         };
+
+         if (tag == msgpack::nil) {
+            value.data = nullptr;
+            return;
+         }
+         if (tag == msgpack::bool_true || tag == msgpack::bool_false) {
+            read_into(std::type_identity<bool>{});
+            return;
+         }
+         if (tag == msgpack::float32 || tag == msgpack::float64) {
+            read_into(std::type_identity<double>{});
+            return;
+         }
+         if (msgpack::is_fixstr(tag) || tag == msgpack::str8 || tag == msgpack::str16 || tag == msgpack::str32) {
+            read_into(std::type_identity<std::string>{});
+            return;
+         }
+         if (msgpack::is_fixarray(tag) || tag == msgpack::array16 || tag == msgpack::array32) {
+            read_into(std::type_identity<array_t>{});
+            return;
+         }
+         if (msgpack::is_fixmap(tag) || tag == msgpack::map16 || tag == msgpack::map32) {
+            read_into(std::type_identity<object_t>{});
+            return;
+         }
+
+         // MessagePack keeps signedness in the type byte, so the decoded magnitude picks the
+         // alternative outright -- see glz::assign_number.
+         bool is_signed{};
+         int64_t signed_value{};
+         uint64_t unsigned_value{};
+         if (msgpack::detail::read_integer_value(ctx, tag, it, end, is_signed, signed_value, unsigned_value)) {
+            if (is_signed) {
+               assign_number(value, signed_value);
+            }
+            else {
+               assign_number(value, unsigned_value);
+            }
+         }
+         // read_integer_value already reported the type byte it could not account for -- binary,
+         // extension, and the reserved 0xC1 have no JSON value category.
       }
    };
 
