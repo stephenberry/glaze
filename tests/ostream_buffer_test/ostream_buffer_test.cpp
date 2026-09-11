@@ -962,10 +962,12 @@ suite documentation_example_tests = [] {
    };
 };
 
-// Regression: dump_newline_indent must not overflow a bounded (non-vector-like)
-// ostream_buffer when prettify inserts a newline + indent near the buffer's end.
-// Exercises the generic-json write path (glz::generic_u64), which does not grow a
-// bounded buffer before writing indentation. The prettified stream output must
+// Regression: the memset destination in dump_newline_indent must respect an ostream_buffer's flush
+// offset. An ostream_buffer indexes logically while data() returns the physical base, so once a
+// flush slides the window, an indent written through data() + ix lands past the physical end.
+// The generic-json writer is what reaches that path: it indents through dump_newline_indent/dumpn,
+// which go through data_at(). The reflected writers indent through &b[ix] instead, and operator[]
+// already subtracts the flush offset, so they never saw this. The prettified stream output must
 // byte-match the in-memory (std::string) output.
 namespace
 {
@@ -976,8 +978,9 @@ namespace
       key["subject"]["simple"]["origin_uid"] = i;
       key["mergeset"] = glz::generic_u64::object_t{};
 
-      // Vary callstack length per element so element byte-sizes differ and an
-      // indent write eventually lands across the bounded buffer boundary.
+      // Vary nested array length per element so element byte-sizes differ, interleaving the
+      // buffer's growth points with its flush points. Uniform element sizes keep physical storage
+      // ahead of the logical index, which hides the bug.
       glz::generic_u64 cs;
       cs = glz::generic_u64::array_t{};
       auto& csa = cs.get_array();
@@ -1017,15 +1020,17 @@ suite ostream_buffer_prettify_overflow_tests = [] {
       expect(!glz::write<glz::opts{.prettify = true}>(root, reference));
 
       std::ostringstream oss;
-      glz::ostream_buffer<> buf(oss); // default 65536 bounded buffer
+      glz::ostream_buffer<> buf(oss); // default 65536 capacity: flushes once 32KB is unflushed
       auto ec = glz::write<glz::opts{.prettify = true}>(root, buf);
       expect(!ec);
       expect(oss.str() == reference);
    };
 
    "generic prettify deep chain to tiny ostream_buffer matches string output"_test = [] {
-      // Deep nesting => large indent count (n) at the leaf. A bounded buffer that
-      // is not grown before the indent write overflows by ~depth bytes.
+      // Deep nesting => large indent count (n) at the leaf. A chain of single-member objects emits
+      // no separators, so no incremental flush happens here and the offset stays 0: this covers deep
+      // indentation through data_at() on the unflushed path. The two array cases cover the flushed
+      // path.
       glz::generic_u64 root;
       glz::generic_u64* cur = &root;
       for (int d = 0; d < 200; ++d) {
@@ -1051,7 +1056,7 @@ suite ostream_buffer_prettify_overflow_tests = [] {
       expect(!glz::write<glz::opts{.prettify = true}>(root, reference));
 
       std::ostringstream oss;
-      glz::ostream_buffer<512> buf(oss); // small bounded buffer: frequent boundary crossings
+      glz::ostream_buffer<512> buf(oss); // small capacity: frequent flushes
       auto ec = glz::write<glz::opts{.prettify = true}>(root, buf);
       expect(!ec);
       expect(oss.str() == reference);

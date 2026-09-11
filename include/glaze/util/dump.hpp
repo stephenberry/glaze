@@ -4,6 +4,7 @@
 #pragma once
 
 #include <bit>
+#include <cassert>
 #include <cstddef>
 #include <cstring>
 #include <span>
@@ -63,15 +64,15 @@ namespace glz
       }
    }
 
-   // The address of the write position, formed without subscripting so that a full buffer
-   // (ix == size()) yields a one-past-the-end pointer instead of an out of range access. A memset or
-   // memcpy of zero bytes through that pointer is well defined, so a length of zero needs no branch.
-   // Buffers whose data() maps to a nonzero logical position (streaming buffers that
-   // flush a prefix and slide their window) report that offset here so data_at() can
-   // translate a logical index into physical storage.
+   // Buffers whose data() maps to a nonzero logical position (streaming buffers that flush a prefix
+   // and slide their window) report that offset here, so that data_at() can translate a logical
+   // index into physical storage the way operator[] already does.
    template <class T>
    concept has_data_offset = requires(const T& t) { t.data_offset(); };
 
+   // The address of the write position, formed without subscripting so that a full buffer
+   // (ix == size()) yields a one-past-the-end pointer instead of an out of range access. A memset or
+   // memcpy of zero bytes through that pointer is well defined, so a length of zero needs no branch.
    template <class B>
    GLZ_ALWAYS_INLINE auto data_at(B& b, const size_t ix) noexcept
    {
@@ -82,6 +83,7 @@ namespace glz
          static_assert(has_data<std::remove_cvref_t<B>>,
                        "an output buffer must be contiguous: dump writes through memset and memcpy");
          if constexpr (has_data_offset<std::remove_cvref_t<B>>) {
+            assert(ix >= b.data_offset() && "Index before flush offset");
             return b.data() + (ix - b.data_offset());
          }
          else {
