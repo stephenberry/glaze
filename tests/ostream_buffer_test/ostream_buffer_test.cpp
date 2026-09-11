@@ -1012,6 +1012,22 @@ namespace
    }
 }
 
+// The reflected writers indent through &b[ix], whose operator[] already maps a logical index onto
+// the sliding window, so they take a different path to the same output as the generic writer above.
+// Reflected types must have linkage, so this cannot live in an anonymous namespace.
+struct prettify_leaf
+{
+   std::string label{};
+   std::vector<uint64_t> samples{};
+};
+
+struct prettify_node
+{
+   uint64_t id{};
+   std::string note{};
+   std::vector<prettify_leaf> leaves{};
+};
+
 suite ostream_buffer_prettify_overflow_tests = [] {
    "generic prettify to default ostream_buffer matches string output"_test = [] {
       glz::generic_u64 root = make_nested_array(20000);
@@ -1045,6 +1061,35 @@ suite ostream_buffer_prettify_overflow_tests = [] {
       std::ostringstream oss;
       glz::ostream_buffer<512> buf(oss);
       auto ec = glz::write<glz::opts{.prettify = true}>(root, buf);
+      expect(!ec);
+      expect(oss.str() == reference);
+   };
+
+   "reflected prettify to small ostream_buffer matches string output"_test = [] {
+      // Vary the per-element byte size so the buffer's growth points interleave with its flush
+      // points, which is what makes a stale flush offset visible in the output.
+      std::vector<prettify_node> nodes;
+      for (uint64_t i = 0; i < 2000; ++i) {
+         prettify_node node;
+         node.id = i;
+         node.note = std::string(size_t(i % 29) + 1, 'z');
+         for (uint64_t d = 0; d < (i % 5); ++d) {
+            prettify_leaf leaf;
+            leaf.label = std::string(size_t((i + d) % 11) + 1, 'w');
+            for (uint64_t v = 0; v <= d; ++v) {
+               leaf.samples.push_back(i * 7 + v);
+            }
+            node.leaves.push_back(std::move(leaf));
+         }
+         nodes.push_back(std::move(node));
+      }
+
+      std::string reference;
+      expect(!glz::write<glz::opts{.prettify = true}>(nodes, reference));
+
+      std::ostringstream oss;
+      glz::ostream_buffer<512> buf(oss);
+      auto ec = glz::write<glz::opts{.prettify = true}>(nodes, buf);
       expect(!ec);
       expect(oss.str() == reference);
    };
