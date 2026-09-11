@@ -625,13 +625,13 @@ namespace ambiguous_nest
 
    struct left
    {
-      std::vector<node> child{};
+      std::vector<node> child;
       int l{};
    };
 
    struct right
    {
-      std::vector<node> child{};
+      std::vector<node> child;
       int r{};
    };
 
