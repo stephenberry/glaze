@@ -890,7 +890,9 @@ namespace glz
                      return;
                   }
                   value.resize(old_size + static_cast<size_t>(chunk_len));
-                  std::memcpy(value.data() + old_size, it, chunk_len);
+                  if (chunk_len > 0) {
+                     std::memcpy(value.data() + old_size, it, chunk_len);
+                  }
                }
                else {
                   // Fixed-size std::array<std::byte, N>: accumulate with bounds checking.

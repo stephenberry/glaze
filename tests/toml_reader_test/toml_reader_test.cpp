@@ -623,6 +623,10 @@ namespace ambiguous_nest
 {
    struct node;
 
+   // `child` deliberately has no `{}` initializer: an NSDMI is parsed in the class definition, so
+   // `std::vector<node> child{}` would resolve list-initialization while `node` is still
+   // incomplete, which newer libstdc++ rejects. The recursion is mutual, so `node` cannot be
+   // completed first. Default construction is identical either way -- do not add the braces back.
    struct left
    {
       std::vector<node> child;
@@ -631,7 +635,7 @@ namespace ambiguous_nest
 
    struct right
    {
-      std::vector<node> child;
+      std::vector<node> child; // no `{}` -- see the note on `left` above
       int r{};
    };
 

@@ -3917,6 +3917,27 @@ suite cbor_byte_and_char_array_tests = [] {
       expect(dst == src);
    };
 
+   // An empty payload into a default-constructed vector leaves data() null, and memcpy is not
+   // allowed a null argument even for a zero count. Both the definite and the indefinite byte
+   // string reach that memcpy, so both are covered here -- this is a UBSan-only failure.
+   "cbor empty byte string does not memcpy from a null pointer"_test = [] {
+      {
+         std::vector<std::byte> dst{}; // data() == nullptr
+         expect(not glz::read_cbor(dst, std::string("\x40", 1))); // bstr(0)
+         expect(dst.empty());
+      }
+      {
+         std::vector<std::byte> dst{};
+         expect(not glz::read_cbor(dst, std::string("\x5F\x40\xFF", 3))); // bstr(*) { bstr(0) }
+         expect(dst.empty());
+      }
+      {
+         std::vector<std::byte> dst{};
+         expect(not glz::read_cbor(dst, std::string("\x5F\xFF", 2))); // bstr(*) {}
+         expect(dst.empty());
+      }
+   };
+
    "cbor std::array<std::byte, N> round trips"_test = [] {
       std::array<std::byte, 4> src{std::byte{1}, std::byte{2}, std::byte{3}, std::byte{4}};
       std::string buffer{};
