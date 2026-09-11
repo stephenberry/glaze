@@ -939,7 +939,9 @@ namespace glz
                   return;
                }
                value.resize(static_cast<size_t>(length));
-               std::memcpy(value.data(), it, length);
+               if (length > 0) {
+                  std::memcpy(value.data(), it, length);
+               }
             }
             else {
                // Fixed-size std::array<std::byte, N>: bounds-check, copy, zero-fill remainder.

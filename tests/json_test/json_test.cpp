@@ -14830,6 +14830,11 @@ suite member_function_pointer_serialization = [] {
       // MSVC produces fully qualified type names with calling convention
       expect(buffer.find("MemberFunctionThing") != std::string::npos && buffer.find("test_item") != std::string::npos)
          << buffer;
+#elif defined(__clang__) && defined(__GLIBCXX__)
+      // Clang printing libstdc++ types strips the __cxx11 inline namespace regardless of ABI.
+      expect(buffer ==
+             R"({"name":"test_item","description":"std::basic_string<char> (MemberFunctionThing::*)() const"})")
+         << buffer;
 #else
       expect(buffer == R"({"name":"test_item","description":"std::string (MemberFunctionThing::*)() const"})")
          << buffer;
