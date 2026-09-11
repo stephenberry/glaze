@@ -100,6 +100,14 @@ namespace glz
          logical_size_ = new_size;
       }
 
+      // Growth policy for the sliding window (called through buffer_traits::grow).
+      // `required` is a logical end position, and the logical index climbs with the document while
+      // only the unflushed window lives in memory. Doubling `required` the way a vector-like buffer
+      // does would therefore size storage to the document. Reserve the window the write needs plus
+      // a slack of half the configured capacity, which keeps memory bounded by that capacity while
+      // still amortizing the resize calls across many writes.
+      void grow(size_t required) { resize(required + DefaultCapacity / 2); }
+
       // Final flush - called by buffer_traits::finalize()
       void finalize(size_t total_written)
       {
@@ -180,9 +188,11 @@ namespace glz
 
       GLZ_ALWAYS_INLINE static bool ensure_capacity(basic_ostream_buffer<Stream, N>& b, size_t needed)
       {
-         b.resize(needed);
+         b.grow(needed);
          return true;
       }
+
+      GLZ_ALWAYS_INLINE static void grow(basic_ostream_buffer<Stream, N>& b, size_t required) { b.grow(required); }
 
       GLZ_ALWAYS_INLINE static void finalize(basic_ostream_buffer<Stream, N>& b, size_t written)
       {

@@ -98,7 +98,7 @@ namespace glz
       else {
          if constexpr (vector_like<Buffer>) {
             if (const auto k = ix + n; k > b.size()) [[unlikely]] {
-               b.resize(2 * k);
+               grow_buffer(b, k);
             }
          }
 

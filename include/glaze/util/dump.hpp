@@ -11,6 +11,7 @@
 #include <string_view>
 
 #include "glaze/concepts/container_concepts.hpp"
+#include "glaze/core/buffer_traits.hpp"
 #include "glaze/core/opts.hpp"
 #include "glaze/util/convert.hpp"
 
@@ -24,7 +25,7 @@ namespace glz
    {
       if constexpr (vector_like<B>) {
          if (const auto k = ix + N; k > b.size()) [[unlikely]] {
-            b.resize(2 * k);
+            grow_buffer(b, k);
          }
       }
    }
@@ -34,7 +35,7 @@ namespace glz
    {
       if constexpr (vector_like<B>) {
          if (const auto k = ix + n; k > b.size()) [[unlikely]] {
-            b.resize(2 * k);
+            grow_buffer(b, k);
          }
       }
    }
@@ -111,7 +112,7 @@ namespace glz
    {
       if constexpr (Checked && vector_like<B>) {
          if (ix == b.size()) [[unlikely]] {
-            b.resize(b.size() == 0 ? 128 : b.size() * 2);
+            grow_buffer(b, b.size() == 0 ? 64 : ix + 1);
          }
       }
       assign_maybe_cast(c, b, ix);
@@ -123,7 +124,7 @@ namespace glz
    {
       if constexpr (Checked && vector_like<B>) {
          if (ix == b.size()) [[unlikely]] {
-            b.resize(b.size() == 0 ? 128 : b.size() * 2);
+            grow_buffer(b, b.size() == 0 ? 64 : ix + 1);
          }
       }
       assign_maybe_cast<c>(b, ix);
@@ -140,7 +141,7 @@ namespace glz
          if constexpr (Checked) {
             const auto k = ix + n;
             if (k > b.size()) [[unlikely]] {
-               b.resize(2 * k);
+               grow_buffer(b, k);
             }
          }
       }
@@ -156,7 +157,7 @@ namespace glz
          if constexpr (Checked) {
             const auto k = ix + n;
             if (ix + n > b.size()) [[unlikely]] {
-               b.resize(2 * k);
+               grow_buffer(b, k);
             }
          }
       }
@@ -171,7 +172,7 @@ namespace glz
       if constexpr (vector_like<B>) {
          const auto k = ix + n;
          if (k > b.size()) [[unlikely]] {
-            b.resize(2 * k);
+            grow_buffer(b, k);
          }
       }
       std::memset(data_at(b, ix), c, n);
@@ -184,7 +185,7 @@ namespace glz
       if constexpr (vector_like<B>) {
          const auto k = ix + n;
          if (k > b.size()) [[unlikely]] {
-            b.resize(2 * k);
+            grow_buffer(b, k);
          }
       }
       std::memset(data_at(b, ix), c, n);
@@ -215,7 +216,7 @@ namespace glz
    {
       if constexpr (vector_like<B>) {
          if (const auto k = ix + n + write_padding_bytes; k > b.size()) [[unlikely]] {
-            b.resize(2 * k);
+            grow_buffer(b, k);
          }
       }
 
@@ -231,7 +232,7 @@ namespace glz
    {
       if constexpr (vector_like<B>) {
          if (const auto k = ix + n + write_padding_bytes; k > b.size()) [[unlikely]] {
-            b.resize(2 * k);
+            grow_buffer(b, k);
          }
       }
 
@@ -251,7 +252,7 @@ namespace glz
          if constexpr (Checked) {
             const auto k = ix + n;
             if (k > b.size()) [[unlikely]] {
-               b.resize(2 * k);
+               grow_buffer(b, k);
             }
          }
       }
@@ -267,7 +268,7 @@ namespace glz
          if constexpr (Checked) {
             const auto k = ix + n;
             if (k > b.size()) [[unlikely]] {
-               b.resize(2 * k);
+               grow_buffer(b, k);
             }
          }
       }
@@ -284,7 +285,7 @@ namespace glz
             if constexpr (Checked) {
                const auto k = ix + n;
                if (k > b.size()) [[unlikely]] {
-                  b.resize(2 * k);
+                  grow_buffer(b, k);
                }
             }
          }
@@ -300,7 +301,7 @@ namespace glz
       if constexpr (vector_like<B>) {
          const auto k = ix + n;
          if (k > b.size()) [[unlikely]] {
-            b.resize(2 * k);
+            grow_buffer(b, k);
          }
       }
       std::memcpy(&b[ix], bytes.data(), n);
@@ -313,7 +314,7 @@ namespace glz
       if constexpr (vector_like<B>) {
          const auto k = ix + N;
          if (k > b.size()) [[unlikely]] {
-            b.resize(2 * k);
+            grow_buffer(b, k);
          }
       }
       std::memcpy(&b[ix], bytes.data(), N);
