@@ -4705,6 +4705,18 @@ namespace cbor_variant_shapes
       bool operator==(const dash&) const = default;
    };
    using internal_t = std::variant<dot, dash>;
+
+   struct idot
+   {
+      int n{};
+      bool operator==(const idot&) const = default;
+   };
+   struct idash
+   {
+      int n{};
+      bool operator==(const idash&) const = default;
+   };
+   using int_ids_t = std::variant<idot, idash>;
 }
 
 template <>
@@ -4720,6 +4732,14 @@ struct glz::meta<cbor_variant_shapes::internal_t>
 {
    static constexpr std::string_view tag = "kind";
    static constexpr std::array<std::string_view, 2> ids{"dot", "dash"};
+};
+
+template <>
+struct glz::meta<cbor_variant_shapes::int_ids_t>
+{
+   static constexpr std::string_view tag = "kind";
+   static constexpr std::string_view content = "data";
+   static constexpr std::array<int, 2> ids{7, 9};
 };
 
 // A variant takes the shape glz::meta declares, as it does in JSON and BEVE. The [index, value]
@@ -4832,6 +4852,67 @@ suite cbor_variant_tagging = [] {
       std::variant<int, std::string> decoded{std::string{"keep"}};
       expect(glz::read_cbor(decoded, std::string{"\xa0", 1}) == glz::error_code::no_matching_variant_type);
       expect(std::get<std::string>(decoded) == "keep");
+   };
+
+   "adjacent tagging requires the content key"_test = [] {
+      std::string buffer; // { "kind" : "circle", "kind" : "circle" } -- two entries, no content
+      buffer.push_back(char(0xa2));
+      for (int i = 0; i < 2; ++i) {
+         buffer.push_back(char(0x64));
+         buffer += "kind";
+         buffer.push_back(char(0x66));
+         buffer += "circle";
+      }
+      adjacent_t decoded{square{9.0}};
+      expect(glz::read_cbor(decoded, buffer) == glz::error_code::missing_key);
+      expect(std::holds_alternative<square>(decoded)); // rejected before the destination is disturbed
+   };
+
+   // Indefinite-length maps are what a streaming CBOR encoder emits, and the object reader already
+   // accepts them, so a tagged variant must too.
+   "an indefinite-length map reads as a tagged variant"_test = [] {
+      std::string buffer; // bf "kind" "dash" "n" 05 ff
+      buffer.push_back(char(0xbf));
+      buffer.push_back(char(0x64));
+      buffer += "kind";
+      buffer.push_back(char(0x64));
+      buffer += "dash";
+      buffer.push_back(char(0x61));
+      buffer += "n";
+      buffer.push_back(char(0x05));
+      buffer.push_back(char(0xff));
+
+      internal_t decoded{};
+      expect(not glz::read_cbor(decoded, buffer));
+      expect(decoded == internal_t{dash{5}});
+   };
+
+   // The float reader accepts an integer, but only as a conversion: resolution runs a strict pass
+   // first so `double` cannot claim a value `int64_t` holds exactly.
+   "an exact alternative wins over a converting one"_test = [] {
+      std::variant<double, int64_t> v{int64_t{42}};
+      std::string buffer{};
+      expect(not glz::write_cbor(v, buffer));
+      std::variant<double, int64_t> decoded{};
+      expect(not glz::read_cbor(decoded, buffer));
+      expect(decoded.index() == 1);
+      expect(std::get<int64_t>(decoded) == 42);
+
+      std::variant<double, int64_t> f{2.5};
+      buffer.clear();
+      expect(not glz::write_cbor(f, buffer));
+      expect(not glz::read_cbor(decoded, buffer));
+      expect(decoded.index() == 0);
+   };
+
+   // glz::meta may declare ids as integrals rather than strings; both readers accept either.
+   "integral ids round trip"_test = [] {
+      int_ids_t v{idash{5}};
+      std::string buffer{};
+      expect(not glz::write_cbor(v, buffer));
+      int_ids_t decoded{};
+      expect(not glz::read_cbor(decoded, buffer));
+      expect(decoded == v);
    };
 };
 

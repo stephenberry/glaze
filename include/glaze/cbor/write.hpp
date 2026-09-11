@@ -584,13 +584,14 @@ namespace glz
       template <auto Opts>
       static void op(auto&& value, is_context auto&& ctx, auto&& b, auto& ix)
       {
-         write_members<Opts>(value, ctx, b, ix, 0, [] {});
+         write_members<Opts>(value, ctx, b, ix, [] {});
       }
 
       // Writes the members, with `prefix` emitted first so an internally tagged variant can splice
-      // its discriminator into the same map. `extra` is how many entries `prefix` adds to the header.
-      template <auto Opts>
-      static void write_members(auto&& value, is_context auto&& ctx, auto&& b, auto& ix, size_t extra, auto&& prefix)
+      // its discriminator into the same map. `Extra` is how many entries `prefix` adds to the header,
+      // so the count stays a compile-time constant and an ordinary object write keeps its fast path.
+      template <auto Opts, size_t Extra = 0>
+      static void write_members(auto&& value, is_context auto&& ctx, auto&& b, auto& ix, auto&& prefix)
       {
          [[maybe_unused]] decltype(auto) t = [&]() -> decltype(auto) {
             if constexpr (reflectable<T>) {
@@ -674,13 +675,15 @@ namespace glz
             });
 
             // Write map header with dynamic count
-            if (!cbor_detail::encode_arg(ctx, cbor::major::map, member_count + extra, b, ix)) [[unlikely]] {
+            if (!cbor_detail::encode_arg(ctx, cbor::major::map, member_count + Extra, b, ix)) [[unlikely]] {
                return;
             }
 
-            prefix();
-            if (bool(ctx.error)) [[unlikely]] {
-               return;
+            if constexpr (Extra) {
+               prefix();
+               if (bool(ctx.error)) [[unlikely]] {
+                  return;
+               }
             }
 
             // Second pass: write members
@@ -780,19 +783,16 @@ namespace glz
          }
          else {
             // Static path: use compile-time count for better performance
-            if (extra == 0) {
-               if (!cbor_detail::encode_arg_cx<count_to_write<Opts>()>(ctx, cbor::major::map, b, ix)) [[unlikely]] {
-                  return;
-               }
-            }
-            else if (!cbor_detail::encode_arg(ctx, cbor::major::map, count_to_write<Opts>() + extra, b, ix))
+            if (!cbor_detail::encode_arg_cx<count_to_write<Opts>() + Extra>(ctx, cbor::major::map, b, ix))
                [[unlikely]] {
                return;
             }
 
-            prefix();
-            if (bool(ctx.error)) [[unlikely]] {
-               return;
+            if constexpr (Extra) {
+               prefix();
+               if (bool(ctx.error)) [[unlikely]] {
+                  return;
+               }
             }
 
             for_each<N>([&]<size_t I>() {
@@ -947,20 +947,6 @@ namespace glz
    {
       static constexpr auto tagging = variant_tagging_v<T>;
 
-      // `ids` may declare fewer entries than the variant has alternatives -- the readers treat the
-      // first unlabeled alternative as the default for an unrecognized id -- so an alternative past
-      // the end of `ids` has no id to write. Indexing there reads past a static array. A valueless
-      // variant has no alternative to name at all.
-      static bool missing_id(auto&& value, is_context auto&& ctx)
-      {
-         if (value.index() >= ids_v<T>.size()) [[unlikely]] {
-            ctx.error = error_code::no_matching_variant_type;
-            ctx.custom_error_message = variant_ids_string_v<T>;
-            return true;
-         }
-         return false;
-      }
-
       static bool write_str(is_context auto& ctx, const sv str, auto&& b, auto& ix)
       {
          if (!cbor_detail::encode_arg(ctx, cbor::major::tstr, str.size(), b, ix)) [[unlikely]] {
@@ -976,6 +962,18 @@ namespace glz
          return true;
       }
 
+      // glz::meta may declare `ids` as strings or as integrals; the readers accept both.
+      template <auto Opts>
+      static void write_id(is_context auto& ctx, const size_t index, auto&& b, auto& ix)
+      {
+         if constexpr (std::integral<std::decay_t<decltype(ids_v<T>[0])>>) {
+            serialize<CBOR>::op<Opts>(ids_v<T>[index], ctx, b, ix);
+         }
+         else {
+            write_str(ctx, ids_v<T>[index], b, ix);
+         }
+      }
+
       template <auto Opts>
       static void op(auto&& value, is_context auto&& ctx, auto&& b, auto& ix)
       {
@@ -987,7 +985,7 @@ namespace glz
             std::visit([&](auto&& v) { serialize<CBOR>::op<Opts>(v, ctx, b, ix); }, value);
          }
          else if constexpr (tagging == variant_tagging_kind::adjacent) {
-            if (missing_id(value, ctx)) [[unlikely]] {
+            if (variant_missing_id<T>(value, ctx)) [[unlikely]] {
                return;
             }
             if (!cbor_detail::encode_arg_cx<2>(ctx, cbor::major::map, b, ix)) [[unlikely]] {
@@ -996,7 +994,8 @@ namespace glz
             if (!write_str(ctx, tag_v<T>, b, ix)) [[unlikely]] {
                return;
             }
-            if (!write_str(ctx, ids_v<T>[value.index()], b, ix)) [[unlikely]] {
+            write_id<Opts>(ctx, value.index(), b, ix);
+            if (bool(ctx.error)) [[unlikely]] {
                return;
             }
             if (!write_str(ctx, content_v<T>, b, ix)) [[unlikely]] {
@@ -1005,10 +1004,10 @@ namespace glz
             std::visit([&](auto&& v) { serialize<CBOR>::op<Opts>(v, ctx, b, ix); }, value);
          }
          else {
-            if (missing_id(value, ctx)) [[unlikely]] {
+            if (variant_missing_id<T>(value, ctx)) [[unlikely]] {
                return;
             }
-            const sv id = ids_v<T>[value.index()];
+            const size_t id_index = value.index();
 
             std::visit(
                [&](auto&& v) {
@@ -1019,7 +1018,7 @@ namespace glz
                      if (!write_str(ctx, tag_v<T>, b, ix)) [[unlikely]] {
                         return;
                      }
-                     write_str(ctx, id, b, ix);
+                     write_id<Opts>(ctx, id_index, b, ix);
                   };
 
                   if constexpr (alternative_declares_key<V>(tag_v<T>)) {
@@ -1041,10 +1040,10 @@ namespace glz
                            ctx.error = error_code::invalid_variant_object;
                            return;
                         }
-                        to<CBOR, X>::template write_members<Opts>(*v, ctx, b, ix, 1, prefix);
+                        to<CBOR, X>::template write_members<Opts, 1>(*v, ctx, b, ix, prefix);
                      }
                      else {
-                        to<CBOR, X>::template write_members<Opts>(v, ctx, b, ix, 1, prefix);
+                        to<CBOR, X>::template write_members<Opts, 1>(v, ctx, b, ix, prefix);
                      }
                   }
                   else {

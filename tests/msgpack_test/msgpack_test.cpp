@@ -691,6 +691,37 @@ suite short_ids_write_guard = [] {
    };
 };
 
+namespace ambiguous
+{
+   // Two alternatives with an identical wire shape at every level: resolution must try both at each
+   // level, which is the shape the speculation budget exists to bound.
+   template <int N>
+   struct a;
+   template <int N>
+   struct b;
+   template <>
+   struct a<0>
+   {
+      double z{};
+   };
+   template <>
+   struct b<0>
+   {
+      double z{};
+   };
+   template <int N>
+   struct a
+   {
+      std::variant<a<N - 1>, b<N - 1>> x{};
+   };
+   template <int N>
+   struct b
+   {
+      std::variant<a<N - 1>, b<N - 1>> x{};
+   };
+   using top = std::variant<a<40>, b<40>>;
+}
+
 namespace variant_shapes
 {
    struct circle
@@ -871,6 +902,80 @@ suite msgpack_variant_tagging = [] {
       std::variant<int, std::string> decoded{std::string{"keep"}};
       expect(glz::read_msgpack(decoded, std::string{"\x80", 1}) == glz::error_code::no_matching_variant_type);
       expect(std::get<std::string>(decoded) == "keep");
+   };
+
+   // Resolving the discriminator is not enough: without the content key there is no value, and
+   // succeeding here would hand back a default-constructed alternative.
+   "adjacent tagging requires the content key"_test = [] {
+      std::string buffer; // { "kind" : "circle", "kind" : "circle" } -- two entries, no content
+      buffer.push_back(char(0x82));
+      for (int i = 0; i < 2; ++i) {
+         buffer.push_back(char(0xa4));
+         buffer += "kind";
+         buffer.push_back(char(0xa6));
+         buffer += "circle";
+      }
+      adjacent_t decoded{square{9.0}};
+      expect(glz::read_msgpack(decoded, buffer) == glz::error_code::missing_key);
+      expect(std::holds_alternative<square>(decoded)); // rejected before the destination is disturbed
+   };
+
+   // An integer is a number, so the floating point reader accepts one -- but only as a conversion.
+   // Resolution runs a strict pass first so `double` cannot claim a value `int64_t` holds exactly.
+   "an exact alternative wins over a converting one"_test = [] {
+      std::variant<double, int64_t> v{int64_t{42}};
+      std::string buffer{};
+      expect(not glz::write_msgpack(v, buffer));
+      std::variant<double, int64_t> decoded{};
+      expect(not glz::read_msgpack(decoded, buffer));
+      expect(decoded.index() == 1);
+      expect(std::get<int64_t>(decoded) == 42);
+
+      // A genuine float still reaches the double alternative.
+      std::variant<double, int64_t> f{2.5};
+      buffer.clear();
+      expect(not glz::write_msgpack(f, buffer));
+      expect(not glz::read_msgpack(decoded, buffer));
+      expect(decoded.index() == 0);
+   };
+
+   // Untagged resolution is speculative, so an ambiguous nest re-parses each subtree per alternative
+   // at every level. The speculation budget bounds that; without it ~100 bytes cost minutes.
+   "an ambiguous nest is bounded rather than exponential"_test = [] {
+      std::string buffer;
+      for (int i = 0; i < 40; ++i) {
+         buffer.push_back(char(0x81));
+         buffer.push_back(char(0xa1));
+         buffer += "x";
+      }
+      buffer.push_back(char(0xa1));
+      buffer += "z"; // a string where a map is required: nothing matches, at any level
+      ambiguous::top decoded{};
+      const auto t0 = std::chrono::steady_clock::now();
+      expect(bool(glz::read_msgpack(decoded, buffer)));
+      const auto ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
+      expect(ms < 2000.0) << ms;
+   };
+
+   // An over-nested or truncated buffer is a property of the input, not of the alternative set.
+   "an input-level failure is reported as itself"_test = [] {
+      std::string deep(400, char(0x91));
+      deep.push_back(char(0x90));
+      glz::generic decoded;
+      expect(glz::read_msgpack(decoded, deep) == glz::error_code::exceeded_max_recursive_depth);
+   };
+
+   // Positional writes have no keys, so adjacent tagging projects to the two element array
+   // [id, value] -- the same projection BEVE makes.
+   "structs_as_arrays projects adjacent tagging positionally"_test = [] {
+      constexpr auto positional = glz::opt_true<glz::opts{.format = glz::MSGPACK}, glz::structs_as_arrays_opt_tag{}>;
+      std::string buffer{};
+      expect(not glz::write<positional>(adjacent_t{square{2.0}}, buffer));
+      expect(static_cast<uint8_t>(buffer[0]) == 0x92); // fixarray(2), not a map
+
+      adjacent_t decoded{};
+      expect(not glz::read<positional>(decoded, buffer));
+      expect(decoded == adjacent_t{square{2.0}});
    };
 };
 

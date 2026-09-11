@@ -615,9 +615,10 @@ namespace glz
       }
 
       // Writes the members, with `prefix` emitted first so an internally tagged variant can splice its
-      // discriminator into the same map. `extra` is how many entries `prefix` adds to the header.
-      template <auto Opts, class Value, is_context Ctx, class B, class IX>
-      GLZ_ALWAYS_INLINE static void write_members(Value&& value, Ctx&& ctx, B&& b, IX&& ix, size_t extra, auto&& prefix)
+      // discriminator into the same map. `Extra` is how many entries `prefix` adds to the header, so
+      // the count stays a compile-time constant and an ordinary object write carries no extra branch.
+      template <auto Opts, size_t Extra = 0, class Value, is_context Ctx, class B, class IX>
+      GLZ_ALWAYS_INLINE static void write_members(Value&& value, Ctx&& ctx, B&& b, IX&& ix, auto&& prefix)
       {
          [[maybe_unused]] decltype(auto) t = [&]() -> decltype(auto) {
             if constexpr (reflectable<T>) {
@@ -628,12 +629,14 @@ namespace glz
             }
          }();
 
-         if (!msgpack::detail::write_map_header(ctx, count_members<Opts>() + extra, b, ix)) [[unlikely]] {
+         if (!msgpack::detail::write_map_header(ctx, count_members<Opts>() + Extra, b, ix)) [[unlikely]] {
             return;
          }
-         prefix();
-         if (bool(ctx.error)) [[unlikely]] {
-            return;
+         if constexpr (Extra) {
+            prefix();
+            if (bool(ctx.error)) [[unlikely]] {
+               return;
+            }
          }
          for_each<N>([&]<size_t I>() {
             if (bool(ctx.error)) [[unlikely]] {
@@ -694,7 +697,7 @@ namespace glz
             });
          }
          else {
-            write_members<Opts>(std::forward<Value>(value), ctx, b, ix, 0, [] {});
+            write_members<Opts>(std::forward<Value>(value), ctx, b, ix, [] {});
          }
       }
    };
@@ -1061,19 +1064,6 @@ namespace glz
       // The tagging representation is a property of the variant, decided once for every alternative.
       static constexpr auto tagging = variant_tagging_v<T>;
 
-      // `ids` may declare fewer entries than the variant has alternatives -- the readers treat the
-      // first unlabeled alternative as the default for an unrecognized id -- so an alternative past
-      // the end of `ids` has no id to write. Indexing there reads past a static array.
-      static bool missing_id(auto&& value, is_context auto&& ctx)
-      {
-         if (value.index() >= ids_v<T>.size()) [[unlikely]] {
-            ctx.error = error_code::no_matching_variant_type;
-            ctx.custom_error_message = variant_ids_string_v<T>;
-            return true;
-         }
-         return false;
-      }
-
       template <class B, class IX>
       GLZ_ALWAYS_INLINE static bool write_str(is_context auto&& ctx, const sv s, B&& b, IX&& ix)
       {
@@ -1081,14 +1071,53 @@ namespace glz
                 msgpack::detail::dump_raw_bytes(ctx, s.data(), s.size(), b, ix);
       }
 
+      // glz::meta may declare `ids` as strings or as integrals; the readers accept both.
+      template <auto Opts, class B, class IX>
+      GLZ_ALWAYS_INLINE static void write_id(is_context auto&& ctx, const size_t index, B&& b, IX&& ix)
+      {
+         if constexpr (std::integral<std::decay_t<decltype(ids_v<T>[0])>>) {
+            serialize<MSGPACK>::op<Opts>(ids_v<T>[index], ctx, b, ix);
+         }
+         else {
+            write_str(ctx, ids_v<T>[index], b, ix);
+         }
+      }
+
       template <auto Opts, class Value, is_context Ctx, class B, class IX>
       static void op(Value&& value, Ctx&& ctx, B&& b, IX&& ix)
       {
          if constexpr (tagging == variant_tagging_kind::none) {
+            // A valueless variant has no alternative to write, and variant_npos is not an index.
+            if (value.index() >= std::variant_size_v<std::remove_cvref_t<Value>>) [[unlikely]] {
+               ctx.error = error_code::no_matching_variant_type;
+               return;
+            }
+            std::visit([&](auto&& v) { serialize<MSGPACK>::op<Opts>(v, ctx, b, ix); }, value);
+         }
+         else if constexpr (check_structs_as_arrays(Opts)) {
+            // Positional writes carry no keys, so adjacent tagging projects to the two element array
+            // [id, value] -- the same projection BEVE makes -- and internal tagging has nothing to
+            // project: its whole mechanism is a key.
+            static_assert(
+               tagging == variant_tagging_kind::adjacent || detail::beve_positional_tagging_needs_content<T>::value,
+               "Positional writes (structs_as_arrays) have no keys, so there is nothing for "
+               "internal tagging to merge a discriminator into. Declare `content` beside "
+               "`tag` in glz::meta to select adjacent tagging, which projects positionally "
+               "to the two element array [id, value].");
+            if (variant_missing_id<T>(value, ctx)) [[unlikely]] {
+               return;
+            }
+            if (!msgpack::detail::write_array_header(ctx, 2, b, ix)) [[unlikely]] {
+               return;
+            }
+            write_id<Opts>(ctx, value.index(), b, ix);
+            if (bool(ctx.error)) [[unlikely]] {
+               return;
+            }
             std::visit([&](auto&& v) { serialize<MSGPACK>::op<Opts>(v, ctx, b, ix); }, value);
          }
          else if constexpr (tagging == variant_tagging_kind::adjacent) {
-            if (missing_id(value, ctx)) [[unlikely]] {
+            if (variant_missing_id<T>(value, ctx)) [[unlikely]] {
                return;
             }
             if (!msgpack::detail::write_map_header(ctx, 2, b, ix)) [[unlikely]] {
@@ -1097,7 +1126,8 @@ namespace glz
             if (!write_str(ctx, tag_v<T>, b, ix)) [[unlikely]] {
                return;
             }
-            if (!write_str(ctx, ids_v<T>[value.index()], b, ix)) [[unlikely]] {
+            write_id<Opts>(ctx, value.index(), b, ix);
+            if (bool(ctx.error)) [[unlikely]] {
                return;
             }
             if (!write_str(ctx, content_v<T>, b, ix)) [[unlikely]] {
@@ -1106,10 +1136,10 @@ namespace glz
             std::visit([&](auto&& v) { serialize<MSGPACK>::op<Opts>(v, ctx, b, ix); }, value);
          }
          else {
-            if (missing_id(value, ctx)) [[unlikely]] {
+            if (variant_missing_id<T>(value, ctx)) [[unlikely]] {
                return;
             }
-            const sv id = ids_v<T>[value.index()];
+            const size_t id_index = value.index();
 
             std::visit(
                [&](auto&& v) {
@@ -1120,7 +1150,7 @@ namespace glz
                      if (!write_str(ctx, tag_v<T>, b, ix)) [[unlikely]] {
                         return;
                      }
-                     write_str(ctx, id, b, ix);
+                     write_id<Opts>(ctx, id_index, b, ix);
                   };
 
                   if constexpr (alternative_declares_key<V>(tag_v<T>)) {
@@ -1142,10 +1172,10 @@ namespace glz
                            ctx.error = error_code::invalid_variant_object;
                            return;
                         }
-                        to<MSGPACK, X>::template write_members<Opts>(*v, ctx, b, ix, 1, prefix);
+                        to<MSGPACK, X>::template write_members<Opts, 1>(*v, ctx, b, ix, prefix);
                      }
                      else {
-                        to<MSGPACK, X>::template write_members<Opts>(v, ctx, b, ix, 1, prefix);
+                        to<MSGPACK, X>::template write_members<Opts, 1>(v, ctx, b, ix, prefix);
                      }
                   }
                   else {

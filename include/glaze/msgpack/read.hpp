@@ -483,17 +483,25 @@ namespace glz
                return;
             }
 
-            bool is_signed{};
-            int64_t signed_value{};
-            uint64_t unsigned_value{};
-            if (!msgpack::detail::read_integer_value(ctx, tag, it, end, is_signed, signed_value, unsigned_value)) {
-               return;
-            }
-            if (is_signed) {
-               value = static_cast<V>(signed_value);
+            // An integer is a number, so a floating point target accepts one -- but only as a
+            // conversion. Variant resolution runs a strict pass first so that `double` cannot claim
+            // a value a later integer alternative holds exactly.
+            if constexpr (check_allow_conversions(Opts)) {
+               bool is_signed{};
+               int64_t signed_value{};
+               uint64_t unsigned_value{};
+               if (!msgpack::detail::read_integer_value(ctx, tag, it, end, is_signed, signed_value, unsigned_value)) {
+                  return;
+               }
+               if (is_signed) {
+                  value = static_cast<V>(signed_value);
+               }
+               else {
+                  value = static_cast<V>(unsigned_value);
+               }
             }
             else {
-               value = static_cast<V>(unsigned_value);
+               ctx.error = error_code::syntax_error;
             }
          }
          else {
@@ -1157,35 +1165,76 @@ namespace glz
       static constexpr auto tagging = variant_tagging_v<T>;
       static constexpr size_t variant_size = std::variant_size_v<T>;
 
-      // Try the alternatives in declaration order, rewinding after each miss. Every MessagePack
-      // reader validates the type byte it was handed, so a wrong alternative fails on the first byte
-      // rather than consuming input. Alternatives that share a wire shape cannot be told apart --
-      // declare a `tag` in glz::meta when that matters.
+      // One pass over the alternatives at a fixed conversion strictness, rewinding after each miss.
+      // Every MessagePack reader validates the type byte it was handed, so a wrong alternative fails
+      // on the first byte rather than consuming input. Alternatives that share a wire shape cannot be
+      // told apart -- declare a `tag` in glz::meta when that matters.
       template <auto Opts, class Value, is_context Ctx, class It, class End>
-      static void try_each(Value&& value, uint8_t tag, Ctx&& ctx, It& it, const End& end) noexcept
+      static bool try_each_pass(Value&& value, uint8_t tag, Ctx&& ctx, It& it, const End& end,
+                                error_code& input_error) noexcept
       {
+         bool matched = false;
+         bool exhausted = false;
          const auto start = it;
-         bool resolved = false;
          for_each<variant_size>([&]<size_t I>() {
-            if (resolved) {
+            if (matched || exhausted || input_error == error_code::exceeded_max_recursive_depth) {
+               // Nesting past the limit is a property of the input: no other alternative can read it,
+               // and re-parsing the subtree per alternative at every level is exponential.
                return;
             }
             using V = std::variant_alternative_t<I, T>;
             it = start;
             ctx.error = error_code::none;
-            ctx.custom_error_message = {};
+            ctx.custom_error_message = {}; // else a rejected alternative's message outlives its error
             // Read into a fresh alternative and move it in, so a miss leaves `value` as it was.
             V v{};
             from<MSGPACK, V>::template op<Opts>(v, tag, ctx, it, end);
-            if (not bool(ctx.error)) {
+            // Charge only what a REJECTED attempt parsed. That is the wasted work the bound is about;
+            // charging the match too would bill every enclosing level for the same bytes and make a
+            // valid nest look exponential.
+            const bool budget_left = bool(ctx.error) ? charge_speculation(ctx, size_t(it - start)) : true;
+            if (!bool(ctx.error)) {
                value.template emplace<I>(std::move(v));
-               resolved = true;
+               matched = true;
+            }
+            else if (ctx.error == error_code::unexpected_end || ctx.error == error_code::exceeded_max_recursive_depth) {
+               input_error = ctx.error;
+            }
+            if (!budget_left) {
+               // Out of speculation budget: keep this alternative's error and stop.
+               exhausted = true;
             }
          });
-         if (not resolved) {
+         if (!matched) {
             it = start;
-            ctx.error = error_code::no_matching_variant_type;
          }
+         return matched;
+      }
+
+      // Resolve an undeclared variant from MessagePack's own type byte.
+      template <auto Opts, class Value, is_context Ctx, class It, class End>
+      static void try_each(Value&& value, uint8_t tag, Ctx&& ctx, It& it, const End& end) noexcept
+      {
+         const auto start = it;
+         error_code input_error{};
+         // Strict first, so a lenient reader cannot claim a value an exact alternative wants: the
+         // floating point reader accepts an integer under allow_conversions, which would otherwise
+         // let `double` take a value that a later `int64_t` alternative holds exactly.
+         if constexpr (check_allow_conversions(Opts)) {
+            if (try_each_pass<opt_false<Opts, allow_conversions_opt_tag{}>>(value, tag, ctx, it, end, input_error)) {
+               return;
+            }
+         }
+         // A lenient retry cannot make over-nested input readable, and running it doubles the work at
+         // every level of a deep nest.
+         if (input_error != error_code::exceeded_max_recursive_depth &&
+             try_each_pass<Opts>(value, tag, ctx, it, end, input_error)) {
+            return;
+         }
+         it = start;
+         // An incomplete or over-nested buffer is a property of the input, not of the alternative set,
+         // so report it as such instead of blaming variant resolution.
+         ctx.error = input_error != error_code::none ? input_error : error_code::no_matching_variant_type;
       }
 
       // Decode the discriminator value at `it` and map it to an alternative index, advancing past it.
@@ -1220,23 +1269,15 @@ namespace glz
             index = variant_id_to_index<T>::op(id.data(), id.data() + id.size(), id.size());
          }
 
-         if (index < ids_v<T>.size()) [[likely]] {
-            return index;
-         }
-         if constexpr (ids_v<T>.size() < variant_size) {
-            // Fewer ids than alternatives: the first unlabeled alternative is the default for an
-            // unrecognized id, matching the BEVE and JSON readers.
-            return ids_v<T>.size();
-         }
-         return variant_size;
+         return variant_index_from_id<T>(index);
       }
 
       // Walk the map once, resolving the discriminator and consuming every entry. `on_content` sees
       // each non-discriminator key and decides whether to parse or skip its value.
       template <auto Opts, class It, class End>
-      static size_t scan_map(is_context auto&& ctx, uint8_t tag, It& it, const End& end, size_t& len,
-                             auto&& on_content) noexcept
+      static size_t scan_map(is_context auto&& ctx, uint8_t tag, It& it, const End& end, auto&& on_content) noexcept
       {
+         size_t len{};
          if (!msgpack::read_map_length(ctx, tag, it, end, len)) {
             return variant_size;
          }
@@ -1268,20 +1309,64 @@ namespace glz
             try_each<Opts>(value, tag, ctx, it, end);
             return;
          }
-         else {
+         else if constexpr (check_structs_as_arrays(Opts)) {
+            // Positional data carries no keys, so an adjacently tagged variant was written as the two
+            // element array [id, value]. Internal tagging cannot be written positionally at all, and
+            // the writer static_asserts on it, so only the adjacent shape reaches here.
             depth_guard guard{ctx};
             if (!guard) [[unlikely]] {
                return;
+            }
+            size_t len{};
+            if (!msgpack::read_array_length(ctx, tag, it, end, len)) {
+               return;
+            }
+            if (len != 2) [[unlikely]] {
+               ctx.error = error_code::invalid_variant_array;
+               return;
+            }
+            const size_t index = resolve_id<Opts>(ctx, it, end);
+            if (bool(ctx.error)) [[unlikely]] {
+               return;
+            }
+            if (index >= variant_size) [[unlikely]] {
+               ctx.error = error_code::no_matching_variant_type;
+               ctx.custom_error_message = variant_ids_string_v<T>;
+               return;
+            }
+            if (value.index() != index) {
+               emplace_runtime_variant(value, index);
+            }
+            std::visit([&](auto&& v) { parse<MSGPACK>::template op<Opts>(v, ctx, it, end); }, value);
+         }
+         else {
+            // The adjacent form is a map this reader consumes itself, so it owns that level. The
+            // internal form hands the same map to the alternative's object reader, which guards it --
+            // counting it here too would halve the nesting a tagged variant is allowed.
+            [[maybe_unused]] depth_guard guard{ctx};
+            if constexpr (tagging == variant_tagging_kind::adjacent) {
+               if (!guard) [[unlikely]] {
+                  return;
+               }
             }
 
             static constexpr auto tag_literal = string_literal_from_view<tag_v<T>.size()>(tag_v<T>);
             const auto start = it;
 
-            // Pass one resolves the discriminator wherever it sits in the map and consumes the whole
-            // item, so an alternative that needs no body is already finished when it returns.
-            size_t len{};
-            const size_t index = scan_map<Opts>(ctx, tag, it, end, len,
-                                                [&](sv) { skip_value<MSGPACK>::template op<Opts>(ctx, it, end); });
+            // One walk resolves the discriminator wherever it sits in the map and consumes the whole
+            // item, noting where the content value began so the adjacent form can return to it. An
+            // alternative that needs no body is therefore already finished when the walk returns.
+            It content_it{};
+            bool content_seen = false;
+            const size_t index = scan_map<Opts>(ctx, tag, it, end, [&](sv key) {
+               if constexpr (tagging == variant_tagging_kind::adjacent) {
+                  if (not content_seen && key == content_v<T>) {
+                     content_it = it;
+                     content_seen = true;
+                  }
+               }
+               skip_value<MSGPACK>::template op<Opts>(ctx, it, end);
+            });
             if (bool(ctx.error)) [[unlikely]] {
                return;
             }
@@ -1291,27 +1376,28 @@ namespace glz
                return;
             }
 
+            if constexpr (tagging == variant_tagging_kind::adjacent) {
+               if (not content_seen) [[unlikely]] {
+                  // Resolving the discriminator is not enough: without the content key there is no
+                  // value. Checked before emplacing so a rejected buffer leaves `value` as it was.
+                  ctx.error = error_code::missing_key;
+                  ctx.custom_error_message = content_v<T>;
+                  return;
+               }
+            }
+
             const auto after = it;
             if (value.index() != index) {
                emplace_runtime_variant(value, index);
             }
 
             if constexpr (tagging == variant_tagging_kind::adjacent) {
-               if (len != 2) [[unlikely]] {
-                  ctx.error = error_code::invalid_variant_object;
+               it = content_it;
+               std::visit([&](auto&& v) { parse<MSGPACK>::template op<Opts>(v, ctx, it, end); }, value);
+               if (bool(ctx.error)) [[unlikely]] {
                   return;
                }
-               // Pass two re-walks the same map and parses the content entry in place.
-               it = start;
-               size_t ignored{};
-               scan_map<Opts>(ctx, tag, it, end, ignored, [&](sv key) {
-                  if (key == content_v<T>) {
-                     std::visit([&](auto&& v) { parse<MSGPACK>::template op<Opts>(v, ctx, it, end); }, value);
-                  }
-                  else {
-                     skip_value<MSGPACK>::template op<Opts>(ctx, it, end);
-                  }
-               });
+               it = after; // the content entry need not be the last one
             }
             else {
                visit<variant_size>(
