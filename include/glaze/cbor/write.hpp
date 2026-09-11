@@ -584,6 +584,14 @@ namespace glz
       template <auto Opts>
       static void op(auto&& value, is_context auto&& ctx, auto&& b, auto& ix)
       {
+         write_members<Opts>(value, ctx, b, ix, 0, [] {});
+      }
+
+      // Writes the members, with `prefix` emitted first so an internally tagged variant can splice
+      // its discriminator into the same map. `extra` is how many entries `prefix` adds to the header.
+      template <auto Opts>
+      static void write_members(auto&& value, is_context auto&& ctx, auto&& b, auto& ix, size_t extra, auto&& prefix)
+      {
          [[maybe_unused]] decltype(auto) t = [&]() -> decltype(auto) {
             if constexpr (reflectable<T>) {
                return to_tie(value);
@@ -666,7 +674,12 @@ namespace glz
             });
 
             // Write map header with dynamic count
-            if (!cbor_detail::encode_arg(ctx, cbor::major::map, member_count, b, ix)) [[unlikely]] {
+            if (!cbor_detail::encode_arg(ctx, cbor::major::map, member_count + extra, b, ix)) [[unlikely]] {
+               return;
+            }
+
+            prefix();
+            if (bool(ctx.error)) [[unlikely]] {
                return;
             }
 
@@ -767,7 +780,18 @@ namespace glz
          }
          else {
             // Static path: use compile-time count for better performance
-            if (!cbor_detail::encode_arg_cx<count_to_write<Opts>()>(ctx, cbor::major::map, b, ix)) [[unlikely]] {
+            if (extra == 0) {
+               if (!cbor_detail::encode_arg_cx<count_to_write<Opts>()>(ctx, cbor::major::map, b, ix)) [[unlikely]] {
+                  return;
+               }
+            }
+            else if (!cbor_detail::encode_arg(ctx, cbor::major::map, count_to_write<Opts>() + extra, b, ix))
+               [[unlikely]] {
+               return;
+            }
+
+            prefix();
+            if (bool(ctx.error)) [[unlikely]] {
                return;
             }
 
@@ -908,37 +932,142 @@ namespace glz
    };
 
    // Variants
+   // A variant takes the shape its glz::meta declares, exactly as it does in JSON and BEVE:
+   //
+   //   internal   { tag : id, ...members }        `tag` declared alone
+   //   adjacent   { tag : id, content : value }   `tag` and `content` declared
+   //   none       the active alternative's own value, bare
+   //
+   // Nothing is invented for a variant the author did not describe. The [index, value] array written
+   // before was compact but no more self-describing than a type name: it is meaningless to any CBOR
+   // implementation that does not already know Glaze's convention.
    template <is_variant T>
       requires(not custom_write<T>)
    struct to<CBOR, T> final
    {
+      static constexpr auto tagging = variant_tagging_v<T>;
+
+      // `ids` may declare fewer entries than the variant has alternatives -- the readers treat the
+      // first unlabeled alternative as the default for an unrecognized id -- so an alternative past
+      // the end of `ids` has no id to write. Indexing there reads past a static array. A valueless
+      // variant has no alternative to name at all.
+      static bool missing_id(auto&& value, is_context auto&& ctx)
+      {
+         if (value.index() >= ids_v<T>.size()) [[unlikely]] {
+            ctx.error = error_code::no_matching_variant_type;
+            ctx.custom_error_message = variant_ids_string_v<T>;
+            return true;
+         }
+         return false;
+      }
+
+      static bool write_str(is_context auto& ctx, const sv str, auto&& b, auto& ix)
+      {
+         if (!cbor_detail::encode_arg(ctx, cbor::major::tstr, str.size(), b, ix)) [[unlikely]] {
+            return false;
+         }
+         if (!ensure_space(ctx, b, ix + str.size() + write_padding_bytes)) [[unlikely]] {
+            return false;
+         }
+         if (str.size() > 0) {
+            std::memcpy(&b[ix], str.data(), str.size());
+            ix += str.size();
+         }
+         return true;
+      }
+
       template <auto Opts>
       static void op(auto&& value, is_context auto&& ctx, auto&& b, auto& ix)
       {
-         // The active alternative is taken from the variant itself rather than recovered by matching
-         // the visited type against the alternative list: the index is what the reader consumes, and a
-         // type match is ambiguous for a variant that repeats an alternative type.
-         const size_t index = value.index();
-
-         // A valueless variant has no alternative to name, and variant_npos is not an index any
-         // reader could resolve. Reject it here rather than emitting an unreadable array.
-         if (index >= std::variant_size_v<std::remove_cvref_t<decltype(value)>>) [[unlikely]] {
-            ctx.error = error_code::no_matching_variant_type;
-            return;
+         if constexpr (tagging == variant_tagging_kind::none) {
+            if (value.index() >= std::variant_size_v<std::remove_cvref_t<decltype(value)>>) [[unlikely]] {
+               ctx.error = error_code::no_matching_variant_type;
+               return;
+            }
+            std::visit([&](auto&& v) { serialize<CBOR>::op<Opts>(v, ctx, b, ix); }, value);
          }
-
-         // Encode variant as array [index, value]
-         if (!cbor_detail::encode_arg_cx<2>(ctx, cbor::major::array, b, ix)) [[unlikely]] {
-            return;
+         else if constexpr (tagging == variant_tagging_kind::adjacent) {
+            if (missing_id(value, ctx)) [[unlikely]] {
+               return;
+            }
+            if (!cbor_detail::encode_arg_cx<2>(ctx, cbor::major::map, b, ix)) [[unlikely]] {
+               return;
+            }
+            if (!write_str(ctx, tag_v<T>, b, ix)) [[unlikely]] {
+               return;
+            }
+            if (!write_str(ctx, ids_v<T>[value.index()], b, ix)) [[unlikely]] {
+               return;
+            }
+            if (!write_str(ctx, content_v<T>, b, ix)) [[unlikely]] {
+               return;
+            }
+            std::visit([&](auto&& v) { serialize<CBOR>::op<Opts>(v, ctx, b, ix); }, value);
          }
-         if (!cbor_detail::encode_arg(ctx, cbor::major::uint, index, b, ix)) [[unlikely]] {
-            return;
-         }
+         else {
+            if (missing_id(value, ctx)) [[unlikely]] {
+               return;
+            }
+            const sv id = ids_v<T>[value.index()];
 
-         std::visit([&](auto&& v) { serialize<CBOR>::op<Opts>(v, ctx, b, ix); }, value);
+            std::visit(
+               [&](auto&& v) {
+                  using V = std::remove_cvref_t<decltype(v)>;
+                  using X = variant_alternative_object_t<V>;
+
+                  const auto prefix = [&] {
+                     if (!write_str(ctx, tag_v<T>, b, ix)) [[unlikely]] {
+                        return;
+                     }
+                     write_str(ctx, id, b, ix);
+                  };
+
+                  if constexpr (alternative_declares_key<V>(tag_v<T>)) {
+                     // The alternative carries the discriminator in a member of its own, so merging
+                     // a second one would write the key twice.
+                     serialize<CBOR>::op<Opts>(v, ctx, b, ix);
+                  }
+                  else if constexpr (variant_unit_alternative<V>) {
+                     // No data to merge with: the discriminator alone is the whole map, which is the
+                     // same map an empty struct alternative produces.
+                     if (!cbor_detail::encode_arg_cx<1>(ctx, cbor::major::map, b, ix)) [[unlikely]] {
+                        return;
+                     }
+                     prefix();
+                  }
+                  else if constexpr ((glaze_object_t<X> || reflectable<X>) && (not custom_write<V>)) {
+                     if constexpr (is_memory_object<V>) {
+                        if (!v) [[unlikely]] {
+                           ctx.error = error_code::invalid_variant_object;
+                           return;
+                        }
+                        to<CBOR, X>::template write_members<Opts>(*v, ctx, b, ix, 1, prefix);
+                     }
+                     else {
+                        to<CBOR, X>::template write_members<Opts>(v, ctx, b, ix, 1, prefix);
+                     }
+                  }
+                  else {
+                     // A custom-serialized alternative is the one shape internal tagging promises but
+                     // CBOR cannot deliver: a definite-length map carries its entry count up front and
+                     // the member count of a body written by someone else's serializer is not knowable
+                     // in advance. The JSON writer merges into such a body because JSON objects are
+                     // not counted.
+                     static_assert(detail::binary_internal_tagging_needs_reflected_alternative<T, V>::value,
+                                   "Internal tagging (glz::meta `tag` without `content`) cannot be "
+                                   "written to CBOR for a custom-serialized alternative: a CBOR map is "
+                                   "length-prefixed and the member count of a custom body is not "
+                                   "knowable in advance. Declare `content` beside `tag` to select "
+                                   "adjacent tagging, which nests the custom value instead of merging "
+                                   "into it. The offending alternative is the second template argument "
+                                   "of binary_internal_tagging_needs_reflected_alternative in the "
+                                   "instantiation backtrace.");
+                  }
+               },
+               value);
+         }
       }
    };
-
    // Glaze value wrapper
    template <class T>
       requires(glaze_value_t<T> && !custom_write<T>)
@@ -1196,22 +1325,6 @@ namespace glz
                to<CBOR, double>::template op<Opts>(secs, ctx, b, ix);
             }
          }
-      }
-   };
-
-   // Generic JSON value -- write the active alternative as its native CBOR type.
-   //
-   // glz::generic is a glaze_value_t over a variant, so without this it would take the variant
-   // writer's [index, value] shape. Its alternatives are exactly the JSON value categories, which
-   // CBOR already distinguishes in its own major type, so the wrapper costs bytes and makes the
-   // output unreadable by any CBOR library that does not know Glaze's variant convention.
-   template <num_mode Mode, template <class> class MapType>
-   struct to<CBOR, generic_json<Mode, MapType>> final
-   {
-      template <auto Opts>
-      static void op(auto&& value, is_context auto&& ctx, auto&& b, auto& ix)
-      {
-         std::visit([&](auto&& v) { serialize<CBOR>::op<Opts>(v, ctx, b, ix); }, value.data);
       }
    };
 

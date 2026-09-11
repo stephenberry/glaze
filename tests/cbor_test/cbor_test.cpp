@@ -3891,14 +3891,18 @@ void custom_variant_ambiguity_tests()
       expect(not glz::read_cbor(r, s));
    };
 
-   "out-of-range variant index is rejected"_test = [] {
+   "an item matching no alternative is rejected"_test = [] {
       using V = std::variant<int32_t, double>;
       std::string buf;
-      expect(not glz::write_cbor(V{int32_t{111}}, buf)); // [index, value], holds index 0
-      // Byte 1 is the type index (a small CBOR uint); force it past the two alternatives.
-      buf[1] = static_cast<char>(0x07);
+      expect(not glz::write_cbor(V{int32_t{111}}, buf));
+      // Written bare, so the buffer is just the integer any CBOR reader would produce.
+      std::string as_int;
+      expect(not glz::write_cbor(int32_t{111}, as_int));
+      expect(buf == as_int);
+
       V in{};
-      expect(glz::read_cbor(in, buf).ec == glz::error_code::no_matching_variant_type);
+      // A text string is neither alternative.
+      expect(glz::read_cbor(in, std::string{"\x61z", 2}).ec == glz::error_code::no_matching_variant_type);
    };
 }
 
@@ -4676,18 +4680,179 @@ struct glz::meta<cbor_throws_on_copy>
 };
 #endif
 
-// A variant that repeats an alternative type: the written index must be the active one, not the first
-// alternative that happens to match by type.
+namespace cbor_variant_shapes
+{
+   struct circle
+   {
+      double radius{};
+      bool operator==(const circle&) const = default;
+   };
+   struct square
+   {
+      double side{};
+      bool operator==(const square&) const = default;
+   };
+   using adjacent_t = std::variant<circle, square>;
+
+   struct dot
+   {
+      int n{};
+      bool operator==(const dot&) const = default;
+   };
+   struct dash
+   {
+      int n{};
+      bool operator==(const dash&) const = default;
+   };
+   using internal_t = std::variant<dot, dash>;
+}
+
+template <>
+struct glz::meta<cbor_variant_shapes::adjacent_t>
+{
+   static constexpr std::string_view tag = "kind";
+   static constexpr std::string_view content = "data";
+   static constexpr std::array<std::string_view, 2> ids{"circle", "square"};
+};
+
+template <>
+struct glz::meta<cbor_variant_shapes::internal_t>
+{
+   static constexpr std::string_view tag = "kind";
+   static constexpr std::array<std::string_view, 2> ids{"dot", "dash"};
+};
+
+// A variant takes the shape glz::meta declares, as it does in JSON and BEVE. The [index, value]
+// array written before was compact but meaningless to any CBOR implementation that did not already
+// know Glaze's convention.
+suite cbor_variant_tagging = [] {
+   using namespace cbor_variant_shapes;
+
+   "an undeclared variant is written bare"_test = [] {
+      std::variant<int, std::string> v{std::string{"x"}};
+      std::string buffer{};
+      expect(not glz::write_cbor(v, buffer));
+      expect(buffer == std::string{"\x61x", 2}); // tstr(1), 'x' -- no wrapper
+
+      std::variant<int, std::string> decoded{};
+      expect(not glz::read_cbor(decoded, buffer));
+      expect(decoded == v);
+   };
+
+   "an undeclared variant resolves from the major type"_test = [] {
+      using v_t = std::variant<std::monostate, bool, int64_t, std::string, std::vector<int>>;
+      const auto roundtrip = [](v_t original) {
+         std::string buffer{};
+         expect(not glz::write_cbor(original, buffer));
+         v_t decoded{};
+         expect(not glz::read_cbor(decoded, buffer));
+         expect(decoded.index() == original.index()) << decoded.index();
+      };
+      roundtrip(v_t{std::monostate{}});
+      roundtrip(v_t{true});
+      roundtrip(v_t{int64_t{-42}});
+      roundtrip(v_t{std::string{"s"}});
+      roundtrip(v_t{std::vector<int>{1, 2, 3}});
+   };
+
+   "adjacent tagging writes the declared tag and content keys"_test = [] {
+      std::string buffer{};
+      expect(not glz::write_cbor(adjacent_t{square{2.0}}, buffer));
+
+      std::string expected; // { "kind" : "square", "data" : { "side" : 2.0 } }
+      expected.push_back(char(0xa2));
+      expected.push_back(char(0x64));
+      expected += "kind";
+      expected.push_back(char(0x66));
+      expected += "square";
+      expected.push_back(char(0x64));
+      expected += "data";
+      std::string inner{};
+      expect(not glz::write_cbor(square{2.0}, inner));
+      expected += inner;
+      expect(buffer == expected);
+
+      adjacent_t decoded{};
+      expect(not glz::read_cbor(decoded, buffer));
+      expect(decoded == adjacent_t{square{2.0}});
+   };
+
+   "internal tagging merges the discriminator into the map"_test = [] {
+      std::string buffer{};
+      expect(not glz::write_cbor(internal_t{dash{5}}, buffer));
+
+      std::string expected; // { "kind" : "dash", "n" : 5 }
+      expected.push_back(char(0xa2));
+      expected.push_back(char(0x64));
+      expected += "kind";
+      expected.push_back(char(0x64));
+      expected += "dash";
+      expected.push_back(char(0x61));
+      expected += "n";
+      expected.push_back(char(0x05));
+      expect(buffer == expected);
+
+      internal_t decoded{};
+      expect(not glz::read_cbor(decoded, buffer));
+      expect(decoded == internal_t{dash{5}});
+   };
+
+   "the discriminator may sit after the members"_test = [] {
+      std::string buffer; // { "n" : 5, "kind" : "dash" } -- key order is not significant
+      buffer.push_back(char(0xa2));
+      buffer.push_back(char(0x61));
+      buffer += "n";
+      buffer.push_back(char(0x05));
+      buffer.push_back(char(0x64));
+      buffer += "kind";
+      buffer.push_back(char(0x64));
+      buffer += "dash";
+
+      internal_t decoded{};
+      expect(not glz::read_cbor(decoded, buffer));
+      expect(decoded == internal_t{dash{5}});
+   };
+
+   "an id naming no alternative is rejected"_test = [] {
+      std::string buffer; // { "kind" : "hexagon", "data" : 0 }
+      buffer.push_back(char(0xa2));
+      buffer.push_back(char(0x64));
+      buffer += "kind";
+      buffer.push_back(char(0x67));
+      buffer += "hexagon";
+      buffer.push_back(char(0x64));
+      buffer += "data";
+      buffer.push_back(char(0x00));
+
+      adjacent_t decoded{};
+      expect(glz::read_cbor(decoded, buffer) == glz::error_code::no_matching_variant_type);
+   };
+
+   "a failed variant read leaves the destination untouched"_test = [] {
+      std::variant<int, std::string> decoded{std::string{"keep"}};
+      expect(glz::read_cbor(decoded, std::string{"\xa0", 1}) == glz::error_code::no_matching_variant_type);
+      expect(std::get<std::string>(decoded) == "keep");
+   };
+};
+
+// An undeclared variant is written bare, so alternatives that share a wire shape cannot be told
+// apart on read -- the value survives, the alternative it lands in is the first of that shape.
+// Declaring a `tag` in glz::meta is what separates them.
 suite cbor_variant_index_tests = [] {
-   "duplicate alternative types"_test = [] {
+   "duplicate alternative types resolve to the first of that shape"_test = [] {
       std::variant<int, int, double> src{std::in_place_index<1>, 7};
       std::string buffer{};
       expect(not glz::write_cbor(src, buffer));
 
       std::variant<int, int, double> dst{};
       expect(not glz::read_cbor(dst, buffer));
-      expect(dst.index() == 1);
-      expect(std::get<1>(dst) == 7);
+      expect(dst.index() == 0); // indistinguishable from alternative 1 on the wire
+      expect(std::get<0>(dst) == 7);
+
+      // The bytes are just the integer, which is the point: any CBOR reader can consume them.
+      std::string as_int{};
+      expect(not glz::write_cbor(7, as_int));
+      expect(buffer == as_int);
    };
 
 #if __cpp_exceptions

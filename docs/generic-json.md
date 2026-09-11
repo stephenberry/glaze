@@ -322,9 +322,11 @@ std::string buffer;
 ec = glz::write_cbor(value, buffer); // or write_msgpack, write_beve, write_jsonb
 ```
 
-Reading back chooses the number alternative the JSON reader would: the widest one the mode holds exactly, falling back to `double` when the sign or magnitude does not fit. So a `glz::generic_u64` that held a `uint64_t` still holds one after a round trip, and a negative value still holds an `int64_t`.
+Reading back chooses the number alternative the JSON reader would: the alternatives are tried in declaration order, so a value lands in the widest one the mode holds exactly and falls back to `double` when the sign or magnitude does not fit. A `glz::generic_u64` that held a `uint64_t` still holds one after a round trip, and a negative value still holds an `int64_t`.
 
-A format can express values JSON cannot — CBOR byte strings and semantic tags, MessagePack `bin` and `ext`. Those have no `glz::generic` alternative and fail with `error_code::syntax_error`; read them into a type that models them. See [MessagePack](./msgpack.md#variants-and-glzgeneric) and [CBOR](./cbor.md#variants-and-glzgeneric).
+This is not a special case for `glz::generic`: it is a variant that declares no `glz::meta::tag`, and every format writes such a variant as the active alternative's own value, with no discriminator.
+
+A format can express values JSON cannot — CBOR byte strings and semantic tags, MessagePack `bin` and `ext`. Those have no `glz::generic` alternative and are rejected; read them into a type that models them. See [MessagePack](./msgpack.md#variants-and-glzgeneric) and [CBOR](./cbor.md#variants-and-glzgeneric).
 
 ## Compilation time optimization
 

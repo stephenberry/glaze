@@ -505,12 +505,24 @@ namespace glz
             }
 
             if constexpr (std::is_signed_v<V>) {
-               int64_t temp = is_signed ? signed_value : static_cast<int64_t>(unsigned_value);
-               if (temp < (std::numeric_limits<V>::min)() || temp > (std::numeric_limits<V>::max)()) {
-                  ctx.error = error_code::dump_int_error;
-                  return;
+               if (is_signed) {
+                  if (signed_value < (std::numeric_limits<V>::min)() ||
+                      signed_value > (std::numeric_limits<V>::max)()) {
+                     ctx.error = error_code::dump_int_error;
+                     return;
+                  }
+                  value = static_cast<V>(signed_value);
                }
-               value = static_cast<V>(temp);
+               else {
+                  // Range-check the unsigned magnitude itself. Narrowing to int64_t first and then
+                  // checking wraps UINT64_MAX to -1, which is in range for every signed V, so the
+                  // widest unsigned input was accepted as -1 instead of being rejected.
+                  if (unsigned_value > static_cast<uint64_t>((std::numeric_limits<V>::max)())) {
+                     ctx.error = error_code::dump_int_error;
+                     return;
+                  }
+                  value = static_cast<V>(unsigned_value);
+               }
             }
             else {
                if (is_signed) {
@@ -611,19 +623,32 @@ namespace glz
       }
    };
 
-   template <glaze_object_t T>
-      requires(!custom_read<T>)
+   // TagKey names an internally tagged variant's discriminator, which the variant reader has already
+   // resolved. It appears in this object's map like any other key, so tolerate it: skip it unless the
+   // alternative declares a member of that name, in which case it reads normally into that member.
+   // Mirrors the JSON object reader's `string_literal tag` parameter.
+   template <class T>
+      requires((glaze_object_t<T> || reflectable<T>) && !custom_read<T>)
    struct from<MSGPACK, T>
    {
       static constexpr auto N = reflect<T>::size;
 
-      template <auto Opts, class Value, is_context Ctx, class It, class End>
+      template <auto Opts, string_literal TagKey = "", class Value, is_context Ctx, class It, class End>
       GLZ_ALWAYS_INLINE static void op(Value&& value, uint8_t tag, Ctx&& ctx, It& it, const End& end) noexcept
       {
          depth_guard guard{ctx};
          if (!guard) [[unlikely]] {
             return;
          }
+
+         [[maybe_unused]] decltype(auto) t = [&]() -> decltype(auto) {
+            if constexpr (reflectable<T>) {
+               return to_tie(value);
+            }
+            else {
+               return nullptr;
+            }
+         }();
 
          if constexpr (check_structs_as_arrays(Opts)) {
             size_t len{};
@@ -641,7 +666,12 @@ namespace glz
                      ctx.error = error_code::syntax_error;
                      return;
                   }
-                  parse<MSGPACK>::template op<Opts>(get_member(value, get<I>(reflect<T>::values)), ctx, it, end);
+                  if constexpr (reflectable<T>) {
+                     parse<MSGPACK>::template op<Opts>(get_member(value, get<I>(t)), ctx, it, end);
+                  }
+                  else {
+                     parse<MSGPACK>::template op<Opts>(get_member(value, get<I>(reflect<T>::values)), ctx, it, end);
+                  }
                   ++idx;
                }
             });
@@ -696,6 +726,13 @@ namespace glz
                   key.data(), key.data() + key.size(), key.size());
 
                if (index >= N || reflect<T>::keys[index] != key) {
+                  if constexpr (not TagKey.sv().empty()) {
+                     // The discriminator the variant reader already consumed conceptually.
+                     if (key == TagKey.sv()) {
+                        skip_value<MSGPACK>::template op<Opts>(ctx, it, end);
+                        continue;
+                     }
+                  }
                   if constexpr (Opts.error_on_unknown_keys) {
                      ctx.error = error_code::unknown_key;
                      return;
@@ -712,7 +749,13 @@ namespace glz
                         skip_value<MSGPACK>::template op<Opts>(ctx, it, end);
                      }
                      else {
-                        parse<MSGPACK>::template op<Opts>(get_member(value, get<I>(reflect<T>::values)), ctx, it, end);
+                        if constexpr (reflectable<T>) {
+                           parse<MSGPACK>::template op<Opts>(get_member(value, get<I>(t)), ctx, it, end);
+                        }
+                        else {
+                           parse<MSGPACK>::template op<Opts>(get_member(value, get<I>(reflect<T>::values)), ctx, it,
+                                                             end);
+                        }
                         if constexpr (Opts.error_on_missing_keys || Opts.partial_read) {
                            fields[I] = true;
                         }
@@ -745,17 +788,6 @@ namespace glz
                }
             }
          }
-      }
-   };
-
-   template <reflectable T>
-      requires(!custom_read<T>)
-   struct from<MSGPACK, T>
-   {
-      template <auto Opts, class Value, is_context Ctx, class It, class End>
-      GLZ_ALWAYS_INLINE static void op(Value&& value, uint8_t tag, Ctx&& ctx, It& it, const End& end) noexcept
-      {
-         from<MSGPACK, decltype(to_tie(value))>::template op<Opts>(to_tie(value), tag, ctx, it, end);
       }
    };
 
@@ -1116,54 +1148,205 @@ namespace glz
       }
    };
 
+   // The counterpart of to<MSGPACK, T>: the shape is whatever glz::meta declared, and an undeclared
+   // variant is a bare value resolved from MessagePack's own self-describing type byte.
    template <is_variant T>
       requires(not custom_read<T>)
    struct from<MSGPACK, T>
    {
+      static constexpr auto tagging = variant_tagging_v<T>;
+      static constexpr size_t variant_size = std::variant_size_v<T>;
+
+      // Try the alternatives in declaration order, rewinding after each miss. Every MessagePack
+      // reader validates the type byte it was handed, so a wrong alternative fails on the first byte
+      // rather than consuming input. Alternatives that share a wire shape cannot be told apart --
+      // declare a `tag` in glz::meta when that matters.
       template <auto Opts, class Value, is_context Ctx, class It, class End>
-      GLZ_ALWAYS_INLINE static void op(Value&& value, uint8_t tag, Ctx&& ctx, It& it, const End& end) noexcept
+      static void try_each(Value&& value, uint8_t tag, Ctx&& ctx, It& it, const End& end) noexcept
       {
-         depth_guard guard{ctx};
-         if (!guard) [[unlikely]] {
-            return;
-         }
-
-         size_t len{};
-         if (!msgpack::read_array_length(ctx, tag, it, end, len)) {
-            return;
-         }
-         if (len != 2) {
-            ctx.error = error_code::invalid_variant_array;
-            for (size_t i = 0; i < len && ctx.error == error_code::none; ++i) {
-               skip_value<MSGPACK>::template op<Opts>(ctx, it, end);
+         const auto start = it;
+         bool resolved = false;
+         for_each<variant_size>([&]<size_t I>() {
+            if (resolved) {
+               return;
             }
-            return;
-         }
-
-         if (it >= end) {
-            ctx.error = error_code::unexpected_end;
-            return;
-         }
-         // The discriminator is the alternative's index -- see to<MSGPACK, is_variant> for why it is
-         // not the id. A negative or out of range discriminator names no alternative.
-         const uint8_t key_tag = static_cast<uint8_t>(*it++);
-         bool is_signed{};
-         int64_t signed_index{};
-         uint64_t unsigned_index{};
-         if (!msgpack::detail::read_integer_value(ctx, key_tag, it, end, is_signed, signed_index, unsigned_index)) {
-            return;
-         }
-         if (is_signed || unsigned_index >= std::variant_size_v<T>) {
+            using V = std::variant_alternative_t<I, T>;
+            it = start;
+            ctx.error = error_code::none;
+            ctx.custom_error_message = {};
+            // Read into a fresh alternative and move it in, so a miss leaves `value` as it was.
+            V v{};
+            from<MSGPACK, V>::template op<Opts>(v, tag, ctx, it, end);
+            if (not bool(ctx.error)) {
+               value.template emplace<I>(std::move(v));
+               resolved = true;
+            }
+         });
+         if (not resolved) {
+            it = start;
             ctx.error = error_code::no_matching_variant_type;
-            skip_value<MSGPACK>::template op<Opts>(ctx, it, end);
+         }
+      }
+
+      // Decode the discriminator value at `it` and map it to an alternative index, advancing past it.
+      // Returns variant_size when the id names no alternative and there is no unlabeled default.
+      template <auto Opts, class It, class End>
+      static size_t resolve_id(is_context auto&& ctx, It& it, const End& end) noexcept
+      {
+         using id_type = std::decay_t<decltype(ids_v<T>[0])>;
+         size_t index = ids_v<T>.size();
+
+         if (it >= end) [[unlikely]] {
+            ctx.error = error_code::unexpected_end;
+            return variant_size;
+         }
+         const uint8_t id_tag = static_cast<uint8_t>(*it++);
+
+         if constexpr (std::integral<id_type>) {
+            bool is_signed{};
+            int64_t signed_id{};
+            uint64_t unsigned_id{};
+            if (!msgpack::detail::read_integer_value(ctx, id_tag, it, end, is_signed, signed_id, unsigned_id)) {
+               return variant_size;
+            }
+            index = variant_id_to_index<T>::op(is_signed ? static_cast<id_type>(signed_id)
+                                                         : static_cast<id_type>(unsigned_id));
+         }
+         else {
+            sv id{};
+            if (!msgpack::detail::read_string_view(ctx, id_tag, it, end, id)) {
+               return variant_size;
+            }
+            index = variant_id_to_index<T>::op(id.data(), id.data() + id.size(), id.size());
+         }
+
+         if (index < ids_v<T>.size()) [[likely]] {
+            return index;
+         }
+         if constexpr (ids_v<T>.size() < variant_size) {
+            // Fewer ids than alternatives: the first unlabeled alternative is the default for an
+            // unrecognized id, matching the BEVE and JSON readers.
+            return ids_v<T>.size();
+         }
+         return variant_size;
+      }
+
+      // Walk the map once, resolving the discriminator and consuming every entry. `on_content` sees
+      // each non-discriminator key and decides whether to parse or skip its value.
+      template <auto Opts, class It, class End>
+      static size_t scan_map(is_context auto&& ctx, uint8_t tag, It& it, const End& end, size_t& len,
+                             auto&& on_content) noexcept
+      {
+         if (!msgpack::read_map_length(ctx, tag, it, end, len)) {
+            return variant_size;
+         }
+         size_t index = variant_size;
+         for (size_t i = 0; i < len && ctx.error == error_code::none; ++i) {
+            if (it >= end) [[unlikely]] {
+               ctx.error = error_code::unexpected_end;
+               return variant_size;
+            }
+            const uint8_t key_tag = static_cast<uint8_t>(*it++);
+            sv key{};
+            if (!msgpack::detail::read_string_view(ctx, key_tag, it, end, key)) {
+               return variant_size;
+            }
+            if (key == tag_v<T>) {
+               index = resolve_id<Opts>(ctx, it, end);
+            }
+            else {
+               on_content(key);
+            }
+         }
+         return index;
+      }
+
+      template <auto Opts, class Value, is_context Ctx, class It, class End>
+      static void op(Value&& value, uint8_t tag, Ctx&& ctx, It& it, const End& end) noexcept
+      {
+         if constexpr (tagging == variant_tagging_kind::none) {
+            try_each<Opts>(value, tag, ctx, it, end);
             return;
          }
-         const size_t variant_index = static_cast<size_t>(unsigned_index);
+         else {
+            depth_guard guard{ctx};
+            if (!guard) [[unlikely]] {
+               return;
+            }
 
-         if (value.index() != variant_index) {
-            emplace_runtime_variant(value, variant_index);
+            static constexpr auto tag_literal = string_literal_from_view<tag_v<T>.size()>(tag_v<T>);
+            const auto start = it;
+
+            // Pass one resolves the discriminator wherever it sits in the map and consumes the whole
+            // item, so an alternative that needs no body is already finished when it returns.
+            size_t len{};
+            const size_t index = scan_map<Opts>(ctx, tag, it, end, len,
+                                                [&](sv) { skip_value<MSGPACK>::template op<Opts>(ctx, it, end); });
+            if (bool(ctx.error)) [[unlikely]] {
+               return;
+            }
+            if (index >= variant_size) [[unlikely]] {
+               ctx.error = error_code::no_matching_variant_type;
+               ctx.custom_error_message = variant_ids_string_v<T>;
+               return;
+            }
+
+            const auto after = it;
+            if (value.index() != index) {
+               emplace_runtime_variant(value, index);
+            }
+
+            if constexpr (tagging == variant_tagging_kind::adjacent) {
+               if (len != 2) [[unlikely]] {
+                  ctx.error = error_code::invalid_variant_object;
+                  return;
+               }
+               // Pass two re-walks the same map and parses the content entry in place.
+               it = start;
+               size_t ignored{};
+               scan_map<Opts>(ctx, tag, it, end, ignored, [&](sv key) {
+                  if (key == content_v<T>) {
+                     std::visit([&](auto&& v) { parse<MSGPACK>::template op<Opts>(v, ctx, it, end); }, value);
+                  }
+                  else {
+                     skip_value<MSGPACK>::template op<Opts>(ctx, it, end);
+                  }
+               });
+            }
+            else {
+               visit<variant_size>(
+                  [&]<size_t I>() {
+                     using V = std::variant_alternative_t<I, T>;
+                     using X = variant_alternative_object_t<V>;
+                     constexpr bool struct_like = (glaze_object_t<X> || reflectable<X>) && (not custom_read<X>);
+
+                     if constexpr (variant_unit_alternative<V>) {
+                        // Nothing but the discriminator: pass one already consumed the whole map.
+                     }
+                     else if constexpr (struct_like && (not is_memory_object<V>)) {
+                        // Thread the discriminator key through so it is skipped without disabling
+                        // unknown-key checking for the alternative's real fields. An alternative that
+                        // declares a member of that name keeps receiving its value (JSON parity).
+                        it = start;
+                        from<MSGPACK, X>::template op<Opts, tag_literal>(std::get<I>(value), tag, ctx, it, end);
+                     }
+                     else if constexpr (requires { Opts.error_on_unknown_keys; }) {
+                        // memory_object / map / pair alternative: tolerate the discriminator key.
+                        static constexpr auto AltOpts = [] {
+                           auto o = Opts;
+                           o.error_on_unknown_keys = false;
+                           return o;
+                        }();
+                        it = start;
+                        from<MSGPACK, V>::template op<AltOpts>(std::get<I>(value), tag, ctx, it, end);
+                     }
+                     else {
+                        it = after;
+                     }
+                  },
+                  index);
+            }
          }
-         std::visit([&](auto&& v) { parse<MSGPACK>::template op<Opts>(v, ctx, it, end); }, value);
       }
    };
 
@@ -1305,76 +1488,6 @@ namespace glz
          if (msgpack::detail::read_string_view(ctx, tag, it, end, sv)) {
             return;
          }
-      }
-   };
-
-   // Generic JSON value -- resolve the alternative from MessagePack's own type byte.
-   //
-   // The counterpart of to<MSGPACK, generic_json>: the value is a bare MessagePack item with no
-   // variant wrapper, and its type byte already names the JSON value category. Which numeric
-   // alternative an integer lands in follows the JSON reader, where the alternatives are tried in
-   // declaration order: the widest exact one for the mode, falling back to double when the magnitude
-   // does not fit. MessagePack keeps signedness in the type byte, so the choice needs no retry.
-   template <num_mode Mode, template <class> class MapType>
-   struct from<MSGPACK, generic_json<Mode, MapType>> final
-   {
-      template <auto Opts, class Value, is_context Ctx, class It, class End>
-      static void op(Value&& value, uint8_t tag, Ctx&& ctx, It& it, const End& end) noexcept
-      {
-         using array_t = typename generic_json<Mode, MapType>::array_t;
-         using object_t = typename generic_json<Mode, MapType>::object_t;
-
-         // Read into a fresh alternative and move it in, rather than emplacing first and parsing in
-         // place: a failed parse then leaves `value` as it was instead of half-filled.
-         const auto read_into = [&]<class V>(std::type_identity<V>) {
-            V v{};
-            from<MSGPACK, V>::template op<Opts>(v, tag, ctx, it, end);
-            if (bool(ctx.error)) [[unlikely]] {
-               return;
-            }
-            value.data = std::move(v);
-         };
-
-         if (tag == msgpack::nil) {
-            value.data = nullptr;
-            return;
-         }
-         if (tag == msgpack::bool_true || tag == msgpack::bool_false) {
-            read_into(std::type_identity<bool>{});
-            return;
-         }
-         if (tag == msgpack::float32 || tag == msgpack::float64) {
-            read_into(std::type_identity<double>{});
-            return;
-         }
-         if (msgpack::is_fixstr(tag) || tag == msgpack::str8 || tag == msgpack::str16 || tag == msgpack::str32) {
-            read_into(std::type_identity<std::string>{});
-            return;
-         }
-         if (msgpack::is_fixarray(tag) || tag == msgpack::array16 || tag == msgpack::array32) {
-            read_into(std::type_identity<array_t>{});
-            return;
-         }
-         if (msgpack::is_fixmap(tag) || tag == msgpack::map16 || tag == msgpack::map32) {
-            read_into(std::type_identity<object_t>{});
-            return;
-         }
-
-         // MessagePack keeps signedness in the type byte, so the decoded magnitude picks the
-         // alternative outright -- see glz::assign_number.
-         bool is_signed{};
-         int64_t signed_value{};
-         uint64_t unsigned_value{};
-         if (msgpack::detail::read_integer_value(ctx, tag, it, end, is_signed, signed_value, unsigned_value)) {
-            if (is_signed) {
-               assign_number(value, signed_value);
-            }
-            else {
-               assign_number(value, unsigned_value);
-            }
-         }
-         // read_integer_value already reported the type byte it could not account for -- binary,
-         // extension, and the reserved 0xC1 have no JSON value category.
       }
    };
 

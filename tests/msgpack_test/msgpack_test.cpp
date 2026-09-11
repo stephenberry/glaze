@@ -633,10 +633,9 @@ suite msgpack_reserve_amplification_tests = [] {
    };
 };
 
-// A variant whose `ids` array is shorter than its alternative list. That is a supported read-side
-// feature for the formats that write ids -- the first unlabeled alternative is the default for an
-// unrecognized id -- so it is reachable from a legal glz::meta. MessagePack discriminates by index
-// and never indexes ids_v, so neither alternative depends on the declaration being complete.
+// A variant whose `ids` array is shorter than its alternative list. The readers treat the first
+// unlabeled alternative as the default for an unrecognized id, so a short `ids` is a legal and
+// useful declaration -- but an alternative past its end has no id for the writer to emit.
 namespace short_ids_guard
 {
    struct labeled
@@ -658,78 +657,220 @@ struct glz::meta<short_ids_guard::v_t>
 };
 
 suite short_ids_write_guard = [] {
-   "an alternative with no declared id round trips on its index"_test = [] {
-      using namespace short_ids_guard;
-      std::string buffer{};
-      expect(not glz::write_msgpack(v_t{unlabeled{7}}, buffer));
-      v_t decoded{};
-      expect(not glz::read_msgpack(decoded, buffer));
-      expect(decoded.index() == 1);
-      expect(std::get<unlabeled>(decoded).b == 7);
+   using namespace short_ids_guard;
 
-      buffer.clear();
+   "an alternative past the end of ids cannot be written"_test = [] {
+      std::string buffer{};
+      expect(glz::write_msgpack(v_t{unlabeled{7}}, buffer) == glz::error_code::no_matching_variant_type);
+   };
+
+   "a labeled alternative round trips through its id"_test = [] {
+      std::string buffer{};
       expect(not glz::write_msgpack(v_t{labeled{3}}, buffer));
+      v_t decoded{};
       expect(not glz::read_msgpack(decoded, buffer));
       expect(decoded.index() == 0);
       expect(std::get<labeled>(decoded).a == 3);
    };
+
+   "an unrecognized id falls back to the first unlabeled alternative"_test = [] {
+      std::string buffer; // { "t" : "zzz", "b" : 7 }
+      buffer.push_back(char(0x82));
+      buffer.push_back(char(0xa1));
+      buffer += "t";
+      buffer.push_back(char(0xa3));
+      buffer += "zzz";
+      buffer.push_back(char(0xa1));
+      buffer += "b";
+      buffer.push_back(char(0x07));
+
+      v_t decoded{};
+      expect(not glz::read_msgpack(decoded, buffer));
+      expect(decoded.index() == 1);
+      expect(std::get<unlabeled>(decoded).b == 7);
+   };
 };
 
-namespace wide_variant
+namespace variant_shapes
 {
-   template <size_t>
-   using alt = int;
-
-   template <class>
-   struct build;
-
-   template <size_t... I>
-   struct build<std::index_sequence<I...>>
+   struct circle
    {
-      using type = std::variant<alt<I>...>;
+      double radius{};
+      bool operator==(const circle&) const = default;
    };
+   struct square
+   {
+      double side{};
+      bool operator==(const square&) const = default;
+   };
+   using adjacent_t = std::variant<circle, square>;
 
-   using v_t = build<std::make_index_sequence<200>>::type;
+   struct dot
+   {
+      int n{};
+      bool operator==(const dot&) const = default;
+   };
+   struct dash
+   {
+      int n{};
+      bool operator==(const dash&) const = default;
+   };
+   using internal_t = std::variant<dot, dash>;
 }
 
-// The variant discriminator is the alternative's index, not its id. ids_v falls back to glz::name_v
-// when glz::meta declares no ids, and for a type with no meta::name that is the compiler's own
-// spelling of it -- so writing the id made the output large and, worse, compiler specific: msgpack
-// written by MSVC could not be read by a GCC build.
-suite msgpack_variant_index_discriminator = [] {
-   "the discriminator is a small integer, not a type name"_test = [] {
+template <>
+struct glz::meta<variant_shapes::adjacent_t>
+{
+   static constexpr std::string_view tag = "kind";
+   static constexpr std::string_view content = "data";
+   static constexpr std::array<std::string_view, 2> ids{"circle", "square"};
+};
+
+template <>
+struct glz::meta<variant_shapes::internal_t>
+{
+   static constexpr std::string_view tag = "kind";
+   static constexpr std::array<std::string_view, 2> ids{"dot", "dash"};
+};
+
+// A variant takes the shape glz::meta declares, as it does in JSON and BEVE. Glaze 8.3.0 and earlier
+// wrote [id, value] for every variant, where an undeclared id fell back to glz::name_v -- the
+// compiler's own spelling of the type, so msgpack written by MSVC could not be read by a GCC build,
+// let alone by another MessagePack implementation.
+suite msgpack_variant_tagging = [] {
+   using namespace variant_shapes;
+
+   "an undeclared variant is written bare"_test = [] {
       std::variant<int, std::string> v{std::string{"x"}};
       std::string buffer{};
       expect(not glz::write_msgpack(v, buffer));
-      // fixarray(2), positive fixint 1, fixstr(1), 'x'
-      expect(buffer == std::string{"\x92\x01\xa1x", 4});
+      // fixstr(1), 'x' -- no wrapper of any kind
+      expect(buffer == std::string{"\xa1x", 2});
 
       std::variant<int, std::string> decoded{};
       expect(not glz::read_msgpack(decoded, buffer));
       expect(decoded == v);
    };
 
-   // An index past 127 leaves the positive fixint range, so the writer must widen it.
-   "an index past the fixint range widens"_test = [] {
-      wide_variant::v_t v{};
-      v.emplace<150>(7);
-      std::string buffer{};
-      expect(not glz::write_msgpack(v, buffer));
-      // fixarray(2), the index as uint8 because 150 is past the positive fixint range, then the value
-      expect(buffer == std::string{"\x92\xcc\x96\x07", 4});
+   "a bare variant is byte-identical to the alternative alone"_test = [] {
+      std::variant<int, std::string> v{std::string{"hello"}};
+      std::string as_variant{}, as_alternative{};
+      expect(not glz::write_msgpack(v, as_variant));
+      expect(not glz::write_msgpack(std::string{"hello"}, as_alternative));
+      expect(as_variant == as_alternative);
 
-      wide_variant::v_t decoded{};
-      expect(not glz::read_msgpack(decoded, buffer));
-      expect(decoded.index() == 150);
-      expect(std::get<150>(decoded) == 7);
+      // and so it reads back as the plain alternative type, which is what a foreign
+      // MessagePack implementation would see.
+      std::string plain{};
+      expect(not glz::read_msgpack(plain, as_variant));
+      expect(plain == "hello");
    };
 
-   "a discriminator naming no alternative is rejected"_test = [] {
+   "an undeclared variant resolves from the type byte"_test = [] {
+      using v_t = std::variant<std::monostate, bool, int64_t, std::string, std::vector<int>>;
+      const auto roundtrip = [](v_t original) {
+         std::string buffer{};
+         expect(not glz::write_msgpack(original, buffer));
+         v_t decoded{};
+         expect(not glz::read_msgpack(decoded, buffer));
+         expect(decoded.index() == original.index()) << decoded.index();
+         return decoded;
+      };
+      roundtrip(v_t{std::monostate{}});
+      roundtrip(v_t{true});
+      roundtrip(v_t{int64_t{-42}});
+      roundtrip(v_t{std::string{"s"}});
+      roundtrip(v_t{std::vector<int>{1, 2, 3}});
+   };
+
+   "adjacent tagging writes the declared tag and content keys"_test = [] {
+      std::string buffer{};
+      expect(not glz::write_msgpack(adjacent_t{square{2.0}}, buffer));
+
+      std::string expected; // { "kind" : "square", "data" : { "side" : 2.0 } }
+      expected.push_back(char(0x82));
+      expected.push_back(char(0xa4));
+      expected += "kind";
+      expected.push_back(char(0xa6));
+      expected += "square";
+      expected.push_back(char(0xa4));
+      expected += "data";
+      expected.push_back(char(0x81));
+      expected.push_back(char(0xa4));
+      expected += "side";
+      expected.push_back(char(0xcb));
+      const double side = 2.0;
+      char bytes[8];
+      std::memcpy(bytes, &side, 8);
+      for (int i = 7; i >= 0; --i) expected.push_back(bytes[i]); // big endian
+      expect(buffer == expected);
+
+      adjacent_t decoded{};
+      expect(not glz::read_msgpack(decoded, buffer));
+      expect(decoded == adjacent_t{square{2.0}});
+   };
+
+   "internal tagging merges the discriminator into the object"_test = [] {
+      std::string buffer{};
+      expect(not glz::write_msgpack(internal_t{dash{5}}, buffer));
+
+      std::string expected; // { "kind" : "dash", "n" : 5 }
+      expected.push_back(char(0x82));
+      expected.push_back(char(0xa4));
+      expected += "kind";
+      expected.push_back(char(0xa4));
+      expected += "dash";
+      expected.push_back(char(0xa1));
+      expected += "n";
+      expected.push_back(char(0x05));
+      expect(buffer == expected);
+
+      internal_t decoded{};
+      expect(not glz::read_msgpack(decoded, buffer));
+      expect(decoded == internal_t{dash{5}});
+   };
+
+   "the discriminator may sit after the members"_test = [] {
+      std::string buffer; // { "n" : 5, "kind" : "dash" } -- key order is not significant
+      buffer.push_back(char(0x82));
+      buffer.push_back(char(0xa1));
+      buffer += "n";
+      buffer.push_back(char(0x05));
+      buffer.push_back(char(0xa4));
+      buffer += "kind";
+      buffer.push_back(char(0xa4));
+      buffer += "dash";
+
+      internal_t decoded{};
+      expect(not glz::read_msgpack(decoded, buffer));
+      expect(decoded == internal_t{dash{5}});
+   };
+
+   "an id naming no alternative is rejected"_test = [] {
+      std::string buffer; // { "kind" : "hexagon", "data" : 0 }
+      buffer.push_back(char(0x82));
+      buffer.push_back(char(0xa4));
+      buffer += "kind";
+      buffer.push_back(char(0xa7));
+      buffer += "hexagon";
+      buffer.push_back(char(0xa4));
+      buffer += "data";
+      buffer.push_back(char(0x00));
+
+      adjacent_t decoded{};
+      expect(glz::read_msgpack(decoded, buffer) == glz::error_code::no_matching_variant_type);
+   };
+
+   "an undeclared variant that matches nothing is rejected"_test = [] {
       std::variant<int, std::string> decoded{};
-      // index 7 against a two alternative variant
-      expect(glz::read_msgpack(decoded, std::string{"\x92\x07\x01", 3}) == glz::error_code::no_matching_variant_type);
-      // a negative discriminator is not an index either
-      expect(glz::read_msgpack(decoded, std::string{"\x92\xff\x01", 3}) == glz::error_code::no_matching_variant_type);
+      // a MessagePack map matches neither alternative
+      expect(glz::read_msgpack(decoded, std::string{"\x80", 1}) == glz::error_code::no_matching_variant_type);
+   };
+
+   "a failed variant read leaves the destination untouched"_test = [] {
+      std::variant<int, std::string> decoded{std::string{"keep"}};
+      expect(glz::read_msgpack(decoded, std::string{"\x80", 1}) == glz::error_code::no_matching_variant_type);
+      expect(std::get<std::string>(decoded) == "keep");
    };
 };
 
@@ -905,16 +1046,22 @@ namespace msgpack_depth
       std::vector<tree_node> children{};
    };
 
-   // Structs are written as arrays, so every level is fixarray(1) for the struct plus fixarray(1)
-   // for its member: two bytes of input per level of nesting.
+   // Structs are keyed maps, so every level is fixmap(1) carrying the "children" key plus fixarray(1)
+   // for the vector itself: two nesting levels per tree node, as when they were written as arrays.
    inline std::string nested_tree(size_t levels)
    {
+      constexpr std::string_view key = "children";
       std::string b;
+      const auto open_node = [&] {
+         b.push_back(char(0x81)); // fixmap(1)
+         b.push_back(char(0xa0 | key.size())); // fixstr(8)
+         b.append(key);
+      };
       for (size_t i = 0; i < levels; ++i) {
-         b.push_back(char(0x91));
-         b.push_back(char(0x91));
+         open_node();
+         b.push_back(char(0x91)); // fixarray(1)
       }
-      b.push_back(char(0x91));
+      open_node();
       b.push_back(char(0x90)); // innermost node, no children
       return b;
    }
@@ -943,8 +1090,32 @@ suite msgpack_recursion_depth_limit = [] {
    };
 };
 
+namespace local_aggregates
+{
+   struct event
+   {
+      std::string name;
+      glz::msgpack::timestamp time;
+      bool operator==(const event&) const = default;
+   };
+
+   struct simple_msgpack_obj
+   {
+      int x = 42;
+      std::string name = "hello";
+   };
+
+   struct large_msgpack_obj
+   {
+      int x = 42;
+      std::string long_name = "this is a very long string that definitely won't fit in a tiny buffer";
+      std::vector<int> data = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
+   };
+}
+
 int main()
 {
+   using namespace local_aggregates;
    // Only the write side is exercised here: MessagePack passes its type-tag byte
    // positionally to from::op, so a generic JSON-style custom from signature cannot be
    // read-tested (a separate MessagePack custom-type limitation). The from exclusion is
@@ -1537,13 +1708,6 @@ int main()
    };
 
    "timestamp in struct"_test = [] {
-      struct event
-      {
-         std::string name;
-         glz::msgpack::timestamp time;
-         bool operator==(const event&) const = default;
-      };
-
       event original{"test_event", {1700000000, 123000000}};
       expect_roundtrip_equal(original);
    };
@@ -1708,19 +1872,6 @@ int main()
 
    // Bounded buffer overflow tests for MessagePack
    {
-      struct simple_msgpack_obj
-      {
-         int x = 42;
-         std::string name = "hello";
-      };
-
-      struct large_msgpack_obj
-      {
-         int x = 42;
-         std::string long_name = "this is a very long string that definitely won't fit in a tiny buffer";
-         std::vector<int> data = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
-      };
-
       "msgpack write to std::array with sufficient space succeeds"_test = [] {
          simple_msgpack_obj obj{};
          std::array<char, 512> buffer{};

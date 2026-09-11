@@ -595,8 +595,13 @@ namespace glz
       }
    };
 
-   template <glaze_object_t T>
-      requires(!custom_write<T>)
+   // A struct is a keyed map: its member names are part of the data, as they are in JSON, CBOR, and
+   // BEVE. A plain aggregate used to go through to_tie to the tuple writer instead, which spells it
+   // as a positional array -- so the same struct was a map when it had a glz::meta and an array when
+   // it did not, and an internally tagged variant over plain aggregates had no keys for its
+   // discriminator to merge into. structs_as_arrays still selects the positional form, for both.
+   template <class T>
+      requires((glaze_object_t<T> || reflectable<T>) && !custom_write<T>)
    struct to<MSGPACK, T>
    {
       static constexpr auto N = reflect<T>::size;
@@ -609,10 +614,65 @@ namespace glz
          }(std::make_index_sequence<N>{});
       }
 
+      // Writes the members, with `prefix` emitted first so an internally tagged variant can splice its
+      // discriminator into the same map. `extra` is how many entries `prefix` adds to the header.
+      template <auto Opts, class Value, is_context Ctx, class B, class IX>
+      GLZ_ALWAYS_INLINE static void write_members(Value&& value, Ctx&& ctx, B&& b, IX&& ix, size_t extra, auto&& prefix)
+      {
+         [[maybe_unused]] decltype(auto) t = [&]() -> decltype(auto) {
+            if constexpr (reflectable<T>) {
+               return to_tie(value);
+            }
+            else {
+               return nullptr;
+            }
+         }();
+
+         if (!msgpack::detail::write_map_header(ctx, count_members<Opts>() + extra, b, ix)) [[unlikely]] {
+            return;
+         }
+         prefix();
+         if (bool(ctx.error)) [[unlikely]] {
+            return;
+         }
+         for_each<N>([&]<size_t I>() {
+            if (bool(ctx.error)) [[unlikely]] {
+               return;
+            }
+            if constexpr (!always_skipped<field_t<T, I>>) {
+               static constexpr sv key = reflect<T>::keys[I];
+               if (!msgpack::detail::write_str_header(ctx, key.size(), b, ix)) [[unlikely]] {
+                  return;
+               }
+               if (!msgpack::detail::dump_raw_bytes(ctx, key.data(), key.size(), b, ix)) [[unlikely]] {
+                  return;
+               }
+               if constexpr (reflectable<T>) {
+                  serialize<MSGPACK>::op<Opts>(get_member(value, get<I>(t)), ctx, b, ix);
+               }
+               else {
+                  serialize<MSGPACK>::op<Opts>(get_member(value, get<I>(reflect<T>::values)), ctx, b, ix);
+               }
+               if constexpr (is_output_streaming<decltype(b)>) {
+                  flush_buffer(b, ix);
+               }
+            }
+         });
+      }
+
       template <auto Opts, class Value, is_context Ctx, class B, class IX>
       GLZ_ALWAYS_INLINE static void op(Value&& value, Ctx&& ctx, B&& b, IX&& ix)
       {
          if constexpr (check_structs_as_arrays(Opts)) {
+            [[maybe_unused]] decltype(auto) t = [&]() -> decltype(auto) {
+               if constexpr (reflectable<T>) {
+                  return to_tie(value);
+               }
+               else {
+                  return nullptr;
+               }
+            }();
+
             if (!msgpack::detail::write_array_header(ctx, count_members<Opts>(), b, ix)) [[unlikely]] {
                return;
             }
@@ -621,7 +681,12 @@ namespace glz
                   return;
                }
                if constexpr (!always_skipped<field_t<T, I>>) {
-                  serialize<MSGPACK>::op<Opts>(get_member(value, get<I>(reflect<T>::values)), ctx, b, ix);
+                  if constexpr (reflectable<T>) {
+                     serialize<MSGPACK>::op<Opts>(get_member(value, get<I>(t)), ctx, b, ix);
+                  }
+                  else {
+                     serialize<MSGPACK>::op<Opts>(get_member(value, get<I>(reflect<T>::values)), ctx, b, ix);
+                  }
                   if constexpr (is_output_streaming<decltype(b)>) {
                      flush_buffer(b, ix);
                   }
@@ -629,39 +694,8 @@ namespace glz
             });
          }
          else {
-            if (!msgpack::detail::write_map_header(ctx, count_members<Opts>(), b, ix)) [[unlikely]] {
-               return;
-            }
-            for_each<N>([&]<size_t I>() {
-               if (bool(ctx.error)) [[unlikely]] {
-                  return;
-               }
-               if constexpr (!always_skipped<field_t<T, I>>) {
-                  static constexpr sv key = reflect<T>::keys[I];
-                  if (!msgpack::detail::write_str_header(ctx, key.size(), b, ix)) [[unlikely]] {
-                     return;
-                  }
-                  if (!msgpack::detail::dump_raw_bytes(ctx, key.data(), key.size(), b, ix)) [[unlikely]] {
-                     return;
-                  }
-                  serialize<MSGPACK>::op<Opts>(get_member(value, get<I>(reflect<T>::values)), ctx, b, ix);
-                  if constexpr (is_output_streaming<decltype(b)>) {
-                     flush_buffer(b, ix);
-                  }
-               }
-            });
+            write_members<Opts>(std::forward<Value>(value), ctx, b, ix, 0, [] {});
          }
-      }
-   };
-
-   template <reflectable T>
-      requires(!custom_write<T>)
-   struct to<MSGPACK, T>
-   {
-      template <auto Opts, class Value, is_context Ctx, class B, class IX>
-      GLZ_ALWAYS_INLINE static void op(Value&& value, Ctx&& ctx, B&& b, IX&& ix)
-      {
-         to<MSGPACK, decltype(to_tie(value))>::template op<Opts>(to_tie(value), ctx, b, ix);
       }
    };
 
@@ -1009,37 +1043,129 @@ namespace glz
       }
    };
 
-   // A variant is written as the two element array [index, value].
+   // A variant takes the shape its glz::meta declares, exactly as it does in JSON and BEVE:
    //
-   // The discriminator is the alternative's index, not its id. An id is only a name when glz::meta
-   // declares one; without that declaration ids_v falls back to glz::name_v, which for a type with no
-   // meta::name is the compiler's own spelling of it -- MSVC's
-   // "glz::ordered_small_map<struct glz::generic_json<2,struct glz::ordered_small_map> >" is not
-   // GCC's. Writing that made the output both large and unreadable by a build using another
-   // compiler. The index is neither, and it matches CBOR.
+   //   internal   { tag : id, ...members }        `tag` declared alone
+   //   adjacent   { tag : id, content : value }   `tag` and `content` declared
+   //   none       the active alternative's own value, bare
+   //
+   // Nothing is invented for a variant the author did not describe. Glaze 8.3.0 and earlier wrote
+   // the two element array [id, value] for every variant, where an undeclared id fell back to
+   // glz::name_v -- the compiler's own spelling of the type. That made the output large, unreadable
+   // by a build using another compiler, and meaningless to any other MessagePack implementation. An
+   // index would have been smaller but no more self-describing; writing nothing at all is both.
    template <is_variant T>
       requires(not custom_write<T>)
    struct to<MSGPACK, T>
    {
-      template <auto Opts, class Value, is_context Ctx, class B, class IX>
-      GLZ_ALWAYS_INLINE static void op(Value&& value, Ctx&& ctx, B&& b, IX&& ix)
-      {
-         // Taken from the variant rather than recovered by matching the visited type, which is
-         // ambiguous for a variant that repeats an alternative type. A valueless variant has no
-         // alternative to name, and variant_npos is not an index any reader could resolve.
-         const size_t index = value.index();
-         if (index >= std::variant_size_v<std::remove_cvref_t<Value>>) [[unlikely]] {
-            ctx.error = error_code::no_matching_variant_type;
-            return;
-         }
+      // The tagging representation is a property of the variant, decided once for every alternative.
+      static constexpr auto tagging = variant_tagging_v<T>;
 
-         if (!msgpack::detail::write_array_header(ctx, 2, b, ix)) [[unlikely]] {
-            return;
+      // `ids` may declare fewer entries than the variant has alternatives -- the readers treat the
+      // first unlabeled alternative as the default for an unrecognized id -- so an alternative past
+      // the end of `ids` has no id to write. Indexing there reads past a static array.
+      static bool missing_id(auto&& value, is_context auto&& ctx)
+      {
+         if (value.index() >= ids_v<T>.size()) [[unlikely]] {
+            ctx.error = error_code::no_matching_variant_type;
+            ctx.custom_error_message = variant_ids_string_v<T>;
+            return true;
          }
-         if (!msgpack::detail::write_unsigned(ctx, index, b, ix)) [[unlikely]] {
-            return;
+         return false;
+      }
+
+      template <class B, class IX>
+      GLZ_ALWAYS_INLINE static bool write_str(is_context auto&& ctx, const sv s, B&& b, IX&& ix)
+      {
+         return msgpack::detail::write_str_header(ctx, s.size(), b, ix) &&
+                msgpack::detail::dump_raw_bytes(ctx, s.data(), s.size(), b, ix);
+      }
+
+      template <auto Opts, class Value, is_context Ctx, class B, class IX>
+      static void op(Value&& value, Ctx&& ctx, B&& b, IX&& ix)
+      {
+         if constexpr (tagging == variant_tagging_kind::none) {
+            std::visit([&](auto&& v) { serialize<MSGPACK>::op<Opts>(v, ctx, b, ix); }, value);
          }
-         std::visit([&](auto&& v) { serialize<MSGPACK>::op<Opts>(v, ctx, b, ix); }, value);
+         else if constexpr (tagging == variant_tagging_kind::adjacent) {
+            if (missing_id(value, ctx)) [[unlikely]] {
+               return;
+            }
+            if (!msgpack::detail::write_map_header(ctx, 2, b, ix)) [[unlikely]] {
+               return;
+            }
+            if (!write_str(ctx, tag_v<T>, b, ix)) [[unlikely]] {
+               return;
+            }
+            if (!write_str(ctx, ids_v<T>[value.index()], b, ix)) [[unlikely]] {
+               return;
+            }
+            if (!write_str(ctx, content_v<T>, b, ix)) [[unlikely]] {
+               return;
+            }
+            std::visit([&](auto&& v) { serialize<MSGPACK>::op<Opts>(v, ctx, b, ix); }, value);
+         }
+         else {
+            if (missing_id(value, ctx)) [[unlikely]] {
+               return;
+            }
+            const sv id = ids_v<T>[value.index()];
+
+            std::visit(
+               [&](auto&& v) {
+                  using V = std::remove_cvref_t<decltype(v)>;
+                  using X = variant_alternative_object_t<V>;
+
+                  const auto prefix = [&] {
+                     if (!write_str(ctx, tag_v<T>, b, ix)) [[unlikely]] {
+                        return;
+                     }
+                     write_str(ctx, id, b, ix);
+                  };
+
+                  if constexpr (alternative_declares_key<V>(tag_v<T>)) {
+                     // The alternative carries the discriminator in a member of its own, so merging
+                     // a second one would write the key twice.
+                     serialize<MSGPACK>::op<Opts>(v, ctx, b, ix);
+                  }
+                  else if constexpr (variant_unit_alternative<V>) {
+                     // No data to merge with: the discriminator alone is the whole object, which is
+                     // the same object an empty struct alternative produces.
+                     if (!msgpack::detail::write_map_header(ctx, 1, b, ix)) [[unlikely]] {
+                        return;
+                     }
+                     prefix();
+                  }
+                  else if constexpr ((glaze_object_t<X> || reflectable<X>) && (not custom_write<V>)) {
+                     if constexpr (is_memory_object<V>) {
+                        if (!v) [[unlikely]] {
+                           ctx.error = error_code::invalid_variant_object;
+                           return;
+                        }
+                        to<MSGPACK, X>::template write_members<Opts>(*v, ctx, b, ix, 1, prefix);
+                     }
+                     else {
+                        to<MSGPACK, X>::template write_members<Opts>(v, ctx, b, ix, 1, prefix);
+                     }
+                  }
+                  else {
+                     // A custom-serialized alternative is the one shape internal tagging promises but
+                     // MessagePack cannot deliver: a map is length-prefixed and the member count of a
+                     // body written by someone else's serializer is not knowable in advance. The JSON
+                     // writer merges into such a body because JSON objects are not counted.
+                     static_assert(detail::binary_internal_tagging_needs_reflected_alternative<T, V>::value,
+                                   "Internal tagging (glz::meta `tag` without `content`) cannot be "
+                                   "written to MessagePack for a custom-serialized alternative: a "
+                                   "MessagePack map is length-prefixed and the member count of a custom "
+                                   "body is not knowable in advance. Declare `content` beside `tag` to "
+                                   "select adjacent tagging, which nests the custom value instead of "
+                                   "merging into it. The offending alternative is the second template "
+                                   "argument of binary_internal_tagging_needs_reflected_alternative in "
+                                   "the instantiation backtrace.");
+                  }
+               },
+               value);
+         }
       }
    };
 
@@ -1154,23 +1280,6 @@ namespace glz
             return;
          }
          msgpack::detail::dump_raw_bytes(ctx, name.data(), name.size(), b, ix);
-      }
-   };
-
-   // Generic JSON value -- write the active alternative as its native MessagePack type.
-   //
-   // glz::generic is a glaze_value_t over a variant, so without this it would take the variant
-   // writer's [index, value] shape. That is wasteful for a type whose alternatives are exactly the
-   // JSON value categories, which MessagePack already distinguishes in its own type byte, and it
-   // makes the output unreadable by any MessagePack library that does not know Glaze's convention.
-   // JSONB writes glz::generic natively for the same reason.
-   template <num_mode Mode, template <class> class MapType>
-   struct to<MSGPACK, generic_json<Mode, MapType>> final
-   {
-      template <auto Opts, class Value, is_context Ctx, class B, class IX>
-      static void op(Value&& value, Ctx&& ctx, B&& b, IX&& ix)
-      {
-         std::visit([&](auto&& v) { serialize<MSGPACK>::op<Opts>(v, ctx, b, ix); }, value.data);
       }
    };
 

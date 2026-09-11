@@ -63,7 +63,19 @@ Glaze CBOR implements the following standards:
 
 ## Variants and `glz::generic`
 
-A `std::variant` is written as the two element array `[index, value]`, where `index` is the active alternative's index. `glz::generic` (and the other generic types) is not wrapped at all: its alternatives are exactly the JSON value categories, which CBOR already distinguishes in its major type, so it is written and read as plain CBOR that any CBOR implementation can consume.
+A variant takes the shape its `glz::meta` declares, exactly as it does in JSON and BEVE:
+
+| `glz::meta` | Shape |
+|---|---|
+| `tag` alone | `{ tag : id, ...members }` — the discriminator merged into the alternative's map |
+| `tag` and `content` | `{ tag : id, content : value }` — the discriminator beside a value of any shape |
+| neither | the active alternative's own value, bare |
+
+Reading an undeclared variant tries the alternatives in declaration order and keeps the first that matches the major type. Alternatives that share a wire shape cannot be told apart; declare a `tag` when that matters.
+
+> **Wire format change.** Glaze 8.3.0 and earlier wrote every variant as the two element array `[index, value]`. That was compact but no more self-describing than a type name, and meaningless to any CBOR implementation that did not already know Glaze's convention. CBOR containing a variant written by an older Glaze will not read back.
+
+`glz::generic` is a variant of exactly the JSON value categories and declares no `tag`, so it falls out of the rule above as plain CBOR:
 
 ```c++
 glz::generic_u64 value;
@@ -73,7 +85,7 @@ std::string buffer;
 ec = glz::write_cbor(value, buffer); // map(2), no per-element type information
 ```
 
-Reading into a `glz::generic` accepts every CBOR major type that has a JSON counterpart. Byte strings, semantic tags, and the simple values other than `false`, `true`, and `null` do not, and fail with `error_code::syntax_error` — so a tagged item (a date, a bignum, a COSE structure) has to be read into a type that models it rather than into a `glz::generic`.
+Reading into a `glz::generic` accepts every CBOR major type that has a JSON counterpart. Byte strings, semantic tags, and the simple values other than `false`, `true`, and `null` do not — so a tagged item (a date, a bignum, a COSE structure) has to be read into a type that models it rather than into a `glz::generic`.
 
 ## CBOR to JSON Conversion
 

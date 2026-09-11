@@ -459,6 +459,25 @@ namespace glz
          const uint8_t major_type = get_major_type(initial);
          const uint8_t additional_info = get_additional_info(initial);
 
+         // An integer is a number, and a floating point target is the only alternative wide enough to
+         // hold a magnitude past int64_t. Rejecting the integer major types here left a CBOR integer
+         // too large for any integer target with nowhere to go, and matches what MessagePack's
+         // floating point reader has always accepted.
+         if (major_type == major::uint || major_type == major::nint) {
+            const uint64_t arg = cbor_detail::decode_arg(ctx, it, end, additional_info);
+            if (bool(ctx.error)) [[unlikely]] {
+               return;
+            }
+            if (major_type == major::nint) {
+               // A negative head encodes -1 - arg, which runs past int64_t once arg does.
+               value = static_cast<T>(-1.0 - static_cast<double>(arg));
+            }
+            else {
+               value = static_cast<T>(arg);
+            }
+            return;
+         }
+
          if (major_type != major::simple) [[unlikely]] {
             ctx.error = error_code::syntax_error;
             return;
@@ -1783,11 +1802,20 @@ namespace glz
 #pragma warning(disable : 4702) // unreachable code from if constexpr
 #endif
    // Glaze objects (structs with reflection)
+   // TagKey names an internally tagged variant's discriminator, which the variant reader has already
+   // resolved. It appears in this object's map like any other key, so tolerate it: skip it unless the
+   // alternative declares a member of that name, in which case it reads normally into that member.
+   // Mirrors the JSON object reader's `string_literal tag` parameter.
    template <class T>
       requires((glaze_object_t<T> || reflectable<T>) && !custom_read<T>)
    struct from<CBOR, T> final
    {
-      template <auto Opts>
+      static constexpr bool is_tag_key(const sv key, const sv tag_key) noexcept
+      {
+         return not tag_key.empty() && key == tag_key;
+      }
+
+      template <auto Opts, string_literal TagKey = "">
       static void op(auto& value, is_context auto& ctx, auto& it, auto end)
       {
          using namespace cbor;
@@ -1891,6 +1919,11 @@ namespace glz
                               parse<CBOR>::op<Opts>(get_member(value, get<I>(reflect<T>::values)), ctx, it, end);
                            }
                         }
+                        else if (is_tag_key(key, TagKey.sv())) {
+                           skip_value<CBOR>::op<Opts>(ctx, it, end);
+                           if (bool(ctx.error)) [[unlikely]]
+                              return;
+                        }
                         else {
                            if constexpr (Opts.error_on_unknown_keys) {
                               ctx.error = error_code::unknown_key;
@@ -1909,7 +1942,14 @@ namespace glz
                      return;
                }
                else [[unlikely]] {
-                  if constexpr (Opts.error_on_unknown_keys) {
+                  const sv unmatched{reinterpret_cast<const char*>(it), static_cast<size_t>(key_len)};
+                  if (is_tag_key(unmatched, TagKey.sv())) {
+                     it += key_len;
+                     skip_value<CBOR>::op<Opts>(ctx, it, end);
+                     if (bool(ctx.error)) [[unlikely]]
+                        return;
+                  }
+                  else if constexpr (Opts.error_on_unknown_keys) {
                      ctx.error = error_code::unknown_key;
                      return;
                   }
@@ -1920,6 +1960,12 @@ namespace glz
                         return;
                   }
                }
+            }
+            else if (is_tag_key(sv{reinterpret_cast<const char*>(it), static_cast<size_t>(key_len)}, TagKey.sv())) {
+               it += key_len;
+               skip_value<CBOR>::op<Opts>(ctx, it, end);
+               if (bool(ctx.error)) [[unlikely]]
+                  return;
             }
             else if constexpr (Opts.error_on_unknown_keys) {
                ctx.error = error_code::unknown_key;
@@ -2230,80 +2276,240 @@ namespace glz
    };
 
    // Variants
+   // The counterpart of to<CBOR, T>: the shape is whatever glz::meta declared, and an undeclared
+   // variant is a bare value resolved from CBOR's own major type.
    template <is_variant T>
       requires(not custom_read<T>)
    struct from<CBOR, T>
    {
+      static constexpr auto tagging = variant_tagging_v<T>;
+      static constexpr size_t variant_size = std::variant_size_v<T>;
+
+      // Try the alternatives in declaration order, rewinding after each miss. Every CBOR reader
+      // validates the major type it is handed, so a wrong alternative fails on the head byte rather
+      // than consuming input. Alternatives that share a wire shape cannot be told apart -- declare a
+      // `tag` in glz::meta when that matters.
       template <auto Opts>
-      GLZ_ALWAYS_INLINE static void op(auto& value, is_context auto& ctx, auto& it, auto end) noexcept
+      static void try_each(auto& value, is_context auto& ctx, auto& it, auto end) noexcept
+      {
+         const auto start = it;
+         bool resolved = false;
+         for_each<variant_size>([&]<size_t I>() {
+            if (resolved) {
+               return;
+            }
+            using V = std::variant_alternative_t<I, T>;
+            it = start;
+            ctx.error = error_code::none;
+            ctx.custom_error_message = {};
+            // Read into a fresh alternative and move it in, so a miss leaves `value` as it was.
+            V v{};
+            from<CBOR, V>::template op<Opts>(v, ctx, it, end);
+            if (not bool(ctx.error)) {
+               value.template emplace<I>(std::move(v));
+               resolved = true;
+            }
+         });
+         if (not resolved) {
+            it = start;
+            ctx.error = error_code::no_matching_variant_type;
+         }
+      }
+
+      // Decode the discriminator value at `it` and map it to an alternative index, advancing past it.
+      // Returns variant_size when the id names no alternative and there is no unlabeled default.
+      template <auto Opts>
+      static size_t resolve_id(is_context auto& ctx, auto& it, auto end) noexcept
+      {
+         using namespace cbor;
+         using id_type = std::decay_t<decltype(ids_v<T>[0])>;
+         size_t index = ids_v<T>.size();
+
+         if constexpr (std::integral<id_type>) {
+            id_type id{};
+            from<CBOR, id_type>::template op<Opts>(id, ctx, it, end);
+            if (bool(ctx.error)) [[unlikely]] {
+               return variant_size;
+            }
+            index = variant_id_to_index<T>::op(id);
+         }
+         else {
+            if (it >= end) [[unlikely]] {
+               ctx.error = error_code::unexpected_end;
+               return variant_size;
+            }
+            const uint8_t initial = static_cast<uint8_t>(*it);
+            if (get_major_type(initial) != major::tstr) [[unlikely]] {
+               ctx.error = error_code::syntax_error;
+               return variant_size;
+            }
+            ++it;
+            const uint64_t len = cbor_detail::decode_arg(ctx, it, end, get_additional_info(initial));
+            if (bool(ctx.error)) [[unlikely]] {
+               return variant_size;
+            }
+            if (static_cast<uint64_t>(end - it) < len) [[unlikely]] {
+               ctx.error = error_code::unexpected_end;
+               return variant_size;
+            }
+            const sv id{reinterpret_cast<const char*>(it), static_cast<size_t>(len)};
+            it += len;
+            index = variant_id_to_index<T>::op(id.data(), id.data() + id.size(), id.size());
+         }
+
+         if (index < ids_v<T>.size()) [[likely]] {
+            return index;
+         }
+         if constexpr (ids_v<T>.size() < variant_size) {
+            // Fewer ids than alternatives: the first unlabeled alternative is the default for an
+            // unrecognized id, matching the BEVE and JSON readers.
+            return ids_v<T>.size();
+         }
+         return variant_size;
+      }
+
+      // Walk the map once, resolving the discriminator and consuming every entry. `on_content` sees
+      // each non-discriminator key and decides whether to parse or skip its value.
+      template <auto Opts>
+      static size_t scan_map(is_context auto& ctx, auto& it, auto end, uint64_t& len, auto&& on_content) noexcept
       {
          using namespace cbor;
 
          if (it >= end) [[unlikely]] {
             ctx.error = error_code::unexpected_end;
-            return;
+            return variant_size;
          }
-
-         uint8_t initial;
-         std::memcpy(&initial, it, 1);
+         const uint8_t initial = static_cast<uint8_t>(*it);
+         if (get_major_type(initial) != major::map) [[unlikely]] {
+            ctx.error = error_code::syntax_error;
+            return variant_size;
+         }
          ++it;
-
-         const uint8_t major_type = get_major_type(initial);
-         const uint8_t additional_info = get_additional_info(initial);
-
-         // Expect array of [index, value]
-         if (major_type != major::array) [[unlikely]] {
-            ctx.error = error_code::syntax_error;
-            return;
+         len = cbor_detail::decode_arg(ctx, it, end, get_additional_info(initial));
+         if (bool(ctx.error)) [[unlikely]] {
+            return variant_size;
          }
 
-         // This reader consumes the [index, value] array itself, so the level is its to count.
-         depth_guard guard{ctx};
-         if (!guard) [[unlikely]] {
+         size_t index = variant_size;
+         for (uint64_t i = 0; i < len && ctx.error == error_code::none; ++i) {
+            if (it >= end) [[unlikely]] {
+               ctx.error = error_code::unexpected_end;
+               return variant_size;
+            }
+            const uint8_t key_initial = static_cast<uint8_t>(*it);
+            if (get_major_type(key_initial) != major::tstr) [[unlikely]] {
+               ctx.error = error_code::syntax_error;
+               return variant_size;
+            }
+            ++it;
+            const uint64_t key_len = cbor_detail::decode_arg(ctx, it, end, get_additional_info(key_initial));
+            if (bool(ctx.error)) [[unlikely]] {
+               return variant_size;
+            }
+            if (static_cast<uint64_t>(end - it) < key_len) [[unlikely]] {
+               ctx.error = error_code::unexpected_end;
+               return variant_size;
+            }
+            const sv key{reinterpret_cast<const char*>(it), static_cast<size_t>(key_len)};
+            it += key_len;
+
+            if (key == tag_v<T>) {
+               index = resolve_id<Opts>(ctx, it, end);
+            }
+            else {
+               on_content(key);
+            }
+         }
+         return index;
+      }
+
+      template <auto Opts>
+      static void op(auto& value, is_context auto& ctx, auto& it, auto end) noexcept
+      {
+         if constexpr (tagging == variant_tagging_kind::none) {
+            try_each<Opts>(value, ctx, it, end);
             return;
          }
+         else {
+            // This reader consumes the discriminating map itself, so the level is its to count.
+            depth_guard guard{ctx};
+            if (!guard) [[unlikely]] {
+               return;
+            }
 
-         uint64_t count = cbor_detail::decode_arg(ctx, it, end, additional_info);
-         if (bool(ctx.error)) [[unlikely]]
-            return;
+            static constexpr auto tag_literal = string_literal_from_view<tag_v<T>.size()>(tag_v<T>);
+            const auto start = it;
 
-         if (count != 2) [[unlikely]] {
-            ctx.error = error_code::syntax_error;
-            return;
+            // Pass one resolves the discriminator wherever it sits in the map and consumes the whole
+            // item, so an alternative that needs no body is already finished when it returns.
+            uint64_t len{};
+            const size_t index =
+               scan_map<Opts>(ctx, it, end, len, [&](sv) { skip_value<CBOR>::op<Opts>(ctx, it, end); });
+            if (bool(ctx.error)) [[unlikely]] {
+               return;
+            }
+            if (index >= variant_size) [[unlikely]] {
+               ctx.error = error_code::no_matching_variant_type;
+               ctx.custom_error_message = variant_ids_string_v<T>;
+               return;
+            }
+
+            const auto after = it;
+            if (value.index() != index) {
+               emplace_runtime_variant(value, index);
+            }
+
+            if constexpr (tagging == variant_tagging_kind::adjacent) {
+               if (len != 2) [[unlikely]] {
+                  ctx.error = error_code::syntax_error;
+                  return;
+               }
+               // Pass two re-walks the same map and parses the content entry in place.
+               it = start;
+               uint64_t ignored{};
+               scan_map<Opts>(ctx, it, end, ignored, [&](sv key) {
+                  if (key == content_v<T>) {
+                     std::visit([&](auto& v) { parse<CBOR>::op<Opts>(v, ctx, it, end); }, value);
+                  }
+                  else {
+                     skip_value<CBOR>::op<Opts>(ctx, it, end);
+                  }
+               });
+            }
+            else {
+               visit<variant_size>(
+                  [&]<size_t I>() {
+                     using V = std::variant_alternative_t<I, T>;
+                     using X = variant_alternative_object_t<V>;
+                     constexpr bool struct_like = (glaze_object_t<X> || reflectable<X>) && (not custom_read<X>);
+
+                     if constexpr (variant_unit_alternative<V>) {
+                        // Nothing but the discriminator: pass one already consumed the whole map.
+                     }
+                     else if constexpr (struct_like && (not is_memory_object<V>)) {
+                        // Thread the discriminator key through so it is skipped without disabling
+                        // unknown-key checking for the alternative's real fields. An alternative that
+                        // declares a member of that name keeps receiving its value (JSON parity).
+                        it = start;
+                        from<CBOR, X>::template op<Opts, tag_literal>(std::get<I>(value), ctx, it, end);
+                     }
+                     else if constexpr (requires { Opts.error_on_unknown_keys; }) {
+                        // memory_object / map / pair alternative: tolerate the discriminator key.
+                        static constexpr auto AltOpts = [] {
+                           auto o = Opts;
+                           o.error_on_unknown_keys = false;
+                           return o;
+                        }();
+                        it = start;
+                        from<CBOR, V>::template op<AltOpts>(std::get<I>(value), ctx, it, end);
+                     }
+                     else {
+                        it = after;
+                     }
+                  },
+                  index);
+            }
          }
-
-         // Read index
-         if (it >= end) [[unlikely]] {
-            ctx.error = error_code::unexpected_end;
-            return;
-         }
-
-         uint8_t idx_initial;
-         std::memcpy(&idx_initial, it, 1);
-         ++it;
-
-         const uint8_t idx_major = get_major_type(idx_initial);
-         const uint8_t idx_info = get_additional_info(idx_initial);
-
-         if (idx_major != major::uint) [[unlikely]] {
-            ctx.error = error_code::syntax_error;
-            return;
-         }
-
-         uint64_t type_index = cbor_detail::decode_arg(ctx, it, end, idx_info);
-         if (bool(ctx.error)) [[unlikely]]
-            return;
-
-         if (type_index >= std::variant_size_v<T>) [[unlikely]] {
-            ctx.error = error_code::no_matching_variant_type;
-            return;
-         }
-
-         if (value.index() != type_index) {
-            emplace_runtime_variant(value, type_index);
-         }
-
-         std::visit([&](auto& v) { parse<CBOR>::op<Opts>(v, ctx, it, end); }, value);
       }
    };
 
@@ -2626,112 +2832,6 @@ namespace glz
          if (bool(ctx.error)) [[unlikely]]
             return;
          wrapper.value = tp;
-      }
-   };
-
-   // Generic JSON value -- resolve the alternative from CBOR's own major type.
-   //
-   // The counterpart of to<CBOR, generic_json>: the value is a bare CBOR item with no variant
-   // wrapper, and CBOR's major type already names the JSON value category it belongs to. Which
-   // numeric alternative an integer lands in follows the JSON reader, where the alternatives are
-   // tried in declaration order: the widest exact one for the mode, falling back to double when the
-   // magnitude does not fit.
-   template <num_mode Mode, template <class> class MapType>
-   struct from<CBOR, generic_json<Mode, MapType>> final
-   {
-      template <auto Opts>
-      static void op(auto& value, is_context auto& ctx, auto& it, auto end) noexcept
-      {
-         using namespace cbor;
-
-         if (it >= end) [[unlikely]] {
-            ctx.error = error_code::unexpected_end;
-            return;
-         }
-
-         using array_t = typename generic_json<Mode, MapType>::array_t;
-         using object_t = typename generic_json<Mode, MapType>::object_t;
-
-         // Read into a fresh alternative and move it in, rather than emplacing first and parsing in
-         // place: a failed parse then leaves `value` as it was instead of half-filled.
-         const auto read_into = [&]<class V>(std::type_identity<V>) {
-            V v{};
-            from<CBOR, V>::template op<Opts>(v, ctx, it, end);
-            if (bool(ctx.error)) [[unlikely]] {
-               return;
-            }
-            value.data = std::move(v);
-         };
-
-         // Peek only: every reader below consumes the head itself.
-         const uint8_t initial = static_cast<uint8_t>(*it);
-         switch (get_major_type(initial)) {
-         case major::uint:
-         case major::nint: {
-            // Decoded here rather than delegated: the integer readers reject a magnitude that does
-            // not fit their target, and no alternative but double is left to fall back to -- and the
-            // floating point reader in turn rejects an integer major type, so it cannot be handed the
-            // same bytes. One decode of the argument answers both questions.
-            const bool negative = get_major_type(initial) == major::nint;
-            ++it;
-            const uint64_t arg = cbor_detail::decode_arg(ctx, it, end, get_additional_info(initial));
-            if (bool(ctx.error)) [[unlikely]] {
-               return;
-            }
-            if (negative) {
-               // A negative head encodes -1 - arg, which is int64_t's whole negative range at
-               // arg == int64_t max and runs past it beyond that. ~arg is that value's bit pattern.
-               if (arg <= static_cast<uint64_t>((std::numeric_limits<int64_t>::max)())) {
-                  assign_number(value, static_cast<int64_t>(~arg));
-               }
-               else {
-                  assign_number(value, -1.0 - static_cast<double>(arg));
-               }
-            }
-            else {
-               assign_number(value, arg);
-            }
-            return;
-         }
-         case major::tstr: {
-            read_into(std::type_identity<std::string>{});
-            return;
-         }
-         case major::array: {
-            read_into(std::type_identity<array_t>{});
-            return;
-         }
-         case major::map: {
-            read_into(std::type_identity<object_t>{});
-            return;
-         }
-         case major::simple: {
-            switch (get_additional_info(initial)) {
-            case simple::false_value:
-            case simple::true_value:
-               read_into(std::type_identity<bool>{});
-               return;
-            case simple::null_value:
-               ++it; // no payload
-               value.data = nullptr;
-               return;
-            case simple::float16:
-            case simple::float32:
-            case simple::float64:
-               read_into(std::type_identity<double>{});
-               return;
-            default:
-               // `undefined`, a break code outside any indefinite item, and the unassigned simple
-               // values have no JSON counterpart.
-               ctx.error = error_code::syntax_error;
-               return;
-            }
-         }
-         default:
-            // Byte strings and semantic tags are CBOR items with no JSON value category.
-            ctx.error = error_code::syntax_error;
-            return;
-         }
       }
    };
 

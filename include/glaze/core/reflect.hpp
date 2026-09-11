@@ -3542,6 +3542,12 @@ namespace glz
       template <class Variant>
       struct beve_positional_tagging_needs_content : std::false_type
       {};
+
+      // MessagePack and CBOR maps are length-prefixed exactly as BEVE objects are, so they inherit
+      // the same representation limit: the member count of a custom body is not knowable in advance.
+      template <class Variant, class Alternative>
+      struct binary_internal_tagging_needs_reflected_alternative : std::false_type
+      {};
    }
 
    template <is_variant T>

@@ -32,7 +32,6 @@ namespace glz
 }
 
 #include <cstddef>
-#include <limits>
 #include <map>
 #include <variant>
 #include <vector>
@@ -564,48 +563,6 @@ namespace glz
 
    // Backwards compatibility alias
    using json_t [[deprecated("glz::json_t is deprecated, use glz::generic instead")]] = generic;
-
-   // Store a number in the widest exact alternative the mode has for it, which is the alternative the
-   // JSON reader's declaration-order search would land on. A signed value always has one. An unsigned
-   // magnitude past the mode's widest integer alternative has nowhere exact left to go but double.
-   //
-   // Shared by the readers of the self-describing binary formats, whose own type information already
-   // says which of these three overloads to call, so the policy is stated once rather than per format.
-   // JSONB is the exception: it stores a number as ASCII text with no decoded magnitude to dispatch
-   // on, so it resolves the alternative by re-reading rather than by asking here.
-   template <num_mode Mode, template <class> class MapType>
-   constexpr void assign_number(generic_json<Mode, MapType>& value, const int64_t n) noexcept
-   {
-      if constexpr (Mode == num_mode::f64) {
-         value.data = static_cast<double>(n);
-      }
-      else {
-         value.data = n;
-      }
-   }
-
-   template <num_mode Mode, template <class> class MapType>
-   constexpr void assign_number(generic_json<Mode, MapType>& value, const uint64_t n) noexcept
-   {
-      if constexpr (Mode == num_mode::f64) {
-         value.data = static_cast<double>(n);
-      }
-      else if constexpr (Mode == num_mode::u64) {
-         value.data = n;
-      }
-      else if (n <= static_cast<uint64_t>((std::numeric_limits<int64_t>::max)())) {
-         value.data = static_cast<int64_t>(n);
-      }
-      else {
-         value.data = static_cast<double>(n);
-      }
-   }
-
-   template <num_mode Mode, template <class> class MapType>
-   constexpr void assign_number(generic_json<Mode, MapType>& value, const double d) noexcept
-   {
-      value.data = d;
-   }
 
    template <num_mode Mode, template <class> class MapType>
    [[nodiscard]] inline bool is_array(const generic_json<Mode, MapType>& value) noexcept
