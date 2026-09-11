@@ -158,6 +158,11 @@ namespace glz
       // Data access (satisfies vector_like concept)
       char* data() noexcept { return buffer_.data(); }
       const char* data() const noexcept { return buffer_.data(); }
+
+      // Logical position that data() maps to. data() points at logical flush_offset_,
+      // not logical 0, so contiguous-write helpers must subtract this to locate a
+      // logical index in physical storage.
+      size_t data_offset() const noexcept { return flush_offset_; }
    };
 
    // buffer_traits specialization for basic_ostream_buffer
