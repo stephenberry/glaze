@@ -89,7 +89,7 @@ namespace glz
          // Optimized single-byte path: direct assignment instead of memcpy
          if constexpr (vector_like<Buffer>) {
             if (ix == b.size()) [[unlikely]] {
-               b.resize(b.size() == 0 ? 128 : b.size() * 2);
+               grow_buffer(b, b.size() == 0 ? 64 : ix + 1);
             }
          }
          b[ix] = static_cast<std::decay_t<decltype(b[0])>>(value);

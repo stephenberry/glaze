@@ -1098,7 +1098,7 @@ suite ostream_buffer_bounded_growth_tests = [] {
       expect(!glz::write_json(rows, buf));
       expect(oss.str() == reference);
       // Window stays a small multiple of the 512 byte capacity; it tracked the document before.
-      expect(buf.buffer_capacity() < 16384u) << buf.buffer_capacity();
+      expect(buf.buffer_capacity() < 4096u) << buf.buffer_capacity();
    };
 
    "prettified generic write keeps the window near capacity"_test = [] {
@@ -1119,7 +1119,40 @@ suite ostream_buffer_bounded_growth_tests = [] {
       glz::ostream_buffer<512> buf(oss);
       expect(!glz::write<glz::opts{.prettify = true}>(root, buf));
       expect(oss.str() == reference);
-      expect(buf.buffer_capacity() < 16384u) << buf.buffer_capacity();
+      expect(buf.buffer_capacity() < 4096u) << buf.buffer_capacity();
+   };
+
+   "binary formats keep the window near capacity"_test = [] {
+      std::vector<bounded_row> rows;
+      for (uint64_t i = 0; i < 20000; ++i) {
+         bounded_row row;
+         row.name = std::string(size_t(i % 23) + 1, 'y');
+         row.id = i;
+         for (uint64_t d = 0; d < (i % 7); ++d) {
+            row.values.push_back(d);
+         }
+         rows.push_back(std::move(row));
+      }
+
+      {
+         std::string reference;
+         expect(!glz::write_beve(rows, reference));
+         std::ostringstream oss;
+         glz::ostream_buffer<512> buf(oss);
+         expect(!glz::write_beve(rows, buf));
+         expect(oss.str() == reference);
+         expect(buf.buffer_capacity() < 4096u) << buf.buffer_capacity();
+      }
+
+      {
+         std::string reference;
+         expect(!glz::write_cbor(rows, reference));
+         std::ostringstream oss;
+         glz::ostream_buffer<512> buf(oss);
+         expect(!glz::write_cbor(rows, buf));
+         expect(oss.str() == reference);
+         expect(buf.buffer_capacity() < 4096u) << buf.buffer_capacity();
+      }
    };
 
    "larger capacity still bounds the window"_test = [] {
@@ -1133,7 +1166,7 @@ suite ostream_buffer_bounded_growth_tests = [] {
       expect(!glz::write_json(values, buf));
       expect(oss.str() == reference);
       // Bounded by the configured capacity plus the slack the growth policy reserves.
-      expect(buf.buffer_capacity() < 4u * 65536u) << buf.buffer_capacity();
+      expect(buf.buffer_capacity() < 98304u) << buf.buffer_capacity();
    };
 };
 

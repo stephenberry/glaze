@@ -81,7 +81,14 @@ namespace glz
    template <class B>
    GLZ_ALWAYS_INLINE void grow_buffer(B& b, const size_t required)
    {
-      buffer_traits<std::remove_cvref_t<B>>::grow(b, required);
+      using traits = buffer_traits<std::remove_cvref_t<B>>;
+      if constexpr (requires { traits::grow(b, required); }) {
+         traits::grow(b, required);
+      }
+      else {
+         // A user specialization written before `grow` existed: keep the growth it used to get.
+         b.resize(2 * required);
+      }
    }
 
    // Concept to check if a buffer type supports output streaming (flushing)
