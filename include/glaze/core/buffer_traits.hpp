@@ -54,7 +54,12 @@ namespace glz
 
       // Grow a resizable buffer so that it can hold `required` bytes.
       // 2x growth amortizes repeated reallocations to O(n) total cost.
-      GLZ_ALWAYS_INLINE static void grow(Buffer& b, size_t required) noexcept(not is_resizable)
+      // Constrained on `is_resizable` so that it is not merely ill-formed for a fixed buffer but
+      // absent from the overload set: `grow_buffer` detects this member to decide whether a
+      // specialization opts into a growth policy, and an unconstrained declaration would answer
+      // yes for every buffer, including those that cannot grow at all.
+      GLZ_ALWAYS_INLINE static void grow(Buffer& b, size_t required)
+         requires(is_resizable)
       {
          b.resize(2 * required);
       }
