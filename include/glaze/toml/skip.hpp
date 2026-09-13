@@ -1,5 +1,7 @@
 #pragma once
 
+#include <array>
+
 #include "glaze/core/context.hpp"
 #include "glaze/core/opts.hpp"
 #include "glaze/toml/common.hpp"
@@ -122,15 +124,26 @@ namespace glz::toml
       }
    }
 
-   template <class It, class End, class Ctx>
-   inline void skip_enclosed(It& it, End end, Ctx& ctx, const char open, const char close) noexcept
+   // Skips a bracketed TOML value. Only the two TOML bracket pairs are supported, because nesting
+   // is tracked across both of them: an array and an inline table may contain each other, so a
+   // skipper that understood only one pair could not find the matching close.
+   template <char Open, char Close, class It, class End, class Ctx>
+   inline void skip_enclosed(It& it, End end, Ctx& ctx) noexcept
    {
-      if (it == end || *it != open) [[unlikely]] {
+      static_assert((Open == '[' && Close == ']') || (Open == '{' && Close == '}'),
+                    "TOML encloses values in either [] or {}");
+
+      if (it == end || *it != Open) [[unlikely]] {
          ctx.error = error_code::syntax_error;
          return;
       }
 
-      int depth = 1;
+      // Nesting is tracked with an explicit stack of expected closing characters rather than by
+      // recursing on the opposite bracket type, so that adversarial input such as `[{[{...` is
+      // bounded by max_recursive_depth_limit instead of overflowing the call stack.
+      std::array<char, max_recursive_depth_limit> closers{};
+      size_t depth = 0;
+      closers[depth++] = Close;
       ++it;
 
       while (depth > 0) {
@@ -159,29 +172,19 @@ namespace glz::toml
             continue;
          }
 
-         if (c == open) {
-            ++depth;
-            ++it;
-            continue;
-         }
-
-         if (c == close) {
+         if (c == closers[depth - 1]) {
             --depth;
             ++it;
             continue;
          }
 
-         if (c == '[') {
-            skip_enclosed(it, end, ctx, '[', ']');
-            if (bool(ctx.error)) [[unlikely]]
+         if (c == '[' || c == '{') {
+            if (depth >= max_recursive_depth_limit) [[unlikely]] {
+               ctx.error = error_code::exceeded_max_recursive_depth;
                return;
-            continue;
-         }
-
-         if (c == '{') {
-            skip_enclosed(it, end, ctx, '{', '}');
-            if (bool(ctx.error)) [[unlikely]]
-               return;
+            }
+            closers[depth++] = (c == '[') ? ']' : '}';
+            ++it;
             continue;
          }
 
@@ -206,10 +209,10 @@ namespace glz::toml
          skip_literal_string(it, end, ctx);
       }
       else if (c == '[') {
-         skip_enclosed(it, end, ctx, '[', ']');
+         skip_enclosed<'[', ']'>(it, end, ctx);
       }
       else if (c == '{') {
-         skip_enclosed(it, end, ctx, '{', '}');
+         skip_enclosed<'{', '}'>(it, end, ctx);
       }
       else {
          while (it != end) {

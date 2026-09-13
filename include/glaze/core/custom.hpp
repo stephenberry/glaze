@@ -9,20 +9,23 @@
 #include "glaze/core/wrappers.hpp"
 #include "glaze/core/write.hpp"
 
-namespace glz
+namespace glz::detail
 {
-   template <uint32_t Format, class T>
-      requires(is_specialization_v<T, custom_t>)
-   struct from<Format, T>
+   // Shared read dispatch for glz::custom.
+   //
+   // `parse_into(x)` reads one value of the format into x and `discard()` consumes one value
+   // without producing anything. Both are supplied by the caller so that formats whose readers
+   // take a tag the caller has already consumed (MSGPACK, BSON) can bind it here. What remains
+   // is purely the shape of the user's handler, which is the same for every format.
+   template <auto Opts, class T, class ParseInto, class Discard>
+   void custom_read(auto&& value, is_context auto&& ctx, ParseInto&& parse_into, Discard&& discard)
    {
-      template <auto Opts>
-      static void op(auto&& value, is_context auto&& ctx, auto&& it, auto end)
       {
          using V = std::decay_t<decltype(value)>;
          using From = typename V::from_t;
 
          if constexpr (std::same_as<From, skip>) {
-            skip_value<Format>::template op<Opts>(ctx, it, end);
+            discard();
          }
          else if constexpr (std::is_member_pointer_v<From>) {
             if constexpr (std::is_member_function_pointer_v<From>) {
@@ -30,14 +33,17 @@ namespace glz
                if constexpr (std::is_void_v<Ret>) {
                   using Tuple = typename inputs_as_tuple<From>::type;
                   if constexpr (glz::tuple_size_v<Tuple> == 0) {
-                     skip_array<Opts>(ctx, it, end);
+                     // A handler that takes no input only needs the incoming value discarded,
+                     // whatever its shape. skip_value is defined for every format, so this works
+                     // outside JSON and it round-trips a getter that writes a non-array value.
+                     discard();
                      if (bool(ctx.error)) [[unlikely]]
                         return;
                      (value.val.*(value.from))();
                   }
                   else if constexpr (glz::tuple_size_v<Tuple> == 1) {
                      std::decay_t<glz::tuple_element_t<0, Tuple>> input{};
-                     glz::from<Format, std::decay_t<decltype(input)>>::template op<Opts>(input, ctx, it, end);
+                     parse_into(input);
                      if constexpr (check_null_terminated(Opts)) {
                         if (bool(ctx.error)) [[unlikely]]
                            return;
@@ -65,14 +71,15 @@ namespace glz
                   if constexpr (std::is_void_v<Ret>) {
                      using Tuple = typename function_traits<Func>::arguments;
                      if constexpr (glz::tuple_size_v<Tuple> == 0) {
-                        skip_array<Opts>(ctx, it, end);
+                        // See the member function case above.
+                        discard();
                         if (bool(ctx.error)) [[unlikely]]
                            return;
                         from();
                      }
                      else if constexpr (glz::tuple_size_v<Tuple> == 1) {
                         std::decay_t<glz::tuple_element_t<0, Tuple>> input{};
-                        glz::from<Format, std::decay_t<decltype(input)>>::template op<Opts>(input, ctx, it, end);
+                        parse_into(input);
                         if constexpr (check_null_terminated(Opts)) {
                            if (bool(ctx.error)) [[unlikely]]
                               return;
@@ -92,7 +99,7 @@ namespace glz
                   }
                }
                else {
-                  glz::from<Format, std::decay_t<decltype(from)>>::template op<Opts>(from, ctx, it, end);
+                  parse_into(from);
                }
             }
             else {
@@ -109,14 +116,15 @@ namespace glz
                      static_assert(false_v<T>, "lambda must take in the class as the first argument");
                   }
                   else if constexpr (N == 1) {
-                     skip_array<Opts>(ctx, it, end);
+                     // Only the class is taken, so there is no input to parse - discard the value.
+                     discard();
                      if (bool(ctx.error)) [[unlikely]]
                         return;
                      value.from(value.val);
                   }
                   else if constexpr (N > 1) {
                      std::decay_t<glz::tuple_element_t<1, Tuple>> input{};
-                     glz::from<Format, std::decay_t<decltype(input)>>::template op<Opts>(input, ctx, it, end);
+                     parse_into(input);
                      if constexpr (check_null_terminated(Opts)) {
                         if (bool(ctx.error)) [[unlikely]]
                            return;
@@ -140,11 +148,11 @@ namespace glz
             }
             else if constexpr (std::invocable<From, decltype(value.val)>) {
                decltype(auto) ref = value.from(value.val);
-               glz::from<Format, std::decay_t<decltype(ref)>>::template op<Opts>(ref, ctx, it, end);
+               parse_into(ref);
             }
             else if constexpr (std::invocable<From, decltype(value.val), context&>) {
                decltype(auto) ref = value.from(value.val, ctx);
-               glz::from<Format, std::decay_t<decltype(ref)>>::template op<Opts>(ref, ctx, it, end);
+               parse_into(ref);
             }
             else {
                static_assert(
@@ -156,6 +164,88 @@ namespace glz
             }
          }
       }
+   }
+}
+
+namespace glz::detail
+{
+   // Shared write dispatch for glz::custom. Split out so a format that must specialize
+   // to<Format, custom_t> for its own reasons - BSON needs to expose a type_code - can reuse the
+   // getter dispatch instead of restating it.
+   template <uint32_t Format, auto Opts, class T>
+   void custom_write(auto&& value, is_context auto&& ctx, auto&&... args)
+   {
+      using V = std::decay_t<decltype(value)>;
+      using To = typename V::to_t;
+
+      if constexpr (std::is_member_pointer_v<To>) {
+         if constexpr (std::is_member_function_pointer_v<To>) {
+            using Tuple = typename inputs_as_tuple<To>::type;
+            if constexpr (glz::tuple_size_v<Tuple> == 0) {
+               serialize<Format>::template op<Opts>((value.val.*(value.to))(), ctx, args...);
+            }
+            else {
+               static_assert(false_v<T>, "function cannot have inputs");
+            }
+         }
+         else if constexpr (std::is_member_object_pointer_v<To>) {
+            auto& to = value.val.*(value.to);
+            using Func = std::decay_t<decltype(to)>;
+            if constexpr (is_specialization_v<Func, std::function>) {
+               using Ret = typename function_traits<Func>::result_type;
+
+               if constexpr (std::is_void_v<Ret>) {
+                  static_assert(false_v<T>, "conversion to JSON must return a value");
+               }
+               else {
+                  using Tuple = typename function_traits<Func>::arguments;
+                  if constexpr (glz::tuple_size_v<Tuple> == 0) {
+                     serialize<Format>::template op<Opts>(to(), ctx, args...);
+                  }
+                  else {
+                     static_assert(false_v<T>, "std::function cannot have inputs");
+                  }
+               }
+            }
+            else {
+               serialize<Format>::template op<Opts>(to, ctx, args...);
+            }
+         }
+         else {
+            static_assert(false_v<T>, "invalid type for custom");
+         }
+      }
+      else {
+         if constexpr (std::invocable<To, decltype(value.val)>) {
+            serialize<Format>::template op<Opts>(std::invoke(value.to, value.val), ctx, args...);
+         }
+         else if constexpr (std::invocable<To, decltype(value.val), context&>) {
+            serialize<Format>::template op<Opts>(std::invoke(value.to, value.val, ctx), ctx, args...);
+         }
+         else {
+            static_assert(false_v<To>,
+                          "expected invocable function, perhaps you need const qualified input on your lambda");
+         }
+      }
+   }
+}
+
+namespace glz
+{
+   template <uint32_t Format, class T>
+      requires(is_specialization_v<T, custom_t>)
+   struct from<Format, T>
+   {
+      template <auto Opts>
+      static void op(auto&& value, is_context auto&& ctx, auto&& it, auto end)
+      {
+         detail::custom_read<Opts, T>(
+            value, ctx,
+            [&](auto& input) {
+               glz::from<Format, std::decay_t<decltype(input)>>::template op<Opts>(input, ctx, it, end);
+            },
+            [&] { skip_value<Format>::template op<Opts>(ctx, it, end); });
+      }
    };
 
    template <uint32_t Format, class T>
@@ -165,58 +255,7 @@ namespace glz
       template <auto Opts>
       static void op(auto&& value, is_context auto&& ctx, auto&&... args)
       {
-         using V = std::decay_t<decltype(value)>;
-         using To = typename V::to_t;
-
-         if constexpr (std::is_member_pointer_v<To>) {
-            if constexpr (std::is_member_function_pointer_v<To>) {
-               using Tuple = typename inputs_as_tuple<To>::type;
-               if constexpr (glz::tuple_size_v<Tuple> == 0) {
-                  serialize<Format>::template op<Opts>((value.val.*(value.to))(), ctx, args...);
-               }
-               else {
-                  static_assert(false_v<T>, "function cannot have inputs");
-               }
-            }
-            else if constexpr (std::is_member_object_pointer_v<To>) {
-               auto& to = value.val.*(value.to);
-               using Func = std::decay_t<decltype(to)>;
-               if constexpr (is_specialization_v<Func, std::function>) {
-                  using Ret = typename function_traits<Func>::result_type;
-
-                  if constexpr (std::is_void_v<Ret>) {
-                     static_assert(false_v<T>, "conversion to JSON must return a value");
-                  }
-                  else {
-                     using Tuple = typename function_traits<Func>::arguments;
-                     if constexpr (glz::tuple_size_v<Tuple> == 0) {
-                        serialize<Format>::template op<Opts>(to(), ctx, args...);
-                     }
-                     else {
-                        static_assert(false_v<T>, "std::function cannot have inputs");
-                     }
-                  }
-               }
-               else {
-                  serialize<Format>::template op<Opts>(to, ctx, args...);
-               }
-            }
-            else {
-               static_assert(false_v<T>, "invalid type for custom");
-            }
-         }
-         else {
-            if constexpr (std::invocable<To, decltype(value.val)>) {
-               serialize<Format>::template op<Opts>(std::invoke(value.to, value.val), ctx, args...);
-            }
-            else if constexpr (std::invocable<To, decltype(value.val), context&>) {
-               serialize<Format>::template op<Opts>(std::invoke(value.to, value.val, ctx), ctx, args...);
-            }
-            else {
-               static_assert(false_v<To>,
-                             "expected invocable function, perhaps you need const qualified input on your lambda");
-            }
-         }
+         detail::custom_write<Format, Opts, T>(value, ctx, args...);
       }
    };
 }

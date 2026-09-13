@@ -1,5 +1,6 @@
 #pragma once
 
+#include <glaze/core/custom.hpp>
 #include <glaze/core/wrappers.hpp>
 
 #include "opts.hpp"
@@ -9,6 +10,21 @@
 
 namespace glz
 {
+   // write.hpp closes with an unconstrained `to<EETF, T>` that has no op, so that an unsupported
+   // value type fails to compile. Fixing Format makes that sink more specialized than the format
+   // independent to<Format, custom_t>, so glz::custom needs an EETF entry point to get past it.
+   // The read side has no such sink and uses the generic one.
+   template <class T>
+      requires(is_specialization_v<T, custom_t>)
+   struct to<EETF, T>
+   {
+      template <auto Opts>
+      static void op(auto&& value, is_context auto&& ctx, auto&&... args)
+      {
+         detail::custom_write<EETF, Opts, T>(value, ctx, args...);
+      }
+   };
+
    template <class T>
    struct atom_as_string_t
    {

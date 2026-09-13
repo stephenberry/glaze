@@ -1018,6 +1018,10 @@ float_precision float_max_write_precision{};
 
 Calls custom read and write std::functions, lambdas, or member functions.
 
+Supported by JSON, BEVE, CBOR, MessagePack, BSON, JSONB, TOML, YAML, and EETF. Not supported by CSV, whose columnar layout requires every struct field to be a container of row values rather than a single value.
+
+A read handler that takes no input (`custom<&T::trigger, &T::get>`) consumes and discards whatever value is present, then invokes the handler.
+
 ```c++
 struct custom_encoding
 {
