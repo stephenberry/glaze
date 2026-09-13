@@ -12167,6 +12167,170 @@ suite volatile_tests = [] {
    };
 };
 
+// A register block made of identical sub-blocks: the array elements are class types, so they are
+// reached by index rather than by iterator (a volatile T* is not an iterator for a class type).
+struct volatile_channel
+{
+   uint32_t control{};
+   uint32_t status{};
+};
+
+struct volatile_channel_block
+{
+   uint32_t enable{};
+   glz::volatile_array<volatile_channel, 4> channels{};
+};
+
+struct volatile_bank
+{
+   glz::volatile_array<uint16_t, 2> regs{};
+};
+
+struct volatile_two_level
+{
+   glz::volatile_array<volatile_bank, 2> banks{};
+};
+
+struct volatile_c_array_block
+{
+   volatile_channel channels[3]{};
+   uint32_t scalars[2]{};
+};
+
+template <>
+struct glz::meta<volatile_c_array_block>
+{
+   using T = volatile_c_array_block;
+   static constexpr auto value = object(&T::channels, &T::scalars);
+};
+
+suite volatile_class_element_array_tests = [] {
+   "volatile_array of class elements"_test = [] {
+      volatile volatile_channel_block obj{};
+      obj.enable = 1;
+      for (size_t i = 0; i < 4; ++i) {
+         obj.channels[i].control = uint32_t(i);
+         obj.channels[i].status = uint32_t(100 + i);
+      }
+
+      std::string s{};
+      expect(not glz::write_json(obj, s));
+      expect(
+         s ==
+         R"({"enable":1,"channels":[{"control":0,"status":100},{"control":1,"status":101},{"control":2,"status":102},{"control":3,"status":103}]})")
+         << s;
+
+      volatile volatile_channel_block obj2{};
+      expect(!glz::read_json(obj2, s));
+      std::string s2{};
+      expect(not glz::write_json(obj2, s2));
+      expect(s2 == s) << s2;
+   };
+
+   "volatile_array of class elements prettified"_test = [] {
+      volatile volatile_channel_block obj{};
+      obj.enable = 1;
+      obj.channels[0].control = 7;
+
+      std::string pretty{};
+      expect(not glz::write<glz::opts{.prettify = true}>(obj, pretty));
+
+      volatile volatile_channel_block obj2{};
+      expect(!glz::read_json(obj2, pretty));
+      expect(obj2.channels[0].control == 7u);
+      expect(obj2.enable == 1u);
+   };
+
+   // The failure was never volatile-specific: volatile_array::begin() is unconditionally
+   // volatile-qualified, so a non-volatile object of the same type could not serialize either.
+   "non-volatile object holding a volatile_array of class elements"_test = [] {
+      volatile_channel_block obj{};
+      obj.enable = 2;
+      obj.channels[1].status = 9;
+
+      std::string s{};
+      expect(not glz::write_json(obj, s));
+
+      volatile_channel_block obj2{};
+      expect(!glz::read_json(obj2, s));
+      expect(obj2.enable == 2u);
+      expect(obj2.channels[1].status == 9u);
+   };
+
+   "nested volatile_array of class elements"_test = [] {
+      volatile volatile_two_level obj{};
+      obj.banks[0].regs[0] = 1;
+      obj.banks[0].regs[1] = 2;
+      obj.banks[1].regs[0] = 3;
+      obj.banks[1].regs[1] = 4;
+
+      std::string s{};
+      expect(not glz::write_json(obj, s));
+      expect(s == R"({"banks":[{"regs":[1,2]},{"regs":[3,4]}]})") << s;
+
+      volatile volatile_two_level obj2{};
+      expect(!glz::read_json(obj2, s));
+      std::string s2{};
+      expect(not glz::write_json(obj2, s2));
+      expect(s2 == s) << s2;
+   };
+
+   "C array of class elements in a volatile struct"_test = [] {
+      volatile volatile_c_array_block obj{};
+      for (size_t i = 0; i < 3; ++i) {
+         obj.channels[i].control = uint32_t(i);
+         obj.channels[i].status = uint32_t(i * 10);
+      }
+      obj.scalars[0] = 7;
+      obj.scalars[1] = 8;
+
+      std::string s{};
+      expect(not glz::write_json(obj, s));
+      expect(
+         s ==
+         R"({"channels":[{"control":0,"status":0},{"control":1,"status":10},{"control":2,"status":20}],"scalars":[7,8]})")
+         << s;
+
+      volatile volatile_c_array_block obj2{};
+      expect(!glz::read_json(obj2, s));
+      std::string s2{};
+      expect(not glz::write_json(obj2, s2));
+      expect(s2 == s) << s2;
+   };
+
+   // Fixed-extent semantics match std::array: a short array leaves the tail alone, and a long one
+   // is rejected rather than writing past the end.
+   "volatile_array of class elements sizing"_test = [] {
+      volatile volatile_channel_block obj{};
+      obj.channels[3].status = 77;
+      expect(!glz::read_json(obj, R"({"channels":[{"control":1,"status":2}]})"));
+      expect(obj.channels[0].control == 1u);
+      expect(obj.channels[3].status == 77u);
+
+      volatile volatile_channel_block obj2{};
+      expect(glz::read_json(obj2, R"({"channels":[{},{},{},{},{}]})") == glz::error_code::exceeded_static_array_size);
+
+      volatile volatile_channel_block obj3{};
+      obj3.channels[0].control = 5;
+      expect(!glz::read_json(obj3, R"({"channels":[]})"));
+      expect(obj3.channels[0].control == 5u);
+   };
+
+   "json pointer into volatile class array elements"_test = [] {
+      volatile volatile_channel_block obj{};
+      obj.channels[2].control = 21;
+      obj.channels[3].status = 33;
+
+      expect(glz::get<volatile uint32_t>(obj, "/channels/2/control") == uint32_t(21));
+      expect(glz::get<volatile uint32_t>(obj, "/channels/3/status") == uint32_t(33));
+      expect(not glz::get<volatile uint32_t>(obj, "/channels/9/status").has_value());
+
+      volatile volatile_two_level nested{};
+      nested.banks[1].regs[0] = 3;
+      expect(glz::get<volatile uint16_t>(nested, "/banks/1/regs/0") == uint16_t(3));
+   };
+};
+
 struct path_test_struct
 {
    uint32_t i{0};

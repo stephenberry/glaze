@@ -882,6 +882,47 @@ namespace glz
       }
    };
 
+   // Writes a BEVE array by indexing rather than by iterating.
+   //
+   // Needed wherever the elements are reached through `volatile`: `volatile T*` is not an
+   // iterator for a class-type `T` (see `volatile_indexed_array`), and `std::span` cannot be
+   // formed over volatile storage either. Only class-type elements reach this path -- a volatile
+   // pointer to a scalar is still an iterator, so those arrays keep taking the typed-array
+   // encodings of the `writable_array_t` writer below -- which makes the generic array tag always
+   // the right one here, matching what an equivalent std::array of the same element type produces.
+   template <auto Opts, size_t N, class B>
+   void write_beve_indexed_array(auto&& value, is_context auto&& ctx, B&& b, auto& ix)
+   {
+      dump_type(ctx, uint8_t(tag::generic_array), b, ix);
+      if (bool(ctx.error)) [[unlikely]] {
+         return;
+      }
+      dump_compressed_int(ctx, N, b, ix);
+      if (bool(ctx.error)) [[unlikely]] {
+         return;
+      }
+
+      for (size_t i = 0; i < N; ++i) {
+         serialize<BEVE>::op<Opts>(value[i], ctx, b, ix);
+         if (bool(ctx.error)) [[unlikely]] {
+            return;
+         }
+         if constexpr (is_output_streaming<std::remove_cvref_t<B>>) {
+            flush_buffer(b, ix);
+         }
+      }
+   }
+
+   template <writable_volatile_array_t T>
+   struct to<BEVE, T> final
+   {
+      template <auto Opts, class B>
+      static void op(auto&& value, is_context auto&& ctx, B&& b, auto& ix)
+      {
+         write_beve_indexed_array<Opts, std::remove_cvref_t<T>::length>(value, ctx, b, ix);
+      }
+   };
+
    template <writable_array_t T>
    struct to<BEVE, T> final
    {
@@ -1284,7 +1325,14 @@ namespace glz
       template <auto Opts, class V, size_t N, class... Args>
       GLZ_ALWAYS_INLINE static void op(const V (&value)[N], is_context auto&& ctx, Args&&... args)
       {
-         serialize<BEVE>::op<Opts>(std::span{value, N}, ctx, std::forward<Args>(args)...);
+         if constexpr (requires { std::span{value, N}; }) {
+            serialize<BEVE>::op<Opts>(std::span{value, N}, ctx, std::forward<Args>(args)...);
+         }
+         else {
+            // A class-type element reached through `volatile` gives a pointer that is neither a
+            // contiguous_iterator nor spannable, so index the array directly instead.
+            write_beve_indexed_array<Opts, N>(value, ctx, std::forward<Args>(args)...);
+         }
       }
    };
 

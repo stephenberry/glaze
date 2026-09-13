@@ -253,6 +253,12 @@ namespace glz
       requires std::input_iterator<decltype(t.begin())>;
    };
 
+   // Marks a container that stores its elements in volatile memory, such as glz::volatile_array.
+   // Defined here rather than alongside glz::volatile_array so that the serialization concepts can
+   // see it without pulling in the hardware headers.
+   template <class T>
+   concept is_volatile_array = requires { std::decay_t<T>::glaze_volatile_array; };
+
    // Concept for a matrix type (not a vector, which is a range)
    template <class T>
    concept matrix_t = requires(T matrix) {
