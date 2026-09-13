@@ -13,6 +13,7 @@
 #include "glaze/cbor.hpp"
 #include "glaze/csv.hpp"
 #include "glaze/json.hpp"
+#include "glaze/json/ndjson.hpp"
 #include "glaze/msgpack.hpp"
 #include "glaze/toml.hpp"
 #include "ut/ut.hpp"
@@ -1212,6 +1213,52 @@ suite ostream_buffer_bounded_growth_tests = [] {
       expect(oss.str() == reference);
       // Bounded by the configured capacity plus the slack the growth policy reserves.
       expect(buf.buffer_capacity() < 98304u) << buf.buffer_capacity();
+   };
+
+   // NDJSON records are independent by construction, so a record boundary is a flush point.
+   // Without one the window grew with the document even though growth was already bounded.
+   "ndjson records flush at the record boundary"_test = [] {
+      std::vector<bounded_row> rows;
+      for (uint64_t i = 0; i < 20000; ++i) {
+         bounded_row row;
+         row.name = std::string(size_t(i % 23) + 1, 'y');
+         row.id = i;
+         for (uint64_t d = 0; d < (i % 7); ++d) {
+            row.values.push_back(d);
+         }
+         rows.push_back(std::move(row));
+      }
+
+      std::string reference;
+      expect(!glz::write_ndjson(rows, reference));
+      expect(reference.size() > 1'000'000u); // document far exceeds the buffer capacity
+
+      std::ostringstream oss;
+      glz::ostream_buffer<512> buf(oss);
+      expect(!glz::write_ndjson(rows, buf));
+      expect(oss.str() == reference);
+      expect(buf.buffer_capacity() < 4096u) << buf.buffer_capacity();
+   };
+
+   "ndjson tuple records flush at the record boundary"_test = [] {
+      // The tuple writer is a separate overload from the array writer and reaches the same record
+      // boundary by its own path. Scalar records are what make that boundary observable: a record
+      // that is one big string has no interior flush point, so without a flush between records the
+      // window accumulated every record rather than holding the largest one.
+      constexpr size_t record_chars = 300'000;
+      auto records = std::tuple{std::string(record_chars, 'a'), std::string(record_chars, 'b'),
+                                std::string(record_chars, 'c')};
+
+      std::string reference;
+      expect(!glz::write_ndjson(records, reference));
+
+      std::ostringstream oss;
+      glz::ostream_buffer<512> buf(oss);
+      expect(!glz::write_ndjson(records, buf));
+      expect(oss.str() == reference);
+      // A string reserves for the worst case where every character escapes, so one record costs
+      // about 2x its length. The window has to cover one record; it must not cover all three.
+      expect(buf.buffer_capacity() < 3 * record_chars) << buf.buffer_capacity();
    };
 };
 
