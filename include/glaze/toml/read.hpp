@@ -171,20 +171,29 @@ namespace glz
       if (*it == '"') {
          // Quoted key
          ++it;
-         while (it != end && *it != '"') {
-            if (*it == '\\') {
+         while (true) {
+            const auto run_start = it;
+            while (it != end && !toml::basic_string_dispatch_table[uint8_t(*it)]) {
                ++it;
-               if (it == end) {
-                  ctx.error = error_code::unexpected_end;
-                  return false;
-               }
-               if (!append_toml_basic_escape(key, it, end)) {
-                  ctx.error = error_code::syntax_error;
-                  return false;
-               }
             }
-            else {
-               key.push_back(*it);
+            if (it != run_start) {
+               key.append(run_start, it);
+            }
+            if (it == end || *it == '"') {
+               break;
+            }
+            if (toml::forbidden_control_table[uint8_t(*it)]) [[unlikely]] {
+               ctx.error = error_code::invalid_control_character;
+               return false;
+            }
+            ++it; // the scan only stops on a backslash once controls are ruled out
+            if (it == end) {
+               ctx.error = error_code::unexpected_end;
+               return false;
+            }
+            if (!append_toml_basic_escape(key, it, end)) {
+               ctx.error = error_code::syntax_error;
+               return false;
             }
             ++it;
          }
@@ -198,13 +207,23 @@ namespace glz
       else if (*it == '\'') {
          // Single-quoted (literal) key
          ++it;
-         while (it != end && *it != '\'') {
+         while (true) {
+            const auto run_start = it;
+            while (it != end && !toml::literal_string_dispatch_table[uint8_t(*it)]) {
+               ++it;
+            }
+            if (it != run_start) {
+               key.append(run_start, it);
+            }
+            if (it == end || *it == '\'') {
+               break;
+            }
             if (*it == '\n' || *it == '\r') {
                ctx.error = error_code::syntax_error;
                return false;
             }
-            key.push_back(*it);
-            ++it;
+            ctx.error = error_code::invalid_control_character;
+            return false;
          }
 
          if (it == end || *it != '\'') {
@@ -250,20 +269,29 @@ namespace glz
 
          if (*it == '"') {
             ++it;
-            while (it != end && *it != '"') {
-               if (*it == '\\') {
+            while (true) {
+               const auto run_start = it;
+               while (it != end && !toml::basic_string_dispatch_table[uint8_t(*it)]) {
                   ++it;
-                  if (it == end) {
-                     ctx.error = error_code::unexpected_end;
-                     return false;
-                  }
-                  if (!append_toml_basic_escape(key, it, end)) {
-                     ctx.error = error_code::syntax_error;
-                     return false;
-                  }
                }
-               else {
-                  key.push_back(*it);
+               if (it != run_start) {
+                  key.append(run_start, it);
+               }
+               if (it == end || *it == '"') {
+                  break;
+               }
+               if (toml::forbidden_control_table[uint8_t(*it)]) [[unlikely]] {
+                  ctx.error = error_code::invalid_control_character;
+                  return false;
+               }
+               ++it; // the scan only stops on a backslash once controls are ruled out
+               if (it == end) {
+                  ctx.error = error_code::unexpected_end;
+                  return false;
+               }
+               if (!append_toml_basic_escape(key, it, end)) {
+                  ctx.error = error_code::syntax_error;
+                  return false;
                }
                ++it;
             }
@@ -276,13 +304,23 @@ namespace glz
          }
          else if (*it == '\'') {
             ++it;
-            while (it != end && *it != '\'') {
+            while (true) {
+               const auto run_start = it;
+               while (it != end && !toml::literal_string_dispatch_table[uint8_t(*it)]) {
+                  ++it;
+               }
+               if (it != run_start) {
+                  key.append(run_start, it);
+               }
+               if (it == end || *it == '\'') {
+                  break;
+               }
                if (*it == '\n' || *it == '\r') {
                   ctx.error = error_code::syntax_error;
                   return false;
                }
-               key.push_back(*it);
-               ++it;
+               ctx.error = error_code::invalid_control_character;
+               return false;
             }
 
             if (it == end || *it != '\'') {
@@ -771,7 +809,27 @@ namespace glz
                   }
                }
                else {
-                  value.push_back(*it);
+                  const auto run_start = it;
+                  while (it + 2 < end && !toml::multiline_basic_dispatch_table[uint8_t(*it)]) {
+                     ++it;
+                  }
+                  if (it != run_start) {
+                     value.append(run_start, it);
+                  }
+                  if (it + 2 >= end) {
+                     break; // unterminated; reported by the check after the loop
+                  }
+                  if (toml::forbidden_control_multiline_table[uint8_t(*it)]) [[unlikely]] {
+                     ctx.error = error_code::invalid_control_character;
+                     return;
+                  }
+                  if (*it == '\\') {
+                     continue; // hand the escape back to the branch above
+                  }
+                  if (*(it + 1) == '"' && *(it + 2) == '"') {
+                     break; // closing delimiter
+                  }
+                  value.push_back('"'); // a lone quote inside the string
                }
                ++it;
             }
@@ -786,24 +844,33 @@ namespace glz
             // Basic string
             ++it; // Skip opening quote
 
-            while (it != end && *it != '"') {
-               if (*it == '\\') {
+            while (true) {
+               const auto run_start = it;
+               while (it != end && !toml::basic_string_dispatch_table[uint8_t(*it)]) {
                   ++it;
-                  if (it == end) {
-                     ctx.error = error_code::unexpected_end;
-                     return;
-                  }
-                  if (!append_toml_basic_escape(value, it, end)) {
-                     ctx.error = error_code::syntax_error;
-                     return;
-                  }
                }
-               else if (*it == '\n' || *it == '\r') { // Newlines not allowed in single-line basic strings
+               if (it != run_start) {
+                  value.append(run_start, it);
+               }
+               if (it == end || *it == '"') {
+                  break;
+               }
+               if (*it == '\n' || *it == '\r') { // Newlines not allowed in single-line basic strings
                   ctx.error = error_code::syntax_error;
                   return;
                }
-               else {
-                  value.push_back(*it);
+               if (toml::forbidden_control_table[uint8_t(*it)]) [[unlikely]] {
+                  ctx.error = error_code::invalid_control_character;
+                  return;
+               }
+               ++it; // the scan only stops on a backslash once controls are ruled out
+               if (it == end) {
+                  ctx.error = error_code::unexpected_end;
+                  return;
+               }
+               if (!append_toml_basic_escape(value, it, end)) {
+                  ctx.error = error_code::syntax_error;
+                  return;
                }
                ++it;
             }
@@ -825,7 +892,24 @@ namespace glz
             }
 
             while (it + 2 < end && !(*it == '\'' && *(it + 1) == '\'' && *(it + 2) == '\'')) {
-               value.push_back(*it);
+               const auto run_start = it;
+               while (it + 2 < end && !toml::multiline_literal_dispatch_table[uint8_t(*it)]) {
+                  ++it;
+               }
+               if (it != run_start) {
+                  value.append(run_start, it);
+               }
+               if (it + 2 >= end) {
+                  break;
+               }
+               if (toml::forbidden_control_multiline_table[uint8_t(*it)]) [[unlikely]] {
+                  ctx.error = error_code::invalid_control_character;
+                  return;
+               }
+               if (*(it + 1) == '\'' && *(it + 2) == '\'') {
+                  break; // closing delimiter
+               }
+               value.push_back(*it); // a lone quote inside the string
                ++it;
             }
 
@@ -839,13 +923,23 @@ namespace glz
             // Literal string
             ++it; // Skip opening quote
 
-            while (it != end && *it != '\'') {
+            while (true) {
+               const auto run_start = it;
+               while (it != end && !toml::literal_string_dispatch_table[uint8_t(*it)]) {
+                  ++it;
+               }
+               if (it != run_start) {
+                  value.append(run_start, it);
+               }
+               if (it == end || *it == '\'') {
+                  break;
+               }
                if (*it == '\n' || *it == '\r') { // Newlines not allowed in single-line literal strings
                   ctx.error = error_code::syntax_error;
                   return;
                }
-               value.push_back(*it);
-               ++it;
+               ctx.error = error_code::invalid_control_character;
+               return;
             }
 
             if (it == end || *it != '\'') {
