@@ -35,6 +35,26 @@ glz::ostream_buffer<> buf3(any_ostream);                       // Polymorphic, 6
 glz::ostream_buffer<4096> buf4(any_ostream);                   // Polymorphic, 4KB
 ```
 
+### What still has to fit in the window
+
+Flush points sit *between* values, never inside one: between array elements, between object members, and between NDJSON records. A value is written in one piece, so the window has to cover the largest single value rather than the document.
+
+Outrunning the window is not an error the way it is on the read side. The window simply grows to hold the value, and stays at that high-water mark for the rest of the write, so the cost of one oversized value is paid for the whole document. `buffer_capacity()` reports the high-water mark if you want to check what a write actually held:
+
+```cpp
+std::ofstream file("output.json");
+glz::basic_ostream_buffer<std::ofstream, 4096> buffer(file);
+auto ec = glz::write_json(obj, buffer);
+buffer.buffer_capacity();  // physical bytes held; near the capacity unless a value outran it
+```
+
+Two cases are worth knowing about:
+
+- **A string larger than the window.** The writer reserves for the worst case, where every character needs an escape, before it knows how the string actually escapes. A string the window cannot already hold therefore grows it to roughly twice the string's length.
+- **An array of numbers.** The numeric fast path reserves worst-case space for the whole array before writing any element, so the window covers the array rather than one element of it. A `std::vector<double>` reserves about 39 bytes per element whatever the configured capacity.
+
+Everything else stays near the configured capacity, independent of how large the document is.
+
 ## Input Streaming (`basic_istream_buffer`)
 
 Read directly from files or input streams with automatic refilling:

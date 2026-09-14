@@ -50,7 +50,7 @@ namespace glz
 
          if constexpr (not check_write_unchecked(Opts) && vector_like<B>) {
             if (const auto n = ix + 64; n > b.size()) {
-               b.resize(2 * n);
+               grow_buffer(b, n);
             }
          }
 
@@ -78,7 +78,7 @@ namespace glz
             if (static_cast<size_t>(size) > available) {
                // Output was truncated - size tells us exactly how much space we need
                if constexpr (resizable<B>) {
-                  b.resize(2 * (ix + size));
+                  grow_buffer(b, ix + size);
                   std::format_to(reinterpret_cast<char*>(&b[ix]), fmt, V(wrapper.val));
                }
                else {
@@ -104,7 +104,7 @@ namespace glz
 
          if (static_cast<size_t>(len) >= available) {
             if constexpr (resizable<B> && not check_write_unchecked(Opts)) {
-               b.resize(2 * (ix + static_cast<size_t>(len) + 1));
+               grow_buffer(b, ix + static_cast<size_t>(len) + 1);
                std::snprintf(reinterpret_cast<char*>(&b[ix]), static_cast<size_t>(len) + 1, printf_fmt.data,
                              static_cast<double>(wrapper.val));
             }

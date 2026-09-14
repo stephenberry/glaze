@@ -13,6 +13,7 @@
 #include "glaze/cbor.hpp"
 #include "glaze/csv.hpp"
 #include "glaze/json.hpp"
+#include "glaze/json/ndjson.hpp"
 #include "glaze/msgpack.hpp"
 #include "glaze/toml.hpp"
 #include "ut/ut.hpp"
@@ -1012,6 +1013,22 @@ namespace
    }
 }
 
+// The reflected writers indent through &b[ix], whose operator[] already maps a logical index onto
+// the sliding window, so they take a different path to the same output as the generic writer above.
+// Reflected types must have linkage, so this cannot live in an anonymous namespace.
+struct prettify_leaf
+{
+   std::string label{};
+   std::vector<uint64_t> samples{};
+};
+
+struct prettify_node
+{
+   uint64_t id{};
+   std::string note{};
+   std::vector<prettify_leaf> leaves{};
+};
+
 suite ostream_buffer_prettify_overflow_tests = [] {
    "generic prettify to default ostream_buffer matches string output"_test = [] {
       glz::generic_u64 root = make_nested_array(20000);
@@ -1049,6 +1066,35 @@ suite ostream_buffer_prettify_overflow_tests = [] {
       expect(oss.str() == reference);
    };
 
+   "reflected prettify to small ostream_buffer matches string output"_test = [] {
+      // Vary the per-element byte size so the buffer's growth points interleave with its flush
+      // points, which is what makes a stale flush offset visible in the output.
+      std::vector<prettify_node> nodes;
+      for (uint64_t i = 0; i < 2000; ++i) {
+         prettify_node node;
+         node.id = i;
+         node.note = std::string(size_t(i % 29) + 1, 'z');
+         for (uint64_t d = 0; d < (i % 5); ++d) {
+            prettify_leaf leaf;
+            leaf.label = std::string(size_t((i + d) % 11) + 1, 'w');
+            for (uint64_t v = 0; v <= d; ++v) {
+               leaf.samples.push_back(i * 7 + v);
+            }
+            node.leaves.push_back(std::move(leaf));
+         }
+         nodes.push_back(std::move(node));
+      }
+
+      std::string reference;
+      expect(!glz::write<glz::opts{.prettify = true}>(nodes, reference));
+
+      std::ostringstream oss;
+      glz::ostream_buffer<512> buf(oss);
+      auto ec = glz::write<glz::opts{.prettify = true}>(nodes, buf);
+      expect(!ec);
+      expect(oss.str() == reference);
+   };
+
    "generic prettify to small ostream_buffer matches string output"_test = [] {
       glz::generic_u64 root = make_nested_array(500);
 
@@ -1060,6 +1106,159 @@ suite ostream_buffer_prettify_overflow_tests = [] {
       auto ec = glz::write<glz::opts{.prettify = true}>(root, buf);
       expect(!ec);
       expect(oss.str() == reference);
+   };
+};
+
+// The streaming buffer must hold its unflushed window, not the document. Write code tracks a
+// logical index, so growth requests are logical end positions; doubling one (the policy a
+// vector-like buffer wants) sized the window to the document instead, which defeated the bounded
+// memory usage streaming exists to provide. These assert the window stays near the configured
+// capacity, and that the bytes are unaffected.
+// Reflected types must have linkage, so this cannot live in an anonymous namespace.
+struct bounded_row
+{
+   std::string name{};
+   uint64_t id{};
+   std::vector<uint64_t> values{};
+};
+
+suite ostream_buffer_bounded_growth_tests = [] {
+   "reflected write keeps the window near capacity"_test = [] {
+      std::vector<bounded_row> rows;
+      for (uint64_t i = 0; i < 20000; ++i) {
+         bounded_row row;
+         row.name = std::string(size_t(i % 23) + 1, 'y');
+         row.id = i;
+         for (uint64_t d = 0; d < (i % 7); ++d) {
+            row.values.push_back(d);
+         }
+         rows.push_back(std::move(row));
+      }
+
+      std::string reference;
+      expect(!glz::write_json(rows, reference));
+      expect(reference.size() > 1'000'000u); // document far exceeds the buffer capacity
+
+      std::ostringstream oss;
+      glz::ostream_buffer<512> buf(oss);
+      expect(!glz::write_json(rows, buf));
+      expect(oss.str() == reference);
+      // Window stays a small multiple of the 512 byte capacity; it tracked the document before.
+      expect(buf.buffer_capacity() < 4096u) << buf.buffer_capacity();
+   };
+
+   "prettified generic write keeps the window near capacity"_test = [] {
+      glz::generic_u64 root;
+      root = glz::generic_u64::array_t{};
+      for (uint64_t i = 0; i < 5000; ++i) {
+         glz::generic_u64 element;
+         element["id"] = i;
+         element["name"] = std::string(size_t(i % 17) + 1, 'x');
+         root.get_array().push_back(std::move(element));
+      }
+
+      std::string reference;
+      expect(!glz::write<glz::opts{.prettify = true}>(root, reference));
+      expect(reference.size() > 100'000u);
+
+      std::ostringstream oss;
+      glz::ostream_buffer<512> buf(oss);
+      expect(!glz::write<glz::opts{.prettify = true}>(root, buf));
+      expect(oss.str() == reference);
+      expect(buf.buffer_capacity() < 4096u) << buf.buffer_capacity();
+   };
+
+   "binary formats keep the window near capacity"_test = [] {
+      std::vector<bounded_row> rows;
+      for (uint64_t i = 0; i < 20000; ++i) {
+         bounded_row row;
+         row.name = std::string(size_t(i % 23) + 1, 'y');
+         row.id = i;
+         for (uint64_t d = 0; d < (i % 7); ++d) {
+            row.values.push_back(d);
+         }
+         rows.push_back(std::move(row));
+      }
+
+      {
+         std::string reference;
+         expect(!glz::write_beve(rows, reference));
+         std::ostringstream oss;
+         glz::ostream_buffer<512> buf(oss);
+         expect(!glz::write_beve(rows, buf));
+         expect(oss.str() == reference);
+         expect(buf.buffer_capacity() < 4096u) << buf.buffer_capacity();
+      }
+
+      {
+         std::string reference;
+         expect(!glz::write_cbor(rows, reference));
+         std::ostringstream oss;
+         glz::ostream_buffer<512> buf(oss);
+         expect(!glz::write_cbor(rows, buf));
+         expect(oss.str() == reference);
+         expect(buf.buffer_capacity() < 4096u) << buf.buffer_capacity();
+      }
+   };
+
+   "larger capacity still bounds the window"_test = [] {
+      std::vector<std::string> values(40000, std::string("streaming stays bounded"));
+
+      std::string reference;
+      expect(!glz::write_json(values, reference));
+
+      std::ostringstream oss;
+      glz::ostream_buffer<> buf(oss); // default 65536
+      expect(!glz::write_json(values, buf));
+      expect(oss.str() == reference);
+      // Bounded by the configured capacity plus the slack the growth policy reserves.
+      expect(buf.buffer_capacity() < 98304u) << buf.buffer_capacity();
+   };
+
+   // NDJSON records are independent by construction, so a record boundary is a flush point.
+   // Without one the window grew with the document even though growth was already bounded.
+   "ndjson records flush at the record boundary"_test = [] {
+      std::vector<bounded_row> rows;
+      for (uint64_t i = 0; i < 20000; ++i) {
+         bounded_row row;
+         row.name = std::string(size_t(i % 23) + 1, 'y');
+         row.id = i;
+         for (uint64_t d = 0; d < (i % 7); ++d) {
+            row.values.push_back(d);
+         }
+         rows.push_back(std::move(row));
+      }
+
+      std::string reference;
+      expect(!glz::write_ndjson(rows, reference));
+      expect(reference.size() > 1'000'000u); // document far exceeds the buffer capacity
+
+      std::ostringstream oss;
+      glz::ostream_buffer<512> buf(oss);
+      expect(!glz::write_ndjson(rows, buf));
+      expect(oss.str() == reference);
+      expect(buf.buffer_capacity() < 4096u) << buf.buffer_capacity();
+   };
+
+   "ndjson tuple records flush at the record boundary"_test = [] {
+      // The tuple writer is a separate overload from the array writer and reaches the same record
+      // boundary by its own path. Scalar records are what make that boundary observable: a record
+      // that is one big string has no interior flush point, so without a flush between records the
+      // window accumulated every record rather than holding the largest one.
+      constexpr size_t record_chars = 300'000;
+      auto records = std::tuple{std::string(record_chars, 'a'), std::string(record_chars, 'b'),
+                                std::string(record_chars, 'c')};
+
+      std::string reference;
+      expect(!glz::write_ndjson(records, reference));
+
+      std::ostringstream oss;
+      glz::ostream_buffer<512> buf(oss);
+      expect(!glz::write_ndjson(records, buf));
+      expect(oss.str() == reference);
+      // A string reserves for the worst case where every character escapes, so one record costs
+      // about 2x its length. The window has to cover one record; it must not cover all three.
+      expect(buf.buffer_capacity() < 3 * record_chars) << buf.buffer_capacity();
    };
 };
 

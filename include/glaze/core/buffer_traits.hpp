@@ -43,14 +43,25 @@ namespace glz
       {
          if constexpr (is_resizable) {
             if (needed > b.size()) {
-               // 2× growth amortizes repeated reallocations to O(n) total cost.
-               b.resize(2 * needed);
+               grow(b, needed);
             }
             return true;
          }
          else {
             return capacity(b) >= needed;
          }
+      }
+
+      // Grow a resizable buffer so that it can hold `required` bytes.
+      // 2x growth amortizes repeated reallocations to O(n) total cost.
+      // Constrained on `is_resizable` so that it is not merely ill-formed for a fixed buffer but
+      // absent from the overload set: `grow_buffer` detects this member to decide whether a
+      // specialization opts into a growth policy, and an unconstrained declaration would answer
+      // yes for every buffer, including those that cannot grow at all.
+      GLZ_ALWAYS_INLINE static void grow(Buffer& b, size_t required)
+         requires(is_resizable)
+      {
+         b.resize(2 * required);
       }
 
       // Finalize buffer to actual written size
@@ -66,6 +77,24 @@ namespace glz
       // Default: no-op for regular buffers
       GLZ_ALWAYS_INLINE static void flush([[maybe_unused]] Buffer& b, [[maybe_unused]] size_t written) noexcept {}
    };
+
+   // Grow a buffer so that it can hold `required` bytes, applying that buffer's growth policy.
+   // Write code tracks a logical index, so `required` is a logical end position rather than an
+   // amount of storage. The two differ for a streaming buffer, which keeps only its unflushed
+   // window in memory: doubling a logical index there would grow storage with the document instead
+   // of with the window, so such buffers translate the request themselves.
+   template <class B>
+   GLZ_ALWAYS_INLINE void grow_buffer(B& b, const size_t required)
+   {
+      using traits = buffer_traits<std::remove_cvref_t<B>>;
+      if constexpr (requires { traits::grow(b, required); }) {
+         traits::grow(b, required);
+      }
+      else {
+         // A user specialization written before `grow` existed: keep the growth it used to get.
+         b.resize(2 * required);
+      }
+   }
 
    // Concept to check if a buffer type supports output streaming (flushing)
    template <class B>
@@ -183,8 +212,7 @@ namespace glz
 
       if constexpr (vector_like<Buffer>) {
          if (required > b.size()) [[unlikely]] {
-            // 2× growth amortizes repeated reallocations to O(n) total cost.
-            b.resize(2 * required);
+            grow_buffer(b, required);
          }
          return true;
       }

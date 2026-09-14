@@ -10,6 +10,7 @@
 #include <vector>
 
 #include "glaze/core/buffer_traits.hpp"
+#include "glaze/core/opts.hpp"
 
 namespace glz
 {
@@ -36,15 +37,17 @@ namespace glz
    // Minimum buffer capacity for streaming.
    // Must be large enough to hold any single JSON value (floats can be ~24 bytes,
    // plus overhead for keys, syntax, etc.). Set to 2 * write_padding_bytes since
-   // the write code resizes buffers to this value on first write anyway.
-   inline constexpr size_t min_ostream_buffer_size = 512;
+   // the write code resizes buffers to this value on first write anyway. Deriving it from
+   // `write_padding_bytes` rather than restating the number keeps `growth_slack` wide enough to
+   // cover a full padding even if that constant changes.
+   inline constexpr size_t min_ostream_buffer_size = 2 * write_padding_bytes;
 
    template <byte_output_stream Stream, size_t DefaultCapacity = 65536>
       requires(DefaultCapacity >= min_ostream_buffer_size)
    class basic_ostream_buffer
    {
       static_assert(DefaultCapacity >= min_ostream_buffer_size,
-                    "Buffer capacity must be at least 256 bytes to handle all JSON value types");
+                    "Buffer capacity must be at least min_ostream_buffer_size to handle all JSON value types");
 
       Stream* stream_;
       std::vector<char> buffer_;
@@ -99,6 +102,22 @@ namespace glz
          }
          logical_size_ = new_size;
       }
+
+      // Headroom `grow` leaves above the position a write asks for. Half the configured capacity
+      // amortizes the resize calls across many writes without letting the window drift away from
+      // that capacity. It must also cover `write_padding_bytes`, because a write path sizes its
+      // request to the value it is about to write and then dumps into the padding past it;
+      // `min_ostream_buffer_size` is what keeps that true for every capacity this class accepts.
+      static constexpr size_t growth_slack = DefaultCapacity / 2;
+      static_assert(growth_slack >= write_padding_bytes,
+                    "Growth slack must cover the padding the write paths dump past a request");
+
+      // Growth policy for the sliding window (called through buffer_traits::grow).
+      // `required` is a logical end position, and the logical index climbs with the document while
+      // only the unflushed window lives in memory. Doubling `required` the way a vector-like buffer
+      // does would therefore size storage to the document. Reserve the window the write needs plus
+      // the slack above, which keeps memory bounded by the configured capacity.
+      void grow(size_t required) { resize(required + growth_slack); }
 
       // Final flush - called by buffer_traits::finalize()
       void finalize(size_t total_written)
@@ -180,9 +199,11 @@ namespace glz
 
       GLZ_ALWAYS_INLINE static bool ensure_capacity(basic_ostream_buffer<Stream, N>& b, size_t needed)
       {
-         b.resize(needed);
+         b.grow(needed);
          return true;
       }
+
+      GLZ_ALWAYS_INLINE static void grow(basic_ostream_buffer<Stream, N>& b, size_t required) { b.grow(required); }
 
       GLZ_ALWAYS_INLINE static void finalize(basic_ostream_buffer<Stream, N>& b, size_t written)
       {
