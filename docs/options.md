@@ -48,7 +48,7 @@ These options are **not** in `glz::opts` by default. Add them to a custom option
 | `bool error_on_missing_array_elements` | `false` | Require arrays to have all elements expected by the target type (tuples, `glaze_array_t`, `tuple_t`) |
 | `bool error_on_const_read` | `false` | Error when attempting to read into a const value |
 | `bool hide_non_invocable` | `true` | Hide non-invocable members from `cli_menu` |
-| `bool escape_control_characters` | `false` | Escape control characters as unicode sequences |
+| `bool escape_control_characters` | `false` | Escape control characters rather than writing them raw |
 | `char indentation_char` | `' '` | Prettified JSON indentation character |
 | `uint8_t indentation_width` | `3` | Prettified JSON indentation size |
 | `bool new_lines_in_arrays` | `true` | Whether prettified arrays have new lines per element |
@@ -283,7 +283,16 @@ glz::write<compact_arrays{.prettify = true}>(obj, json);
 Control string quoting and escape sequence handling. Useful for embedding pre-formatted content. See [Type Handling Options](#type-handling-options) for details.
 
 #### `escape_control_characters`
-When `true`, control characters (0x00-0x1F) are escaped as `\uXXXX` sequences. The default (`false`) does not escape these characters for performance and safety (embedding nulls can cause issues, especially with C APIs). Glaze will error when parsing non-escaped control characters per the JSON spec—this option allows writing them as escaped unicode to avoid such errors on re-read.
+When `true`, control characters are escaped rather than written raw. The default (`false`) does not escape them, for performance and safety (embedding nulls can cause issues, especially with C APIs). Readers reject non-escaped control characters, so this option is what makes such a value survive a write/read round trip.
+
+The exact set and escape form follow the target format:
+
+| Format | Escaped set | Escape written |
+|--------|-------------|----------------|
+| JSON | `0x00`-`0x1F` | `\uXXXX` |
+| YAML | `0x00`-`0x1F` except `\t`, `\n`, `\r`, plus `0x7F` (DEL) | `\xXX` |
+
+YAML's set follows its `c-printable` production, which permits tab, line feed and carriage return but excludes DEL. In YAML the option also decides the scalar style: a value carrying such a byte is forced to the double-quoted style, since plain, single-quoted and block scalars have no escape mechanism.
 
 The binary-to-JSON converters use this option to decide what to do with control characters in a converted value. Off, they fail with `error_code::invalid_control_character`. On, the bytes are escaped. They ignore `raw_string` and `unquoted` either way. See [String Escaping](binary.md#string-escaping).
 

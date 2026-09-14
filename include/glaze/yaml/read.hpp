@@ -610,7 +610,7 @@ namespace glz
                   return;
                }
 
-               const unsigned char esc = static_cast<unsigned char>(*src);
+               const auto esc = uint8_t(*src);
 
                // Check for escaped newline (line continuation - no space)
                if (esc == '\n' || esc == '\r') {
@@ -648,8 +648,8 @@ namespace glz
                         ctx.error = error_code::syntax_error;
                         return;
                      }
-                     const uint32_t hi = digit_hex_table[static_cast<unsigned char>(src[0])];
-                     const uint32_t lo = digit_hex_table[static_cast<unsigned char>(src[1])];
+                     const uint32_t hi = digit_hex_table[uint8_t(src[0])];
+                     const uint32_t lo = digit_hex_table[uint8_t(src[1])];
                      if ((hi | lo) & 0xF0) [[unlikely]] {
                         ctx.error = error_code::syntax_error;
                         return;

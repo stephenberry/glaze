@@ -137,6 +137,41 @@ Double-quoted strings support YAML escape sequences including:
 - `\N` (next line U+0085), `\_` (non-breaking space U+00A0)
 - `\L` (line separator U+2028), `\P` (paragraph separator U+2029)
 
+#### Control Characters
+
+YAML's `c-printable` production excludes the C0 control range apart from tab, line feed and
+carriage return, and also excludes DEL (`0x7F`). Glaze enforces this on the read side:
+
+```cpp
+std::string yaml = "key: a\x01" "b\n";   // raw 0x01 in a plain scalar
+std::map<std::string, std::string> value{};
+auto ec = glz::read_yaml(value, yaml);
+// ec == glz::error_code::invalid_control_character
+```
+
+Reading rejects a raw control byte in every position that can carry one: plain, single-quoted,
+double-quoted and block scalars, mapping keys, and comments. The `\xXX` escape form is the
+supported way to carry such a character and is always accepted.
+
+Writing does not escape these characters by default, which keeps the common write path free of
+the check. Enable [`escape_control_characters`](options.md#escape_control_characters) to have the
+writer emit the escaped form instead, which is what makes the value survive a round trip:
+
+```cpp
+struct yaml_escape_opts : glz::opts
+{
+   bool escape_control_characters = true;
+};
+
+std::string out{};
+auto ec = glz::write<yaml_escape_opts{{.format = glz::YAML}}>(std::string("a\x01" "b"), out);
+// out == "\"a\\x01b\""
+```
+
+A value carrying such a byte is forced to the double-quoted style, since plain, single-quoted and
+block scalars have no escape mechanism. Tab, line feed and carriage return are unaffected by the
+option and always round trip.
+
 ### Numbers
 
 ```yaml
