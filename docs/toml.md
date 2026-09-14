@@ -779,3 +779,52 @@ auto ec = glz::read_toml(config, toml);
 - **Null values**: TOML has no native null type. When writing `std::nullptr_t` or a variant holding null, an empty string `""` is written.
 - **Type coercion**: The parser does not coerce types. If the variant has no matching alternative for the detected type, an error is returned.
 - **Array of tables in maps**: The `[[array_of_tables]]` syntax is not fully supported when reading into map types. Use struct-based types for this pattern.
+
+## Control Characters
+
+TOML v1.0.0 excludes raw control characters from strings, keys and comments. A single-line basic or literal string and a comment admit tab and nothing else in the C0 range; the multi-line forms (`"""` and `'''`) additionally admit line feed and carriage return. DEL (`0x7F`) is excluded from all of them.
+
+### Reading
+
+Reading rejects a raw control byte with `error_code::invalid_control_character`:
+
+```c++
+struct config { std::string note{}; };
+
+config c{};
+auto ec = glz::read_toml(c, "note = \"a\x01" "b\"");
+// ec == glz::error_code::invalid_control_character
+```
+
+An escape is the supported way to carry one, and is accepted as before:
+
+```c++
+auto ec = glz::read_toml(c, R"(note = "a\u0001b")");
+// ec is empty, c.note == "a\x01" "b"
+```
+
+### Writing
+
+Escaping costs a check on every string, so as in JSON it is off by default and the writer emits the byte as given:
+
+```c++
+config out{std::string("a\x01" "b")};
+std::string buffer{};
+(void)glz::write_toml(out, buffer);
+// buffer holds a raw 0x01, which is not valid TOML
+```
+
+Turn on `escape_control_characters` to have them written as `\u00XX`, so the document round-trips:
+
+```c++
+struct escape_opts : glz::toml_opts {
+   bool escape_control_characters = true;
+};
+
+(void)glz::write<escape_opts{}>(out, buffer);
+// buffer == R"(note = "a\u0001b")"
+```
+
+Characters with a short escape (`\t`, `\n`, `\r`, `\"`, `\\`) use it; the rest become `\u00XX`.
+
+Map keys are a separate case: a key that is not bare is written as a quoted basic string with its control characters always escaped, whatever the option says. A raw control byte there would reparse as invalid TOML and change the surrounding structure, so correctness of the key is not left to the option.

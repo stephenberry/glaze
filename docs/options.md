@@ -285,6 +285,8 @@ Control string quoting and escape sequence handling. Useful for embedding pre-fo
 #### `escape_control_characters`
 When `true`, control characters (0x00-0x1F) are escaped as `\uXXXX` sequences. The default (`false`) does not escape these characters for performance and safety (embedding nulls can cause issues, especially with C APIs). Glaze will error when parsing non-escaped control characters per the JSON spec—this option allows writing them as escaped unicode to avoid such errors on re-read.
 
+TOML honors this option too, writing `\u00XX` for the control characters TOML forbids raw: the C0 range apart from tab, plus DEL (0x7F). Reading TOML rejects those bytes whether or not the option is set. See [Control Characters](toml.md#control-characters).
+
 The binary-to-JSON converters use this option to decide what to do with control characters in a converted value. Off, they fail with `error_code::invalid_control_character`. On, the bytes are escaped. They ignore `raw_string` and `unquoted` either way. See [String Escaping](binary.md#string-escaping).
 
 
