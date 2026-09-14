@@ -37,7 +37,7 @@ namespace glz
       }
 
       // `glz::format_error(ec, buffer)` is the call that follows a failed read, so it has to accept
-      // every buffer a read accepts -- data() and size() and nothing else. See GitHub issue #2854.
+      // every buffer a read accepts: data() and size() and nothing else. See GitHub issue #2854.
       inline source_info get_source_info(const contiguous auto& buffer, const size_t index)
       {
          using V = std::decay_t<decltype(*buffer.data())>;
@@ -89,9 +89,9 @@ namespace glz
       }
 
       // A buffer that can report its size but not its bytes cannot show context, but it can still
-      // say where the error was. Keeping this overload means format_error stays callable for any
-      // sized buffer instead of failing inside its own body, which is the diagnostic this whole
-      // change exists to remove.
+      // say where the error was. This overload keeps format_error callable for any sized buffer, so
+      // a failed read is always reportable rather than failing to compile inside format_error
+      // itself.
       inline source_info get_source_info(const has_size auto& buffer, const size_t index)
          requires(!contiguous<std::remove_cvref_t<decltype(buffer)>>)
       {
