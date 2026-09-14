@@ -522,6 +522,12 @@ namespace glz
                   return;
                }
             }
+            else if (forbidden_control_table[uint8_t(*it)]) [[unlikely]] {
+               // A raw control byte is invalid; the \xXX escape form above is how such a
+               // character is legitimately carried in a double-quoted scalar.
+               ctx.error = error_code::invalid_control_character;
+               return;
+            }
             ++it;
          }
 
@@ -771,6 +777,10 @@ namespace glz
                }
             }
             else {
+               if (forbidden_control_table[uint8_t(*it)]) [[unlikely]] {
+                  ctx.error = error_code::invalid_control_character;
+                  return;
+               }
                ++it;
             }
          }
@@ -1012,6 +1022,13 @@ namespace glz
          while (it != end) {
             const char c = *it;
 
+            // YAML's character stream excludes these outright, so reject rather than
+            // carry the byte into the value.
+            if (forbidden_control_table[uint8_t(c)]) [[unlikely]] {
+               ctx.error = error_code::invalid_control_character;
+               return;
+            }
+
             // End conditions
             if (c == '\n' || c == '\r') {
                if (in_flow) {
@@ -1149,6 +1166,11 @@ namespace glz
 
          while (it != end) {
             const char c = *it;
+
+            if (forbidden_control_table[uint8_t(c)]) [[unlikely]] {
+               ctx.error = error_code::invalid_control_character;
+               return;
+            }
 
             // Check for newline - potential continuation
             if (c == '\n' || c == '\r') {
@@ -1494,6 +1516,11 @@ namespace glz
 
             // Read line content
             while (it != end && *it != '\n' && *it != '\r') {
+               if (forbidden_control_table[uint8_t(*it)]) [[unlikely]] {
+                  // Block scalars have no escape mechanism, so the byte cannot be valid here.
+                  ctx.error = error_code::invalid_control_character;
+                  return;
+               }
                value.push_back(*it);
                ++it;
             }
@@ -1836,6 +1863,10 @@ namespace glz
                   if (key.empty() || key.back() == ' ' || key.back() == '\t') break;
                }
 
+               if (forbidden_control_table[uint8_t(c)]) [[unlikely]] {
+                  ctx.error = error_code::invalid_control_character;
+                  return false;
+               }
                key.push_back(c);
                ++it;
             }
@@ -2414,7 +2445,7 @@ namespace glz
 
          // Parse as plain scalar and check if it's a null keyword
          auto start = it;
-         while (it != end && !yaml::plain_scalar_end_table[static_cast<uint8_t>(*it)]) {
+         while (it != end && !yaml::plain_scalar_end_or_control_table[static_cast<uint8_t>(*it)]) {
             ++it;
          }
 

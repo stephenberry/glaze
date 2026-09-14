@@ -827,6 +827,55 @@ name: >
    };
 };
 
+suite yaml_control_character_reader_tests = [] {
+   // YAML's character stream excludes the C0 range apart from \t, \n and \r, plus DEL.
+   // The reader is the conformance gate for these, so every scalar style must reject a
+   // raw one rather than carry it into a value.
+   "read_rejects_raw_control_in_every_scalar_style"_test = [] {
+      const char c1 = char(0x01);
+      const std::vector<std::pair<const char*, std::string>> cases{
+         {"plain", std::string("key: abc") + c1 + "def\n"},
+         {"single-quoted", std::string("key: 'abc") + c1 + "def'\n"},
+         {"double-quoted", std::string("key: \"abc") + c1 + "def\"\n"},
+         {"literal block", std::string("key: |\n  abc") + c1 + "def\n"},
+         {"folded block", std::string("key: >\n  abc") + c1 + "def\n"},
+         {"mapping key", std::string("k") + c1 + ": v\n"},
+      };
+      for (const auto& [style, yaml] : cases) {
+         std::map<std::string, std::string> parsed{};
+         auto ec = glz::read_yaml(parsed, yaml);
+         expect(ec == glz::error_code::invalid_control_character) << style;
+      }
+   };
+
+   "read_rejects_raw_del"_test = [] {
+      const std::string yaml = std::string("key: abc") + char(0x7f) + "def\n";
+      std::map<std::string, std::string> parsed{};
+      auto ec = glz::read_yaml(parsed, yaml);
+      expect(ec == glz::error_code::invalid_control_character);
+   };
+
+   "read_accepts_escaped_control_in_double_quoted"_test = [] {
+      // The \xXX escape is how a control character is legitimately carried, and is what
+      // the writer emits under escape_control_characters. It must still be accepted.
+      const std::string yaml = "key: \"abc\\x01def\"\n";
+      std::map<std::string, std::string> parsed{};
+      auto ec = glz::read_yaml(parsed, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(parsed.at("key") == std::string("abc") + char(0x01) + "def");
+   };
+
+   "read_still_accepts_tab_newline_carriage_return"_test = [] {
+      // These three are control characters YAML permits; they must not be swept up.
+      const std::string yaml = "key: \"a\\tb\"\nother: |\n  line1\n  line2\n";
+      std::map<std::string, std::string> parsed{};
+      auto ec = glz::read_yaml(parsed, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(parsed.at("key") == "a\tb");
+      expect(parsed.at("other") == "line1\nline2\n");
+   };
+};
+
 // Opt in to control-character escaping, which is off by default so that the common
 // write path pays nothing for it.
 struct yaml_escape_opts : glz::opts
@@ -915,7 +964,10 @@ suite yaml_writer_edge_case_tests = [] {
 
    "write_control_char_raw_by_default"_test = [] {
       // Escaping control characters is opt-in, so by default the byte is written through
-      // untouched and the plain style is kept. Rejecting it is the reader's job.
+      // untouched and the plain style is kept. The reader is the conformance gate and
+      // rejects it, so the default write is deliberately not round-trippable here --
+      // the same asymmetry glz::write_json / glz::read_json already have. Callers that
+      // need the round trip enable escape_control_characters.
       const std::string original = std::string("abc") + char(0x01) + "def";
       std::string yaml{};
       auto wec = glz::write_yaml(original, yaml);
@@ -924,8 +976,7 @@ suite yaml_writer_edge_case_tests = [] {
 
       std::string parsed{};
       auto rec = glz::read_yaml(parsed, yaml);
-      expect(!rec) << glz::format_error(rec, yaml);
-      expect(parsed == original);
+      expect(rec == glz::error_code::invalid_control_character) << "reader must reject it";
    };
 
    "write_control_char_escaped_under_opt_in"_test = [] {

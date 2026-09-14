@@ -515,6 +515,15 @@ namespace glz::yaml
 
    // Table for characters that terminate a plain scalar in flow context
    // Terminators: space, tab, newline, carriage return, colon, comma, [ ] { } #
+   // Control characters YAML's c-printable set excludes outright: the C0 range apart from
+   // tab, line feed and carriage return, plus DEL. A reader must reject these; they are
+   // the bytes the writer escapes when escape_control_characters is enabled.
+   inline constexpr bool is_yaml_forbidden_control(char c) noexcept
+   {
+      const auto u = uint8_t(c);
+      return (u < 0x20 && u != 0x09 && u != 0x0a && u != 0x0d) || u == 0x7f;
+   }
+
    inline constexpr std::array<bool, 256> plain_scalar_end_table = [] {
       std::array<bool, 256> t{};
       t[' '] = true;
@@ -528,6 +537,29 @@ namespace glz::yaml
       t['{'] = true;
       t['}'] = true;
       t['#'] = true;
+      return t;
+   }();
+
+   // O(1) lookup for the reject predicate, for the scalar parsers that are char-by-char
+   // state machines rather than table-driven scans.
+   inline constexpr std::array<bool, 256> forbidden_control_table = [] {
+      std::array<bool, 256> t{};
+      for (size_t i = 0; i < 256; ++i) {
+         t[i] = is_yaml_forbidden_control(char(uint8_t(i)));
+      }
+      return t;
+   }();
+
+   // plain_scalar_end_table plus the control bytes a reader must reject. Scanning with
+   // this table makes the rejection free: the loop already performs the lookup, so it
+   // stops on a forbidden byte and the caller raises the error at the stop point.
+   inline constexpr std::array<bool, 256> plain_scalar_end_or_control_table = [] {
+      auto t = plain_scalar_end_table;
+      for (size_t i = 0; i < 256; ++i) {
+         if (is_yaml_forbidden_control(char(uint8_t(i)))) {
+            t[i] = true;
+         }
+      }
       return t;
    }();
 
