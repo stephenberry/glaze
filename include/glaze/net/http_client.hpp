@@ -893,6 +893,14 @@ namespace glz
       std::function<void(std::error_code ec)>; // May carry HTTP statuses via http_status_category()
    using http_connect_handler = std::function<void(const response& headers)>;
    using http_disconnect_handler = std::function<void()>;
+   // Reports how much of the response body has been delivered so far. `total` is the size
+   // the response framed itself with, or 0 when that size is not knowable in advance - a
+   // chunked body, or one framed by connection close. Called once with (0, total) as soon
+   // as the headers are parsed, so a caller has the total before any body arrives, and
+   // again after every span handed to on_data. Returning false cancels the transfer: the
+   // stream stops where it is, the socket is closed rather than pooled, and on_disconnect
+   // follows as it would for a caller-initiated disconnect().
+   using http_progress_handler = std::function<bool(size_t transferred, size_t total)>;
 
    // Streaming HTTP connection handle
    struct http_stream_connection
@@ -915,7 +923,19 @@ namespace glz
       std::atomic<bool> peer_will_close{false};
       stream_read_strategy strategy{stream_read_strategy::bulk_transfer}; // Default strategy
       std::function<bool(int)> status_is_error{}; // Evaluated before treating status as failure
+      http_progress_handler on_progress{}; // Reports body bytes delivered; returning false cancels
       bool is_https{false}; // Track if this is an HTTPS connection
+      bool head_request{false}; // A HEAD reply is framed as if it had a body, but carries none
+
+      // The body size the response framed itself with, fixed once the headers are parsed,
+      // and how much of it has been delivered. Empty when nothing frames the body in
+      // advance - a chunked body, or one framed by connection close - which is also the
+      // case that reports a total of 0. Both are touched only from the connection's own
+      // read chain, which asio serializes, so neither needs to be atomic; status_is_error
+      // and on_progress are likewise read from that chain and must not be reassigned once
+      // the stream is running.
+      std::optional<size_t> content_length{};
+      size_t bytes_received{};
 
       // Constructor with optional buffer size limit and strategy
       http_stream_connection(size_t max_buffer_size = 1024 * 1024,
@@ -981,10 +1001,12 @@ namespace glz
       glz::http_headers headers;
       // Declared in the order callers reach for them. Designators must appear in
       // declaration order (gcc and MSVC enforce this; clang accepts any order as an
-      // extension), so the spelling that comes naturally - on_data and on_error first,
-      // the optional on_connect and on_disconnect after - has to be the declared one.
+      // extension), so the spelling that comes naturally - the data path of on_data,
+      // on_error and on_progress first, the on_connect and on_disconnect bookends
+      // after - has to be the declared one.
       http_data_handler on_data;
       http_error_handler on_error;
+      http_progress_handler on_progress;
       http_connect_handler on_connect;
       http_disconnect_handler on_disconnect;
       std::function<bool(int)> status_is_error{[](int status) { return status >= 400; }};
@@ -1259,26 +1281,30 @@ namespace glz
       {
          auto url_result = parse_url(params.url);
          if (!url_result) {
-            asio::post(io_executor, [on_error = params.on_error, error = url_result.error()]() { on_error(error); });
+            asio::post(io_executor, [on_error = params.on_error, error = url_result.error()]() {
+               if (on_error) on_error(error);
+            });
             return nullptr;
          }
 
          return perform_stream_request(params.method, *url_result, params.body, params.max_buffer_size, params.headers,
                                        params.timeout, params.strategy, params.status_is_error, params.on_data,
-                                       params.on_error, params.on_connect, params.on_disconnect);
+                                       params.on_error, params.on_connect, params.on_disconnect, {});
       }
 
       std::shared_ptr<http_stream_connection> stream_request_v2(const stream_request_params_v2& params)
       {
          auto url_result = parse_url(params.url);
          if (!url_result) {
-            asio::post(io_executor, [on_error = params.on_error, error = url_result.error()]() { on_error(error); });
+            asio::post(io_executor, [on_error = params.on_error, error = url_result.error()]() {
+               if (on_error) on_error(error);
+            });
             return nullptr;
          }
 
          return perform_stream_request(params.method, *url_result, params.body, params.max_buffer_size, params.headers,
                                        params.timeout, params.strategy, params.status_is_error, params.on_data,
-                                       params.on_error, params.on_connect, params.on_disconnect);
+                                       params.on_error, params.on_connect, params.on_disconnect, params.on_progress);
       }
 
       // Asynchronous GET request
@@ -1439,14 +1465,15 @@ namespace glz
          const std::string& method, const url_parts& url, const std::string& body, size_t max_buffer_size,
          const glz::http_headers& headers, std::chrono::seconds timeout, stream_read_strategy strategy,
          std::function<bool(int)> status_is_error, http_data_handler on_data, http_error_handler on_error,
-         http_connect_handler on_connect, http_disconnect_handler on_disconnect)
+         http_connect_handler on_connect, http_disconnect_handler on_disconnect, http_progress_handler on_progress)
       {
          const bool use_https = (url.protocol == "https");
 
 #ifndef GLZ_ENABLE_SSL
          if (use_https) {
-            asio::post(io_executor,
-                       [on_error = std::move(on_error)]() { on_error(make_error_code(ssl_error::ssl_not_supported)); });
+            asio::post(io_executor, [on_error = std::move(on_error)]() {
+               if (on_error) on_error(make_error_code(ssl_error::ssl_not_supported));
+            });
             return nullptr;
          }
 #endif
@@ -1458,6 +1485,8 @@ namespace glz
          connection->is_https = use_https;
 
          connection->status_is_error = std::move(status_is_error);
+         connection->on_progress = std::move(on_progress);
+         connection->head_request = (method == "HEAD");
 
          // Wrap the disconnect handler to return the socket to the pool
          auto internal_on_disconnect = [this, user_on_disconnect = std::move(on_disconnect), connection, url,
@@ -1499,7 +1528,7 @@ namespace glz
             if (!ec && !connection->is_connected && !connection->should_stop) {
                // Mark for stop to prevent race conditions
                connection->disconnect();
-               on_error(std::make_error_code(std::errc::timed_out));
+               if (on_error) on_error(std::make_error_code(std::errc::timed_out));
                internal_on_disconnect();
             }
          });
@@ -1524,7 +1553,7 @@ namespace glz
                 internal_on_disconnect = std::move(internal_on_disconnect)](
                   asio::error_code ec, asio::ip::tcp::resolver::results_type results) mutable {
                   if (ec || connection->should_stop) {
-                     on_error(ec);
+                     if (on_error) on_error(ec);
                      internal_on_disconnect(); // Ensure cleanup on resolve error
                      return;
                   }
@@ -1547,7 +1576,7 @@ namespace glz
                             internal_on_disconnect = std::move(internal_on_disconnect)](
                               asio::error_code ec, const asio::ip::tcp::endpoint&) mutable {
                               if (ec || connection->should_stop) {
-                                 on_error(ec);
+                                 if (on_error) on_error(ec);
                                  internal_on_disconnect(); // Ensure cleanup on connect error
                                  return;
                               }
@@ -1589,7 +1618,7 @@ namespace glz
 
          // Set SNI hostname for virtual hosting support
          if (!detail::configure_ssl_client_hostname(*ssl_sock, url.host)) {
-            on_error(make_error_code(ssl_error::sni_hostname_failed));
+            if (on_error) on_error(make_error_code(ssl_error::sni_hostname_failed));
             on_disconnect();
             return;
          }
@@ -1599,7 +1628,7 @@ namespace glz
                                              on_error = std::move(on_error), on_connect = std::move(on_connect),
                                              on_disconnect = std::move(on_disconnect)](asio::error_code ec) mutable {
                if (ec || connection->should_stop) {
-                  on_error(ec);
+                  if (on_error) on_error(ec);
                   on_disconnect();
                   return;
                }
@@ -1628,7 +1657,7 @@ namespace glz
                                   on_error = std::move(on_error), on_connect = std::move(on_connect),
                                   on_disconnect = std::move(on_disconnect)](asio::error_code ec, std::size_t) mutable {
                                     if (ec || connection->should_stop) {
-                                       on_error(ec);
+                                       if (on_error) on_error(ec);
                                        if (on_disconnect) on_disconnect();
                                        return;
                                     }
@@ -1638,6 +1667,76 @@ namespace glz
                                  });
             },
             *connection->socket);
+      }
+
+      // Returns false once the caller has cancelled from on_progress, which stops the
+      // stream exactly the way disconnect() does and leaves the read loop to unwind
+      // through its usual stopped path.
+      static bool report_stream_progress(const std::shared_ptr<http_stream_connection>& connection)
+      {
+         if (!connection->on_progress) {
+            return true;
+         }
+         const bool keep_going =
+            connection->on_progress(connection->bytes_received, connection->content_length.value_or(0));
+         if (!keep_going) {
+            connection->disconnect();
+         }
+         return keep_going;
+      }
+
+      static bool deliver_stream_body(const std::shared_ptr<http_stream_connection>& connection, std::string_view data,
+                                      const http_data_handler& on_data)
+      {
+         on_data(data);
+         connection->bytes_received += data.size();
+         return report_stream_progress(connection);
+      }
+
+      // How much of `available` still belongs to this response's body. Bytes past the end
+      // of a length-framed body belong to whatever the peer sends next, so they are never
+      // delivered as body no matter that they are already in hand.
+      static size_t stream_body_span(const std::shared_ptr<http_stream_connection>& connection, size_t available)
+      {
+         if (!connection->content_length) {
+            return available;
+         }
+         return (std::min)(available, *connection->content_length - connection->bytes_received);
+      }
+
+      static bool stream_body_complete(const std::shared_ptr<http_stream_connection>& connection)
+      {
+         return connection->content_length && connection->bytes_received >= *connection->content_length;
+      }
+
+      // EOF is simply how a body framed by connection close ends, so it is not reported as
+      // a failure there. A body the response framed with a Content-Length is a different
+      // matter: a close before its last declared byte is an incomplete message
+      // (RFC 9112 8), and handing the caller a short body as though it were whole is how a
+      // truncated download passes for a complete one. The buffered paths already reject
+      // such a response; the streaming path has to say so too.
+      static bool stream_read_failure_is_error(const std::shared_ptr<http_stream_connection>& connection,
+                                               asio::error_code ec)
+      {
+         if (connection->should_stop || ec == asio::error::operation_aborted) {
+            return false;
+         }
+         if (ec != asio::error::eof) {
+            return true;
+         }
+         return !stream_body_complete(connection) && connection->content_length.has_value();
+      }
+
+      // A response read to its framed end leaves the socket positioned at the start of
+      // whatever the server sends next, which is the one state that makes it reusable.
+      // Anything still buffered past that point means the peer sent more than it framed,
+      // so the socket is out of step with its own framing; and a response that asked for
+      // a close is single-use however cleanly it ended.
+      static void mark_stream_reusable(const std::shared_ptr<http_stream_connection>& connection)
+      {
+         if (!connection->peer_will_close.load(std::memory_order_relaxed) && connection->buffer->size() == 0) {
+            connection->response_complete.store(true, std::memory_order_relaxed);
+         }
       }
 
       void read_stream_response(std::shared_ptr<http_stream_connection> connection, http_data_handler on_data,
@@ -1653,7 +1752,7 @@ namespace glz
                    on_connect = std::move(on_connect), on_disconnect = std::move(on_disconnect)](
                      asio::error_code ec, std::size_t bytes_transferred) mutable {
                      if (ec || connection->should_stop) {
-                        on_error(ec);
+                        if (on_error) on_error(ec);
                         if (on_disconnect) on_disconnect();
                         return;
                      }
@@ -1665,7 +1764,7 @@ namespace glz
                      // Parse status line
                      auto line_end = header_data.find("\r\n");
                      if (line_end == std::string_view::npos) {
-                        on_error(std::make_error_code(std::errc::protocol_error));
+                        if (on_error) on_error(std::make_error_code(std::errc::protocol_error));
                         if (on_disconnect) on_disconnect();
                         return;
                      }
@@ -1674,7 +1773,7 @@ namespace glz
 
                      auto parsed_status = parse_http_status_line(status_line);
                      if (!parsed_status) {
-                        on_error(parsed_status.error());
+                        if (on_error) on_error(parsed_status.error());
                         if (on_disconnect) on_disconnect();
                         return;
                      }
@@ -1686,7 +1785,7 @@ namespace glz
                      while (!header_data.starts_with("\r\n")) {
                         line_end = header_data.find("\r\n");
                         if (line_end == std::string_view::npos) {
-                           on_error(std::make_error_code(std::errc::protocol_error));
+                           if (on_error) on_error(std::make_error_code(std::errc::protocol_error));
                            if (on_disconnect) on_disconnect();
                            return;
                         }
@@ -1711,8 +1810,14 @@ namespace glz
                      connection->is_connected = true;
                      connection->timer->cancel();
 
+                     // RFC 9112 9.3: before HTTP/1.1 the connection closed after each
+                     // response unless the reply opted back in, so the absence of a signal
+                     // means opposite things either side of that line.
+                     const bool keep_alive_is_default = parsed_status->version != "1.0";
                      connection->peer_will_close.store(
-                        response_headers.response_headers.contains_token("connection", "close"),
+                        keep_alive_is_default
+                           ? response_headers.response_headers.contains_token("connection", "close")
+                           : !response_headers.response_headers.contains_token("connection", "keep-alive"),
                         std::memory_order_relaxed);
 
                      if (on_connect) {
@@ -1725,16 +1830,52 @@ namespace glz
 
                      if (status_is_error) {
                         // Propagate the precise HTTP status via a dedicated error category.
-                        on_error(make_http_status_error(parsed_status->status_code));
+                        if (on_error) on_error(make_http_status_error(parsed_status->status_code));
                         if (on_disconnect) on_disconnect();
                         return;
                      }
 
-                     if (response_headers.response_headers.contains_token("transfer-encoding", "chunked")) {
+                     // Resolve the body framing before a byte of it is read. read_content_length
+                     // reports `absent` for a chunked response, so the two framings are never
+                     // weighed against each other here either.
+                     const auto content_length_field = detail::read_content_length(response_headers.response_headers);
+                     if (content_length_field.state == detail::content_length_state::unframed) [[unlikely]] {
+                        // RFC 9112 6.3: Content-Length fields that disagree frame no body at all.
+                        // Reading one of the two lengths would leave the remainder on the socket
+                        // for the next reader to take for a status line, so the response is
+                        // refused rather than framed by a guess.
+                        if (on_error) on_error(make_error_code(http_client_error::unframed_response));
+                        if (on_disconnect) on_disconnect();
+                        return;
+                     }
+
+                     // RFC 9110 6.4.1: these replies never carry a body, whatever they frame.
+                     // A Content-Length on a HEAD reply or a 304 states the length the
+                     // equivalent GET would have had, so framing the body by it would wait for
+                     // bytes that are never coming and then report the wait as a truncation.
+                     const int status_code = parsed_status->status_code;
+                     const bool carries_no_body =
+                        connection->head_request || status_code / 100 == 1 || status_code == 204 || status_code == 304;
+
+                     connection->content_length = carries_no_body ? std::optional<size_t>{0}
+                                                  : content_length_field.state == detail::content_length_state::present
+                                                     ? std::optional<size_t>{content_length_field.value}
+                                                     : std::nullopt;
+
+                     // Report the total before any body arrives, so a caller can refuse the
+                     // transfer before it costs anything.
+                     if (!report_stream_progress(connection)) {
+                        if (on_disconnect) on_disconnect();
+                        return;
+                     }
+
+                     if (!carries_no_body &&
+                         response_headers.response_headers.contains_token("transfer-encoding", "chunked")) {
                         start_chunked_reading(connection, std::move(on_data), std::move(on_error),
                                               std::move(on_disconnect));
                      }
                      else {
+                        // A body framed as empty finishes on the first pass through the loop.
                         start_stream_reading(connection, std::move(on_data), std::move(on_error),
                                              std::move(on_disconnect));
                      }
@@ -1763,7 +1904,7 @@ namespace glz
                                                              std::size_t bytes_transferred) mutable {
                      if (ec || connection->should_stop) {
                         if (ec != asio::error::eof && ec != asio::error::operation_aborted && !connection->should_stop)
-                           on_error(ec);
+                           if (on_error) on_error(ec);
                         if (on_disconnect) on_disconnect();
                         return;
                      }
@@ -1782,7 +1923,7 @@ namespace glz
                         std::from_chars(line_view.data(), line_view.data() + line_view.size(), chunk_size, 16);
 
                      if (parse_ec != std::errc{}) {
-                        on_error(std::make_error_code(std::errc::protocol_error));
+                        if (on_error) on_error(std::make_error_code(std::errc::protocol_error));
                         if (on_disconnect) on_disconnect();
                         return;
                      }
@@ -1831,10 +1972,7 @@ namespace glz
                                             return;
                                          }
 
-                                         // A response that asked to close is single-use however cleanly it ended.
-                                         if (!connection->peer_will_close.load(std::memory_order_relaxed)) {
-                                            connection->response_complete.store(true, std::memory_order_relaxed);
-                                         }
+                                         mark_stream_reusable(connection);
                                          if (on_disconnect) on_disconnect();
                                       });
             },
@@ -1849,7 +1987,7 @@ namespace glz
          // buffered-size check with a tiny length, and hands on_data a view of chunk_size bytes
          // over a few-byte buffer. Reject it as a malformed chunk.
          if (chunk_size > (std::numeric_limits<size_t>::max)() - 2) [[unlikely]] {
-            on_error(std::make_error_code(std::errc::protocol_error));
+            if (on_error) on_error(std::make_error_code(std::errc::protocol_error));
             if (on_disconnect) on_disconnect();
             return;
          }
@@ -1860,8 +1998,12 @@ namespace glz
          // Check if we have enough data in the buffer already.
          if (connection->buffer->size() >= total_to_read) {
             std::string_view data{static_cast<const char*>(connection->buffer->data().data()), chunk_size};
-            on_data(data);
+            const bool keep_going = deliver_stream_body(connection, data, on_data);
             connection->buffer->consume(total_to_read);
+            if (!keep_going) {
+               if (on_disconnect) on_disconnect();
+               return;
+            }
 
             // Post the next read to avoid deep recursion
             std::visit(
@@ -1885,14 +2027,18 @@ namespace glz
                    on_disconnect = std::move(on_disconnect)](asio::error_code ec, std::size_t) mutable {
                      if (ec || connection->should_stop) {
                         if (ec != asio::error::eof && ec != asio::error::operation_aborted && !connection->should_stop)
-                           on_error(ec);
+                           if (on_error) on_error(ec);
                         if (on_disconnect) on_disconnect();
                         return;
                      }
 
                      std::string_view data{static_cast<const char*>(connection->buffer->data().data()), chunk_size};
-                     on_data(data);
+                     const bool keep_going = deliver_stream_body(connection, data, on_data);
                      connection->buffer->consume(chunk_size + 2); // Consume data + trailing CRLF
+                     if (!keep_going) {
+                        if (on_disconnect) on_disconnect();
+                        return;
+                     }
 
                      read_chunk_size(connection, std::move(on_data), std::move(on_error), std::move(on_disconnect));
                   });
@@ -1900,30 +2046,20 @@ namespace glz
             *connection->socket);
       }
 
+      // The one body read loop: whatever is already buffered goes out, then the framing
+      // decides whether the stream is over or another read is due. The strategy decides
+      // only how much a single read may take, never where the body ends.
       void start_stream_reading(std::shared_ptr<http_stream_connection> connection, http_data_handler on_data,
                                 http_error_handler on_error, http_disconnect_handler on_disconnect)
       {
-         // Dispatch to the appropriate strategy
-         switch (connection->strategy) {
-         case stream_read_strategy::bulk_transfer:
-            start_stream_reading_bulk(connection, std::move(on_data), std::move(on_error), std::move(on_disconnect));
-            break;
-         case stream_read_strategy::immediate_delivery:
-            start_stream_reading_immediate(connection, std::move(on_data), std::move(on_error),
-                                           std::move(on_disconnect));
-            break;
-         }
-      }
-
-      void start_stream_reading_bulk(std::shared_ptr<http_stream_connection> connection, http_data_handler on_data,
-                                     http_error_handler on_error, http_disconnect_handler on_disconnect)
-      {
-         // Process any existing data in buffer first
-         if (connection->buffer->size() > 0) {
-            std::string_view data{static_cast<const char*>(connection->buffer->data().data()),
-                                  connection->buffer->size()};
-            on_data(data);
-            connection->buffer->consume(connection->buffer->size());
+         if (const size_t span = stream_body_span(connection, connection->buffer->size()); span > 0) {
+            std::string_view data{static_cast<const char*>(connection->buffer->data().data()), span};
+            const bool keep_going = deliver_stream_body(connection, data, on_data);
+            connection->buffer->consume(span);
+            if (!keep_going) {
+               if (on_disconnect) on_disconnect();
+               return;
+            }
          }
 
          if (connection->should_stop) {
@@ -1931,70 +2067,48 @@ namespace glz
             return;
          }
 
-         // Use async_read with transfer_at_least(1) - may read more data for efficiency
-         std::visit(
-            [&, this](auto& sock) {
-               asio::async_read(*sock, *connection->buffer, asio::transfer_at_least(1),
-                                [this, connection, on_data, on_error, on_disconnect](
-                                   asio::error_code ec, std::size_t /*bytes_transferred*/) {
-                                   if (ec || connection->should_stop) {
-                                      if (ec != asio::error::eof && ec != asio::error::operation_aborted &&
-                                          !connection->should_stop) {
-                                         on_error(ec);
-                                      }
-                                      if (on_disconnect) on_disconnect();
-                                      return;
-                                   }
-
-                                   // Recurse to process the new data
-                                   start_stream_reading_bulk(connection, on_data, on_error, on_disconnect);
-                                });
-            },
-            *connection->socket);
-      }
-
-      void start_stream_reading_immediate(std::shared_ptr<http_stream_connection> connection, http_data_handler on_data,
-                                          http_error_handler on_error, http_disconnect_handler on_disconnect)
-      {
-         // Process existing buffer content first
-         if (connection->buffer->size() > 0) {
-            std::string_view data{static_cast<const char*>(connection->buffer->data().data()),
-                                  connection->buffer->size()};
-            on_data(data);
-            connection->buffer->consume(connection->buffer->size());
-         }
-
-         if (connection->should_stop) {
+         // A length-framed body ends at its last byte, not at the peer's close: waiting on
+         // a read that the framing says will never carry body would stall the stream until
+         // the connection dropped, and would forfeit a socket that is ready to be reused.
+         if (stream_body_complete(connection)) {
+            mark_stream_reusable(connection);
             if (on_disconnect) on_disconnect();
             return;
          }
 
-         // Use async_read_some for immediate delivery of available data
-         constexpr size_t read_size = 8192;
+         auto resume = [this, connection, on_data, on_error, on_disconnect](asio::error_code ec,
+                                                                            std::size_t bytes_transferred) {
+            if (ec || connection->should_stop) {
+               if (stream_read_failure_is_error(connection, ec)) {
+                  if (on_error) on_error(ec);
+               }
+               if (on_disconnect) on_disconnect();
+               return;
+            }
+
+            if (connection->strategy == stream_read_strategy::immediate_delivery) {
+               connection->buffer->commit(bytes_transferred); // async_read commits for itself
+            }
+            start_stream_reading(connection, on_data, on_error, on_disconnect);
+         };
+
          std::visit(
-            [&, this](auto& sock) {
-               sock->async_read_some(connection->buffer->prepare(read_size), [this, connection, on_data, on_error,
-                                                                              on_disconnect](
-                                                                                asio::error_code ec,
-                                                                                std::size_t bytes_transferred) {
-                  if (ec || connection->should_stop) {
-                     if (ec != asio::error::eof && ec != asio::error::operation_aborted && !connection->should_stop) {
-                        on_error(ec);
-                     }
-                     if (on_disconnect) on_disconnect();
-                     return;
-                  }
-
-                  // Commit the received data and deliver immediately
-                  connection->buffer->commit(bytes_transferred);
-
-                  std::string_view data{static_cast<const char*>(connection->buffer->data().data()), bytes_transferred};
-                  on_data(data);
-                  connection->buffer->consume(bytes_transferred);
-
-                  // Continue reading
-                  start_stream_reading_immediate(connection, on_data, on_error, on_disconnect);
-               });
+            [&](auto& sock) {
+               if (connection->strategy == stream_read_strategy::bulk_transfer) {
+                  // transfer_at_least(1) is free to take more in one go, for throughput.
+                  asio::async_read(*sock, *connection->buffer, asio::transfer_at_least(1), std::move(resume));
+               }
+               else {
+                  // Immediate delivery hands over whatever has arrived, so it reads into a
+                  // bounded window: no more than the body has left, so a read cannot run past
+                  // the body and strand the next response's bytes in this buffer, and no more
+                  // than the buffer can hold, which a small max_buffer_size would otherwise
+                  // overrun.
+                  constexpr size_t max_read_size = 8192;
+                  const size_t window = (std::min)(stream_body_span(connection, max_read_size),
+                                                   connection->buffer->max_size() - connection->buffer->size());
+                  sock->async_read_some(connection->buffer->prepare(window), std::move(resume));
+               }
             },
             *connection->socket);
       }
