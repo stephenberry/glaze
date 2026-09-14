@@ -1246,8 +1246,8 @@ suite ostream_buffer_bounded_growth_tests = [] {
       // that is one big string has no interior flush point, so without a flush between records the
       // window accumulated every record rather than holding the largest one.
       constexpr size_t record_chars = 300'000;
-      auto records = std::tuple{std::string(record_chars, 'a'), std::string(record_chars, 'b'),
-                                std::string(record_chars, 'c')};
+      auto records =
+         std::tuple{std::string(record_chars, 'a'), std::string(record_chars, 'b'), std::string(record_chars, 'c')};
 
       std::string reference;
       expect(!glz::write_ndjson(records, reference));
