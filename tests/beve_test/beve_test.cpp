@@ -30,6 +30,7 @@
 #include "glaze/json/json_ptr.hpp"
 #include "glaze/json/read.hpp"
 #include "glaze/trace/trace.hpp"
+#include "minimal_buffer.hpp"
 #include "scratch_directory.hpp"
 #include "ut/ut.hpp"
 
@@ -9242,6 +9243,70 @@ suite beve_recursion_depth_limit = [] {
 
       std::set<std::vector<int>> out{};
       expect(glz::read_beve(out, buffer) == glz::error_code::invalid_length);
+   };
+};
+
+// Regression coverage for GitHub issue #2854: the BEVE readers each carry their own emptiness
+// check, so the shared fix in core/read.hpp proves nothing about them.
+template <class Buffer>
+concept appendable_with_delimiter = requires(Buffer& buffer) { glz::write_beve_append_with_delimiter(1, buffer); };
+
+suite contiguous_buffer_without_empty = [] {
+   "read_beve round trip"_test = [] {
+      test_buffers::qt_style_buffer buffer{};
+      expect(not glz::write_beve(std::vector<int>{1, 2, 3}, buffer));
+
+      std::vector<int> value{};
+      expect(not glz::read_beve(value, buffer));
+      expect(value == std::vector<int>{1, 2, 3});
+   };
+
+   "read_beve_delimited"_test = [] {
+      std::string written{};
+      expect(not glz::write_beve_delimited(std::vector<int>{4, 5, 6}, written));
+
+      test_buffers::qt_style_buffer buffer{};
+      buffer.assign(written);
+
+      std::vector<int> values{};
+      expect(not glz::read_beve_delimited(values, buffer));
+      expect(values == std::vector<int>{4, 5, 6});
+   };
+
+   "read_beve_delimited on an empty buffer"_test = [] {
+      test_buffers::qt_style_buffer buffer{};
+      std::vector<int> values{1, 2};
+      expect(not glz::read_beve_delimited(values, buffer));
+      expect(values.empty());
+   };
+
+   "lazy_beve"_test = [] {
+      // read_only_buffer, not qt_style_buffer: lazy_beve used to index the buffer directly, and a
+      // fixture with operator[] would compile either way and prove nothing.
+      std::string written{};
+      expect(not glz::write_beve(std::vector<int>{7, 8}, written));
+
+      const test_buffers::read_only_buffer buffer{written};
+      expect(glz::lazy_beve(buffer).has_value());
+
+      const test_buffers::read_only_buffer empty{};
+      expect(not glz::lazy_beve(empty).has_value());
+   };
+
+   "append a delimiter to a buffer without push_back"_test = [] {
+      // qt_style_buffer has no push_back, which is what the delimiter write used to require.
+      // Appending also needs a buffer that can grow, so a fixed-size one is rejected at the call
+      // site rather than inside the body.
+      static_assert(appendable_with_delimiter<std::string>);
+      static_assert(not appendable_with_delimiter<std::array<char, 64>>);
+
+      test_buffers::qt_style_buffer buffer{};
+      expect(not glz::write_beve(1, buffer));
+      expect(not glz::write_beve_append_with_delimiter(2, buffer));
+
+      std::vector<int> values{};
+      expect(not glz::read_beve_delimited(values, buffer));
+      expect(values == std::vector<int>{1, 2});
    };
 };
 

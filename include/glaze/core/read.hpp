@@ -138,7 +138,7 @@ namespace glz
       using Buffer = std::remove_reference_t<decltype(buffer)>;
 
       if constexpr (Opts.format != NDJSON) {
-         if (buffer.empty()) [[unlikely]] {
+         if (buffer.size() == 0) [[unlikely]] {
             ctx.error = error_code::no_read_input;
             return {0, ctx.error, ctx.custom_error_message};
          }

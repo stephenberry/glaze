@@ -187,8 +187,8 @@ namespace glz
       inline void prettify_json(is_context auto&& ctx, In&& in, Out&& out)
       {
          if constexpr (resizable<Out>) {
-            if (in.empty()) {
-               out.clear();
+            if (in.size() == 0) {
+               out.resize(0); // resize is what `resizable` promises; clear() is not
                return;
             }
             out.resize(in.size() * 2);

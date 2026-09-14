@@ -40,12 +40,12 @@ namespace glz
       return result;
    }
 
-   template <auto Opts = opts{.format = STENCIL}, class Template, class T, resizable Buffer>
+   template <auto Opts = opts{.format = STENCIL}, contiguous Template, class T, resizable Buffer>
    [[nodiscard]] error_ctx stencil(Template&& layout, T&& value, Buffer& buffer)
    {
       context ctx{};
 
-      if (layout.empty()) [[unlikely]] {
+      if (layout.size() == 0) [[unlikely]] {
          ctx.error = error_code::no_read_input;
          return {0, ctx.error, ctx.custom_error_message};
       }

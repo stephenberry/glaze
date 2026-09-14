@@ -10,21 +10,18 @@
 
 namespace glz
 {
-   template <auto Opts = opts{}, class Template, class T, resizable Buffer>
+   template <auto Opts = opts{}, contiguous Template, class T, resizable Buffer>
    [[nodiscard]] error_ctx stencilcount(Template&& layout, T&& value, Buffer& buffer)
    {
       context ctx{};
 
-      if (layout.empty()) [[unlikely]] {
+      if (layout.size() == 0) [[unlikely]] {
          ctx.error = error_code::no_read_input;
          return {0, ctx.error, ctx.custom_error_message};
       }
 
       auto [it, end] = read_iterators<Opts, false>(layout);
       auto outer_start = it;
-      if (layout.empty()) [[unlikely]] {
-         ctx.error = error_code::no_read_input;
-      }
       if (not bool(ctx.error)) [[likely]] {
          auto skip_whitespace = [&] {
             while (it < end && whitespace_table[uint8_t(*it)]) {

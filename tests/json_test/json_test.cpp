@@ -40,6 +40,7 @@
 #include "glaze/record/recorder.hpp"
 #include "glaze/trace/trace.hpp"
 #include "json_test_shared_types.hpp"
+#include "minimal_buffer.hpp"
 #include "scratch_directory.hpp"
 #include "ut/ut.hpp"
 
@@ -15675,6 +15676,135 @@ suite json_recursion_depth_limit = [] {
       const auto ec = glz::read<glz::opts{.error_on_unknown_keys = false}>(out, buffer);
       expect(not ec) << glz::format_error(ec, buffer);
       expect(out.size() == 2 * glz::max_recursive_depth_limit);
+   };
+};
+
+// Buffers that promise only what glaze's concepts require; see tests/minimal_buffer.hpp.
+// Regression coverage for GitHub issue #2854.
+using test_buffers::qt_style_buffer;
+using test_buffers::read_only_buffer;
+
+// contiguous is the constraint glz::read actually selects on; is_buffer is the weaker public
+// spelling the issue reported against. Both must hold.
+static_assert(glz::contiguous<qt_style_buffer>);
+static_assert(glz::is_buffer<qt_style_buffer>);
+static_assert(glz::contiguous<read_only_buffer>);
+
+struct no_empty_payload
+{
+   int i{};
+   std::string s{};
+};
+
+suite buffer_without_member_empty = [] {
+   "round trip"_test = [] {
+      qt_style_buffer buffer{};
+      expect(not glz::write_json(no_empty_payload{42, "hello"}, buffer));
+      expect(std::string_view(buffer.data(), buffer.size()) == R"({"i":42,"s":"hello"})");
+
+      no_empty_payload value{};
+      expect(not glz::read_json(value, buffer));
+      expect(value.i == 42);
+      expect(value.s == "hello");
+   };
+
+   "empty buffer reports no_read_input"_test = [] {
+      qt_style_buffer buffer{};
+      no_empty_payload value{};
+      expect(glz::read_json(value, buffer).ec == glz::error_code::no_read_input);
+   };
+
+   "get_view_json"_test = [] {
+      qt_style_buffer buffer{};
+      expect(not glz::write_json(no_empty_payload{5, "view"}, buffer));
+
+      const auto view = glz::get_view_json<"/i">(buffer);
+      expect(view.has_value());
+      if (view) {
+         expect(std::string_view(view->data(), view->size()) == "5");
+      }
+   };
+
+   "get_view_json with a runtime pointer"_test = [] {
+      // A separate overload from the compile-time one above, with its own empty check.
+      qt_style_buffer buffer{};
+      expect(not glz::write_json(no_empty_payload{6, "runtime"}, buffer));
+
+      const auto view = glz::get_view_json("/i", buffer);
+      expect(view.has_value());
+      if (view) {
+         expect(std::string_view(view->data(), view->size()) == "6");
+      }
+   };
+
+   "get_view_json on an empty buffer"_test = [] {
+      qt_style_buffer buffer{};
+      const auto view = glz::get_view_json<"/i">(buffer);
+      expect(not view.has_value());
+      if (not view) {
+         expect(view.error().ec == glz::error_code::no_read_input);
+      }
+   };
+
+   "prettify and minify"_test = [] {
+      qt_style_buffer buffer{};
+      expect(not glz::write_json(no_empty_payload{9, "p"}, buffer));
+
+      // Both sides are custom buffers: the output side is what catches prettify reaching for
+      // clear(), which output_buffer never promised.
+      qt_style_buffer pretty{};
+      glz::prettify_json(buffer, pretty);
+      expect(std::string_view(pretty.data(), pretty.size()).contains("\n"));
+
+      qt_style_buffer minified{};
+      glz::minify_json(pretty, minified);
+      expect(std::string_view(minified.data(), minified.size()) == R"({"i":9,"s":"p"})");
+   };
+
+   "prettify an empty buffer"_test = [] {
+      qt_style_buffer in{};
+      qt_style_buffer out{};
+      out.assign("stale");
+      glz::prettify_json(in, out);
+      expect(out.size() == 0);
+   };
+
+   "minify_jsonc"_test = [] {
+      // The two-argument overload took `in` by const reference while the implementation pads it in
+      // place, so no argument type could ever match it.
+      std::string in = R"({"i":1, /* note */ "s":"x"})";
+      std::string out{};
+      glz::minify_jsonc(in, out);
+      expect(out == R"({"i":1,/* note */"s":"x"})") << out;
+   };
+
+   "format_error on a failed read"_test = [] {
+      // The call that follows a failed read must accept the buffer the read accepted.
+      qt_style_buffer buffer{};
+      buffer.assign(R"({"i":1,)"
+                    "\n"
+                    R"( "s":})");
+
+      no_empty_payload value{};
+      const auto ec = glz::read_json(value, buffer);
+      expect(bool(ec));
+
+      const auto message = glz::format_error(ec, buffer);
+      expect(message.starts_with("2:6:")) << message; // line 2, column 6, where the bad value sits
+   };
+
+   "read through a buffer that is only contiguous"_test = [] {
+      // No subscript, no iterators, no emptiness member of any spelling. Const, so this is also
+      // the unpadded read path.
+      const read_only_buffer buffer{R"({"i":3,"s":"minimal"})"};
+      no_empty_payload value{};
+      expect(not glz::read_json(value, buffer));
+      expect(value.i == 3);
+      expect(value.s == "minimal");
+
+      const read_only_buffer empty{};
+      expect(glz::read_json(value, empty).ec == glz::error_code::no_read_input);
+      expect(glz::format_error(glz::read_json(value, empty), empty).size() > 0);
    };
 };
 

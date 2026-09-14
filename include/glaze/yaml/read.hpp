@@ -6672,7 +6672,7 @@ namespace glz
    template <auto Opts = yaml::yaml_opts{}, class T, contiguous Buffer>
    [[nodiscard]] error_ctx read_yaml(T&& value, Buffer&& buffer) noexcept
    {
-      if (buffer.empty()) {
+      if (buffer.size() == 0) {
          using V = std::remove_cvref_t<T>;
          if constexpr (requires { value = nullptr; }) {
             value = nullptr;

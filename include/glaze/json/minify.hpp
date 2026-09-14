@@ -157,7 +157,7 @@ namespace glz
          requires(contiguous<In> && resizable<In>)
       inline void minify_json(is_context auto&& ctx, In&& in, Out&& out)
       {
-         if (in.empty()) {
+         if (in.size() == 0) {
             return;
          }
          in.resize(in.size() + padding_bytes);
@@ -207,7 +207,7 @@ namespace glz
    }
 
    template <auto Opts = opts{}>
-   inline void minify_jsonc(const auto& in, auto& out)
+   inline void minify_jsonc(resizable auto& in, auto& out)
    {
       context ctx{};
       detail::minify_json<opt_true<Opts, &opts::comments>>(ctx, in, out);

@@ -2,6 +2,7 @@
 // For the license information refer to glaze.hpp
 
 #include "glaze/glaze.hpp"
+#include "minimal_buffer.hpp"
 #include "ut/ut.hpp"
 
 using namespace ut;
@@ -783,6 +784,37 @@ suite stencilcount_tests = [] {
             }
          }
       }
+   };
+};
+
+// Regression coverage for GitHub issue #2854: the layout is walked through read_iterators, which
+// needs only data() and size(), but the emptiness check demanded a member beyond that.
+suite contiguous_layout_without_empty = [] {
+   "stencil with a custom layout buffer"_test = [] {
+      test_buffers::qt_style_buffer layout{};
+      layout.assign("{{first_name}} {{last_name}}");
+
+      person p{.first_name = "Ada", .last_name = "Lovelace"};
+      std::string out{};
+      expect(not glz::stencil(layout, p, out));
+      expect(out == "Ada Lovelace") << out;
+   };
+
+   "stencil with an empty custom layout"_test = [] {
+      test_buffers::qt_style_buffer layout{};
+      person p{};
+      std::string out{};
+      expect(glz::stencil(layout, p, out).ec == glz::error_code::no_read_input);
+   };
+
+   "stencilcount with a custom layout buffer"_test = [] {
+      test_buffers::qt_style_buffer layout{};
+      layout.assign("{{first_name}}");
+
+      person p{.first_name = "Ada"};
+      std::string out{};
+      expect(not glz::stencilcount(layout, p, out));
+      expect(out == "Ada") << out;
    };
 };
 

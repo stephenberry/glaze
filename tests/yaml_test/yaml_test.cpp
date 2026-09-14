@@ -24,6 +24,7 @@
 #include <vector>
 
 #include "glaze/json/generic.hpp"
+#include "minimal_buffer.hpp"
 #include "scratch_directory.hpp"
 #include "ut/ut.hpp"
 
@@ -12764,6 +12765,33 @@ suite yaml_indent_width_tests = [] {
       std::string buffer{};
       expect(!glz::write<opts>(seq_doc_t{}, buffer));
       expect(buffer == "{items: [{a: 1, b: 2}, {a: 3, b: 4}]}") << buffer;
+   };
+};
+
+// Regression coverage for GitHub issue #2854: read_yaml has its own emptiness check, separate from
+// the shared one in core/read.hpp.
+suite contiguous_buffer_without_empty = [] {
+   "read_yaml round trip"_test = [] {
+      test_buffers::qt_style_buffer buffer{};
+      expect(not glz::write_yaml(std::map<std::string, int>{{"a", 1}}, buffer));
+
+      std::map<std::string, int> value{};
+      expect(not glz::read_yaml(value, buffer));
+      expect(value == std::map<std::string, int>{{"a", 1}});
+   };
+
+   "read_yaml on an empty buffer"_test = [] {
+      test_buffers::qt_style_buffer buffer{};
+      std::optional<int> value{42};
+      expect(not glz::read_yaml(value, buffer));
+      expect(not value.has_value());
+   };
+
+   "read through a buffer that is only contiguous"_test = [] {
+      const test_buffers::read_only_buffer buffer{"a: 2"};
+      std::map<std::string, int> value{};
+      expect(not glz::read_yaml(value, buffer));
+      expect(value == std::map<std::string, int>{{"a", 2}});
    };
 };
 

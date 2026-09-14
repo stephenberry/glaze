@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <optional>
 #include <string>
+#include <string_view>
 
 #include "glaze/core/write_chars.hpp"
 #include "glaze/util/dump.hpp"
@@ -35,35 +36,37 @@ namespace glz
          }
       }
 
-      inline source_info get_source_info(const has_size auto& buffer, const size_t index)
+      // `glz::format_error(ec, buffer)` is the call that follows a failed read, so it has to accept
+      // every buffer a read accepts -- data() and size() and nothing else. See GitHub issue #2854.
+      inline source_info get_source_info(const contiguous auto& buffer, const size_t index)
       {
-         using V = std::decay_t<decltype(buffer[0])>;
+         using V = std::decay_t<decltype(*buffer.data())>;
 
          if constexpr (std::same_as<V, std::byte>) {
             return {.context = "", .index = index};
          }
          else {
-            if (index >= buffer.size()) {
+            const std::string_view text{reinterpret_cast<const char*>(buffer.data()), buffer.size()};
+            if (index >= text.size()) {
                return {.context = "", .index = index};
             }
 
-            const auto start = std::begin(buffer) + index;
-            const auto line = size_t(std::count(std::begin(buffer), start, static_cast<V>('\n')) + 1);
-            const auto rstart = std::rbegin(buffer) + buffer.size() - index - 1;
-            const auto prev_new_line =
-               std::find((std::min)(rstart + 1, std::rend(buffer)), std::rend(buffer), static_cast<V>('\n'));
-            const auto column = size_t(std::distance(rstart, prev_new_line));
-            const auto next_new_line =
-               std::find((std::min)(start + 1, std::end(buffer)), std::end(buffer), static_cast<V>('\n'));
+            // The line the error sits on starts just after the newline before it, or at the
+            // beginning when there is none. Both the column and the context start from that one
+            // position. Searching from index - 1 leaves index itself out, so a newline *at* the
+            // error belongs to the line it ends rather than the one it opens.
+            const size_t prev_newline = index ? text.rfind('\n', index - 1) : text.npos;
+            const size_t offset = (prev_newline == text.npos) ? 0 : prev_newline + 1;
+            const size_t column = index - offset + 1;
+            const size_t line = size_t(std::count(text.begin(), text.begin() + index, '\n') + 1);
 
-            const auto offset = (prev_new_line == std::rend(buffer) ? 0 : index - column + 1);
-            auto context_begin = std::begin(buffer) + offset;
-            auto context_end = next_new_line;
+            size_t context_begin = offset;
+            size_t context_end = (std::min)(text.find('\n', index + 1), text.size());
 
             size_t front_truncation = 0;
             size_t rear_truncation = 0;
 
-            if (std::distance(context_begin, context_end) > 64) {
+            if (context_end - context_begin > 64) {
                // reduce the context length so that we can more easily see errors, especially for non-prettified buffers
                if (column <= 32) {
                   rear_truncation = 64;
@@ -72,17 +75,27 @@ namespace glz
                else {
                   front_truncation = column - 32;
                   context_begin += front_truncation;
-                  if (std::distance(context_begin, context_end) > 64) {
+                  if (context_end - context_begin > 64) {
                      rear_truncation = front_truncation + 64;
-                     context_end = std::begin(buffer) + offset + rear_truncation;
+                     context_end = offset + rear_truncation;
                   }
                }
             }
 
-            std::string context{context_begin, context_end};
+            std::string context{text.substr(context_begin, context_end - context_begin)};
             convert_tabs_to_single_spaces(context);
             return {line, column, context, index, front_truncation, rear_truncation};
          }
+      }
+
+      // A buffer that can report its size but not its bytes cannot show context, but it can still
+      // say where the error was. Keeping this overload means format_error stays callable for any
+      // sized buffer instead of failing inside its own body, which is the diagnostic this whole
+      // change exists to remove.
+      inline source_info get_source_info(const has_size auto& buffer, const size_t index)
+         requires(!contiguous<std::remove_cvref_t<decltype(buffer)>>)
+      {
+         return {.context = "", .index = index};
       }
 
       template <class B>
