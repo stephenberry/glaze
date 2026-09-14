@@ -191,7 +191,7 @@ namespace glz
                dump("\\0", b, ix);
                break;
             default:
-               if (uint8_t(c) < 0x20) {
+               if (is_yaml_control(c)) {
                   // Control characters - use hex escape
                   dump("\\x", b, ix);
                   constexpr char hex[] = "0123456789abcdef";
@@ -301,7 +301,7 @@ namespace glz
             {
                bool has_unrepresentable = false;
                for (char c : str) {
-                  if (c == '\r' || c == '\0' || (uint8_t(c) < 0x20 && c != '\n' && c != '\t')) {
+                  if (is_yaml_control(c) && c != '\n' && c != '\t') {
                      has_unrepresentable = true;
                      break;
                   }
@@ -339,7 +339,7 @@ namespace glz
             // have no escape mechanism for these.
             bool needs_escapes = false;
             for (char c : str) {
-               if (c == '\r' || c == '\0' || (uint8_t(c) < 0x20 && c != '\t')) {
+               if (is_yaml_control(c) && c != '\t') {
                   needs_escapes = true;
                   break;
                }

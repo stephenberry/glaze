@@ -948,6 +948,50 @@ suite yaml_writer_edge_case_tests = [] {
       expect(parsed == value);
    };
 
+   "write_scalar_with_del_is_escaped"_test = [] {
+      // DEL (0x7f) sits outside YAML's c-printable set just as the C0 range does, so a
+      // plain scalar carrying it raw is invalid even though the byte is not < 0x20.
+      const std::string original = std::string("a") + char(0x7f) + "b";
+      std::string yaml{};
+      auto wec = glz::write_yaml(original, yaml);
+      expect(!wec);
+      expect(yaml == "\"a\\x7fb\"");
+
+      std::string parsed{};
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+      expect(parsed == original);
+   };
+
+   "write_multiline_scalar_with_del_avoids_block"_test = [] {
+      // A literal block has no escape mechanism, so a multiline value holding DEL must
+      // fall back to the double-quoted style rather than emit the byte raw.
+      const std::string original = std::string("line1\n") + char(0x7f) + "\nline2";
+      std::string yaml{};
+      auto wec = glz::write_yaml(original, yaml);
+      expect(!wec);
+      expect(yaml == "\"line1\\n\\x7f\\nline2\"");
+      expect(yaml.find('|') == std::string::npos);
+
+      std::string parsed{};
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+      expect(parsed == original);
+   };
+
+   "write_map_key_with_del_is_escaped"_test = [] {
+      std::map<std::string, int> value{{std::string("k") + char(0x7f), 1}};
+      std::string yaml{};
+      auto wec = glz::write_yaml(value, yaml);
+      expect(!wec);
+      expect(yaml == "\"k\\x7f\": 1\n");
+
+      std::map<std::string, int> parsed{};
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+      expect(parsed == value);
+   };
+
    "write_bool_like_and_number_like_scalars_are_quoted"_test = [] {
       std::string bool_yaml{};
       auto bool_wec = glz::write_yaml(std::string{"true"}, bool_yaml);

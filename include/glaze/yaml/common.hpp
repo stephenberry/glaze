@@ -1378,6 +1378,17 @@ namespace glz::yaml
    // Check if character is a YAML indicator that needs quoting
    inline constexpr bool is_yaml_indicator(char c) noexcept { return yaml_indicator_table[static_cast<uint8_t>(c)]; }
 
+   // Check if a byte is a control character that YAML's c-printable set excludes:
+   // the C0 range and DEL. Such a byte cannot appear literally in a plain, single-quoted
+   // or block scalar, so it forces the double-quoted style, which escapes it as \xXX.
+   // Tab, line feed and carriage return are C0 controls that some styles do permit, so
+   // callers exempt those individually where the style allows them.
+   inline constexpr bool is_yaml_control(char c) noexcept
+   {
+      const auto u = uint8_t(c);
+      return u < 0x20 || u == 0x7f;
+   }
+
    // Check if string needs quoting when written
    inline bool needs_quoting(std::string_view s) noexcept
    {
@@ -1400,14 +1411,14 @@ namespace glz::yaml
          return true;
       }
 
-      // Check for characters that require quoting. A C0 control byte (< 0x20)
-      // cannot appear literally in a plain scalar, so it forces a quoted style;
-      // the double-quoted writer then escapes it as \xXX. This mirrors the
-      // control-character check the multiline block and double-quoted paths
-      // already apply, which the single-line plain path was missing. The listed
-      // \n, \r and \t are all < 0x20, so the earlier explicit form is subsumed.
+      // Check for characters that require quoting. A control byte cannot appear
+      // literally in a plain scalar, so it forces a quoted style; the double-quoted
+      // writer then escapes it as \xXX. This mirrors the control-character check the
+      // multiline block and double-quoted paths already apply, which the single-line
+      // plain path was missing. \n, \r and \t are themselves controls, so the
+      // earlier explicit form is subsumed.
       for (char c : s) {
-         if (c == ':' || c == '#' || c == ',' || uint8_t(c) < 0x20) {
+         if (c == ':' || c == '#' || c == ',' || is_yaml_control(c)) {
             return true;
          }
       }
