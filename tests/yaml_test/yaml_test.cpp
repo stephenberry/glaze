@@ -827,6 +827,13 @@ name: >
    };
 };
 
+// Opt in to control-character escaping, which is off by default so that the common
+// write path pays nothing for it.
+struct yaml_escape_opts : glz::opts
+{
+   bool escape_control_characters = true;
+};
+
 suite yaml_writer_edge_case_tests = [] {
    "write_string_chomping_strip_marker"_test = [] {
       const std::string original = "line1\nline2";
@@ -906,13 +913,26 @@ suite yaml_writer_edge_case_tests = [] {
       expect(parsed == original);
    };
 
-   "write_scalar_with_only_control_char_is_escaped"_test = [] {
-      // A control byte with no other quote-forcing character must still route to the
-      // double-quoted style. Emitting it in a plain scalar produces output no longer
-      // valid per the YAML character set (only \t, \n and \r are permitted C0 controls).
+   "write_control_char_raw_by_default"_test = [] {
+      // Escaping control characters is opt-in, so by default the byte is written through
+      // untouched and the plain style is kept. Rejecting it is the reader's job.
       const std::string original = std::string("abc") + char(0x01) + "def";
-      std::string yaml;
+      std::string yaml{};
       auto wec = glz::write_yaml(original, yaml);
+      expect(!wec);
+      expect(yaml == original) << "control byte should pass through unquoted";
+
+      std::string parsed{};
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+      expect(parsed == original);
+   };
+
+   "write_control_char_escaped_under_opt_in"_test = [] {
+      // With escape_control_characters the byte forces a quoted style and is escaped.
+      const std::string original = std::string("abc") + char(0x01) + "def";
+      std::string yaml{};
+      auto wec = glz::write<yaml_escape_opts{{.format = glz::YAML}}>(original, yaml);
       expect(!wec);
       expect(yaml == "\"abc\\x01def\"");
 
@@ -922,74 +942,77 @@ suite yaml_writer_edge_case_tests = [] {
       expect(parsed == original);
    };
 
-   "write_scalar_with_embedded_nul_is_escaped"_test = [] {
+   "write_embedded_nul_raw_by_default_escaped_under_opt_in"_test = [] {
       const std::string original = std::string("a\0b", 3);
-      std::string yaml;
-      auto wec = glz::write_yaml(original, yaml);
-      expect(!wec);
-      expect(yaml == "\"a\\0b\"");
+
+      std::string plain{};
+      expect(!glz::write_yaml(original, plain));
+      expect(plain == original) << "NUL should pass through by default";
+
+      std::string escaped{};
+      expect(!glz::write<yaml_escape_opts{{.format = glz::YAML}}>(original, escaped));
+      expect(escaped == "\"a\\0b\"");
 
       std::string parsed{};
-      auto rec = glz::read_yaml(parsed, yaml);
-      expect(!rec) << glz::format_error(rec, yaml);
+      auto rec = glz::read_yaml(parsed, escaped);
+      expect(!rec) << glz::format_error(rec, escaped);
       expect(parsed == original);
    };
 
-   "write_map_key_with_control_char_is_escaped"_test = [] {
+   "write_map_key_with_control_char_follows_the_option"_test = [] {
       std::map<std::string, int> value{{std::string("k") + char(0x1b), 1}};
-      std::string yaml{};
-      auto wec = glz::write_yaml(value, yaml);
-      expect(!wec);
-      expect(yaml == "\"k\\x1b\": 1\n");
+
+      std::string plain{};
+      expect(!glz::write_yaml(value, plain));
+      expect(plain == std::string("k") + char(0x1b) + ": 1\n");
+
+      std::string escaped{};
+      expect(!glz::write<yaml_escape_opts{{.format = glz::YAML}}>(value, escaped));
+      expect(escaped == "\"k\\x1b\": 1\n");
 
       std::map<std::string, int> parsed{};
-      auto rec = glz::read_yaml(parsed, yaml);
-      expect(!rec) << glz::format_error(rec, yaml);
+      auto rec = glz::read_yaml(parsed, escaped);
+      expect(!rec) << glz::format_error(rec, escaped);
       expect(parsed == value);
    };
 
-   "write_scalar_with_del_is_escaped"_test = [] {
-      // DEL (0x7f) sits outside YAML's c-printable set just as the C0 range does, so a
-      // plain scalar carrying it raw is invalid even though the byte is not < 0x20.
+   "write_del_follows_the_option"_test = [] {
+      // DEL (0x7f) is outside YAML's c-printable set just as the C0 range is, so the
+      // opt-in path escapes it even though it is not < 0x20.
       const std::string original = std::string("a") + char(0x7f) + "b";
-      std::string yaml{};
-      auto wec = glz::write_yaml(original, yaml);
-      expect(!wec);
-      expect(yaml == "\"a\\x7fb\"");
+
+      std::string plain{};
+      expect(!glz::write_yaml(original, plain));
+      expect(plain == original) << "DEL should pass through by default";
+
+      std::string escaped{};
+      expect(!glz::write<yaml_escape_opts{{.format = glz::YAML}}>(original, escaped));
+      expect(escaped == "\"a\\x7fb\"");
 
       std::string parsed{};
-      auto rec = glz::read_yaml(parsed, yaml);
-      expect(!rec) << glz::format_error(rec, yaml);
+      auto rec = glz::read_yaml(parsed, escaped);
+      expect(!rec) << glz::format_error(rec, escaped);
       expect(parsed == original);
    };
 
-   "write_multiline_scalar_with_del_avoids_block"_test = [] {
-      // A literal block has no escape mechanism, so a multiline value holding DEL must
-      // fall back to the double-quoted style rather than emit the byte raw.
+   "write_multiline_with_del_avoids_block_under_opt_in"_test = [] {
+      // A literal block has no escape mechanism, so opting in must abandon the block
+      // style for this value rather than emit the byte raw.
       const std::string original = std::string("line1\n") + char(0x7f) + "\nline2";
-      std::string yaml{};
-      auto wec = glz::write_yaml(original, yaml);
-      expect(!wec);
-      expect(yaml == "\"line1\\n\\x7f\\nline2\"");
-      expect(yaml.find('|') == std::string::npos);
+
+      std::string plain{};
+      expect(!glz::write_yaml(original, plain));
+      expect(plain.find('|') != std::string::npos) << "default still uses a literal block";
+
+      std::string escaped{};
+      expect(!glz::write<yaml_escape_opts{{.format = glz::YAML}}>(original, escaped));
+      expect(escaped == "\"line1\\n\\x7f\\nline2\"");
+      expect(escaped.find('|') == std::string::npos);
 
       std::string parsed{};
-      auto rec = glz::read_yaml(parsed, yaml);
-      expect(!rec) << glz::format_error(rec, yaml);
+      auto rec = glz::read_yaml(parsed, escaped);
+      expect(!rec) << glz::format_error(rec, escaped);
       expect(parsed == original);
-   };
-
-   "write_map_key_with_del_is_escaped"_test = [] {
-      std::map<std::string, int> value{{std::string("k") + char(0x7f), 1}};
-      std::string yaml{};
-      auto wec = glz::write_yaml(value, yaml);
-      expect(!wec);
-      expect(yaml == "\"k\\x7f\": 1\n");
-
-      std::map<std::string, int> parsed{};
-      auto rec = glz::read_yaml(parsed, yaml);
-      expect(!rec) << glz::format_error(rec, yaml);
-      expect(parsed == value);
    };
 
    "write_bool_like_and_number_like_scalars_are_quoted"_test = [] {

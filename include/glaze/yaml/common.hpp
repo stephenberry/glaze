@@ -1389,7 +1389,13 @@ namespace glz::yaml
       return u < 0x20 || u == 0x7f;
    }
 
-   // Check if string needs quoting when written
+   // Check if string needs quoting when written.
+   // EscapeControls mirrors glz::opts::escape_control_characters. When it is off (the
+   // default) only the line breaks and tab that would structurally break a plain scalar
+   // force quoting, so the common path pays nothing for control-character conformance;
+   // rejecting a spec-invalid control byte is the reader's job. When it is on, any byte
+   // outside YAML's c-printable set forces a quoted style and gets escaped as \xXX.
+   template <bool EscapeControls = false>
    inline bool needs_quoting(std::string_view s) noexcept
    {
       if (s.empty()) return true;
@@ -1411,15 +1417,23 @@ namespace glz::yaml
          return true;
       }
 
-      // Check for characters that require quoting. A control byte cannot appear
-      // literally in a plain scalar, so it forces a quoted style; the double-quoted
-      // writer then escapes it as \xXX. This mirrors the control-character check the
-      // multiline block and double-quoted paths already apply, which the single-line
-      // plain path was missing. \n, \r and \t are themselves controls, so the
-      // earlier explicit form is subsumed.
+      // Check for characters that require quoting.
       for (char c : s) {
-         if (c == ':' || c == '#' || c == ',' || is_yaml_control(c)) {
+         if (c == ':' || c == '#' || c == ',') {
             return true;
+         }
+         if constexpr (EscapeControls) {
+            // Subsumes \n, \r and \t, which are themselves control characters.
+            if (is_yaml_control(c)) {
+               return true;
+            }
+         }
+         else {
+            // A raw line break ends a plain scalar and a tab is stripped by the plain
+            // parser, so these break the round trip regardless of the escaping option.
+            if (c == '\n' || c == '\r' || c == '\t') {
+               return true;
+            }
          }
       }
 

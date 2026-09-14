@@ -161,7 +161,7 @@ namespace glz
    namespace yaml
    {
       // Write a YAML double-quoted string with proper escaping
-      template <class B>
+      template <auto Opts, class B>
       inline void write_double_quoted_string(std::string_view str, is_context auto&& ctx, B&& b, auto& ix)
       {
          // Estimate max size: original + quotes + escapes
@@ -191,6 +191,9 @@ namespace glz
                dump("\\0", b, ix);
                break;
             default:
+               // Reached only once a quoted style has already been chosen, so this is off
+               // the common path and stays unconditional: having committed to a quoted
+               // scalar there is nothing to gain by emitting a raw control byte into it.
                if (is_yaml_control(c)) {
                   // Control characters - use hex escape
                   dump("\\x", b, ix);
@@ -292,7 +295,7 @@ namespace glz
             // Block scalars are not valid inside flow collections ({...}, [...]).
             // Emit double-quoted escaped form in flow context.
             if constexpr (yaml::check_flow_style(Opts) || yaml::check_flow_context(Opts)) {
-               write_double_quoted_string(str, ctx, b, ix);
+               write_double_quoted_string<Opts>(str, ctx, b, ix);
                return;
             }
 
@@ -301,13 +304,23 @@ namespace glz
             {
                bool has_unrepresentable = false;
                for (char c : str) {
-                  if (is_yaml_control(c) && c != '\n' && c != '\t') {
-                     has_unrepresentable = true;
-                     break;
+                  if constexpr (check_escape_control_characters(Opts)) {
+                     if (is_yaml_control(c) && c != '\n' && c != '\t') {
+                        has_unrepresentable = true;
+                        break;
+                     }
+                  }
+                  else {
+                     // A raw carriage return would be re-read as a line break, so it
+                     // breaks the round trip whether or not escaping is requested.
+                     if (c == '\r') {
+                        has_unrepresentable = true;
+                        break;
+                     }
                   }
                }
                if (has_unrepresentable) {
-                  write_double_quoted_string(str, ctx, b, ix);
+                  write_double_quoted_string<Opts>(str, ctx, b, ix);
                   return;
                }
             }
@@ -333,19 +346,29 @@ namespace glz
          }
 
          // Check if string needs quoting
-         if (yaml::needs_quoting(str)) {
+         if (yaml::needs_quoting<check_escape_control_characters(Opts)>(str)) {
             // Double-quoted style is required for strings with characters that need
             // escape sequences (\r, \0, control chars) since single-quoted strings
             // have no escape mechanism for these.
             bool needs_escapes = false;
             for (char c : str) {
-               if (is_yaml_control(c) && c != '\t') {
-                  needs_escapes = true;
-                  break;
+               if constexpr (check_escape_control_characters(Opts)) {
+                  if (is_yaml_control(c) && c != '\t') {
+                     needs_escapes = true;
+                     break;
+                  }
+               }
+               else {
+                  // Single-quoted scalars have no escapes, so a carriage return would be
+                  // re-read as a line break. Everything else is left to the reader.
+                  if (c == '\r') {
+                     needs_escapes = true;
+                     break;
+                  }
                }
             }
             if (needs_escapes || str.find('\'') != std::string_view::npos) {
-               write_double_quoted_string(str, ctx, b, ix);
+               write_double_quoted_string<Opts>(str, ctx, b, ix);
             }
             else {
                write_single_quoted_string(str, ctx, b, ix);
