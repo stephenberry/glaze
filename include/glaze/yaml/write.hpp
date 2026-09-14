@@ -191,7 +191,7 @@ namespace glz
                dump("\\0", b, ix);
                break;
             default:
-               if (static_cast<unsigned char>(c) < 0x20) {
+               if (uint8_t(c) < 0x20) {
                   // Control characters - use hex escape
                   dump("\\x", b, ix);
                   constexpr char hex[] = "0123456789abcdef";
@@ -301,7 +301,7 @@ namespace glz
             {
                bool has_unrepresentable = false;
                for (char c : str) {
-                  if (c == '\r' || c == '\0' || (static_cast<unsigned char>(c) < 0x20 && c != '\n' && c != '\t')) {
+                  if (c == '\r' || c == '\0' || (uint8_t(c) < 0x20 && c != '\n' && c != '\t')) {
                      has_unrepresentable = true;
                      break;
                   }
@@ -339,7 +339,7 @@ namespace glz
             // have no escape mechanism for these.
             bool needs_escapes = false;
             for (char c : str) {
-               if (c == '\r' || c == '\0' || (static_cast<unsigned char>(c) < 0x20 && c != '\t')) {
+               if (c == '\r' || c == '\0' || (uint8_t(c) < 0x20 && c != '\t')) {
                   needs_escapes = true;
                   break;
                }

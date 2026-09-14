@@ -1407,7 +1407,7 @@ namespace glz::yaml
       // already apply, which the single-line plain path was missing. The listed
       // \n, \r and \t are all < 0x20, so the earlier explicit form is subsumed.
       for (char c : s) {
-         if (c == ':' || c == '#' || c == ',' || static_cast<unsigned char>(c) < 0x20) {
+         if (c == ':' || c == '#' || c == ',' || uint8_t(c) < 0x20) {
             return true;
          }
       }
