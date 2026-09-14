@@ -1020,6 +1020,20 @@ namespace glz
          value.clear();
 
          while (it != end) {
+            // Copy the run of ordinary content in bulk. Only a byte the table marks
+            // needs the dispatch below, so the control-character rejection rides on a
+            // lookup the scan already performs rather than costing a test per byte.
+            {
+               const auto run_start = it;
+               while (it != end && !plain_scalar_dispatch_table[uint8_t(*it)]) {
+                  ++it;
+               }
+               if (it != run_start) {
+                  value.append(run_start, it);
+               }
+               if (it == end) break;
+            }
+
             const char c = *it;
 
             // YAML's character stream excludes these outright, so reject rather than
@@ -1165,6 +1179,17 @@ namespace glz
          value.clear();
 
          while (it != end) {
+            {
+               const auto run_start = it;
+               while (it != end && !plain_scalar_block_dispatch_table[uint8_t(*it)]) {
+                  ++it;
+               }
+               if (it != run_start) {
+                  value.append(run_start, it);
+               }
+               if (it == end) break;
+            }
+
             const char c = *it;
 
             if (forbidden_control_table[uint8_t(c)]) [[unlikely]] {
@@ -1764,6 +1789,18 @@ namespace glz
          else {
             // Plain key - read until colon
             while (it != end) {
+               // Bulk-copy the ordinary run; only dispatch bytes need the checks below.
+               {
+                  const auto run_start = it;
+                  while (it != end && !plain_scalar_dispatch_table[uint8_t(*it)]) {
+                     ++it;
+                  }
+                  if (it != run_start) {
+                     key.append(run_start, it);
+                  }
+                  if (it == end) break;
+               }
+
                const char c = *it;
                if (c == ':') {
                   // Check if this ends the key

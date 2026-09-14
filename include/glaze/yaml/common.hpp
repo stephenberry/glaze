@@ -540,6 +540,58 @@ namespace glz::yaml
       return t;
    }();
 
+   // Bytes that end a plain scalar's ordinary run and need the full dispatch: line
+   // breaks, the indicators that may terminate the scalar, and the control bytes a
+   // reader must reject. Everything else is content and can be copied in bulk, so the
+   // control-character check costs nothing per byte.
+   inline constexpr std::array<bool, 256> plain_scalar_dispatch_table = [] {
+      std::array<bool, 256> t{};
+      t['\n'] = true;
+      t['\r'] = true;
+      t['#'] = true;
+      t[':'] = true;
+      t[','] = true;
+      t[']'] = true;
+      t['}'] = true;
+      for (size_t i = 0; i < 256; ++i) {
+         if (is_yaml_forbidden_control(char(uint8_t(i)))) {
+            t[i] = true;
+         }
+      }
+      return t;
+   }();
+
+   // The block-context form of plain_scalar_dispatch_table. Flow indicators do not end
+   // a plain scalar outside a flow collection, so they stay part of the bulk-copied run.
+   inline constexpr std::array<bool, 256> plain_scalar_block_dispatch_table = [] {
+      std::array<bool, 256> t{};
+      t['\n'] = true;
+      t['\r'] = true;
+      t['#'] = true;
+      t[':'] = true;
+      for (size_t i = 0; i < 256; ++i) {
+         if (is_yaml_forbidden_control(char(uint8_t(i)))) {
+            t[i] = true;
+         }
+      }
+      return t;
+   }();
+
+   // Line terminators plus the control bytes a comment may not contain. Scanning a
+   // comment with this table costs no more than the two compares it replaces, and makes
+   // the scan stop on an invalid byte instead of swallowing it to end of line.
+   inline constexpr std::array<bool, 256> comment_end_or_control_table = [] {
+      std::array<bool, 256> t{};
+      t['\n'] = true;
+      t['\r'] = true;
+      for (size_t i = 0; i < 256; ++i) {
+         if (is_yaml_forbidden_control(char(uint8_t(i)))) {
+            t[i] = true;
+         }
+      }
+      return t;
+   }();
+
    // O(1) lookup for the reject predicate, for the scalar parsers that are char-by-char
    // state machines rather than table-driven scans.
    inline constexpr std::array<bool, 256> forbidden_control_table = [] {
@@ -834,7 +886,9 @@ namespace glz::yaml
    inline void skip_comment(It&& it, End end) noexcept
    {
       if (it != end && *it == '#') {
-         while (it != end && *it != '\n' && *it != '\r') {
+         // Stops on a forbidden control byte rather than consuming it, leaving the
+         // caller's line-end validation to reject the document.
+         while (it != end && !comment_end_or_control_table[static_cast<uint8_t>(*it)]) {
             ++it;
          }
       }

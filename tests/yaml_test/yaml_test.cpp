@@ -848,6 +848,24 @@ suite yaml_control_character_reader_tests = [] {
       }
    };
 
+   "read_rejects_raw_control_in_comments"_test = [] {
+      // A comment's bytes never reach a value, but they are still part of the character
+      // stream, so the document must be rejected either way.
+      const char c1 = char(0x01);
+      for (const auto& yaml : {std::string("# c") + c1 + "\nkey: v\n", std::string("key: v # c") + c1 + "\n"}) {
+         std::map<std::string, std::string> parsed{};
+         auto ec = glz::read_yaml(parsed, yaml);
+         expect(bool(ec)) << "comment control byte must be rejected";
+      }
+
+      // Clean comments are unaffected.
+      std::map<std::string, std::string> ok{};
+      const std::string good = "# fine\nkey: v # also fine\n";
+      auto ec = glz::read_yaml(ok, good);
+      expect(!ec) << glz::format_error(ec, good);
+      expect(ok.at("key") == "v");
+   };
+
    "read_rejects_raw_del"_test = [] {
       const std::string yaml = std::string("key: abc") + char(0x7f) + "def\n";
       std::map<std::string, std::string> parsed{};
