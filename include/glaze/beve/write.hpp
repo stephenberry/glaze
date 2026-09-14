@@ -1897,10 +1897,15 @@ namespace glz
 
    // Write the BEVE delimiter byte to a buffer
    // Used to separate multiple BEVE values in a stream/buffer (like NDJSON's newline)
+   // Resizable because appending has no meaning for a fixed-size buffer, whose size is already its
+   // capacity. resize/index is also all that `output_buffer` promises; push_back is not.
    template <class Buffer>
+      requires output_buffer<Buffer> && resizable<Buffer>
    void write_beve_delimiter(Buffer& buffer)
    {
-      buffer.push_back(static_cast<typename Buffer::value_type>(tag::delimiter));
+      const size_t ix = buffer.size();
+      buffer.resize(ix + 1);
+      buffer[ix] = static_cast<typename Buffer::value_type>(tag::delimiter);
    }
 
    // Append a BEVE value to an existing buffer without clearing it
@@ -1933,7 +1938,7 @@ namespace glz
    // Append a BEVE value to an existing buffer with a delimiter prefix
    // Useful for streaming multiple values
    template <auto Opts = opts{}, write_supported<BEVE> T, class Buffer>
-      requires output_buffer<Buffer>
+      requires output_buffer<Buffer> && resizable<Buffer>
    [[nodiscard]] error_ctx write_beve_append_with_delimiter(T&& value, Buffer& buffer)
    {
       write_beve_delimiter(buffer);

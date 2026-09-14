@@ -40,7 +40,7 @@ namespace glz
 
       auto start = it;
 
-      if (buffer.empty()) [[unlikely]] {
+      if (buffer.size() == 0) [[unlikely]] {
          ctx.error = error_code::no_read_input;
       }
 
@@ -229,9 +229,18 @@ namespace glz
       return unexpected(s.error());
    }
 
+   // write_at replaces a value in place, which needs the index-based erase/insert of a std::string.
+   // `contiguous` promises only data() and size(), so it would admit buffers (std::vector<char>
+   // among them) that cannot splice; spelling the requirement out rejects them at the call site.
+   template <class T>
+   concept spliceable_buffer = contiguous<T> && requires(T& buffer, size_t index, std::string_view value) {
+      buffer.erase(index, index);
+      buffer.insert(index, value);
+   };
+
    // Write raw text to a JSON value denoted by a JSON Pointer
    template <string_literal Path, auto Opts = opts{}>
-   [[nodiscard]] inline error_ctx write_at(const std::string_view value, contiguous auto&& buffer)
+   [[nodiscard]] inline error_ctx write_at(const std::string_view value, spliceable_buffer auto&& buffer)
    {
       auto view = glz::get_view_json<Path, Opts>(buffer);
       if (view) {
@@ -271,7 +280,7 @@ namespace glz
 
       auto start = it;
 
-      if (buffer.empty()) [[unlikely]] {
+      if (buffer.size() == 0) [[unlikely]] {
          return result_t{unexpected(error_ctx{0, error_code::no_read_input})};
       }
 
@@ -426,7 +435,7 @@ namespace glz
 
    // Runtime version of write_at - write a JSON value at a runtime JSON pointer location
    template <auto Opts = opts{}>
-   [[nodiscard]] inline error_ctx write_at(const sv json_ptr, const sv value, contiguous auto&& buffer)
+   [[nodiscard]] inline error_ctx write_at(const sv json_ptr, const sv value, spliceable_buffer auto&& buffer)
    {
       auto view = glz::get_view_json<Opts>(json_ptr, buffer);
       if (view) {

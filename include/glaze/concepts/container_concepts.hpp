@@ -62,6 +62,11 @@ namespace glz
       { t.capacity() } -> std::integral;
    };
 
+   // data() and size(), and nothing else. Emptiness is therefore size() == 0; empty() is not part
+   // of the promise, and neither std::ranges::empty nor glz::empty_range substitutes, since both
+   // require range<T>, meaning begin()/end(), which this concept also never promised.
+   // Qt's QByteArray is the buffer that exposed the gap: contiguous and resizable, but emptiness
+   // spelled isEmpty() (GitHub issue #2854).
    template <class T>
    concept contiguous = has_size<T> && has_data<T>;
 

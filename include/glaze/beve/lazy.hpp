@@ -1317,12 +1317,12 @@ namespace glz
       doc.beve_ = reinterpret_cast<const char*>(buffer.data());
       doc.len_ = buffer.size();
 
-      if (buffer.empty()) {
+      if (buffer.size() == 0) {
          return unexpected(error_ctx{0, error_code::unexpected_end});
       }
 
       // Validate first byte is a valid BEVE tag
-      const uint8_t first_byte = static_cast<uint8_t>(buffer[0]);
+      const uint8_t first_byte = static_cast<uint8_t>(doc.beve_[0]);
       const uint8_t type_bits = first_byte & 0b00000'111;
 
       // Valid types: null(0), number(1), string(2), object(3), typed_array(4), generic_array(5), extensions(6)
