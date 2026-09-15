@@ -33,6 +33,7 @@ int main() {
 ## Features
 
 - **Connection Pooling**: Automatically reuses connections for better performance, with stale-connection detection (timestamp eviction + active TCP peek)
+- **Redirect Following**: Opt-in automatic following of 3xx responses, with RFC 9110 method rewriting and cross-origin credential stripping
 - **Transparent Retry**: Idempotent requests (GET, HEAD, OPTIONS, PUT, DELETE, TRACE) are retried once on connection-level failures when the server has not yet started responding. POST and PATCH are never auto-retried.
 - **Chunked Transfer-Encoding**: Transparent decoding of chunked responses across synchronous, asynchronous, and streaming paths
 - **Asynchronous Operations**: Non-blocking requests with futures or completion handlers
@@ -396,6 +397,45 @@ auto on_error = [](std::error_code ec) {
     std::cerr << "Stream error: " << ec.message() << "\n";
 };
 ```
+
+## Following Redirects
+
+Redirects are not followed by default: a 3xx response is returned to the caller as-is. Set `max_redirects` to the number of hops the client may follow automatically.
+
+```cpp
+glz::http_client client{};
+client.max_redirects(10);
+
+auto response = client.get("http://example.com/old-path");
+// response is whatever the chain ends on
+```
+
+The option applies to the synchronous and asynchronous request methods. Streaming requests (`stream_request_v2`) always deliver the 3xx response itself.
+
+Each hop takes the target of the response's `Location` field, resolved against the URL that produced it, so absolute, scheme-relative (`//host/path`), root-relative (`/path`), query-only (`?page=2`) and relative (`../v2/thing`) values all work.
+
+**Method rewriting** follows RFC 9110 15.4:
+
+| Status | Effect |
+|---|---|
+| 301, 302 | `POST` continues as `GET` with no body; every other method is kept |
+| 303 | Continues as `GET` with no body, unless the request was `HEAD` |
+| 307, 308 | Method and body are preserved |
+
+When a hop drops the body, `Content-Type` is dropped with it.
+
+300 (Multiple Choices) and 305 (Use Proxy) are never followed; they name no single target to continue onto.
+
+**Credentials** (`Authorization`, `Proxy-Authorization`, `Cookie`) and a caller-supplied `Host` are dropped when a hop crosses to a different scheme, host or port. Other caller headers travel with the whole chain.
+
+Two errors are specific to this path:
+
+- `glz::http_client_error::too_many_redirects` when the chain exceeds `max_redirects()`
+- `glz::http_client_error::invalid_redirect` when `Location` is missing, empty, does not resolve to an `http`/`https` target, or carries a control character
+
+A space in the target is percent-encoded rather than rejected, matching browsers and curl.
+
+Both are returned in place of the response, so the last 3xx of an over-long chain is not handed back. Set `max_redirects(0)` and follow the chain yourself if you need to see each hop.
 
 ## Response Structure
 

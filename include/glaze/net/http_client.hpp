@@ -3,6 +3,7 @@
 
 #pragma once
 
+#include <algorithm>
 #include <atomic>
 #include <chrono>
 #include <concepts>
@@ -16,6 +17,7 @@
 #include <memory>
 #include <mutex>
 #include <optional>
+#include <ranges>
 #include <shared_mutex>
 #include <source_location>
 #include <system_error>
@@ -76,6 +78,8 @@ namespace glz
       success = 0,
       response_too_large, // Response body exceeds max_response_body_size
       unframed_response, // Response Content-Length is malformed or repeats with conflicting values
+      too_many_redirects, // Redirect chain exceeded max_redirects()
+      invalid_redirect, // A 3xx response's Location is missing, empty, or not resolvable to an HTTP(S) target
    };
 
    // HTTP client error category for std::error_code integration
@@ -93,6 +97,10 @@ namespace glz
             return "Response body size exceeds configured maximum";
          case http_client_error::unframed_response:
             return "Response Content-Length is malformed or repeats with conflicting values";
+         case http_client_error::too_many_redirects:
+            return "Redirect chain exceeded the configured maximum";
+         case http_client_error::invalid_redirect:
+            return "Redirect response has a missing or unusable Location";
          default:
             return "Unknown HTTP client error";
          }
@@ -496,6 +504,247 @@ namespace glz
       }
 
       return url_parts{std::move(protocol), std::move(host), port, std::move(path)};
+   }
+
+   namespace detail
+   {
+      // RFC 3986 5.2.4: collapse the "." and ".." segments of an absolute path, so a
+      // Location of "../v2/thing" becomes a request-target the next server can route rather
+      // than one it answers with 400. Any query string must already be split off by the
+      // caller.
+      inline std::string remove_dot_segments(std::string_view path)
+      {
+         std::string output;
+         output.reserve(path.size());
+
+         while (!path.empty()) {
+            if (path.starts_with("../")) {
+               path.remove_prefix(3);
+            }
+            else if (path.starts_with("./")) {
+               path.remove_prefix(2);
+            }
+            else if (path.starts_with("/./")) {
+               path.remove_prefix(2); // leaves the "/" as the start of the next segment
+            }
+            else if (path == "/.") {
+               // Steps 2B and 2C replace the prefix with "/", so the trailing slash
+               // survives into the output: "/a/b/." resolves to "/a/b/", not "/a/b".
+               path.remove_suffix(1);
+            }
+            else if (path.starts_with("/../") || path == "/..") {
+               if (path.size() == 3) {
+                  path.remove_suffix(2);
+               }
+               else {
+                  path.remove_prefix(3);
+               }
+               // Walking above the root is not an error: RFC 3986 5.4.2 resolves it by
+               // discarding the extra step rather than rejecting the reference.
+               if (auto slash = output.rfind('/'); slash != std::string::npos) {
+                  output.resize(slash);
+               }
+               else {
+                  output.clear();
+               }
+            }
+            else if (path == "." || path == "..") {
+               path = {};
+            }
+            else {
+               // Move one segment - the leading "/" plus everything up to the next "/" - across.
+               const size_t next = path.find('/', path.starts_with("/") ? 1 : 0);
+               const size_t count = (next == std::string_view::npos) ? path.size() : next;
+               output.append(path.substr(0, count));
+               path.remove_prefix(count);
+            }
+         }
+
+         return output.empty() ? std::string{"/"} : output;
+      }
+   }
+
+   // RFC 3986 5.2/5.3: resolve a Location field against the URL the response came from.
+   // Location is allowed to be an absolute URL, scheme-relative ("//host/path"),
+   // root-relative ("/path"), a query-only reference ("?page=2"), or a relative reference
+   // ("thing"), and servers send all of these in practice.
+   inline std::expected<url_parts, std::error_code> resolve_redirect_url(const url_parts& base,
+                                                                         std::string_view location)
+   {
+      // A fragment identifies a part of the retrieved representation and never travels on
+      // the wire, so it is dropped before the reference is resolved (RFC 9110 10.2.2).
+      if (const auto hash = location.find('#'); hash != std::string_view::npos) {
+         location = location.substr(0, hash);
+      }
+      if (location.empty()) {
+         return std::unexpected(make_error_code(http_client_error::invalid_redirect));
+      }
+
+      // An absolute reference starts with "scheme://", but "/r?to=http://elsewhere" does
+      // not: the "://" only means a scheme when nothing else comes first.
+      const size_t scheme_end = location.find("://");
+      const bool is_absolute = scheme_end != std::string_view::npos && scheme_end == location.find_first_of(":/?");
+
+      // Seeded with the failure every branch below would otherwise have to spell out, so
+      // no branch can leave a half-formed url_parts behind.
+      std::expected<url_parts, std::error_code> resolved =
+         std::unexpected(make_error_code(http_client_error::invalid_redirect));
+      if (is_absolute) {
+         // A scheme is case-insensitive (RFC 3986 3.1) but parse_url matches it literally,
+         // so a "HTTPS://..." Location is normalized rather than rejected.
+         std::string absolute{location};
+         for (size_t i = 0; i < scheme_end; ++i) {
+            absolute[i] = static_cast<char>(std::tolower(static_cast<unsigned char>(absolute[i])));
+         }
+         resolved = parse_url(absolute);
+      }
+      else if (location.starts_with("//")) {
+         resolved = parse_url(base.protocol + ":" + std::string(location));
+      }
+      else {
+         // Same origin; only the target within it changes.
+         std::string_view reference_path = location;
+         std::string_view reference_query;
+         if (const auto question = reference_path.find('?'); question != std::string_view::npos) {
+            reference_query = reference_path.substr(question);
+            reference_path = reference_path.substr(0, question);
+         }
+
+         const std::string_view base_path = split_target(base.path).path;
+
+         std::string merged;
+         if (reference_path.empty()) {
+            // A query-only reference keeps the base path whole rather than merging
+            // against its parent directory (RFC 3986 5.2.2).
+            merged = std::string(base_path);
+         }
+         else if (reference_path.starts_with('/')) {
+            merged = std::string(reference_path);
+         }
+         else {
+            const auto last_slash = base_path.rfind('/');
+            merged = (last_slash == std::string_view::npos) ? std::string{"/"}
+                                                            : std::string(base_path.substr(0, last_slash + 1));
+            merged.append(reference_path);
+         }
+
+         std::string path = detail::remove_dot_segments(merged);
+         path.append(reference_query);
+         resolved = url_parts{base.protocol, base.host, base.port, std::move(path)};
+      }
+
+      if (!resolved) {
+         return std::unexpected(make_error_code(http_client_error::invalid_redirect));
+      }
+      // ws/wss parse as URLs but name a different protocol; an HTTP response cannot
+      // redirect a request onto one.
+      if (resolved->protocol != "http" && resolved->protocol != "https") {
+         return std::unexpected(make_error_code(http_client_error::invalid_redirect));
+      }
+      // The path goes straight into the next request line and the host into its Host
+      // field, and both of them came from the server rather than the caller. A CTL in
+      // either would split the message itself (CWE-113), and a space in a host resolves
+      // to nothing a name lookup could use, so neither is a target worth sending.
+      const auto has_control = [](std::string_view field) {
+         return std::ranges::any_of(field, [](unsigned char c) { return c < 0x20 || c == 0x7f; });
+      };
+      if (has_control(resolved->path) || has_control(resolved->host) || resolved->host.find(' ') != std::string::npos) {
+         return std::unexpected(make_error_code(http_client_error::invalid_redirect));
+      }
+
+      // A space is not legal in a URI (RFC 3986 2) and would split the request line into a
+      // different request than the one intended, but servers do emit unencoded spaces and
+      // every other user agent percent-encodes rather than abandon the hop over it.
+      if (resolved->path.find(' ') != std::string::npos) {
+         std::string encoded;
+         encoded.reserve(resolved->path.size() + 16);
+         for (const char c : resolved->path) {
+            if (c == ' ') {
+               encoded.append("%20");
+            }
+            else {
+               encoded.push_back(c);
+            }
+         }
+         resolved->path = std::move(encoded);
+      }
+
+      return resolved;
+   }
+
+   // 300 (Multiple Choices) names no single target to follow and 305 (Use Proxy) was
+   // deprecated for being unsafe to act on; 304 is not a redirect at all.
+   inline bool is_redirect_status(int status_code) noexcept
+   {
+      return status_code == 301 || status_code == 302 || status_code == 303 || status_code == 307 || status_code == 308;
+   }
+
+   namespace detail
+   {
+      // The request as it stands at one point in a redirect chain. Both the sync and async
+      // paths carry one of these so the hop rules below are written once.
+      struct redirect_request
+      {
+         std::string method;
+         url_parts url;
+         std::string body;
+         glz::http_headers headers;
+         size_t hops = 0;
+      };
+
+      // Rewrite `request` into the follow-up the 3xx response asks for, or say why the hop
+      // cannot be taken. The hop limit lives here rather than in each caller so the sync
+      // and async paths cannot drift apart on what counts as a hop.
+      inline std::expected<void, std::error_code> apply_redirect(const response& resp, redirect_request& request,
+                                                                 size_t max_hops)
+      {
+         if (request.hops >= max_hops) {
+            return std::unexpected(make_error_code(http_client_error::too_many_redirects));
+         }
+
+         const auto location = resp.response_headers.first_value("Location");
+         if (!location) {
+            return std::unexpected(make_error_code(http_client_error::invalid_redirect));
+         }
+
+         auto target = resolve_redirect_url(request.url, *location);
+         if (!target) {
+            return std::unexpected(target.error());
+         }
+
+         // Credentials are scoped to the origin they were issued for. A redirect that changes
+         // scheme, host or port hands the next request to a different party, so the fields
+         // that authenticate the caller do not travel with it - curl's CVE-2018-1000007 was
+         // exactly this leak. A caller-pinned Host belonged to the old origin too, and
+         // keeping it would send the new origin a request addressed to the old one.
+         const bool same_origin = glz::striequal(target->host, request.url.host) && target->port == request.url.port &&
+                                  target->protocol == request.url.protocol;
+         if (!same_origin) {
+            request.headers.erase("Authorization");
+            request.headers.erase("Proxy-Authorization");
+            request.headers.erase("Cookie");
+            request.headers.erase("Host");
+         }
+
+         // RFC 9110 15.4.4/15.4.8: 303 always continues as GET, and for 301/302 every
+         // deployed user agent rewrites POST to GET - a server that sends one to a browser is
+         // relying on that. 307 and 308 exist precisely to preserve the method, so they do.
+         const bool continue_as_get =
+            (resp.status_code == 303 && request.method != "GET" && request.method != "HEAD") ||
+            ((resp.status_code == 301 || resp.status_code == 302) && request.method == "POST");
+         if (continue_as_get) {
+            request.method = "GET";
+            request.body.clear();
+            // Body framing belongs to the request writer, which recomputes it from the now
+            // empty body; the media type is the caller's and would describe a body that is
+            // no longer being sent.
+            request.headers.erase("Content-Type");
+         }
+
+         request.url = std::move(*target);
+         ++request.hops;
+         return {};
+      }
    }
 
    // Idempotent HTTP methods are safe to retry transparently when a pooled connection
@@ -1413,8 +1662,33 @@ namespace glz
 
       size_t max_response_body_size() const { return max_response_body_size_; }
 
+      // Maximum number of 3xx hops to follow automatically (0 = do not follow, the
+      // default: the 3xx response is returned to the caller as-is).
+      //
+      // A followed hop takes the target of the response's Location field, resolved against
+      // the URL that produced it. 303 continues as GET, as does a POST answered with 301 or
+      // 302; 307 and 308 keep the method and body. Credentials (Authorization,
+      // Proxy-Authorization, Cookie) and a caller-supplied Host are dropped when a hop
+      // crosses to a different scheme, host or port. Exceeding the limit returns
+      // http_client_error::too_many_redirects; a missing or unusable Location returns
+      // http_client_error::invalid_redirect.
+      //
+      // Applies to the sync and async request methods. Streaming requests
+      // (stream_request_v2) always deliver the 3xx response itself.
+      //
+      // Must be configured before issuing requests; not safe to change while requests are
+      // in flight.
+      http_client& max_redirects(size_t max_hops)
+      {
+         max_redirects_ = max_hops;
+         return *this;
+      }
+
+      size_t max_redirects() const { return max_redirects_; }
+
      private:
       size_t max_response_body_size_ = http_default_max_body_size;
+      size_t max_redirects_ = 0;
       // For async operations only when no io_executor is provided
       std::shared_ptr<asio::io_context> async_io_context;
       asio::any_io_executor io_executor;
@@ -2113,9 +2387,36 @@ namespace glz
             *connection->socket);
       }
 
+      // Drives one request to its final response, following 3xx hops while the client is
+      // configured to. The common case - no redirect, or following switched off - costs
+      // one status-code test on top of the single exchange below.
       std::expected<response, std::error_code> perform_sync_request(const std::string& method, const url_parts& url,
                                                                     const std::string& body,
                                                                     const glz::http_headers& headers)
+      {
+         auto result = perform_sync_exchange(method, url, body, headers);
+         if (max_redirects_ == 0 || !result || !is_redirect_status(result->status_code)) {
+            return result;
+         }
+
+         // A hop is being taken, so the request now has to be carried and rewritten;
+         // copying it here keeps that cost off the straight-through path.
+         detail::redirect_request request{method, url, body, headers, 0};
+         do {
+            if (auto applied = detail::apply_redirect(*result, request, max_redirects_); !applied) {
+               return std::unexpected(applied.error());
+            }
+            result = perform_sync_exchange(request.method, request.url, request.body, request.headers);
+         } while (result && is_redirect_status(result->status_code));
+
+         return result;
+      }
+
+      // A single request/response exchange, including the one transparent retry a stale
+      // pooled connection warrants.
+      std::expected<response, std::error_code> perform_sync_exchange(const std::string& method, const url_parts& url,
+                                                                     const std::string& body,
+                                                                     const glz::http_headers& headers)
       {
          const bool use_https = (url.protocol == "https");
 
@@ -2455,9 +2756,53 @@ namespace glz
          }
       }
 
+      // Async counterpart of perform_sync_request: the user handler is called once, with
+      // the response at the end of the redirect chain.
       template <typename CompletionHandler>
       void perform_request_async(const std::string& method, const url_parts& url, const std::string& body,
                                  const glz::http_headers& headers, CompletionHandler&& handler)
+      {
+         if (max_redirects_ == 0) {
+            perform_async_exchange(method, url, body, headers, std::forward<CompletionHandler>(handler));
+            return;
+         }
+
+         using handler_t = std::decay_t<CompletionHandler>;
+         // The request outlives each exchange, since a hop rewrites it and sends it again
+         // from a completion handler running on an io thread.
+         // Braced-then-moved rather than make_shared's parenthesized form: the parenthesized
+         // aggregate initialization of P0960 is newer than some of the compilers glaze
+         // supports.
+         auto request =
+            std::make_shared<detail::redirect_request>(detail::redirect_request{method, url, body, headers, 0});
+         auto user_handler = std::make_shared<handler_t>(std::forward<CompletionHandler>(handler));
+         perform_async_exchange_following_redirects<handler_t>(std::move(request), std::move(user_handler));
+      }
+
+      // Recurses through the same instantiation on every hop, so the chain is one lambda
+      // type deep however many redirects the server sends.
+      template <typename Handler>
+      void perform_async_exchange_following_redirects(std::shared_ptr<detail::redirect_request> request,
+                                                      std::shared_ptr<Handler> user_handler)
+      {
+         perform_async_exchange(
+            request->method, request->url, request->body, request->headers,
+            [this, request, user_handler](std::expected<response, std::error_code> result) mutable {
+               if (!result || !is_redirect_status(result->status_code)) {
+                  (*user_handler)(std::move(result));
+                  return;
+               }
+               if (auto applied = detail::apply_redirect(*result, *request, max_redirects_); !applied) {
+                  (*user_handler)(std::unexpected(applied.error()));
+                  return;
+               }
+               perform_async_exchange_following_redirects<Handler>(std::move(request), std::move(user_handler));
+            });
+      }
+
+      template <typename CompletionHandler>
+      void perform_async_exchange(const std::string& method, const url_parts& url, const std::string& body,
+                                  const glz::http_headers& headers, CompletionHandler&& handler)
       {
          const bool use_https = (url.protocol == "https");
 
