@@ -35,6 +35,13 @@ namespace glz
    concept is_system_time_point =
       is_time_point<T> && std::is_same_v<typename std::remove_cvref_t<T>::clock, std::chrono::system_clock>;
 
+#if defined(__cpp_lib_chrono) && __cpp_lib_chrono >= 201907L
+   // Concept for utc_clock time_points (serialize as ISO 8601 string via clock_cast)
+   template <class T>
+   concept is_utc_time_point =
+      is_time_point<T> && std::is_same_v<typename std::remove_cvref_t<T>::clock, std::chrono::utc_clock>;
+#endif
+
    // Concept for steady_clock time_points (serialize as numeric count)
    template <class T>
    concept is_steady_time_point =

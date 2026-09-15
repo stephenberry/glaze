@@ -1748,4 +1748,18 @@ suite date_format_tests = [] {
    };
 };
 
+#if defined(__cpp_lib_chrono) && __cpp_lib_chrono >= 201907L
+suite utc_clock_json_tests = [] {
+   "utc_time_json_roundtrip"_test = [] {
+      const std::chrono::utc_time<std::chrono::seconds> t{
+         std::chrono::floor<std::chrono::seconds>(std::chrono::utc_clock::now())};
+      const auto json = glz::write_json(t);
+      expect(bool(json));
+      std::chrono::utc_time<std::chrono::seconds> parsed{};
+      expect(!glz::read_json(parsed, json.value()));
+      expect(parsed == t);
+   };
+};
+#endif
+
 int main() { return 0; }
