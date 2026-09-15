@@ -695,31 +695,22 @@ namespace ambiguous
 {
    // Two alternatives with an identical wire shape at every level: resolution must try both at each
    // level, which is the shape the speculation budget exists to bound.
-   template <int N>
-   struct a;
-   template <int N>
-   struct b;
-   template <>
-   struct a<0>
+   //
+   // The nesting is carried by the data, not by the type. A chain of N distinct types costs GCC
+   // super-linear instantiation memory -- 3.6 GB at N=20 and unbounded by N=40, where clang stays
+   // flat -- and what this measures is a property of the input, which one recursive type expresses
+   // just as well.
+   struct nest_a;
+   struct nest_b;
+   using node = std::variant<nest_a, nest_b>;
+   struct nest_a
    {
-      double z{};
+      std::vector<node> x{};
    };
-   template <>
-   struct b<0>
+   struct nest_b
    {
-      double z{};
+      std::vector<node> x{};
    };
-   template <int N>
-   struct a
-   {
-      std::variant<a<N - 1>, b<N - 1>> x{};
-   };
-   template <int N>
-   struct b
-   {
-      std::variant<a<N - 1>, b<N - 1>> x{};
-   };
-   using top = std::variant<a<40>, b<40>>;
 }
 
 namespace variant_shapes
@@ -944,13 +935,14 @@ suite msgpack_variant_tagging = [] {
    "an ambiguous nest is bounded rather than exponential"_test = [] {
       std::string buffer;
       for (int i = 0; i < 40; ++i) {
-         buffer.push_back(char(0x81));
-         buffer.push_back(char(0xa1));
+         buffer.push_back(char(0x81)); // fixmap(1)
+         buffer.push_back(char(0xa1)); // fixstr(1)
          buffer += "x";
+         buffer.push_back(char(0x91)); // fixarray(1): the next level down
       }
       buffer.push_back(char(0xa1));
       buffer += "z"; // a string where a map is required: nothing matches, at any level
-      ambiguous::top decoded{};
+      ambiguous::node decoded{};
       const auto t0 = std::chrono::steady_clock::now();
       expect(bool(glz::read_msgpack(decoded, buffer)));
       const auto ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
