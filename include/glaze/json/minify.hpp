@@ -145,7 +145,9 @@ namespace glz
                   }
                   // A block comment is preserved as written. A line comment is dropped: minifying is
                   // what removes the newline that terminates it, so keeping it would comment out
-                  // everything the output put after it.
+                  // everything the output put after it. The dump below is unchecked, which the
+                  // reservation at the top of this function covers: the output cannot be larger than
+                  // the input.
                   if (is_block_comment(value)) {
                      dump<false>(value, b, ix);
                   }

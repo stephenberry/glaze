@@ -15935,6 +15935,20 @@ suite buffer_without_member_empty = [] {
       }
    };
 
+   "jsonc a line comment before a closing bracket keeps its own line (#2864)"_test = [] {
+      // The break after a line comment is deferred to the next emission, so the token that follows
+      // must neither lose that break nor gain a second one when it is a closing bracket.
+      std::string in = "{\"a\":1, // c\n}";
+      std::string out{};
+      glz::prettify_jsonc(in, out);
+      expect(out == "{\n   \"a\": 1,\n   // c\n}") << out;
+
+      std::string array = "[\"a\", // c\n]";
+      std::string array_out{};
+      glz::prettify_jsonc(array, array_out);
+      expect(array_out == "[\n   \"a\",\n   // c\n]") << array_out;
+   };
+
    "jsonc an unterminated comment is reported whatever context the read carries (#2864)"_test = [] {
       // The unterminated comment is only excused while a stream can still deliver more data. A
       // buffered read has no such source, even when it is handed a streaming context.
