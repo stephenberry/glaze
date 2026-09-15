@@ -3,7 +3,9 @@
 
 #pragma once
 
-// Minified JSONC only works with /**/ style comments, so we only supports this
+// Minified JSONC supports both comment styles. A line comment cannot survive minification, because
+// minifying is what removes the newline that terminates it, so line comments are dropped while block
+// comments are preserved.
 
 #include "glaze/json/json_format.hpp"
 
@@ -65,8 +67,11 @@ namespace glz
          }()) {
             switch (json_types[uint8_t(*it)]) {
             case String: {
-               const auto value = read_json_string<Opts>(it, end);
-               dump_maybe_empty<false>(value, b, ix);
+               const auto value = read_json_string<Opts>(ctx, it, end);
+               if (bool(ctx.error)) [[unlikely]] {
+                  return;
+               }
+               dump<false>(value, b, ix);
                skip_whitespace();
                break;
             }
@@ -134,8 +139,14 @@ namespace glz
             }
             case Comment: {
                if constexpr (Opts.comments) {
-                  const auto value = read_jsonc_comment(it, end);
-                  if (value.size()) [[likely]] {
+                  const auto value = read_jsonc_comment(ctx, it, end);
+                  if (bool(ctx.error)) [[unlikely]] {
+                     return;
+                  }
+                  // A block comment is preserved as written. A line comment is dropped: minifying is
+                  // what removes the newline that terminates it, so keeping it would comment out
+                  // everything the output put after it.
+                  if (is_block_comment(value)) {
                      dump<false>(value, b, ix);
                   }
                   skip_whitespace();
@@ -146,6 +157,13 @@ namespace glz
                }
             }
             [[unlikely]] default: {
+               // A null terminated buffer ends on its sentinel, which is not a JSON token: reaching
+               // it is the end of the document rather than an error.
+               if constexpr (Opts.null_terminated) {
+                  if (*it == '\0') {
+                     return;
+                  }
+               }
                ctx.error = error_code::syntax_error;
                return;
             }
@@ -186,9 +204,12 @@ namespace glz
       }
    }
 
-   // We don't return errors from minifying even though they are handled because the error case
-   // should not happen since we minify auto-generated JSON.
-   // The detail version can be used if error context is needed
+   // These overloads drop the error because minifying auto-generated JSON is not expected to fail.
+   // The overloads taking a context report it instead, for input that may not be well formed, such as
+   // a hand-written .jsonc file.
+   //
+   // Minifying only reports what it actually parses, which is strings and comments. It does not check
+   // that the document is structurally valid JSON, so use glz::validate_json for that.
 
    template <auto Opts = opts{}>
    inline void minify_json(resizable auto& in, auto& out)
@@ -220,5 +241,21 @@ namespace glz
       std::string out{};
       detail::minify_json<opt_true<Opts, &opts::comments>>(ctx, in, out);
       return out;
+   }
+
+   /// Minify, reporting failure through the returned error_ctx
+   template <auto Opts = opts{}>
+   [[nodiscard]] inline error_ctx minify_json(context& ctx, resizable auto& in, auto& out)
+   {
+      detail::minify_json<Opts>(ctx, in, out);
+      return {0, ctx.error, ctx.custom_error_message};
+   }
+
+   /// Minify JSONC, reporting failure through the returned error_ctx
+   template <auto Opts = opts{}>
+   [[nodiscard]] inline error_ctx minify_jsonc(context& ctx, resizable auto& in, auto& out)
+   {
+      detail::minify_json<opt_true<Opts, &opts::comments>>(ctx, in, out);
+      return {0, ctx.error, ctx.custom_error_message};
    }
 }
