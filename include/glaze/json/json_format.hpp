@@ -114,7 +114,10 @@ namespace glz::detail
    {
       auto start = it;
       ++it; // skip quote
-      for (const auto end_m7 = end - 7; it < end_m7;) {
+      // The scan reads eight bytes at a time, so it only runs while at least that many remain. The
+      // end marker below is otherwise formed before the start of the buffer, which is undefined.
+      const auto chunk_end = (size_t(end - it) > 7) ? end - 7 : it;
+      for (; it < chunk_end;) {
          uint64_t chunk;
          std::memcpy(&chunk, it, 8);
          if constexpr (std::endian::native == std::endian::big) {
@@ -205,7 +208,10 @@ namespace glz::detail
       // guards: without them a comment such as "/" "*" "/" would look closed by the '*' of its own
       // opening delimiter and swallow whatever followed.
       const auto content = start + 2;
-      for (const auto end_m7 = end - 7; it < end_m7;) {
+      // As above: the chunked scan needs eight bytes to read, and the marker must stay inside the
+      // buffer for input such as "/*/" that is shorter than that.
+      const auto chunk_end = (size_t(end - it) > 7) ? end - 7 : it;
+      for (; it < chunk_end;) {
          uint64_t chunk;
          std::memcpy(&chunk, it, 8);
          if constexpr (std::endian::native == std::endian::big) {

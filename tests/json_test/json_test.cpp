@@ -15846,6 +15846,8 @@ suite buffer_without_member_empty = [] {
       expect(glz::prettify_jsonc(comment_pretty_ctx, unterminated_comment, out).ec ==
              glz::error_code::expected_end_comment);
 
+      // Minifying pads its input in place, so it needs a mutable copy of the buffer; prettifying
+      // takes the buffer as it is
       std::string string_copy = unterminated_string;
       glz::context string_ctx{};
       expect(glz::minify_jsonc(string_ctx, string_copy, out).ec == glz::error_code::unexpected_end);
@@ -15955,6 +15957,24 @@ suite buffer_without_member_empty = [] {
          expect(glz::read<trailing_opts{}>(stream_value, stream_copy, stream_ctx).ec ==
                 glz::error_code::expected_end_comment) << in;
       }
+   };
+
+   "minify reports a bounded output buffer that is too small (#2864)"_test = [] {
+      // Minifying cannot produce more bytes than it was given, which is what lets it write into the
+      // output without checking room for each token. A fixed-size output has to be told when the
+      // input is more than it holds, rather than walking off the end of it.
+      const std::string in = R"({"a":1,"b":[1,2,3]})";
+
+      std::array<char, 8> small{};
+      std::string small_in = in;
+      glz::context small_ctx{};
+      expect(glz::minify_jsonc(small_ctx, small_in, small).ec == glz::error_code::buffer_overflow);
+
+      std::array<char, 64> roomy{};
+      std::string roomy_in = in;
+      glz::context roomy_ctx{};
+      expect(glz::minify_jsonc(roomy_ctx, roomy_in, roomy).ec == glz::error_code::none);
+      expect(std::string_view{roomy.data(), roomy_in.size()} == in);
    };
 
    "prettify keeps its line break for a whitespace only container (#2864)"_test = [] {

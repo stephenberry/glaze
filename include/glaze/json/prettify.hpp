@@ -27,7 +27,8 @@ namespace glz
          bool line_started = true;
          // A line comment has to be followed by a line break, or it would comment out whatever the
          // output put after it on the same line. The break is deferred to the next emission, so a
-         // comment at the end of the input cannot leave a trailing newline behind.
+         // comment at the end of the input cannot leave a trailing newline behind: a flag still
+         // pending when the input runs out is intended, not a break that went missing.
          bool line_comment_pending = false;
 
          // Line breaks are emitted where the formatter has always emitted them, whether or not the

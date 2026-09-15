@@ -178,6 +178,14 @@ namespace glz
          if (in.size() == 0) {
             return;
          }
+
+         // Minifying cannot produce more bytes than it was given, which is what lets the dumping
+         // below stay unchecked. A fixed-size output has to be told when that is more than it holds,
+         // rather than walking off the end of it.
+         if (not ensure_space(ctx, out, in.size())) {
+            return;
+         }
+
          in.resize(in.size() + padding_bytes);
 
          if constexpr (resizable<Out>) {
