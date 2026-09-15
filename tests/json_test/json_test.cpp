@@ -1172,15 +1172,15 @@ suite basic_types = [] {
          expect(glz::read<options>(v, input) == glz::error_code::no_read_input) << commented;
       }
 
-      // An unterminated block comment runs to the end of the buffer without skip_comment flagging
-      // it, so it arrives here as an input that held no value. That is the same answer as an empty
-      // buffer, which is a coarse diagnosis but a true one.
+      // An unterminated block comment is flagged by skip_comment, so the answer names the comment
+      // rather than arriving here as an input that held no value. That matches the malformed
+      // comments below, which are not flattened into the absent-value answer either.
       {
          const std::string_view unterminated{"/* never closed"};
          const std::vector<char> buf{unterminated.begin(), unterminated.end()};
          const std::string_view input{buf.data(), buf.size()};
          int i{42};
-         expect(glz::read<options>(i, input) == glz::error_code::no_read_input);
+         expect(glz::read<options>(i, input) == glz::error_code::expected_end_comment);
          expect(i == 42) << "destination must be left alone";
       }
 
@@ -15776,6 +15776,40 @@ suite buffer_without_member_empty = [] {
       std::string out{};
       glz::minify_jsonc(in, out);
       expect(out == R"({"i":1,/* note */"s":"x"})") << out;
+   };
+
+   "jsonc the reader reports unterminated comments and stars before a close (#2864)"_test = [] {
+      // An unterminated block comment is malformed input rather than an input that held no value,
+      // and a run of stars before the closing delimiter does not hide it.
+      {
+         const std::string inner = R"({"a":1 /* oops)";
+         glz::generic value{};
+         std::string copy = inner;
+         expect(bool(glz::read_jsonc(value, copy))) << inner;
+      }
+      {
+         // After a complete value the reader is done, so only validation looks at the comment
+         const std::string trailing = R"({"a":1} /* oops)";
+         expect(bool(glz::validate_jsonc(std::string_view{trailing}))) << trailing;
+      }
+      for (int stars = 1; stars <= 8; ++stars) {
+         const std::string in = "{/*" + std::string(size_t(stars), '*') + "/ \"s\":\"x\"}";
+         glz::generic value{};
+         std::string copy = in;
+         expect(not glz::read_jsonc(value, copy)) << in;
+         expect(not glz::validate_jsonc(std::string_view{in})) << in;
+         expect(value["s"].get<std::string>() == "x") << in;
+      }
+      // A line comment is ended by the end of the buffer, so it stays well formed
+      const std::string no_newline = R"({"a":1} // no newline at eof)";
+      expect(not glz::validate_jsonc(std::string_view{no_newline})) << no_newline;
+
+      // A carriage return ends a line comment on its own
+      const std::string cr = "{\"a\":1, // c\r\"b\":2}";
+      glz::generic value{};
+      std::string copy = cr;
+      expect(not glz::read_jsonc(value, copy)) << cr;
+      expect(not glz::validate_jsonc(std::string_view{cr})) << cr;
    };
 
    "format_error on a failed read"_test = [] {

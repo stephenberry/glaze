@@ -506,17 +506,40 @@ namespace glz
          ctx.error = error_code::unexpected_end;
       }
       else if (*it == '/') {
-         while (++it != end && *it != '\n');
+         // A carriage return ends the comment on its own, so that CR line endings do not swallow the
+         // rest of the document. The line feed of a CRLF pair is left as ordinary whitespace.
+         while (++it != end && *it != '\n' && *it != '\r');
       }
       else if (*it == '*') {
+         bool closed = false;
          while (++it != end) {
             if (*it == '*') [[unlikely]] {
                if (++it == end) [[unlikely]]
                   break;
                else if (*it == '/') [[likely]] {
                   ++it;
+                  closed = true;
                   break;
                }
+               // The byte after the '*' does not close the comment, and it may itself be a '*', so
+               // step back onto it and let the loop advance one byte at a time. Advancing past it
+               // hides the closing delimiter whenever the stars before it number an even amount,
+               // because every other star is then skipped over.
+               --it;
+            }
+         }
+         // A stream that can still deliver data is asking for more of it rather than reporting
+         // malformed input, so an unterminated block comment is only an error once no more data can
+         // arrive. Buffered reads report it even when they happen to carry streaming state, since
+         // that state is not attached to any source.
+         if (not closed) [[unlikely]] {
+            if constexpr (requires { ctx.stream; }) {
+               if (not ctx.stream.enabled() or ctx.stream.source_at_eof()) {
+                  ctx.error = error_code::expected_end_comment;
+               }
+            }
+            else {
+               ctx.error = error_code::expected_end_comment;
             }
          }
       }
