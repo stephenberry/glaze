@@ -401,6 +401,36 @@ std::string minified = glz::minify_json(pretty_json);
 auto ec = glz::read<glz::opts{.minified = true}>(person, minified_buffer);
 ```
 
+### JSONC Minification and Pretty Printing
+
+`glz::minify_jsonc` and `glz::prettify_jsonc` accept both comment styles. Minifying preserves block
+comments and drops line comments, because minifying is what removes the newline that terminates a
+line comment. Pretty printing keeps both, and puts the content that follows a line comment onto a
+new line so the comment cannot swallow it.
+
+```cpp
+std::string jsonc = R"({"name":"John", // Person's name
+"age":30})";
+
+std::string minified = glz::minify_jsonc(jsonc); // {"name":"John","age":30}
+```
+
+Like their JSON counterparts, these overloads return the formatted text and drop the error. The
+overloads that take a `glz::context` report it instead, which is what distinguishes malformed input
+such as an unterminated comment or string from a successful run:
+
+```cpp
+glz::context ctx{};
+std::string out{};
+if (const auto ec = glz::minify_jsonc(ctx, jsonc, out)) {
+   // ec.ec == glz::error_code::expected_end_comment, for example
+}
+```
+
+Neither function validates the structure of the document. They report what they actually parse,
+which is strings and comments, and copy the rest, so use `glz::validate_jsonc` to check a document
+that may not be well formed.
+
 ### Custom Serialization
 
 For complex custom behavior, use `glz::custom`:

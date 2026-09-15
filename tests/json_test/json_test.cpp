@@ -1172,15 +1172,15 @@ suite basic_types = [] {
          expect(glz::read<options>(v, input) == glz::error_code::no_read_input) << commented;
       }
 
-      // An unterminated block comment runs to the end of the buffer without skip_comment flagging
-      // it, so it arrives here as an input that held no value. That is the same answer as an empty
-      // buffer, which is a coarse diagnosis but a true one.
+      // An unterminated block comment is flagged by skip_comment, so the answer names the comment
+      // rather than arriving here as an input that held no value. That matches the malformed
+      // comments below, which are not flattened into the absent-value answer either.
       {
          const std::string_view unterminated{"/* never closed"};
          const std::vector<char> buf{unterminated.begin(), unterminated.end()};
          const std::string_view input{buf.data(), buf.size()};
          int i{42};
-         expect(glz::read<options>(i, input) == glz::error_code::no_read_input);
+         expect(glz::read<options>(i, input) == glz::error_code::expected_end_comment);
          expect(i == 42) << "destination must be left alone";
       }
 
@@ -15776,6 +15776,255 @@ suite buffer_without_member_empty = [] {
       std::string out{};
       glz::minify_jsonc(in, out);
       expect(out == R"({"i":1,/* note */"s":"x"})") << out;
+   };
+
+   "jsonc line comments no longer truncate the output (#2864)"_test = [] {
+      // A line comment used to be scanned as a block comment: the scan looked for the closing
+      // delimiter all the way to the end of the buffer, found none, and everything after the
+      // comment was dropped without a word.
+      std::string in = "{\"i\":1, // note\n \"s\":\"x\"}";
+      expect(glz::minify_jsonc(in) == R"({"i":1,"s":"x"})") << glz::minify_jsonc(in);
+
+      // A document that opens with a line comment is still a document afterwards
+      std::string header = "// Copyright 2026 Example Corp\n// SPDX-License-Identifier: MIT\n{\n  \"a\": 1\n}\n";
+      expect(glz::minify_jsonc(header) == R"({"a":1})") << glz::minify_jsonc(header);
+
+      // Block comments remain preserved, including one written in place
+      std::string block = R"({"a":1, /* note */ "b":2})";
+      expect(glz::minify_jsonc(block) == R"({"a":1,/* note */"b":2})") << glz::minify_jsonc(block);
+
+      // Comment delimiters inside a string are just string content
+      std::string strings = R"({"u":"http://x","v":"a/*b"})";
+      expect(glz::minify_jsonc(strings) == strings) << glz::minify_jsonc(strings);
+   };
+
+   "jsonc line comments in prettify end their line (#2864)"_test = [] {
+      // The newline that terminates a line comment is dropped by prettifying's own whitespace
+      // handling, so it has to be put back or the comment swallows the rest of that line.
+      const std::string in = "{\"i\":1, // note\n \"s\":\"x\"}";
+      std::string out{};
+      glz::prettify_jsonc(in, out);
+      expect(out == "{\n   \"i\": 1,\n   // note\n   \"s\": \"x\"\n}") << out;
+
+      auto canonical = [](const std::string& text) {
+         glz::generic value{};
+         if (glz::read_jsonc(value, text)) {
+            return std::string{};
+         }
+         std::string serialized{};
+         (void)glz::write_json(value, serialized);
+         return serialized;
+      };
+      expect(canonical(out) == canonical(in)) << canonical(out) << " vs " << canonical(in);
+
+      // A leading line comment takes its own line, and the value behind it survives
+      std::string leading = "// c\n{\"a\":1}";
+      std::string leading_out{};
+      glz::prettify_jsonc(leading, leading_out);
+      expect(leading_out == "// c\n{\n   \"a\": 1\n}") << leading_out;
+
+      // A line comment at the end of the input does not leave a trailing newline behind
+      std::string trailing = R"({"a":1} // tail)";
+      std::string trailing_out{};
+      glz::prettify_jsonc(trailing, trailing_out);
+      expect(trailing_out == "{\n   \"a\": 1\n}// tail") << trailing_out;
+   };
+
+   "jsonc unterminated comments and strings are reported (#2864)"_test = [] {
+      // An empty view out of the string and comment scanners used to be indistinguishable from a
+      // successful scan, and prettifying handed one to a function that memcpy's it. Both writers now
+      // report the reason for the empty view instead.
+      const std::string unterminated_comment = R"({"a":1} /* oops)";
+      const std::string unterminated_string = R"({"a":"oops)";
+
+      std::string out{};
+      std::string comment_copy = unterminated_comment;
+      glz::context comment_ctx{};
+      expect(glz::minify_jsonc(comment_ctx, comment_copy, out).ec == glz::error_code::expected_end_comment);
+
+      glz::context comment_pretty_ctx{};
+      expect(glz::prettify_jsonc(comment_pretty_ctx, unterminated_comment, out).ec ==
+             glz::error_code::expected_end_comment);
+
+      // Minifying pads its input in place, so it needs a mutable copy of the buffer; prettifying
+      // takes the buffer as it is
+      std::string string_copy = unterminated_string;
+      glz::context string_ctx{};
+      expect(glz::minify_jsonc(string_ctx, string_copy, out).ec == glz::error_code::unexpected_end);
+
+      glz::context string_pretty_ctx{};
+      expect(glz::prettify_jsonc(string_pretty_ctx, unterminated_string, out).ec == glz::error_code::unexpected_end);
+
+      // The validator checks trailing content, which is where a comment left open after a complete
+      // value sits. It used to be swallowed silently, so the validator now agrees with the writers.
+      expect(bool(glz::validate_jsonc(std::string_view{unterminated_comment})));
+      expect(bool(glz::validate_jsonc(std::string_view{unterminated_string})));
+
+      // A plain read validates the value itself rather than what follows it, so the unterminated
+      // comment is covered here inside the document.
+      const std::string inner_comment = R"({"a":1 /* oops)";
+      std::string inner_comment_copy = inner_comment;
+      std::string inner_string_copy = unterminated_string;
+      glz::generic value{};
+      expect(bool(glz::read_jsonc(value, inner_comment_copy)));
+      expect(bool(glz::read_jsonc(value, inner_string_copy)));
+
+      // A line comment is terminated by the end of the buffer, so this one is well formed
+      std::string no_newline = R"({"a":1} // no newline at eof)";
+      std::string no_newline_copy = no_newline;
+      glz::context eof_ctx{};
+      expect(glz::minify_jsonc(eof_ctx, no_newline_copy, out).ec == glz::error_code::none);
+      expect(out == R"({"a":1})") << out;
+   };
+
+   "jsonc a block comment is not closed by its own opening (#2864)"_test = [] {
+      // The scan used to accept any '*' followed by '/' as the closing delimiter, so the '*' that
+      // belongs to the opening delimiter could close the comment it opened.
+      std::string bare = "/*/";
+      std::string out{};
+      glz::context bare_ctx{};
+      expect(glz::minify_jsonc(bare_ctx, bare, out).ec == glz::error_code::expected_end_comment);
+
+      // Given more input, the closing delimiter that counts is the real one
+      std::string in_place = R"({"a":1} /*/ x */)";
+      glz::context in_place_ctx{};
+      expect(glz::minify_jsonc(in_place_ctx, in_place, out).ec == glz::error_code::none);
+      expect(out == R"({"a":1}/*/ x */)") << out;
+   };
+
+   "jsonc a run of stars before the closing delimiter (#2864)"_test = [] {
+      // The comment scan stepped two bytes over every star it did not close on, which hid the
+      // closing delimiter whenever the stars before it numbered an even amount. The count is
+      // exercised in both directions because only the even ones used to fail.
+      for (int stars = 1; stars <= 8; ++stars) {
+         const std::string comment = "/*" + std::string(size_t(stars), '*') + "/";
+         std::string in = "{" + comment + " \"s\":\"x\"}";
+
+         glz::generic value{};
+         expect(not glz::read_jsonc(value, in)) << comment;
+         expect(not glz::validate_jsonc(std::string_view{in})) << comment;
+         expect(value["s"].get<std::string>() == "x") << comment;
+
+         // Minifying keeps the comment, so its output has to stay readable
+         const std::string minified = glz::minify_jsonc(in);
+         glz::generic round_tripped{};
+         expect(not glz::read_jsonc(round_tripped, minified)) << comment << " -> " << minified;
+         expect(round_tripped["s"].get<std::string>() == "x") << comment << " -> " << minified;
+      }
+   };
+
+   "jsonc line comments end on a carriage return (#2864)"_test = [] {
+      // A carriage return ends a line comment on its own, so a document written with CR line endings
+      // is not swallowed by the first comment in it.
+      for (const std::string& in :
+           {std::string{"{\"a\":1, // c\r\"b\":2}"}, std::string{"{\"a\":1, // c\r\n\"b\":2}"}}) {
+         std::string copy = in;
+         expect(glz::minify_jsonc(copy) == R"({"a":1,"b":2})") << in;
+
+         glz::generic value{};
+         std::string read_copy = in;
+         expect(not glz::read_jsonc(value, read_copy)) << in;
+         expect(not glz::validate_jsonc(std::string_view{in})) << in;
+
+         std::string pretty{};
+         glz::prettify_jsonc(in, pretty);
+         expect(pretty.find("// c") != std::string::npos) << pretty;
+         glz::generic round_tripped{};
+         std::string pretty_copy = pretty;
+         expect(not glz::read_jsonc(round_tripped, pretty_copy)) << pretty;
+      }
+   };
+
+   "jsonc a line comment before a closing bracket keeps its own line (#2864)"_test = [] {
+      // The break after a line comment is deferred to the next emission, so the token that follows
+      // must neither lose that break nor gain a second one when it is a closing bracket.
+      std::string in = "{\"a\":1, // c\n}";
+      std::string out{};
+      glz::prettify_jsonc(in, out);
+      expect(out == "{\n   \"a\": 1,\n   // c\n}") << out;
+
+      std::string array = "[\"a\", // c\n]";
+      std::string array_out{};
+      glz::prettify_jsonc(array, array_out);
+      expect(array_out == "[\n   \"a\",\n   // c\n]") << array_out;
+   };
+
+   "jsonc an unterminated comment is reported whatever context the read carries (#2864)"_test = [] {
+      // The unterminated comment is only excused while a stream can still deliver more data. A
+      // buffered read has no such source, even when it is handed a streaming context.
+      struct trailing_opts : glz::opts
+      {
+         bool validate_trailing_whitespace = true;
+         constexpr trailing_opts() { comments = true; }
+      };
+
+      for (const std::string& in : {std::string{R"({"a":1 /* oops)"}, std::string{R"({"a":1} /* oops)"}}) {
+         glz::generic plain_value{};
+         std::string plain_copy = in;
+         glz::context plain_ctx{};
+         expect(glz::read<trailing_opts{}>(plain_value, plain_copy, plain_ctx).ec ==
+                glz::error_code::expected_end_comment) << in;
+
+         glz::generic stream_value{};
+         std::string stream_copy = in;
+         glz::streaming_context stream_ctx{};
+         expect(glz::read<trailing_opts{}>(stream_value, stream_copy, stream_ctx).ec ==
+                glz::error_code::expected_end_comment) << in;
+      }
+   };
+
+   "minify reports a bounded output buffer that is too small (#2864)"_test = [] {
+      // Minifying cannot produce more bytes than it was given, which is what lets it write into the
+      // output without checking room for each token. A fixed-size output has to be told when the
+      // input is more than it holds, rather than walking off the end of it.
+      const std::string in = R"({"a":1,"b":[1,2,3]})";
+
+      std::array<char, 8> small{};
+      std::string small_in = in;
+      glz::context small_ctx{};
+      expect(glz::minify_jsonc(small_ctx, small_in, small).ec == glz::error_code::buffer_overflow);
+
+      std::array<char, 64> roomy{};
+      std::string roomy_in = in;
+      glz::context roomy_ctx{};
+      expect(glz::minify_jsonc(roomy_ctx, roomy_in, roomy).ec == glz::error_code::none);
+      expect(std::string_view{roomy.data(), roomy_in.size()} == in);
+   };
+
+   "prettify keeps its line break for a whitespace only container (#2864)"_test = [] {
+      // The break before a closing bracket stays unconditional, so whitespace inside an empty
+      // container still produces the blank indented line it always has, and the output of
+      // prettify_json is unchanged by the line comment handling. Pinned because the comment breaks
+      // had to start tracking whether a line had already begun.
+      const std::string in = R"({"a":1,"b":[1,2],"c":{ }})";
+      std::string out{};
+      glz::prettify_json(in, out);
+      expect(out == "{\n   \"a\": 1,\n   \"b\": [\n      1,\n      2\n   ],\n   \"c\": {\n      \n   }\n}") << out;
+   };
+
+   "minify and prettify report no error on valid jsonc (#2864)"_test = [] {
+      // Minifying used to end the null terminated path by classifying the terminator, which left
+      // syntax_error behind on every input, valid or not. That made the error channel meaningless,
+      // so a spurious error on well formed input is worth failing on.
+      auto expect_no_error = [](const std::string& in) {
+         std::string copy = in;
+         std::string minified{};
+         glz::context minify_ctx{};
+         expect(glz::minify_jsonc(minify_ctx, copy, minified).ec == glz::error_code::none) << in;
+
+         std::string pretty{};
+         glz::context prettify_ctx{};
+         expect(glz::prettify_jsonc(prettify_ctx, in, pretty).ec == glz::error_code::none) << in;
+         return minified;
+      };
+
+      expect(expect_no_error(R"({"a":1,"b":2})") == R"({"a":1,"b":2})");
+      expect(expect_no_error(R"({"a":1, /* c */ "b":2})") == R"({"a":1,/* c */"b":2})");
+      expect(expect_no_error("{\"a\":1, // c\n \"b\":2}") == R"({"a":1,"b":2})");
+      (void)expect_no_error(R"([1,2,3])");
+      (void)expect_no_error(R"({"nested":{"deep":[{"x":null},true,false]}})");
+      (void)expect_no_error(R"({"empty":{},"earr":[],"s":"","num":-1.5e3})");
+      (void)expect_no_error(R"({"in_place":/* c */1})");
    };
 
    "format_error on a failed read"_test = [] {
