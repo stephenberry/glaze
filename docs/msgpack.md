@@ -150,6 +150,52 @@ std::chrono::milliseconds decoded{};
 glz::read_msgpack(decoded, buffer); // decoded.count() == 12345
 ```
 
+## Structs
+
+A struct is written as a map whose keys are the member names, the same shape JSON, CBOR, and BEVE use:
+
+```cpp
+struct point { int x{}; int y{}; };
+glz::write_msgpack(point{1, 2}, buffer); // 82 a1 78 01 a1 79 02  ->  {"x":1,"y":2}
+```
+
+Set `structs_as_arrays` to write the members positionally instead, dropping the keys.
+
+> **Wire format change.** Glaze 8.3.0 and earlier wrote a struct with no `glz::meta` as a positional array while writing one with a `glz::meta` as a map. Both are now maps. A reflected struct needs member names, so, as in every other format, it must be a type with linkage: a function-local struct no longer serializes.
+
+## Variants and `glz::generic`
+
+A variant takes the shape its `glz::meta` declares, exactly as it does in JSON and BEVE:
+
+| `glz::meta` | Shape |
+|---|---|
+| `tag` alone | `{ tag : id, ...members }` — the discriminator merged into the alternative's map |
+| `tag` and `content` | `{ tag : id, content : value }` — the discriminator beside a value of any shape |
+| neither | the active alternative's own value, bare |
+
+Nothing is invented for a variant you did not describe:
+
+```cpp
+std::variant<int, std::string> v{std::string{"x"}};
+glz::write_msgpack(v, buffer); // a1 78  ->  "x", byte-identical to writing the string alone
+```
+
+Reading an undeclared variant tries the alternatives in declaration order and keeps the first that matches the type byte. Alternatives that share a wire shape — `int32_t` and `int64_t`, or two structs with the same field names — cannot be told apart; declare a `tag` when that matters.
+
+> **Wire format change.** Glaze 8.3.0 and earlier wrote every variant as the two element array `[id, value]`. Without a `glz::meta::ids` declaration that `id` fell back to `glz::name_v`, the compiler's own spelling of the type, so a buffer written by MSVC could not be read by a GCC build. msgpack containing a variant written by an older Glaze will not read back.
+
+`glz::generic` is a variant of exactly the JSON value categories and declares no `tag`, so it falls out of the rule above as plain MessagePack that any implementation can consume:
+
+```cpp
+glz::generic_u64 value;
+auto ec = glz::read_json(value, R"({"a":[1,2,3],"c":"text"})");
+
+std::string buffer;
+ec = glz::write_msgpack(value, buffer); // fixmap(2), no per-element type information
+```
+
+Reading into a `glz::generic` accepts every MessagePack type that has a JSON counterpart. `bin`, `ext` (including the timestamp extension), and the reserved `0xC1` do not; read those into the type that models them, such as `glz::msgpack::ext`.
+
 ## Recursion Depth
 
 A `fixarray` or `fixmap` nesting level costs a single byte, so a small hostile buffer could otherwise drive the reader deep enough to overflow the stack. The readers and the value skipper cap nesting at `max_recursive_depth_limit` (256 levels) and return `error_code::exceeded_max_recursive_depth` beyond it. Structs are written as arrays, so a struct holding a vector of itself counts two levels per struct and reaches the cap at 128 struct levels.
