@@ -2921,6 +2921,9 @@ namespace glz
          // We need to allocate a new buffer here because we could call another includer that uses the buffer
          std::string nested_buffer = buffer;
          static constexpr auto NestedOpts = opt_true<disable_padding_on<Opts>(), &opts::null_terminated>;
+         // The included file fills in part of the object we belong to, so its keys count toward
+         // that object's missing key check rather than being required all over again here.
+         const include_key_scope include_keys{ctx, &include_key_tag<std::remove_cvref_t<decltype(value.value)>>};
          const auto ecode = glz::read<NestedOpts>(value.value, nested_buffer, ctx);
          if (bool(ctx.error)) [[unlikely]] {
             ctx.error = error_code::includer_error;
@@ -3155,6 +3158,41 @@ namespace glz
                }
             }();
 
+            // A file include merges an external document into this object, so with
+            // error_on_missing_keys the keys have to be counted across both documents (see
+            // context::key_bits). While this object parses, its bits are published for its
+            // includer members to hand down; and if this parse is itself an included document,
+            // it claims the bits of the object that included us and merges into them at the
+            // closing brace instead of running a check of its own.
+            static constexpr bool tracks_include_keys = [] {
+               // Nested so that reflecting over the members is only asked for when it can matter
+               if constexpr ((glaze_object_t<T> || reflectable<T>) && Opts.error_on_missing_keys) {
+                  return has_includer_member<T>;
+               }
+               else {
+                  return false;
+               }
+            }();
+            [[maybe_unused]] bit_array<num_members>* include_bits{};
+            if constexpr (tracks_include_keys) {
+               if (ctx.include_key_type == &include_key_tag<T>) {
+                  include_bits = static_cast<bit_array<num_members>*>(ctx.include_key_bits);
+                  ctx.include_key_bits = nullptr;
+                  ctx.include_key_type = nullptr;
+               }
+            }
+            [[maybe_unused]] const std::conditional_t<tracks_include_keys,
+                                                      key_bits_scope<std::remove_reference_t<decltype(ctx)>>,
+                                                      inert_key_bits_scope> published_bits{
+               ctx, [&]() -> void* {
+                  if constexpr (tracks_include_keys) {
+                     return &fields;
+                  }
+                  else {
+                     return nullptr;
+                  }
+               }()};
+
             size_t read_count{}; // for partial_read
 
             bool first = true;
@@ -3198,8 +3236,19 @@ namespace glz
                if (*it == '}') {
                   --ctx.depth;
                   if constexpr ((glaze_object_t<T> || reflectable<T>) && Opts.error_on_missing_keys) {
+                     const bool defer_to_includer = [&] {
+                        if constexpr (tracks_include_keys) {
+                           if (include_bits) {
+                              // An included document is a fragment: hand the keys it supplied to
+                              // the object that included it, which checks the union of both.
+                              *include_bits |= fields;
+                              return true;
+                           }
+                        }
+                        return false;
+                     }();
                      constexpr auto req_fields = required_fields<T, Opts>();
-                     if ((req_fields & fields) != req_fields) {
+                     if (not defer_to_includer && (req_fields & fields) != req_fields) {
                         for (size_t i = 0; i < num_members; ++i) {
                            if (not fields[i] && req_fields[i]) {
                               ctx.custom_error_message = reflect<T>::keys[i];

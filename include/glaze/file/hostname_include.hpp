@@ -115,6 +115,9 @@ namespace glz
 
          std::string nested_buffer = buffer;
          static constexpr auto NestedOpts = opt_true<disable_padding_on<Opts>(), &opts::null_terminated>;
+         // As with glz::file_include: the included file is a fragment of the object we belong to,
+         // so its keys count toward that object's missing key check.
+         const include_key_scope include_keys{ctx, &include_key_tag<std::remove_cvref_t<decltype(value.value)>>};
          const auto ecode = glz::read<NestedOpts>(value.value, nested_buffer, ctx);
          if (bool(ctx.error)) [[unlikely]] {
             ctx.error = error_code::includer_error;

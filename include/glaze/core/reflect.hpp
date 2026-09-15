@@ -805,6 +805,24 @@ namespace glz
       return custom_getter_is_null(custom_val, ctx);
    }
 
+   // Whether any member of T performs a file include. Only these objects pay for the key-bit
+   // bookkeeping that lets an included document satisfy the including object's missing-key check.
+   template <class T>
+   constexpr bool has_includer_member = []() constexpr {
+      if constexpr (glaze_object_t<T> || reflectable<T>) {
+         bool found = false;
+         for_each<reflect<T>::size>([&]<auto I>() constexpr {
+            if constexpr (is_includer<std::decay_t<refl_t<T, I>>>) {
+               found = true;
+            }
+         });
+         return found;
+      }
+      else {
+         return false;
+      }
+   }();
+
    template <class T, auto Opts>
    constexpr auto required_fields()
    {
