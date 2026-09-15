@@ -369,11 +369,30 @@ namespace glz
       using arguments = std::tuple<Args...>;
    };
 
+   // Selects invocable_traits for a concrete callable: function objects (including lambdas)
+   // dispatch through decltype(&T::operator()), while free function pointers match
+   // invocable_traits directly. The primary template is intentionally empty (rather than a
+   // hard error) so that invocable_args_t/invocable_result_t remain SFINAE-friendly for other
+   // types, such as member pointers inspected inside std::enable_if_t conditions.
    template <class T>
-   using invocable_args_t = typename invocable_traits<decltype(&T::operator())>::arguments;
+   struct invocable_traits_for
+   {};
 
    template <class T>
-   using invocable_result_t = typename invocable_traits<decltype(&T::operator())>::result_type;
+      requires requires { &T::operator(); }
+   struct invocable_traits_for<T> : invocable_traits<decltype(&T::operator())>
+   {};
+
+   template <class T>
+      requires(std::is_pointer_v<T> && std::is_function_v<std::remove_pointer_t<T>>)
+   struct invocable_traits_for<T> : invocable_traits<T>
+   {};
+
+   template <class T>
+   using invocable_args_t = typename invocable_traits_for<T>::arguments;
+
+   template <class T>
+   using invocable_result_t = typename invocable_traits_for<T>::result_type;
 
    // checks if type is a lambda with all known arguments
    template <class T>

@@ -30,7 +30,7 @@ glz::write_float64<&T::x> // Writes out numbers with a maximum precision of floa
 glz::write_float_full<&T::x> // Writes out numbers with full precision (turns off higher level float precision wrappers)
 glz::float_format<&T::x, "{:.2f}"> // Format floats using std::format syntax (C++23)
 
-glz::custom<&T::read, &T::write> // Calls custom read and write std::functions, lambdas, or member functions
+glz::custom<&T::read, &T::write> // Calls custom read and write std::functions, lambdas, member functions, or free functions
 glz::manage<&T::x, &T::read_x, &T::write_x> // Calls read_x() after reading x and calls write_x() before writing x
 glz::as_array<&T::member> // Treat a reflected/member-annotated type as a positional array for read and write
 glz::flatten_map<&T::member> // Flatten map-like containers into a JSON array [key..., value, ...]
@@ -1016,7 +1016,7 @@ float_precision float_max_write_precision{};
 
 ## custom
 
-Calls custom read and write std::functions, lambdas, or member functions.
+Calls custom read and write std::functions, lambdas, member functions, or free functions.
 
 ```c++
 struct custom_encoding
@@ -1105,6 +1105,41 @@ expect(obj.str == "Hello!");
 > [!NOTE]
 >
 > With read lambdas like `[](custom_buffer_input& s, const std::string& input)`, both types must be concrete (cannot use `auto`), otherwise you'll get a compilation error noting this. The reason is that Glaze must be able to determine what type to decode into before passing the decoded value to `input`.
+
+### Free functions
+
+Free functions (as non-member function pointers) follow the same conventions as lambdas: the object is the first argument, the decoded input is the second, and an optional `glz::context&` third argument enables custom error handling. A free function with a non-void return acts as a getter, so reading decodes into the returned reference and writing serializes the returned value.
+
+```c++
+struct free_func_counter
+{
+   int count{};
+};
+
+void counter_read(free_func_counter& obj, int val) { obj.count = val; }
+int counter_write(const free_func_counter& obj) { return obj.count; }
+
+template <>
+struct glz::meta<free_func_counter>
+{
+   static constexpr auto value = object("count", custom<counter_read, counter_write>);
+};
+```
+
+With a `glz::context&` parameter for custom errors:
+
+```c++
+void counter_read_checked(free_func_counter& obj, int val, glz::context& ctx)
+{
+   if (val < 0) {
+      ctx.error = glz::error_code::constraint_violated;
+      ctx.custom_error_message = "count cannot be negative";
+   }
+   else {
+      obj.count = val;
+   }
+}
+```
 
 ## manage
 
