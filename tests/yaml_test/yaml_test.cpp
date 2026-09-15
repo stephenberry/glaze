@@ -7299,6 +7299,78 @@ suite generic_colon_in_value_tests = [] {
    };
 };
 
+// Test for issue #2826: quotes in plain scalars must not affect later quoted values
+suite plain_scalar_quotes_preserve_later_quotes = [] {
+   "plain quotes do not affect later mapping values"_test = [] {
+      struct test_case
+      {
+         std::string_view yaml;
+         std::string_view one;
+      };
+
+      const test_case cases[] = {
+         {"one: a'b\ntwo: 'c: d'\n", "a'b"},
+         {"one: a'b\r\ntwo: 'c: d'\r\n", "a'b"},
+         {"one: a'b\rtwo: 'c: d'\r", "a'b"},
+         {"one: a'b\ntwo: 'c: d'", "a'b"},
+         {"one: a\"b\ntwo: \"c: d\"\n", "a\"b"},
+         {"one: a 'b\ntwo: 'c: d'\n", "a 'b"},
+         {"one: a \"b\ntwo: \"c: d\"\n", "a \"b"},
+         {"one: a\"b\\\ntwo: \"c: d\"\n", "a\"b\\"},
+         {"one: a\"b\\\r\ntwo: \"c: d\"\r\n", "a\"b\\"},
+         {"one: a'b\n# comment ' with: a colon\ntwo: 'c: d'\n", "a'b"},
+         {"one: 'a''b'\ntwo: 'c: d'\n", "a'b"},
+         {"one: a'b\ntwo: \"c: d\"\n", "a'b"},
+         {"two: 'c: d'\none: a'b\n", "a'b"},
+      };
+
+      const auto check = [&]<class T>() {
+         for (const auto& [yaml, one] : cases) {
+            T parsed{};
+            const auto ec = glz::read_yaml(parsed, yaml);
+            expect(!ec) << glz::format_error(ec, yaml);
+            if (ec) continue;
+
+            expect(parsed.size() == 2u) << yaml;
+            expect(glz::write_json(parsed["one"]).value_or("WRITE_ERROR") == glz::write_json(one).value()) << yaml;
+            expect(glz::write_json(parsed["two"]).value_or("WRITE_ERROR") == R"("c: d")") << yaml;
+         }
+      };
+
+      check.template operator()<glz::generic>();
+      check.template operator()<glz::generic_u64>();
+      check.template operator()<glz::generic_i64>();
+      check.template operator()<std::map<std::string, std::string>>();
+   };
+
+   "plain quotes do not allow inconsistent sibling indentation"_test = [] {
+      const std::string_view yaml = "one: a'b\n two: 'c: d'\n";
+      glz::generic_u64 parsed{};
+      const auto ec = glz::read_yaml(parsed, yaml);
+      expect(ec == glz::error_code::syntax_error);
+   };
+
+   "quote lookahead preserves nested collections and multiline strings"_test = [] {
+      for (const std::string_view yaml :
+           {"outer:\n  one: a'b\n  two: 'c: d'\n", "outer: {\"one\":\"a'b\",\"two\":\"c: d\"}\n",
+            "outer: {\"one\":\"} : payload\",\"two\":\"c: d\"}\n", "outer:\n  one: 'a\n    b'\n  two: 'c: d'\n",
+            "outer:\n  one: \"a\\\n    b\"\n  two: 'c: d'\n"}) {
+         glz::generic parsed{};
+         std::map<std::string, std::map<std::string, std::string>> typed{};
+         const auto ec       = glz::read_yaml(parsed, yaml);
+         const auto typed_ec = glz::read_yaml(typed, yaml);
+         expect(!ec) << glz::format_error(ec, yaml);
+         expect(!typed_ec) << glz::format_error(typed_ec, yaml);
+         if (ec || typed_ec) continue;
+
+         expect(glz::write_json(parsed).value_or("GENERIC_WRITE_ERROR") ==
+                glz::write_json(typed).value_or("TYPED_WRITE_ERROR"))
+            << yaml;
+         expect(parsed["outer"]["two"].as<std::string>() == "c: d");
+      }
+   };
+};
+
 suite generic_malformed_flow_tests = [] {
    "generic_malformed_flow_array_in_value"_test = [] {
       // Unclosed flow array in a block mapping value should produce an error
