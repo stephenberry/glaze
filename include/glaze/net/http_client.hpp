@@ -1447,6 +1447,17 @@ namespace glz
          return perform_sync_request("GET", *url_result, "", headers);
       }
 
+      // Synchronous HEAD request
+      std::expected<response, std::error_code> head(std::string_view url, const glz::http_headers& headers = {})
+      {
+         auto url_result = parse_url(url);
+         if (!url_result) {
+            return std::unexpected(url_result.error());
+         }
+
+         return perform_sync_request("HEAD", *url_result, "", headers);
+      }
+
       // Synchronous POST request - truly synchronous, no promises/futures
       std::expected<response, std::error_code> post(std::string_view url, const std::string& body,
                                                     const glz::http_headers& headers = {})

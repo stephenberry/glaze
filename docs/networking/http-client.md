@@ -17,7 +17,7 @@ int main() {
     if (response) {
         std::cout << "Status: " << response->status_code << std::endl;
         std::cout << "Body: " << response->response_body << std::endl;
-        
+
         // Access response headers
         for (const auto& [name, value] : response->response_headers) {
             std::cout << name << ": " << value << std::endl;
@@ -138,6 +138,7 @@ Notes:
 ## Synchronous Methods
 
 ### GET Request
+
 ```cpp
 std::expected<response, std::error_code> get(
     std::string_view url,
@@ -145,10 +146,23 @@ std::expected<response, std::error_code> get(
 );
 ```
 
+### HEAD Request
+
+A HEAD request will receive a status code and response headers, but no body. This is useful for checking existence
+of files on a server, or receiving headers for later usage (e.g. `Content-Length` for file size).
+
+```cpp
+std::expected<response, std::error_code> head(
+    std::string_view url,
+    const glz::http_headers& headers = {}
+);
+```
+
 ### POST Request
+
 ```cpp
 std::expected<response, std::error_code> post(
-    std::string_view url, 
+    std::string_view url,
     std::string_view body,
     const glz::http_headers& headers = {}
 );
@@ -158,7 +172,7 @@ std::expected<response, std::error_code> post(
 
 ```cpp
 std::expected<response, std::error_code> put(
-    std::string_view url, 
+    std::string_view url,
     const std::string& body,
     const glz::http_headers& headers = {}
 );
@@ -168,7 +182,7 @@ std::expected<response, std::error_code> put(
 
 ```cpp
 std::expected<response, std::error_code> patch(
-    std::string_view url, 
+    std::string_view url,
     const std::string& body,
     const glz::http_headers& headers = {}
 );
@@ -178,7 +192,7 @@ std::expected<response, std::error_code> patch(
 ```cpp
 template<class T>
 std::expected<response, std::error_code> post_json(
-    std::string_view url, 
+    std::string_view url,
     const T& data,
     const glz::http_headers& headers = {}
 );
@@ -188,7 +202,7 @@ std::expected<response, std::error_code> post_json(
 ```cpp
 template<class T>
 std::expected<response, std::error_code> put_json(
-    std::string_view url, 
+    std::string_view url,
     const T& data,
     const glz::http_headers& headers = {}
 );
@@ -199,7 +213,7 @@ std::expected<response, std::error_code> put_json(
 ```cpp
 template<class T>
 std::expected<response, std::error_code> patch_json(
-    std::string_view url, 
+    std::string_view url,
     const T& data,
     const glz::http_headers& headers = {}
 );
@@ -238,7 +252,7 @@ void get_async(
 **Future-based:**
 ```cpp
 std::future<std::expected<response, std::error_code>> post_async(
-    std::string_view url, 
+    std::string_view url,
     std::string_view body,
     const glz::http_headers& headers = {}
 );
@@ -248,7 +262,7 @@ std::future<std::expected<response, std::error_code>> post_async(
 ```cpp
 template<typename CompletionHandler>
 void post_async(
-    std::string_view url, 
+    std::string_view url,
     std::string_view body,
     const glz::http_headers& headers,
     CompletionHandler&& handler
@@ -261,7 +275,7 @@ void post_async(
 ```cpp
 template<class T>
 std::future<std::expected<response, std::error_code>> post_json_async(
-    std::string_view url, 
+    std::string_view url,
     const T& data,
     const glz::http_headers& headers = {}
 );
@@ -271,7 +285,7 @@ std::future<std::expected<response, std::error_code>> post_json_async(
 ```cpp
 template<class T, typename CompletionHandler>
 void post_json_async(
-    std::string_view url, 
+    std::string_view url,
     const T& data,
     const glz::http_headers& headers,
     CompletionHandler&& handler
@@ -560,7 +574,7 @@ int main() {
 
     // Launch multiple async requests
     std::vector<std::future<std::expected<glz::response, std::error_code>>> futures;
-    
+
     futures.push_back(client.get_async("https://api.github.com/users/octocat"));
     futures.push_back(client.get_async("https://api.github.com/users/defunkt"));
     futures.push_back(client.get_async("https://api.github.com/users/pjhyett"));
@@ -601,7 +615,7 @@ int main() {
     // Async JSON POST with callback
     struct Data { int value = 42; };
     Data data;
-    
+
     client.post_json_async("https://httpbin.org/post", data, {},
         [](std::expected<glz::response, std::error_code> result) {
             if (result) {

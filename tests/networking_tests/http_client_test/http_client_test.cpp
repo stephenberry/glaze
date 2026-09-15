@@ -343,6 +343,17 @@ class simple_test_client
       return perform_request("GET", *url_parts, "");
    }
 
+   std::expected<response, std::error_code> head(const std::string& url)
+   {
+      auto url_parts = parse_url(url);
+      if (!url_parts) {
+         return std::unexpected(url_parts.error());
+      }
+
+      return perform_request("HEAD", *url_parts, "");
+   }
+
+
    std::expected<response, std::error_code> post(const std::string& url, const std::string& body)
    {
       auto url_parts = parse_url(url);
@@ -502,6 +513,24 @@ suite working_http_tests = [] {
       server.stop();
       std::this_thread::sleep_for(std::chrono::milliseconds(50)); // Clean shutdown
    };
+
+   "basic_head_request"_test = [] {
+      working_test_server server;
+      expect(server.start()) << "Server should start\n";
+
+      simple_test_client client;
+      auto result = client.head(server.base_url() + "/hello");
+
+      expect(result.has_value()) << "HEAD request should succeed\n";
+      if (result.has_value()) {
+         expect(result->status_code == 200) << "Status should be 200\n";
+         expect(result->response_body.empty()) << "Body should be empty\n";
+      }
+
+      server.stop();
+      std::this_thread::sleep_for(std::chrono::milliseconds(50)); // Clean shutdown
+   };
+
 
    "cors_preflight_generates_options_response"_test = [] {
       working_test_server server;
