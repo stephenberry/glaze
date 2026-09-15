@@ -3103,7 +3103,7 @@ namespace glz
       inline bool inline_value_has_plain_mapping_indicator(It pos, End end) noexcept
       {
          const auto stop = yaml::implicit_key_scan_end(pos, end);
-         int flow_depth = 0;
+         int flow_depth  = 0;
          while (pos != stop) {
             const char c = *pos;
             if (c == '\n' || c == '\r' || c == '#') return false;
@@ -3113,11 +3113,11 @@ namespace glz
                while (pos != stop && *pos != quote) {
                   if (*pos == '\\' && quote == '"') {
                      ++pos;
-                     if (pos != stop) ++pos;
+                     if (pos == stop) break;
                   }
-                  else {
-                     ++pos;
-                  }
+                  // A quote in a plain scalar must not make the probe scan a later line.
+                  if (*pos == '\n' || *pos == '\r') return false;
+                  ++pos;
                }
                if (pos != stop) ++pos;
                continue;
