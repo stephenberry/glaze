@@ -7322,6 +7322,9 @@ suite plain_scalar_quotes_preserve_later_quotes = [] {
          {"one: 'a''b'\ntwo: 'c: d'\n", "a'b"},
          {"one: a'b\ntwo: \"c: d\"\n", "a'b"},
          {"two: 'c: d'\none: a'b\n", "a'b"},
+         {"one: \"a\\\"b: c\"\ntwo: 'c: d'\n", "a\"b: c"},
+         {"one: \"a\\\"\"\ntwo: 'c: d'\n", "a\""},
+         {"one: \"a\\\\\"\ntwo: 'c: d'\n", "a\\"},
       };
 
       const auto check = [&]<class T>() {
@@ -7348,6 +7351,32 @@ suite plain_scalar_quotes_preserve_later_quotes = [] {
       glz::generic_u64 parsed{};
       const auto ec = glz::read_yaml(parsed, yaml);
       expect(ec == glz::error_code::syntax_error);
+   };
+
+   "multiline implicit block keys are rejected"_test = [] {
+      for (const std::string_view yaml : {"key: \"line1\n  line2\": value\n", "key: 'line1\n  line2': value\n",
+                                          "\"line1\n  line2\": value\n", "'line1\n  line2': value\n"}) {
+         glz::generic parsed{};
+         std::map<std::string, std::string> typed{};
+         expect(bool(glz::read_yaml(parsed, yaml))) << yaml;
+         expect(bool(glz::read_yaml(typed, yaml))) << yaml;
+      }
+   };
+
+   "multiline explicit block and flow keys remain supported"_test = [] {
+      for (const std::string_view yaml :
+           {"key:\n  ? \"line1\n    line2\"\n  : value\n", "key:\n  ? 'line1\n    line2'\n  : value\n",
+            "key: {? \"line1\n    line2\": value}\n", "key: {? 'line1\n    line2': value}\n",
+            "key: {\"line1\n    line2\": value}\n"}) {
+         glz::generic parsed{};
+         std::map<std::string, std::map<std::string, std::string>> typed{};
+         const auto ec       = glz::read_yaml(parsed, yaml);
+         const auto typed_ec = glz::read_yaml(typed, yaml);
+         expect(!ec) << glz::format_error(ec, yaml);
+         expect(!typed_ec) << glz::format_error(typed_ec, yaml);
+         expect(glz::write_json(parsed).value_or("WRITE_ERROR") == R"({"key":{"line1 line2":"value"}})");
+         expect(glz::write_json(typed).value_or("WRITE_ERROR") == R"({"key":{"line1 line2":"value"}})");
+      }
    };
 
    "quote lookahead preserves nested collections and multiline strings"_test = [] {
