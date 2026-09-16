@@ -50,7 +50,7 @@ namespace glz
          return {0, ctx.error, ctx.custom_error_message};
       }
 
-      auto p = read_iterators<Opts, false>(layout);
+      auto p = read_iterators<Opts>(layout);
       auto it = p.first;
       auto end = p.second;
       auto outer_start = it;
@@ -318,7 +318,7 @@ namespace glz
                            static constexpr auto TargetKey = get<I>(reflect<T>::keys);
                            if ((TargetKey.size() == key.size()) && comparitor<TargetKey>(start)) [[likely]] {
                               size_t ix = 0;
-                              temp_buffer.resize(2 * write_padding_bytes);
+                              resize_unfilled(temp_buffer, 2 * write_padding_bytes);
 
                               if constexpr (reflectable<T>) {
                                  serialize<JSON>::template op<RawOpts>(get_member(value, get<I>(to_tie(value))), ctx,

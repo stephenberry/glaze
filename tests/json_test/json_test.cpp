@@ -15761,6 +15761,32 @@ suite buffer_without_member_empty = [] {
       expect(std::string_view(minified.data(), minified.size()) == R"({"i":9,"s":"p"})");
    };
 
+   // A buffer that keeps no '\0' of its own is read with bounds rather than a sentinel, because
+   // nothing pads it any more. Nothing here can be spelled with std::string: it terminates itself,
+   // so it never takes that path.
+   "buffer without its own terminator"_test = [] {
+      static_assert(not glz::self_terminating<qt_style_buffer>);
+      static_assert(glz::self_terminating<std::string>);
+
+      qt_style_buffer buffer{};
+      buffer.assign(R"({"i":7,"s":"tail"})");
+      no_empty_payload value{};
+      expect(not glz::read_json(value, buffer));
+      expect(value.i == 7);
+      expect(value.s == "tail");
+      // The read must not have grown it to make room for a sentinel, or shrunk it back after.
+      expect(buffer.size() == 18);
+
+      // Every truncation of a valid document is rejected rather than read off the end of the buffer.
+      const std::string_view full = R"({"i":7,"s":"aéb"})";
+      for (size_t n = 1; n < full.size(); ++n) {
+         qt_style_buffer cut{};
+         cut.assign(full.substr(0, n));
+         no_empty_payload partial{};
+         expect(bool(glz::read_json(partial, cut))) << "truncation at " << n;
+      }
+   };
+
    "prettify an empty buffer"_test = [] {
       qt_style_buffer in{};
       qt_style_buffer out{};
@@ -15770,8 +15796,9 @@ suite buffer_without_member_empty = [] {
    };
 
    "minify_jsonc"_test = [] {
-      // The two-argument overload took `in` by const reference while the implementation pads it in
-      // place, so no argument type could ever match it.
+      // The two-argument overload once took `in` by const reference while the implementation
+      // resized it, so no argument type could ever match it. Nothing resizes the input now, but the
+      // overload still has to be callable.
       std::string in = R"({"i":1, /* note */ "s":"x"})";
       std::string out{};
       glz::minify_jsonc(in, out);

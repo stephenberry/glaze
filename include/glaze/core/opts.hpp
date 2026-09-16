@@ -47,8 +47,7 @@ namespace glz
       no_header = 1 << 3, // whether or not a binary header is needed
       disable_write_unknown =
          1 << 4, // whether to turn off writing unknown fields for a glz::meta specialized for unknown writing
-      is_padded = 1 << 5, // whether or not the read buffer is padded
-      disable_padding = 1 << 6, // to explicitly disable padding for contexts like includers
+      is_padded = 1 << 5, // the caller guarantees `padding_bytes` of readable slack past the buffer
       write_unchecked = 1 << 7, // the write buffer has sufficient space and does not need to be checked
       // Error rather than write a control character that has no two-character JSON escape. Set by
       // the binary-to-JSON converters, which are emitting someone else's bytes and would rather
@@ -933,8 +932,6 @@ namespace glz
 
    consteval bool check_is_padded(auto&& o) { return o.internal & uint32_t(opts_internal::is_padded); }
 
-   consteval bool check_disable_padding(auto&& o) { return o.internal & uint32_t(opts_internal::disable_padding); }
-
    consteval bool check_write_unchecked(auto&& o) { return o.internal & uint32_t(opts_internal::write_unchecked); }
 
    consteval bool check_reject_control_characters(auto&& o)
@@ -1033,22 +1030,6 @@ namespace glz
    {
       auto ret = Opts;
       ret.internal &= ~uint32_t(opts_internal::is_padded);
-      return ret;
-   }
-
-   template <auto Opts>
-   constexpr auto disable_padding_on()
-   {
-      auto ret = Opts;
-      ret.internal |= uint32_t(opts_internal::disable_padding);
-      return ret;
-   }
-
-   template <auto Opts>
-   constexpr auto disable_padding_off()
-   {
-      auto ret = Opts;
-      ret.internal &= ~uint32_t(opts_internal::disable_padding);
       return ret;
    }
 

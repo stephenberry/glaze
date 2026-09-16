@@ -150,6 +150,12 @@ namespace glz
       // seeded per read from the input size, 0 means unlimited. See charge_speculation below.
       uint32_t depth{}; // Nesting depth of structures (objects/arrays)
       // Used for indentation when writing and for stack overflow protection when reading
+      // Whether the input has `padding_bytes` of readable slack past `end`, so a fixed width load
+      // that straddles the end of the document stays inside the buffer. The readers scan in 8 byte
+      // chunks and use this to decide how much of the tail they have to finish a byte at a time;
+      // see `chunk_min`. False is always correct -- it only costs the last few bytes of a buffer
+      // their chunked path -- so a context that reaches a reader without being told stays right.
+      bool padded_input{};
       std::string current_file; // top level file path
       // NOTE: The default constructor is valid for std::string_view, so we use this rather than {}
       // because debuggers like jumping to std::string_view initialization calls

@@ -20,7 +20,7 @@ namespace glz
          return {0, ctx.error, ctx.custom_error_message};
       }
 
-      auto [it, end] = read_iterators<Opts, false>(layout);
+      auto [it, end] = read_iterators<Opts>(layout);
       auto outer_start = it;
       if (not bool(ctx.error)) [[likely]] {
          auto skip_whitespace = [&] {

@@ -162,7 +162,7 @@ namespace glz
          }
          std::memcpy(&b[ix], ",\n", 2);
          ix += 2;
-         std::memset(&b[ix], check_indentation_char(Opts), ctx.depth);
+         fill_bytes(&b[ix], check_indentation_char(Opts), ctx.depth);
          ix += ctx.depth;
       }
       else {
@@ -1358,7 +1358,7 @@ namespace glz
          if constexpr (check_new_lines_in_arrays(Opts)) {
             std::memcpy(&b[ix], ",\n", 2);
             ix += 2;
-            std::memset(&b[ix], check_indentation_char(Opts), ctx.depth);
+            fill_bytes(&b[ix], check_indentation_char(Opts), ctx.depth);
             ix += ctx.depth;
          }
          else {
@@ -1454,7 +1454,7 @@ namespace glz
                   if constexpr (check_new_lines_in_arrays(Opts)) {
                      std::memcpy(&b[ix], "[\n", 2);
                      ix += 2;
-                     std::memset(&b[ix], check_indentation_char(Opts), ctx.depth);
+                     fill_bytes(&b[ix], check_indentation_char(Opts), ctx.depth);
                      ix += ctx.depth;
                   }
                   else {
@@ -1482,7 +1482,7 @@ namespace glz
                      if constexpr (check_new_lines_in_arrays(Opts)) {
                         std::memcpy(&b[ix], ",\n", 2);
                         ix += 2;
-                        std::memset(&b[ix], check_indentation_char(Opts), ctx.depth);
+                        fill_bytes(&b[ix], check_indentation_char(Opts), ctx.depth);
                         ix += ctx.depth;
                      }
                      else {
@@ -1504,7 +1504,7 @@ namespace glz
                   ctx.depth -= check_indentation_width(Opts);
                   std::memcpy(&b[ix], "\n", 1);
                   ++ix;
-                  std::memset(&b[ix], check_indentation_char(Opts), ctx.depth);
+                  fill_bytes(&b[ix], check_indentation_char(Opts), ctx.depth);
                   ix += ctx.depth;
                }
 
@@ -1526,7 +1526,7 @@ namespace glz
                   if constexpr (check_new_lines_in_arrays(Opts)) {
                      std::memcpy(&b[ix], "[\n", 2);
                      ix += 2;
-                     std::memset(&b[ix], check_indentation_char(Opts), ctx.depth);
+                     fill_bytes(&b[ix], check_indentation_char(Opts), ctx.depth);
                      ix += ctx.depth;
                   }
                   else {
@@ -1572,7 +1572,7 @@ namespace glz
                         if constexpr (check_new_lines_in_arrays(Opts)) {
                            std::memcpy(&b[ix], ",\n", 2);
                            ix += 2;
-                           std::memset(&b[ix], check_indentation_char(Opts), ctx.depth);
+                           fill_bytes(&b[ix], check_indentation_char(Opts), ctx.depth);
                            ix += ctx.depth;
                         }
                         else {
@@ -1625,7 +1625,7 @@ namespace glz
                   }
                   std::memcpy(&b[ix], "\n", 1);
                   ++ix;
-                  std::memset(&b[ix], check_indentation_char(Opts), ctx.depth);
+                  fill_bytes(&b[ix], check_indentation_char(Opts), ctx.depth);
                   ix += ctx.depth;
                }
             }
@@ -1701,7 +1701,7 @@ namespace glz
                   }
                   std::memcpy(&b[ix], "\n", 1);
                   ++ix;
-                  std::memset(&b[ix], check_indentation_char(Opts), ctx.depth);
+                  fill_bytes(&b[ix], check_indentation_char(Opts), ctx.depth);
                   ix += ctx.depth;
                }
             }
@@ -1730,7 +1730,7 @@ namespace glz
                return;
             }
             dump<false>("{\n", b, ix);
-            std::memset(&b[ix], check_indentation_char(Opts), ctx.depth);
+            fill_bytes(&b[ix], check_indentation_char(Opts), ctx.depth);
             ix += ctx.depth;
          }
          else {
@@ -1924,7 +1924,7 @@ namespace glz
             }
             std::memcpy(&b[ix], "\n", 1);
             ++ix;
-            std::memset(&b[ix], check_indentation_char(Opts), ctx.depth);
+            fill_bytes(&b[ix], check_indentation_char(Opts), ctx.depth);
             ix += ctx.depth;
             std::memcpy(&b[ix], "}", 1);
             ++ix;
@@ -2001,7 +2001,7 @@ namespace glz
                      }
                      std::memcpy(&b[ix], "\n", 1);
                      ++ix;
-                     std::memset(&b[ix], check_indentation_char(Opts), ctx.depth);
+                     fill_bytes(&b[ix], check_indentation_char(Opts), ctx.depth);
                      ix += ctx.depth;
                      std::memcpy(&b[ix], "}", 1);
                      ++ix;
@@ -2049,7 +2049,7 @@ namespace glz
                      }
                      std::memcpy(&b[ix], "\n", 1);
                      ++ix;
-                     std::memset(&b[ix], check_indentation_char(Opts), ctx.depth);
+                     fill_bytes(&b[ix], check_indentation_char(Opts), ctx.depth);
                      ix += ctx.depth;
                      std::memcpy(&b[ix], "}", 1);
                      ++ix;
@@ -2159,7 +2159,7 @@ namespace glz
                      }
                      std::memcpy(&b[ix], "\n", 1);
                      ++ix;
-                     std::memset(&b[ix], check_indentation_char(Opts), ctx.depth);
+                     fill_bytes(&b[ix], check_indentation_char(Opts), ctx.depth);
                      ix += ctx.depth;
                      std::memcpy(&b[ix], "}", 1);
                      ++ix;
@@ -2509,7 +2509,7 @@ namespace glz
                   }
                   std::memcpy(&b[ix], "{\n", 2);
                   ix += 2;
-                  std::memset(&b[ix], check_indentation_char(Opts), ctx.depth);
+                  fill_bytes(&b[ix], check_indentation_char(Opts), ctx.depth);
                   ix += ctx.depth;
                }
                else {
@@ -2628,7 +2628,7 @@ namespace glz
                         if constexpr (Opts.prettify) {
                            std::memcpy(&b[ix], ",\n", 2);
                            ix += 2;
-                           std::memset(&b[ix], check_indentation_char(Opts), ctx.depth);
+                           fill_bytes(&b[ix], check_indentation_char(Opts), ctx.depth);
                            ix += ctx.depth;
                         }
                         else {
@@ -2688,7 +2688,7 @@ namespace glz
                   if constexpr (I != 0 && Opts.prettify) {
                      std::memcpy(&b[ix], ",\n", 2);
                      ix += 2;
-                     std::memset(&b[ix], check_indentation_char(Opts), ctx.depth);
+                     fill_bytes(&b[ix], check_indentation_char(Opts), ctx.depth);
                      ix += ctx.depth;
                   }
 
@@ -2747,7 +2747,7 @@ namespace glz
                   }
                   std::memcpy(&b[ix], "\n", 1);
                   ++ix;
-                  std::memset(&b[ix], check_indentation_char(Opts), ctx.depth);
+                  fill_bytes(&b[ix], check_indentation_char(Opts), ctx.depth);
                   ix += ctx.depth;
                   std::memcpy(&b[ix], "}", 1);
                   ++ix;
@@ -2866,7 +2866,7 @@ namespace glz
 
       if constexpr (traits::is_resizable) {
          if (buffer.size() < 2 * write_padding_bytes) {
-            buffer.resize(2 * write_padding_bytes);
+            resize_unfilled(buffer, 2 * write_padding_bytes);
          }
       }
       context ctx{};
@@ -2874,6 +2874,13 @@ namespace glz
       to_runtime_partial<std::remove_cvref_t<T>>::template op<set_json<Opts>()>(keys, std::forward<T>(value), ctx,
                                                                                 buffer, ix);
       if (bool(ctx.error)) [[unlikely]] {
+         // Truncate on the way out too: the padding above is grown without being filled, so a
+         // buffer left at its padded length would hand the caller indeterminate bytes. Not
+         // `finalize`, which for a streaming buffer means flushing -- a failed write must not
+         // push the partial document downstream on its way out.
+         if constexpr (traits::is_resizable && not traits::is_output_streaming) {
+            buffer.resize(ix);
+         }
          return {ix, ctx.error, ctx.custom_error_message};
       }
 
@@ -2920,7 +2927,7 @@ namespace glz
 
       if constexpr (traits::is_resizable) {
          if (buffer.size() < 2 * write_padding_bytes) {
-            buffer.resize(2 * write_padding_bytes);
+            resize_unfilled(buffer, 2 * write_padding_bytes);
          }
       }
       context ctx{};
@@ -2928,6 +2935,13 @@ namespace glz
       to_runtime_exclude<std::remove_cvref_t<T>>::template op<set_json<Opts>()>(exclude_keys, std::forward<T>(value),
                                                                                 ctx, buffer, ix);
       if (bool(ctx.error)) [[unlikely]] {
+         // Truncate on the way out too: the padding above is grown without being filled, so a
+         // buffer left at its padded length would hand the caller indeterminate bytes. Not
+         // `finalize`, which for a streaming buffer means flushing -- a failed write must not
+         // push the partial document downstream on its way out.
+         if constexpr (traits::is_resizable && not traits::is_output_streaming) {
+            buffer.resize(ix);
+         }
          return {ix, ctx.error, ctx.custom_error_message};
       }
 

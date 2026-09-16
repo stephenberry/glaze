@@ -70,13 +70,21 @@ namespace glz::detail
       }
    };
 
-   template <auto Opts>
-      requires(check_is_padded(Opts))
+   // Returns the quoted span starting at `it`, or an empty view when the buffer runs out first.
+   //
+   // Chunked while eight bytes remain, then a byte at a time. The chunk reads past the character it
+   // is looking at, so it has to stop short of the end of the buffer; the tail covers whatever is
+   // left. A padded caller would find the tail unreachable, which is not worth a second copy of
+   // this for minify and prettify.
    sv read_json_string(auto&& it, auto end) noexcept
    {
       auto start = it;
       ++it; // skip quote
-      while (it < end) [[likely]] {
+      // The bound as a pointer, so each chunk costs one compare. Where eight bytes are not left,
+      // the fallback is the opening quote, which sits before `it` and fails the test on the first
+      // look; never `it` itself, which would pass and read a chunk past `end`.
+      const auto* const chunk_limit = (end - it >= 8) ? end - 8 : it - 1;
+      while (it <= chunk_limit) {
          uint64_t chunk;
          std::memcpy(&chunk, it, 8);
          if constexpr (std::endian::native == std::endian::big) {
@@ -101,41 +109,6 @@ namespace glz::detail
          }
       }
 
-      return {};
-   }
-
-   template <auto Opts>
-      requires(!check_is_padded(Opts))
-   sv read_json_string(auto&& it, auto end) noexcept
-   {
-      auto start = it;
-      ++it; // skip quote
-      for (const auto end_m7 = end - 7; it < end_m7;) {
-         uint64_t chunk;
-         std::memcpy(&chunk, it, 8);
-         if constexpr (std::endian::native == std::endian::big) {
-            chunk = std::byteswap(chunk);
-         }
-         const uint64_t quote = has_quote(chunk);
-         if (quote) {
-            it += (countr_zero(quote) >> 3);
-
-            auto* prev = it - 1;
-            while (*prev == '\\') {
-               --prev;
-            }
-            if (size_t(it - prev) % 2) {
-               ++it; // add quote
-               return {start, size_t(it - start)};
-            }
-            ++it; // skip escaped quote and continue
-         }
-         else {
-            it += 8;
-         }
-      }
-
-      // Tail end of buffer. Should be rare we even get here
       while (it < end) {
          if (*it == '"') {
             auto* prev = it - 1;

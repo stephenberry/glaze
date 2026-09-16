@@ -3,11 +3,15 @@
 
 #pragma once
 
+#include <bit>
+#include <cstring>
+
 #include "glaze/beve/header.hpp"
 #include "glaze/core/common.hpp"
 #include "glaze/core/opts.hpp"
 #include "glaze/core/wrappers.hpp"
 #include "glaze/reflection/get_name.hpp"
+#include "glaze/util/bit.hpp"
 #include "glaze/util/primes_64.hpp"
 
 #if GLZ_REFLECTION26
@@ -2426,12 +2430,24 @@ namespace glz
       }
    }();
 
-   template <size_t min_length>
+   // Finds the closing quote of an object key, or nullptr when there is none where one could be.
+   //
+   // Bounded by the longest reflected key rather than by `end`: a key longer than that matches
+   // nothing, so "not found" is already the right answer for the callers and there is no reason to
+   // run off down the rest of the document looking for a quote. That bound is what makes an inline
+   // scan the better choice over std::memchr, whose call overhead alone outweighs walking the two
+   // or three words a key spans.
+   template <size_t min_length, size_t max_length>
    GLZ_ALWAYS_INLINE constexpr const void* quote_memchr(auto&& it, auto end) noexcept
    {
+      // A key shorter than min_length matches nothing either, so starting the scan there is safe:
+      // it can only fail to find the quote, which is the answer such a key deserves.
+      const size_t available = size_t(end - it);
+      const size_t limit = available < max_length + 1 ? available : max_length + 1;
+      size_t i = min_length < limit ? min_length : limit;
+
       if consteval {
-         const auto count = size_t(end - it);
-         for (std::size_t i = 0; i < count; ++i) {
+         for (; i < limit; ++i) {
             if (it[i] == '"') {
                return it + i;
             }
@@ -2439,19 +2455,23 @@ namespace glz
          return nullptr;
       }
       else {
-         if constexpr (min_length >= 4) {
-            // Skipping makes the bifurcation worth it
-            const auto* start = it + min_length;
-            if (start >= end) [[unlikely]] {
-               return nullptr;
+         for (; limit - i >= 8; i += 8) {
+            uint64_t chunk;
+            std::memcpy(&chunk, it + i, 8);
+            if constexpr (std::endian::native == std::endian::big) {
+               chunk = std::byteswap(chunk);
             }
-            else [[likely]] {
-               return std::memchr(start, '"', size_t(end - start));
+            const uint64_t test = has_quote(chunk);
+            if (test) {
+               return it + i + (size_t(countr_zero(test)) >> 3);
             }
          }
-         else {
-            return std::memchr(it, '"', size_t(end - it));
+         for (; i < limit; ++i) {
+            if (it[i] == '"') {
+               return it + i;
+            }
          }
+         return nullptr;
       }
    }
 
@@ -2502,7 +2522,7 @@ namespace glz
       GLZ_ALWAYS_INLINE static constexpr size_t op(auto&& it, auto end) noexcept
       {
          if constexpr (HashInfo.sized_hash) {
-            const auto* c = quote_memchr<HashInfo.min_length>(it, end);
+            const auto* c = quote_memchr<HashInfo.min_length, HashInfo.max_length>(it, end);
             if (c) [[likely]] {
                const auto n = size_t(static_cast<std::decay_t<decltype(it)>>(c) - it);
                if (n == 0 || n > HashInfo.max_length || HashInfo.unique_index >= size_t(end - it)) [[unlikely]] {
@@ -2637,7 +2657,7 @@ namespace glz
 
       GLZ_ALWAYS_INLINE static constexpr size_t op(auto&& it, auto end) noexcept
       {
-         const auto* c = quote_memchr<HashInfo.min_length>(it, end);
+         const auto* c = quote_memchr<HashInfo.min_length, HashInfo.max_length>(it, end);
          if (c) [[likely]] {
             const auto n = uint8_t(static_cast<std::decay_t<decltype(it)>>(c) - it);
             const auto pos = per_length_info<T>.unique_index[n];
@@ -2689,7 +2709,7 @@ namespace glz
                return HashInfo.table[h % bsize];
             }
             else {
-               const auto* c = quote_memchr<HashInfo.min_length>(it, end);
+               const auto* c = quote_memchr<HashInfo.min_length, HashInfo.max_length>(it, end);
                if (c) [[likely]] {
                   const auto n = uint8_t(static_cast<std::decay_t<decltype(it)>>(c) - it);
                   const auto h = full_hash<HashInfo.min_length, HashInfo.max_length, HashInfo.seed>(it, n);

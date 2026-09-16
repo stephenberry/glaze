@@ -821,14 +821,12 @@ namespace glz
       static constexpr auto tokens = jmespath::tokenize_as_array<S>();
       static constexpr auto N = tokens.size();
 
-      constexpr bool use_padded = resizable<Buffer> && non_const_buffer<Buffer> && !check_disable_padding(Options);
+      // The readers bound their own fixed width loads against `end`, so there is nothing here for
+      // a padded buffer to protect and the caller's buffer is left alone. It also puts `end` back
+      // where it belongs: the padding used to be counted as part of the document, because the
+      // iterators were taken after the buffer had already grown.
+      static constexpr auto Opts = is_padded_off<Options>();
 
-      static constexpr auto Opts = use_padded ? is_padded_on<Options>() : is_padded_off<Options>();
-
-      if constexpr (use_padded) {
-         // Pad the buffer for SWAR
-         buffer.resize(buffer.size() + padding_bytes);
-      }
       auto p = read_iterators<Opts>(buffer);
       auto it = p.first;
       auto end = p.second;
@@ -959,11 +957,6 @@ namespace glz
          });
       }
 
-      if constexpr (use_padded) {
-         // Restore the original buffer state
-         buffer.resize(buffer.size() - padding_bytes);
-      }
-
       return {size_t(it - start), ctx.error, ctx.custom_error_message};
    }
 
@@ -1003,13 +996,12 @@ namespace glz
       const auto& tokens = expression.tokens;
       const auto N = tokens.size();
 
-      constexpr bool use_padded = resizable<Buffer> && non_const_buffer<Buffer> && !check_disable_padding(Options);
-      static constexpr auto Opts = use_padded ? is_padded_on<Options>() : is_padded_off<Options>();
+      // The readers bound their own fixed width loads against `end`, so there is nothing here for
+      // a padded buffer to protect and the caller's buffer is left alone. It also puts `end` back
+      // where it belongs: the padding used to be counted as part of the document, because the
+      // iterators were taken after the buffer had already grown.
+      static constexpr auto Opts = is_padded_off<Options>();
 
-      if constexpr (use_padded) {
-         // Pad the buffer for SWAR
-         buffer.resize(buffer.size() + padding_bytes);
-      }
       auto p = read_iterators<Opts>(buffer);
       auto it = p.first;
       auto end = p.second;
@@ -1150,11 +1142,6 @@ namespace glz
                }
             }();
          }
-      }
-
-      if constexpr (use_padded) {
-         // Restore the original buffer state
-         buffer.resize(buffer.size() - padding_bytes);
       }
 
       return {size_t(it - start), ctx.error, ctx.custom_error_message};

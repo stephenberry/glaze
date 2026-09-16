@@ -14,6 +14,27 @@
 
 namespace glz
 {
+   // Grows `b` to `n` bytes, leaving the new bytes indeterminate when the buffer type can do that.
+   //
+   // For callers that write every byte they go on to keep and then truncate to that length, so the
+   // zero fill `resize` performs is never read: serialization into an output buffer, and the string
+   // reader, which sizes its target to the raw span plus padding and then fills it. Neither is a
+   // one time cost -- a finished write shrinks the buffer back to the document's length, so the
+   // next write into the same buffer re-expands it past the write padding and fills it again, and
+   // on short documents that fill is most of the call.
+   //
+   // Buffers without resize_and_overwrite (std::vector<char> and friends) keep the filling resize.
+   template <class B>
+   GLZ_ALWAYS_INLINE void resize_unfilled(B& b, const size_t n)
+   {
+      if constexpr (requires { b.resize_and_overwrite(n, [](auto*, size_t written) { return written; }); }) {
+         b.resize_and_overwrite(n, [](auto*, size_t written) noexcept { return written; });
+      }
+      else {
+         b.resize(n);
+      }
+   }
+
    // Primary template for buffer traits
    // Handles resizable buffers (std::string, std::vector<char>, etc.)
    template <class Buffer>
@@ -61,7 +82,7 @@ namespace glz
       GLZ_ALWAYS_INLINE static void grow(Buffer& b, size_t required)
          requires(is_resizable)
       {
-         b.resize(2 * required);
+         resize_unfilled(b, 2 * required);
       }
 
       // Finalize buffer to actual written size
@@ -92,7 +113,7 @@ namespace glz
       }
       else {
          // A user specialization written before `grow` existed: keep the growth it used to get.
-         b.resize(2 * required);
+         resize_unfilled(b, 2 * required);
       }
    }
 
