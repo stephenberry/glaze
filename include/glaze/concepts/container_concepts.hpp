@@ -73,6 +73,21 @@ namespace glz
    template <class Buffer>
    concept non_const_buffer = !std::is_const_v<Buffer>;
 
+   // Keeps a '\0' at data()[size()] of its own accord, which is what the readers' `null_terminated`
+   // option asserts about an input buffer.
+   //
+   // c_str() is the promise: std::basic_string is specified to store the terminator and hand it out
+   // this way, and a container that does not store one has nothing to return. `string_t` does not
+   // answer this -- std::vector<char> and the QByteArray shaped buffers glaze accepts satisfy it
+   // and terminate nothing. That distinction used to be invisible, because the reader grew every
+   // resizable buffer by its SWAR padding and so supplied a terminator to buffers that had none.
+   // Now that the buffer is left alone, a buffer that cannot promise a sentinel is read with
+   // bounds instead of one.
+   template <class T>
+   concept self_terminating = requires(const T& t) {
+      { t.c_str() } -> std::convertible_to<const char*>;
+   };
+
    template <class T>
    concept byte_like =
       std::same_as<std::remove_cvref_t<T>, std::byte> || std::same_as<std::remove_cvref_t<T>, unsigned char> ||

@@ -35,7 +35,8 @@ The flags are cumulative rather than exclusive. When AVX2 is available, `GLZ_USE
 ```c++
 std::string report;
 std::ignore = glz::write_json(glz::simd_info, report);
-// {"detected":"AVX512BW","utf8_validation":"AVX512BW","string_escape":"AVX2","float_write":"SSE4.1"}
+// {"detected":"AVX512BW","utf8_validation":"AVX512BW","string_escape":"AVX2",
+//  "float_write":"SSE4.1","structural_skip":"AVX512BW"}
 ```
 
 Each field is a `std::string_view`, so they compare by value and work in `constexpr` contexts.
@@ -46,6 +47,7 @@ Each field is a `std::string_view`, so they compare by value and work in `conste
 | `utf8_validation` | UTF-8 validator | `AVX512BW`, `AVX2`, `SSSE3`, `NEON64`, `WASM_SIMD128`, `scalar` |
 | `string_escape` | Widest JSON string-escape helper | `AVX2`, `SSE2`, `NEON`, `SWAR` |
 | `float_write` | Float serialization, via the zmij writer | `NEON`, `SSE4.1`, `SSE2`, `scalar` |
+| `structural_skip` | Skipping over unmodelled values | `AVX512BW`, `AVX2`, `SSE2`, `NEON64`, `WASM_SIMD128`, `SWAR` |
 
 `SWAR` means SIMD-within-a-register: eight bytes at a time packed into a `uint64_t`, needing no intrinsics. It is Glaze's fallback everywhere, so `scalar` in the other fields does not mean the work is done a byte at a time.
 
@@ -58,6 +60,7 @@ Each field is a `std::string_view`, so they compare by value and work in `conste
 > - **String escaping** has no AVX-512 helper and no WASM helper, so an AVX-512 build escapes with AVX2 and a WASM build escapes with SWAR.
 > - **UTF-8 validation** needs a byte-granular shuffle, which plain SSE2 and 32-bit NEON lack. Those targets validate with the scalar validator while the rest of Glaze stays vectorized.
 > - **Float writing** runs its own detection off `__SSE2__` / `__ARM_NEON` rather than Glaze's `GLZ_USE_*` macros, honouring only `GLZ_DISABLE_SIMD`. `detected` does not even bound it from above: a 32-bit x86 build with SSE2 reports `detected == "scalar"` and `float_write == "SSE2"`.
+> - **Skipping** asks less of a target than the others: a byte compare and a way to gather one bit per byte. Every backend has both except 32-bit NEON, which lacks the pairwise gather, so it skips with SWAR while still escaping strings with NEON.
 >
 > This list is illustrative, not exhaustive — check the field you care about rather than inferring it from `detected`.
 
@@ -210,7 +213,36 @@ for (auto& msg : messages) {
 
 ## Buffers
 
-It is recommended to use a non-const `std::string` as your input and output buffer. When reading, Glaze will automatically pad the `std::string` for more efficient SIMD/SWAR and resize back to the original once parsing is finished.
+It is recommended to use a `std::string` as your input and output buffer, because it carries the null terminator the default `null_terminated` option expects.
+
+Glaze reads the buffer you give it and does not modify it, so a `const std::string&` or a `std::string_view` over one is just as fast. A buffer that keeps no terminator of its own -- a `std::vector<char>`, or a container shaped like `QByteArray` -- is read with bounds instead, which costs the last few bytes of the buffer their chunked path and nothing else.
+
+> [!NOTE]
+>
+> Glaze used to grow a non-const `std::string` by a few bytes while reading it and shrink it back afterwards, so that its fixed width loads could run past the end of the document into bytes it had just made readable. It no longer does: every one of those loads bounds itself against the end of the buffer, and the caller's buffer is left alone. If you were relying on that growth, see `is_padded` below.
+
+### `is_padded`
+
+`is_padded` is an opt-in promise **you** make about a buffer you already own: that `glz::padding_bytes` (16) bytes past `end` are readable memory. It buys back the unbounded loads, which is worth a little on the last chunk of each buffer and nothing anywhere else.
+
+```c++
+std::string buffer = get_json();
+const size_t size = buffer.size();
+buffer.resize(size + glz::padding_bytes);      // the slack you are promising
+buffer.resize(size);                            // capacity stays; size is the document
+
+// A view of the document, with readable bytes past its end.
+constexpr auto opts = glz::is_padded_on<glz::opts{}>();
+auto ec = glz::read<opts>(value, std::string_view{buffer.data(), size});
+```
+
+> [!WARNING]
+>
+> This is a promise the reader takes at its word: it does not and cannot check it. A buffer without that slack will be read out of bounds, which is undefined behavior -- a crash, or silently wrong values, depending on what happens to sit after it.
+>
+> Address Sanitizer catches the over-read, but only when the allocation ends where the document does. A `std::string` usually has spare capacity past `size()` that absorbs the read, so a broken promise can look fine in testing; check one with an exactly sized allocation.
+>
+> Leaving `is_padded` off is always correct, so do not reach for it unless you have measured that you need it and you control how the buffer was allocated. It says nothing about null termination, which is a separate promise made by `null_terminated`.
 
 ## Compile Time Options
 

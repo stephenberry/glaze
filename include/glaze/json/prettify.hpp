@@ -25,7 +25,7 @@ namespace glz
          while (it < end) {
             switch (json_types[uint8_t(*it)]) {
             case String: {
-               const auto value = read_json_string<Opts>(it, end);
+               const auto value = read_json_string(it, end);
                dump_maybe_empty(value, b, ix);
                break;
             }
@@ -199,7 +199,7 @@ namespace glz
             return;
          }
 
-         if constexpr (string_t<In>) {
+         if constexpr (self_terminating<In>) {
             prettify_json<opt_true<Opts, &opts::null_terminated>>(ctx, it, end, out, ix);
          }
          else {

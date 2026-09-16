@@ -1928,6 +1928,13 @@ namespace glz
       to<BEVE, std::remove_cvref_t<T>>::template op<set_beve<Opts>()>(std::forward<T>(value), ctx, buffer, ix);
 
       if (bool(ctx.error)) [[unlikely]] {
+         // Truncate to what was written, as the other write entry points do: the buffer grows
+         // unfilled from here on, so leaving it at its grown length hands the caller indeterminate
+         // bytes past `count`. Not `finalize`, which for a streaming buffer means flushing -- a
+         // failed write must not push the partial document downstream on its way out.
+         if constexpr (traits::is_resizable && not traits::is_output_streaming) {
+            buffer.resize(ix);
+         }
          return {ix - start_ix, ctx.error, ctx.custom_error_message};
       }
 
@@ -1959,7 +1966,7 @@ namespace glz
 
       if constexpr (traits::is_resizable) {
          if (buffer.size() < 2 * write_padding_bytes) {
-            buffer.resize(2 * write_padding_bytes);
+            resize_unfilled(buffer, 2 * write_padding_bytes);
          }
       }
 

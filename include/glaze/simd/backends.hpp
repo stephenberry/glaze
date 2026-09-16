@@ -6,6 +6,7 @@
 #include <string_view>
 
 #include "glaze/simd/simd.hpp"
+#include "glaze/simd/structural.hpp"
 #include "glaze/simd/utf8_validation.hpp"
 #include "glaze/util/zmij.hpp"
 
@@ -19,8 +20,8 @@ namespace glz
    // files with different -march flags gives each of them its own values; see simd_info below for
    // what that means when they are linked together.
    //
-   // Four fields rather than one name because they genuinely disagree; docs/optimizing-performance.md
-   // has the cases and why they arise.
+   // Separate fields rather than one name because they genuinely disagree;
+   // docs/optimizing-performance.md has the cases and why they arise.
    struct simd_backends
    {
       // Widest instruction set the detection in simd.hpp enabled. One of "AVX512BW", "AVX2",
@@ -51,6 +52,11 @@ namespace glz
       // Names zmij's path only. Setting opts::float_format routes floats through std::format
       // instead (core/write_chars.hpp), which this field does not describe.
       std::string_view float_write{};
+
+      // Skipping over a value the program does not model, through the punctuation bitmasks in
+      // simd/structural.hpp. Needs a byte compare and a way to gather one bit per byte, which every
+      // backend above has except 32 bit NEON; targets without one skip with SWAR and report "SWAR".
+      std::string_view structural_skip{};
    };
 
    namespace detail
@@ -101,6 +107,17 @@ namespace glz
 #endif
       }
 
+      // Mirrors the backend selection in simd/structural.hpp, which builds the punctuation bitmasks
+      // that the skip in util/parse.hpp settles whole 64 byte windows with.
+      consteval std::string_view structural_skip_simd() noexcept
+      {
+#if defined(GLZ_STRUCTURAL_SIMD)
+         return structural::backend;
+#else
+         return "SWAR";
+#endif
+      }
+
       // Mirrors zmij's own ZMIJ_USE_* selection. These are defined to 0 or 1 rather than
       // defined/undefined, so they are tested by value.
       consteval std::string_view float_write_simd() noexcept
@@ -121,8 +138,8 @@ namespace glz
    //
    //    std::string s;
    //    std::ignore = glz::write_json(glz::simd_info, s);
-   //    // {"detected":"AVX512BW","utf8_validation":"AVX512BW",
-   //    //  "string_escape":"AVX2","float_write":"SSE4.1"}
+   //    // {"detected":"AVX512BW","utf8_validation":"AVX512BW","string_escape":"AVX2",
+   //    //  "float_write":"SSE4.1","structural_skip":"AVX512BW"}
    //
    // Deliberately not `inline`. The values come from the preprocessor, so every translation unit
    // must keep its own answer, which internal linkage gives it. Under `inline` the copies merge
@@ -136,5 +153,6 @@ namespace glz
       .utf8_validation = detail::utf8_simd::backend,
       .string_escape = detail::string_escape_simd(),
       .float_write = detail::float_write_simd(),
+      .structural_skip = detail::structural_skip_simd(),
    };
 }

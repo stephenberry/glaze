@@ -821,14 +821,13 @@ namespace glz
       static constexpr auto tokens = jmespath::tokenize_as_array<S>();
       static constexpr auto N = tokens.size();
 
-      constexpr bool use_padded = resizable<Buffer> && non_const_buffer<Buffer> && !check_disable_padding(Options);
+      // The readers bound their own fixed width loads against `end`, so there is nothing here for
+      // a padded buffer to protect and the caller's buffer is left alone. It also puts `end` back
+      // where it belongs: the padding used to be counted as part of the document, because the
+      // iterators were taken after the buffer had already grown. What that padding also supplied,
+      // and what this has to keep supplying, is the terminator `null_terminated` asserts.
+      static constexpr auto Opts = parse_opts_for<Options, Buffer>();
 
-      static constexpr auto Opts = use_padded ? is_padded_on<Options>() : is_padded_off<Options>();
-
-      if constexpr (use_padded) {
-         // Pad the buffer for SWAR
-         buffer.resize(buffer.size() + padding_bytes);
-      }
       auto p = read_iterators<Opts>(buffer);
       auto it = p.first;
       auto end = p.second;
@@ -955,13 +954,26 @@ namespace glz
                      ++it;
                   }
                }
+
+               // The loop above can also end by running out of buffer, which is not a decision --
+               // it is the document being cut short of the key. Saying so here is what stops the
+               // next token starting its own scan from `end`; the runtime overload below has
+               // always had this and the compile-time one did not, because the padding used to
+               // keep `end` far enough away for the loop to fail on a '\0' instead.
+               if (not bool(ctx.error)) [[unlikely]] {
+                  ctx.error = (it == end) ? error_code::unexpected_end : error_code::key_not_found;
+               }
             }
          });
       }
 
-      if constexpr (use_padded) {
-         // Restore the original buffer state
-         buffer.resize(buffer.size() - padding_bytes);
+      // end_reached is the bounded readers' way of saying "the buffer ran out here", and it is
+      // internal: glz::read settles it against the nesting depth before returning. This walks the
+      // document by matching braces rather than by entering depth, so there is no depth to settle
+      // against -- but there is nothing to settle either. Reaching the end of the buffer with a
+      // path still to navigate, or a value still to finish, is a truncated document every time.
+      if (ctx.error == error_code::end_reached) [[unlikely]] {
+         ctx.error = error_code::unexpected_end;
       }
 
       return {size_t(it - start), ctx.error, ctx.custom_error_message};
@@ -1003,13 +1015,13 @@ namespace glz
       const auto& tokens = expression.tokens;
       const auto N = tokens.size();
 
-      constexpr bool use_padded = resizable<Buffer> && non_const_buffer<Buffer> && !check_disable_padding(Options);
-      static constexpr auto Opts = use_padded ? is_padded_on<Options>() : is_padded_off<Options>();
+      // The readers bound their own fixed width loads against `end`, so there is nothing here for
+      // a padded buffer to protect and the caller's buffer is left alone. It also puts `end` back
+      // where it belongs: the padding used to be counted as part of the document, because the
+      // iterators were taken after the buffer had already grown. What that padding also supplied,
+      // and what this has to keep supplying, is the terminator `null_terminated` asserts.
+      static constexpr auto Opts = parse_opts_for<Options, Buffer>();
 
-      if constexpr (use_padded) {
-         // Pad the buffer for SWAR
-         buffer.resize(buffer.size() + padding_bytes);
-      }
       auto p = read_iterators<Opts>(buffer);
       auto it = p.first;
       auto end = p.second;
@@ -1152,9 +1164,13 @@ namespace glz
          }
       }
 
-      if constexpr (use_padded) {
-         // Restore the original buffer state
-         buffer.resize(buffer.size() - padding_bytes);
+      // end_reached is the bounded readers' way of saying "the buffer ran out here", and it is
+      // internal: glz::read settles it against the nesting depth before returning. This walks the
+      // document by matching braces rather than by entering depth, so there is no depth to settle
+      // against -- but there is nothing to settle either. Reaching the end of the buffer with a
+      // path still to navigate, or a value still to finish, is a truncated document every time.
+      if (ctx.error == error_code::end_reached) [[unlikely]] {
+         ctx.error = error_code::unexpected_end;
       }
 
       return {size_t(it - start), ctx.error, ctx.custom_error_message};

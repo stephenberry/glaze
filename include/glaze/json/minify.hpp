@@ -22,7 +22,7 @@ namespace glz
 
          auto skip_expected_whitespace = [&] {
             auto new_ws_start = it;
-            if (ws_size && ws_size < size_t(end - it)) [[likely]] {
+            if (ws_size && std::ptrdiff_t(ws_size) < end - it) [[likely]] {
                skip_matching_ws(ws_start, it, ws_size);
             }
 
@@ -65,7 +65,7 @@ namespace glz
          }()) {
             switch (json_types[uint8_t(*it)]) {
             case String: {
-               const auto value = read_json_string<Opts>(it, end);
+               const auto value = read_json_string(it, end);
                dump_maybe_empty<false>(value, b, ix);
                skip_whitespace();
                break;
@@ -101,6 +101,14 @@ namespace glz
                break;
             }
             case Null: {
+               // The type table matched on the first byte alone, so the rest of the literal still
+               // has to be in the buffer. Stepping over it regardless puts `it` past `end`, and
+               // from there the loop goes on minifying whatever follows the document into an
+               // output sized for the document.
+               if (end - it < 4) [[unlikely]] {
+                  ctx.error = error_code::unexpected_end;
+                  return;
+               }
                dump<false>("null", b, ix);
                it += 4;
                skip_whitespace();
@@ -108,12 +116,20 @@ namespace glz
             }
             case Bool: {
                if (*it == 't') {
+                  if (end - it < 4) [[unlikely]] {
+                     ctx.error = error_code::unexpected_end;
+                     return;
+                  }
                   dump<false>("true", b, ix);
                   it += 4;
                   skip_whitespace();
                   break;
                }
                else {
+                  if (end - it < 5) [[unlikely]] {
+                     ctx.error = error_code::unexpected_end;
+                     return;
+                  }
                   dump<false>("false", b, ix);
                   it += 5;
                   skip_whitespace();
@@ -160,29 +176,29 @@ namespace glz
          if (in.size() == 0) {
             return;
          }
-         in.resize(in.size() + padding_bytes);
 
          if constexpr (resizable<Out>) {
-            out.resize(in.size() + padding_bytes);
+            out.resize(in.size() + 2 * padding_bytes);
          }
          size_t ix = 0;
-         auto [it, end] = read_iterators<Opts, true>(in);
+         auto [it, end] = read_iterators<Opts>(in);
          if (bool(ctx.error)) [[unlikely]] {
             return;
          }
 
-         static constexpr auto O = is_padded_on<Opts>();
-         if constexpr (string_t<In>) {
-            minify_json<opt_true<O, &opts::null_terminated>>(ctx, it, end, out, ix);
+         // The input is no longer grown and shrunk around this: everything the scan below reads
+         // through -- read_json_string, read_json_number, skip_matching_ws -- bounds its own loads
+         // against `end`, so there is nothing left for the padding to protect.
+         if constexpr (self_terminating<In>) {
+            minify_json<opt_true<Opts, &opts::null_terminated>>(ctx, it, end, out, ix);
          }
          else {
-            minify_json<opt_false<O, &opts::null_terminated>>(ctx, it, end, out, ix);
+            minify_json<opt_false<Opts, &opts::null_terminated>>(ctx, it, end, out, ix);
          }
 
          if constexpr (resizable<Out>) {
             out.resize(ix);
          }
-         in.resize(in.size() - padding_bytes);
       }
    }
 

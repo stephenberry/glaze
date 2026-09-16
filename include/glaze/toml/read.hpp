@@ -61,7 +61,7 @@ namespace glz
       char utf8[4]{};
       char* dst = utf8;
 
-      if (!handle_unicode_code_point(cursor, dst, hex_end)) {
+      if (handle_unicode_code_point(cursor, dst, hex_end).written == 0) {
          return false;
       }
 
