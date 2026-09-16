@@ -881,9 +881,15 @@ namespace glz
       http_connection_pool(asio::any_io_executor executor) : io_executor(executor)
       {
 #ifdef GLZ_ENABLE_SSL
-         // Use tls_client to allow negotiation of TLS 1.2/1.3 (highest mutually supported version)
-         // This automatically disables insecure protocols (SSLv3, TLS 1.0, TLS 1.1)
+         // Use tls_client so the handshake negotiates the highest mutually supported version
+         // (TLS 1.2 or TLS 1.3). asio sets the floor for tls_client to TLS 1.0, so the
+         // protocols deprecated by RFC 8996 are disabled explicitly here rather than assumed;
+         // on a default build OpenSSL's security level also rejects them, but that backstop
+         // disappears the moment a caller lowers the level through configure_ssl_context.
          ssl_context = std::make_shared<asio::ssl::context>(asio::ssl::context::tls_client);
+         ssl_context->set_options(asio::ssl::context::default_workarounds | asio::ssl::context::no_sslv2 |
+                                  asio::ssl::context::no_sslv3 | asio::ssl::context::no_tlsv1 |
+                                  asio::ssl::context::no_tlsv1_1);
          detail::seed_platform_trust_anchors(*ssl_context);
          ssl_context->set_verify_mode(asio::ssl::verify_peer);
 #endif

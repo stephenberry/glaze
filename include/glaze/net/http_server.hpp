@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <array>
 #include <atomic>
+#include <cassert>
 #include <cctype>
 #include <charconv>
 #include <chrono>
@@ -2237,6 +2238,10 @@ namespace glz
       {
          if constexpr (EnableTLS) {
 #ifdef GLZ_ENABLE_SSL
+            assert(!running &&
+                   "configure_ssl_context() must be called before start(); the server holds no lock "
+                   "around the SSL context, so modifying it while the acceptor is running races with "
+                   "the handshakes in flight");
             func(*ssl_context);
 #endif
          }
@@ -2252,6 +2257,10 @@ namespace glz
          static_assert(EnableTLS,
                        "ssl_context_unsafe() requires a TLS-enabled server (glz::https_server, or "
                        "glz::http_server<true>); http_server<false> holds no SSL context");
+         assert(!running &&
+                "ssl_context_unsafe() must be called before start(); the server holds no lock around "
+                "the SSL context, so modifying it while the acceptor is running races with the "
+                "handshakes in flight");
          return *ssl_context;
       }
 #endif
