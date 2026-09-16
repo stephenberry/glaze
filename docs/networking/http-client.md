@@ -17,7 +17,7 @@ int main() {
     if (response) {
         std::cout << "Status: " << response->status_code << std::endl;
         std::cout << "Body: " << response->response_body << std::endl;
-        
+
         // Access response headers
         for (const auto& [name, value] : response->response_headers) {
             std::cout << name << ": " << value << std::endl;
@@ -148,7 +148,7 @@ std::expected<response, std::error_code> get(
 ### POST Request
 ```cpp
 std::expected<response, std::error_code> post(
-    std::string_view url, 
+    std::string_view url,
     std::string_view body,
     const glz::http_headers& headers = {}
 );
@@ -158,7 +158,7 @@ std::expected<response, std::error_code> post(
 
 ```cpp
 std::expected<response, std::error_code> put(
-    std::string_view url, 
+    std::string_view url,
     const std::string& body,
     const glz::http_headers& headers = {}
 );
@@ -168,7 +168,7 @@ std::expected<response, std::error_code> put(
 
 ```cpp
 std::expected<response, std::error_code> patch(
-    std::string_view url, 
+    std::string_view url,
     const std::string& body,
     const glz::http_headers& headers = {}
 );
@@ -178,7 +178,7 @@ std::expected<response, std::error_code> patch(
 ```cpp
 template<class T>
 std::expected<response, std::error_code> post_json(
-    std::string_view url, 
+    std::string_view url,
     const T& data,
     const glz::http_headers& headers = {}
 );
@@ -188,7 +188,7 @@ std::expected<response, std::error_code> post_json(
 ```cpp
 template<class T>
 std::expected<response, std::error_code> put_json(
-    std::string_view url, 
+    std::string_view url,
     const T& data,
     const glz::http_headers& headers = {}
 );
@@ -199,7 +199,7 @@ std::expected<response, std::error_code> put_json(
 ```cpp
 template<class T>
 std::expected<response, std::error_code> patch_json(
-    std::string_view url, 
+    std::string_view url,
     const T& data,
     const glz::http_headers& headers = {}
 );
@@ -238,7 +238,7 @@ void get_async(
 **Future-based:**
 ```cpp
 std::future<std::expected<response, std::error_code>> post_async(
-    std::string_view url, 
+    std::string_view url,
     std::string_view body,
     const glz::http_headers& headers = {}
 );
@@ -248,7 +248,7 @@ std::future<std::expected<response, std::error_code>> post_async(
 ```cpp
 template<typename CompletionHandler>
 void post_async(
-    std::string_view url, 
+    std::string_view url,
     std::string_view body,
     const glz::http_headers& headers,
     CompletionHandler&& handler
@@ -261,7 +261,7 @@ void post_async(
 ```cpp
 template<class T>
 std::future<std::expected<response, std::error_code>> post_json_async(
-    std::string_view url, 
+    std::string_view url,
     const T& data,
     const glz::http_headers& headers = {}
 );
@@ -271,7 +271,7 @@ std::future<std::expected<response, std::error_code>> post_json_async(
 ```cpp
 template<class T, typename CompletionHandler>
 void post_json_async(
-    std::string_view url, 
+    std::string_view url,
     const T& data,
     const glz::http_headers& headers,
     CompletionHandler&& handler
@@ -396,6 +396,63 @@ auto on_error = [](std::error_code ec) {
     // Fallback for transport errors
     std::cerr << "Stream error: " << ec.message() << "\n";
 };
+```
+
+### Blocking Stream Requests
+
+If you need a stream request to block the current thread and unblock later, you can use an `std::promise`.
+If you need error handling, callbacks can set an additional `std::error_code` as needed.
+e.g. Blocking until the request is complete:
+
+```cpp
+std::fstream file("filename.txt");
+
+// this will make file operations throw, which lets you pass their error codes to the promise
+file.exceptions(std::ios::failbit | std::ios::badbit);
+
+std::promise<void> promise;
+std::error_code error{};
+
+auto on_data = [&file, &error](std::string_view data) {
+    if (error) return;
+    try {
+        file.write(data.data(), data.size());
+    } catch (std::system_error &e) {
+        std::println(stderr, "Failed to write to file: {}", e.what());
+        error = e.code();
+    }
+};
+
+auto on_error = [&error](std::error_code ec) {
+    std::println(stderr, "Failed to download file: {}", ec.message());
+    error = ec;
+};
+
+auto on_disconnect = [&file, &error, &promise]() {
+    try {
+        file.flush();
+    } catch (std::system_error &e) {
+        std::println(stderr, "Failed to commit to file: {}", e.what());
+        error = e.code();
+    }
+
+    // done, thread can continue
+    promise.set_value();
+};
+
+// send off request
+auto conn = client.stream_request_v2({
+    .url = url,
+    .on_data = on_data,
+    .on_error = on_error,
+    .on_disconnect = on_disconnect
+});
+
+// this will wait until the promise has a value
+promise.get_future().get();
+if (error) {
+    // handle errors here
+}
 ```
 
 ## Following Redirects
@@ -560,7 +617,7 @@ int main() {
 
     // Launch multiple async requests
     std::vector<std::future<std::expected<glz::response, std::error_code>>> futures;
-    
+
     futures.push_back(client.get_async("https://api.github.com/users/octocat"));
     futures.push_back(client.get_async("https://api.github.com/users/defunkt"));
     futures.push_back(client.get_async("https://api.github.com/users/pjhyett"));
@@ -601,7 +658,7 @@ int main() {
     // Async JSON POST with callback
     struct Data { int value = 42; };
     Data data;
-    
+
     client.post_json_async("https://httpbin.org/post", data, {},
         [](std::expected<glz::response, std::error_code> result) {
             if (result) {
