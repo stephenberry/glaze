@@ -154,6 +154,8 @@ Selects the serialization format. Built-in formats include:
 #### `null_terminated`
 When `true` (default), Glaze assumes input buffers are null-terminated, enabling certain optimizations. Set to `false` for non-null-terminated buffers with a small performance cost.
 
+`glz::read` derives this for you from the buffer type: a resizable buffer that does not keep a terminator of its own (a `std::vector<char>`, or a container shaped like `QByteArray`) is read with bounds regardless of what you asked for. A non-resizable buffer such as a `std::string_view` is taken at your word, so a view over memory with no terminator needs `null_terminated = false`. See also `is_padded`, a separate promise about readable slack past the end.
+
 #### `comments`
 Enable JSONC-style comment parsing (`//` and `/* */`).
 
@@ -306,6 +308,31 @@ Exits parsing after reading the deepest structural object. Useful for reading he
 
 #### `append_arrays`
 When reading into arrays, appends new elements instead of replacing existing contents.
+
+#### `is_padded`
+Off by default, and off is always correct. Turning it on promises that `glz::padding_bytes` (16) bytes past the end of the input buffer are readable memory, which lets the reader's fixed width loads run past the end of the document instead of bounding themselves against it.
+
+Set it with `glz::is_padded_on<Opts>()`:
+
+```cpp
+std::string buffer = get_json();
+const size_t size = buffer.size();
+buffer.resize(size + glz::padding_bytes);   // the slack being promised
+buffer.resize(size);                         // capacity stays; size is the document
+
+constexpr auto opts = glz::is_padded_on<glz::opts{}>();
+auto ec = glz::read<opts>(value, std::string_view{buffer.data(), size});
+```
+
+> [!WARNING]
+>
+> The reader takes this at its word and cannot check it. A buffer without that slack is read out of bounds, which is undefined behavior: a crash, or silently wrong values, depending on what follows the buffer in memory.
+>
+> Address Sanitizer catches the over-read, but only when the allocation really does end where the document does. A `std::string` usually has spare capacity past `size()`, which absorbs the read and lets a broken promise look fine in testing. To check one, put the document in an exactly sized allocation.
+>
+> `is_padded` says nothing about null termination -- that is `null_terminated`, a separate promise.
+>
+> Earlier versions of Glaze set this flag internally, after growing a resizable input buffer themselves and shrinking it back when the parse finished. Glaze no longer touches your buffer, so the flag now means only what a caller asserts with it.
 
 #### `shrink_to_fit`
 Calls `shrink_to_fit()` on dynamic containers after reading to minimize memory usage.
