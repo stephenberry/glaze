@@ -314,7 +314,11 @@ namespace glz
       static constexpr auto KeyWithEndQuote = join_v<Key, chars<"\"">>;
       static constexpr auto Length = KeyWithEndQuote.size();
 
-      if (((it + Length) < end) && comparitor<KeyWithEndQuote>(it)) [[likely]] {
+      // Compared as a count rather than by forming `it + Length` first: a pointer past one-past-the-end
+      // is undefined even when it is never dereferenced, and a key near the end of a short buffer
+      // reaches this with fewer than `Length` bytes left. Signed, so a cursor that has overshot
+      // `end` does not read as room.
+      if (((end - it) > std::ptrdiff_t(Length)) && comparitor<KeyWithEndQuote>(it)) [[likely]] {
          it += Length;
          if constexpr (not Opts.null_terminated) {
             if (it == end) [[unlikely]] {
@@ -348,7 +352,8 @@ namespace glz
       static constexpr auto TargetKey = glz::get<I>(reflect<T>::keys);
       static constexpr auto Length = TargetKey.size();
 
-      if (((it + Length) < end) && comparitor<TargetKey>(it)) [[likely]] {
+      // A count, not a formed pointer -- see the note in the object overload above.
+      if (((end - it) > std::ptrdiff_t(Length)) && comparitor<TargetKey>(it)) [[likely]] {
          it += Length;
          if (*it != '"') [[unlikely]] {
             ctx.error = error_code::unexpected_enum;

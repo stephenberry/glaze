@@ -2697,12 +2697,13 @@ namespace glz
          }
          else {
             if constexpr (length_range == 1) {
-               auto quote = it + min_length;
-               // Ensure we can read *quote to determine if string is min_length or max_length.
-               // The check (quote + 1) > end ensures quote < end, making *quote dereferenceable.
-               if ((quote + 1) > end) [[unlikely]] {
+               // Bound before forming the pointer, not after: `it + min_length` is undefined once it
+               // runs past one-past-the-end, whether or not it is dereferenced, and a key shorter
+               // than min_length gets here. The test is the same one, written as a count.
+               if ((end - it) <= std::ptrdiff_t(min_length)) [[unlikely]] {
                   return N;
                }
+               const auto* const quote = it + min_length; // in bounds, and readable
 
                const auto n = min_length + uint8_t(*quote != '"');
                const auto h = full_hash<HashInfo.min_length, HashInfo.max_length, HashInfo.seed>(it, n);
