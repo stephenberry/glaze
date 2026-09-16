@@ -24,6 +24,34 @@ namespace glz
    // on short documents that fill is most of the call.
    //
    // Buffers without resize_and_overwrite (std::vector<char> and friends) keep the filling resize.
+   //
+   // NOTE: the callback below returns `n` without writing anything, which violates a precondition
+   // of resize_and_overwrite. [string.capacity] requires that "after evaluating OP there are no
+   // indeterminate values in the range [p, p + r)", and r is n here while only the first min(o, n)
+   // bytes were carried over. Violating a precondition is undefined behavior, so this is not a
+   // grey area in the standard -- it is outside it, deliberately, because skipping the fill is the
+   // entire point and the API offers no conforming way to ask for capacity without content.
+   //
+   // What makes it work in practice is how the implementations lower it. libc++ is literally
+   // `__resize_default_init(n); __erase_to_end(op(data(), n));`, so returning n erases nothing and
+   // the new bytes are left as the allocator produced them. libstdc++ does not promise that: it
+   // documents the requirement in the same terms the standard does, warning that `op` "must ensure
+   // that all characters up to the returned length are valid after it returns". Nothing here is
+   // guaranteed by contract on any implementation -- it is a bet that none of them read what they
+   // were told to leave alone.
+   //
+   // The obligation this creates is on every caller, and it is not optional: a byte that is kept
+   // must be written before it is read, and the buffer must be truncated to what was written
+   // before anyone outside can observe it. That is why the write entry points resize to `ix` on
+   // their error paths rather than leaving the buffer at its grown length -- returning it longer
+   // would hand the caller indeterminate bytes inside size(). Reading one is undefined in its own
+   // right, and a std::string's spare capacity will happily hide the mistake from a sanitizer.
+   //
+   // The conforming alternative is plain `resize`. Measured on the write and read benchmarks, that
+   // costs about 11% across the board and roughly 2.7x on a small write -- one bool per call goes
+   // from ~1030 to ~386 MB/s -- because a finished write shrinks the buffer back and the next one
+   // re-expands and refills it. That is the price of this note; weigh it if the bet above ever
+   // stops looking good.
    template <class B>
    GLZ_ALWAYS_INLINE void resize_unfilled(B& b, const size_t n)
    {
