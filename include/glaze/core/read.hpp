@@ -46,6 +46,33 @@ namespace glz
       return std::pair{it, end};
    }
 
+   // The options a parse over `Buf` may actually assert, given what that buffer guarantees.
+   //
+   // `is_padded` comes off because nothing pads a buffer on the reader's behalf any more; a caller
+   // who really does have `padding_bytes` of readable slack sets `ctx.padded_input` and gets the
+   // unbounded loads that way.
+   //
+   // `null_terminated` is the subtle one. A resizable buffer used to be handed a terminator by that
+   // padding whether it kept one of its own or not, so the option -- which defaults on -- held for
+   // all of them. With the padding gone it holds only for buffers that terminate themselves, and
+   // asserting it for the rest reads a byte past the last one they own. A non-resizable buffer is
+   // left alone: it was never padded, so the caller has always been the one promising the sentinel.
+   //
+   // Every entry point that builds iterators over a caller's buffer has to go through this. Reached
+   // by two paths before, they disagreed, and the one that skipped it read out of bounds.
+   template <auto Opts, class Buf>
+   consteval auto parse_opts_for()
+   {
+      auto o = is_padded_off<Opts>();
+      using B = std::remove_cvref_t<Buf>;
+      if constexpr (resizable<B> && not self_terminating<B>) {
+         if constexpr (requires { o.null_terminated = false; }) {
+            o.null_terminated = false;
+         }
+      }
+      return o;
+   }
+
    // Only a non-null-terminated read produces end_reached, and only ever to say "the buffer ran
    // out here"; whether that is an outcome or a failure is settled at the top level and nowhere
    // else. ctx.depth carries the answer: a value that closed cleanly leaves it at zero, so the
@@ -147,20 +174,7 @@ namespace glz
       // and get the unbounded loads back, and nobody else pays for the buffer being touched at all.
       ctx.padded_input = check_is_padded(Opts);
 
-      // A resizable buffer used to be handed a terminator by that padding whether it had one of its
-      // own or not, so `null_terminated` -- which defaults on -- held for all of them. With the
-      // padding gone it holds only for buffers that keep one themselves, and asserting it for the
-      // rest would read a byte past the last one they own. A non-resizable buffer is left alone:
-      // it was never padded, so the caller has always been the one promising the sentinel.
-      static constexpr auto ParseOpts = [] {
-         auto o = is_padded_off<Opts>();
-         if constexpr (resizable<std::remove_reference_t<Buf>> && not self_terminating<std::remove_reference_t<Buf>>) {
-            if constexpr (requires { o.null_terminated = false; }) {
-               o.null_terminated = false;
-            }
-         }
-         return o;
-      }();
+      static constexpr auto ParseOpts = parse_opts_for<Opts, Buf>();
 
       auto [it, end] = read_iterators<ParseOpts>(buffer);
       auto start = it;
@@ -266,6 +280,11 @@ namespace glz
          }
          return o;
       }();
+
+      // A stream window is never padded, whatever a reused context was told on its last read.
+      // Left set, `chunk_min` would hand every scan in this parse the unbounded chunk path and
+      // let it load up to seven bytes past the window.
+      ctx.padded_input = false;
 
       // Initial fill if buffer is empty
       if (buffer.empty()) {

@@ -130,8 +130,21 @@ namespace glz::detail
    inline sv read_jsonc_comment(auto&& it, auto end) noexcept
    {
       auto start = it;
+      // The caller matched one '/'; that says nothing about the second byte of the opener being
+      // there at all. Stepping over both regardless leaves `it` past `end`, and every scan the
+      // caller runs after this one starts from there.
+      if (end - it < 2) [[unlikely]] {
+         it = end;
+         return {};
+      }
       it += 2; // skip /*
-      for (const auto end_m7 = end - 7; it < end_m7;) {
+
+      // The bound as a pointer, so each chunk costs one compare. `end - 8` only points into the
+      // buffer once that much of it is left; where it is not, the fallback is the byte before the
+      // cursor, which is inside the opener and so fails the test on the first look. Never `it`
+      // itself -- that passes, and the chunk behind it would read past the end of the buffer.
+      const auto* const chunk_limit = (end - it >= 8) ? end - 8 : it - 1;
+      while (it <= chunk_limit) {
          uint64_t chunk;
          std::memcpy(&chunk, it, 8);
          if constexpr (std::endian::native == std::endian::big) {

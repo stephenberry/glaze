@@ -316,14 +316,39 @@ namespace glz
       bool truncated{};
    };
 
+   // Whether what is left of the buffer could still grow into the escape being read.
+   //
+   // Reached only when too few bytes remain to finish one, which on its own does not say the
+   // document was cut: `"\uD83D"` is a whole document holding a lone surrogate, and what follows
+   // the escape is the closing quote rather than the second half of a pair. A caller told the
+   // input ran out goes looking for more, and no more of it settles that document. So the bytes
+   // that are there decide -- a clean prefix is a truncation, anything already contradicting the
+   // escape is malformed.
+   template <bool ExpectOpener>
+   [[nodiscard]] GLZ_ALWAYS_INLINE bool escape_prefix_intact(const auto* it, const auto* end) noexcept
+   {
+      auto n = size_t(end - it);
+      if constexpr (ExpectOpener) {
+         if (n > 0 && it[0] != '\\') return false;
+         if (n > 1 && it[1] != 'u') return false;
+         if (n < 2) return true;
+         it += 2;
+         n -= 2;
+      }
+      for (size_t i = 0; i < n; ++i) {
+         if (digit_hex_table[uint8_t(it[i])] == 255) return false;
+      }
+      return true;
+   }
+
    template <class SrcChar, class DstChar = SrcChar>
    [[nodiscard]] GLZ_ALWAYS_INLINE unicode_result handle_unicode_code_point(const SrcChar*& it, DstChar*& dst,
                                                                             const SrcChar* end) noexcept
    {
       using namespace unicode;
 
-      if (it + 4 >= end) [[unlikely]] {
-         return {0, true};
+      if (end - it <= 4) [[unlikely]] {
+         return {0, escape_prefix_intact<false>(it, end)};
       }
       const uint32_t high = hex_to_u32(it);
       if (high == 0xFFFFFFFFu) [[unlikely]] {
@@ -339,8 +364,8 @@ namespace glz
             return {};
          }
 
-         if (it + 6 >= end) [[unlikely]] {
-            return {0, true};
+         if (end - it <= 6) [[unlikely]] {
+            return {0, escape_prefix_intact<true>(it, end)};
          }
          // The next two characters must be `\u`
          uint16_t u;
@@ -1036,6 +1061,16 @@ namespace glz
                // Handle escape sequence
                ++it;
 
+               // The backslash can be the last byte the chunk covers, which lands `it` on `end`.
+               // A null-terminated buffer answers that read with its terminator, which the escape
+               // table below rejects; a bounded one has nothing there to read.
+               if constexpr (not Opts.null_terminated) {
+                  if (it == end) [[unlikely]] {
+                     ctx.error = error_code::unexpected_end;
+                     return;
+                  }
+               }
+
                if (*it == 'u') {
                   ++it;
                   if (not skip_unicode_code_point(it, end)) [[unlikely]] {
@@ -1096,7 +1131,10 @@ namespace glz
                      return;
                   }
                }
-               ctx.error = error_code::syntax_error;
+               // Same code the chunked loop above reports. Both loops run over one buffer now, so
+               // an escape that lands in the last few bytes must be diagnosed the same as one that
+               // does not.
+               ctx.error = error_code::invalid_escape;
                return;
             }
             }
@@ -1202,6 +1240,22 @@ namespace glz
          const uint64_t escaped = escaped_mask(w.backslash, escape_carry);
          const uint64_t quote = w.quote & ~escaped;
          const uint64_t in_string = prefix_xor(quote) ^ in_string_carry;
+
+         // A backslash outside a string cannot occur in JSON, and the parity above takes it at
+         // face value: it cancels the next quote, and every byte after that is on the wrong side
+         // of the string boundary for the rest of the document. The byte scan reaches a backslash
+         // only through a string, so it does not make that mistake, and a malformed document must
+         // not be read one way here and another way on a target without these masks. Hand it over
+         // instead. The test is exact where it has to be -- at the first stray backslash nothing
+         // has diverged yet, so `in_string` is still right about it -- and anything it flags later
+         // only costs a window.
+         if (w.backslash & ~in_string) [[unlikely]] {
+            if (in_string_carry) {
+               it = string_open;
+            }
+            return false;
+         }
+
          in_string_carry = uint64_t(int64_t(in_string) >> 63); // sign extend the last byte's state
          if (in_string_carry && quote) {
             // Ending inside a string means the window's last unescaped quote opened it.
@@ -1321,13 +1375,6 @@ namespace glz
          case '"': {
             skip_string<skip_string_opts{opening_not_handled, skip_validation, Opts.validate_utf8,
                                          null_terminated_unused}>(ctx, it, end);
-            if (bool(ctx.error)) [[unlikely]] {
-               return;
-            }
-            break;
-         }
-         case '/': {
-            skip_comment(ctx, it, end);
             if (bool(ctx.error)) [[unlikely]] {
                return;
             }

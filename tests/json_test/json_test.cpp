@@ -13598,9 +13598,25 @@ suite custom_error = [] {
 
 suite minify_prettify_safety = [] {
    "invalid minify"_test = [] {
+      // A lone 'f' is not a document. Minifying used to answer "false", because the type table
+      // matched on that one byte and the step over the rest of the literal landed in padding that
+      // the caller never supplied; the output was three bytes of nothing. Bounded, it is an error
+      // and nothing is written.
       std::string buffer("f");
       auto minified = glz::minify_json(buffer);
-      expect(minified == "false");
+      expect(minified == "");
+
+      buffer = "tru";
+      minified = glz::minify_json(buffer);
+      expect(minified == "");
+
+      buffer = "nul";
+      minified = glz::minify_json(buffer);
+      expect(minified == "");
+
+      buffer = "true";
+      minified = glz::minify_json(buffer);
+      expect(minified == "true");
 
       buffer = "\"";
       minified = glz::minify_json(buffer);

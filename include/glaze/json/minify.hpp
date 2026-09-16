@@ -22,7 +22,7 @@ namespace glz
 
          auto skip_expected_whitespace = [&] {
             auto new_ws_start = it;
-            if (ws_size && ws_size < size_t(end - it)) [[likely]] {
+            if (ws_size && std::ptrdiff_t(ws_size) < end - it) [[likely]] {
                skip_matching_ws(ws_start, it, ws_size);
             }
 
@@ -101,6 +101,14 @@ namespace glz
                break;
             }
             case Null: {
+               // The type table matched on the first byte alone, so the rest of the literal still
+               // has to be in the buffer. Stepping over it regardless puts `it` past `end`, and
+               // from there the loop goes on minifying whatever follows the document into an
+               // output sized for the document.
+               if (end - it < 4) [[unlikely]] {
+                  ctx.error = error_code::unexpected_end;
+                  return;
+               }
                dump<false>("null", b, ix);
                it += 4;
                skip_whitespace();
@@ -108,12 +116,20 @@ namespace glz
             }
             case Bool: {
                if (*it == 't') {
+                  if (end - it < 4) [[unlikely]] {
+                     ctx.error = error_code::unexpected_end;
+                     return;
+                  }
                   dump<false>("true", b, ix);
                   it += 4;
                   skip_whitespace();
                   break;
                }
                else {
+                  if (end - it < 5) [[unlikely]] {
+                     ctx.error = error_code::unexpected_end;
+                     return;
+                  }
                   dump<false>("false", b, ix);
                   it += 5;
                   skip_whitespace();
