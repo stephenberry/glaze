@@ -2247,7 +2247,13 @@ namespace glz
       // Direct access to SSL context (NOT thread-safe)
       // WARNING: Call before start(); the server performs no locking around the context
       // This is provided for advanced use cases where the caller manages synchronization
-      inline asio::ssl::context& ssl_context_unsafe() { return *ssl_context; }
+      inline asio::ssl::context& ssl_context_unsafe()
+      {
+         static_assert(EnableTLS,
+                       "ssl_context_unsafe() requires a TLS-enabled server (glz::https_server, or "
+                       "glz::http_server<true>); http_server<false> holds no SSL context");
+         return *ssl_context;
+      }
 #endif
 
       /**
