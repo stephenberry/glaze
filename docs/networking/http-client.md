@@ -17,7 +17,7 @@ int main() {
     if (response) {
         std::cout << "Status: " << response->status_code << std::endl;
         std::cout << "Body: " << response->response_body << std::endl;
-        
+
         // Access response headers
         for (const auto& [name, value] : response->response_headers) {
             std::cout << name << ": " << value << std::endl;
@@ -148,7 +148,7 @@ std::expected<response, std::error_code> get(
 ### POST Request
 ```cpp
 std::expected<response, std::error_code> post(
-    std::string_view url, 
+    std::string_view url,
     std::string_view body,
     const glz::http_headers& headers = {}
 );
@@ -158,7 +158,7 @@ std::expected<response, std::error_code> post(
 
 ```cpp
 std::expected<response, std::error_code> put(
-    std::string_view url, 
+    std::string_view url,
     const std::string& body,
     const glz::http_headers& headers = {}
 );
@@ -168,7 +168,7 @@ std::expected<response, std::error_code> put(
 
 ```cpp
 std::expected<response, std::error_code> patch(
-    std::string_view url, 
+    std::string_view url,
     const std::string& body,
     const glz::http_headers& headers = {}
 );
@@ -178,7 +178,7 @@ std::expected<response, std::error_code> patch(
 ```cpp
 template<class T>
 std::expected<response, std::error_code> post_json(
-    std::string_view url, 
+    std::string_view url,
     const T& data,
     const glz::http_headers& headers = {}
 );
@@ -188,7 +188,7 @@ std::expected<response, std::error_code> post_json(
 ```cpp
 template<class T>
 std::expected<response, std::error_code> put_json(
-    std::string_view url, 
+    std::string_view url,
     const T& data,
     const glz::http_headers& headers = {}
 );
@@ -199,7 +199,7 @@ std::expected<response, std::error_code> put_json(
 ```cpp
 template<class T>
 std::expected<response, std::error_code> patch_json(
-    std::string_view url, 
+    std::string_view url,
     const T& data,
     const glz::http_headers& headers = {}
 );
@@ -238,7 +238,7 @@ void get_async(
 **Future-based:**
 ```cpp
 std::future<std::expected<response, std::error_code>> post_async(
-    std::string_view url, 
+    std::string_view url,
     std::string_view body,
     const glz::http_headers& headers = {}
 );
@@ -248,7 +248,7 @@ std::future<std::expected<response, std::error_code>> post_async(
 ```cpp
 template<typename CompletionHandler>
 void post_async(
-    std::string_view url, 
+    std::string_view url,
     std::string_view body,
     const glz::http_headers& headers,
     CompletionHandler&& handler
@@ -261,7 +261,7 @@ void post_async(
 ```cpp
 template<class T>
 std::future<std::expected<response, std::error_code>> post_json_async(
-    std::string_view url, 
+    std::string_view url,
     const T& data,
     const glz::http_headers& headers = {}
 );
@@ -271,7 +271,7 @@ std::future<std::expected<response, std::error_code>> post_json_async(
 ```cpp
 template<class T, typename CompletionHandler>
 void post_json_async(
-    std::string_view url, 
+    std::string_view url,
     const T& data,
     const glz::http_headers& headers,
     CompletionHandler&& handler
@@ -313,7 +313,7 @@ struct stream_request_params_v2 {
 -   `max_buffer_size`: Larger buffer can decrease dropouts and increase throughput at cost of memory usage. (default is 1 MiB)
 -   `body`: The HTTP Body to send.
 -   `headers`: The HTTP headers to send.
--   `on_data`: A callback that's called when data is received.
+-   `on_data`: A callback that's called when data is received; returning `false` cancels the transfer.
 -   `on_error`: A callback that's called when an error occurs.
 -   `on_progress`: An optional callback reporting download progress; returning `false` cancels the transfer. See [Progress and Cancellation](#progress-and-cancellation).
 -   `on_connect`: A callback that's called when the connection is established and the headers are received.
@@ -364,6 +364,19 @@ auto conn = client.stream_request_v2({
         return !cancelled.load();
     },
     .on_disconnect = [&] { file.close(); }
+});
+```
+
+Like `on_progress`, the `on_data` handler can also return `false` to cancel the request early; for instance, a file write operation failing:
+
+```cpp
+auto conn = client.stream_request_v2({
+    // ...
+    .on_data = [&](std::string_view data) {
+        file.write(data.data(), data.size());
+        return file.good();
+    },
+    // ...
 });
 ```
 
@@ -560,7 +573,7 @@ int main() {
 
     // Launch multiple async requests
     std::vector<std::future<std::expected<glz::response, std::error_code>>> futures;
-    
+
     futures.push_back(client.get_async("https://api.github.com/users/octocat"));
     futures.push_back(client.get_async("https://api.github.com/users/defunkt"));
     futures.push_back(client.get_async("https://api.github.com/users/pjhyett"));
@@ -601,7 +614,7 @@ int main() {
     // Async JSON POST with callback
     struct Data { int value = 42; };
     Data data;
-    
+
     client.post_json_async("https://httpbin.org/post", data, {},
         [](std::expected<glz::response, std::error_code> result) {
             if (result) {

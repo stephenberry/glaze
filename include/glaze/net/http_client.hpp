@@ -1137,7 +1137,7 @@ namespace glz
    struct http_stream_connection;
 
    // Handler function types for streaming
-   using http_data_handler = std::function<void(std::string_view data)>;
+   using http_data_handler = std::function<bool(std::string_view data)>;
    using http_error_handler =
       std::function<void(std::error_code ec)>; // May carry HTTP statuses via http_status_category()
    using http_connect_handler = std::function<void(const response& headers)>;
@@ -1962,7 +1962,12 @@ namespace glz
       static bool deliver_stream_body(const std::shared_ptr<http_stream_connection>& connection, std::string_view data,
                                       const http_data_handler& on_data)
       {
-         on_data(data);
+         const bool keep_going = on_data(data);
+         if (!keep_going) {
+            connection->disconnect();
+            return false;
+         }
+
          connection->bytes_received += data.size();
          return report_stream_progress(connection);
       }
