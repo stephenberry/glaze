@@ -306,19 +306,20 @@ struct stream_request_params_v2 {
 };
 ```
 
--   `method`: The HTTP method to use. (default is "GET")
--   `url`: The URL to request.
--   `timeout`: Set connection timeout. (default is 30s)
--   `strategy`: Can be `bulk_transfer` (default, larger chunks, better throughput) or `immediate_delivery` (smaller chunks, lower latency)
--   `max_buffer_size`: Larger buffer can decrease dropouts and increase throughput at cost of memory usage. (default is 1 MiB)
--   `body`: The HTTP Body to send.
--   `headers`: The HTTP headers to send.
--   `on_data`: A callback that's called when data is received; returning `false` cancels the transfer.
--   `on_error`: A callback that's called when an error occurs.
--   `on_progress`: An optional callback reporting download progress; returning `false` cancels the transfer. See [Progress and Cancellation](#progress-and-cancellation).
--   `on_connect`: A callback that's called when the connection is established and the headers are received.
--   `on_disconnect`: A callback that's called when the connection is closed.
--   `status_is_error`: Optional predicate to decide whether a status code should trigger `on_error` (defaults to checking for codes ≥ 400).
+- `method`: The HTTP method to use. (default is "GET")
+- `url`: The URL to request.
+- `timeout`: Set connection timeout. (default is 30s)
+- `strategy`: Can be `bulk_transfer` (default, larger chunks, better throughput) or `immediate_delivery` (smaller chunks, lower latency)
+- `max_buffer_size`: Larger buffer can decrease dropouts and increase throughput at cost of memory usage. (default is 1 MiB)
+- `body`: The HTTP Body to send.
+- `headers`: The HTTP headers to send.
+- `on_data`: A callback that's called when data is received; returning `false` cancels the transfer.
+  - A callback that returns nothing (or any non-boolean value) will be assumed to always be successful.
+- `on_error`: A callback that's called when an error occurs.
+- `on_progress`: An optional callback reporting download progress; returning `false` cancels the transfer. See [Progress and Cancellation](#progress-and-cancellation).
+- `on_connect`: A callback that's called when the connection is established and the headers are received.
+- `on_disconnect`: A callback that's called when the connection is closed.
+- `status_is_error`: Optional predicate to decide whether a status code should trigger `on_error` (defaults to checking for codes ≥ 400).
 
 To override the default behaviour you can supply a predicate:
 

@@ -1137,7 +1137,6 @@ namespace glz
    struct http_stream_connection;
 
    // Handler function types for streaming
-   using http_data_handler = std::function<bool(std::string_view data)>;
    using http_error_handler =
       std::function<void(std::error_code ec)>; // May carry HTTP statuses via http_status_category()
    using http_connect_handler = std::function<void(const response& headers)>;
@@ -1150,6 +1149,37 @@ namespace glz
    // stream stops where it is, the socket is closed rather than pooled, and on_disconnect
    // follows as it would for a caller-initiated disconnect().
    using http_progress_handler = std::function<bool(size_t transferred, size_t total)>;
+
+   // thin wrapper around std::function
+   // non-bool returns (e.g. void) are assumed to be successful,
+   // otherwise the return value is passed through
+   class http_data_handler
+   {
+      std::function<bool(std::string_view)> fn_;
+
+   public:
+      http_data_handler() = default;
+
+      // this will reject functions that don't take std::string_view
+      template <typename F>
+         requires(!std::same_as<std::decay_t<F>, http_data_handler> &&
+                  std::invocable<F, std::string_view>)
+      constexpr http_data_handler(F&& f)
+         : fn_([g = std::forward<F>(f)](std::string_view data) mutable {
+              if constexpr (std::is_invocable_r_v<bool, F, std::string_view>) {
+                 return g(data);
+              }
+              // non-bool funcs will always return true
+              else {
+                 g(data);
+                 return true;
+              }
+           })
+      {}
+
+      constexpr bool operator()(std::string_view data) const { return fn_(data); }
+      constexpr explicit operator bool() const noexcept { return static_cast<bool>(fn_); }
+   };
 
    // Streaming HTTP connection handle
    struct http_stream_connection
