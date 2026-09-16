@@ -1497,7 +1497,15 @@ namespace glz
          // Initialize SSL context for TLS-enabled servers
          if constexpr (EnableTLS) {
 #ifdef GLZ_ENABLE_SSL
-            ssl_context = std::make_unique<asio::ssl::context>(asio::ssl::context::tlsv12);
+            // Use tls_server so the handshake negotiates the highest mutually supported
+            // version (TLS 1.2 or TLS 1.3), mirroring the tls_client that
+            // http_connection_pool already uses. asio sets the floor for tls_server to
+            // TLS 1.0, so the protocols deprecated by RFC 8996 are disabled explicitly
+            // here rather than assumed.
+            ssl_context = std::make_unique<asio::ssl::context>(asio::ssl::context::tls_server);
+            ssl_context->set_options(asio::ssl::context::default_workarounds | asio::ssl::context::no_sslv2 |
+                                     asio::ssl::context::no_sslv3 | asio::ssl::context::no_tlsv1 |
+                                     asio::ssl::context::no_tlsv1_1);
             ssl_context->set_default_verify_paths();
 #else
             static_assert(!EnableTLS, "TLS support requires GLZ_ENABLE_SSL to be defined and OpenSSL to be available");
@@ -2201,6 +2209,46 @@ namespace glz
          }
          return *this;
       }
+
+      /**
+       * @brief Configure the SSL context directly
+       *
+       * Gives access to the underlying asio::ssl::context for the settings this class does
+       * not wrap: ALPN protocols, cipher suites, protocol version bounds, session tickets,
+       * or a certificate callback (SSL_CTX_set_cert_cb) for per-handshake certificate
+       * selection.
+       *
+       * Call before start(). Every accepted connection reads this context and the server
+       * performs no locking around it, so a modification once the acceptor is running races
+       * with the handshakes in flight.
+       *
+       * Example:
+       * @code
+       * server.configure_ssl_context([](asio::ssl::context& ctx) {
+       *    SSL_CTX_set_alpn_select_cb(ctx.native_handle(), select_alpn, nullptr);
+       * });
+       * @endcode
+       *
+       * @param func Callable invoked with asio::ssl::context&
+       * @return Reference to this server for method chaining
+       */
+      template <typename Func>
+      inline http_server& configure_ssl_context([[maybe_unused]] Func&& func)
+      {
+         if constexpr (EnableTLS) {
+#ifdef GLZ_ENABLE_SSL
+            func(*ssl_context);
+#endif
+         }
+         return *this;
+      }
+
+#ifdef GLZ_ENABLE_SSL
+      // Direct access to SSL context (NOT thread-safe)
+      // WARNING: Call before start(); the server performs no locking around the context
+      // This is provided for advanced use cases where the caller manages synchronization
+      inline asio::ssl::context& ssl_context_unsafe() { return *ssl_context; }
+#endif
 
       /**
        * @brief Enable signal handling for graceful shutdown
