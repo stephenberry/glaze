@@ -50,8 +50,14 @@ namespace glz
    // The conforming alternative is plain `resize`. Measured on the write and read benchmarks, that
    // costs about 11% across the board and roughly 2.7x on a small write -- one bool per call goes
    // from ~1030 to ~386 MB/s -- because a finished write shrinks the buffer back and the next one
-   // re-expands and refills it. That is the price of this note; weigh it if the bet above ever
-   // stops looking good.
+   // re-expands and refills it.
+   //
+   // That trade has been made knowingly and this is not an oversight to be tidied away: the win is
+   // large, the obligation above is one glaze already meets everywhere it matters, and no
+   // implementation reads bytes it was asked to leave alone. What would force a revisit is an
+   // implementation that starts touching the unwritten range -- a hardened or checked standard
+   // library that fills or traps it, or a sanitizer mode that tracks indeterminate heap bytes --
+   // rather than the wording itself, which is already known and accepted.
    template <class B>
    GLZ_ALWAYS_INLINE void resize_unfilled(B& b, const size_t n)
    {
