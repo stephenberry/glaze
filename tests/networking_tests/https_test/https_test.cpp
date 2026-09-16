@@ -386,6 +386,14 @@ class HTTPSTestServer
       }
    }
 
+   // Reach the server's SSL context before start(), for cases that need to vary the TLS
+   // configuration. Must be called before start(), as configure_ssl_context requires.
+   template <typename Func>
+   void configure_ssl_context(Func&& func)
+   {
+      server_.configure_ssl_context(std::forward<Func>(func));
+   }
+
    uint16_t port() const { return port_; }
 
    void stop()
@@ -938,6 +946,30 @@ suite tls_version_tests = [] {
 
       expect(negotiated.empty()) << "TLS 1.1 is deprecated by RFC 8996 and must not negotiate, got '" << negotiated
                                  << "'\n";
+
+      test_server.stop();
+   };
+
+   // The RFC 8996 floor has to hold on its own, not merely because OpenSSL's default
+   // security level happens to reject TLS 1.1 as well. Dropping the server's security level
+   // to 0 removes that second line of defense, leaving only the explicit no_tlsv1 and
+   // no_tlsv1_1 context options standing between the client and a deprecated protocol.
+   // Without those options this case negotiates TLS 1.1.
+   "server_refuses_tls11_without_security_level_backstop"_test = [] {
+      if (!certificates_exist()) {
+         CertificateGenerator::generate_test_certificates();
+      }
+
+      HTTPSTestServer test_server;
+      test_server.configure_ssl_context(
+         [](asio::ssl::context& ctx) { SSL_CTX_set_security_level(ctx.native_handle(), 0); });
+      expect(test_server.start()) << "HTTPS server should start successfully\n";
+
+      const std::string negotiated = negotiated_protocol(test_server.port(), TLS1_1_VERSION, TLS1_1_VERSION);
+
+      expect(negotiated.empty()) << "TLS 1.1 must stay disabled by the explicit context options even when the "
+                                    "security level no longer rejects it, got '"
+                                 << negotiated << "'\n";
 
       test_server.stop();
    };
