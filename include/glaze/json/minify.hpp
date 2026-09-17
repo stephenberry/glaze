@@ -186,12 +186,14 @@ namespace glz
          }
       }
 
+      // Returns the number of bytes written, which is what a bounded output has no other way to
+      // learn: it has no size to be shrunk to the result the way a resizable one does.
       template <auto Opts, class In, output_buffer Out>
          requires(contiguous<In> && resizable<In>)
-      inline void minify_json(is_context auto&& ctx, In&& in, Out&& out)
+      inline size_t minify_json(is_context auto&& ctx, In&& in, Out&& out)
       {
          if (in.size() == 0) {
-            return;
+            return 0;
          }
 
          if constexpr (resizable<Out>) {
@@ -202,13 +204,13 @@ namespace glz
             // output without checking room for each token. A bounded output has to be told when
             // the input is more than it holds, rather than being written past the end of.
             if (not ensure_space(ctx, out, in.size())) [[unlikely]] {
-               return;
+               return 0;
             }
          }
          size_t ix = 0;
          auto [it, end] = read_iterators<Opts>(in);
          if (bool(ctx.error)) [[unlikely]] {
-            return;
+            return 0;
          }
 
          // The input is no longer grown and shrunk around this: everything the scan below reads
@@ -224,10 +226,13 @@ namespace glz
          if constexpr (resizable<Out>) {
             out.resize(ix);
          }
+         return ix;
       }
    }
 
-   // The overloads that write into a caller's buffer report what went wrong. Not [[nodiscard]]:
+   // The overloads that write into a caller's buffer report what went wrong, and how many bytes
+   // they wrote, which is the only way a bounded output learns where its result ends. Not
+   // [[nodiscard]]:
    // minifying auto-generated JSON does not fail, so the callers that have always ignored the
    // outcome are right to, and warning at all of them would say nothing useful. The overloads that
    // return the text have nowhere to put an error and stay silent.
@@ -240,8 +245,8 @@ namespace glz
    inline error_ctx minify_json(resizable auto& in, auto& out)
    {
       context ctx{};
-      detail::minify_json<Opts>(ctx, in, out);
-      return {0, ctx.error, ctx.custom_error_message};
+      const auto n = detail::minify_json<Opts>(ctx, in, out);
+      return {n, ctx.error, ctx.custom_error_message};
    }
 
    template <auto Opts = opts{}>
@@ -257,8 +262,8 @@ namespace glz
    inline error_ctx minify_jsonc(resizable auto& in, auto& out)
    {
       context ctx{};
-      detail::minify_json<opt_true<Opts, &opts::comments>>(ctx, in, out);
-      return {0, ctx.error, ctx.custom_error_message};
+      const auto n = detail::minify_json<opt_true<Opts, &opts::comments>>(ctx, in, out);
+      return {n, ctx.error, ctx.custom_error_message};
    }
 
    template <auto Opts = opts{}>

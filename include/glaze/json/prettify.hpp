@@ -241,20 +241,22 @@ namespace glz
          }
       }
 
+      // Returns the number of bytes written, which is what a bounded output has no other way to
+      // learn: it has no size to be shrunk to the result the way a resizable one does.
       template <auto Opts, contiguous In, output_buffer Out>
-      inline void prettify_json(is_context auto&& ctx, In&& in, Out&& out)
+      inline size_t prettify_json(is_context auto&& ctx, In&& in, Out&& out)
       {
          if constexpr (resizable<Out>) {
             if (in.size() == 0) {
                out.resize(0); // resize is what `resizable` promises; clear() is not
-               return;
+               return 0;
             }
             out.resize(in.size() * 2);
          }
          size_t ix = 0;
          auto [it, end] = read_iterators<Opts>(in);
          if (bool(ctx.error)) [[unlikely]] {
-            return;
+            return 0;
          }
 
          if constexpr (self_terminating<In>) {
@@ -267,10 +269,13 @@ namespace glz
          if constexpr (resizable<Out>) {
             out.resize(ix);
          }
+         return ix;
       }
    }
 
-   // The overloads that write into a caller's buffer report what went wrong. Not [[nodiscard]]:
+   // The overloads that write into a caller's buffer report what went wrong, and how many bytes
+   // they wrote, which is the only way a bounded output learns where its result ends. Not
+   // [[nodiscard]]:
    // prettifying auto-generated JSON does not fail, so the callers that have always ignored the
    // outcome are right to, and warning at all of them would say nothing useful. The overloads that
    // return the text have nowhere to put an error and stay silent.
@@ -283,8 +288,8 @@ namespace glz
    inline error_ctx prettify_json(const auto& in, auto& out)
    {
       context ctx{};
-      detail::prettify_json<Opts>(ctx, in, out);
-      return {0, ctx.error, ctx.custom_error_message};
+      const auto n = detail::prettify_json<Opts>(ctx, in, out);
+      return {n, ctx.error, ctx.custom_error_message};
    }
 
    /// <summary>
@@ -303,8 +308,8 @@ namespace glz
    inline error_ctx prettify_jsonc(const auto& in, auto& out)
    {
       context ctx{};
-      detail::prettify_json<opt_true<Opts, &opts::comments>>(ctx, in, out);
-      return {0, ctx.error, ctx.custom_error_message};
+      const auto n = detail::prettify_json<opt_true<Opts, &opts::comments>>(ctx, in, out);
+      return {n, ctx.error, ctx.custom_error_message};
    }
 
    /// <summary>

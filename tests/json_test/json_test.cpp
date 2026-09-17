@@ -16109,8 +16109,12 @@ suite buffer_without_member_empty = [] {
 
       std::array<char, 64> roomy{};
       std::string roomy_in = in;
-      expect(not glz::minify_json(roomy_in, roomy));
-      expect(std::string_view{roomy.data(), in.size()} == in);
+      // A bounded output has no size to be shrunk to the result, so the byte count in the
+      // error_ctx is the only way the caller learns where its output ends
+      const auto ec = glz::minify_json(roomy_in, roomy);
+      expect(not ec);
+      expect(ec.count == in.size()) << ec.count;
+      expect(std::string_view{roomy.data(), ec.count} == in);
    };
 
    "prettify keeps its break for a whitespace only container (#2864)"_test = [] {
@@ -16119,8 +16123,10 @@ suite buffer_without_member_empty = [] {
       // line comment handling had to start routing every break through one place.
       const std::string in = R"({"a":1,"b":[1,2],"c":{ }})";
       std::string out{};
-      expect(not glz::prettify_json(in, out));
+      const auto ec = glz::prettify_json(in, out);
+      expect(not ec);
       expect(out == "{\n   \"a\": 1,\n   \"b\": [\n      1,\n      2\n   ],\n   \"c\": {\n      \n   }\n}") << out;
+      expect(ec.count == out.size()) << ec.count;
    };
 
    "format_error on a failed read"_test = [] {
