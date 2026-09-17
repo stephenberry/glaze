@@ -3,7 +3,9 @@
 
 #pragma once
 
-// Minified JSONC only works with /**/ style comments, so we only supports this
+// Minifying JSONC handles both comment styles. A block comment is carried through as written; a
+// line comment is dropped, because minifying is what removes the newline that ends it and without
+// that newline the comment would swallow everything written after it.
 
 #include "glaze/json/json_format.hpp"
 
@@ -11,11 +13,27 @@ namespace glz
 {
    namespace detail
    {
-      // We can use unchecked dumping to the output because we know minifying will not make the output any larger
       template <auto Opts>
       inline void minify_json(is_context auto&& ctx, auto&& it, auto&& end, auto&& b, auto& ix) noexcept
       {
          using enum json_type;
+
+         // Every dump below is unchecked, which the caller's one-shot sizing covers for a resizable
+         // destination: minifying only ever removes bytes, so the input's length is room enough.
+         //
+         // A bounded destination cannot be grown, and asking it for the input's length up front
+         // refuses a buffer that fits the result -- sizing the output to the minified length is the
+         // obvious thing to do, and `{ "a" : 1 }` into a 7 byte buffer has to work. So each write
+         // asks for exactly what it stores instead. None of it survives for a resizable
+         // destination, which keeps the unchecked dumps and nothing more.
+         const auto reserve = [&]([[maybe_unused]] const size_t n) {
+            if constexpr (has_bounded_capacity<decltype(b)>) {
+               return ensure_space(ctx, b, ix + n);
+            }
+            else {
+               return true;
+            }
+         };
 
          auto ws_start = it;
          uint64_t ws_size{};
@@ -65,12 +83,21 @@ namespace glz
          }()) {
             switch (json_types[uint8_t(*it)]) {
             case String: {
-               const auto value = read_json_string(it, end);
-               dump_maybe_empty<false>(value, b, ix);
+               const auto value = read_json_string(ctx, it, end);
+               if (bool(ctx.error)) [[unlikely]] {
+                  return;
+               }
+               if (not reserve(value.size())) [[unlikely]] {
+                  return;
+               }
+               dump<false>(value, b, ix); // non-empty: the scanner reports an empty view as an error
                skip_whitespace();
                break;
             }
             case Comma: {
+               if (not reserve(1)) [[unlikely]] {
+                  return;
+               }
                dump<false>(',', b, ix);
                ++it;
                skip_expected_whitespace();
@@ -78,23 +105,35 @@ namespace glz
             }
             case Number: {
                const auto value = read_json_number<Opts.null_terminated>(it, end);
+               if (not reserve(value.size())) [[unlikely]] {
+                  return;
+               }
                dump<false>(value, b, ix); // we couldn't have gotten here without one valid character
                skip_whitespace();
                break;
             }
             case Colon: {
+               if (not reserve(1)) [[unlikely]] {
+                  return;
+               }
                dump<false>(':', b, ix);
                ++it;
                skip_whitespace();
                break;
             }
             case Array_Start: {
+               if (not reserve(1)) [[unlikely]] {
+                  return;
+               }
                dump<false>('[', b, ix);
                ++it;
                skip_expected_whitespace();
                break;
             }
             case Array_End: {
+               if (not reserve(1)) [[unlikely]] {
+                  return;
+               }
                dump<false>(']', b, ix);
                ++it;
                skip_whitespace();
@@ -102,47 +141,58 @@ namespace glz
             }
             case Null: {
                // The type table matched on the first byte alone, so the rest of the literal still
-               // has to be in the buffer. Stepping over it regardless puts `it` past `end`, and
-               // from there the loop goes on minifying whatever follows the document into an
-               // output sized for the document.
-               if (end - it < 4) [[unlikely]] {
-                  ctx.error = error_code::unexpected_end;
+               // has to be in the buffer, and it has to actually spell the literal. Stepping over
+               // it regardless puts `it` past `end`, and from there the loop goes on minifying
+               // whatever follows the document into an output sized for the document. Dumping it
+               // regardless invents the bytes that were not there: {"a":nul } came out as
+               // {"a":null}, a well-formed document the input never said.
+               if (not match_literal<"null">(ctx, it, end)) [[unlikely]] {
+                  return;
+               }
+               if (not reserve(4)) [[unlikely]] {
                   return;
                }
                dump<false>("null", b, ix);
-               it += 4;
                skip_whitespace();
                break;
             }
             case Bool: {
                if (*it == 't') {
-                  if (end - it < 4) [[unlikely]] {
-                     ctx.error = error_code::unexpected_end;
+                  if (not match_literal<"true">(ctx, it, end)) [[unlikely]] {
+                     return;
+                  }
+                  if (not reserve(4)) [[unlikely]] {
                      return;
                   }
                   dump<false>("true", b, ix);
-                  it += 4;
                   skip_whitespace();
                   break;
                }
                else {
-                  if (end - it < 5) [[unlikely]] {
-                     ctx.error = error_code::unexpected_end;
+                  if (not match_literal<"false">(ctx, it, end)) [[unlikely]] {
+                     return;
+                  }
+                  if (not reserve(5)) [[unlikely]] {
                      return;
                   }
                   dump<false>("false", b, ix);
-                  it += 5;
                   skip_whitespace();
                   break;
                }
             }
             case Object_Start: {
+               if (not reserve(1)) [[unlikely]] {
+                  return;
+               }
                dump<false>('{', b, ix);
                ++it;
                skip_expected_whitespace();
                break;
             }
             case Object_End: {
+               if (not reserve(1)) [[unlikely]] {
+                  return;
+               }
                dump<false>('}', b, ix);
                ++it;
                skip_whitespace();
@@ -150,9 +200,18 @@ namespace glz
             }
             case Comment: {
                if constexpr (Opts.comments) {
-                  const auto value = read_jsonc_comment(it, end);
-                  if (value.size()) [[likely]] {
-                     dump<false>(value, b, ix);
+                  const auto comment = read_jsonc_comment(ctx, it, end);
+                  if (bool(ctx.error)) [[unlikely]] {
+                     return;
+                  }
+                  // A line comment is dropped rather than written out. Minifying is what removes
+                  // the newline that ends it, and a line comment with no line break behind it
+                  // comments out the whole rest of the output.
+                  if (not comment.line) {
+                     if (not reserve(comment.text.size())) [[unlikely]] {
+                        return;
+                     }
+                     dump<false>(comment.text, b, ix);
                   }
                   skip_whitespace();
                   break;
@@ -162,6 +221,16 @@ namespace glz
                }
             }
             [[unlikely]] default: {
+               // A null terminated run carries no bound in its loop condition, so it ends here, on
+               // the terminator, which is not a JSON token. Reaching it is the end of the document
+               // rather than an error -- unclassified is how the type table reports both, and
+               // without this the minifier left syntax_error behind on every input it was ever
+               // given, valid or not, which is what made its error not worth returning.
+               if constexpr (Opts.null_terminated) {
+                  if (it >= end) {
+                     return;
+                  }
+               }
                ctx.error = error_code::syntax_error;
                return;
             }
@@ -169,21 +238,25 @@ namespace glz
          }
       }
 
+      // Returns the number of bytes written, which is what a bounded output has no other way to
+      // learn: it has no size to be shrunk to the result the way a resizable one does.
       template <auto Opts, class In, output_buffer Out>
          requires(contiguous<In> && resizable<In>)
-      inline void minify_json(is_context auto&& ctx, In&& in, Out&& out)
+      inline size_t minify_json(is_context auto&& ctx, In&& in, Out&& out)
       {
          if (in.size() == 0) {
-            return;
+            return 0;
          }
 
          if constexpr (resizable<Out>) {
+            // Minifying only ever removes bytes, so this is room enough for whatever comes out.
+            // A bounded output is checked per write instead; see the scan above for why.
             out.resize(in.size() + 2 * padding_bytes);
          }
          size_t ix = 0;
          auto [it, end] = read_iterators<Opts>(in);
          if (bool(ctx.error)) [[unlikely]] {
-            return;
+            return 0;
          }
 
          // The input is no longer grown and shrunk around this: everything the scan below reads
@@ -199,18 +272,29 @@ namespace glz
          if constexpr (resizable<Out>) {
             out.resize(ix);
          }
+         return ix;
       }
    }
 
-   // We don't return errors from minifying even though they are handled because the error case
-   // should not happen since we minify auto-generated JSON.
-   // The detail version can be used if error context is needed
+   // The overloads that write into a caller's buffer report what went wrong, and how many bytes
+   // they wrote, which is the only way a bounded output learns where its result ends. That count is
+   // an offset into the output, not the input, so glz::format_error(ec, source) -- which reads it
+   // as a position in the buffer it is handed -- does not point at the offending byte here. Not
+   // [[nodiscard]]:
+   // minifying auto-generated JSON does not fail, so the callers that have always ignored the
+   // outcome are right to, and warning at all of them would say nothing useful. The overloads that
+   // return the text have nowhere to put an error and stay silent.
+   //
+   // Minifying reports what it actually parses, which is strings, comments and literals. It does
+   // not check that the document is structurally valid JSON -- `[1 2]` minifies to `[12]` -- so a
+   // document that may not be well formed wants glz::validate_json or glz::validate_jsonc.
 
    template <auto Opts = opts{}>
-   inline void minify_json(resizable auto& in, auto& out)
+   inline error_ctx minify_json(resizable auto& in, auto& out)
    {
       context ctx{};
-      detail::minify_json<Opts>(ctx, in, out);
+      const auto n = detail::minify_json<Opts>(ctx, in, out);
+      return {n, ctx.error, ctx.custom_error_message};
    }
 
    template <auto Opts = opts{}>
@@ -219,14 +303,22 @@ namespace glz
       context ctx{};
       std::string out{};
       detail::minify_json<Opts>(ctx, in, out);
+      if (bool(ctx.error)) [[unlikely]] {
+         // Nothing here can report the failure, and the prefix written so far is not a document:
+         // it is whatever the scan managed before it stopped, routinely an unterminated string or
+         // an unclosed brace. Handing that back is the silent truncation this whole change is
+         // about, one layer up, so it comes back empty instead.
+         return {};
+      }
       return out;
    }
 
    template <auto Opts = opts{}>
-   inline void minify_jsonc(resizable auto& in, auto& out)
+   inline error_ctx minify_jsonc(resizable auto& in, auto& out)
    {
       context ctx{};
-      detail::minify_json<opt_true<Opts, &opts::comments>>(ctx, in, out);
+      const auto n = detail::minify_json<opt_true<Opts, &opts::comments>>(ctx, in, out);
+      return {n, ctx.error, ctx.custom_error_message};
    }
 
    template <auto Opts = opts{}>
@@ -235,6 +327,13 @@ namespace glz
       context ctx{};
       std::string out{};
       detail::minify_json<opt_true<Opts, &opts::comments>>(ctx, in, out);
+      if (bool(ctx.error)) [[unlikely]] {
+         // Nothing here can report the failure, and the prefix written so far is not a document:
+         // it is whatever the scan managed before it stopped, routinely an unterminated string or
+         // an unclosed brace. Handing that back is the silent truncation this whole change is
+         // about, one layer up, so it comes back empty instead.
+         return {};
+      }
       return out;
    }
 }

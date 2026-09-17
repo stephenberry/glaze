@@ -546,6 +546,11 @@ namespace glz
       }
    }
 
+   // Skips a JSONC comment, `it` pointing at its opening '/'.
+   //
+   //    // line comment      ends at a line terminator, which is left behind for the whitespace
+   //                         skip, or at the end of the buffer, which ends it just as well
+   //    /* block comment */  ends at the closing delimiter, and is malformed without one
    GLZ_ALWAYS_INLINE void skip_comment(is_context auto&& ctx, auto&& it, auto end) noexcept
    {
       ++it;
@@ -553,19 +558,34 @@ namespace glz
          ctx.error = error_code::unexpected_end;
       }
       else if (*it == '/') {
-         while (++it != end && *it != '\n');
+         // A carriage return ends the comment on its own, so a file written with CR line endings
+         // does not have the rest of the document swallowed by its first comment.
+         while (++it != end && *it != '\n' && *it != '\r');
       }
       else if (*it == '*') {
-         while (++it != end) {
+         ++it; // past the '*' of the opener, which cannot also close the comment
+         while (it != end) {
             if (*it == '*') [[unlikely]] {
-               if (++it == end) [[unlikely]]
-                  break;
-               else if (*it == '/') [[likely]] {
+               // Advance past the '*' only, and let the loop look at the byte after it on the next
+               // turn. Stepping over that byte here as well is what used to hide a closing
+               // delimiter behind a run of an even number of stars: a '*' was examined as a
+               // candidate only at an even offset within its run, so a comment opened with "/*" and
+               // closed with "**" plus "/" scanned to the end of the buffer with its delimiter
+               // sitting in plain sight.
+               ++it;
+               if (it != end && *it == '/') [[likely]] {
                   ++it;
-                  break;
+                  return;
                }
             }
+            else {
+               ++it;
+            }
          }
+         // The scan reached the end of the buffer without the closing delimiter. Left unreported,
+         // this arrives at the value parser as an input that held no value, which reads as an empty
+         // document rather than as the malformed comment it is.
+         ctx.error = error_code::expected_end_comment;
       }
       else [[unlikely]] {
          ctx.error = error_code::expected_end_comment;
