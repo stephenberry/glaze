@@ -785,11 +785,13 @@ suite json_patch_tests = [] {
       auto doc = glz::read_json<glz::generic>("{}");
       expect(doc.has_value());
 
-      glz::patch_document ops = {{glz::patch_op_type::add, "/foo", glz::generic{"bar"}, std::nullopt}};
+      glz::patch_document ops = {{glz::patch_op_type::add, "/foo", glz::generic("bar"), std::nullopt}};
 
       auto ec = glz::patch(*doc, ops);
       expect(!ec);
       expect(doc->contains("foo"));
+      expect((*doc)["foo"].is_string());
+      expect((*doc)["foo"].get_string() == "bar");
    };
 
    // ============================================================================

@@ -119,6 +119,28 @@ glz::write_json(json, buffer);
 expect(buffer == R"({"pi":3.141,"happy":true,"name":"Stephen","nothing":null,"answer":{"everything":42},"list":[1,0,2],"object":{"currency":"USD","value":42.99}})");
 ```
 
+## Constructing generic Values
+
+A braced list always selects the array or object constructor, **including when it holds a
+single element**. Use parentheses or assignment to build a scalar:
+
+```c++
+glz::generic{"bar"}   // ["bar"] - a one element array
+glz::generic("bar")   // "bar"   - a string
+```
+
+This is ordinary C++ list initialization, not a Glaze rule: a viable
+`std::initializer_list` constructor is preferred over every other candidate.
+`std::vector<int>{3}` is `[3]` while `std::vector<int>(3)` is `[0,0,0]` for the same
+reason.
+
+The case worth watching is copying, where braces wrap rather than copy:
+
+```c++
+glz::generic copy = other;    // copy of other
+glz::generic wrapped{other};  // one element array containing other
+```
+
 ## get() vs as()
 
 All generic types are variants underneath. The `get<T>()` method mimics a `std::get` call for a variant, which rejects conversions and throws if the type doesn't match. The `as<T>()` method performs conversions.
