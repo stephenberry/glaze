@@ -1,6 +1,7 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
+#include <cstdlib>
 #include <glaze/glaze.hpp>
 #include <string>
 #include <vector>
@@ -58,7 +59,7 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t* Data, size_t Size)
             std::string minified{};
             if (not glz::minify_jsonc(minify_in, minified)) {
                if (not round_trips(minified)) {
-                  __builtin_trap();
+                  std::abort(); // not assert: a fuzz target has to fire under NDEBUG too
                }
             }
 
@@ -66,7 +67,7 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t* Data, size_t Size)
             std::string prettified{};
             if (not glz::prettify_jsonc(prettify_in, prettified)) {
                if (not round_trips(prettified)) {
-                  __builtin_trap();
+                  std::abort(); // not assert: a fuzz target has to fire under NDEBUG too
                }
             }
          }
