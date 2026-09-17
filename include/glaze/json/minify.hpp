@@ -131,12 +131,10 @@ namespace glz
                break;
             }
             case Null: {
-               // The type table matched on the first byte alone, so the rest of the literal still
-               // has to be in the buffer, and it has to actually spell the literal. Stepping over
-               // it regardless puts `it` past `end`, and from there the loop goes on minifying
-               // whatever follows the document into an output sized for the document. Dumping it
-               // regardless invents the bytes that were not there: {"a":nul } came out as
-               // {"a":null}, a well-formed document the input never said.
+               // The type table matched on the first byte alone; see match_literal for why writing
+               // the literal from the writer's own spelling needs the rest of it checked. Stepping
+               // over it unchecked also puts `it` past `end`, and from there the loop goes on
+               // minifying whatever follows the document into an output sized for the document.
                if (not match_literal<"null">(ctx, it, end)) [[unlikely]] {
                   return;
                }
@@ -269,7 +267,9 @@ namespace glz
    // [[nodiscard]]:
    // minifying auto-generated JSON does not fail, so the callers that have always ignored the
    // outcome are right to, and warning at all of them would say nothing useful. The overloads that
-   // return the text have nowhere to put an error and stay silent.
+   // return the text have nowhere to put an error, so they come back empty rather than hand over
+   // the prefix the scan managed before it stopped -- routinely an unterminated string or an
+   // unclosed brace, which is not a document but a silent truncation of one.
    //
    // Minifying reports what it actually parses, which is strings, comments and literals. It does
    // not check that the document is structurally valid JSON -- `[1 2]` minifies to `[12]` -- so a
@@ -290,11 +290,7 @@ namespace glz
       std::string out{};
       detail::minify_json<Opts>(ctx, in, out);
       if (bool(ctx.error)) [[unlikely]] {
-         // Nothing here can report the failure, and the prefix written so far is not a document:
-         // it is whatever the scan managed before it stopped, routinely an unterminated string or
-         // an unclosed brace. Handing that back is the silent truncation this whole change is
-         // about, one layer up, so it comes back empty instead.
-         return {};
+         return {}; // an incomplete result is not a document; see above
       }
       return out;
    }
@@ -314,11 +310,7 @@ namespace glz
       std::string out{};
       detail::minify_json<opt_true<Opts, &opts::comments>>(ctx, in, out);
       if (bool(ctx.error)) [[unlikely]] {
-         // Nothing here can report the failure, and the prefix written so far is not a document:
-         // it is whatever the scan managed before it stopped, routinely an unterminated string or
-         // an unclosed brace. Handing that back is the silent truncation this whole change is
-         // about, one layer up, so it comes back empty instead.
-         return {};
+         return {}; // an incomplete result is not a document; see above
       }
       return out;
    }
