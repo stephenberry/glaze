@@ -205,6 +205,24 @@ namespace
    static_assert(glz::detail::member_supported<glz::operation::serialize, glz::JSON, WithFunctions, 2>());
    static_assert(glz::detail::first_unsupported_member<glz::operation::serialize, glz::JSON, WithFunctions> == 3);
 
+   // Which formats a function-pointer member is passed over by is not uniform: JSON and BSON drop
+   // both kinds, JSONB, BEVE and CBOR drop both, TOML drops member function pointers, and YAML,
+   // MSGPACK and CSV drop neither -- writing this struct as MSGPACK or YAML fails today. The check
+   // therefore exempts function pointers everywhere rather than tracking that table, which is the
+   // lenient direction: it means such a member is never *reported* by this diagnostic, not that every
+   // format writes it. The assertions below are the exemption, stated where it is doing work -- a
+   // format with no writer for either kind.
+   static_assert(glz::write_supported<int (WithFunctions::*)(int), glz::JSON>);
+   static_assert(!glz::write_supported<int (*)(int), glz::MSGPACK>);
+   static_assert(!glz::write_supported<int (WithFunctions::*)(int), glz::MSGPACK>);
+   static_assert(glz::detail::member_supported<glz::operation::serialize, glz::MSGPACK, WithFunctions, 1>());
+   static_assert(glz::detail::member_supported<glz::operation::serialize, glz::MSGPACK, WithFunctions, 2>());
+   static_assert(glz::detail::first_unsupported_member<glz::operation::serialize, glz::MSGPACK, WithFunctions> == 3);
+   static_assert(!glz::write_supported<int (*)(int), glz::YAML>);
+   static_assert(glz::detail::member_supported<glz::operation::serialize, glz::YAML, WithFunctions, 1>());
+   static_assert(!glz::write_supported<int (*)(int), glz::JSONB>);
+   static_assert(glz::detail::member_supported<glz::operation::serialize, glz::JSONB, WithFunctions, 1>());
+
    // ---- asking must remain possible -----------------------------------------------------------
    //
    // This is the reason the diagnostic lives inside `op()` instead of at class scope on
@@ -311,6 +329,11 @@ suite diagnostics_tests = [] {
       std::string callables;
       expect(!glz::write_json(functions, callables));
       expect(callables == R"({"a":1})") << callables;
+
+
+      // MSGPACK is one of the formats that does not pass function pointers over, so it is not
+      // written here: the point of the assertions above is that this diagnostic stays out of its way,
+      // not that every format accepts the struct.
    };
 
    "BSON writes the members it emits itself"_test = [] {
