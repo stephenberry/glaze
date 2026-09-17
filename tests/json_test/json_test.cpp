@@ -15504,27 +15504,36 @@ suite bounded_buffer_overflow_tests = [] {
       expect(ctx.error == glz::error_code::buffer_overflow) << int(ctx.error);
    };
 
-   "prettify into a bounded buffer with room to spare"_test = [] {
-      // The comment carries its own write, so JSONC is checked here too rather than only where a
-      // comment has to be skipped.
+   "prettify into a bounded buffer that fits exactly"_test = [] {
+      // The two sizes below pin the reservations from both sides, which is the only way to catch a
+      // reservation that is wrong rather than merely present. Exactly enough room has to succeed,
+      // or some reserve is asking for more than its write stores and output that fits is being
+      // refused. One byte less has to be refused, which is the case that walks off the end of the
+      // array without the checks. A buffer with room to spare proves neither, since it never
+      // reaches a reservation that can fail. The comment carries a write of its own, which is why
+      // the input is JSONC.
       const std::string in = R"({"a":1,/* note */"b":[1,2,3]})";
-      std::array<char, 512> buffer{};
+      const std::string expected = glz::prettify_jsonc(in);
+      expect(expected.size() == 65u) << expected.size();
 
-      glz::context ctx{};
-      glz::detail::prettify_json<glz::opts{.comments = true}>(ctx, in, buffer);
-      expect(not bool(ctx.error)) << int(ctx.error);
+      std::array<char, 65> exact{};
+      glz::context exact_ctx{};
+      glz::detail::prettify_json<glz::opts{.comments = true}>(exact_ctx, in, exact);
+      expect(not bool(exact_ctx.error)) << int(exact_ctx.error);
+      expect(std::string_view{exact.data(), exact.size()} == expected);
 
-      // Nothing reports how much was written: the public overloads return void, and a bounded
-      // destination has no size to shrink. Prettified JSON contains no '\0' of its own, so in an
-      // array that started zeroed the first one ends the document.
-      const std::string_view written{buffer.data(), std::strlen(buffer.data())};
-      expect(written == glz::prettify_jsonc(in)) << written;
+      // And one byte short has to be refused rather than rounded off
+      std::array<char, 64> short_by_one{};
+      glz::context short_ctx{};
+      glz::detail::prettify_json<glz::opts{.comments = true}>(short_ctx, in, short_by_one);
+      expect(short_ctx.error == glz::error_code::buffer_overflow) << int(short_ctx.error);
    };
 
    "prettify grows past twice its input"_test = [] {
-      // A resizable destination starts at twice the input size, which is not an upper bound on
-      // prettified output: every nesting level adds a newline and its indentation, so this
-      // document expands more than sixteen fold. The growth has to come from `dump` alone.
+      // Pins the premise rather than the fix: prettified output has no bound that a single upfront
+      // reservation could use, which is why the writes are checked one at a time. A resizable
+      // destination starts at twice the input size and every nesting level adds a newline and its
+      // indentation, so this document expands more than sixteen fold.
       const std::string in = "[[[[[[[[[[1]]]]]]]]]]";
       auto pretty = glz::prettify_json(in);
       expect(pretty.size() > 2 * in.size()) << pretty.size();
