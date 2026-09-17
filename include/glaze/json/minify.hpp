@@ -3,7 +3,9 @@
 
 #pragma once
 
-// Minified JSONC only works with /**/ style comments, so we only supports this
+// Minifying JSONC handles both comment styles. A block comment is carried through as written; a
+// line comment is dropped, because minifying is what removes the newline that ends it and without
+// that newline the comment would swallow everything written after it.
 
 #include "glaze/json/json_format.hpp"
 
@@ -65,8 +67,11 @@ namespace glz
          }()) {
             switch (json_types[uint8_t(*it)]) {
             case String: {
-               const auto value = read_json_string(it, end);
-               dump_maybe_empty<false>(value, b, ix);
+               const auto value = read_json_string(ctx, it, end);
+               if (bool(ctx.error)) [[unlikely]] {
+                  return;
+               }
+               dump<false>(value, b, ix); // non-empty: the scanner reports an empty view as an error
                skip_whitespace();
                break;
             }
@@ -102,36 +107,32 @@ namespace glz
             }
             case Null: {
                // The type table matched on the first byte alone, so the rest of the literal still
-               // has to be in the buffer. Stepping over it regardless puts `it` past `end`, and
-               // from there the loop goes on minifying whatever follows the document into an
-               // output sized for the document.
-               if (end - it < 4) [[unlikely]] {
-                  ctx.error = error_code::unexpected_end;
+               // has to be in the buffer, and it has to actually spell the literal. Stepping over
+               // it regardless puts `it` past `end`, and from there the loop goes on minifying
+               // whatever follows the document into an output sized for the document. Dumping it
+               // regardless invents the bytes that were not there: {"a":nul } came out as
+               // {"a":null}, a well-formed document the input never said.
+               if (not match_literal<"null">(ctx, it, end)) [[unlikely]] {
                   return;
                }
                dump<false>("null", b, ix);
-               it += 4;
                skip_whitespace();
                break;
             }
             case Bool: {
                if (*it == 't') {
-                  if (end - it < 4) [[unlikely]] {
-                     ctx.error = error_code::unexpected_end;
+                  if (not match_literal<"true">(ctx, it, end)) [[unlikely]] {
                      return;
                   }
                   dump<false>("true", b, ix);
-                  it += 4;
                   skip_whitespace();
                   break;
                }
                else {
-                  if (end - it < 5) [[unlikely]] {
-                     ctx.error = error_code::unexpected_end;
+                  if (not match_literal<"false">(ctx, it, end)) [[unlikely]] {
                      return;
                   }
                   dump<false>("false", b, ix);
-                  it += 5;
                   skip_whitespace();
                   break;
                }
@@ -150,9 +151,15 @@ namespace glz
             }
             case Comment: {
                if constexpr (Opts.comments) {
-                  const auto value = read_jsonc_comment(it, end);
-                  if (value.size()) [[likely]] {
-                     dump<false>(value, b, ix);
+                  const auto comment = read_jsonc_comment(ctx, it, end);
+                  if (bool(ctx.error)) [[unlikely]] {
+                     return;
+                  }
+                  // A line comment is dropped rather than written out. Minifying is what removes
+                  // the newline that ends it, and a line comment with no line break behind it
+                  // comments out the whole rest of the output.
+                  if (not comment.line) {
+                     dump<false>(comment.text, b, ix);
                   }
                   skip_whitespace();
                   break;
@@ -162,6 +169,16 @@ namespace glz
                }
             }
             [[unlikely]] default: {
+               // A null terminated run carries no bound in its loop condition, so it ends here, on
+               // the terminator, which is not a JSON token. Reaching it is the end of the document
+               // rather than an error -- unclassified is how the type table reports both, and
+               // without this the minifier left syntax_error behind on every input it was ever
+               // given, valid or not, which is what made its error not worth returning.
+               if constexpr (Opts.null_terminated) {
+                  if (it >= end) {
+                     return;
+                  }
+               }
                ctx.error = error_code::syntax_error;
                return;
             }
@@ -179,6 +196,14 @@ namespace glz
 
          if constexpr (resizable<Out>) {
             out.resize(in.size() + 2 * padding_bytes);
+         }
+         else {
+            // Minifying only ever removes bytes, which is what lets the scan below dump into the
+            // output without checking room for each token. A bounded output has to be told when
+            // the input is more than it holds, rather than being written past the end of.
+            if (not ensure_space(ctx, out, in.size())) [[unlikely]] {
+               return;
+            }
          }
          size_t ix = 0;
          auto [it, end] = read_iterators<Opts>(in);
@@ -202,15 +227,21 @@ namespace glz
       }
    }
 
-   // We don't return errors from minifying even though they are handled because the error case
-   // should not happen since we minify auto-generated JSON.
-   // The detail version can be used if error context is needed
+   // The overloads that write into a caller's buffer report what went wrong. Not [[nodiscard]]:
+   // minifying auto-generated JSON does not fail, so the callers that have always ignored the
+   // outcome are right to, and warning at all of them would say nothing useful. The overloads that
+   // return the text have nowhere to put an error and stay silent.
+   //
+   // Minifying reports what it actually parses, which is strings, comments and literals. It does
+   // not check that the document is structurally valid JSON -- `[1 2]` minifies to `[12]` -- so a
+   // document that may not be well formed wants glz::validate_json or glz::validate_jsonc.
 
    template <auto Opts = opts{}>
-   inline void minify_json(resizable auto& in, auto& out)
+   inline error_ctx minify_json(resizable auto& in, auto& out)
    {
       context ctx{};
       detail::minify_json<Opts>(ctx, in, out);
+      return {0, ctx.error, ctx.custom_error_message};
    }
 
    template <auto Opts = opts{}>
@@ -223,10 +254,11 @@ namespace glz
    }
 
    template <auto Opts = opts{}>
-   inline void minify_jsonc(resizable auto& in, auto& out)
+   inline error_ctx minify_jsonc(resizable auto& in, auto& out)
    {
       context ctx{};
       detail::minify_json<opt_true<Opts, &opts::comments>>(ctx, in, out);
+      return {0, ctx.error, ctx.custom_error_message};
    }
 
    template <auto Opts = opts{}>

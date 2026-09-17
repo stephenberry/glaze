@@ -3,7 +3,8 @@
 
 #pragma once
 
-// Minified JSONC only works with /**/ style comments, so we only supports this
+// Prettifying JSONC preserves comments of both styles. A line comment runs to the end of its
+// line, so whatever follows one is put on a new line rather than behind it.
 
 #include "glaze/json/json_format.hpp"
 
@@ -22,22 +23,52 @@ namespace glz
          std::vector<json_type> state(64);
          int64_t indent{};
 
+         // Set while the output cursor sits on a line that a `//` comment has commented out. Only
+         // the comment-enabled path can set it, so the plain JSON writer keeps the code it had.
+         [[maybe_unused]] bool line_comment_open = false;
+
+         // Every line break the writer emits goes through this, because a break is also what ends a
+         // line comment: doing it in one place is what keeps the two from doubling up.
+         auto new_line = [&] {
+            append_new_line<use_tabs, indent_width>(b, ix, indent);
+            if constexpr (Opts.comments) {
+               line_comment_open = false;
+            }
+         };
+
+         // Anything written while a line comment is open has to start a line of its own first, or
+         // the comment swallows it. Deferring the break to the next write rather than emitting it
+         // with the comment is what keeps a comment at the end of the input from leaving a trailing
+         // newline behind, and lets a break the writer was going to emit anyway serve as this one.
+         auto close_line_comment = [&] {
+            if constexpr (Opts.comments) {
+               if (line_comment_open) [[unlikely]] {
+                  new_line();
+               }
+            }
+         };
+
          while (it < end) {
             switch (json_types[uint8_t(*it)]) {
             case String: {
-               const auto value = read_json_string(it, end);
-               dump_maybe_empty(value, b, ix);
+               const auto value = read_json_string(ctx, it, end);
+               if (bool(ctx.error)) [[unlikely]] {
+                  return;
+               }
+               close_line_comment();
+               dump(value, b, ix); // non-empty: the scanner reports an empty view as an error
                break;
             }
             case Comma: {
+               close_line_comment();
                dump(',', b, ix);
                ++it;
                if constexpr (check_new_lines_in_arrays(Opts)) {
-                  append_new_line<use_tabs, indent_width>(b, ix, indent);
+                  new_line();
                }
                else {
                   if (state[indent] == Object_Start) {
-                     append_new_line<use_tabs, indent_width>(b, ix, indent);
+                     new_line();
                   }
                   else {
                      if constexpr (use_tabs) {
@@ -52,10 +83,12 @@ namespace glz
             }
             case Number: {
                const auto value = read_json_number<Opts.null_terminated>(it, end);
-               dump_not_empty(value, b, ix);
+               close_line_comment();
+               dump_not_empty(value, b, ix); // non-empty: a Number match is one valid character
                break;
             }
             case Colon: {
+               close_line_comment();
                if constexpr (use_tabs) {
                   dump(":\t", b, ix);
                }
@@ -66,6 +99,7 @@ namespace glz
                break;
             }
             case Array_Start: {
+               close_line_comment();
                dump('[', b, ix);
                ++it;
                ++indent;
@@ -80,12 +114,12 @@ namespace glz
                if constexpr (check_new_lines_in_arrays(Opts)) {
                   if constexpr (not Opts.null_terminated) {
                      if (it != end && *it != ']') {
-                        append_new_line<use_tabs, indent_width>(b, ix, indent);
+                        new_line();
                      }
                   }
                   else {
                      if (*it != ']') {
-                        append_new_line<use_tabs, indent_width>(b, ix, indent);
+                        new_line();
                      }
                   }
                }
@@ -99,31 +133,44 @@ namespace glz
                }
                if constexpr (check_new_lines_in_arrays(Opts)) {
                   if (it[-1] != '[') {
-                     append_new_line<use_tabs, indent_width>(b, ix, indent);
+                     new_line();
                   }
                }
+               close_line_comment();
                dump(']', b, ix);
                ++it;
                break;
             }
             case Null: {
+               // The type table matched on the first byte alone; see match_literal for why writing
+               // the literal from the writer's own spelling needs the rest of it checked.
+               if (not match_literal<"null">(ctx, it, end)) [[unlikely]] {
+                  return;
+               }
+               close_line_comment();
                dump("null", b, ix);
-               it += 4;
                break;
             }
             case Bool: {
                if (*it == 't') {
+                  if (not match_literal<"true">(ctx, it, end)) [[unlikely]] {
+                     return;
+                  }
+                  close_line_comment();
                   dump("true", b, ix);
-                  it += 4;
                   break;
                }
                else {
+                  if (not match_literal<"false">(ctx, it, end)) [[unlikely]] {
+                     return;
+                  }
+                  close_line_comment();
                   dump("false", b, ix);
-                  it += 5;
                   break;
                }
             }
             case Object_Start: {
+               close_line_comment();
                dump('{', b, ix);
                ++it;
                ++indent;
@@ -137,12 +184,12 @@ namespace glz
                state[indent] = Object_Start;
                if constexpr (not Opts.null_terminated) {
                   if (it != end && *it != '}') [[unlikely]] {
-                     append_new_line<use_tabs, indent_width>(b, ix, indent);
+                     new_line();
                   }
                }
                else {
                   if (*it != '}') {
-                     append_new_line<use_tabs, indent_width>(b, ix, indent);
+                     new_line();
                   }
                }
                break;
@@ -154,20 +201,31 @@ namespace glz
                   return;
                }
                if (it[-1] != '{') {
-                  append_new_line<use_tabs, indent_width>(b, ix, indent);
+                  new_line();
                }
+               close_line_comment();
                dump('}', b, ix);
                ++it;
                break;
             }
             case Comment: {
                if constexpr (Opts.comments) {
-                  const auto value = read_jsonc_comment(it, end);
-                  dump_not_empty(value, b, ix);
+                  const auto comment = read_jsonc_comment(ctx, it, end);
+                  if (bool(ctx.error)) [[unlikely]] {
+                     return;
+                  }
+                  close_line_comment();
+                  dump(comment.text, b, ix); // non-empty: an empty view comes with an error
+                  line_comment_open = comment.line;
                   break;
                }
                else {
-                  [[fallthrough]];
+                  // A '/' opens a comment, and plain JSON has none. Skipping it as though it were
+                  // whitespace silently rewrote the document: "{\"a\":1} // tail" came out as
+                  // "{...}true", the 't' of "tail" taken for a literal. minify_json has always
+                  // reported this, and the two had no business disagreeing.
+                  ctx.error = error_code::syntax_error;
+                  return;
                }
             }
             case Whitespace: {
@@ -212,15 +270,21 @@ namespace glz
       }
    }
 
-   // We don't return errors from prettifying even though they are handled because the error case
-   // should not happen since we prettify auto-generated JSON.
-   // The detail version can be used if error context is needed
+   // The overloads that write into a caller's buffer report what went wrong. Not [[nodiscard]]:
+   // prettifying auto-generated JSON does not fail, so the callers that have always ignored the
+   // outcome are right to, and warning at all of them would say nothing useful. The overloads that
+   // return the text have nowhere to put an error and stay silent.
+   //
+   // Prettifying reports what it actually parses, which is strings, comments and literals. It does
+   // not check that the document is structurally valid JSON -- `[1 2]` prettifies to `[12]` -- so a
+   // document that may not be well formed wants glz::validate_json or glz::validate_jsonc.
 
    template <auto Opts = opts{}>
-   inline void prettify_json(const auto& in, auto& out)
+   inline error_ctx prettify_json(const auto& in, auto& out)
    {
       context ctx{};
       detail::prettify_json<Opts>(ctx, in, out);
+      return {0, ctx.error, ctx.custom_error_message};
    }
 
    /// <summary>
@@ -236,10 +300,11 @@ namespace glz
    }
 
    template <auto Opts = opts{}>
-   inline void prettify_jsonc(const auto& in, auto& out)
+   inline error_ctx prettify_jsonc(const auto& in, auto& out)
    {
       context ctx{};
       detail::prettify_json<opt_true<Opts, &opts::comments>>(ctx, in, out);
+      return {0, ctx.error, ctx.custom_error_message};
    }
 
    /// <summary>
