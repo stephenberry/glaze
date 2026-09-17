@@ -4266,6 +4266,82 @@ suite raw_json_tests = [] {
    };
 };
 
+// An empty raw_json carries no JSON document, so the writer stands null in its place. Writing
+// nothing produced `{"payload":}` from a member that was simply never filled.
+struct raw_json_holder
+{
+   int id{};
+   glz::raw_json payload{};
+};
+
+struct raw_json_view_holder
+{
+   int id{};
+   glz::raw_json_view payload{};
+};
+
+suite empty_raw_json_tests = [] {
+   "empty raw_json member writes null"_test = [] {
+      raw_json_holder obj{};
+      std::string s{};
+      expect(not glz::write_json(obj, s));
+      expect(s == R"({"id":0,"payload":null})") << s;
+      expect(not glz::validate_json(s)) << s;
+   };
+
+   "empty raw_json_view member writes null"_test = [] {
+      raw_json_view_holder obj{};
+      std::string s{};
+      expect(not glz::write_json(obj, s));
+      expect(s == R"({"id":0,"payload":null})") << s;
+      expect(not glz::validate_json(s)) << s;
+   };
+
+   "raw_json cleared after being filled writes null"_test = [] {
+      raw_json_holder obj{42, R"({"a":1})"};
+      std::string s{};
+      expect(not glz::write_json(obj, s));
+      expect(s == R"({"id":42,"payload":{"a":1}})") << s;
+
+      obj.payload.str.clear();
+      s.clear();
+      expect(not glz::write_json(obj, s));
+      expect(s == R"({"id":42,"payload":null})") << s;
+   };
+
+   "empty raw_json is written as null at the top level"_test = [] {
+      expect(glz::write_json(glz::raw_json{}).value() == "null");
+      expect(glz::write_json(glz::raw_json_view{}).value() == "null");
+   };
+
+   "empty raw_json elements write null"_test = [] {
+      std::vector<glz::raw_json> v(3);
+      std::string s{};
+      expect(not glz::write_json(v, s));
+      expect(s == R"([null,null,null])") << s;
+   };
+
+   "empty raw_json prettifies as null"_test = [] {
+      raw_json_holder obj{};
+      std::string s{};
+      expect(not glz::write<glz::opts{.prettify = true}>(obj, s));
+      expect(s == "{\n   \"id\": 0,\n   \"payload\": null\n}") << s;
+   };
+
+   "the null stands only in the output, the member stays empty"_test = [] {
+      raw_json_holder obj{};
+      expect(obj.payload.str.empty());
+      std::string s{};
+      expect(not glz::write_json(obj, s));
+      expect(obj.payload.str.empty());
+
+      // Reading the written document back fills the member with the literal that was written.
+      raw_json_holder read{};
+      expect(not glz::read_json(read, s));
+      expect(read.payload.str == "null") << read.payload.str;
+   };
+};
+
 // Test struct for raw_json whitespace issue (GitHub issue)
 struct Properties
 {
