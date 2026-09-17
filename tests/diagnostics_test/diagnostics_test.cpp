@@ -31,7 +31,10 @@
 
 using namespace ut;
 
-namespace
+// A named namespace rather than an anonymous one: a type with no linkage makes clang reject
+// `external<T>`, which is what the member names go through, with "cannot be defined in any other
+// translation unit because its type does not have linkage".
+namespace diagnostics_test_names
 {
    // Every member has a writer and a reader, so nothing is diagnosed and every format can handle it.
    struct Supported
@@ -87,6 +90,8 @@ namespace
       std::vector<float> num2{};
    };
 }
+
+using namespace diagnostics_test_names;
 
 template <>
 struct glz::meta<SkippedForSerialize>
