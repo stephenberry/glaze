@@ -16102,9 +16102,10 @@ suite buffer_without_member_empty = [] {
       // wrote past the end of the array, which ASan reports, on valid JSON with no comments in it.
       const std::string in = R"({"a":1,"b":[1,2,3]})";
 
-      std::array<char, 8> small{};
-      std::string small_in = in;
-      expect(glz::minify_json(small_in, small) == glz::error_code::buffer_overflow);
+      // Not named `small`: the Windows SDK's rpcndr.h defines that as a macro for `char`
+      std::array<char, 8> cramped{};
+      std::string cramped_in = in;
+      expect(glz::minify_json(cramped_in, cramped) == glz::error_code::buffer_overflow);
 
       std::array<char, 64> roomy{};
       std::string roomy_in = in;
