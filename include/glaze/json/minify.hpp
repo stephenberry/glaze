@@ -18,22 +18,17 @@ namespace glz
       {
          using enum json_type;
 
-         // Every dump below is unchecked, which the caller's one-shot sizing covers for a resizable
-         // destination: minifying only ever removes bytes, so the input's length is room enough.
+         // Every write below goes through this, and the dump it makes is unchecked: the caller's
+         // one-shot sizing covers a resizable destination, because minifying only ever removes
+         // bytes, so the input's length is room enough.
          //
          // A bounded destination cannot be grown, and asking it for the input's length up front
          // refuses a buffer that fits the result -- sizing the output to the minified length is the
          // obvious thing to do, and `{ "a" : 1 }` into a 7 byte buffer has to work. So each write
-         // asks for exactly what it stores instead. None of it survives for a resizable
-         // destination, which keeps the unchecked dumps and nothing more.
-         const auto reserve = [&]([[maybe_unused]] const size_t n) {
-            if constexpr (has_bounded_capacity<decltype(b)>) {
-               return ensure_space(ctx, b, ix + n);
-            }
-            else {
-               return true;
-            }
-         };
+         // asks for exactly what it stores instead; see emit_bytes for where that count comes from.
+         // None of it survives for a resizable destination, which keeps the unchecked dumps and
+         // nothing more.
+         const auto emit = [&](const auto& x) { return emit_bytes<false>(ctx, b, ix, x); };
 
          auto ws_start = it;
          uint64_t ws_size{};
@@ -87,72 +82,65 @@ namespace glz
                if (bool(ctx.error)) [[unlikely]] {
                   return;
                }
-               if (not reserve(value.size())) [[unlikely]] {
+               // non-empty: the scanner reports an empty view as an error
+               if (not emit(value)) [[unlikely]] {
                   return;
                }
-               dump<false>(value, b, ix); // non-empty: the scanner reports an empty view as an error
                skip_whitespace();
                break;
             }
             case Comma: {
-               if (not reserve(1)) [[unlikely]] {
+               if (not emit(',')) [[unlikely]] {
                   return;
                }
-               dump<false>(',', b, ix);
                ++it;
                skip_expected_whitespace();
                break;
             }
             case Number: {
                const auto value = read_json_number<Opts.null_terminated>(it, end);
-               if (not reserve(value.size())) [[unlikely]] {
+               // non-empty: a Number match is one valid character
+               if (not emit(value)) [[unlikely]] {
                   return;
                }
-               dump<false>(value, b, ix); // we couldn't have gotten here without one valid character
                skip_whitespace();
                break;
             }
             case Colon: {
-               if (not reserve(1)) [[unlikely]] {
+               if (not emit(':')) [[unlikely]] {
                   return;
                }
-               dump<false>(':', b, ix);
                ++it;
                skip_whitespace();
                break;
             }
             case Array_Start: {
-               if (not reserve(1)) [[unlikely]] {
+               if (not emit('[')) [[unlikely]] {
                   return;
                }
-               dump<false>('[', b, ix);
                ++it;
                skip_expected_whitespace();
                break;
             }
             case Array_End: {
-               if (not reserve(1)) [[unlikely]] {
+               if (not emit(']')) [[unlikely]] {
                   return;
                }
-               dump<false>(']', b, ix);
                ++it;
                skip_whitespace();
                break;
             }
             case Null: {
-               // The type table matched on the first byte alone, so the rest of the literal still
-               // has to be in the buffer, and it has to actually spell the literal. Stepping over
-               // it regardless puts `it` past `end`, and from there the loop goes on minifying
-               // whatever follows the document into an output sized for the document. Dumping it
-               // regardless invents the bytes that were not there: {"a":nul } came out as
-               // {"a":null}, a well-formed document the input never said.
+               // The type table matched on the first byte alone; see match_literal for why writing
+               // the literal from the writer's own spelling needs the rest of it checked. Stepping
+               // over it unchecked also puts `it` past `end`, and from there the loop goes on
+               // minifying whatever follows the document into an output sized for the document.
                if (not match_literal<"null">(ctx, it, end)) [[unlikely]] {
                   return;
                }
-               if (not reserve(4)) [[unlikely]] {
+               if (not emit("null")) [[unlikely]] {
                   return;
                }
-               dump<false>("null", b, ix);
                skip_whitespace();
                break;
             }
@@ -161,10 +149,9 @@ namespace glz
                   if (not match_literal<"true">(ctx, it, end)) [[unlikely]] {
                      return;
                   }
-                  if (not reserve(4)) [[unlikely]] {
+                  if (not emit("true")) [[unlikely]] {
                      return;
                   }
-                  dump<false>("true", b, ix);
                   skip_whitespace();
                   break;
                }
@@ -172,28 +159,25 @@ namespace glz
                   if (not match_literal<"false">(ctx, it, end)) [[unlikely]] {
                      return;
                   }
-                  if (not reserve(5)) [[unlikely]] {
+                  if (not emit("false")) [[unlikely]] {
                      return;
                   }
-                  dump<false>("false", b, ix);
                   skip_whitespace();
                   break;
                }
             }
             case Object_Start: {
-               if (not reserve(1)) [[unlikely]] {
+               if (not emit('{')) [[unlikely]] {
                   return;
                }
-               dump<false>('{', b, ix);
                ++it;
                skip_expected_whitespace();
                break;
             }
             case Object_End: {
-               if (not reserve(1)) [[unlikely]] {
+               if (not emit('}')) [[unlikely]] {
                   return;
                }
-               dump<false>('}', b, ix);
                ++it;
                skip_whitespace();
                break;
@@ -208,10 +192,10 @@ namespace glz
                   // the newline that ends it, and a line comment with no line break behind it
                   // comments out the whole rest of the output.
                   if (not comment.line) {
-                     if (not reserve(comment.text.size())) [[unlikely]] {
+                     // non-empty: an empty view comes with an error
+                     if (not emit(comment.text)) [[unlikely]] {
                         return;
                      }
-                     dump<false>(comment.text, b, ix);
                   }
                   skip_whitespace();
                   break;
@@ -283,7 +267,9 @@ namespace glz
    // [[nodiscard]]:
    // minifying auto-generated JSON does not fail, so the callers that have always ignored the
    // outcome are right to, and warning at all of them would say nothing useful. The overloads that
-   // return the text have nowhere to put an error and stay silent.
+   // return the text have nowhere to put an error, so they come back empty rather than hand over
+   // the prefix the scan managed before it stopped -- routinely an unterminated string or an
+   // unclosed brace, which is not a document but a silent truncation of one.
    //
    // Minifying reports what it actually parses, which is strings, comments and literals. It does
    // not check that the document is structurally valid JSON -- `[1 2]` minifies to `[12]` -- so a
@@ -304,11 +290,7 @@ namespace glz
       std::string out{};
       detail::minify_json<Opts>(ctx, in, out);
       if (bool(ctx.error)) [[unlikely]] {
-         // Nothing here can report the failure, and the prefix written so far is not a document:
-         // it is whatever the scan managed before it stopped, routinely an unterminated string or
-         // an unclosed brace. Handing that back is the silent truncation this whole change is
-         // about, one layer up, so it comes back empty instead.
-         return {};
+         return {}; // an incomplete result is not a document; see above
       }
       return out;
    }
@@ -328,11 +310,7 @@ namespace glz
       std::string out{};
       detail::minify_json<opt_true<Opts, &opts::comments>>(ctx, in, out);
       if (bool(ctx.error)) [[unlikely]] {
-         // Nothing here can report the failure, and the prefix written so far is not a document:
-         // it is whatever the scan managed before it stopped, routinely an unterminated string or
-         // an unclosed brace. Handing that back is the silent truncation this whole change is
-         // about, one layer up, so it comes back empty instead.
-         return {};
+         return {}; // an incomplete result is not a document; see above
       }
       return out;
    }

@@ -28,24 +28,45 @@ namespace glz
          [[maybe_unused]] bool line_comment_open = false;
 
          // Every line break the writer emits goes through this, because a break is also what ends a
-         // line comment: doing it in one place is what keeps the two from doubling up.
-         auto new_line = [&] {
+         // line comment: doing it in one place is what keeps the two from doubling up. The newline
+         // and the indentation behind it are also what make the output unbounded -- there is no
+         // bound on prettified output that a single reservation up front could use -- so this is
+         // the write a bounded destination is likeliest to run out on.
+         const auto new_line = [&] {
+            if constexpr (has_bounded_capacity<decltype(b)>) {
+               const size_t n = use_tabs ? size_t(indent) : size_t(indent) * indent_width;
+               if (not ensure_space(ctx, b, ix + 1 + n)) [[unlikely]] {
+                  return false;
+               }
+            }
             append_new_line<use_tabs, indent_width>(b, ix, indent);
             if constexpr (Opts.comments) {
                line_comment_open = false;
             }
+            return true;
          };
 
-         // Anything written while a line comment is open has to start a line of its own first, or
-         // the comment swallows it. Deferring the break to the next write rather than emitting it
-         // with the comment is what keeps a comment at the end of the input from leaving a trailing
-         // newline behind, and lets a break the writer was going to emit anyway serve as this one.
-         auto close_line_comment = [&] {
+         // Every write below goes through this, which is what fixes their order in one place: an
+         // open line comment is closed first, because anything written into one is commented out,
+         // and emit_bytes then takes the reservation from the argument rather than from a byte
+         // count spelled out beside the write.
+         //
+         // Deferring that break to the next write rather than emitting it with the comment is what
+         // keeps a comment at the end of the input from leaving a trailing newline behind, and lets
+         // a break the writer was going to emit anyway serve as this one.
+         //
+         // A break that fails is reported rather than swallowed: on a bounded destination that ran
+         // out, carrying on would leave `line_comment_open` set and put this write *inside* the
+         // comment, which is not a truncated document but a wrong one.
+         const auto emit = [&](const auto& x) {
             if constexpr (Opts.comments) {
                if (line_comment_open) [[unlikely]] {
-                  new_line();
+                  if (not new_line()) [[unlikely]] {
+                     return false;
+                  }
                }
             }
+            return emit_bytes<true>(ctx, b, ix, x);
          };
 
          while (it < end) {
@@ -55,52 +76,54 @@ namespace glz
                if (bool(ctx.error)) [[unlikely]] {
                   return;
                }
-               close_line_comment();
-               dump(value, b, ix); // non-empty: the scanner reports an empty view as an error
+               // non-empty: the scanner reports an empty view as an error
+               if (not emit(value)) [[unlikely]] {
+                  return;
+               }
                break;
             }
             case Comma: {
-               close_line_comment();
-               dump(',', b, ix);
+               if (not emit(',')) [[unlikely]] {
+                  return;
+               }
                ++it;
                if constexpr (check_new_lines_in_arrays(Opts)) {
-                  new_line();
+                  if (not new_line()) [[unlikely]] {
+                     return;
+                  }
                }
                else {
                   if (state[indent] == Object_Start) {
-                     new_line();
+                     if (not new_line()) [[unlikely]] {
+                        return;
+                     }
                   }
-                  else {
-                     if constexpr (use_tabs) {
-                        dump('\t', b, ix);
-                     }
-                     else {
-                        dump(' ', b, ix);
-                     }
+                  else if (not emit(use_tabs ? '\t' : ' ')) [[unlikely]] {
+                     return;
                   }
                }
                break;
             }
             case Number: {
                const auto value = read_json_number<Opts.null_terminated>(it, end);
-               close_line_comment();
-               dump_not_empty(value, b, ix); // non-empty: a Number match is one valid character
+               // non-empty: a Number match is one valid character
+               if (not emit(value)) [[unlikely]] {
+                  return;
+               }
                break;
             }
             case Colon: {
-               close_line_comment();
-               if constexpr (use_tabs) {
-                  dump(":\t", b, ix);
-               }
-               else {
-                  dump(": ", b, ix);
+               static constexpr sv colon = use_tabs ? sv{":\t"} : sv{": "};
+               if (not emit(colon)) [[unlikely]] {
+                  return;
                }
                ++it;
                break;
             }
             case Array_Start: {
-               close_line_comment();
-               dump('[', b, ix);
+               if (not emit('[')) [[unlikely]] {
+                  return;
+               }
                ++it;
                ++indent;
                if (size_t(indent) >= state.size()) [[unlikely]] {
@@ -114,12 +137,16 @@ namespace glz
                if constexpr (check_new_lines_in_arrays(Opts)) {
                   if constexpr (not Opts.null_terminated) {
                      if (it != end && *it != ']') {
-                        new_line();
+                        if (not new_line()) [[unlikely]] {
+                           return;
+                        }
                      }
                   }
                   else {
                      if (*it != ']') {
-                        new_line();
+                        if (not new_line()) [[unlikely]] {
+                           return;
+                        }
                      }
                   }
                }
@@ -131,13 +158,18 @@ namespace glz
                   ctx.error = error_code::syntax_error;
                   return;
                }
+               // This break is the one the bracket wanted anyway, and it closes an open line
+               // comment on its way, leaving the emit below nothing to close.
                if constexpr (check_new_lines_in_arrays(Opts)) {
                   if (it[-1] != '[') {
-                     new_line();
+                     if (not new_line()) [[unlikely]] {
+                        return;
+                     }
                   }
                }
-               close_line_comment();
-               dump(']', b, ix);
+               if (not emit(']')) [[unlikely]] {
+                  return;
+               }
                ++it;
                break;
             }
@@ -147,8 +179,9 @@ namespace glz
                if (not match_literal<"null">(ctx, it, end)) [[unlikely]] {
                   return;
                }
-               close_line_comment();
-               dump("null", b, ix);
+               if (not emit("null")) [[unlikely]] {
+                  return;
+               }
                break;
             }
             case Bool: {
@@ -156,22 +189,25 @@ namespace glz
                   if (not match_literal<"true">(ctx, it, end)) [[unlikely]] {
                      return;
                   }
-                  close_line_comment();
-                  dump("true", b, ix);
+                  if (not emit("true")) [[unlikely]] {
+                     return;
+                  }
                   break;
                }
                else {
                   if (not match_literal<"false">(ctx, it, end)) [[unlikely]] {
                      return;
                   }
-                  close_line_comment();
-                  dump("false", b, ix);
+                  if (not emit("false")) [[unlikely]] {
+                     return;
+                  }
                   break;
                }
             }
             case Object_Start: {
-               close_line_comment();
-               dump('{', b, ix);
+               if (not emit('{')) [[unlikely]] {
+                  return;
+               }
                ++it;
                ++indent;
                if (size_t(indent) >= state.size()) [[unlikely]] {
@@ -183,13 +219,17 @@ namespace glz
                }
                state[indent] = Object_Start;
                if constexpr (not Opts.null_terminated) {
-                  if (it != end && *it != '}') [[unlikely]] {
-                     new_line();
+                  if (it != end && *it != '}') {
+                     if (not new_line()) [[unlikely]] {
+                        return;
+                     }
                   }
                }
                else {
                   if (*it != '}') {
-                     new_line();
+                     if (not new_line()) [[unlikely]] {
+                        return;
+                     }
                   }
                }
                break;
@@ -200,11 +240,15 @@ namespace glz
                   ctx.error = error_code::syntax_error;
                   return;
                }
+               // As in Array_End, this break doubles as the close of an open line comment.
                if (it[-1] != '{') {
-                  new_line();
+                  if (not new_line()) [[unlikely]] {
+                     return;
+                  }
                }
-               close_line_comment();
-               dump('}', b, ix);
+               if (not emit('}')) [[unlikely]] {
+                  return;
+               }
                ++it;
                break;
             }
@@ -214,8 +258,10 @@ namespace glz
                   if (bool(ctx.error)) [[unlikely]] {
                      return;
                   }
-                  close_line_comment();
-                  dump(comment.text, b, ix); // non-empty: an empty view comes with an error
+                  // non-empty: an empty view comes with an error
+                  if (not emit(comment.text)) [[unlikely]] {
+                     return;
+                  }
                   line_comment_open = comment.line;
                   break;
                }
@@ -280,7 +326,9 @@ namespace glz
    // [[nodiscard]]:
    // prettifying auto-generated JSON does not fail, so the callers that have always ignored the
    // outcome are right to, and warning at all of them would say nothing useful. The overloads that
-   // return the text have nowhere to put an error and stay silent.
+   // return the text have nowhere to put an error, so they come back empty rather than hand over
+   // the prefix the scan managed before it stopped -- routinely an unterminated string or an
+   // unclosed brace, which is not a document but a silent truncation of one.
    //
    // Prettifying reports what it actually parses, which is strings, comments and literals. It does
    // not check that the document is structurally valid JSON -- `[1 2]` prettifies to `[12]` -- so a
@@ -304,11 +352,7 @@ namespace glz
       std::string out{};
       detail::prettify_json<Opts>(ctx, in, out);
       if (bool(ctx.error)) [[unlikely]] {
-         // Nothing here can report the failure, and the prefix written so far is not a document:
-         // it is whatever the scan managed before it stopped, routinely an unterminated string or
-         // an unclosed brace. Handing that back is the silent truncation this whole change is
-         // about, one layer up, so it comes back empty instead.
-         return {};
+         return {}; // an incomplete result is not a document; see above
       }
       return out;
    }
@@ -331,11 +375,7 @@ namespace glz
       std::string out{};
       detail::prettify_json<opt_true<Opts, &opts::comments>>(ctx, in, out);
       if (bool(ctx.error)) [[unlikely]] {
-         // Nothing here can report the failure, and the prefix written so far is not a document:
-         // it is whatever the scan managed before it stopped, routinely an unterminated string or
-         // an unclosed brace. Handing that back is the silent truncation this whole change is
-         // about, one layer up, so it comes back empty instead.
-         return {};
+         return {}; // an incomplete result is not a document; see above
       }
       return out;
    }

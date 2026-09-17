@@ -15491,6 +15491,79 @@ suite bounded_buffer_overflow_tests = [] {
       expect(not ec) << "prettify with many fields should not crash";
       expect(buffer.size() > 0) << "output should not be empty";
    };
+
+   "prettify into a bounded buffer that is too small"_test = [] {
+      // `dump` grows a resizable destination but writes straight through a bounded one, so
+      // prettify owes it the room for every write. Without those checks this ran off the end of
+      // the array and reported nothing at all.
+      const std::string in = R"({"a":1,"b":[1,2,3]})";
+      std::array<char, 8> buffer{};
+
+      glz::context ctx{};
+      glz::detail::prettify_json<glz::opts{}>(ctx, in, buffer);
+      expect(ctx.error == glz::error_code::buffer_overflow) << int(ctx.error);
+   };
+
+   "prettify into a bounded buffer that fits exactly"_test = [] {
+      // The two sizes below pin the reservations from both sides, which is the only way to catch a
+      // reservation that is wrong rather than merely present. Exactly enough room has to succeed,
+      // or some reserve is asking for more than its write stores and output that fits is being
+      // refused. One byte less has to be refused, which is the case that walks off the end of the
+      // array without the checks. A buffer with room to spare proves neither, since it never
+      // reaches a reservation that can fail. The comment carries a write of its own, which is why
+      // the input is JSONC.
+      const std::string in = R"({"a":1,/* note */"b":[1,2,3]})";
+      const std::string expected = glz::prettify_jsonc(in);
+      expect(expected.size() == 65u) << expected.size();
+
+      std::array<char, 65> exact{};
+      glz::context exact_ctx{};
+      glz::detail::prettify_json<glz::opts{.comments = true}>(exact_ctx, in, exact);
+      expect(not bool(exact_ctx.error)) << int(exact_ctx.error);
+      expect(std::string_view{exact.data(), exact.size()} == expected);
+
+      // And one byte short has to be refused rather than rounded off
+      std::array<char, 64> short_by_one{};
+      glz::context short_ctx{};
+      glz::detail::prettify_json<glz::opts{.comments = true}>(short_ctx, in, short_by_one);
+      expect(short_ctx.error == glz::error_code::buffer_overflow) << int(short_ctx.error);
+   };
+
+   "prettify does not write inside a line comment it could not close"_test = [] {
+      // The break a line comment defers is itself a write, so on a bounded output it can be the
+      // write that runs out of room. Reporting that rather than swallowing it is what keeps the
+      // token behind the comment out of it: with the failure ignored, a 23 byte output comes back
+      // as `// c"b"`, which is not a truncated document but a wrong one, with the key commented
+      // out. 23 is the size that tells the two apart -- the break needs four bytes and does not
+      // fit, while the three the key needs still do.
+      const std::string in = "{\"a\":1, // c\n\"b\":2}";
+
+      std::array<char, 23> tight{};
+      glz::context tight_ctx{};
+      const auto written = glz::detail::prettify_json<glz::opts{.comments = true}>(tight_ctx, in, tight);
+      expect(tight_ctx.error == glz::error_code::buffer_overflow) << int(tight_ctx.error);
+      expect(written == 20u) << written;
+      expect(std::string_view{tight.data(), written} == "{\n   \"a\": 1,\n   // c")
+         << std::string_view{tight.data(), written};
+
+      // With room for the break the document completes
+      std::array<char, 32> roomy{};
+      glz::context roomy_ctx{};
+      const auto complete = glz::detail::prettify_json<glz::opts{.comments = true}>(roomy_ctx, in, roomy);
+      expect(not bool(roomy_ctx.error)) << int(roomy_ctx.error);
+      expect(std::string_view{roomy.data(), complete} == glz::prettify_jsonc(in));
+   };
+
+   "prettify grows past twice its input"_test = [] {
+      // Pins the premise rather than the fix: prettified output has no bound that a single upfront
+      // reservation could use, which is why the writes are checked one at a time. A resizable
+      // destination starts at twice the input size and every nesting level adds a newline and its
+      // indentation, so this document expands more than sixteen fold.
+      const std::string in = "[[[[[[[[[[1]]]]]]]]]]";
+      auto pretty = glz::prettify_json(in);
+      expect(pretty.size() > 2 * in.size()) << pretty.size();
+      expect(glz::minify_json(pretty) == in) << pretty;
+   };
 };
 
 namespace json_depth
