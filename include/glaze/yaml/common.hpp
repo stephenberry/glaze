@@ -1067,8 +1067,8 @@ namespace glz::yaml
       if (c == '&' || c == '!') {
          // An anchor name and a tag shorthand both run to the next whitespace or flow indicator.
          ++it;
-         while (it != stop && *it != ' ' && *it != '\t' && *it != ',' && *it != '[' && *it != ']' &&
-                *it != '{' && *it != '}' && *it != '\n' && *it != '\r') {
+         while (it != stop && *it != ' ' && *it != '\t' && *it != ',' && *it != '[' && *it != ']' && *it != '{' &&
+                *it != '}' && *it != '\n' && *it != '\r') {
             ++it;
          }
          return true;
