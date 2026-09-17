@@ -10,7 +10,9 @@
 // members an operation skips by design. The rejection itself is covered by the cases next to this
 // file, which are compiled by check_diagnostic.cmake.
 
+#include <optional>
 #include <string>
+#include <variant>
 #include <vector>
 
 #include "cases/shapes.hpp"
@@ -66,6 +68,16 @@ namespace
       int a{1};
       int (*free_function)(int){};
       int (WithFunctions::*member_function)(int){};
+   };
+
+   // BSON emits the members below itself, inside its member loop, because a BSON element carries its
+   // type next to its key and `to<BSON, T>::type_code` cannot express them: nullable, null and
+   // variant members are written even though `to<BSON, ...>` has no specialization for them.
+   struct BsonInlineMembers
+   {
+      std::optional<int> engaged{42};
+      std::monostate empty{};
+      std::variant<int, std::string> choice{std::string{"picked"}};
    };
 
    // CSV writes a struct of columns rather than a row, so a member has to be a container.
@@ -139,6 +151,27 @@ namespace
    static_assert(glz::detail::writable_members<glz::JSON, Supported>);
    static_assert(glz::detail::readable_members<glz::JSON, Supported>);
    static_assert(glz::detail::writable_members<glz::JSON, WithFunctions>);
+
+   // The member count has to agree with the reflection it stands in for, for a type that has
+   // linkage, in both reflection modes: reflectable aggregates are counted through the tie,
+   // everything else through reflect<T>.
+   static_assert(glz::detail::member_count<Outer>() == glz::reflect<Outer>::size);
+   static_assert(glz::detail::member_count<Inner>() == glz::reflect<Inner>::size);
+   static_assert(glz::detail::member_count<Supported>() == glz::reflect<Supported>::size);
+   static_assert(glz::detail::member_count<Renamed>() == glz::reflect<Renamed>::size);
+   static_assert(glz::detail::member_count<Outer>() == 3);
+
+   // Members a format writes itself are not missing support. BSON is the case that exists today:
+   // `write_supported` is false for all three of these, yet the format writes all three.
+   static_assert(!glz::write_supported<std::optional<int>, glz::BSON>);
+   static_assert(glz::detail::member_supported<glz::operation::serialize, glz::BSON, BsonInlineMembers, 0>());
+   static_assert(glz::detail::member_supported<glz::operation::serialize, glz::BSON, BsonInlineMembers, 1>());
+   static_assert(glz::detail::member_supported<glz::operation::serialize, glz::BSON, BsonInlineMembers, 2>());
+   static_assert(glz::detail::writable_members<glz::BSON, BsonInlineMembers>);
+   static_assert(glz::detail::first_unsupported_member<glz::operation::serialize, glz::BSON, BsonInlineMembers> == 3);
+   // The exemption is the writer's, not the reader's: the reader has real from<BSON, ...>
+   // specializations for these, so nothing is exempted there.
+   static_assert(glz::read_supported<std::optional<int>, glz::BSON>);
 
    // ---- what the report says the member is ----------------------------------------------------
 
@@ -278,6 +311,18 @@ suite diagnostics_tests = [] {
       std::string callables;
       expect(!glz::write_json(functions, callables));
       expect(callables == R"({"a":1})") << callables;
+   };
+
+   "BSON writes the members it emits itself"_test = [] {
+      BsonInlineMembers v{};
+      std::string bytes;
+      expect(!glz::write_bson(v, bytes)) << "write_bson failed";
+
+      BsonInlineMembers back{};
+      expect(!glz::read_bson(back, bytes));
+      expect(back.engaged == 42);
+      expect(std::holds_alternative<std::string>(back.choice));
+      expect(std::get<std::string>(back.choice) == "picked");
    };
 
    "the CSV writer still round trips a struct of columns"_test = [] {

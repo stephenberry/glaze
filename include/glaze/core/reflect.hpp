@@ -713,6 +713,58 @@ namespace glz
    // template and is therefore only instantiated when the writer or reader actually runs.
    namespace detail
    {
+      // Members a format's object writer emits itself, inside its own member loop, instead of
+      // dispatching to `to<Format, M>`. BSON is the case that exists today: a BSON element carries
+      // its type next to its key, and the object writer emits that pair itself for nullable, null
+      // and variant members (`bson_detail::write_member_element`), so `write_supported` is false for
+      // those types even though the format writes them.
+      template <uint32_t Format, class M>
+      inline constexpr bool writer_emits_member_inline = false;
+
+      // How many members T has, and what each one is, without instantiating `reflect<T>` for a
+      // reflectable type. `reflect<T>` declares `static constexpr auto keys = member_names<V>`, and
+      // deducing `auto` there evaluates the member names -- which is a hard error in GCC for a type
+      // with no linkage, because the pre-C++26 implementation passes the type through
+      // `external<T>`, a variable template that cannot be defined for a type declared inside a
+      // function. MSGPACK's reflectable path forwards through `to_tie` and never touches the names,
+      // so it writes such a type today and asking about its members must not be what breaks it.
+      //
+      // The tie is that path's own view of the members, so both answers come from it and match what
+      // `reflect<T>` reports for a type that has linkage.
+      template <class T, bool Reflectable = reflectable<T>>
+      struct member_counter
+      {
+         static constexpr size_t value = reflect<T>::size;
+      };
+
+      template <class T>
+      struct member_counter<T, true>
+      {
+         static constexpr size_t value = glz::tuple_size_v<decltype(to_tie(std::declval<T&>()))>;
+      };
+
+      template <class T>
+      consteval size_t member_count()
+      {
+         return member_counter<T>::value;
+      }
+
+      template <class T, size_t I, bool Reflectable = reflectable<T>>
+      struct member_type
+      {
+         using type = refl_t<T, I>;
+      };
+
+      // `reflect<T>::type<I>` for a reflectable type is exactly this expression
+      template <class T, size_t I>
+      struct member_type<T, I, true>
+      {
+         using type = member_t<std::remove_cvref_t<T>, decltype(get<I>(to_tie(std::declval<T&>())))>;
+      };
+
+      template <class T, size_t I>
+      using member_type_t = std::remove_cvref_t<typename member_type<T, I>::type>;
+
       // Whether the member at index I is written/read as usual for Format, or the operation skips it
       // by design. A member skipped by design must not be diagnosed: `meta::skip` exists so that a
       // field whose type has no `to`/`from` can sit in a struct without breaking it, and the object
@@ -720,10 +772,10 @@ namespace glz
       template <operation Op, uint32_t Format, class T, size_t I>
       consteval bool member_supported()
       {
-         using M = field_t<T, I>;
+         using M = member_type_t<T, I>;
          if constexpr (Op == operation::serialize) {
             return always_skipped<M> || is_any_function_ptr<M> || skipped_by_meta<T, I, Op> ||
-                   write_supported<M, Format>;
+                   writer_emits_member_inline<Format, M> || write_supported<M, Format>;
          }
          else {
             return always_skipped<M> || is_any_function_ptr<M> || skipped_by_meta<T, I, Op> ||
@@ -731,11 +783,11 @@ namespace glz
          }
       }
 
-      // Index of the first member with no support, or reflect<T>::size when there is none. Evaluated
+      // Index of the first member with no support, or the member count when there is none. Evaluated
       // once per (operation, format, T), however many option sets instantiate the object writer.
       template <operation Op, uint32_t Format, class T>
       inline constexpr size_t first_unsupported_member = [] {
-         constexpr size_t N = reflect<T>::size;
+         constexpr size_t N = member_count<T>();
          size_t first{N};
          [&]<size_t... I>(std::index_sequence<I...>) {
             ((member_supported<Op, Format, T, I>() ? void() : (void)(first = first < I ? first : I)), ...);
@@ -750,7 +802,7 @@ namespace glz
 
       template <class T, size_t I>
       inline constexpr auto member_type_of =
-         string_literal_from_view<type_name<field_t<T, I>>.size()>(type_name<field_t<T, I>>);
+         string_literal_from_view<type_name<member_type_t<T, I>>.size()>(type_name<member_type_t<T, I>>);
 
       // Instantiating one of these reports the error, and every template argument is load bearing: the
       // compiler prints them in the instantiation trace, and that trace is what names the member.
@@ -788,7 +840,7 @@ namespace glz
       template <operation Op, uint32_t Format, class T>
       inline constexpr bool object_members_supported = [] {
          constexpr size_t bad = first_unsupported_member<Op, Format, T>;
-         if constexpr (bad == reflect<T>::size) {
+         if constexpr (bad == member_count<T>()) {
             return true;
          }
          else if constexpr (Op == operation::serialize) {
