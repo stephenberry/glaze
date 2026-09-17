@@ -55,20 +55,19 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t* Data, size_t Size)
                return rewritten == original;
             };
 
+            // A formatter that rejects a document the validator accepted is the same disagreement
+            // as one that mangles it, so an error here is a failure rather than a reason to skip
+            // the check. Gating on success would hide exactly the regression this guards against.
             std::string minify_in{Data, Data + Size};
             std::string minified{};
-            if (not glz::minify_jsonc(minify_in, minified)) {
-               if (not round_trips(minified)) {
-                  std::abort(); // not assert: a fuzz target has to fire under NDEBUG too
-               }
+            if (glz::minify_jsonc(minify_in, minified) || not round_trips(minified)) {
+               std::abort(); // not assert: a fuzz target has to fire under NDEBUG too
             }
 
             const std::string prettify_in{Data, Data + Size};
             std::string prettified{};
-            if (not glz::prettify_jsonc(prettify_in, prettified)) {
-               if (not round_trips(prettified)) {
-                  std::abort(); // not assert: a fuzz target has to fire under NDEBUG too
-               }
+            if (glz::prettify_jsonc(prettify_in, prettified) || not round_trips(prettified)) {
+               std::abort(); // not assert: a fuzz target has to fire under NDEBUG too
             }
          }
       }

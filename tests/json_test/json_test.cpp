@@ -16082,7 +16082,11 @@ suite buffer_without_member_empty = [] {
       // it were whitespace: the bytes behind it were formatted as document content, so
       // {"a":1} // tail came out as {"a":1}true, the 't' of "tail" taken for a literal.
       // minify_json has always reported it.
-      for (std::string_view in : {R"({"a":1} // tail)", R"({"a":1, /* c */ "b":2})", R"(// head)"}) {
+      // The bodies that start with a digit or a structural byte are the ones that pin this: with a
+      // body like `tail` the literal check rejects the input first, so the whole test passed with
+      // the Comment case reverted to skipping the '/' as whitespace.
+      for (std::string_view in : {R"({"a":1} // 123)", R"({"a":1} // {"b":2})", R"({"a":1} // tail)",
+                                  R"({"a":1, /* c */ "b":2})", R"(// head)"}) {
          std::string out{};
          std::string copy{in};
          expect(bool(glz::minify_json(copy, out))) << in;
@@ -16096,10 +16100,10 @@ suite buffer_without_member_empty = [] {
       }
    };
 
-   "minify reports a bounded output that is too small (#2864)"_test = [] {
-      // Minifying only ever removes bytes, which is what lets it dump without checking room for
-      // each token. A bounded output has to be told when the input is more than it holds: this
-      // wrote past the end of the array, which ASan reports, on valid JSON with no comments in it.
+   "minify bounds a fixed-capacity output (#2864)"_test = [] {
+      // Dumping into the output is unchecked, which the one-shot sizing covers for a resizable
+      // destination. A bounded one used to get no check at all and was written past the end of,
+      // which ASan reports, on valid JSON with no comments in it.
       const std::string in = R"({"a":1,"b":[1,2,3]})";
 
       // Not named `small`: the Windows SDK's rpcndr.h defines that as a macro for `char`
@@ -16115,6 +16119,43 @@ suite buffer_without_member_empty = [] {
       expect(not ec);
       expect(ec.count == in.size()) << ec.count;
       expect(std::string_view{roomy.data(), ec.count} == in);
+   };
+
+   "minify accepts an output sized to the minified length (#2864)"_test = [] {
+      // Reserving the input's length in one call up front is the obvious way to bound this, and it
+      // is wrong: minifying shrinks, so sizing the output to the result is the natural thing for a
+      // caller to do, and the whole input's length refuses a buffer that fits. Checking each write
+      // instead costs a bounded destination one compare per token and a resizable one nothing.
+      const std::string in = R"({ "a" : 1 })"; // 11 bytes in, 7 out
+
+      std::array<char, 7> exact{};
+      std::string exact_in = in;
+      const auto exact_ec = glz::minify_json(exact_in, exact);
+      expect(not exact_ec) << int(exact_ec.ec);
+      expect(exact_ec.count == 7u) << exact_ec.count;
+      expect(std::string_view{exact.data(), exact.size()} == R"({"a":1})");
+
+      // And one byte short is still refused
+      std::array<char, 6> short_by_one{};
+      std::string short_in = in;
+      expect(glz::minify_json(short_in, short_by_one) == glz::error_code::buffer_overflow);
+   };
+
+   "the formatters return nothing rather than a truncated document (#2864)"_test = [] {
+      // The overloads that return the text have nowhere to report a failure, and the prefix the
+      // scan managed is not a document: `{"a":"` is an unterminated string. Handing that back is
+      // the silent truncation this change is about, one layer up.
+      std::string unterminated_string = R"({"a":"oops)";
+      expect(glz::minify_jsonc(unterminated_string).empty()) << glz::minify_jsonc(unterminated_string);
+      expect(glz::prettify_jsonc(unterminated_string).empty());
+
+      std::string unterminated_comment = R"({"a":1 /* oops)";
+      expect(glz::minify_jsonc(unterminated_comment).empty());
+      expect(glz::prettify_jsonc(unterminated_comment).empty());
+
+      // A document that formats cleanly still comes back
+      std::string good = R"({"a":1, /* c */ "b":2})";
+      expect(glz::minify_jsonc(good) == R"({"a":1,/* c */"b":2})");
    };
 
    "prettify keeps its break for a whitespace only container (#2864)"_test = [] {

@@ -274,7 +274,9 @@ namespace glz
    }
 
    // The overloads that write into a caller's buffer report what went wrong, and how many bytes
-   // they wrote, which is the only way a bounded output learns where its result ends. Not
+   // they wrote, which is the only way a bounded output learns where its result ends. That count is
+   // an offset into the output, not the input, so glz::format_error(ec, source) -- which reads it
+   // as a position in the buffer it is handed -- does not point at the offending byte here. Not
    // [[nodiscard]]:
    // prettifying auto-generated JSON does not fail, so the callers that have always ignored the
    // outcome are right to, and warning at all of them would say nothing useful. The overloads that
@@ -301,6 +303,13 @@ namespace glz
       context ctx{};
       std::string out{};
       detail::prettify_json<Opts>(ctx, in, out);
+      if (bool(ctx.error)) [[unlikely]] {
+         // Nothing here can report the failure, and the prefix written so far is not a document:
+         // it is whatever the scan managed before it stopped, routinely an unterminated string or
+         // an unclosed brace. Handing that back is the silent truncation this whole change is
+         // about, one layer up, so it comes back empty instead.
+         return {};
+      }
       return out;
    }
 
@@ -321,6 +330,13 @@ namespace glz
       context ctx{};
       std::string out{};
       detail::prettify_json<opt_true<Opts, &opts::comments>>(ctx, in, out);
+      if (bool(ctx.error)) [[unlikely]] {
+         // Nothing here can report the failure, and the prefix written so far is not a document:
+         // it is whatever the scan managed before it stopped, routinely an unterminated string or
+         // an unclosed brace. Handing that back is the silent truncation this whole change is
+         // about, one layer up, so it comes back empty instead.
+         return {};
+      }
       return out;
    }
 }

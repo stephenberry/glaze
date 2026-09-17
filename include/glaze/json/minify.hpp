@@ -13,11 +13,27 @@ namespace glz
 {
    namespace detail
    {
-      // We can use unchecked dumping to the output because we know minifying will not make the output any larger
       template <auto Opts>
       inline void minify_json(is_context auto&& ctx, auto&& it, auto&& end, auto&& b, auto& ix) noexcept
       {
          using enum json_type;
+
+         // Every dump below is unchecked, which the caller's one-shot sizing covers for a resizable
+         // destination: minifying only ever removes bytes, so the input's length is room enough.
+         //
+         // A bounded destination cannot be grown, and asking it for the input's length up front
+         // refuses a buffer that fits the result -- sizing the output to the minified length is the
+         // obvious thing to do, and `{ "a" : 1 }` into a 7 byte buffer has to work. So each write
+         // asks for exactly what it stores instead. None of it survives for a resizable
+         // destination, which keeps the unchecked dumps and nothing more.
+         const auto reserve = [&]([[maybe_unused]] const size_t n) {
+            if constexpr (has_bounded_capacity<decltype(b)>) {
+               return ensure_space(ctx, b, ix + n);
+            }
+            else {
+               return true;
+            }
+         };
 
          auto ws_start = it;
          uint64_t ws_size{};
@@ -71,11 +87,17 @@ namespace glz
                if (bool(ctx.error)) [[unlikely]] {
                   return;
                }
+               if (not reserve(value.size())) [[unlikely]] {
+                  return;
+               }
                dump<false>(value, b, ix); // non-empty: the scanner reports an empty view as an error
                skip_whitespace();
                break;
             }
             case Comma: {
+               if (not reserve(1)) [[unlikely]] {
+                  return;
+               }
                dump<false>(',', b, ix);
                ++it;
                skip_expected_whitespace();
@@ -83,23 +105,35 @@ namespace glz
             }
             case Number: {
                const auto value = read_json_number<Opts.null_terminated>(it, end);
+               if (not reserve(value.size())) [[unlikely]] {
+                  return;
+               }
                dump<false>(value, b, ix); // we couldn't have gotten here without one valid character
                skip_whitespace();
                break;
             }
             case Colon: {
+               if (not reserve(1)) [[unlikely]] {
+                  return;
+               }
                dump<false>(':', b, ix);
                ++it;
                skip_whitespace();
                break;
             }
             case Array_Start: {
+               if (not reserve(1)) [[unlikely]] {
+                  return;
+               }
                dump<false>('[', b, ix);
                ++it;
                skip_expected_whitespace();
                break;
             }
             case Array_End: {
+               if (not reserve(1)) [[unlikely]] {
+                  return;
+               }
                dump<false>(']', b, ix);
                ++it;
                skip_whitespace();
@@ -115,6 +149,9 @@ namespace glz
                if (not match_literal<"null">(ctx, it, end)) [[unlikely]] {
                   return;
                }
+               if (not reserve(4)) [[unlikely]] {
+                  return;
+               }
                dump<false>("null", b, ix);
                skip_whitespace();
                break;
@@ -122,6 +159,9 @@ namespace glz
             case Bool: {
                if (*it == 't') {
                   if (not match_literal<"true">(ctx, it, end)) [[unlikely]] {
+                     return;
+                  }
+                  if (not reserve(4)) [[unlikely]] {
                      return;
                   }
                   dump<false>("true", b, ix);
@@ -132,18 +172,27 @@ namespace glz
                   if (not match_literal<"false">(ctx, it, end)) [[unlikely]] {
                      return;
                   }
+                  if (not reserve(5)) [[unlikely]] {
+                     return;
+                  }
                   dump<false>("false", b, ix);
                   skip_whitespace();
                   break;
                }
             }
             case Object_Start: {
+               if (not reserve(1)) [[unlikely]] {
+                  return;
+               }
                dump<false>('{', b, ix);
                ++it;
                skip_expected_whitespace();
                break;
             }
             case Object_End: {
+               if (not reserve(1)) [[unlikely]] {
+                  return;
+               }
                dump<false>('}', b, ix);
                ++it;
                skip_whitespace();
@@ -159,6 +208,9 @@ namespace glz
                   // the newline that ends it, and a line comment with no line break behind it
                   // comments out the whole rest of the output.
                   if (not comment.line) {
+                     if (not reserve(comment.text.size())) [[unlikely]] {
+                        return;
+                     }
                      dump<false>(comment.text, b, ix);
                   }
                   skip_whitespace();
@@ -197,15 +249,9 @@ namespace glz
          }
 
          if constexpr (resizable<Out>) {
+            // Minifying only ever removes bytes, so this is room enough for whatever comes out.
+            // A bounded output is checked per write instead; see the scan above for why.
             out.resize(in.size() + 2 * padding_bytes);
-         }
-         else {
-            // Minifying only ever removes bytes, which is what lets the scan below dump into the
-            // output without checking room for each token. A bounded output has to be told when
-            // the input is more than it holds, rather than being written past the end of.
-            if (not ensure_space(ctx, out, in.size())) [[unlikely]] {
-               return 0;
-            }
          }
          size_t ix = 0;
          auto [it, end] = read_iterators<Opts>(in);
@@ -231,7 +277,9 @@ namespace glz
    }
 
    // The overloads that write into a caller's buffer report what went wrong, and how many bytes
-   // they wrote, which is the only way a bounded output learns where its result ends. Not
+   // they wrote, which is the only way a bounded output learns where its result ends. That count is
+   // an offset into the output, not the input, so glz::format_error(ec, source) -- which reads it
+   // as a position in the buffer it is handed -- does not point at the offending byte here. Not
    // [[nodiscard]]:
    // minifying auto-generated JSON does not fail, so the callers that have always ignored the
    // outcome are right to, and warning at all of them would say nothing useful. The overloads that
@@ -255,6 +303,13 @@ namespace glz
       context ctx{};
       std::string out{};
       detail::minify_json<Opts>(ctx, in, out);
+      if (bool(ctx.error)) [[unlikely]] {
+         // Nothing here can report the failure, and the prefix written so far is not a document:
+         // it is whatever the scan managed before it stopped, routinely an unterminated string or
+         // an unclosed brace. Handing that back is the silent truncation this whole change is
+         // about, one layer up, so it comes back empty instead.
+         return {};
+      }
       return out;
    }
 
@@ -272,6 +327,13 @@ namespace glz
       context ctx{};
       std::string out{};
       detail::minify_json<opt_true<Opts, &opts::comments>>(ctx, in, out);
+      if (bool(ctx.error)) [[unlikely]] {
+         // Nothing here can report the failure, and the prefix written so far is not a document:
+         // it is whatever the scan managed before it stopped, routinely an unterminated string or
+         // an unclosed brace. Handing that back is the silent truncation this whole change is
+         // about, one layer up, so it comes back empty instead.
+         return {};
+      }
       return out;
    }
 }

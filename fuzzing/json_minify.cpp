@@ -29,14 +29,10 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t* Data, size_t Size)
       std::vector<char> jsonc{Data, Data + Size};
       [[maybe_unused]] auto maybe_smaller = glz::minify_jsonc(jsonc);
    }
-   {
-      std::vector<char> jsonc{Data, Data + Size};
-      jsonc.push_back('\0');
-      [[maybe_unused]] auto maybe_smaller = glz::minify_jsonc(jsonc);
-   }
 
    // Only a self-terminating buffer selects the null terminated scan, whose run ends on the
-   // sentinel rather than on a bound in its loop condition.
+   // sentinel rather than on a bound in its loop condition. A vector carrying a trailing NUL does
+   // not: that NUL is just a byte inside the document.
    {
       std::string jsonc{Data, Data + Size};
       [[maybe_unused]] auto maybe_smaller = glz::minify_jsonc(jsonc);

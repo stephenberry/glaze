@@ -423,7 +423,9 @@ if (const auto ec = glz::minify_jsonc(jsonc, out)) {
 }
 ```
 
-The overloads that return the formatted text have nowhere to put an error and stay silent.
+The overloads that return the formatted text have nowhere to put an error, so on failure they return an empty string rather than the partial output, which is rarely a valid document.
+
+`error_ctx::count` is the number of bytes written, which is how a fixed-capacity output learns where its result ends. It is an offset into the output rather than the input, so `glz::format_error(ec, source)` does not point at the offending byte for these functions.
 
 Neither function validates the structure of the document. They report what they actually parse -- strings, comments and literals -- and copy the rest, so `[1 2]` minifies to `[12]`. Use `glz::validate_json` or `glz::validate_jsonc` to check a document that may not be well formed.
 

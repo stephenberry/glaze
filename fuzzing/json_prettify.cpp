@@ -31,14 +31,9 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t* Data, size_t Size)
       const std::vector<char> jsonc{Data, Data + Size};
       [[maybe_unused]] auto beautiful = glz::prettify_jsonc(jsonc);
    }
-   {
-      std::vector<char> jsonc{Data, Data + Size};
-      jsonc.push_back('\0');
-      const auto& input = jsonc;
-      [[maybe_unused]] auto beautiful = glz::prettify_jsonc(input);
-   }
 
-   // Only a self-terminating buffer selects the null terminated scan
+   // Only a self-terminating buffer selects the null terminated scan. A vector carrying a
+   // trailing NUL does not: that NUL is just a byte inside the document.
    {
       const std::string jsonc{Data, Data + Size};
       [[maybe_unused]] auto beautiful = glz::prettify_jsonc(jsonc);
