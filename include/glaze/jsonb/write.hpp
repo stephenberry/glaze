@@ -711,7 +711,7 @@ namespace glz
       {}
    };
 
-   // Generic JSON value — dispatch each variant alternative to the matching JSONB element.
+   // Generic JSON value — write the active alternative as its native JSONB element.
    // Without this specialization, glz::generic would fall through to the variant handler and
    // serialize as an [index, value] array rather than as the native element type.
    template <num_mode Mode, template <class> class MapType>
@@ -720,36 +720,7 @@ namespace glz
       template <auto Opts>
       static void op(auto&& value, is_context auto&& ctx, auto&& b, auto& ix)
       {
-         using G = std::decay_t<decltype(value)>;
-         using array_t = typename G::array_t;
-         using object_t = typename G::object_t;
-
-         std::visit(
-            [&](auto&& v) {
-               using V = std::decay_t<decltype(v)>;
-               if constexpr (std::same_as<V, std::nullptr_t>) {
-                  to<JSONB, std::nullptr_t>::template op<Opts>(nullptr, ctx, b, ix);
-               }
-               else if constexpr (std::same_as<V, bool>) {
-                  to<JSONB, bool>::template op<Opts>(v, ctx, b, ix);
-               }
-               else if constexpr (std::same_as<V, std::string>) {
-                  to<JSONB, std::string>::template op<Opts>(v, ctx, b, ix);
-               }
-               else if constexpr (std::same_as<V, array_t>) {
-                  // Container dispatch: array of generic_json — handled by writable_array_t.
-                  to<JSONB, array_t>::template op<Opts>(v, ctx, b, ix);
-               }
-               else if constexpr (std::same_as<V, object_t>) {
-                  // Map<string, generic_json> — writable_map_t handles it.
-                  to<JSONB, object_t>::template op<Opts>(v, ctx, b, ix);
-               }
-               else {
-                  // Numeric types: uint64_t, int64_t, double depending on Mode.
-                  to<JSONB, V>::template op<Opts>(v, ctx, b, ix);
-               }
-            },
-            value.data);
+         std::visit([&](auto&& v) { serialize<JSONB>::op<Opts>(v, ctx, b, ix); }, value.data);
       }
    };
 

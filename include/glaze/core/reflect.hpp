@@ -3563,6 +3563,44 @@ namespace glz
       template <class Variant>
       struct beve_positional_tagging_needs_content : std::false_type
       {};
+
+      // MessagePack and CBOR maps are length-prefixed exactly as BEVE objects are, so they inherit
+      // the same representation limit: the member count of a custom body is not knowable in advance.
+      template <class Variant, class Alternative>
+      struct binary_internal_tagging_needs_reflected_alternative : std::false_type
+      {};
+   }
+
+   // `ids` may declare fewer entries than the variant has alternatives -- the readers treat the first
+   // unlabeled alternative as the default for an unrecognized id -- so an alternative past the end of
+   // `ids` has no id to write. Indexing there reads past a static array. A valueless variant has no
+   // alternative to name at all, and neither does an index past the alternative list.
+   template <is_variant T>
+   [[nodiscard]] inline bool variant_missing_id(auto&& value, is_context auto&& ctx) noexcept
+   {
+      if (value.index() >= ids_v<T>.size()) [[unlikely]] {
+         ctx.error = error_code::no_matching_variant_type;
+         ctx.custom_error_message = variant_ids_string_v<T>;
+         return true;
+      }
+      return false;
+   }
+
+   // Map an already-decoded discriminator to an alternative index. Returns variant_size when the id
+   // names no alternative and there is no unlabeled default. The formats differ only in how they
+   // decode the id from their own bytes; this rule is the same for all of them.
+   template <is_variant T>
+   [[nodiscard]] constexpr size_t variant_index_from_id(size_t index) noexcept
+   {
+      if (index < ids_v<T>.size()) [[likely]] {
+         return index;
+      }
+      if constexpr (ids_v<T>.size() < std::variant_size_v<T>) {
+         // Fewer ids than alternatives: the first unlabeled alternative is the default for an
+         // unrecognized id, matching the BEVE and JSON readers.
+         return ids_v<T>.size();
+      }
+      return std::variant_size_v<T>;
    }
 
    template <is_variant T>
