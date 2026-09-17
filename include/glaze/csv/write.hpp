@@ -467,6 +467,7 @@ namespace glz
       template <auto Opts, class B>
       static void op(auto&& value, is_context auto&& ctx, B&& b, auto& ix)
       {
+         static_assert(detail::writable_members<CSV, T>, "One of this object's members has no writer for CSV.");
          static constexpr auto N = reflect<T>::size;
 
          [[maybe_unused]] decltype(auto) t = [&] {

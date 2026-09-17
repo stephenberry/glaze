@@ -4563,6 +4563,7 @@ namespace glz
       template <auto Opts, string_literal Tag = "", class It>
       static void op(auto&& value, is_context auto&& ctx, It&& it, auto end)
       {
+         static_assert(detail::readable_members<YAML, T>, "One of this object's members has no reader for YAML.");
          if (bool(ctx.error)) [[unlikely]]
             return;
 

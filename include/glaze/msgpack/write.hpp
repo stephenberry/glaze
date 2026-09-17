@@ -611,6 +611,7 @@ namespace glz
       template <auto Opts, class Value, is_context Ctx, class B, class IX>
       GLZ_ALWAYS_INLINE static void op(Value&& value, Ctx&& ctx, B&& b, IX&& ix)
       {
+         static_assert(detail::writable_members<MSGPACK, T>, "One of this object's members has no writer for MSGPACK.");
          if constexpr (check_structs_as_arrays(Opts)) {
             if (!msgpack::detail::write_array_header(ctx, count_members<Opts>(), b, ix)) [[unlikely]] {
                return;
@@ -660,6 +661,7 @@ namespace glz
       template <auto Opts, class Value, is_context Ctx, class B, class IX>
       GLZ_ALWAYS_INLINE static void op(Value&& value, Ctx&& ctx, B&& b, IX&& ix)
       {
+         static_assert(detail::writable_members<MSGPACK, T>, "One of this object's members has no writer for MSGPACK.");
          to<MSGPACK, decltype(to_tie(value))>::template op<Opts>(to_tie(value), ctx, b, ix);
       }
    };

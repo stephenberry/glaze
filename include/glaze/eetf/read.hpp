@@ -291,6 +291,7 @@ namespace glz
       template <auto Opts, is_context Ctx, class It0, class It1>
       static void op(auto&& value, Ctx&& ctx, It0&& it, It1&& end) noexcept
       {
+         static_assert(detail::readable_members<EETF, T>, "One of this object's members has no reader for EETF.");
          if (bool(ctx.error)) [[unlikely]] {
             return;
          }

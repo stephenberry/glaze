@@ -1038,6 +1038,7 @@ namespace glz
          requires(not std::is_pointer_v<std::remove_cvref_t<V>>)
       static void op(V&& value, is_context auto&& ctx, B&& b, auto& ix)
       {
+         static_assert(detail::writable_members<TOML, T>, "One of this object's members has no writer for TOML.");
          // Call the path-aware version with empty prefix for top-level
          write_toml_object_with_path<Options, T>(std::forward<V>(value), ctx, b, ix, "");
       }

@@ -710,6 +710,7 @@ namespace glz
       template <auto Opts>
       static void op(auto& value, is_context auto& ctx, auto& it, auto end)
       {
+         static_assert(detail::readable_members<JSONB, T>, "One of this object's members has no reader for JSONB.");
          depth_guard g{ctx};
          if (!g) return;
          uint8_t tc{};

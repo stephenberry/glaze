@@ -717,6 +717,7 @@ namespace glz
       template <auto Opts>
       static void op(auto&& value, is_context auto&& ctx, auto&& b, auto& ix) noexcept
       {
+         static_assert(detail::writable_members<BSON, T>, "One of this object's members has no writer for BSON.");
          size_t start{};
          if (!bson_detail::reserve_document_length(ctx, b, ix, start)) [[unlikely]] {
             return;

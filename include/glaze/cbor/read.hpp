@@ -1793,6 +1793,7 @@ namespace glz
       template <auto Opts>
       static void op(auto& value, is_context auto& ctx, auto& it, auto end)
       {
+         static_assert(detail::readable_members<CBOR, T>, "One of this object's members has no reader for CBOR.");
          using namespace cbor;
 
          if (it >= end) [[unlikely]] {

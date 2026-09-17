@@ -1561,6 +1561,7 @@ namespace glz
          requires(check_structs_as_arrays(Opts) == true)
       static void op(auto&& value, is_context auto&& ctx, B&& b, auto& ix)
       {
+         static_assert(detail::writable_members<BEVE, T>, "One of this object's members has no writer for BEVE.");
          if (!ensure_space(ctx, b, ix + 1 + write_padding_bytes)) [[unlikely]] {
             return;
          }
@@ -1601,6 +1602,7 @@ namespace glz
          requires(check_structs_as_arrays(Options) == false)
       static void op(auto&& value, is_context auto&& ctx, B&& b, auto& ix)
       {
+         static_assert(detail::writable_members<BEVE, T>, "One of this object's members has no writer for BEVE.");
          constexpr auto Opts = opening_handled_off<Options>();
 
          [[maybe_unused]] decltype(auto) t = [&]() -> decltype(auto) {
