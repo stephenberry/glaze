@@ -87,6 +87,11 @@ namespace glz
          {
             if (!ssl_ctx_) {
                ssl_ctx_ = std::make_shared<asio::ssl::context>(asio::ssl::context::tls_client);
+               // asio sets the tls_client floor to TLS 1.0; disable the protocols deprecated
+               // by RFC 8996 explicitly, matching http_connection_pool and http_server.
+               ssl_ctx_->set_options(asio::ssl::context::default_workarounds | asio::ssl::context::no_sslv2 |
+                                     asio::ssl::context::no_sslv3 | asio::ssl::context::no_tlsv1 |
+                                     asio::ssl::context::no_tlsv1_1);
                detail::seed_platform_trust_anchors(*ssl_ctx_);
             }
             return *ssl_ctx_;

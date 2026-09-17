@@ -380,6 +380,84 @@ class TestHTTPSServer
 // Global test server - initialized before tests run
 static TestHTTPSServer g_server;
 
+// A deliberately permissive TLS server that offers exactly one protocol version, used to
+// probe what the client is willing to negotiate. Its security level is dropped to 0 so the
+// version window is the only thing under test; glz::https_server cannot stand in here
+// because it (correctly) refuses to offer the deprecated protocols at all.
+class SingleVersionTLSServer
+{
+   asio::io_context io_;
+   std::optional<asio::ip::tcp::acceptor> acceptor_;
+   std::thread thread_;
+   uint16_t port_{};
+   bool ok_{false};
+
+  public:
+   explicit SingleVersionTLSServer(int version)
+   {
+      try {
+         auto ctx = std::make_shared<asio::ssl::context>(asio::ssl::context::tls_server);
+         SSL_CTX_set_security_level(ctx->native_handle(), 0);
+         if (SSL_CTX_set_min_proto_version(ctx->native_handle(), version) != 1 ||
+             SSL_CTX_set_max_proto_version(ctx->native_handle(), version) != 1) {
+            return;
+         }
+         ctx->use_certificate_chain_file("client_test_cert.pem");
+         ctx->use_private_key_file("client_test_key.pem", asio::ssl::context::pem);
+
+         acceptor_.emplace(io_, asio::ip::tcp::endpoint(asio::ip::make_address("127.0.0.1"), 0));
+         port_ = acceptor_->local_endpoint().port();
+         ok_ = true;
+
+         thread_ = std::thread([this, ctx]() {
+            // One handshake is enough; the client either negotiates or it does not.
+            asio::error_code ec;
+            asio::ssl::stream<asio::ip::tcp::socket> stream(io_, *ctx);
+            acceptor_->accept(stream.lowest_layer(), ec);
+            if (ec) return;
+            stream.handshake(asio::ssl::stream_base::server, ec);
+            if (ec) return;
+            // Answer anything at all so a successful handshake yields a usable response.
+            const std::string reply = "HTTP/1.1 200 OK\r\nContent-Length: 2\r\nConnection: close\r\n\r\nok";
+            asio::write(stream, asio::buffer(reply), ec);
+            stream.shutdown(ec);
+         });
+      }
+      catch (const std::exception&) {
+         ok_ = false;
+      }
+   }
+
+   ~SingleVersionTLSServer()
+   {
+      asio::error_code ec;
+      if (acceptor_) acceptor_->close(ec);
+      io_.stop();
+      if (thread_.joinable()) thread_.join();
+   }
+
+   bool ok() const { return ok_; }
+   uint16_t port() const { return port_; }
+};
+
+// True when glz::http_client completes a request against a server offering only `version`.
+// Certificate verification is off and the client's security level is dropped to 0 so that the
+// protocol version is the only variable. Without lowering the level the deprecated protocols
+// are rejected by OpenSSL's own policy, which would make this probe pass whether or not the
+// context carries the explicit no_tlsv1/no_tlsv1_1 options.
+static bool client_negotiates(int version)
+{
+   SingleVersionTLSServer server(version);
+   if (!server.ok()) {
+      return false;
+   }
+   glz::http_client client;
+   client.set_ssl_verify_mode(asio::ssl::verify_none);
+   client.configure_ssl_context([](asio::ssl::context& ctx) { SSL_CTX_set_security_level(ctx.native_handle(), 0); });
+   auto result = client.get("https://127.0.0.1:" + std::to_string(server.port()) + "/");
+   return result.has_value();
+}
+
 // Test suite
 suite https_client_tests = [] {
    "https_get_request"_test = [] {
@@ -637,6 +715,19 @@ suite https_client_tests = [] {
    // =========================================================================
    // Thread-Safe SSL Configuration Tests
    // =========================================================================
+
+   // Control: the harness itself works, so a refusal below is attributable to the version
+   // rather than to the probe server failing to come up.
+   "client_negotiates_tls12_against_permissive_server"_test = [] {
+      expect(client_negotiates(TLS1_2_VERSION)) << "a TLS 1.2 server must still be reachable\n";
+   };
+
+   // asio's tls_client leaves the floor at TLS 1.0, and the OpenSSL security level that
+   // masks this on a default build disappears as soon as a caller lowers it. The explicit
+   // no_tlsv1/no_tlsv1_1 options are what actually hold the RFC 8996 floor.
+   "client_refuses_tls11"_test = [] {
+      expect(!client_negotiates(TLS1_1_VERSION)) << "TLS 1.1 is deprecated by RFC 8996 and must not negotiate\n";
+   };
 
    "configure_ssl_context_callable"_test = [] {
       glz::http_client client;
