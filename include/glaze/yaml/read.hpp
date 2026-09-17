@@ -3103,27 +3103,28 @@ namespace glz
       inline bool inline_value_has_plain_mapping_indicator(It pos, End end) noexcept
       {
          const auto stop = yaml::implicit_key_scan_end(pos, end);
+         // See `line_could_be_block_mapping` for why a quote is an indicator only where a node can
+         // begin. The value segment is itself a node position, so the scan starts at one.
+         bool at_node_start = true;
          int flow_depth = 0;
          while (pos != stop) {
             const char c = *pos;
             if (c == '\n' || c == '\r' || c == '#') return false;
-            if (c == '"' || c == '\'') {
-               const char quote = c;
+            if (c == ' ' || c == '\t') {
                ++pos;
-               while (pos != stop && *pos != quote) {
-                  if (*pos == '\\' && quote == '"') {
-                     ++pos;
-                     if (pos == stop) break;
-                  }
-                  // A quote in a plain scalar must not make the probe scan a later line.
-                  if (*pos == '\n' || *pos == '\r') return false;
-                  ++pos;
-               }
-               if (pos != stop) ++pos;
                continue;
             }
-            if (c == '[' || c == '{') {
+            const bool node_start = std::exchange(at_node_start, false);
+
+            if ((c == '"' || c == '\'') && node_start) {
+               // A quote in a plain scalar must not make the probe scan a later line, and the
+               // '' escape must not be mistaken for the end of a single-quoted scalar.
+               if (not yaml::skip_probe_quoted_scalar(pos, stop)) return false;
+               continue;
+            }
+            if ((c == '[' || c == '{') && (node_start || flow_depth > 0)) {
                ++flow_depth;
+               at_node_start = true;
                ++pos;
                continue;
             }
@@ -3135,6 +3136,15 @@ namespace glz
             if (c == ':' && flow_depth == 0) {
                const auto next = pos + 1;
                return (next == end) || *next == ' ' || *next == '\t' || *next == '\n' || *next == '\r';
+            }
+            if (flow_depth > 0 && (c == ',' || c == ':')) {
+               at_node_start = true;
+               ++pos;
+               continue;
+            }
+            if (node_start && yaml::skip_probe_node_property(pos, stop)) {
+               at_node_start = true;
+               continue;
             }
             ++pos;
          }
@@ -5361,6 +5371,9 @@ namespace glz
    {
       const auto stop = yaml::implicit_key_scan_end(it, end);
       int flow_depth = 0;
+      // See `line_could_be_block_mapping` for why the quote guard is the state of the node rather
+      // than the preceding character.
+      bool at_node_start = true;
       bool prev_was_whitespace = true;
       bool key_supports_adjacent_value = false;
 
@@ -5369,64 +5382,63 @@ namespace glz
          if (c == '\n' || c == '\r') {
             return false;
          }
+         if (c == ' ' || c == '\t') {
+            prev_was_whitespace = true;
+            key_supports_adjacent_value = false; // "Adjacent" admits no separation at all
+            ++it;
+            continue;
+         }
          if (flow_depth == 0 && (c == ',' || c == ']' || c == '}')) {
             return false;
          }
-         if (c == '#' && flow_depth == 0 && prev_was_whitespace) {
+         // As in `line_could_be_block_mapping`, content clears both flags and a branch opts back in.
+         const bool after_whitespace = std::exchange(prev_was_whitespace, false);
+         const bool node_start = std::exchange(at_node_start, false);
+         const bool adjacent_value_ok = std::exchange(key_supports_adjacent_value, false);
+
+         if (c == '#' && flow_depth == 0 && after_whitespace) {
             return false;
          }
-         if ((c == '"' || c == '\'') && prev_was_whitespace) {
-            const char quote = c;
-            ++it;
-            while (it != stop && *it != quote) {
-               if (*it == '\\' && quote == '"') {
-                  ++it;
-                  if (it != stop) ++it;
-               }
-               else if (*it == '\n' || *it == '\r') {
-                  return false;
-               }
-               else {
-                  ++it;
-               }
+         if ((c == '"' || c == '\'') && node_start) {
+            if (not yaml::skip_probe_quoted_scalar(it, stop)) {
+               return false;
             }
-            if (it != stop) ++it;
             key_supports_adjacent_value = true;
-            prev_was_whitespace = false;
             continue;
          }
          if (c == '[' || c == '{') {
             ++flow_depth;
-            key_supports_adjacent_value = false;
-            prev_was_whitespace = false;
+            at_node_start = true;
             ++it;
             continue;
          }
          if (c == ']' || c == '}') {
-            if (flow_depth > 0) {
-               --flow_depth;
-               if (flow_depth == 0) {
-                  key_supports_adjacent_value = true;
-               }
-               prev_was_whitespace = false;
-               ++it;
-               continue;
+            --flow_depth; // Depth zero returned above, so this closes a collection we opened
+            if (flow_depth == 0) {
+               key_supports_adjacent_value = true;
             }
-            return false;
+            ++it;
+            continue;
          }
          if (c == ':' && flow_depth == 0) {
             const auto next = it + 1;
             if (next == end || *next == ' ' || *next == '\t' || *next == '\n' || *next == '\r') {
                return true;
             }
-            if (key_supports_adjacent_value) {
-               return true;
-            }
-            return false;
+            // A ':' run together with its key is a separator only after a JSON-like key.
+            return adjacent_value_ok;
          }
-
-         key_supports_adjacent_value = false;
-         prev_was_whitespace = (c == ' ' || c == '\t');
+         // Inside a flow collection ',' separates entries and ':' ends a key, so a node begins
+         // after either.
+         if (c == ',' || c == ':') {
+            at_node_start = true;
+            ++it;
+            continue;
+         }
+         if (node_start && yaml::skip_probe_node_property(it, stop)) {
+            at_node_start = true;
+            continue;
+         }
          ++it;
       }
 
@@ -5496,26 +5508,26 @@ namespace glz
             // Bounded by the longest implicit key the spec allows: unbounded, this probe runs
             // once per entry per nesting level over the whole remaining flow collection.
             const auto stop = yaml::implicit_key_scan_end(pos, end);
+            // See `line_could_be_block_mapping` for why a quote is an indicator only where a node
+            // can begin. Brackets need no such guard here: ns-plain-safe-in keeps them out of a
+            // flow-context plain scalar, so every one of them is an indicator.
+            bool at_node_start = true;
             int depth = 0;
             while (pos != stop) {
                const char c = *pos;
-               if (c == '"' || c == '\'') {
-                  const char quote = c;
+               if (c == ' ' || c == '\t') {
                   ++pos;
-                  while (pos != stop && *pos != quote) {
-                     if (*pos == '\\' && quote == '"') {
-                        ++pos;
-                        if (pos != stop) ++pos;
-                     }
-                     else {
-                        ++pos;
-                     }
-                  }
-                  if (pos != stop) ++pos;
+                  continue;
+               }
+               const bool node_start = std::exchange(at_node_start, false);
+
+               if ((c == '"' || c == '\'') && node_start) {
+                  if (not yaml::skip_probe_quoted_scalar(pos, stop)) return false;
                   continue;
                }
                if (c == '[' || c == '{') {
                   ++depth;
+                  at_node_start = true;
                   ++pos;
                   continue;
                }
@@ -5529,6 +5541,16 @@ namespace glz
                if (c == ':' && depth == 0) {
                   auto next = pos + 1;
                   return next == end || *next == ' ' || *next == '\t' || *next == '\n' || *next == '\r';
+               }
+               // Inside a nested collection ',' separates entries and ':' ends a key.
+               if (c == ',' || c == ':') {
+                  at_node_start = true;
+                  ++pos;
+                  continue;
+               }
+               if (node_start && yaml::skip_probe_node_property(pos, stop)) {
+                  at_node_start = true;
+                  continue;
                }
                ++pos;
             }

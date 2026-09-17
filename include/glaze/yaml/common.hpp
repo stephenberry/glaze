@@ -1013,6 +1013,77 @@ namespace glz::yaml
       return true;
    }
 
+   // Advances `it` past the quoted scalar whose opening quote it points at, for the implicit-key
+   // probes. Returns false when the scalar does not close before `stop`, or when it runs into a
+   // line break: an implicit key must fit on one line, so either way the text under the probe is
+   // not one.
+   //
+   // The single-quoted case is the reason this is shared. `''` is the only escape a single-quoted
+   // scalar has, and a probe that misses it mistakes the first quote of the pair for the closing
+   // one, resumes scanning inside the scalar, and reads a ':' that is content as a separator.
+   template <class It, class End>
+   inline bool skip_probe_quoted_scalar(It& it, End stop)
+   {
+      const char quote = *it;
+      ++it;
+      while (it != stop) {
+         const char c = *it;
+         if (c == '\n' || c == '\r') {
+            return false;
+         }
+         if (c == quote) {
+            ++it;
+            if (quote == '\'' && it != stop && *it == '\'') {
+               ++it; // '' is an escaped quote, not the end of the scalar
+               continue;
+            }
+            // A closing quote on the last byte of the window reports closed, though the byte past
+            // it could have made the pair an escape. Harmless: `it` is then `stop`, so the caller's
+            // loop ends and the probe answers false either way.
+            return true;
+         }
+         if (c == '\\' && quote == '"') {
+            ++it; // Skip escape character
+            if (it == stop) {
+               return false;
+            }
+            if (*it == '\n' || *it == '\r') {
+               return false;
+            }
+         }
+         ++it;
+      }
+      return false;
+   }
+
+   // A node's properties (`&anchor`, `!tag`) and the explicit key indicator `? ` precede the node
+   // proper, so a node is still starting after one. Advances `it` past one such token and reports
+   // whether it consumed one. `it` must be where a node can begin, which is what makes `&`, `!`
+   // and `?` indicators here rather than the plain content they would be inside a scalar.
+   template <class It, class End>
+   inline bool skip_probe_node_property(It& it, End stop)
+   {
+      const char c = *it;
+      if (c == '&' || c == '!') {
+         // An anchor name and a tag shorthand both run to the next whitespace or flow indicator.
+         ++it;
+         while (it != stop && *it != ' ' && *it != '\t' && *it != ',' && *it != '[' && *it != ']' &&
+                *it != '{' && *it != '}' && *it != '\n' && *it != '\r') {
+            ++it;
+         }
+         return true;
+      }
+      // Only "? " is the explicit key indicator; "?foo" is an ordinary plain scalar.
+      if (c == '?') {
+         const auto next = it + 1;
+         if (next != stop && (*next == ' ' || *next == '\t')) {
+            ++it;
+            return true;
+         }
+      }
+      return false;
+   }
+
    // Quick check if current line contains a colon that could indicate a block mapping key.
    // Scans no further than the end of the line or `max_implicit_key_lookahead` bytes, whichever
    // comes first, so the cost of a probe is bounded by a constant rather than by the line.
@@ -1021,13 +1092,31 @@ namespace glz::yaml
    inline bool line_could_be_block_mapping(It it, End end)
    {
       const auto stop = implicit_key_scan_end(it, end);
-      bool prev_was_whitespace = true; // Start of value acts like after whitespace
+      // A quote is an indicator only where a node can begin. Once a plain scalar is under way it
+      // runs to the end of the line, and the spaces and quotes inside it are content ("a 'b'" is
+      // one plain scalar, "a '''" likewise), so the guard is whether a node starts here rather
+      // than what the preceding character was. A node starts at the beginning of the scan, after
+      // an indicator that ends the node before it, and after the properties that precede one. The
+      // other implicit-key probes carry the same model and point here for it.
+      bool at_node_start = true;
+      bool prev_was_whitespace = true; // For the '#' rule, which is about the preceding character
       int flow_depth = 0;
       while (it != stop) {
          const char c = *it;
          if (c == '\n' || c == '\r') {
             return false;
          }
+         if (c == ' ' || c == '\t') {
+            prev_was_whitespace = true; // Whitespace separates nodes, it does not end one
+            ++it;
+            continue;
+         }
+         // Past here `c` is an indicator or content. Either way it ends a run of whitespace, and
+         // unless a branch below says otherwise it begins a plain scalar that owns the rest of the
+         // line, so both flags clear by default and a branch opts back in.
+         const bool after_whitespace = std::exchange(prev_was_whitespace, false);
+         const bool node_start = std::exchange(at_node_start, false);
+
          if (c == ':' && flow_depth == 0) {
             ++it;
             // Colon followed by space, newline, or end indicates a mapping key
@@ -1036,49 +1125,45 @@ namespace glz::yaml
             }
             // Otherwise this ':' is part of plain content (e.g., "::", "http://").
             // Continue scanning for a later mapping separator on the same line.
-            prev_was_whitespace = false;
             continue;
          }
          // Per YAML spec: # only starts a comment when preceded by whitespace
          // Stop scanning if we hit a comment - any colon after is not a key indicator
-         if (c == '#' && flow_depth == 0 && prev_was_whitespace) {
+         if (c == '#' && flow_depth == 0 && after_whitespace) {
             return false;
          }
-         // Skip over quoted strings only when they start a quoted token.
-         // Quote characters are otherwise valid in plain scalars/keys.
-         if ((c == '"' || c == '\'') && prev_was_whitespace) {
-            const char quote = c;
-            ++it;
-            while (it != stop && *it != quote) {
-               if (*it == '\\' && quote == '"') {
-                  ++it; // Skip escape character
-                  if (it != stop) ++it; // Skip escaped character
-               }
-               else if (*it == '\n' || *it == '\r') {
-                  // Unterminated quote on this line
-                  return false;
-               }
-               else {
-                  ++it;
-               }
+         if ((c == '"' || c == '\'') && node_start) {
+            if (not skip_probe_quoted_scalar(it, stop)) {
+               return false;
             }
-            if (it != stop) ++it; // Skip closing quote
-            prev_was_whitespace = false;
             continue;
          }
-         if (c == '[' || c == '{') {
+         // A flow collection opens only where a node can begin, and thereafter every bracket is
+         // an indicator because ns-plain-safe-in excludes them. In block context a plain scalar
+         // already under way swallows them instead: "a['][]" is one plain key.
+         if ((c == '[' || c == '{') && (node_start || flow_depth > 0)) {
             ++flow_depth;
-            prev_was_whitespace = false;
+            at_node_start = true;
             ++it;
             continue;
          }
          if ((c == ']' || c == '}') && flow_depth > 0) {
-            --flow_depth;
-            prev_was_whitespace = false;
+            --flow_depth; // A closing bracket ends a node; it never starts one
             ++it;
             continue;
          }
-         prev_was_whitespace = (c == ' ' || c == '\t');
+         // Inside a flow collection ',' separates entries and ':' ends a key, so a node begins
+         // after either. Outside one both are ordinary plain content -- ns-plain-safe-out admits
+         // them, which is why "a,'b: c" is a single plain key and "a[b]'c: d" another.
+         if (flow_depth > 0 && (c == ',' || c == ':')) {
+            at_node_start = true;
+            ++it;
+            continue;
+         }
+         if (node_start && skip_probe_node_property(it, stop)) {
+            at_node_start = true; // Properties precede the node, so it is still starting
+            continue;
+         }
          ++it;
       }
       return false;
