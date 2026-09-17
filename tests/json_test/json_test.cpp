@@ -15529,6 +15529,31 @@ suite bounded_buffer_overflow_tests = [] {
       expect(short_ctx.error == glz::error_code::buffer_overflow) << int(short_ctx.error);
    };
 
+   "prettify does not write inside a line comment it could not close"_test = [] {
+      // The break a line comment defers is itself a write, so on a bounded output it can be the
+      // write that runs out of room. Reporting that rather than swallowing it is what keeps the
+      // token behind the comment out of it: with the failure ignored, a 23 byte output comes back
+      // as `// c"b"`, which is not a truncated document but a wrong one, with the key commented
+      // out. 23 is the size that tells the two apart -- the break needs four bytes and does not
+      // fit, while the three the key needs still do.
+      const std::string in = "{\"a\":1, // c\n\"b\":2}";
+
+      std::array<char, 23> tight{};
+      glz::context tight_ctx{};
+      const auto written = glz::detail::prettify_json<glz::opts{.comments = true}>(tight_ctx, in, tight);
+      expect(tight_ctx.error == glz::error_code::buffer_overflow) << int(tight_ctx.error);
+      expect(written == 20u) << written;
+      expect(std::string_view{tight.data(), written} == "{\n   \"a\": 1,\n   // c")
+         << std::string_view{tight.data(), written};
+
+      // With room for the break the document completes
+      std::array<char, 32> roomy{};
+      glz::context roomy_ctx{};
+      const auto complete = glz::detail::prettify_json<glz::opts{.comments = true}>(roomy_ctx, in, roomy);
+      expect(not bool(roomy_ctx.error)) << int(roomy_ctx.error);
+      expect(std::string_view{roomy.data(), complete} == glz::prettify_jsonc(in));
+   };
+
    "prettify grows past twice its input"_test = [] {
       // Pins the premise rather than the fix: prettified output has no bound that a single upfront
       // reservation could use, which is why the writes are checked one at a time. A resizable
