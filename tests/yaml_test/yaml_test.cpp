@@ -7370,7 +7370,7 @@ suite plain_scalar_quotes_preserve_later_quotes = [] {
             "key: {\"line1\n    line2\": value}\n"}) {
          glz::generic parsed{};
          std::map<std::string, std::map<std::string, std::string>> typed{};
-         const auto ec       = glz::read_yaml(parsed, yaml);
+         const auto ec = glz::read_yaml(parsed, yaml);
          const auto typed_ec = glz::read_yaml(typed, yaml);
          expect(!ec) << glz::format_error(ec, yaml);
          expect(!typed_ec) << glz::format_error(typed_ec, yaml);
@@ -7386,7 +7386,7 @@ suite plain_scalar_quotes_preserve_later_quotes = [] {
             "outer:\n  one: \"a\\\n    b\"\n  two: 'c: d'\n"}) {
          glz::generic parsed{};
          std::map<std::string, std::map<std::string, std::string>> typed{};
-         const auto ec       = glz::read_yaml(parsed, yaml);
+         const auto ec = glz::read_yaml(parsed, yaml);
          const auto typed_ec = glz::read_yaml(typed, yaml);
          expect(!ec) << glz::format_error(ec, yaml);
          expect(!typed_ec) << glz::format_error(typed_ec, yaml);

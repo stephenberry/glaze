@@ -3103,7 +3103,7 @@ namespace glz
       inline bool inline_value_has_plain_mapping_indicator(It pos, End end) noexcept
       {
          const auto stop = yaml::implicit_key_scan_end(pos, end);
-         int flow_depth  = 0;
+         int flow_depth = 0;
          while (pos != stop) {
             const char c = *pos;
             if (c == '\n' || c == '\r' || c == '#') return false;
