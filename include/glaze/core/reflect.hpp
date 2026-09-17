@@ -696,6 +696,116 @@ namespace glz
       }
    }();
 
+   // =============================================================================================
+   // Diagnostics for object members with no writer or reader for the format being compiled
+   // =============================================================================================
+   //
+   // Without these, a struct with one unsupported member fails from inside the member loop, where the
+   // only clue is `error: incomplete type 'glz::to<10, Opaque>' used in nested name specifier`: an
+   // opaque format id, no member, and a stack of frames around it. The helpers below reduce that to a
+   // single error that names the member, and they cost nothing until a writer or reader is
+   // instantiated for T.
+   //
+   // None of this may move to class scope on `to<Format, T>`: `write_supported` is
+   // `requires { to<Format, T>{}; }`, so an assert in the class body turns that feature probe into a
+   // hard error instead of `false`. The same reasoning is recorded on the variant writers in jsonb and
+   // yaml. Inside the body of `op()` the assert is invisible to the probe, because `op` is a member
+   // template and is therefore only instantiated when the writer or reader actually runs.
+   namespace detail
+   {
+      // Whether the member at index I is written/read as usual for Format, or the operation skips it
+      // by design. A member skipped by design must not be diagnosed: `meta::skip` exists so that a
+      // field whose type has no `to`/`from` can sit in a struct without breaking it, and the object
+      // writers only emit function pointers when write_function_pointers is on.
+      template <operation Op, uint32_t Format, class T, size_t I>
+      consteval bool member_supported()
+      {
+         using M = field_t<T, I>;
+         if constexpr (Op == operation::serialize) {
+            return always_skipped<M> || is_any_function_ptr<M> || skipped_by_meta<T, I, Op> ||
+                   write_supported<M, Format>;
+         }
+         else {
+            return always_skipped<M> || is_any_function_ptr<M> || skipped_by_meta<T, I, Op> ||
+                   read_supported<M, Format>;
+         }
+      }
+
+      // Index of the first member with no support, or reflect<T>::size when there is none. Evaluated
+      // once per (operation, format, T), however many option sets instantiate the object writer.
+      template <operation Op, uint32_t Format, class T>
+      inline constexpr size_t first_unsupported_member = [] {
+         constexpr size_t N = reflect<T>::size;
+         size_t first{N};
+         [&]<size_t... I>(std::index_sequence<I...>) {
+            ((member_supported<Op, Format, T, I>() ? void() : (void)(first = first < I ? first : I)), ...);
+         }(std::make_index_sequence<N>{});
+         return first;
+      }();
+
+      // The key the member is written under and the name of its type, both as template arguments so
+      // that the instantiation trace below can print them.
+      template <class T, size_t I>
+      inline constexpr auto member_key_of = string_literal_from_view<key_name_v<I, T>.size()>(key_name_v<I, T>);
+
+      template <class T, size_t I>
+      inline constexpr auto member_type_of =
+         string_literal_from_view<type_name<field_t<T, I>>.size()>(type_name<field_t<T, I>>);
+
+      // Instantiating one of these reports the error, and every template argument is load bearing: the
+      // compiler prints them in the instantiation trace, and that trace is what names the member.
+      // `unsupported_writer<outer_t, 10, 1, glz::string_literal<2>{"o"}, glz::string_literal<7>{"Opaque"}>`
+      // reads as: object `outer_t`, format 10 (JSON), member 1 of `glz::reflect<T>`, key `o`, type
+      // `Opaque`.
+      template <class T, uint32_t Format, size_t I, auto Key = member_key_of<T, I>,
+                auto Type = member_type_of<T, I>>
+      struct unsupported_writer
+      {
+         static_assert(member_supported<operation::serialize, Format, T, I>(),
+                       "glz::to<Format, T>: one of this object's members has no writer for this format. "
+                       "The glz::detail::unsupported_writer specialization in the trace above names it: "
+                       "after the object come the format id and the member's index in glz::reflect<T>, "
+                       "then the member's key and the name of its type. Give that type a glz::meta "
+                       "specialization, make it reflectable, or exclude the member with glz::skip.");
+         static constexpr bool value = true;
+      };
+
+      template <class T, uint32_t Format, size_t I, auto Key = member_key_of<T, I>,
+                auto Type = member_type_of<T, I>>
+      struct unsupported_reader
+      {
+         static_assert(member_supported<operation::parse, Format, T, I>(),
+                       "glz::from<Format, T>: one of this object's members has no reader for this format. "
+                       "The glz::detail::unsupported_reader specialization in the trace above names it: "
+                       "after the object come the format id and the member's index in glz::reflect<T>, "
+                       "then the member's key and the name of its type. Give that type a glz::meta "
+                       "specialization, make it reflectable, or exclude the member with glz::skip.");
+         static constexpr bool value = true;
+      };
+
+      // True when every member is supported. Only on the path where one is not is the diagnostic above
+      // instantiated, and so the error reported.
+      template <operation Op, uint32_t Format, class T>
+      inline constexpr bool object_members_supported = [] {
+         constexpr size_t bad = first_unsupported_member<Op, Format, T>;
+         if constexpr (bad == reflect<T>::size) {
+            return true;
+         }
+         else if constexpr (Op == operation::serialize) {
+            return unsupported_writer<T, Format, bad>::value;
+         }
+         else {
+            return unsupported_reader<T, Format, bad>::value;
+         }
+      }();
+
+      template <uint32_t Format, class T>
+      inline constexpr bool writable_members = object_members_supported<operation::serialize, Format, T>;
+
+      template <uint32_t Format, class T>
+      inline constexpr bool readable_members = object_members_supported<operation::parse, Format, T>;
+   }
+
    // Check if a custom_t setter (From) accepts a nullable type (read side).
    // Complement of custom_getter_returns_nullable which checks the To/getter (write side).
    template <class V, class From>
