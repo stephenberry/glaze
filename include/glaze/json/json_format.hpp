@@ -70,6 +70,53 @@ namespace glz::detail
       }
    };
 
+   // One write into a formatter's output, with the room a bounded destination needs taken from the
+   // argument itself: a char is one byte, a string literal knows its length at compile time, and a
+   // view carries its own. A byte count spelled out beside its write is free to drift out of step
+   // with it, and one that is too small runs off the end of the buffer while one that is too large
+   // refuses output that would have fit -- neither of which shows up anywhere but review.
+   //
+   // `dump` grows a resizable destination itself but writes straight through a bounded one, leaving
+   // the room for that write to its caller. Supplying that room is all this adds, and it compiles
+   // out entirely for a resizable destination, which keeps dump's own growth and nothing more.
+   //
+   // Checked says whether dump may still have to grow a resizable destination. Minifying reserves
+   // its whole output in one call up front, because it only ever drops bytes; prettified output has
+   // no comparable bound, since every nesting level adds a newline and its indentation.
+   //
+   // A view handed here must be non-empty: dump memcpy's through `&b[ix]`, which a full buffer has
+   // no way to form. Every call site that is not obviously non-empty says why it is.
+   template <bool Checked, class B>
+   GLZ_ALWAYS_INLINE bool emit_bytes(is_context auto& ctx, B& b, size_t& ix, const auto& x) noexcept(not vector_like<B>)
+   {
+      using T = std::remove_cvref_t<decltype(x)>;
+      if constexpr (byte_sized<T>) {
+         if constexpr (has_bounded_capacity<B>) {
+            if (not ensure_space(ctx, b, ix + 1)) [[unlikely]] {
+               return false;
+            }
+         }
+         dump<Checked>(x, b, ix);
+      }
+      else {
+         const sv s = [&] {
+            if constexpr (std::is_bounded_array_v<T>) {
+               return sv{x, std::extent_v<T> - 1}; // a string literal, without its terminator
+            }
+            else {
+               return sv{x};
+            }
+         }();
+         if constexpr (has_bounded_capacity<B>) {
+            if (not ensure_space(ctx, b, ix + s.size())) [[unlikely]] {
+               return false;
+            }
+         }
+         dump<Checked>(s, b, ix);
+      }
+      return true;
+   }
+
    // Steps `it` over one of JSON's three literals, which the type table above matched on its first
    // byte alone.
    //
