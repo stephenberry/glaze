@@ -15491,6 +15491,45 @@ suite bounded_buffer_overflow_tests = [] {
       expect(not ec) << "prettify with many fields should not crash";
       expect(buffer.size() > 0) << "output should not be empty";
    };
+
+   "prettify into a bounded buffer that is too small"_test = [] {
+      // `dump` grows a resizable destination but writes straight through a bounded one, so
+      // prettify owes it the room for every write. Without those checks this ran off the end of
+      // the array and reported nothing at all.
+      const std::string in = R"({"a":1,"b":[1,2,3]})";
+      std::array<char, 8> buffer{};
+
+      glz::context ctx{};
+      glz::detail::prettify_json<glz::opts{}>(ctx, in, buffer);
+      expect(ctx.error == glz::error_code::buffer_overflow) << int(ctx.error);
+   };
+
+   "prettify into a bounded buffer with room to spare"_test = [] {
+      // The comment carries its own write, so JSONC is checked here too rather than only where a
+      // comment has to be skipped.
+      const std::string in = R"({"a":1,/* note */"b":[1,2,3]})";
+      std::array<char, 512> buffer{};
+
+      glz::context ctx{};
+      glz::detail::prettify_json<glz::opts{.comments = true}>(ctx, in, buffer);
+      expect(not bool(ctx.error)) << int(ctx.error);
+
+      // Nothing reports how much was written: the public overloads return void, and a bounded
+      // destination has no size to shrink. Prettified JSON contains no '\0' of its own, so in an
+      // array that started zeroed the first one ends the document.
+      const std::string_view written{buffer.data(), std::strlen(buffer.data())};
+      expect(written == glz::prettify_jsonc(in)) << written;
+   };
+
+   "prettify grows past twice its input"_test = [] {
+      // A resizable destination starts at twice the input size, which is not an upper bound on
+      // prettified output: every nesting level adds a newline and its indentation, so this
+      // document expands more than sixteen fold. The growth has to come from `dump` alone.
+      const std::string in = "[[[[[[[[[[1]]]]]]]]]]";
+      auto pretty = glz::prettify_json(in);
+      expect(pretty.size() > 2 * in.size()) << pretty.size();
+      expect(glz::minify_json(pretty) == in) << pretty;
+   };
 };
 
 namespace json_depth

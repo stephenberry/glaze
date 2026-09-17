@@ -27,25 +27,52 @@ namespace glz
          // the comment-enabled path can set it, so the plain JSON writer keeps the code it had.
          [[maybe_unused]] bool line_comment_open = false;
 
+         // `dump` grows a resizable destination itself but writes straight through a bounded one,
+         // leaving the room for that write to its caller. Minifying reserves its whole output in
+         // one call because it only ever drops bytes; prettified output has no comparable bound,
+         // since every nesting level adds a newline and its indentation, so each write below asks
+         // for exactly what it is about to store. None of it survives for a resizable destination,
+         // which keeps dump's own growth and nothing more.
+         const auto reserve = [&]([[maybe_unused]] const size_t n) {
+            if constexpr (has_bounded_capacity<decltype(b)>) {
+               return ensure_space(ctx, b, ix + n);
+            }
+            else {
+               return true;
+            }
+         };
+
          // Every line break the writer emits goes through this, because a break is also what ends a
-         // line comment: doing it in one place is what keeps the two from doubling up.
-         auto new_line = [&] {
+         // line comment: doing it in one place is what keeps the two from doubling up. The newline
+         // and the indentation behind it are also what make the output unbounded, so this is the
+         // write a bounded destination is likeliest to run out on.
+         const auto new_line = [&] {
+            const size_t n = use_tabs ? size_t(indent) : size_t(indent) * indent_width;
+            if (not reserve(1 + n)) [[unlikely]] {
+               return false;
+            }
             append_new_line<use_tabs, indent_width>(b, ix, indent);
             if constexpr (Opts.comments) {
                line_comment_open = false;
             }
+            return true;
          };
 
          // Anything written while a line comment is open has to start a line of its own first, or
          // the comment swallows it. Deferring the break to the next write rather than emitting it
          // with the comment is what keeps a comment at the end of the input from leaving a trailing
          // newline behind, and lets a break the writer was going to emit anyway serve as this one.
-         auto close_line_comment = [&] {
+         //
+         // Reports its break failing rather than swallowing it: on a bounded destination that ran
+         // out, carrying on would leave `line_comment_open` set and put the next write *inside* the
+         // comment, which is not a truncated document but a wrong one.
+         const auto close_line_comment = [&] {
             if constexpr (Opts.comments) {
                if (line_comment_open) [[unlikely]] {
-                  new_line();
+                  return new_line();
                }
             }
+            return true;
          };
 
          while (it < end) {
@@ -55,26 +82,46 @@ namespace glz
                if (bool(ctx.error)) [[unlikely]] {
                   return;
                }
-               close_line_comment();
+               if (not close_line_comment()) [[unlikely]] {
+                  return;
+               }
+               if (not reserve(value.size())) [[unlikely]] {
+                  return;
+               }
                dump(value, b, ix); // non-empty: the scanner reports an empty view as an error
                break;
             }
             case Comma: {
-               close_line_comment();
+               if (not close_line_comment()) [[unlikely]] {
+                  return;
+               }
+               if (not reserve(1)) [[unlikely]] {
+                  return;
+               }
                dump(',', b, ix);
                ++it;
                if constexpr (check_new_lines_in_arrays(Opts)) {
-                  new_line();
+                  if (not new_line()) [[unlikely]] {
+                     return;
+                  }
                }
                else {
                   if (state[indent] == Object_Start) {
-                     new_line();
+                     if (not new_line()) [[unlikely]] {
+                        return;
+                     }
                   }
                   else {
                      if constexpr (use_tabs) {
+                        if (not reserve(1)) [[unlikely]] {
+                           return;
+                        }
                         dump('\t', b, ix);
                      }
                      else {
+                        if (not reserve(1)) [[unlikely]] {
+                           return;
+                        }
                         dump(' ', b, ix);
                      }
                   }
@@ -83,12 +130,22 @@ namespace glz
             }
             case Number: {
                const auto value = read_json_number<Opts.null_terminated>(it, end);
-               close_line_comment();
+               if (not close_line_comment()) [[unlikely]] {
+                  return;
+               }
+               if (not reserve(value.size())) [[unlikely]] {
+                  return;
+               }
                dump_not_empty(value, b, ix); // non-empty: a Number match is one valid character
                break;
             }
             case Colon: {
-               close_line_comment();
+               if (not close_line_comment()) [[unlikely]] {
+                  return;
+               }
+               if (not reserve(2)) [[unlikely]] { // both spellings are two bytes
+                  return;
+               }
                if constexpr (use_tabs) {
                   dump(":\t", b, ix);
                }
@@ -99,7 +156,12 @@ namespace glz
                break;
             }
             case Array_Start: {
-               close_line_comment();
+               if (not close_line_comment()) [[unlikely]] {
+                  return;
+               }
+               if (not reserve(1)) [[unlikely]] {
+                  return;
+               }
                dump('[', b, ix);
                ++it;
                ++indent;
@@ -114,12 +176,16 @@ namespace glz
                if constexpr (check_new_lines_in_arrays(Opts)) {
                   if constexpr (not Opts.null_terminated) {
                      if (it != end && *it != ']') {
-                        new_line();
+                        if (not new_line()) [[unlikely]] {
+                           return;
+                        }
                      }
                   }
                   else {
                      if (*it != ']') {
-                        new_line();
+                        if (not new_line()) [[unlikely]] {
+                           return;
+                        }
                      }
                   }
                }
@@ -133,10 +199,17 @@ namespace glz
                }
                if constexpr (check_new_lines_in_arrays(Opts)) {
                   if (it[-1] != '[') {
-                     new_line();
+                     if (not new_line()) [[unlikely]] {
+                        return;
+                     }
                   }
                }
-               close_line_comment();
+               if (not close_line_comment()) [[unlikely]] {
+                  return;
+               }
+               if (not reserve(1)) [[unlikely]] {
+                  return;
+               }
                dump(']', b, ix);
                ++it;
                break;
@@ -147,7 +220,12 @@ namespace glz
                if (not match_literal<"null">(ctx, it, end)) [[unlikely]] {
                   return;
                }
-               close_line_comment();
+               if (not close_line_comment()) [[unlikely]] {
+                  return;
+               }
+               if (not reserve(4)) [[unlikely]] {
+                  return;
+               }
                dump("null", b, ix);
                break;
             }
@@ -156,7 +234,12 @@ namespace glz
                   if (not match_literal<"true">(ctx, it, end)) [[unlikely]] {
                      return;
                   }
-                  close_line_comment();
+                  if (not close_line_comment()) [[unlikely]] {
+                     return;
+                  }
+                  if (not reserve(4)) [[unlikely]] {
+                     return;
+                  }
                   dump("true", b, ix);
                   break;
                }
@@ -164,13 +247,23 @@ namespace glz
                   if (not match_literal<"false">(ctx, it, end)) [[unlikely]] {
                      return;
                   }
-                  close_line_comment();
+                  if (not close_line_comment()) [[unlikely]] {
+                     return;
+                  }
+                  if (not reserve(5)) [[unlikely]] {
+                     return;
+                  }
                   dump("false", b, ix);
                   break;
                }
             }
             case Object_Start: {
-               close_line_comment();
+               if (not close_line_comment()) [[unlikely]] {
+                  return;
+               }
+               if (not reserve(1)) [[unlikely]] {
+                  return;
+               }
                dump('{', b, ix);
                ++it;
                ++indent;
@@ -184,12 +277,16 @@ namespace glz
                state[indent] = Object_Start;
                if constexpr (not Opts.null_terminated) {
                   if (it != end && *it != '}') [[unlikely]] {
-                     new_line();
+                     if (not new_line()) [[unlikely]] {
+                        return;
+                     }
                   }
                }
                else {
                   if (*it != '}') {
-                     new_line();
+                     if (not new_line()) [[unlikely]] {
+                        return;
+                     }
                   }
                }
                break;
@@ -201,9 +298,16 @@ namespace glz
                   return;
                }
                if (it[-1] != '{') {
-                  new_line();
+                  if (not new_line()) [[unlikely]] {
+                     return;
+                  }
                }
-               close_line_comment();
+               if (not close_line_comment()) [[unlikely]] {
+                  return;
+               }
+               if (not reserve(1)) [[unlikely]] {
+                  return;
+               }
                dump('}', b, ix);
                ++it;
                break;
@@ -214,7 +318,12 @@ namespace glz
                   if (bool(ctx.error)) [[unlikely]] {
                      return;
                   }
-                  close_line_comment();
+                  if (not close_line_comment()) [[unlikely]] {
+                     return;
+                  }
+                  if (not reserve(comment.text.size())) [[unlikely]] {
+                     return;
+                  }
                   dump(comment.text, b, ix); // non-empty: an empty view comes with an error
                   line_comment_open = comment.line;
                   break;
