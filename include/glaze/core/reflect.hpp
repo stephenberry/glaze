@@ -796,7 +796,11 @@ namespace glz
       }();
 
       // The key the member is written under and the name of its type, both as template arguments so
-      // that the instantiation trace below can print them.
+      // that the instantiation trace below can print them. The key comes from the member names, which
+      // GCC's pre-C++26 reflection cannot produce for a type with no linkage -- it passes the type
+      // through `external<T>`, which cannot be defined for a type declared inside a function -- so a
+      // report about such a type surfaces the compiler's own error instead of this message. Every
+      // format that writes keys needs those names anyway, so that case is MSGPACK's tie-based path.
       template <class T, size_t I>
       inline constexpr auto member_key_of = string_literal_from_view<key_name_v<I, T>.size()>(key_name_v<I, T>);
 
