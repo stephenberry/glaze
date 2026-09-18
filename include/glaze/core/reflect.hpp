@@ -769,31 +769,33 @@ namespace glz
       // by design. A member skipped by design must not be diagnosed: `meta::skip` exists so that a
       // field whose type has no `to`/`from` can sit in a struct without breaking it, and the object
       // writers only emit function pointers when write_function_pointers is on.
+      //
+      // The order of the questions is not free. Each one below the first is only reached when the
+      // ones above it are false, so the cheap and common answers come first and the ones that cost a
+      // template instantiation -- `skipped_by_meta`, which is only asked of a type that has a meta to
+      // ask, and the format's own exemption, which is only asked of a member no format claims to
+      // write -- are not instantiated for members that are simply fine.
       template <operation Op, uint32_t Format, class T, size_t I>
       consteval bool member_supported()
       {
          using M = member_type_t<T, I>;
-         if constexpr (Op == operation::serialize) {
-            return always_skipped<M> || is_any_function_ptr<M> || skipped_by_meta<T, I, Op> ||
-                   writer_emits_member_inline<Format, M> || write_supported<M, Format>;
+         if constexpr (always_skipped<M> || is_any_function_ptr<M>) {
+            return true;
          }
          else {
-            return always_skipped<M> || is_any_function_ptr<M> || skipped_by_meta<T, I, Op> ||
-                   read_supported<M, Format>;
+            if constexpr (meta_has_skip<std::remove_cvref_t<T>>) {
+               if (skipped_by_meta<T, I, Op>) {
+                  return true;
+               }
+            }
+            if constexpr (Op == operation::serialize) {
+               return write_supported<M, Format> || writer_emits_member_inline<Format, M>;
+            }
+            else {
+               return read_supported<M, Format>;
+            }
          }
       }
-
-      // Index of the first member with no support, or the member count when there is none. Evaluated
-      // once per (operation, format, T), however many option sets instantiate the object writer.
-      template <operation Op, uint32_t Format, class T>
-      inline constexpr size_t first_unsupported_member = [] {
-         constexpr size_t N = member_count<T>();
-         size_t first{N};
-         [&]<size_t... I>(std::index_sequence<I...>) {
-            ((member_supported<Op, Format, T, I>() ? void() : (void)(first = first < I ? first : I)), ...);
-         }(std::make_index_sequence<N>{});
-         return first;
-      }();
 
       // The key the member is written under and the name of its type, both as template arguments so
       // that the instantiation trace below can print them. The key comes from the member names, and
@@ -842,11 +844,17 @@ namespace glz
       };
 
       // True when every member is supported. Only on the path where one is not is the diagnostic above
-      // instantiated, and so the error reported.
+      // instantiated, and so the error reported. One variable template for the whole question, so a
+      // type costs a single additional instantiation however many members it has.
       template <operation Op, uint32_t Format, class T>
       inline constexpr bool object_members_supported = [] {
-         constexpr size_t bad = first_unsupported_member<Op, Format, T>;
-         if constexpr (bad == member_count<T>()) {
+         constexpr size_t N = member_count<T>();
+         constexpr size_t bad = [&]<size_t... I>(std::index_sequence<I...>) {
+            size_t first{N};
+            ((member_supported<Op, Format, T, I>() ? void() : (void)(first = first < I ? first : I)), ...);
+            return first;
+         }(std::make_index_sequence<N>{});
+         if constexpr (bad == N) {
             return true;
          }
          else if constexpr (Op == operation::serialize) {

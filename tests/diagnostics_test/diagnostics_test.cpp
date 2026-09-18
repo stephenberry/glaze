@@ -128,30 +128,37 @@ namespace
 {
    // ---- which member is a problem -------------------------------------------------------------
    //
-   // `first_unsupported_member` is the half of the diagnostic that decides, and it is separable from
-   // the half that reports: naming it here does not instantiate the report.
+   // `member_supported` is the half of the diagnostic that decides, and it is separable from the half
+   // that reports: asking it here does not instantiate the report. Which member the report picks is
+   // the first one that answers false, and the cases next to this file pin that in the trace.
 
    static_assert(!glz::detail::member_supported<glz::operation::serialize, glz::JSON, Outer, 1>());
    static_assert(!glz::detail::member_supported<glz::operation::parse, glz::JSON, Outer, 1>());
    static_assert(glz::detail::member_supported<glz::operation::serialize, glz::JSON, Outer, 0>());
    static_assert(glz::detail::member_supported<glz::operation::serialize, glz::JSON, Outer, 2>());
 
-   static_assert(glz::detail::first_unsupported_member<glz::operation::serialize, glz::JSON, Outer> == 1);
-   static_assert(glz::detail::first_unsupported_member<glz::operation::parse, glz::JSON, Outer> == 1);
-   static_assert(glz::detail::first_unsupported_member<glz::operation::serialize, glz::JSON, Supported> == 2);
-   static_assert(glz::detail::first_unsupported_member<glz::operation::parse, glz::JSON, Supported> == 2);
+   static_assert(glz::detail::member_supported<glz::operation::parse, glz::JSON, Outer, 0>());
+   // A struct with nothing to report: every member answers true in both directions.
+   static_assert(glz::detail::member_supported<glz::operation::serialize, glz::JSON, Supported, 0>());
+   static_assert(glz::detail::member_supported<glz::operation::serialize, glz::JSON, Supported, 1>());
 
    // The same member is the problem in every format, and a struct that is fine in one is fine in all.
-   static_assert(glz::detail::first_unsupported_member<glz::operation::serialize, glz::JSONB, Outer> == 1);
-   static_assert(glz::detail::first_unsupported_member<glz::operation::serialize, glz::BEVE, Outer> == 1);
-   static_assert(glz::detail::first_unsupported_member<glz::operation::serialize, glz::CBOR, Outer> == 1);
-   static_assert(glz::detail::first_unsupported_member<glz::operation::serialize, glz::MSGPACK, Outer> == 1);
-   static_assert(glz::detail::first_unsupported_member<glz::operation::serialize, glz::BSON, Outer> == 1);
-   static_assert(glz::detail::first_unsupported_member<glz::operation::serialize, glz::YAML, Outer> == 1);
-   static_assert(glz::detail::first_unsupported_member<glz::operation::serialize, glz::TOML, Outer> == 1);
-   static_assert(glz::detail::first_unsupported_member<glz::operation::serialize, glz::CSV, Outer> == 1);
-   static_assert(glz::detail::first_unsupported_member<glz::operation::parse, glz::BEVE, Outer> == 1);
-   static_assert(glz::detail::first_unsupported_member<glz::operation::parse, glz::YAML, Outer> == 1);
+   static_assert(!glz::detail::member_supported<glz::operation::serialize, glz::JSONB, Outer, 1>());
+   static_assert(!glz::detail::member_supported<glz::operation::serialize, glz::BEVE, Outer, 1>());
+   static_assert(!glz::detail::member_supported<glz::operation::serialize, glz::CBOR, Outer, 1>());
+   static_assert(!glz::detail::member_supported<glz::operation::serialize, glz::MSGPACK, Outer, 1>());
+   static_assert(!glz::detail::member_supported<glz::operation::serialize, glz::BSON, Outer, 1>());
+   static_assert(!glz::detail::member_supported<glz::operation::serialize, glz::YAML, Outer, 1>());
+   static_assert(!glz::detail::member_supported<glz::operation::serialize, glz::TOML, Outer, 1>());
+   static_assert(!glz::detail::member_supported<glz::operation::serialize, glz::CSV, Outer, 1>());
+   static_assert(!glz::detail::member_supported<glz::operation::parse, glz::JSONB, Outer, 1>());
+   static_assert(!glz::detail::member_supported<glz::operation::parse, glz::BEVE, Outer, 1>());
+   static_assert(!glz::detail::member_supported<glz::operation::parse, glz::CBOR, Outer, 1>());
+   static_assert(!glz::detail::member_supported<glz::operation::parse, glz::MSGPACK, Outer, 1>());
+   static_assert(!glz::detail::member_supported<glz::operation::parse, glz::BSON, Outer, 1>());
+   static_assert(!glz::detail::member_supported<glz::operation::parse, glz::YAML, Outer, 1>());
+   static_assert(!glz::detail::member_supported<glz::operation::parse, glz::TOML, Outer, 1>());
+   static_assert(!glz::detail::member_supported<glz::operation::parse, glz::CSV, Outer, 1>());
 
    static_assert(glz::detail::writable_members<glz::JSON, Supported>);
    static_assert(glz::detail::readable_members<glz::JSON, Supported>);
@@ -173,7 +180,6 @@ namespace
    static_assert(glz::detail::member_supported<glz::operation::serialize, glz::BSON, BsonInlineMembers, 1>());
    static_assert(glz::detail::member_supported<glz::operation::serialize, glz::BSON, BsonInlineMembers, 2>());
    static_assert(glz::detail::writable_members<glz::BSON, BsonInlineMembers>);
-   static_assert(glz::detail::first_unsupported_member<glz::operation::serialize, glz::BSON, BsonInlineMembers> == 3);
    // The exemption is the writer's, not the reader's: the reader has real from<BSON, ...>
    // specializations for these, so nothing is exempted there.
    static_assert(glz::read_supported<std::optional<int>, glz::BSON>);
@@ -198,17 +204,12 @@ namespace
    static_assert(glz::detail::member_supported<glz::operation::parse, glz::JSON, SkippedForParse, 1>());
    static_assert(!glz::detail::member_supported<glz::operation::serialize, glz::JSON, SkippedForParse, 1>());
 
-   static_assert(glz::detail::first_unsupported_member<glz::operation::serialize, glz::JSON, SkippedForSerialize> ==
-                 2);
-   static_assert(glz::detail::first_unsupported_member<glz::operation::parse, glz::JSON, SkippedForParse> == 2);
 
    static_assert(glz::detail::member_supported<glz::operation::serialize, glz::JSON, WithSkipMembers, 1>());
    static_assert(glz::detail::member_supported<glz::operation::parse, glz::JSON, WithSkipMembers, 1>());
-   static_assert(glz::detail::first_unsupported_member<glz::operation::serialize, glz::JSON, WithSkipMembers> == 3);
 
    static_assert(glz::detail::member_supported<glz::operation::serialize, glz::JSON, WithFunctions, 1>());
    static_assert(glz::detail::member_supported<glz::operation::serialize, glz::JSON, WithFunctions, 2>());
-   static_assert(glz::detail::first_unsupported_member<glz::operation::serialize, glz::JSON, WithFunctions> == 3);
 
    // Which formats a function-pointer member is passed over by is not uniform: JSON and BSON drop
    // both kinds, JSONB, BEVE and CBOR drop both, TOML drops member function pointers, and YAML,
@@ -222,7 +223,6 @@ namespace
    static_assert(!glz::write_supported<int (WithFunctions::*)(int), glz::MSGPACK>);
    static_assert(glz::detail::member_supported<glz::operation::serialize, glz::MSGPACK, WithFunctions, 1>());
    static_assert(glz::detail::member_supported<glz::operation::serialize, glz::MSGPACK, WithFunctions, 2>());
-   static_assert(glz::detail::first_unsupported_member<glz::operation::serialize, glz::MSGPACK, WithFunctions> == 3);
    static_assert(!glz::write_supported<int (*)(int), glz::YAML>);
    static_assert(glz::detail::member_supported<glz::operation::serialize, glz::YAML, WithFunctions, 1>());
    static_assert(!glz::write_supported<int (*)(int), glz::JSONB>);
