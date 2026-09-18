@@ -128,9 +128,9 @@ int main() {
 |---------|-------------|-------|
 | Max struct members | 128 | Unlimited |
 | Non-aggregate types | Not supported | Full support |
-| Inheritance | Requires explicit `glz::meta` | Automatic (via `nonstatic_data_members_of`) |
+| Inheritance | Requires explicit `glz::meta` | Automatic (base members first, then the type's own) |
 | Member name extraction | `__PRETTY_FUNCTION__` parsing | `std::meta::identifier_of` |
-| Member count | Structured binding probe | `nonstatic_data_members_of().size()` |
+| Member count | Structured binding probe | Number of members across the hierarchy |
 | Private member access | Limited | Full (with `access_context::unchecked()`) |
 | Compile-time safety | Compiler-specific hacks | Standardized API |
 
@@ -221,6 +221,18 @@ constexpr auto names = glz::member_names<Derived>;
 constexpr auto count = glz::detail::count_members<Derived>;
 // count == 3 (2 from Base + 1 from Derived)
 ```
+
+> **Note:** Two shapes still need a `glz::meta`. The first is two members with one name: a member
+> that hides a member of a base class is a member of its own, and two bases can repeat a name as
+> well, so the reflection lists both under that name, the writer emits the key twice and the reader
+> cannot be instantiated for the type at all. Give such a type a `glz::meta` that names its members
+> apart, such as `glz::object("base_x", &Base::x, "x", &Derived::x)`. The second is a base inherited
+> twice *non*-virtually: it has two subobjects, whose members the compiler refuses to name
+> unambiguously, while a virtual base is a single shared subobject and is reflected once.
+>
+> A `glz::meta` written for a base class is not consulted for a derived type that is reflected
+> automatically, because the reflection reads the base's data members: the same base serializes as
+> `{"renamed":1}` on its own and as `{"raw":1,"extra":2}` inside such a derived type.
 
 ### Automatic Enum String Serialization
 
