@@ -144,6 +144,32 @@ namespace glz
       }
    };
 
+   // Specialization for arrays whose elements are reached through `volatile`.
+   // These are not `array_t` because they are not iterable (see `volatile_indexed_array`),
+   // so the element is reached with `operator[]` instead of `std::next(begin(), index)`.
+   template <class T>
+      requires volatile_indexed_array<T>
+   struct seek_op<T>
+   {
+      template <class F>
+      static bool op(F&& func, auto&& value, sv json_ptr)
+      {
+         if (json_ptr.empty()) {
+            func(value);
+            return true;
+         }
+         if (json_ptr[0] != '/' || json_ptr.size() < 2) return false;
+
+         size_t index{};
+         auto [p, ec] = std::from_chars(&json_ptr[1], json_ptr.data() + json_ptr.size(), index);
+         if (ec != std::errc{}) return false;
+         json_ptr = json_ptr.substr(p - json_ptr.data());
+
+         if (index >= T::length) return false;
+         return seek(std::forward<F>(func), value[index], json_ptr);
+      }
+   };
+
    // Specialization for nullable types
    template <class T>
       requires nullable_t<T>
