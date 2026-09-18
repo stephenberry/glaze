@@ -8,6 +8,7 @@
 #include <tuple>
 #include <type_traits>
 #include <utility>
+#include <vector>
 
 #include "glaze/core/feature_test.hpp"
 #include "glaze/core/tuple.hpp"
@@ -24,19 +25,67 @@ namespace glz
    {
 #if GLZ_REFLECTION26
       // C++26 P2996 Reflection Implementation
-      // Uses std::meta::nonstatic_data_members_of for true compile-time reflection
-      // Supports inheritance - automatically includes base class members
+      // Uses std::meta queries for true compile-time reflection
+      // Supports inheritance - the members of base classes are enumerated through bases_of
 
       // Helper to get access context for reflection
       inline consteval auto reflection_access_ctx() { return std::meta::access_context::unchecked(); }
 
+      // Collects every nonstatic data member of `type`, inherited ones included: a base subobject's
+      // members come before the members the type declares itself, and a base type reached through
+      // more than one path contributes once. That is exact for a virtual base, which is one shared
+      // subobject; a base inherited twice non-virtually has two subobjects, and its members cannot
+      // be named unambiguously, so a type shaped that way needs a glz::meta.
+      //
+      // The queries are indexed rather than ranged over on purpose: a range-for over a std::meta
+      // query inside a recursive consteval function silently yields nothing on GCC 16, so the bases
+      // of a type walked that way are invisible. A non-recursive range-for is fine.
+      inline consteval void collect_all_members(std::meta::info type, std::vector<std::meta::info>& members,
+                                                std::vector<std::meta::info>& visited)
+      {
+         visited.push_back(type);
+
+         auto bases = std::meta::bases_of(type, reflection_access_ctx());
+         for (size_t i = 0; i < bases.size(); ++i) {
+            const auto base = std::meta::type_of(bases[i]);
+            bool seen = false;
+            for (size_t j = 0; j < visited.size(); ++j) {
+               if (visited[j] == base) {
+                  seen = true;
+                  break;
+               }
+            }
+            if (not seen) {
+               collect_all_members(base, members, visited);
+            }
+         }
+
+         auto direct = std::meta::nonstatic_data_members_of(type, reflection_access_ctx());
+         for (size_t i = 0; i < direct.size(); ++i) {
+            members.push_back(direct[i]);
+         }
+      }
+
+      inline consteval std::vector<std::meta::info> all_members_of(std::meta::info type)
+      {
+         // A type with no base classes is the common case, and its member list is the direct members
+         // in the order they are declared, so the walk below is not entered for it
+         if (std::meta::bases_of(type, reflection_access_ctx()).size() == 0) {
+            return std::meta::nonstatic_data_members_of(type, reflection_access_ctx());
+         }
+
+         std::vector<std::meta::info> members{};
+         std::vector<std::meta::info> visited{};
+         collect_all_members(type, members, visited);
+         return members;
+      }
+
       // Count members using P2996 reflection
       // Works for any class type, including non-aggregates (classes with custom constructors)
-      // Inherited members are automatically included via nonstatic_data_members_of
+      // Inherited members are counted, base members first
       template <class T>
          requires(std::is_class_v<std::remove_cvref_t<T>>)
-      inline constexpr size_t count_members =
-         std::meta::nonstatic_data_members_of(^^std::remove_cvref_t<T>, reflection_access_ctx()).size();
+      inline constexpr size_t count_members = all_members_of(^^std::remove_cvref_t<T>).size();
 
       // Helper struct to get member info at a specific index
       template <class T, size_t I>
@@ -44,7 +93,7 @@ namespace glz
       {
          static consteval auto info()
          {
-            auto members = std::meta::nonstatic_data_members_of(^^T, reflection_access_ctx());
+            auto members = all_members_of(^^T);
             return members[I];
          }
       };
