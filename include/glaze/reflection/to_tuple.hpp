@@ -92,19 +92,130 @@ namespace glz
          [[maybe_unused]] constexpr operator std::string_view() const { return {}; }
       };
 
-      template <class T, class... Args>
-         requires(std::is_aggregate_v<std::remove_cvref_t<T>>)
-      inline constexpr auto count_members = [] {
-         using V = std::remove_cvref_t<T>;
-         if constexpr (requires { V{Args{}..., any_t{}}; }) {
-            return count_members<V, Args..., any_t>;
+      inline constexpr size_t max_pure_reflection_count = 128;
+
+      // Whether V can be aggregate initialized from exactly N universal clauses.
+      //
+      // A clause covers one member, so for an aggregate with m members this holds for every N in
+      // [first, m] and for no N outside it, where first is one past the last member that cannot be
+      // default initialized: members beyond the clauses are copy-initialized from {} and a member
+      // that cannot be value initialized fails the whole initialization. Counting is therefore
+      // finding the largest initializable N, which is m: at N == m the clauses cover every member
+      // and nothing is left to value initialize.
+      template <class V, size_t... I>
+      consteval bool initializable_with_n_impl(std::index_sequence<I...>)
+      {
+         return requires { V{(void(I), any_t{})...}; };
+      }
+
+      template <class V, size_t N>
+      inline constexpr bool initializable_with_n = initializable_with_n_impl<V>(std::make_index_sequence<N>{});
+
+      // Largest initializable N in [Low, High]; Low is known initializable and High known not.
+      template <class V, size_t Low, size_t High>
+      consteval size_t largest_initializable_between()
+      {
+         if constexpr (High <= Low + 1) {
+            return Low;
          }
          else {
-            return sizeof...(Args);
+            constexpr size_t mid = Low + (High - Low) / 2;
+            if constexpr (initializable_with_n<V, mid>) {
+               return largest_initializable_between<V, mid, High>();
+            }
+            else {
+               return largest_initializable_between<V, Low, mid>();
+            }
          }
-      }();
+      }
 
-      inline constexpr size_t max_pure_reflection_count = 128;
+      // Largest initializable N in [Low, Max]; Low is known initializable. Doubling Low brackets
+      // the member count and the bracket is then binary searched, so the number of probes grows
+      // logarithmically with the count rather than one probe per member.
+      template <class V, size_t Low, size_t Max>
+      consteval size_t largest_initializable_from()
+      {
+         if constexpr (Low >= Max) {
+            return Max;
+         }
+         else if constexpr (Low * 2 > Max) {
+            if constexpr (initializable_with_n<V, Max>) {
+               return Max;
+            }
+            else {
+               return largest_initializable_between<V, Low, Max>();
+            }
+         }
+         else if constexpr (initializable_with_n<V, Low * 2>) {
+            return largest_initializable_from<V, Low * 2, Max>();
+         }
+         else {
+            return largest_initializable_between<V, Low, Low * 2>();
+         }
+      }
+
+      // Smallest initializable N in [From, Max], or Max + 1 when there is none. Only reached when
+      // the first member alone cannot be the last clause, so the walk is linear in the position of
+      // the last member that cannot be default initialized.
+      template <class V, size_t From, size_t Max>
+      consteval size_t first_initializable_from()
+      {
+         if constexpr (From > Max) {
+            return Max + 1;
+         }
+         else if constexpr (initializable_with_n<V, From>) {
+            return From;
+         }
+         else {
+            return first_initializable_from<V, From + 1, Max>();
+         }
+      }
+
+      // Member count without the over-limit check, which the caller only pays for types that reach
+      // the limit.
+      template <class V>
+      consteval size_t count_members_unchecked()
+      {
+         if constexpr (initializable_with_n<V, 1>) {
+            // Clauses can cover one member without leaving a member to value initialize, so every
+            // count up to the member count is initializable. Four clauses are probed next rather
+            // than two, which costs nothing for aggregates of two or three members, saves the probe
+            // at two for everything larger, and only adds a probe for a single member.
+            if constexpr (initializable_with_n<V, 4>) {
+               return largest_initializable_from<V, 4, max_pure_reflection_count>();
+            }
+            else {
+               return largest_initializable_between<V, 1, 4>();
+            }
+         }
+         else if constexpr (initializable_with_n<V, 0>) {
+            return 0; // no members, so no clauses are initializable
+         }
+         else {
+            constexpr size_t first = first_initializable_from<V, 2, max_pure_reflection_count>();
+            static_assert(first <= max_pure_reflection_count,
+                          "glaze: unable to count the members of this aggregate within "
+                          "max_pure_reflection_count; provide a glz::meta<T> specialization.");
+            return largest_initializable_from<V, first, max_pure_reflection_count>();
+         }
+      }
+
+      template <class V>
+      consteval size_t count_members_impl()
+      {
+         constexpr size_t count = count_members_unchecked<V>();
+         if constexpr (count == max_pure_reflection_count) {
+            // The limit is only reachable with more members, which to_tie cannot decompose.
+            static_assert(!initializable_with_n<V, max_pure_reflection_count + 1>,
+                          "glaze: this type has more members than pure reflection supports "
+                          "(max_pure_reflection_count); provide a glz::meta<T> specialization.");
+         }
+         return count;
+      }
+
+      template <class T>
+         requires(std::is_aggregate_v<std::remove_cvref_t<T>>)
+      inline constexpr size_t count_members = count_members_impl<std::remove_cvref_t<T>>();
 #endif
    }
 
