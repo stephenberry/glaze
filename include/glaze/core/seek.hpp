@@ -71,7 +71,7 @@ namespace glz
          for (const char c : token) {
             if (c < '0' || c > '9') return {};
             const size_t digit = size_t(c - '0');
-            if (index > (std::numeric_limits<size_t>::max() - digit) / 10) return {};
+            if (index > ((std::numeric_limits<size_t>::max)() - digit) / 10) return {};
             index = index * 10 + digit;
          }
          return index;
