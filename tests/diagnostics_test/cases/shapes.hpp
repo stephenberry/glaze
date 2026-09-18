@@ -5,13 +5,16 @@
 
 #include <glaze/core/reflect.hpp>
 
-// Private data, no glz::meta: neither an aggregate nor reflectable, so no format has a writer or a
-// reader for it.
+// Private data, no glz::meta: no format has a writer or a reader for it, in either reflection mode.
+// Traditional reflection already excludes it (a class with private data is not an aggregate), but
+// C++26 reflection can reflect any class, so the opt-out has to be explicit for the case to mean the
+// same thing there.
 class Opaque
 {
    int value{};
 
 public:
+   static constexpr bool glaze_reflect = false;
    Opaque() = default;
 };
 
