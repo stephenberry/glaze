@@ -717,7 +717,8 @@ namespace glz
       // dispatching to `to<Format, M>`. BSON is the case that exists today: a BSON element carries
       // its type next to its key, and the object writer emits that pair itself for nullable, null
       // and variant members (`bson_detail::write_member_element`), so `write_supported` is false for
-      // those types even though the format writes them.
+      // those types even though the format writes them. TOML declares the same thing for members
+      // that are always null, which its writer emits as nothing (see toml/write.hpp).
       template <uint32_t Format, class M>
       inline constexpr bool writer_emits_member_inline = false;
 

@@ -68,4 +68,4 @@ static void op(auto&& value, is_context auto&& ctx, B&& b, auto& ix)
 }
 ```
 
-A format that omits it keeps the old error from inside its member loop. A format whose object writer emits some members itself, instead of dispatching to `to<Format, M>`, declares that with `detail::writer_emits_member_inline<Format, M>`; BSON does, for nullable, null and variant members, because a BSON element carries its type next to its key.
+A format that omits it keeps the old error from inside its member loop. A format whose object writer emits some members itself, instead of dispatching to `to<Format, M>`, declares that with `detail::writer_emits_member_inline<Format, M>`: BSON does, for nullable, null and variant members, because a BSON element carries its type next to its key, and TOML does for members that are always null, which its writer emits as nothing. The declaration is per direction, and only for what the writer really handles: TOML's reader has no reader for those members either, so nothing is exempted on that side and the diagnostic still reports them.

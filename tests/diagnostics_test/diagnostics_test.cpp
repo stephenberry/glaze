@@ -89,6 +89,17 @@ namespace diagnostics_test_names
       std::vector<int> num1{};
       std::vector<float> num2{};
    };
+
+   // TOML writes an always-null member itself, as nothing, inside `write_inline_value`, and has no
+   // `to<TOML, std::monostate>` or `to<TOML, std::nullopt_t>`: the same asymmetry as BSON, one format
+   // further along. The reader is not in the same position -- it has no `from<TOML, ...>` for these
+   // either, and reading into this struct fails on main as well -- so only the write side is exempt.
+   struct TomlInlineMembers
+   {
+      std::string name{"n"};
+      std::monostate empty{};
+      std::nullopt_t nothing = std::nullopt;
+   };
 }
 
 using namespace diagnostics_test_names;
@@ -183,6 +194,15 @@ namespace
    // The exemption is the writer's, not the reader's: the reader has real from<BSON, ...>
    // specializations for these, so nothing is exempted there.
    static_assert(glz::read_supported<std::optional<int>, glz::BSON>);
+
+   // The same asymmetry for TOML, and again only on the write side: `write_supported` is false for
+   // both of these while the TOML writer emits the struct, and its reader genuinely cannot read them
+   // (the read of this struct fails on main too).
+   static_assert(!glz::write_supported<std::monostate, glz::TOML>);
+   static_assert(!glz::write_supported<std::nullopt_t, glz::TOML>);
+   static_assert(glz::detail::member_supported<glz::operation::serialize, glz::TOML, TomlInlineMembers, 1>());
+   static_assert(glz::detail::member_supported<glz::operation::serialize, glz::TOML, TomlInlineMembers, 2>());
+   static_assert(glz::detail::writable_members<glz::TOML, TomlInlineMembers>);
 
    // ---- what the report says the member is ----------------------------------------------------
 
@@ -351,6 +371,16 @@ suite diagnostics_tests = [] {
       expect(back.engaged == 42);
       expect(std::holds_alternative<std::string>(back.choice));
       expect(std::get<std::string>(back.choice) == "picked");
+   };
+
+   "TOML writes the always-null members it emits as nothing"_test = [] {
+      TomlInlineMembers v{};
+      std::string text;
+      expect(!glz::write_toml(v, text)) << "write_toml failed";
+      expect(text == R"(name = "n")") << text;
+      // Only the write side is exercised here: TOML's reader has no `from<TOML, std::monostate>` or
+      // `from<TOML, std::nullopt_t>` either, so reading this struct fails on main as well and the
+      // diagnostic is right to report it for the read direction.
    };
 
    "the CSV writer still round trips a struct of columns"_test = [] {
