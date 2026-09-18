@@ -1327,6 +1327,19 @@ namespace glz
             std::memcpy(&b[ix], value.str.data(), n);
             ix += n;
          }
+         else {
+            // An empty raw_json holds no JSON document, but a value is required wherever one is
+            // written. Dumping nothing truncates the enclosing document (`{"key":}`), so the empty
+            // state serializes as null. This covers a member that was never filled as well as one
+            // cleared or assigned an empty string.
+            if (!ensure_space(ctx, b, ix + 4 + write_padding_bytes)) [[unlikely]] {
+               return;
+            }
+
+            static constexpr char null_v[]{'n', 'u', 'l', 'l'};
+            std::memcpy(&b[ix], null_v, 4);
+            ix += 4;
+         }
       }
    };
 
