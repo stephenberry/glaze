@@ -1533,6 +1533,36 @@ struct count_non_default_constructible_only
 };
 static_assert(glz::detail::count_members<count_non_default_constructible_only> == 1);
 
+// The universal clause excludes character pointers from its template conversion, so a dedicated
+// conversion is needed for these members, otherwise they count as no members and write as nothing.
+struct count_c_string_member
+{
+   const char* name{};
+   int count{};
+};
+static_assert(glz::detail::count_members<count_c_string_member> == 2);
+
+struct count_c_string_only
+{
+   const char* name{};
+};
+static_assert(glz::detail::count_members<count_c_string_only> == 1);
+
+struct count_string_view_and_c_string
+{
+   std::string_view view{};
+   const char* name{};
+   int count{};
+};
+static_assert(glz::detail::count_members<count_string_view_and_c_string> == 3);
+
+struct count_nullptr_member
+{
+   std::nullptr_t n{};
+   int a{};
+};
+static_assert(glz::detail::count_members<count_nullptr_member> == 2);
+
 struct count_one_member
 {
    int a{};
@@ -1595,6 +1625,35 @@ suite member_count_tests = [] {
       expect(buffer == R"({"a":{"v":1},"b":2,"c":{"v":3}})") << buffer;
    };
 
+   "c string members are written"_test = [] {
+      std::string buffer{};
+      expect(not glz::write_json(count_c_string_member{"hello", 7}, buffer));
+      expect(buffer == R"({"name":"hello","count":7})") << buffer;
+
+      buffer.clear();
+      expect(not glz::write_json(count_c_string_only{"hi"}, buffer));
+      expect(buffer == R"({"name":"hi"})") << buffer;
+   };
+
+   // The pointer member itself is not asserted on read: a pointer cannot own the bytes it points to,
+   // so the field is skipped. The members around it must still be read.
+   "c string members do not stop the other members from being read"_test = [] {
+      count_c_string_member obj{};
+      expect(not glz::read_json(obj, R"({"name":"hello","count":7})"));
+      expect(obj.count == 7);
+   };
+
+   "string view and c string members are written"_test = [] {
+      std::string buffer{};
+      expect(not glz::write_json(count_string_view_and_c_string{"view", "name", 3}, buffer));
+      expect(buffer == R"({"view":"view","name":"name","count":3})") << buffer;
+   };
+
+   "a null member is skipped on write"_test = [] {
+      std::string buffer{};
+      expect(not glz::write_json(count_nullptr_member{nullptr, 5}, buffer));
+      expect(buffer == R"({"a":5})") << buffer;
+   };
 };
 
 int main() { return 0; }

@@ -89,7 +89,13 @@ namespace glz
 #pragma GCC diagnostic pop
 #endif
 
+         // A non-template conversion is preferred over the template above, which keeps the
+         // conversion of a member unambiguous for types constructible from more than one of these.
+         // Character pointers and nullptr_t are excluded from the template, so they need a
+         // non-template conversion of their own to be initializable from a clause at all.
          [[maybe_unused]] constexpr operator std::string_view() const { return {}; }
+         [[maybe_unused]] constexpr operator const char*() const { return {}; }
+         [[maybe_unused]] constexpr operator std::nullptr_t() const { return {}; }
       };
 
       inline constexpr size_t max_pure_reflection_count = 128;
@@ -155,8 +161,9 @@ namespace glz
       }
 
       // Smallest initializable N in [From, Max], or Max + 1 when there is none. Only reached when
-      // the first member alone cannot be the last clause, so the walk is linear in the position of
-      // the last member that cannot be default initialized.
+      // one clause is not initializable, which means a member that cannot be default initialized is
+      // followed by at least one more member. The walk is linear in the position of the last such
+      // member, and finds the first clause count that covers it.
       template <class V, size_t From, size_t Max>
       consteval size_t first_initializable_from()
       {
