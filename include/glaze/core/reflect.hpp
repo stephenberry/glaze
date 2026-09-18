@@ -767,8 +767,13 @@ namespace glz
 
       // Whether the member at index I is written/read as usual for Format, or the operation skips it
       // by design. A member skipped by design must not be diagnosed: `meta::skip` exists so that a
-      // field whose type has no `to`/`from` can sit in a struct without breaking it, and the object
-      // writers only emit function pointers when write_function_pointers is on.
+      // field whose type has no `to`/`from` can sit in a struct without breaking it, and writers only
+      // emit function pointers when write_function_pointers is on.
+      //
+      // Which formats pass function pointers over is not uniform: JSON, BSON, JSONB, BEVE and CBOR
+      // drop both kinds, TOML drops member function pointers, and YAML, MSGPACK and CSV drop neither.
+      // The exemption below is therefore the lenient direction -- such a member is never *reported*
+      // here, which is not the same as being writable everywhere.
       //
       // The order of the questions is not free. Each one below the first is only reached when the
       // ones above it are false, so the cheap and common answers come first and the ones that cost a
@@ -871,7 +876,11 @@ namespace glz
       template <operation Op, uint32_t Format, class T>
       inline constexpr bool object_members_supported = [] {
          constexpr size_t bad = first_unsupported_member<Op, Format, T>;
-         constexpr size_t at = bad < member_count<T>() ? bad : 0; // a member that exists, for the branch not taken
+         // `at` names a member for the branch that is not taken, for a compiler that substitutes a
+         // template-id appearing in a branch it discards (MSVC does). With nothing to report it has
+         // to name a member that exists, and index 0 is one for every type that has members; a type
+         // with none never reads the name.
+         constexpr size_t at = bad < member_count<T>() ? bad : 0;
          if constexpr (bad == member_count<T>()) {
             return true;
          }
@@ -883,6 +892,10 @@ namespace glz
          }
       }();
 
+      // The names a format's object writer and reader ask for, as the first statement of `op()`.
+      // Nothing enforces that: a format that never asks keeps the old error from inside its member
+      // loop, and one that emits some members itself declares them with `writer_emits_member_inline`
+      // above. `docs/compile-time-diagnostics.md` carries the table of formats and the detail.
       template <uint32_t Format, class T>
       inline constexpr bool writable_members = object_members_supported<operation::serialize, Format, T>;
 
