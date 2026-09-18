@@ -92,8 +92,8 @@ class DerivedClass : public BaseClass
    {}
 };
 
-// Need explicit meta for derived class to include both base and derived members
-// (P2996's bases_of iteration has limitations in current Bloomberg clang)
+// A user's meta still wins over automatic reflection: this one names the base and derived members
+// itself, which is also the escape for the shapes reflection cannot name on its own
 template <>
 struct glz::meta<DerivedClass>
 {
