@@ -775,6 +775,13 @@ namespace glz
       // template instantiation -- `skipped_by_meta`, which is only asked of a type that has a meta to
       // ask, and the format's own exemption, which is only asked of a member no format claims to
       // write -- are not instantiated for members that are simply fine.
+      //
+      // The question is about the member's own type. A member whose type *contains* a type with no
+      // writer -- `std::vector<Opaque>`, `std::optional<Opaque>` -- answers true here, because
+      // `to<Format, ...>` for the container exists, and the failure then comes from inside that
+      // container's own op(), with the message this check was written to replace. Reporting it would
+      // mean instantiating the container's writer to find out, which is the cost the check exists to
+      // avoid.
       template <operation Op, uint32_t Format, class T, size_t I>
       consteval bool member_supported()
       {

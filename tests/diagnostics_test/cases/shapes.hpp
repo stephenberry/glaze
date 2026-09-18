@@ -40,6 +40,17 @@ struct Nested
    Inner inner{};
 };
 
+// Two members no format can handle, with a good one between them. Which of the two the report names
+// is only visible in the instantiation trace, and a type with a single unsupported member cannot
+// tell "first" from "last" -- without this shape a fold that keeps the last index instead of the
+// first passes the whole suite.
+struct TwoBad
+{
+   Opaque first_bad{};
+   int ok{};
+   Opaque second_bad{};
+};
+
 // Renamed keys: what the report names has to be the key the output uses, so that the member can be
 // found in the document.
 struct Renamed
