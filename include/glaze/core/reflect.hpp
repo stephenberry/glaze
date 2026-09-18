@@ -817,8 +817,11 @@ namespace glz
       // `unsupported_writer<outer_t, 10, 1, glz::string_literal<2>{"o"}, glz::string_literal<7>{"Opaque"}>`
       // reads as: object `outer_t`, format 10 (JSON), member 1 of `glz::reflect<T>`, key `o`, type
       // `Opaque`.
-      template <class T, uint32_t Format, size_t I, auto Key = member_key_of<T, I>,
-                auto Type = member_type_of<T, I>>
+      //
+      // The key and the type are arguments rather than defaults for that reason: MSVC substitutes the
+      // defaults of a template-id that appears in a branch it does not take, and there they would be
+      // asked for the member at index `I` of a type whose members stop before it.
+      template <class T, uint32_t Format, size_t I, auto Key, auto Type>
       struct unsupported_writer
       {
          static_assert(member_supported<operation::serialize, Format, T, I>(),
@@ -830,8 +833,7 @@ namespace glz
          static constexpr bool value = true;
       };
 
-      template <class T, uint32_t Format, size_t I, auto Key = member_key_of<T, I>,
-                auto Type = member_type_of<T, I>>
+      template <class T, uint32_t Format, size_t I, auto Key, auto Type>
       struct unsupported_reader
       {
          static_assert(member_supported<operation::parse, Format, T, I>(),
@@ -843,25 +845,34 @@ namespace glz
          static constexpr bool value = true;
       };
 
-      // True when every member is supported. Only on the path where one is not is the diagnostic above
-      // instantiated, and so the error reported. One variable template for the whole question, so a
-      // type costs a single additional instantiation however many members it has.
+      // Index of the first member with no support, or the member count when there is none. Kept
+      // separate from the reporting below because a member count is not a member: the branch that
+      // does not report still names the report, and a report named with the member count would ask
+      // for a member that does not exist.
+      template <operation Op, uint32_t Format, class T>
+      inline constexpr size_t first_unsupported_member = [] {
+         constexpr size_t N = member_count<T>();
+         size_t first{N};
+         [&]<size_t... I>(std::index_sequence<I...>) {
+            ((member_supported<Op, Format, T, I>() ? void() : (void)(first = first < I ? first : I)), ...);
+         }(std::make_index_sequence<N>{});
+         return first;
+      }();
+
+      // True when every member is supported. Only the branch that reports instantiates the report,
+      // and so the error.
       template <operation Op, uint32_t Format, class T>
       inline constexpr bool object_members_supported = [] {
-         constexpr size_t N = member_count<T>();
-         constexpr size_t bad = [&]<size_t... I>(std::index_sequence<I...>) {
-            size_t first{N};
-            ((member_supported<Op, Format, T, I>() ? void() : (void)(first = first < I ? first : I)), ...);
-            return first;
-         }(std::make_index_sequence<N>{});
-         if constexpr (bad == N) {
+         constexpr size_t bad = first_unsupported_member<Op, Format, T>;
+         constexpr size_t at = bad < member_count<T>() ? bad : 0; // a member that exists, for the branch not taken
+         if constexpr (bad == member_count<T>()) {
             return true;
          }
          else if constexpr (Op == operation::serialize) {
-            return unsupported_writer<T, Format, bad>::value;
+            return unsupported_writer<T, Format, at, member_key_of<T, at>, member_type_of<T, at>>::value;
          }
          else {
-            return unsupported_reader<T, Format, bad>::value;
+            return unsupported_reader<T, Format, at, member_key_of<T, at>, member_type_of<T, at>>::value;
          }
       }();
 
