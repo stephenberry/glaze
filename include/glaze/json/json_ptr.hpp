@@ -4,7 +4,6 @@
 #pragma once
 
 #include <algorithm>
-#include <charconv>
 
 #include "glaze/core/seek.hpp"
 #include "glaze/json/read.hpp"
@@ -115,7 +114,7 @@ namespace glz
                case '[': {
                   ++it;
                   // Could optimize by counting commas
-                  static constexpr auto n = stoui(key);
+                  static constexpr auto n = detail::parse_json_ptr_array_index(key);
                   if constexpr (n) {
                      for_each<n.value()>([&]<size_t>() {
                         skip_value<JSON>::op<Opts>(ctx, it, end);
@@ -256,15 +255,6 @@ namespace glz
       }
    }
 
-   namespace detail
-   {
-      // Check if a string could be a numeric array index
-      inline bool runtime_maybe_numeric(const std::string& s)
-      {
-         return !s.empty() && s.find_first_not_of("0123456789") == std::string::npos;
-      }
-   } // namespace detail
-
    // Runtime version of get_view_json - navigate to a JSON value using a runtime JSON pointer
    template <auto Opts = opts{}>
    [[nodiscard]] inline auto get_view_json(const sv json_ptr, contiguous auto&& buffer)
@@ -308,8 +298,6 @@ namespace glz
          if (it >= end) {
             return result_t{unexpected(error_ctx{size_t(it - start), error_code::unexpected_end})};
          }
-
-         const bool is_numeric = runtime_maybe_numeric(token);
 
          if (*it == '{') {
             ++it;
@@ -383,15 +371,11 @@ namespace glz
             }
          }
          else if (*it == '[') {
-            if (!is_numeric) {
+            const auto parsed_index = detail::parse_json_ptr_array_index(token);
+            if (!parsed_index) {
                return result_t{unexpected(error_ctx{size_t(it - start), error_code::array_element_not_found})};
             }
-
-            size_t index{};
-            auto [p, ec] = std::from_chars(token.data(), token.data() + token.size(), index);
-            if (ec != std::errc{}) {
-               return result_t{unexpected(error_ctx{size_t(it - start), error_code::array_element_not_found})};
-            }
+            const size_t index = *parsed_index;
 
             ++it; // skip '['
 
