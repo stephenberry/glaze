@@ -1130,6 +1130,7 @@ namespace glz
       template <auto Opts, class It, class End>
       static void op(auto& value, uint8_t tag, is_context auto& ctx, It& it, const End& end) noexcept
       {
+         static_assert(detail::readable_members<BSON, T>, "One of this object's members has no reader for BSON.");
          if (tag != bson::type::document) [[unlikely]] {
             ctx.error = error_code::syntax_error;
             return;

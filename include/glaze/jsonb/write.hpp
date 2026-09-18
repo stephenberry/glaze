@@ -467,6 +467,7 @@ namespace glz
       template <auto Opts>
       static void op(auto&& value, is_context auto&& ctx, auto&& b, auto& ix)
       {
+         static_assert(detail::writable_members<JSONB, T>, "One of this object's members has no writer for JSONB.");
          size_t header_pos{};
          if (!jsonb_detail::reserve_container_header(ctx, b, ix, header_pos)) [[unlikely]] {
             return;

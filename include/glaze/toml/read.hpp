@@ -2623,6 +2623,7 @@ namespace glz
       template <auto Opts, class It>
       static void op(auto&& value, is_context auto&& ctx, It&& it, auto end)
       {
+         static_assert(detail::readable_members<TOML, T>, "One of this object's members has no reader for TOML.");
          if constexpr (check_error_on_missing_keys(Opts)) {
             // An inline table settles its own required keys where it is parsed, so a record built
             // for one is never read -- and an array of inline tables would allocate one per element.

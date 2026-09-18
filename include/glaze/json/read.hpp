@@ -2758,6 +2758,7 @@ namespace glz
       template <auto Options, string_literal tag = "">
       static void op(auto&& value, is_context auto&& ctx, auto&& it, auto end)
       {
+         static_assert(detail::readable_members<JSON, T>, "One of this object's members has no reader for JSON.");
          static constexpr auto num_members = reflect<T>::size;
 
          static constexpr auto Opts = opening_handled_off<ws_handled_off<Options>()>();

@@ -311,10 +311,21 @@ namespace glz
       }
    };
 
+   // The least specialized `to<EETF, ...>`: everything without a writer of its own lands here, so
+   // `write_supported<T, EETF>` is true for every type and a member-level check cannot report
+   // anything for this format. Left as a complete specialization because removing it would change
+   // which error a top-level `write_term` on an unsupported type produces, but it now says why
+   // instead of leaving the dispatcher to report a missing `op`.
    template <class T>
    struct to<EETF, T> final
    {
-      // empty for compilation error if use unsupported value type
+      template <auto Opts>
+      GLZ_ALWAYS_INLINE static void op(auto&&, auto&&...) noexcept
+      {
+         static_assert(false_v<T>,
+                       "glz::write_term: this type has no EETF writer. Give it a glz::meta "
+                       "specialization, make it reflectable, or exclude the field with glz::skip.");
+      }
    };
 
    template <uint8_t layout = glz::eetf::map_layout, write_supported<EETF> T, output_buffer Buffer>

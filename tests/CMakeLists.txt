@@ -130,6 +130,7 @@ if(glaze_BUILD_PERFORMANCE_TESTS)
     add_subdirectory(json_performance)
 endif()
 add_subdirectory(json_reflection_test)
+add_subdirectory(diagnostics_test)
 add_subdirectory(json_test)
 
 option(glaze_BUILD_NETWORKING_TESTS "Build networking tests (requires OpenSSL)" ON)

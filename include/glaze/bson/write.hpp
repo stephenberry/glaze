@@ -664,6 +664,21 @@ namespace glz
          }
       }
 
+   } // namespace bson_detail
+
+   namespace detail
+   {
+      // The object writer above emits these members itself, so they are written even though
+      // `to<BSON, T>` has no specialization for them -- which is what the member check in
+      // core/reflect.hpp asks about. Only the write side needs this: the reader has real
+      // `from<BSON, ...>` specializations for all three.
+      template <class M>
+         requires(always_null_t<M> || nullable_like<M> || is_variant<M>)
+      inline constexpr bool writer_emits_member_inline<BSON, M> = true;
+   }
+
+   namespace bson_detail
+   {
       // Returns true iff the struct field at index I should be omitted from
       // output under the given options (skip_null_members on an empty optional,
       // skip_default_members on a default-valued field, etc.).
@@ -717,6 +732,7 @@ namespace glz
       template <auto Opts>
       static void op(auto&& value, is_context auto&& ctx, auto&& b, auto& ix) noexcept
       {
+         static_assert(detail::writable_members<BSON, T>, "One of this object's members has no writer for BSON.");
          size_t start{};
          if (!bson_detail::reserve_document_length(ctx, b, ix, start)) [[unlikely]] {
             return;

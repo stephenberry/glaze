@@ -1296,6 +1296,7 @@ namespace glz
       template <auto Opts, class It>
       static void op(auto&& value, is_context auto&& ctx, It&& it, auto end)
       {
+         static_assert(detail::readable_members<CSV, T>, "One of this object's members has no reader for CSV.");
          static constexpr auto N = reflect<T>::size;
          static constexpr auto HashInfo = hash_info<T>;
 

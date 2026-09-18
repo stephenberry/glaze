@@ -583,6 +583,7 @@ namespace glz
       template <auto Opts>
       static void op(auto&& value, is_context auto&& ctx, auto&& b, auto& ix)
       {
+         static_assert(detail::writable_members<CBOR, T>, "One of this object's members has no writer for CBOR.");
          [[maybe_unused]] decltype(auto) t = [&]() -> decltype(auto) {
             if constexpr (reflectable<T>) {
                return to_tie(value);
