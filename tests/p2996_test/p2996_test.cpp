@@ -404,4 +404,240 @@ suite p2996_reflect_array = [] {
    };
 };
 
+// Inherited members (issue #2852): the reflection lists the members of base classes as well,
+// base members first, so a derived type round-trips its whole state without a glz::meta.
+struct InheritBase
+{
+   std::string name;
+   int id{};
+};
+
+struct InheritDerived : InheritBase
+{
+   std::string extra;
+};
+
+struct InheritSecond : InheritDerived
+{
+   double factor{};
+};
+
+// A virtual base is one shared subobject, so its members appear once however many paths reach it
+struct RootMember
+{
+   int root{};
+};
+
+struct LeftBranch : virtual RootMember
+{
+   int left{};
+};
+
+struct RightBranch : virtual RootMember
+{
+   int right{};
+};
+
+struct VirtualDiamond : LeftBranch, RightBranch
+{
+   int bottom{};
+};
+
+// A private base and a private member inside it are reachable through unchecked access
+class PrivateBaseMembers
+{
+   int hidden{1};
+
+  public:
+   int shown{2};
+};
+
+struct PrivateBaseDerived : private PrivateBaseMembers
+{
+   int own{3};
+};
+
+// A polymorphic base contributes its data members and not the vtable pointer
+struct PolyBase
+{
+   virtual ~PolyBase() = default;
+   int pv{5};
+};
+
+struct PolyDerived : PolyBase
+{
+   int pd{6};
+};
+
+// An empty base holds no members and must not shift the indices of the members that exist
+struct EmptyBaseMembers
+{};
+
+struct WithEmptyBase : EmptyBaseMembers
+{
+   int value{};
+};
+
+// A member that hides a member of a base class is a member of its own, so a glz::meta is how the
+// two are given a key each, which is the escape the documentation describes
+struct ShadowedBase
+{
+   int x{1};
+};
+
+struct ShadowedDerived : ShadowedBase
+{
+   int x{2};
+};
+
+template <>
+struct glz::meta<ShadowedDerived>
+{
+   using T = ShadowedDerived;
+   static constexpr auto value = glz::object("base_x", &ShadowedBase::x, "x", &T::x);
+};
+
+suite p2996_inherited_members = [] {
+   "member names include inherited members, base first"_test = [] {
+      constexpr auto names = glz::member_names<InheritSecond>;
+      // a count is pinned at compile time, so a wrong one fails the build rather than a later index
+      static_assert(names.size() == 4);
+      expect(names[0] == "name");
+      expect(names[1] == "id");
+      expect(names[2] == "extra");
+      expect(names[3] == "factor");
+      static_assert(glz::reflect<InheritSecond>::size == 4);
+   };
+
+   "inherited members round-trip through JSON"_test = [] {
+      InheritSecond obj{};
+      obj.name = "base";
+      obj.id = 7;
+      obj.extra = "derived";
+      obj.factor = 2.5;
+
+      std::string s{};
+      expect(not glz::write_json(obj, s));
+      expect(s == R"({"name":"base","id":7,"extra":"derived","factor":2.5})") << s;
+
+      InheritSecond back{};
+      expect(not glz::read_json(back, s));
+      expect(back.name == "base");
+      expect(back.id == 7);
+      expect(back.extra == "derived");
+      expect(back.factor == 2.5);
+   };
+
+   "inherited members round-trip through BEVE"_test = [] {
+      InheritSecond obj{};
+      obj.name = "beve";
+      obj.id = 11;
+      obj.extra = "fields";
+      obj.factor = 0.5;
+
+      std::string s{};
+      expect(not glz::write_beve(obj, s));
+
+      InheritSecond back{};
+      expect(not glz::read_beve(back, s));
+      expect(back.name == "beve");
+      expect(back.id == 11);
+      expect(back.extra == "fields");
+      expect(back.factor == 0.5);
+   };
+
+   "a virtual base contributes its members once"_test = [] {
+      constexpr auto names = glz::member_names<VirtualDiamond>;
+      static_assert(names.size() == 4);
+      expect(names[0] == "root");
+      expect(names[1] == "left");
+      expect(names[2] == "right");
+      expect(names[3] == "bottom");
+
+      VirtualDiamond obj{};
+      obj.root = 1;
+      obj.left = 2;
+      obj.right = 3;
+      obj.bottom = 4;
+
+      std::string s{};
+      expect(not glz::write_json(obj, s));
+      expect(s == R"({"root":1,"left":2,"right":3,"bottom":4})") << s;
+
+      VirtualDiamond back{};
+      expect(not glz::read_json(back, s));
+      expect(back.root == 1);
+      expect(back.left == 2);
+      expect(back.right == 3);
+      expect(back.bottom == 4);
+   };
+
+   "members of a private base are reflected and read back"_test = [] {
+      constexpr auto names = glz::member_names<PrivateBaseDerived>;
+      static_assert(names.size() == 3);
+      expect(names[0] == "hidden");
+      expect(names[1] == "shown");
+      expect(names[2] == "own");
+
+      PrivateBaseDerived obj{};
+      std::string s{};
+      expect(not glz::write_json(obj, s));
+      expect(s == R"({"hidden":1,"shown":2,"own":3})") << s;
+
+      // the private members cannot be read here, so the read is pinned by what the object writes
+      // back: the document carries values the defaults do not have
+      PrivateBaseDerived back{};
+      expect(not glz::read_json(back, R"({"hidden":8,"shown":9,"own":7})"));
+      expect(back.own == 7);
+      std::string s2{};
+      expect(not glz::write_json(back, s2));
+      expect(s2 == R"({"hidden":8,"shown":9,"own":7})") << s2;
+   };
+
+   "a polymorphic base contributes its members, not the vtable"_test = [] {
+      constexpr auto names = glz::member_names<PolyDerived>;
+      static_assert(names.size() == 2);
+      expect(names[0] == "pv");
+      expect(names[1] == "pd");
+
+      PolyDerived obj{};
+      std::string s{};
+      expect(not glz::write_json(obj, s));
+      expect(s == R"({"pv":5,"pd":6})") << s;
+
+      PolyDerived back{};
+      expect(not glz::read_json(back, s));
+      expect(back.pv == 5);
+      expect(back.pd == 6);
+   };
+
+   "a glz::meta gives a hidden member its own key"_test = [] {
+      std::string s{};
+      expect(not glz::write_json(ShadowedDerived{}, s));
+      expect(s == R"({"base_x":1,"x":2})") << s;
+
+      ShadowedDerived back{};
+      expect(not glz::read_json(back, s));
+      expect(back.ShadowedBase::x == 1);
+      expect(back.x == 2);
+   };
+
+   "an empty base contributes no members"_test = [] {
+      constexpr auto names = glz::member_names<WithEmptyBase>;
+      static_assert(names.size() == 1);
+      expect(names[0] == "value");
+
+      WithEmptyBase obj{};
+      obj.value = 9;
+
+      std::string s{};
+      expect(not glz::write_json(obj, s));
+      expect(s == R"({"value":9})") << s;
+
+      WithEmptyBase back{};
+      expect(not glz::read_json(back, s));
+      expect(back.value == 9);
+   };
+};
+
 int main() {}
