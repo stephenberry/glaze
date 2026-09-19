@@ -14029,6 +14029,17 @@ suite ndjson_options = [] {
    };
 };
 
+struct atomic_pair
+{
+   int a{};
+   int b{};
+};
+
+struct atomic_pair_holder
+{
+   std::atomic<atomic_pair> p{};
+};
+
 suite atomics = [] {
    "atomics"_test = [] {
       std::atomic<int> i{};
@@ -14056,6 +14067,16 @@ suite atomics = [] {
       std::atomic<bool> b{true};
       expect(glz::read_json(b, R"(42)"));
       expect(b.load());
+   };
+
+   // partial_read_complete is a non-error code, so the parsed value still has to be stored
+   "atomic partial read stores the value"_test = [] {
+      atomic_pair_holder h{};
+      h.p.store(atomic_pair{7, 8});
+      constexpr glz::opts opts{.error_on_unknown_keys = false, .partial_read = true};
+      expect(not glz::read<opts>(h, R"({"p":{"a":1,"b":2,"junk":3}})"));
+      expect(h.p.load().a == 1) << h.p.load().a;
+      expect(h.p.load().b == 2) << h.p.load().b;
    };
 };
 
