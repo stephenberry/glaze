@@ -692,7 +692,19 @@ namespace glz
          }
          int64_t ms{};
          if (!bson_detail::read_le<int64_t>(ctx, it, end, ms)) return;
-         value = std::chrono::system_clock::time_point{std::chrono::milliseconds{ms}};
+         // The clock's duration is finer than milliseconds, so converting a full int64 count
+         // scales it up and wraps. Split it into floored seconds plus a [0, 1000) ms part and
+         // reject a datetime the clock cannot hold.
+         int64_t secs = ms / 1000;
+         int64_t sub_ms = ms % 1000;
+         if (sub_ms < 0) {
+            sub_ms += 1000;
+            --secs;
+         }
+         using namespace std::chrono;
+         if (!chrono_detail::make_sys_time(value, seconds{secs}, milliseconds{sub_ms})) [[unlikely]] {
+            ctx.error = error_code::parse_error;
+         }
       }
    };
 

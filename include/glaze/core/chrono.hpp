@@ -475,6 +475,43 @@ namespace glz
          ymd = candidate;
       }
 
+      // Assemble a system_clock time_point from whole seconds since the epoch plus a
+      // sub-second part in [0s, 1s). The sum is formed in the target's own precision: an
+      // int64 nanosecond count only spans 1677-09-21 to 2262-04-11, so summing in
+      // nanoseconds first wraps for dates a coarser target holds comfortably (year 9999
+      // fits sys_seconds). Returns false and leaves value unchanged when the target cannot
+      // represent the instant, rather than wrapping.
+      template <is_system_time_point TP>
+      [[nodiscard]] constexpr bool make_sys_time(TP& value, std::chrono::seconds secs,
+                                                 std::chrono::nanoseconds subsec) noexcept
+      {
+         using namespace std::chrono;
+         using Duration = typename TP::duration;
+
+         // time_point_cast truncates toward zero. Measuring a pre-epoch instant back from
+         // the next whole second keeps both parts on the same side of zero, so truncating
+         // them separately matches truncating their sum.
+         if (secs < seconds{0} && subsec > nanoseconds{0}) {
+            secs += seconds{1};
+            subsec -= seconds{1};
+         }
+
+         // Only a target finer than seconds scales the count up. max()/min() truncate toward
+         // zero here, so the boundary second fits only without a sub-second part past it.
+         if constexpr (std::ratio_less_v<typename Duration::period, std::ratio<1>> &&
+                       !treat_as_floating_point_v<typename Duration::rep>) {
+            constexpr seconds max_secs = duration_cast<seconds>((Duration::max)());
+            constexpr seconds min_secs = duration_cast<seconds>((Duration::min)());
+            if (secs > max_secs || secs < min_secs || (secs == max_secs && subsec > nanoseconds{0}) ||
+                (secs == min_secs && subsec < nanoseconds{0})) {
+               return false;
+            }
+         }
+
+         value = TP{duration_cast<Duration>(secs) + duration_cast<Duration>(subsec)};
+         return true;
+      }
+
       // Parse an RFC 3339 / ISO 8601 date-time string into a system_clock time_point.
       // On failure, sets ec to parse_error and leaves value unchanged.
       template <is_system_time_point TP>
@@ -585,11 +622,13 @@ namespace glz
             return;
          }
 
-         const auto tp = sys_days{ymd} + hours{hr} + minutes{mi} + seconds{sc} + seconds{tz_offset_seconds} +
-                         nanoseconds{subsec_nanos};
-
-         using Duration = typename std::remove_cvref_t<TP>::duration;
-         value = time_point_cast<Duration>(tp);
+         // Anchored at seconds so the time-of-day is folded in with 64-bit arithmetic (MSVC's
+         // hours and minutes use a 32-bit rep).
+         const auto tp =
+            sys_seconds{sys_days{ymd}} + hours{hr} + minutes{mi} + seconds{sc} + seconds{tz_offset_seconds};
+         if (!make_sys_time(value, tp.time_since_epoch(), nanoseconds{subsec_nanos})) {
+            ec = error_code::parse_error;
+         }
       }
 
       // ============================================
