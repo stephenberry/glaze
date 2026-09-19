@@ -9,6 +9,11 @@ function(add_glz_json_test target)
 
     if (MINGW)
         target_compile_options(${target} PRIVATE "-Wa,-mbig-obj")
+        # json_test.cpp includes glaze/file/hostname_include.hpp, which calls Winsock. Its
+        # `#pragma comment(lib, "ws2_32.lib")` is MSVC only, so MinGW has to be told to link
+        # it. Named here as well as on glaze::asio, because this requirement belongs to the
+        # header this target includes, not to Asio.
+        target_link_libraries(${target} PRIVATE ws2_32)
     endif ()
 
     add_test(NAME ${target} COMMAND ${target})
@@ -22,6 +27,7 @@ function(add_glz_json_test target)
 
     if (MINGW)
         target_compile_options(${non_null_target} PRIVATE "-Wa,-mbig-obj")
+        target_link_libraries(${non_null_target} PRIVATE ws2_32)
     endif ()
 
     add_test(NAME ${non_null_target} COMMAND ${non_null_target})
