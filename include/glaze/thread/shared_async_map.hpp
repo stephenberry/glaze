@@ -332,6 +332,7 @@ namespace glz
             assert(shared_lock_ptr);
          }
 
+         static constexpr bool glaze_value_proxy = true;
          static constexpr bool glaze_reflect = false;
 
          // Disable Copy and Move

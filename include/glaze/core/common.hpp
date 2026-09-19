@@ -453,18 +453,26 @@ namespace glz
    template <class T>
    concept is_any_function_ptr = is_member_function_pointer<T> || is_function_ptr_or_ref<T>;
 
+   // A value proxy is a locked reference to an element of a thread safe container
+   // (see glaze/thread/value_proxy.hpp). It converts implicitly to the element type and
+   // dereferences to it, so for a bool convertible element it would otherwise satisfy the
+   // nullable concepts. Serialization of a proxy is transparent to its element, never nullable.
    template <class T>
-   concept nullable_t = !meta_value_t<T> && !str_t<T> && !is_function_ptr_or_ref<T> && requires(T t) {
-      bool(t);
-      { *t };
-   };
+   concept is_value_proxy = requires { std::remove_cvref_t<T>::glaze_value_proxy; };
+
+   template <class T>
+   concept nullable_t =
+      !meta_value_t<T> && !str_t<T> && !is_function_ptr_or_ref<T> && !is_value_proxy<T> && requires(T t) {
+         bool(t);
+         { *t };
+      };
 
    template <class T>
    concept nullable_like = nullable_t<T> && !is_expected<T> && !std::is_array_v<T>;
 
    // For optional like types that cannot overload `operator bool()`
    template <class T>
-   concept nullable_value_t = !meta_value_t<T> && requires(T t) {
+   concept nullable_value_t = !meta_value_t<T> && !is_value_proxy<T> && requires(T t) {
       t.value();
       { t.has_value() } -> std::convertible_to<bool>;
    };

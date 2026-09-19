@@ -5,18 +5,33 @@
 
 #include "glaze/core/common.hpp"
 
+// A value proxy holds a lock alongside a reference to one element of a thread safe container
+// (see shared_async_map.hpp and shared_async_vector.hpp). Serialization is transparent: the
+// proxy reads and writes exactly as its element type does, in whatever format is asked for.
+//
+// `is_value_proxy` is declared in glaze/core/common.hpp so that the core concepts
+// (the nullable concepts in particular) can exclude proxies from their own matches.
+
 namespace glz
 {
-   template <class T>
-   concept is_value_proxy = requires { T::glaze_value_proxy; };
-
    template <uint32_t Format, is_value_proxy T>
    struct from<Format, T>
    {
       template <auto Opts>
-      static void op(auto&& value, is_context auto&& ctx, auto&& it, auto end)
+      static void op(auto&& value, is_context auto&& ctx, auto&&... args)
       {
-         parse<JSON>::op<Opts>(value.value(), ctx, it, end);
+         parse<Format>::template op<Opts>(value.value(), ctx, args...);
+      }
+
+      // Formats whose readers consume the header before dispatching pass the tag ahead of the
+      // context (MSGPACK always, BEVE under no_header). Hand the element's reader the same tag
+      // and options this one was given, exactly as the format's dispatcher would have.
+      template <auto Opts, class Tag>
+         requires(not is_context<std::remove_cvref_t<Tag>>)
+      static void op(auto&& value, Tag&& tag, is_context auto&& ctx, auto&&... args)
+      {
+         using V = std::remove_cvref_t<decltype(value.value())>;
+         from<Format, V>::template op<Opts>(value.value(), tag, ctx, args...);
       }
    };
 
