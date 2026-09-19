@@ -455,8 +455,9 @@ namespace glz
 
    // A value proxy is a locked reference to an element of a thread safe container
    // (see glaze/thread/value_proxy.hpp). It converts implicitly to the element type and
-   // dereferences to it, so for a bool convertible element it would otherwise satisfy the
-   // nullable concepts. Serialization of a proxy is transparent to its element, never nullable.
+   // dereferences to it, so for a bool convertible element `bool(proxy)` and `*proxy` both
+   // compile and the proxy would otherwise be read and written as a nullable, serializing a
+   // falsy element as null. A proxy is transparent to its element, never nullable.
    template <class T>
    concept is_value_proxy = requires { std::remove_cvref_t<T>::glaze_value_proxy; };
 
@@ -472,7 +473,7 @@ namespace glz
 
    // For optional like types that cannot overload `operator bool()`
    template <class T>
-   concept nullable_value_t = !meta_value_t<T> && !is_value_proxy<T> && requires(T t) {
+   concept nullable_value_t = !meta_value_t<T> && requires(T t) {
       t.value();
       { t.has_value() } -> std::convertible_to<bool>;
    };

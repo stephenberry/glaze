@@ -6,6 +6,7 @@
 #include <cstdint>
 #include <deque>
 #include <limits>
+#include <map>
 #include <random>
 #include <thread>
 
@@ -13,11 +14,15 @@
 #include "glaze/beve/write.hpp"
 #include "glaze/json/read.hpp"
 #include "glaze/json/write.hpp"
+#include "glaze/msgpack/read.hpp"
+#include "glaze/msgpack/write.hpp"
 #include "glaze/thread/async_string.hpp"
 #include "glaze/thread/async_vector.hpp"
 #include "glaze/thread/guard.hpp"
 #include "glaze/thread/shared_async_map.hpp"
 #include "glaze/thread/shared_async_vector.hpp"
+#include "glaze/yaml/read.hpp"
+#include "glaze/yaml/write.hpp"
 #include "ut/ut.hpp"
 
 using namespace ut;
@@ -2367,8 +2372,8 @@ suite async_vector_beve_tests = [] {
 };
 
 // A value proxy is a locked reference to one element. It must serialize exactly as that element
-// does, in whatever format is asked for: writing in one format and reading back in another was
-// issue #2903, where the proxy reader always parsed JSON.
+// does, in whatever format is asked for. Reading a proxy in a non-JSON format was issue #2903,
+// where the proxy reader always parsed JSON no matter what it was asked for.
 suite value_proxy_serialization_tests = [] {
    "value_proxy beve round trip"_test = [] {
       glz::shared_async_vector<std::string> v;
@@ -2457,12 +2462,9 @@ suite value_proxy_serialization_tests = [] {
 
       glz::shared_async_map<std::string, std::string> restored;
       expect(not glz::read_beve(restored, buffer)) << "map read rejected its own BEVE output";
-      const bool restored_ok = restored.size() == 2;
-      expect(restored_ok);
-      if (restored_ok) {
-         expect(restored.at("a") == "one");
-         expect(restored.at("b") == "two");
-      }
+      expect[restored.size() == 2];
+      expect(restored.at("a") == "one");
+      expect(restored.at("b") == "two");
    };
 
    "shared_async_map<std::string, int> round trips"_test = [] {
@@ -2476,23 +2478,76 @@ suite value_proxy_serialization_tests = [] {
 
       glz::shared_async_map<std::string, int> from_json;
       expect(not glz::read_json(from_json, json));
-      const bool from_json_ok = from_json.size() == 2;
-      expect(from_json_ok);
-      if (from_json_ok) {
-         expect(from_json.at("a") == 1);
-         expect(from_json.at("b") == 0);
-      }
+      expect[from_json.size() == 2];
+      expect(from_json.at("a") == 1);
+      expect(from_json.at("b") == 0);
 
       std::string beve{};
       expect(not glz::write_beve(map, beve));
 
       glz::shared_async_map<std::string, int> from_beve;
       expect(not glz::read_beve(from_beve, beve));
-      const bool from_beve_ok = from_beve.size() == 2;
-      expect(from_beve_ok);
-      if (from_beve_ok) {
-         expect(from_beve.at("a") == 1);
-         expect(from_beve.at("b") == 0);
+      expect[from_beve.size() == 2];
+      expect(from_beve.at("a") == 1);
+      expect(from_beve.at("b") == 0);
+   };
+
+   // A proxy used to look nullable, which silently swallowed a null for a non-nullable element.
+   // It now rejects one exactly as the equivalent std::map does.
+   "null rejected for a non-nullable element"_test = [] {
+      const std::string json = R"({"x":null})";
+
+      std::map<std::string, int> reference;
+      const auto reference_ec = glz::read_json(reference, json);
+
+      glz::shared_async_map<std::string, int> map;
+      const auto ec = glz::read_json(map, json);
+
+      expect(bool(ec)) << "null was accepted for a non-nullable element";
+      expect(ec.ec == reference_ec.ec) << "proxy and std::map disagree on null";
+   };
+
+   // MSGPACK hands the reader a tag ahead of the context, which is the proxy reader's second
+   // overload. A proxy holding a struct exercises the element's nested member reads through it.
+   "value_proxy msgpack round trip"_test = [] {
+      glz::shared_async_vector<Point> v;
+      v.emplace_back(Point{1, 2});
+
+      std::string buffer{};
+      {
+         auto proxy = v[0];
+         expect(not glz::write_msgpack(proxy, buffer));
+      }
+
+      std::string expected{};
+      expect(not glz::write_msgpack(Point{1, 2}, expected));
+      expect(buffer == expected) << "proxy wrote different bytes than its element";
+
+      {
+         auto proxy = v[0];
+         *proxy = Point{0, 0};
+         expect(not glz::read_msgpack(proxy, buffer));
+         expect(*proxy == Point{1, 2});
+      }
+   };
+
+   // The YAML reader probes for null assignment. An unconstrained proxy assignment answers yes
+   // for every element type and then fails to compile in the body.
+   "value_proxy yaml round trip"_test = [] {
+      glz::shared_async_vector<int> v;
+      v.emplace_back(42);
+
+      std::string buffer{};
+      {
+         auto proxy = v[0];
+         expect(not glz::write_yaml(proxy, buffer));
+      }
+
+      {
+         auto proxy = v[0];
+         *proxy = 0;
+         expect(not glz::read_yaml(proxy, buffer));
+         expect(*proxy == 42);
       }
    };
 
@@ -2506,12 +2561,9 @@ suite value_proxy_serialization_tests = [] {
 
       glz::shared_async_vector<int> restored;
       expect(not glz::read_beve(restored, buffer));
-      const bool restored_ok = restored.size() == 2;
-      expect(restored_ok);
-      if (restored_ok) {
-         expect(*restored[0] == 1);
-         expect(*restored[1] == 0);
-      }
+      expect[restored.size() == 2];
+      expect(*restored[0] == 1);
+      expect(*restored[1] == 0);
    };
 };
 
