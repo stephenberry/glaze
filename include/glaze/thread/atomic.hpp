@@ -28,8 +28,13 @@ namespace glz
       static void op(auto&& value, is_context auto&& ctx, auto&& it, auto end) noexcept
       {
          using V = typename T::value_type;
-         V temp{};
+         // Seed with the current value so that a partial read (e.g. an object with only some keys
+         // present) behaves the same as it does for a non-atomic member.
+         V temp = value.load();
          parse<Format>::template op<Opts>(temp, ctx, it, end);
+         if (bool(ctx.error)) [[unlikely]] {
+            return; // leave the atomic untouched on a failed parse
+         }
          value.store(temp);
       }
    };
