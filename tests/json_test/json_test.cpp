@@ -14047,6 +14047,16 @@ suite atomics = [] {
       expect(not glz::write_json(b, buffer));
       expect(buffer == R"(true)");
    };
+
+   "atomic read failure leaves value unchanged"_test = [] {
+      std::atomic<int> i{5};
+      expect(glz::read_json(i, R"(not_a_number)"));
+      expect(i.load() == 5);
+
+      std::atomic<bool> b{true};
+      expect(glz::read_json(b, R"(42)"));
+      expect(b.load());
+   };
 };
 
 namespace trr
