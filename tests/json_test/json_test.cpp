@@ -21,6 +21,7 @@
 #include <set>
 #include <span>
 #if defined(__STDCPP_FLOAT128_T__)
+#include <charconv>
 #include <stdfloat>
 #endif
 #include <tuple>
@@ -10191,17 +10192,35 @@ suite bitset = [] {
 };
 
 #if defined(__STDCPP_FLOAT128_T__) && !defined(__APPLE__)
-suite float128_test = [] {
-   "float128"_test = [] {
-      std::float128_t x = 3.14;
-
-      std::string s{};
-      expect(not glz::write_json(x, s));
-
-      x = 0.0;
-      expect(!glz::read_json(x, s));
-      expect(x == 3.14);
+// __STDCPP_FLOAT128_T__ reports that the type exists, not that <charconv> reads and writes it:
+// MinGW's libstdc++ defines the macro while its to_chars/from_chars have no _Float128 overloads,
+// and the library's float128 path is exactly those two calls. So ask the standard library itself,
+// and where the answer is no the suite registers with nothing in it. The type is a template
+// parameter because that is what makes the calls dependent, so a missing overload answers false
+// instead of failing the build; the suite lambda is generic for the same reason, so the branch
+// that cannot compile is never instantiated.
+template <class T>
+consteval bool charconv_handles()
+{
+   return requires(T value, char* first, char* last) {
+      std::to_chars(first, last, value, std::chars_format::general);
+      std::from_chars(first, last, value);
    };
+}
+
+suite float128_test = []<class = void> {
+   if constexpr (charconv_handles<std::float128_t>()) {
+      "float128"_test = [] {
+         std::float128_t x = 3.14;
+
+         std::string s{};
+         expect(not glz::write_json(x, s));
+
+         x = 0.0;
+         expect(!glz::read_json(x, s));
+         expect(x == 3.14);
+      };
+   }
 };
 #endif
 
