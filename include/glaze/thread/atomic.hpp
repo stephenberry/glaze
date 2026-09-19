@@ -44,8 +44,8 @@ namespace glz
          parse<Format>::template op<Opts>(temp, ctx, it, end);
          // end_reached and partial_read_complete are non-error codes: the value parsed, the read
          // simply stopped at the buffer end or at a partial_read boundary, so the store must happen.
-         if (bool(ctx.error) && ctx.error != error_code::end_reached &&
-             ctx.error != error_code::partial_read_complete) [[unlikely]] {
+         if (bool(ctx.error) && ctx.error != error_code::end_reached && ctx.error != error_code::partial_read_complete)
+            [[unlikely]] {
             return; // leave the atomic untouched on a failed parse
          }
          value.store(temp);
