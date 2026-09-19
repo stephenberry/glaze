@@ -24,7 +24,6 @@ namespace glz
       requires(std::is_member_function_pointer_v<T>)
    struct invoke_t<T> final
    {
-      // using F = typename std_function_signature_decayed_keep_non_const_ref<T>::type;
       using mem_fun = T;
       typename parent_of_fn<T>::type& val;
       mem_fun ptr;
@@ -93,28 +92,18 @@ namespace glz
       }
    };
 
+   // An invoke member is a call site rather than state, so there is nothing to serialize.
+   // Exclude it from output instead of inventing a value for it.
    template <class T>
    struct to<JSON, invoke_t<T>>
    {
       template <auto Opts>
-      static void op(auto&& value, is_context auto&& ctx, auto&&... args)
+      static void op(auto&&, is_context auto&&, auto&&...)
       {
-         using V = std::decay_t<decltype(value.val)>;
-         dump('[', args...);
-         if constexpr (is_specialization_v<V, std::function>) {
-            using Ret = typename function_traits<V>::result_type;
-
-            if constexpr (std::is_void_v<Ret>) {
-               using Tuple = typename function_traits<V>::arguments;
-               Tuple inputs{};
-               using Inputs = std::remove_cvref_t<decltype(inputs)>;
-               to<JSON, Inputs>::template op<Opts>(inputs, ctx, args...);
-            }
-            else {
-               static_assert(false_v<T>, "std::function must have void return");
-            }
-         }
-         dump(']', args...);
+         static_assert(false_v<T>,
+                       "glz::invoke members cannot be written: a function has no value to serialize. "
+                       "Exclude the member from output with a meta<T>::skip(key, ctx) that returns true when "
+                       "ctx.op == glz::operation::serialize (see docs/skip-keys.md).");
       }
    };
 
@@ -132,103 +121,4 @@ namespace glz
 
    template <auto MemPtr>
    constexpr auto invoke = invoke_impl<MemPtr>();
-}
-
-namespace glz
-{
-   template <class Signature>
-      requires(std::is_void_v<typename function_traits<std::function<Signature>>::result_type>)
-   struct invoke_update
-   {
-      invoke_update() = default;
-      invoke_update(const invoke_update&) = default;
-      invoke_update(invoke_update&&) = default;
-      invoke_update& operator=(const invoke_update&) = default;
-      invoke_update& operator=(invoke_update&&) = default;
-
-      template <class F>
-      invoke_update(F&& f) : func(std::forward<F>(f))
-      {}
-
-      std::function<Signature> func{};
-      std::string prev{};
-      bool initialized = false;
-   };
-
-   template <class T>
-   concept is_invoke_update = requires {
-      T::func;
-      T::prev;
-      T::initialized;
-   };
-
-   // Register invoke_update as having specified Glaze serialization
-   template <class Signature>
-   struct specified<invoke_update<Signature>> : std::true_type
-   {};
-
-   template <is_invoke_update T>
-   struct from<JSON, T>
-   {
-      template <auto Opts>
-      static void op(auto&& value, is_context auto&& ctx, auto&& it, auto end)
-      {
-         using V = std::decay_t<decltype(value.func)>;
-
-         using Tuple = typename function_traits<V>::arguments;
-         if constexpr (glz::tuple_size_v<Tuple> == 0) {
-            auto start = it;
-            skip_array<Opts>(ctx, it, end);
-            if (bool(ctx.error)) [[unlikely]]
-               return;
-            const sv input = {start, size_t(it - start)};
-            if (value.initialized) {
-               if (input != value.prev) {
-                  value.func();
-               }
-            }
-            else {
-               value.initialized = true;
-            }
-            value.prev = input;
-         }
-         else {
-            auto start = it;
-            skip_array<Opts>(ctx, it, end);
-            if (bool(ctx.error)) [[unlikely]]
-               return;
-            const sv input = {start, size_t(it - start)};
-            if (value.initialized) {
-               if (input != value.prev) {
-                  Tuple inputs{};
-                  it = start;
-                  parse<JSON>::op<Opts>(inputs, ctx, it, end);
-                  if (bool(ctx.error)) [[unlikely]]
-                     return;
-                  std::apply(value.func, inputs);
-               }
-            }
-            else {
-               value.initialized = true;
-            }
-            value.prev = input;
-         }
-      }
-   };
-
-   template <is_invoke_update T>
-   struct to<JSON, T>
-   {
-      template <auto Opts>
-      static void op(auto&& value, is_context auto&& ctx, auto&&... args)
-      {
-         using V = std::decay_t<decltype(value.val)>;
-         dump('[', args...);
-         using Tuple = typename function_traits<V>::arguments;
-         Tuple inputs{};
-         using Inputs = std::remove_cvref_t<decltype(inputs)>;
-         to<JSON, Inputs>::template op<Opts>(inputs, ctx, args...);
-         dump(']', args...);
-      }
-   };
 }

@@ -8693,6 +8693,12 @@ struct glz::meta<invoke_struct>
 {
    using T = invoke_struct;
    static constexpr auto value = object("square", invoke<&T::square>, "add_one", invoke<&T::add_one>);
+
+   // invoke members are call sites rather than state, so they are read-only
+   static constexpr bool skip(const std::string_view key, const glz::meta_context& ctx)
+   {
+      return ctx.op == glz::operation::serialize && (key == "square" || key == "add_one");
+   }
 };
 
 suite invoke_test = [] {
@@ -8706,6 +8712,54 @@ suite invoke_test = [] {
       auto ec = glz::read_json(obj, s);
       expect(!ec) << glz::format_error(ec, s);
       expect(obj.y == 26); // 5 * 5 + 1
+   };
+
+   "invoke members are skipped when writing"_test = [] {
+      invoke_struct obj{};
+      std::string s{};
+      expect(not glz::write_json(obj, s));
+      expect(s == "{}") << s;
+   };
+};
+
+// invoke members interleaved with data members, to cover separator placement when the skipped
+// keys are in the middle and at the end of the object
+struct invoke_mixed
+{
+   int a = 1;
+   int b = 2;
+   std::function<void(int)> set_a{};
+   void bump_b() { ++b; }
+
+   // MSVC requires this constructor for 'this' to be captured
+   invoke_mixed() { set_a = [&](int v) { a = v; }; }
+};
+
+template <>
+struct glz::meta<invoke_mixed>
+{
+   using T = invoke_mixed;
+   static constexpr auto value =
+      object("a", &T::a, "set_a", invoke<&T::set_a>, "b", &T::b, "bump_b", invoke<&T::bump_b>);
+
+   static constexpr bool skip(const std::string_view key, const glz::meta_context& ctx)
+   {
+      return ctx.op == glz::operation::serialize && (key == "set_a" || key == "bump_b");
+   }
+};
+
+suite invoke_mixed_test = [] {
+   "invoke mixed with data members"_test = [] {
+      invoke_mixed obj{};
+      std::string s = R"({"set_a":[7],"bump_b":[]})";
+      auto ec = glz::read_json(obj, s);
+      expect(!ec) << glz::format_error(ec, s);
+      expect(obj.a == 7) << obj.a;
+      expect(obj.b == 3) << obj.b;
+
+      std::string buffer{};
+      expect(not glz::write_json(obj, buffer));
+      expect(buffer == R"({"a":7,"b":3})") << buffer;
    };
 };
 
@@ -9967,92 +10021,6 @@ suite trade_quote_test = [] {
          buffer ==
          R"({"id":706,"method":"save_quote","params":{"time":1698627291351456360,"action":"send","quote":"kill","account":"603302","uid":11,"session_id":1,"request_id":41,"state":0,"order_id":"2023103000180021","exchange":"CZCE","type":"","tif":"","offset":"","side":"","symbol":"SPD RM401&RM403","price":0,"quantity":0,"traded":0}})")
          << buffer;
-   };
-};
-
-suite invoke_update_test = [] {
-   "invoke"_test = [] {
-      int x = 5;
-
-      std::map<std::string, glz::invoke_update<void()>> funcs;
-      funcs["square"] = [&] { x *= x; };
-      funcs["add_one"] = [&] { x += 1; };
-
-      std::string s = R"(
- {
-    "square":[],
-    "add_one":[]
- })";
-      expect(!glz::read_json(funcs, s));
-      expect(x == 5);
-
-      std::string s2 = R"(
- {
-    "square":[],
-    "add_one":[ ]
- })";
-      expect(!glz::read_json(funcs, s2));
-      expect(x == 6);
-
-      std::string s3 = R"(
- {
-    "square":[ ],
-    "add_one":[ ]
- })";
-      expect(!glz::read_json(funcs, s3));
-      expect(x == 36);
-   };
-};
-
-struct updater
-{
-   int x = 5;
-   glz::invoke_update<void()> square;
-   glz::invoke_update<void()> add_one;
-
-   // constructor required by MSVC
-   updater()
-   {
-      square = [&] { x *= x; };
-      add_one = [&] { x += 1; };
-   }
-};
-
-template <>
-struct glz::meta<updater>
-{
-   using T = updater;
-   static constexpr auto value = object(&T::x, &T::square, &T::add_one);
-};
-
-suite invoke_updater_test = [] {
-   "invoke_updater"_test = [] {
-      updater obj{};
-      auto& x = obj.x;
-
-      std::string s = R"(
- {
-    "square":[],
-    "add_one":[]
- })";
-      expect(!glz::read_json(obj, s));
-      expect(x == 5) << x;
-
-      std::string s2 = R"(
- {
-    "square":[],
-    "add_one":[ ]
- })";
-      expect(!glz::read_json(obj, s2));
-      expect(x == 6) << x;
-
-      std::string s3 = R"(
- {
-    "square":[ ],
-    "add_one":[ ]
- })";
-      expect(!glz::read_json(obj, s3));
-      expect(x == 36) << x;
    };
 };
 
