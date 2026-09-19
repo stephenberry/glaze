@@ -8732,7 +8732,10 @@ struct invoke_mixed
    void bump_b() { ++b; }
 
    // MSVC requires this constructor for 'this' to be captured
-   invoke_mixed() { set_a = [&](int v) { a = v; }; }
+   invoke_mixed()
+   {
+      set_a = [&](int v) { a = v; };
+   }
 };
 
 template <>
