@@ -77,6 +77,8 @@ glz::read_json(tp, "\"2024-12-13T15:30:45-08:00\"");
 glz::read_json(tp, "\"2024-12-13T15:30:45.123456789Z\"");
 ```
 
+Any date in `[0000, 9999]` reads exactly into a time point that can hold it, such as `sys_time<seconds>`. A date the target's duration cannot represent fails with `error_code::parse_error` rather than wrapping: a 64-bit nanosecond count only spans 1677-09-21 to 2262-04-11, which is also the range of `system_clock::time_point` on platforms where the clock ticks in nanoseconds (libstdc++).
+
 ### Date-Only Time Points (`sys_days`)
 
 > **Breaking change:** `std::chrono::sys_days` previously serialized as the full ISO 8601 datetime `"YYYY-MM-DDT00:00:00Z"`. It now serializes as the date-only string `"YYYY-MM-DD"`. The reader accepts both forms, so consumers upgrading Glaze on the read side stay compatible; producers that emit the new shape break older readers that strictly require a time component.

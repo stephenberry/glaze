@@ -1288,6 +1288,53 @@ int main()
       expect(decoded == epoch);
    };
 
+   "chrono time_point far range does not wrap"_test = [] {
+      using namespace std::chrono;
+      using sys_dur = system_clock::duration;
+
+      // 2300-01-01T00:00:00Z as a timestamp 64. Summing the fields in nanoseconds wraps int64
+      // (it used to decode as a date in 1715), so the clock either holds the instant exactly
+      // or the read fails; which one depends on the platform's system_clock precision.
+      constexpr int64_t year_2300 = 10413792000LL;
+      std::string buffer;
+      expect(!glz::write_msgpack(glz::msgpack::timestamp{year_2300, 500000000}, buffer));
+
+      system_clock::time_point decoded{};
+      const auto ec = glz::read_msgpack(decoded, buffer);
+      if (duration_cast<seconds>((sys_dur::max)()).count() > year_2300) {
+         expect(!ec);
+         expect(decoded == system_clock::time_point{duration_cast<sys_dur>(seconds{year_2300} + milliseconds{500})});
+      }
+      else {
+         expect(ec == glz::error_code::parse_error);
+      }
+
+      // The timestamp 96 seconds field is a full int64; no system_clock holds its extremes.
+      for (const int64_t secs : {(std::numeric_limits<int64_t>::max)(), (std::numeric_limits<int64_t>::min)()}) {
+         buffer.clear();
+         expect(!glz::write_msgpack(glz::msgpack::timestamp{secs, 999999999}, buffer));
+         expect(glz::read_msgpack(decoded, buffer) == glz::error_code::parse_error);
+      }
+
+      // Pre-epoch instants keep decoding as before.
+      buffer.clear();
+      expect(!glz::write_msgpack(glz::msgpack::timestamp{-1, 500000000}, buffer));
+      expect(!glz::read_msgpack(decoded, buffer));
+      expect(decoded == system_clock::time_point{duration_cast<sys_dur>(milliseconds{-500})});
+   };
+
+   "chrono time_point rejects nanoseconds above the spec limit"_test = [] {
+      using namespace std::chrono;
+      // "nanoseconds must not be larger than 999999999" - such a field is not a sub-second part.
+      system_clock::time_point decoded{};
+      for (const glz::msgpack::timestamp ts :
+           {glz::msgpack::timestamp{100, 1000000000}, glz::msgpack::timestamp{-100, 4294967295u}}) {
+         std::string buffer;
+         expect(!glz::write_msgpack(ts, buffer));
+         expect(glz::read_msgpack(decoded, buffer) == glz::error_code::parse_error);
+      }
+   };
+
    "chrono duration roundtrip"_test = [] {
       using namespace std::chrono;
       auto check = [](auto v) {

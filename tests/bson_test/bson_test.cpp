@@ -158,6 +158,13 @@ namespace bson_test
       bool operator==(const time_s&) const = default;
    };
 
+   // Same key as time_s, but carrying the raw millisecond count so a test can put any int64
+   // datetime on the wire.
+   struct raw_time_s
+   {
+      glz::bson::datetime t{};
+   };
+
    struct duration_s
    {
       std::chrono::milliseconds ms{}; // int64 element
@@ -649,6 +656,26 @@ namespace
          using namespace std::chrono;
          time_s v{system_clock::time_point{milliseconds{1700000000000LL}}};
          expect_roundtrip_equal(v);
+      };
+
+      "chrono-datetime-out-of-range-rejected"_test = [] {
+         using namespace std::chrono;
+         // The datetime is a full int64 of milliseconds, and system_clock counts in something
+         // finer, so the extremes cannot be held. They used to wrap (INT64_MAX decoded as one
+         // millisecond before the epoch) and now fail.
+         for (const int64_t ms : {(std::numeric_limits<int64_t>::max)(), (std::numeric_limits<int64_t>::min)()}) {
+            std::string buffer;
+            expect(!glz::write_bson(raw_time_s{glz::bson::datetime{ms}}, buffer));
+            time_s out{};
+            expect(glz::read_bson(out, buffer) == glz::error_code::parse_error);
+         }
+
+         // Pre-epoch datetimes keep decoding as before.
+         std::string buffer;
+         expect(!glz::write_bson(raw_time_s{glz::bson::datetime{-1500}}, buffer));
+         time_s out{};
+         expect(!glz::read_bson(out, buffer));
+         expect(out.t == system_clock::time_point{milliseconds{-1500}});
       };
 
       "roundtrip-duration"_test = [] {

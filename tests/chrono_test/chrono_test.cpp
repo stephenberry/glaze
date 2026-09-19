@@ -806,6 +806,68 @@ suite chrono_edge_case_tests = [] {
       auto json = glz::write_json(tp);
       expect(json.value() == "\"2024-12-13T15:30:45.123456789Z\"") << json.value();
    };
+
+   "far_range_dates_do_not_wrap"_test = [] {
+      using namespace std::chrono;
+
+      // An int64 nanosecond count only spans 1677-09-21 to 2262-04-11. A target coarser than
+      // nanoseconds holds the whole [0000, 9999] range, so none of these may pass through a
+      // nanosecond sum on the way in ("9999-12-31T23:59:59Z" used to read back as 1816).
+      for (const std::string_view text : {"\"9999-12-31T23:59:59Z\"", "\"2300-01-01T00:00:00Z\"",
+                                          "\"1600-01-01T00:00:00Z\"", "\"0001-01-01T00:00:00Z\""}) {
+         sys_time<seconds> tp{};
+         expect(!glz::read_json(tp, text)) << text;
+         auto json = glz::write_json(tp);
+         expect(json.value() == text) << json.value();
+      }
+
+      sys_time<seconds> expected = sys_time<seconds>{sys_days{year{9999} / month{12} / day{31}}} + seconds{86399};
+      sys_time<seconds> tp{};
+      expect(!glz::read_json(tp, "\"9999-12-31T23:59:59Z\""));
+      expect(tp == expected);
+
+      sys_time<milliseconds> ms_tp{};
+      expect(!glz::read_json(ms_tp, "\"9999-12-31T23:59:59.999Z\""));
+      expect(ms_tp == sys_time<milliseconds>{expected} + milliseconds{999});
+
+      // The same parser backs YAML.
+      sys_time<seconds> yaml_tp{};
+      const std::string yaml = "9999-12-31T23:59:59Z";
+      expect(!glz::read_yaml(yaml_tp, yaml));
+      expect(yaml_tp == expected);
+   };
+
+   "pre_epoch_fraction_unchanged"_test = [] {
+      using namespace std::chrono;
+
+      sys_time<milliseconds> tp{};
+      expect(!glz::read_json(tp, "\"1969-12-31T23:59:59.500Z\""));
+      expect(tp.time_since_epoch() == milliseconds{-500});
+
+      // Digits finer than the target still truncate toward the epoch, as time_point_cast does.
+      expect(!glz::read_json(tp, "\"1969-12-31T23:59:59.1234567Z\""));
+      expect(tp.time_since_epoch() == milliseconds{-876});
+      expect(!glz::read_json(tp, "\"1970-01-01T00:00:00.1234567Z\""));
+      expect(tp.time_since_epoch() == milliseconds{123});
+   };
+
+   "nanosecond_target_rejects_unrepresentable_dates"_test = [] {
+      using namespace std::chrono;
+
+      // A nanosecond time_point cannot hold these at all, so they are an error, not a wrap.
+      sys_time<nanoseconds> tp{};
+      expect(glz::read_json(tp, "\"2300-01-01T00:00:00Z\"") == glz::error_code::parse_error);
+      expect(glz::read_json(tp, "\"1600-01-01T00:00:00Z\"") == glz::error_code::parse_error);
+      expect(glz::read_json(tp, "\"9999-12-31T23:59:59.999999999Z\"") == glz::error_code::parse_error);
+
+      // The last and first whole seconds an int64 nanosecond count reaches.
+      expect(!glz::read_json(tp, "\"2262-04-11T23:47:16Z\""));
+      expect(tp.time_since_epoch() == nanoseconds{seconds{9223372036}});
+      expect(glz::read_json(tp, "\"2262-04-11T23:47:17Z\"") == glz::error_code::parse_error);
+      expect(!glz::read_json(tp, "\"1677-09-21T00:12:44Z\""));
+      expect(tp.time_since_epoch() == nanoseconds{seconds{-9223372036}});
+      expect(glz::read_json(tp, "\"1677-09-21T00:12:43Z\"") == glz::error_code::parse_error);
+   };
 };
 
 suite chrono_timezone_tests = [] {
@@ -1487,6 +1549,19 @@ struct glz::meta<CompactTime>
    static constexpr auto value = glz::object("tp", glz::date_format(&T::tp, "%FT%T"));
 };
 
+struct NanoTime
+{
+   // Nanosecond member: an int64 count of these only reaches 1677-09-21 to 2262-04-11.
+   std::chrono::sys_time<std::chrono::nanoseconds> tp{};
+};
+
+template <>
+struct glz::meta<NanoTime>
+{
+   using T = NanoTime;
+   static constexpr auto value = glz::object("tp", glz::date_format(&T::tp, "%FT%T"));
+};
+
 struct PercentLiteral
 {
    std::chrono::sys_time<std::chrono::seconds> tp{};
@@ -1671,6 +1746,16 @@ suite date_format_tests = [] {
          CompactTime r;
          expect(bool(glz::read_json(r, R"({"tp":"10000-01-01T00:00:00"})")));
       }
+   };
+
+   "date_format_nanosecond_member_rejects_unrepresentable_dates"_test = [] {
+      // The format admits years the member cannot hold; those are an error rather than a wrap.
+      NanoTime r;
+      expect(glz::read_json(r, R"({"tp":"9999-12-31T23:59:59"})") == glz::error_code::parse_error);
+      expect(glz::read_json(r, R"({"tp":"1600-01-01T00:00:00"})") == glz::error_code::parse_error);
+
+      expect(!glz::read_json(r, R"({"tp":"2262-04-11T23:47:16"})"));
+      expect(r.tp.time_since_epoch() == nanoseconds{seconds{9223372036}});
    };
 
    "date_format_pre_1970_roundtrip"_test = [] {

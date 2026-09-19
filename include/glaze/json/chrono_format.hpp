@@ -162,7 +162,6 @@ namespace glz
             wrapper.val = ymd;
          }
          else {
-            using Duration = typename V::duration;
             // Anchor the day at seconds precision before adding the time-of-day. MSVC's
             // std::chrono::hours and minutes use a 32-bit rep, so `sys_days + hours + minutes`
             // overflows the intermediate minutes count (days * 24 * 60 exceeds INT_MAX for
@@ -170,7 +169,10 @@ namespace glz
             // instant. sys_seconds widens the arithmetic to 64 bits before the time-of-day
             // is folded in, so the reconstruction is exact on every supported standard library.
             const auto tp = sys_seconds{sys_days{ymd}} + hours{f.hour} + minutes{f.minute} + seconds{f.second};
-            wrapper.val = time_point_cast<Duration>(tp);
+            // A nanosecond target only spans 1677-2262; reject a date outside it rather than wrap.
+            if (!chrono_detail::make_sys_time(wrapper.val, tp.time_since_epoch(), nanoseconds{})) [[unlikely]] {
+               ctx.error = error_code::parse_error;
+            }
          }
       }
    };
