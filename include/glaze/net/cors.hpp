@@ -151,13 +151,15 @@ namespace glz
          bool is_preflight = (req.method == http_method::OPTIONS) &&
                              (req.headers.find("access-control-request-method") != req.headers.end());
 
-         if (is_preflight && config.handle_preflight) {
+         const bool origin_allowed = !origin.empty() && is_origin_allowed(config, origin);
+
+         if (is_preflight && config.handle_preflight && !origin_allowed) {
             // Origin not allowed, but it's a preflight request - respond with 403
             res.status(403).body("CORS: Origin not allowed");
          }
 
          // Always add CORS headers if origin is allowed
-         if (!origin.empty() && is_origin_allowed(config, origin)) {
+         if (origin_allowed) {
             // Determine which origin to send back
             std::string allowed_origin = "*";
             const bool contains_wildcard = std::find(config.allowed_origins.begin(), config.allowed_origins.end(),

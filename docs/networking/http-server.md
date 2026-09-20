@@ -325,6 +325,19 @@ server.get("/users/:id", [](const glz::request& req, glz::response& res) {
 });
 ```
 
+### Responses Without a Body
+
+A reply to a `HEAD` request and any `1xx`, `204` or `304` response ends at the empty line after its headers (RFC 9112 6.3), so the server sends no body for them even when the handler set one. A recipient never reads a body from these, and bytes sent there would be read as the start of the next response on a keep-alive connection.
+
+- `HEAD`: `Content-Length` is still generated from the body the handler built, which is the length `GET` would return. A `HEAD` route can therefore share its handler with the `GET` route.
+- `1xx`, `204`, `304`: no `Content-Length` is generated (RFC 9110 8.6).
+
+```cpp
+auto get_report = [](const glz::request&, glz::response& res) { res.json(build_report()); };
+server.get("/report", get_report);
+server.route(glz::http_method::HEAD, "/report", get_report); // headers only, same Content-Length
+```
+
 ## Middleware
 
 ### Adding Middleware

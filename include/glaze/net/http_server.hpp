@@ -3125,7 +3125,19 @@ namespace glz
             h.append("\r\n");
          }
 
-         if (!(response.user_headers_set & response::has_content_length)) {
+         // RFC 9112 6.3: a response to HEAD, and any 1xx, 204 or 304 response, ends at the
+         // empty line after its header section whatever its fields say, so a recipient
+         // never reads content from one. Content written there stays on the connection
+         // and is taken for the start of the next response, which is the response-side
+         // desync http_client's carries_no_body already guards against as a reader.
+         const bool bodyless_status =
+            response.status_code / 100 == 1 || response.status_code == 204 || response.status_code == 304;
+         const bool carries_no_body = bodyless_status || conn->request_.method == http_method::HEAD;
+
+         // RFC 9110 8.6 forbids Content-Length on 1xx and 204, and allows it on a 304 only
+         // when it equals the length of the 200 it stands in for, which this writer cannot
+         // know. A HEAD reply keeps it: the body the handler built is the one GET returns.
+         if (!bodyless_status && !(response.user_headers_set & response::has_content_length)) {
             h.append("Content-Length: ");
             auto* end = glz::to_chars(num_buf, static_cast<uint64_t>(response.response_body.size()));
             h.append(num_buf, size_t(end - num_buf));
@@ -3169,7 +3181,10 @@ namespace glz
          // Scatter-gather write: send headers and body as separate buffers.
          // Zero-copy for the body — write directly from conn->response_.response_body.
          // conn (shared_ptr) keeps header_buf and response_body alive during the async write.
-         std::array<asio::const_buffer, 2> bufs = {asio::buffer(h), asio::buffer(response.response_body)};
+         // A response that carries no body sends the header section alone.
+         const asio::const_buffer body =
+            carries_no_body ? asio::const_buffer{} : asio::const_buffer{asio::buffer(response.response_body)};
+         std::array<asio::const_buffer, 2> bufs = {asio::buffer(h), body};
 
          // Custom completion condition: removes the default 64KB-per-chunk cap
          // in asio::async_write (transfer_all uses 65536). Without this, a 960KB
@@ -3191,6 +3206,9 @@ namespace glz
                               }
                               else {
                                  // Keep-alive: compact buffer (shift leftover pipelined data to front)
+                                 // The method resets too, so a request line that fails to parse is not
+                                 // answered as though it were the HEAD that came before it.
+                                 conn->request_.method = {};
                                  conn->request_.params.clear();
                                  conn->request_.query.clear();
                                  conn->request_.headers.clear();
