@@ -4901,9 +4901,16 @@ suite beve_v2_variant_resolution = [] {
       // is 1000000 on glibc, 1000 on MSVC and 128 on FreeBSD, where one tick is 7.8125 ms. Timing a
       // fixed number of reads reports 0 for any loop shorter than a tick, and the ratio then divides
       // by it: issue #2896, where the linear reader was reported as growing by inf on FreeBSD, whose
-      // tick is wide enough to swallow both loops. Counting reads per fixed budget cannot divide by
-      // zero, and the budget spans at least 16 ticks and at least 20 ms of CPU time, so a count on
-      // the linear path, which runs into the thousands, is off by well under a percent.
+      // tick is wide enough to swallow both loops. Counting reads cannot divide by zero, and the
+      // elapsed time is at least 16 ticks, so the rate carries at most one tick in sixteen of error
+      // -- about 6% at 128 Hz, against the 2x margin the 8x bound keeps over a linear reader.
+      //
+      // The rate divides by the CPU time actually consumed rather than by the budget it aimed at,
+      // because the stop check only runs once per batch: a read slow enough to approach the batch
+      // makes the loop overshoot the budget by most of a batch, and charging the reads counted in
+      // that longer window to the budget understates what each one cost. In a -O0 build with a
+      // quadratic reader that overshoot is most of the budget, which read that 11.1x regression as
+      // 7.0x and passed it.
       //
       // The clock is process CPU time rather than wall time, because ctest runs this binary
       // alongside two others and a loaded machine deschedules the loops. Wall time counts that
@@ -4931,19 +4938,21 @@ suite beve_v2_variant_resolution = [] {
       // At least 16 clock ticks and at least 20 ms of CPU time per measurement.
       const auto budget = std::max<clock_t>(16, static_cast<clock_t>(0.02 * CLOCKS_PER_SEC));
       constexpr int rounds = 5; // odd, so the median is the middle element
-      auto reads_per_budget = [budget](const std::string& buf) {
-         // The clock is sampled once per batch: the sampling is a getrusage syscall on FreeBSD, so
-         // it must stay well below the batch's own cost, and a batch must stay well below the budget
-         // so that the overshoot past the budget is a small fraction of the measured window.
+      auto reads_per_tick = [budget](const std::string& buf) {
+         // The clock is sampled once per batch: the sampling is a getrusage syscall on FreeBSD, so it
+         // must stay well below the batch's own cost. Overshooting the budget costs nothing now that
+         // the rate divides by the time actually consumed; the batch only decides how much extra CPU
+         // time a measurement can spend.
          constexpr std::size_t batch = 8;
          std::size_t reads = 0;
          // std::clock returns (clock_t)-1 on failure, which FreeBSD's getrusage-backed clock does
-         // when the syscall fails. Counting that as elapsed time would stop after a single batch for
-         // both depths and the equal counts would pass the bound; counting it as no time at all
-         // would spin here forever. Report zero reads instead, which the caller turns into a failure.
+         // when the syscall fails. Read as elapsed time at the start it is the process's CPU ticks
+         // since launch, past the budget, so both depths would stop after a single batch with equal
+         // rates and pass the bound; read mid-loop it is negative and would spin here forever.
+         // Report no reads instead, which the caller turns into a failure.
          const auto c0 = std::clock();
          if (c0 == static_cast<clock_t>(-1)) {
-            return reads;
+            return 0.0;
          }
          for (;;) {
             for (std::size_t i = 0; i < batch; ++i) {
@@ -4953,10 +4962,10 @@ suite beve_v2_variant_resolution = [] {
             reads += batch;
             const auto now = std::clock();
             if (now == static_cast<clock_t>(-1)) {
-               return std::size_t{0};
+               return 0.0;
             }
             if (now - c0 >= budget) {
-               return reads;
+               return double(reads) / double(now - c0);
             }
          }
       };
@@ -4967,21 +4976,21 @@ suite beve_v2_variant_resolution = [] {
          deep_v out{};
          expect(not glz::read_beve(out, deep));
       }
-      (void)reads_per_budget(shallow); // warm both paths before timing
-      (void)reads_per_budget(deep);
+      (void)reads_per_tick(shallow); // warm both paths before timing
+      (void)reads_per_tick(deep);
       std::array<double, rounds> growth{};
       for (auto& g : growth) {
-         const auto per_shallow = reads_per_budget(shallow);
-         const auto per_deep = reads_per_budget(deep);
-         // A clock that failed reports zero reads; fail loudly rather than letting 0/0 leave NaN or
+         const auto per_shallow = reads_per_tick(shallow);
+         const auto per_deep = reads_per_tick(deep);
+         // A clock that failed reports a zero rate; fail loudly rather than letting 0/0 leave NaN or
          // 0/n pass the bound.
-         expect(per_shallow > 0 && per_deep > 0) << "std::clock() failed";
+         expect(per_shallow > 0.0 && per_deep > 0.0) << "std::clock() failed";
          // Reads per unit CPU time, inverted: how much the time per read grew with the depth.
-         g = double(per_shallow) / double(per_deep);
+         g = per_shallow / per_deep;
       }
       std::ranges::sort(growth);
       const auto median_growth = growth[rounds / 2];
-      // Measured 3.8-4.2x linear against 11.5-14x quadratic, so 8x separates them with margin.
+      // Measured 3.6-4.3x linear against 11-15x quadratic, so 8x separates them with margin.
       expect(median_growth < 8.0) << "read time grew " << median_growth << "x for 4x the depth";
 
       // Past the limit, every level fails identically. Each of the variant reader's recovery paths
