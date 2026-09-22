@@ -86,6 +86,16 @@ suite http_smuggling_suite = [] {
       res.status(304);
       res.body("stale");
    });
+   server.get("/continue", [&](const glz::request&, glz::response& res) {
+      res.status(100);
+      res.body("stale");
+   });
+   // A Content-Length the handler set is forbidden on a 204 just like the generated one.
+   server.get("/no-content-with-length", [&](const glz::request&, glz::response& res) {
+      res.status(204);
+      res.header("Content-Length", "99");
+      res.body("stale");
+   });
    server.route(glz::http_method::HEAD, "/head-route", [&](const glz::request&, glz::response& res) {
       res.status(200);
       res.body("twelve bytes");
@@ -321,11 +331,37 @@ suite http_smuggling_suite = [] {
          "Host: localhost\r\n"
          "\r\n");
 
-      expect(reply.head.starts_with("HTTP/1.1 304")) << "got: " << reply.head;
+      expect(reply.head.starts_with("HTTP/1.1 304 Not Modified")) << "got: " << reply.head;
       expect(reply.head.find("Content-Length") == std::string::npos)
          << "A 304 may not state a length this writer cannot know, got: " << reply.head;
       expect(reply.rest.starts_with("HTTP/1.1 200"))
          << "Content after a 304 is read as the next response, got: " << reply.rest;
+   };
+
+   "A 1xx response carries no content and no Content-Length"_test = [&] {
+      const auto reply = pipeline_before_marker(
+         "GET /continue HTTP/1.1\r\n"
+         "Host: localhost\r\n"
+         "\r\n");
+
+      expect(reply.head.starts_with("HTTP/1.1 100")) << "got: " << reply.head;
+      expect(reply.head.find("Content-Length") == std::string::npos)
+         << "RFC 9110 8.6 forbids Content-Length on a 1xx, got: " << reply.head;
+      expect(reply.rest.starts_with("HTTP/1.1 200"))
+         << "Content after a 1xx is read as the next response, got: " << reply.rest;
+   };
+
+   "A handler-set Content-Length is dropped from a 204"_test = [&] {
+      const auto reply = pipeline_before_marker(
+         "GET /no-content-with-length HTTP/1.1\r\n"
+         "Host: localhost\r\n"
+         "\r\n");
+
+      expect(reply.head.starts_with("HTTP/1.1 204")) << "got: " << reply.head;
+      expect(reply.head.find("Content-Length") == std::string::npos)
+         << "A recipient framing by Content-Length reads the next reply as this body, got: " << reply.head;
+      expect(reply.rest.starts_with("HTTP/1.1 200"))
+         << "Content after a 204 is read as the next response, got: " << reply.rest;
    };
 
    "A reply to HEAD keeps its Content-Length and carries no content"_test = [&] {

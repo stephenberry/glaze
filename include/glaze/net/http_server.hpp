@@ -1249,6 +1249,8 @@ namespace glz
             return "Created";
          case 204:
             return "No Content";
+         case 304:
+            return "Not Modified";
          case 400:
             return "Bad Request";
          case 401:
@@ -3102,8 +3104,26 @@ namespace glz
             h.append("\r\n");
          }
 
+         // RFC 9112 6.3: a response to HEAD, and any 1xx, 204 or 304 response, ends at the
+         // empty line after its header section whatever its fields say, so a recipient
+         // never reads content from one. Content written there stays on the connection
+         // and is taken for the start of the next response, which is the response-side
+         // desync http_client's carries_no_body already guards against as a reader.
+         const bool bodyless_status =
+            response.status_code / 100 == 1 || response.status_code == 204 || response.status_code == 304;
+         const bool carries_no_body = bodyless_status || conn->request_.method == http_method::HEAD;
+
+         // RFC 9110 8.6: a server must not send Content-Length in a 1xx or 204 response,
+         // so one the handler set is dropped below like Transfer-Encoding. A 304 may carry
+         // one the handler knows to be the length of the 200 it stands in for, and a HEAD
+         // reply keeps its own: the body the handler built is the one GET returns.
+         const bool content_length_forbidden = response.status_code / 100 == 1 || response.status_code == 204;
+
          for (const auto& [name, value] : response.response_headers) {
             if (header_field_has_crlf(name, value)) [[unlikely]] {
+               continue;
+            }
+            if (content_length_forbidden && glz::striequal(name, "content-length")) [[unlikely]] {
                continue;
             }
             // This writer sends a complete, already-buffered body and frames it with
@@ -3125,18 +3145,8 @@ namespace glz
             h.append("\r\n");
          }
 
-         // RFC 9112 6.3: a response to HEAD, and any 1xx, 204 or 304 response, ends at the
-         // empty line after its header section whatever its fields say, so a recipient
-         // never reads content from one. Content written there stays on the connection
-         // and is taken for the start of the next response, which is the response-side
-         // desync http_client's carries_no_body already guards against as a reader.
-         const bool bodyless_status =
-            response.status_code / 100 == 1 || response.status_code == 204 || response.status_code == 304;
-         const bool carries_no_body = bodyless_status || conn->request_.method == http_method::HEAD;
-
-         // RFC 9110 8.6 forbids Content-Length on 1xx and 204, and allows it on a 304 only
-         // when it equals the length of the 200 it stands in for, which this writer cannot
-         // know. A HEAD reply keeps it: the body the handler built is the one GET returns.
+         // No Content-Length is generated for a 1xx, 204 or 304: forbidden on the first two,
+         // and on a 304 the length of the 200 it stands in for is not one this writer knows.
          if (!bodyless_status && !(response.user_headers_set & response::has_content_length)) {
             h.append("Content-Length: ");
             auto* end = glz::to_chars(num_buf, static_cast<uint64_t>(response.response_body.size()));
@@ -3311,6 +3321,8 @@ namespace glz
             return "Created";
          case 204:
             return "No Content";
+         case 304:
+            return "Not Modified";
          case 400:
             return "Bad Request";
          case 401:
