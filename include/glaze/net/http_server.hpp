@@ -1146,15 +1146,17 @@ namespace glz
          is_closed_ = true;
 
          close_handler_ = std::move(handler);
-         close_pending_ = true;
 
          // A chunked body ends with the zero-length chunk; a response that carries no
          // body has none to end. The socket closes once every write queued so far,
-         // the headers included, is on the wire.
+         // the headers included, is on the wire. The terminator is queued before the
+         // close is marked pending, so a write completing on another io thread cannot
+         // see a pending close with nothing in flight and close ahead of it.
          if (chunked_encoding_ && !body_forbidden_) {
             write_tracked(std::make_shared<std::string>("0\r\n\r\n"), {});
          }
-         else if (writes_in_flight_ == 0) {
+         close_pending_ = true;
+         if (writes_in_flight_ == 0) {
             close_socket();
          }
       }
@@ -1208,8 +1210,12 @@ namespace glz
       bool is_closed_;
       bool chunked_encoding_ = false;
       bool body_forbidden_ = false; // Set by send_headers for a HEAD reply and a 1xx, 204 or 304
-      bool close_pending_ = false;
-      size_t writes_in_flight_ = 0;
+      // Write completions run on whichever io thread the server's pool picks, concurrently
+      // with each other and with the handler that queues writes, so the close bookkeeping
+      // they share is atomic.
+      std::atomic<bool> close_pending_{false};
+      std::atomic<bool> socket_closed_{false};
+      std::atomic<size_t> writes_in_flight_{0};
 
       // Writes are counted until they complete so close() can wait for the bytes already
       // queued rather than cancel them by closing the socket underneath.
@@ -1227,9 +1233,11 @@ namespace glz
                            });
       }
 
+      // Both close() and the last write completion can see the close due at once, so only
+      // the first caller closes.
       void close_socket()
       {
-         close_pending_ = false;
+         if (socket_closed_.exchange(true)) return;
          if (close_handler_) close_handler_();
          asio::error_code ec;
          socket_->lowest_layer().close(ec);
