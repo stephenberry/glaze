@@ -104,6 +104,41 @@ suite http_smuggling_suite = [] {
       res.status(200);
       res.body("marker");
    });
+   // Streaming handlers that write content after a status that cannot carry any, and
+   // HEAD streaming routes that stream what their GET would.
+   server.stream_get("/stream-no-content", [](glz::request&, glz::streaming_response& res) {
+      res.start_stream(204);
+      res.send("stale");
+      res.close();
+   });
+   server.stream_get("/stream-no-content-framed", [](glz::request&, glz::streaming_response& res) {
+      res.start_stream(204, {{"Content-Length", "99"}, {"Transfer-Encoding", "chunked"}});
+      res.close();
+   });
+   server.stream_get("/stream-not-modified", [](glz::request&, glz::streaming_response& res) {
+      res.start_stream(304);
+      res.send("stale");
+      res.close();
+   });
+   server.stream(glz::http_method::HEAD, "/stream-head", [](glz::request&, glz::streaming_response& res) {
+      res.start_stream(200, {{"Content-Type", "text/plain"}});
+      res.send("stale");
+      res.close();
+   });
+   server.stream_get("/stream-empty-send", [](glz::request&, glz::streaming_response& res) {
+      res.start_stream(200, {{"Content-Type", "text/plain"}});
+      res.send("a");
+      res.send("");
+      res.send("b");
+      res.close();
+   });
+   // A sender loop that only stops when a send fails or max_events is reached; 500
+   // events 20 ms apart outlast the test's 5 second wait.
+   server.stream(glz::http_method::HEAD, "/stream-head-events", [](glz::request&, glz::streaming_response& res) {
+      res.as_event_stream();
+      glz::streaming_utils::send_periodic_data<int>(
+         res.stream, [] { return 1; }, std::chrono::milliseconds(20), 500);
+   });
    server.enable_cors();
    server.bind(test_host, 0);
    const uint16_t test_port = server.port();
@@ -426,6 +461,106 @@ suite http_smuggling_suite = [] {
 
       expect(response.find("HTTP/1.1 400") != std::string::npos) << "got: " << response;
       expect(response.ends_with("Bad Request")) << "The 400 must keep its body, got: " << response;
+   };
+
+   // The streaming writer follows the same rule. A streaming handler owns the connection
+   // and closes it when done, so each case reads to EOF and checks that the bytes end at
+   // the empty line after the header section.
+   const auto stream_reply = [&](const std::string& request) {
+      std::future<std::string> f = std::async(std::launch::async, [&] { return send_raw(test_port, request); });
+
+      auto future_timeout = std::chrono::system_clock::now() + std::chrono::seconds(5);
+      std::string response;
+      if (std::future_status::ready == f.wait_until(future_timeout)) {
+         response = f.get();
+      }
+      return response;
+   };
+
+   const auto ends_at_header_section = [](const std::string& response) {
+      const auto head_end = response.find("\r\n\r\n");
+      return head_end != std::string::npos && head_end + 4 == response.size();
+   };
+
+   "A streamed 204 carries no content and no framing"_test = [&] {
+      const auto response = stream_reply(
+         "GET /stream-no-content HTTP/1.1\r\n"
+         "Host: localhost\r\n"
+         "\r\n");
+
+      expect(response.starts_with("HTTP/1.1 204")) << "got: " << response;
+      expect(response.find("Transfer-Encoding") == std::string::npos)
+         << "RFC 9112 6.1 forbids Transfer-Encoding on a 204, got: " << response;
+      expect(ends_at_header_section(response)) << "got: " << response;
+   };
+
+   "A streamed 204 drops the framing fields the handler set"_test = [&] {
+      const auto response = stream_reply(
+         "GET /stream-no-content-framed HTTP/1.1\r\n"
+         "Host: localhost\r\n"
+         "\r\n");
+
+      expect(response.starts_with("HTTP/1.1 204")) << "got: " << response;
+      expect(response.find("Transfer-Encoding") == std::string::npos) << "got: " << response;
+      expect(response.find("Content-Length") == std::string::npos) << "got: " << response;
+      expect(ends_at_header_section(response)) << "got: " << response;
+   };
+
+   "A streamed 304 carries no content and generates no framing"_test = [&] {
+      const auto response = stream_reply(
+         "GET /stream-not-modified HTTP/1.1\r\n"
+         "Host: localhost\r\n"
+         "\r\n");
+
+      expect(response.starts_with("HTTP/1.1 304 Not Modified")) << "got: " << response;
+      expect(response.find("Transfer-Encoding") == std::string::npos) << "got: " << response;
+      expect(ends_at_header_section(response)) << "got: " << response;
+   };
+
+   "A streamed reply to HEAD keeps the GET framing and carries no content"_test = [&] {
+      const auto response = stream_reply(
+         "HEAD /stream-head HTTP/1.1\r\n"
+         "Host: localhost\r\n"
+         "\r\n");
+
+      expect(response.starts_with("HTTP/1.1 200")) << "got: " << response;
+      expect(response.find("Transfer-Encoding: chunked\r\n") != std::string::npos)
+         << "A HEAD reply states the framing GET would use, got: " << response;
+      expect(ends_at_header_section(response)) << "got: " << response;
+   };
+
+   // A send on a response that cannot carry content reports an error, so a sender loop
+   // closes the stream at once instead of running until max_events.
+   "A streamed reply to HEAD ends a sender loop"_test = [&] {
+      const auto response = stream_reply(
+         "HEAD /stream-head-events HTTP/1.1\r\n"
+         "Host: localhost\r\n"
+         "\r\n");
+
+      expect(response.starts_with("HTTP/1.1 200")) << "got: " << response;
+      expect(ends_at_header_section(response)) << "got: " << response;
+   };
+
+   // A zero-length chunk is the terminator, so an empty send must not write one.
+   "An empty streamed send does not end the chunked body"_test = [&] {
+      const auto response = stream_reply(
+         "GET /stream-empty-send HTTP/1.1\r\n"
+         "Host: localhost\r\n"
+         "\r\n");
+
+      expect(response.starts_with("HTTP/1.1 200")) << "got: " << response;
+      expect(response.ends_with("\r\n\r\n1\r\na\r\n1\r\nb\r\n0\r\n\r\n")) << "got: " << response;
+   };
+
+   // The stream closes the connection when it ends, and says so.
+   "A streamed response announces Connection: close"_test = [&] {
+      const auto response = stream_reply(
+         "GET /stream-empty-send HTTP/1.1\r\n"
+         "Host: localhost\r\n"
+         "\r\n");
+
+      expect(response.find("Connection: close\r\n") != std::string::npos) << "got: " << response;
+      expect(response.find("keep-alive") == std::string::npos) << "got: " << response;
    };
 
    server.stop();
