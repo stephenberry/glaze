@@ -10192,24 +10192,14 @@ suite bitset = [] {
 };
 
 #if defined(__STDCPP_FLOAT128_T__) && !defined(__APPLE__)
-// __STDCPP_FLOAT128_T__ reports that the type exists, not that <charconv> reads and writes it:
-// MinGW's libstdc++ defines the macro while its to_chars/from_chars have no _Float128 overloads,
-// and the library's float128 path is exactly those two calls. So ask the standard library itself,
-// and where the answer is no the suite registers with nothing in it. The type is a template
-// parameter because that is what makes the calls dependent, so a missing overload answers false
-// instead of failing the build; the suite lambda is generic for the same reason, so the branch
-// that cannot compile is never instantiated.
-template <class T>
-consteval bool charconv_handles()
-{
-   return requires(T value, char* first, char* last) {
-      std::to_chars(first, last, value, std::chars_format::general);
-      std::from_chars(first, last, value);
-   };
-}
-
+// The capability question is the library's: glz::has_charconv_float_write/read ask <charconv> whether
+// it has the overloads, and the library's float128 paths assert on the same answer. __STDCPP_FLOAT128_T__
+// only reports that the type exists -- MinGW's libstdc++ defines it with no _Float128 overloads -- so
+// where the answer is no this suite registers with nothing in it. The suite lambda is generic because
+// that makes the discarded statement non-dependent, so the branch that cannot compile is never
+// instantiated.
 suite float128_test = []<class = void> {
-   if constexpr (charconv_handles<std::float128_t>()) {
+   if constexpr (glz::has_charconv_float_write<std::float128_t> && glz::has_charconv_float_read<std::float128_t>) {
       "float128"_test = [] {
          std::float128_t x = 3.14;
 
