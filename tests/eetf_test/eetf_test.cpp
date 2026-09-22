@@ -330,6 +330,28 @@ struct eetf_escape_opts : glz::eetf::eetf_opts
 };
 
 suite eetf_to_json_tests = [] {
+   "eetf_to_json binds at the same level as the readers"_test = [] {
+      // Only containers take a level, so a scalar fits inside the deepest container the limit allows.
+      constexpr auto limit = glz::max_recursive_depth_limit;
+      const auto build = [](size_t levels, std::string_view innermost) {
+         std::string b{char(131)}; // format version
+         for (size_t i = 0; i < levels; ++i) {
+            b += std::string_view{"l\0\0\0\1", 5}; // LIST_EXT of one element
+         }
+         b += innermost;
+         b.append(levels, 'j'); // each list's NIL_EXT tail
+         return b;
+      };
+      const std::string one{'a', char(1)}; // SMALL_INTEGER_EXT
+      const std::string empty{'j'}; // NIL_EXT, written as []
+
+      std::string json{};
+      expect(not glz::eetf_to_json(build(limit, one), json));
+      expect(json == std::string(limit, '[') + "1" + std::string(limit, ']'));
+      expect(not glz::eetf_to_json(build(limit - 1, empty), json));
+      expect(glz::eetf_to_json(build(limit, empty), json) == glz::error_code::exceeded_max_recursive_depth);
+   };
+
    "eetf_to_json true"_test = [] {
       bool b = true;
       std::string buffer{};

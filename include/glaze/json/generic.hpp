@@ -180,15 +180,14 @@ namespace glz
          else if (value.is_array()) {
             auto& arr = value.get_array();
 
-            // Parse the index
-            size_t index{};
-            auto [p, ec] = std::from_chars(&json_ptr[1], json_ptr.data() + json_ptr.size(), index);
-            if (ec != std::errc{}) return false;
+            // Parse the index (RFC 6901 forbids leading zeros)
+            const auto [token, remaining_ptr] = tokenize_json_ptr(json_ptr);
+            const auto index = detail::parse_json_ptr_array_index(token);
+            if (!index) return false;
 
-            if (index >= arr.size()) return false;
+            if (*index >= arr.size()) return false;
 
-            sv remaining_ptr = json_ptr.substr(p - json_ptr.data());
-            return seek(std::forward<F>(func), arr[index], remaining_ptr);
+            return seek(std::forward<F>(func), arr[*index], remaining_ptr);
          }
 
          return false;
@@ -210,11 +209,7 @@ namespace glz
       sv remaining = json_ptr;
 
       while (!remaining.empty() && remaining[0] == '/') {
-         remaining.remove_prefix(1); // Remove leading '/'
-
-         // Find the next '/' or end of string
-         size_t key_end = remaining.find('/');
-         sv key = (key_end == sv::npos) ? remaining : remaining.substr(0, key_end);
+         const auto [key, next] = tokenize_json_ptr(remaining);
 
          // Check if JSON Pointer escaping is needed
          const bool needs_unescape = key.find('~') != sv::npos;
@@ -257,26 +252,17 @@ namespace glz
          else if (current->is_array()) {
             // Array indices must be plain numbers (no escaping applies to indices)
             // If key contains '~', it's invalid as an array index and will fail to parse
-            size_t index = 0;
-            auto [ptr, ec] = std::from_chars(key.data(), key.data() + key.size(), index);
-            if (ec != std::errc{} || ptr != key.data() + key.size()) {
-               return nullptr; // Invalid index
-            }
+            const auto index = detail::parse_json_ptr_array_index(key);
+            if (!index) return nullptr; // Invalid index
             auto& arr = current->get_array();
-            if (index >= arr.size()) return nullptr;
-            current = &arr[index];
+            if (*index >= arr.size()) return nullptr;
+            current = &arr[*index];
          }
          else {
             return nullptr; // Can't navigate further
          }
 
-         // Move to next segment
-         if (key_end == sv::npos) {
-            remaining = sv{};
-         }
-         else {
-            remaining = remaining.substr(key_end);
-         }
+         remaining = next;
       }
 
       return current;

@@ -112,18 +112,22 @@ namespace glz
       inline void beve_to_json_value(auto&& ctx, auto&& it, auto&& end, Buffer& out, auto&& ix,
                                      uint32_t recursive_depth)
       {
-         // Check recursion depth limit
-         if (recursive_depth >= max_recursive_depth_limit) [[unlikely]] {
-            ctx.error = error_code::exceeded_max_recursive_depth;
-            return;
-         }
-
          if (it >= end) [[unlikely]] {
             ctx.error = error_code::syntax_error;
             return;
          }
          const auto tag = uint8_t(*it);
          const auto type = tag & 0b00000'111;
+
+         // `recursive_depth` is the number of levels enclosing this value. Containers, and the
+         // extensions that wrap a value, open another; scalars do not, so as in the readers a scalar
+         // may sit inside the deepest container the limit allows.
+         const bool opens_level = type != tag::null && type != tag::number && type != tag::string;
+         if (opens_level && recursive_depth >= max_recursive_depth_limit) [[unlikely]] {
+            ctx.error = error_code::exceeded_max_recursive_depth;
+            return;
+         }
+
          switch (type) {
          case tag::null: {
             if (tag & tag::boolean) {
