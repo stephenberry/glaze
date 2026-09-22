@@ -1907,6 +1907,12 @@ hours_val = 1)";
       input = "2262-04-11T23:47:16Z";
       expect(!glz::read_toml(ns_tp, input));
       expect(ns_tp.time_since_epoch() == nanoseconds{seconds{9223372036}});
+      // The boundary second's fraction up to max() still fits; one nanosecond more does not.
+      input = "2262-04-11T23:47:16.854775807Z";
+      expect(!glz::read_toml(ns_tp, input));
+      expect(ns_tp.time_since_epoch() == (nanoseconds::max)());
+      input = "2262-04-11T23:47:16.854775808Z";
+      expect(glz::read_toml(ns_tp, input) == glz::error_code::parse_error);
    };
 
    "system_time_struct_write"_test = [] {

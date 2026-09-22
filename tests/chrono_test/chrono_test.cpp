@@ -867,6 +867,24 @@ suite chrono_edge_case_tests = [] {
       expect(!glz::read_json(tp, "\"1677-09-21T00:12:44Z\""));
       expect(tp.time_since_epoch() == nanoseconds{seconds{-9223372036}});
       expect(glz::read_json(tp, "\"1677-09-21T00:12:43Z\"") == glz::error_code::parse_error);
+
+      // The boundary seconds are not whole: max() and min() carry a fraction the target still
+      // holds, and one nanosecond past either does not.
+      expect(!glz::read_json(tp, "\"2262-04-11T23:47:16.854775807Z\""));
+      expect(tp.time_since_epoch() == (nanoseconds::max)());
+      expect(glz::read_json(tp, "\"2262-04-11T23:47:16.854775808Z\"") == glz::error_code::parse_error);
+      expect(!glz::read_json(tp, "\"1677-09-21T00:12:43.145224192Z\""));
+      expect(tp.time_since_epoch() == (nanoseconds::min)());
+      expect(glz::read_json(tp, "\"1677-09-21T00:12:43.145224191Z\"") == glz::error_code::parse_error);
+
+      // So the largest value of the type round-trips through the writer.
+      const sys_time<nanoseconds> largest{(nanoseconds::max)()};
+      auto json = glz::write_json(largest);
+      expect(json.has_value());
+      expect(json.value() == "\"2262-04-11T23:47:16.854775807Z\"") << json.value();
+      sys_time<nanoseconds> back{};
+      expect(!glz::read_json(back, json.value()));
+      expect(back == largest);
    };
 };
 

@@ -1323,6 +1323,30 @@ int main()
       expect(decoded == system_clock::time_point{duration_cast<sys_dur>(milliseconds{-500})});
    };
 
+   "chrono time_point pre-epoch fraction roundtrip"_test = [] {
+      using namespace std::chrono;
+      // The writer floors the split, so a pre-epoch fraction goes out as the second before it
+      // plus a positive nanoseconds field. A truncating split left the field negative, which
+      // wrapped in the uint32 and read back as +0.574 s for -0.5 s.
+      for (const auto ms : {milliseconds{-1}, milliseconds{-500}, milliseconds{-1500}}) {
+         const system_clock::time_point tp{duration_cast<system_clock::duration>(ms)};
+         std::string buffer;
+         expect(!glz::write_msgpack(tp, buffer));
+         system_clock::time_point decoded{};
+         expect(!glz::read_msgpack(decoded, buffer));
+         expect(decoded == tp);
+      }
+
+      // The ends of the clock's range keep their fraction of the boundary second.
+      for (const auto extreme : {(system_clock::time_point::max)(), (system_clock::time_point::min)()}) {
+         std::string buffer;
+         expect(!glz::write_msgpack(extreme, buffer));
+         system_clock::time_point decoded{};
+         expect(!glz::read_msgpack(decoded, buffer));
+         expect(decoded == extreme);
+      }
+   };
+
    "chrono time_point rejects nanoseconds above the spec limit"_test = [] {
       using namespace std::chrono;
       // "nanoseconds must not be larger than 999999999" - such a field is not a sub-second part.

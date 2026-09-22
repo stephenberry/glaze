@@ -496,19 +496,24 @@ namespace glz
             subsec -= seconds{1};
          }
 
-         // Only a target finer than seconds scales the count up. max()/min() truncate toward
-         // zero here, so the boundary second fits only without a sub-second part past it.
+         const Duration frac = duration_cast<Duration>(subsec);
+
+         // Only a target finer than seconds scales the count up. max()/min() are not whole
+         // seconds (nanoseconds::max() is 2262-04-11T23:47:16.854775807), so the boundary
+         // second accepts exactly the fraction the target still holds past it.
          if constexpr (std::ratio_less_v<typename Duration::period, std::ratio<1>> &&
                        !treat_as_floating_point_v<typename Duration::rep>) {
             constexpr seconds max_secs = duration_cast<seconds>((Duration::max)());
             constexpr seconds min_secs = duration_cast<seconds>((Duration::min)());
-            if (secs > max_secs || secs < min_secs || (secs == max_secs && subsec > nanoseconds{0}) ||
-                (secs == min_secs && subsec < nanoseconds{0})) {
+            constexpr Duration max_frac = (Duration::max)() - duration_cast<Duration>(max_secs);
+            constexpr Duration min_frac = (Duration::min)() - duration_cast<Duration>(min_secs);
+            if (secs > max_secs || secs < min_secs || (secs == max_secs && frac > max_frac) ||
+                (secs == min_secs && frac < min_frac)) {
                return false;
             }
          }
 
-         value = TP{duration_cast<Duration>(secs) + duration_cast<Duration>(subsec)};
+         value = TP{duration_cast<Duration>(secs) + frac};
          return true;
       }
 
