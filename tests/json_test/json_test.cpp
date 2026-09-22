@@ -2378,6 +2378,51 @@ suite json_pointer = [] {
       expect(b.has_value() && std::any_cast<std::string>(b) == thing.thing.b);
    };
 
+   // RFC 6901 section 4: array-index = %x30 / ( %x31-39 *(%x30-39) ), so a leading zero is not a
+   // valid index and must not resolve to the element it would name without it.
+   "seek rejects leading zero array indices"_test = [] {
+      std::vector<std::vector<int>> v{{1, 2, 3}, {4, 5, 6}};
+
+      int found{};
+      expect(glz::seek(
+         [&](auto&& val) {
+            if constexpr (std::same_as<std::remove_cvref_t<decltype(val)>, int>) {
+               found = val;
+            }
+         },
+         v, "/1/2"));
+      expect(found == 6);
+
+      expect(not glz::seek([](auto&&) {}, v, "/01/2"));
+      expect(not glz::seek([](auto&&) {}, v, "/1/02"));
+      expect(not glz::seek([](auto&&) {}, v, "/00/0"));
+
+      // The rest of the index grammar, which must keep behaving as it always has
+      for (const auto ptr :
+           {"/-/0", "/+1/0", "/ 1/0", "/1 /0", "//0", "/~01/0", "/1abc/0", "/99999999999999999999999/0"}) {
+         expect(not glz::seek([](auto&&) {}, v, ptr)) << ptr;
+      }
+   };
+
+   "get_view_json rejects leading zero array indices"_test = [] {
+      std::string buffer = R"({"items":[1,2,3,4,5,6,7,8,9,10,11]})";
+
+      auto view = glz::get_view_json<"/items/10">(buffer);
+      expect(view.has_value());
+      expect(glz::sv{view->data(), view->size()} == "11");
+
+      expect(not glz::get_view_json<"/items/00">(buffer).has_value());
+      expect(not glz::get_view_json<"/items/01">(buffer).has_value());
+      expect(not glz::get_view_json<"/items/010">(buffer).has_value());
+
+      // The runtime overload follows the same rule
+      expect(glz::get_view_json("/items/10", buffer).has_value());
+      expect(not glz::get_view_json("/items/00", buffer).has_value());
+      expect(not glz::get_view_json("/items/01", buffer).has_value());
+      expect(not glz::get_view_json("/items/010", buffer).has_value());
+      expect(not glz::get_view_json("/items/99999999999999999999999", buffer).has_value());
+   };
+
    "get"_test = [] {
       Thing thing{};
       expect(thing.thing.a == glz::get<double>(thing, "/thing_ptr/a"));
@@ -2440,6 +2485,9 @@ suite json_pointer = [] {
 
       static_assert(glz::valid<Thing, "/vec3/2", double>());
       static_assert(glz::valid<Thing, "/vec3/3", double>() == false);
+      // RFC 6901 section 4 forbids leading zeros in an array index
+      static_assert(glz::valid<Thing, "/vec3/02", double>() == false);
+      static_assert(glz::valid<Thing, "/vector/01", V3>() == false);
 
       static_assert(glz::valid<Thing, "/map/f", int>());
       static_assert(glz::valid<Thing, "/vector", std::vector<V3>>());
@@ -8693,6 +8741,12 @@ struct glz::meta<invoke_struct>
 {
    using T = invoke_struct;
    static constexpr auto value = object("square", invoke<&T::square>, "add_one", invoke<&T::add_one>);
+
+   // invoke members are call sites rather than state, so they are read-only
+   static constexpr bool skip(const std::string_view key, const glz::meta_context& ctx)
+   {
+      return ctx.op == glz::operation::serialize && (key == "square" || key == "add_one");
+   }
 };
 
 suite invoke_test = [] {
@@ -8706,6 +8760,57 @@ suite invoke_test = [] {
       auto ec = glz::read_json(obj, s);
       expect(!ec) << glz::format_error(ec, s);
       expect(obj.y == 26); // 5 * 5 + 1
+   };
+
+   "invoke members are skipped when writing"_test = [] {
+      invoke_struct obj{};
+      std::string s{};
+      expect(not glz::write_json(obj, s));
+      expect(s == "{}") << s;
+   };
+};
+
+// invoke members interleaved with data members, to cover separator placement when the skipped
+// keys are in the middle and at the end of the object
+struct invoke_mixed
+{
+   int a = 1;
+   int b = 2;
+   std::function<void(int)> set_a{};
+   void bump_b() { ++b; }
+
+   // MSVC requires this constructor for 'this' to be captured
+   invoke_mixed()
+   {
+      set_a = [&](int v) { a = v; };
+   }
+};
+
+template <>
+struct glz::meta<invoke_mixed>
+{
+   using T = invoke_mixed;
+   static constexpr auto value =
+      object("a", &T::a, "set_a", invoke<&T::set_a>, "b", &T::b, "bump_b", invoke<&T::bump_b>);
+
+   static constexpr bool skip(const std::string_view key, const glz::meta_context& ctx)
+   {
+      return ctx.op == glz::operation::serialize && (key == "set_a" || key == "bump_b");
+   }
+};
+
+suite invoke_mixed_test = [] {
+   "invoke mixed with data members"_test = [] {
+      invoke_mixed obj{};
+      std::string s = R"({"set_a":[7],"bump_b":[]})";
+      auto ec = glz::read_json(obj, s);
+      expect(!ec) << glz::format_error(ec, s);
+      expect(obj.a == 7) << obj.a;
+      expect(obj.b == 3) << obj.b;
+
+      std::string buffer{};
+      expect(not glz::write_json(obj, buffer));
+      expect(buffer == R"({"a":7,"b":3})") << buffer;
    };
 };
 
@@ -9967,92 +10072,6 @@ suite trade_quote_test = [] {
          buffer ==
          R"({"id":706,"method":"save_quote","params":{"time":1698627291351456360,"action":"send","quote":"kill","account":"603302","uid":11,"session_id":1,"request_id":41,"state":0,"order_id":"2023103000180021","exchange":"CZCE","type":"","tif":"","offset":"","side":"","symbol":"SPD RM401&RM403","price":0,"quantity":0,"traded":0}})")
          << buffer;
-   };
-};
-
-suite invoke_update_test = [] {
-   "invoke"_test = [] {
-      int x = 5;
-
-      std::map<std::string, glz::invoke_update<void()>> funcs;
-      funcs["square"] = [&] { x *= x; };
-      funcs["add_one"] = [&] { x += 1; };
-
-      std::string s = R"(
- {
-    "square":[],
-    "add_one":[]
- })";
-      expect(!glz::read_json(funcs, s));
-      expect(x == 5);
-
-      std::string s2 = R"(
- {
-    "square":[],
-    "add_one":[ ]
- })";
-      expect(!glz::read_json(funcs, s2));
-      expect(x == 6);
-
-      std::string s3 = R"(
- {
-    "square":[ ],
-    "add_one":[ ]
- })";
-      expect(!glz::read_json(funcs, s3));
-      expect(x == 36);
-   };
-};
-
-struct updater
-{
-   int x = 5;
-   glz::invoke_update<void()> square;
-   glz::invoke_update<void()> add_one;
-
-   // constructor required by MSVC
-   updater()
-   {
-      square = [&] { x *= x; };
-      add_one = [&] { x += 1; };
-   }
-};
-
-template <>
-struct glz::meta<updater>
-{
-   using T = updater;
-   static constexpr auto value = object(&T::x, &T::square, &T::add_one);
-};
-
-suite invoke_updater_test = [] {
-   "invoke_updater"_test = [] {
-      updater obj{};
-      auto& x = obj.x;
-
-      std::string s = R"(
- {
-    "square":[],
-    "add_one":[]
- })";
-      expect(!glz::read_json(obj, s));
-      expect(x == 5) << x;
-
-      std::string s2 = R"(
- {
-    "square":[],
-    "add_one":[ ]
- })";
-      expect(!glz::read_json(obj, s2));
-      expect(x == 6) << x;
-
-      std::string s3 = R"(
- {
-    "square":[ ],
-    "add_one":[ ]
- })";
-      expect(!glz::read_json(obj, s3));
-      expect(x == 36) << x;
    };
 };
 
@@ -14029,6 +14048,17 @@ suite ndjson_options = [] {
    };
 };
 
+struct atomic_pair
+{
+   int a{};
+   int b{};
+};
+
+struct atomic_pair_holder
+{
+   std::atomic<atomic_pair> p{};
+};
+
 suite atomics = [] {
    "atomics"_test = [] {
       std::atomic<int> i{};
@@ -14046,6 +14076,26 @@ suite atomics = [] {
 
       expect(not glz::write_json(b, buffer));
       expect(buffer == R"(true)");
+   };
+
+   "atomic read failure leaves value unchanged"_test = [] {
+      std::atomic<int> i{5};
+      expect(glz::read_json(i, R"(not_a_number)"));
+      expect(i.load() == 5);
+
+      std::atomic<bool> b{true};
+      expect(glz::read_json(b, R"(42)"));
+      expect(b.load());
+   };
+
+   // partial_read_complete is a non-error code, so the parsed value still has to be stored
+   "atomic partial read stores the value"_test = [] {
+      atomic_pair_holder h{};
+      h.p.store(atomic_pair{7, 8});
+      constexpr glz::opts opts{.error_on_unknown_keys = false, .partial_read = true};
+      expect(not glz::read<opts>(h, R"({"p":{"a":1,"b":2,"junk":3}})"));
+      expect(h.p.load().a == 1) << h.p.load().a;
+      expect(h.p.load().b == 2) << h.p.load().b;
    };
 };
 
@@ -15643,6 +15693,25 @@ suite json_recursion_depth_limit = [] {
    "untyped reads are bounded too"_test = [] {
       glz::generic out{};
       expect(glz::read_json(out, nested_arrays(100'000)) == glz::error_code::exceeded_max_recursive_depth);
+   };
+
+   "prettify binds at the same level as the readers"_test = [] {
+      // Prettify has to accept every document the validator does, and reject the next level with the
+      // same error.
+      const auto at_limit = nested_arrays(glz::max_recursive_depth_limit);
+      expect(not glz::validate_jsonc(at_limit));
+      std::string pretty{};
+      expect(not glz::prettify_jsonc(at_limit, pretty));
+      expect(glz::minify_json(pretty) == at_limit);
+
+      const auto past_limit = nested_arrays(glz::max_recursive_depth_limit + 1);
+      expect(glz::validate_jsonc(past_limit) == glz::error_code::exceeded_max_recursive_depth);
+      expect(glz::prettify_jsonc(past_limit, pretty) == glz::error_code::exceeded_max_recursive_depth);
+      expect(glz::prettify_json(past_limit, pretty) == glz::error_code::exceeded_max_recursive_depth);
+
+      expect(not glz::prettify_jsonc(nested_objects(glz::max_recursive_depth_limit), pretty));
+      expect(glz::prettify_jsonc(nested_objects(glz::max_recursive_depth_limit + 1), pretty) ==
+             glz::error_code::exceeded_max_recursive_depth);
    };
 
    "a validated skip of an unknown key is bounded"_test = [] {

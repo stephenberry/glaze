@@ -86,12 +86,6 @@ namespace glz
       {
          using namespace cbor;
 
-         // Check recursion depth limit
-         if (recursive_depth >= max_recursive_depth_limit) [[unlikely]] {
-            ctx.error = error_code::exceeded_max_recursive_depth;
-            return;
-         }
-
          if (it >= end) [[unlikely]] {
             ctx.error = error_code::unexpected_end;
             return;
@@ -103,6 +97,15 @@ namespace glz
 
          const uint8_t major_type = get_major_type(initial);
          const uint8_t additional_info = get_additional_info(initial);
+
+         // `recursive_depth` is the number of levels enclosing this value. Arrays, maps, and the tags
+         // that wrap a value open another; scalars do not, so as in the readers a scalar may sit
+         // inside the deepest container the limit allows.
+         const bool opens_level = major_type == major::array || major_type == major::map || major_type == major::tag;
+         if (opens_level && recursive_depth >= max_recursive_depth_limit) [[unlikely]] {
+            ctx.error = error_code::exceeded_max_recursive_depth;
+            return;
+         }
 
          switch (major_type) {
          case major::uint: {
@@ -674,11 +677,6 @@ namespace glz
       {
          using namespace cbor;
 
-         if (recursive_depth >= max_recursive_depth_limit) [[unlikely]] {
-            ctx.error = error_code::exceeded_max_recursive_depth;
-            return;
-         }
-
          if (it >= end) [[unlikely]] {
             ctx.error = error_code::unexpected_end;
             return;
@@ -698,7 +696,12 @@ namespace glz
          case major::tag: {
             // Unwrap the tag and key-check the tagged content, so e.g. a tag-0
             // datetime text key still emits as a string. Typed-array tags
-            // (RFC 8746) decode to a JSON array and are rejected below.
+            // (RFC 8746) decode to a JSON array and are rejected below. The tag is the only key
+            // that recurses, so it is the one that takes a level, as it does as a value.
+            if (recursive_depth >= max_recursive_depth_limit) [[unlikely]] {
+               ctx.error = error_code::exceeded_max_recursive_depth;
+               return;
+            }
             ++it;
             const uint64_t tag_num = cbor_to_json_decode_arg(ctx, it, end, additional_info);
             if (bool(ctx.error)) [[unlikely]]

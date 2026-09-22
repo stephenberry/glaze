@@ -9241,6 +9241,32 @@ suite beve_recursion_depth_limit = [] {
       expect(glz::read_beve(out, nest) == glz::error_code::exceeded_max_recursive_depth);
    };
 
+   "beve_to_json binds at the same level as the readers"_test = [] {
+      // Only containers take a level, so a scalar fits inside the deepest container the limit allows.
+      constexpr auto limit = glz::max_recursive_depth_limit;
+      const auto build = [](size_t levels, std::string_view innermost) {
+         std::string b;
+         for (size_t i = 0; i < levels; ++i) {
+            b.push_back(char(glz::tag::generic_array));
+            b.push_back(char(1 << 2)); // one element
+         }
+         b += innermost;
+         return b;
+      };
+      const std::string one{char(glz::tag::u8), char(1)};
+      const std::string empty{char(glz::tag::generic_array), char(0)};
+
+      glz::generic out{};
+      std::string json{};
+      expect(not glz::read_beve(out, build(limit, one)));
+      expect(not glz::beve_to_json(build(limit, one), json));
+      expect(json == std::string(limit, '[') + "1" + std::string(limit, ']'));
+      expect(not glz::beve_to_json(build(limit - 1, empty), json));
+
+      expect(glz::read_beve(out, build(limit, empty)) == glz::error_code::exceeded_max_recursive_depth);
+      expect(glz::beve_to_json(build(limit, empty), json) == glz::error_code::exceeded_max_recursive_depth);
+   };
+
    "an ambiguous nest cannot multiply the work of resolving it"_test = [] {
       // Resolution is speculative: an alternative is parsed to find out whether it fits, and a
       // rejected one is rewound and the next tried. Nest that and the re-parses multiply -- measured

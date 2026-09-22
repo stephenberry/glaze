@@ -53,6 +53,27 @@ namespace glz
 
 // Glaze Feature Test Macros for breaking changes
 
+// v8.5.0 removes glz::invoke_update and makes writing a glz::invoke member an error
+//
+// glz::invoke_update is gone. It detected change by comparing the raw JSON text of the
+// argument array, so "[]" and "[ ]" counted as different and fired the callback, and it
+// kept parser state (prev, initialized) inside the user's data model. To call a function
+// when a value changes, specialize from<JSON, T> for a type of your own, where the
+// comparison is over parsed values rather than text.
+//
+// Writing a glz::invoke member is now a compile error. It previously wrote "[]" for a
+// member function pointer, "[[0]]" (fabricated zeroed arguments, which Glaze cannot read
+// back) for a std::function with by-value arguments, and failed to compile for zero
+// argument or reference argument std::functions. An invoke member is a call site rather
+// than state, and reading the written "[]" back invokes the function. Exclude these
+// members from output with a meta<T>::skip that returns true for operation::serialize:
+//
+//   static constexpr bool skip(const std::string_view key, const glz::meta_context& ctx)
+//   {
+//      return ctx.op == glz::operation::serialize && key == "add_one";
+//   }
+#define glaze_v8_5_0_invoke
+
 // v8.3.0 fixes GLZ_NO_UNIQUE_ADDRESS on the MSVC ABI
 //
 // The macro tested the standard [[no_unique_address]] before [[msvc::no_unique_address]].
