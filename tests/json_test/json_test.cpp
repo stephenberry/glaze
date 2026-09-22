@@ -2378,6 +2378,51 @@ suite json_pointer = [] {
       expect(b.has_value() && std::any_cast<std::string>(b) == thing.thing.b);
    };
 
+   // RFC 6901 section 4: array-index = %x30 / ( %x31-39 *(%x30-39) ), so a leading zero is not a
+   // valid index and must not resolve to the element it would name without it.
+   "seek rejects leading zero array indices"_test = [] {
+      std::vector<std::vector<int>> v{{1, 2, 3}, {4, 5, 6}};
+
+      int found{};
+      expect(glz::seek(
+         [&](auto&& val) {
+            if constexpr (std::same_as<std::remove_cvref_t<decltype(val)>, int>) {
+               found = val;
+            }
+         },
+         v, "/1/2"));
+      expect(found == 6);
+
+      expect(not glz::seek([](auto&&) {}, v, "/01/2"));
+      expect(not glz::seek([](auto&&) {}, v, "/1/02"));
+      expect(not glz::seek([](auto&&) {}, v, "/00/0"));
+
+      // The rest of the index grammar, which must keep behaving as it always has
+      for (const auto ptr :
+           {"/-/0", "/+1/0", "/ 1/0", "/1 /0", "//0", "/~01/0", "/1abc/0", "/99999999999999999999999/0"}) {
+         expect(not glz::seek([](auto&&) {}, v, ptr)) << ptr;
+      }
+   };
+
+   "get_view_json rejects leading zero array indices"_test = [] {
+      std::string buffer = R"({"items":[1,2,3,4,5,6,7,8,9,10,11]})";
+
+      auto view = glz::get_view_json<"/items/10">(buffer);
+      expect(view.has_value());
+      expect(glz::sv{view->data(), view->size()} == "11");
+
+      expect(not glz::get_view_json<"/items/00">(buffer).has_value());
+      expect(not glz::get_view_json<"/items/01">(buffer).has_value());
+      expect(not glz::get_view_json<"/items/010">(buffer).has_value());
+
+      // The runtime overload follows the same rule
+      expect(glz::get_view_json("/items/10", buffer).has_value());
+      expect(not glz::get_view_json("/items/00", buffer).has_value());
+      expect(not glz::get_view_json("/items/01", buffer).has_value());
+      expect(not glz::get_view_json("/items/010", buffer).has_value());
+      expect(not glz::get_view_json("/items/99999999999999999999999", buffer).has_value());
+   };
+
    "get"_test = [] {
       Thing thing{};
       expect(thing.thing.a == glz::get<double>(thing, "/thing_ptr/a"));
@@ -2440,6 +2485,9 @@ suite json_pointer = [] {
 
       static_assert(glz::valid<Thing, "/vec3/2", double>());
       static_assert(glz::valid<Thing, "/vec3/3", double>() == false);
+      // RFC 6901 section 4 forbids leading zeros in an array index
+      static_assert(glz::valid<Thing, "/vec3/02", double>() == false);
+      static_assert(glz::valid<Thing, "/vector/01", V3>() == false);
 
       static_assert(glz::valid<Thing, "/map/f", int>());
       static_assert(glz::valid<Thing, "/vector", std::vector<V3>>());
