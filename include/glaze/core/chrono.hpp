@@ -7,6 +7,7 @@
 #include <cstdint>
 #include <string_view>
 #include <type_traits>
+#include <utility>
 
 #include "glaze/core/context.hpp"
 #include "glaze/core/meta.hpp"
@@ -498,18 +499,28 @@ namespace glz
 
          const Duration frac = duration_cast<Duration>(subsec);
 
-         // Only a target finer than seconds scales the count up. max()/min() are not whole
-         // seconds (nanoseconds::max() is 2262-04-11T23:47:16.854775807), so the boundary
-         // second accepts exactly the fraction the target still holds past it.
-         if constexpr (std::ratio_less_v<typename Duration::period, std::ratio<1>> &&
-                       !treat_as_floating_point_v<typename Duration::rep>) {
-            constexpr seconds max_secs = duration_cast<seconds>((Duration::max)());
-            constexpr seconds min_secs = duration_cast<seconds>((Duration::min)());
-            constexpr Duration max_frac = (Duration::max)() - duration_cast<Duration>(max_secs);
-            constexpr Duration min_frac = (Duration::min)() - duration_cast<Duration>(min_secs);
-            if (secs > max_secs || secs < min_secs || (secs == max_secs && frac > max_frac) ||
-                (secs == min_secs && frac < min_frac)) {
-               return false;
+         if constexpr (!treat_as_floating_point_v<typename Duration::rep>) {
+            if constexpr (std::ratio_less_v<typename Duration::period, std::ratio<1>>) {
+               // A target finer than seconds scales the count up. max()/min() are not whole
+               // seconds (nanoseconds::max() is 2262-04-11T23:47:16.854775807), so the boundary
+               // second accepts exactly the fraction the target still holds past it.
+               constexpr seconds max_secs = duration_cast<seconds>((Duration::max)());
+               constexpr seconds min_secs = duration_cast<seconds>((Duration::min)());
+               constexpr Duration max_frac = (Duration::max)() - duration_cast<Duration>(max_secs);
+               constexpr Duration min_frac = (Duration::min)() - duration_cast<Duration>(min_secs);
+               if (secs > max_secs || secs < min_secs || (secs == max_secs && frac > max_frac) ||
+                   (secs == min_secs && frac < min_frac)) {
+                  return false;
+               }
+            }
+            else {
+               // A target of seconds or coarser divides the count down, which cannot overflow
+               // in int64, but its rep may still be narrower than int64 (MSVC's minutes is int).
+               const auto ticks = duration_cast<duration<int64_t, typename Duration::period>>(secs).count();
+               if (std::cmp_greater(ticks, (Duration::max)().count()) ||
+                   std::cmp_less(ticks, (Duration::min)().count())) {
+                  return false;
+               }
             }
          }
 

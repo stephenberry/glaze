@@ -886,6 +886,34 @@ suite chrono_edge_case_tests = [] {
       expect(!glz::read_json(back, json.value()));
       expect(back == largest);
    };
+
+   "narrow_rep_target_rejects_unrepresentable_dates"_test = [] {
+      using namespace std::chrono;
+
+      // A target of seconds or coarser never scales the count up, but its rep can still be
+      // narrower than int64. MSVC's std::chrono::minutes has an int rep and so ends in 6053.
+      using minutes32 = duration<int32_t, std::ratio<60>>;
+      sys_time<minutes32> m{};
+      expect(!glz::read_json(m, "\"6053-01-23T02:07:59Z\""));
+      expect(m.time_since_epoch().count() == (std::numeric_limits<int32_t>::max)());
+      expect(glz::read_json(m, "\"6053-01-23T02:08:00Z\"") == glz::error_code::parse_error);
+      expect(glz::read_json(m, "\"9999-12-31T23:59:59Z\"") == glz::error_code::parse_error);
+
+      using seconds32 = duration<int32_t>;
+      sys_time<seconds32> s{};
+      expect(!glz::read_json(s, "\"2038-01-19T03:14:07Z\""));
+      expect(s.time_since_epoch().count() == (std::numeric_limits<int32_t>::max)());
+      expect(glz::read_json(s, "\"2038-01-19T03:14:08Z\"") == glz::error_code::parse_error);
+      expect(!glz::read_json(s, "\"1901-12-13T20:45:52Z\""));
+      expect(s.time_since_epoch().count() == (std::numeric_limits<int32_t>::min)());
+      expect(glz::read_json(s, "\"1901-12-13T20:45:51Z\"") == glz::error_code::parse_error);
+      // Pre-epoch instants with a fraction still truncate toward the epoch.
+      expect(!glz::read_json(s, "\"1901-12-13T20:45:52.5Z\""));
+      expect(s.time_since_epoch().count() == (std::numeric_limits<int32_t>::min)() + 1);
+
+      // TOML parses the datetime itself but shares the bound.
+      expect(glz::read_toml(s, std::string{"2038-01-19T03:14:08Z"}) == glz::error_code::parse_error);
+   };
 };
 
 suite chrono_timezone_tests = [] {
@@ -1580,6 +1608,19 @@ struct glz::meta<NanoTime>
    static constexpr auto value = glz::object("tp", glz::date_format(&T::tp, "%FT%T"));
 };
 
+struct Seconds32Time
+{
+   // int32 seconds: holds only 1901-12-13T20:45:52 to 2038-01-19T03:14:07.
+   std::chrono::sys_time<std::chrono::duration<int32_t>> tp{};
+};
+
+template <>
+struct glz::meta<Seconds32Time>
+{
+   using T = Seconds32Time;
+   static constexpr auto value = glz::object("tp", glz::date_format(&T::tp, "%FT%T"));
+};
+
 struct PercentLiteral
 {
    std::chrono::sys_time<std::chrono::seconds> tp{};
@@ -1774,6 +1815,13 @@ suite date_format_tests = [] {
 
       expect(!glz::read_json(r, R"({"tp":"2262-04-11T23:47:16"})"));
       expect(r.tp.time_since_epoch() == nanoseconds{seconds{9223372036}});
+   };
+
+   "date_format_narrow_rep_member_rejects_unrepresentable_dates"_test = [] {
+      Seconds32Time r;
+      expect(!glz::read_json(r, R"({"tp":"2038-01-19T03:14:07"})"));
+      expect(r.tp.time_since_epoch().count() == (std::numeric_limits<int32_t>::max)());
+      expect(glz::read_json(r, R"({"tp":"2038-01-19T03:14:08"})") == glz::error_code::parse_error);
    };
 
    "date_format_pre_1970_roundtrip"_test = [] {
