@@ -6,6 +6,7 @@
 #include <memory>
 #include <mutex>
 #include <shared_mutex>
+#include <type_traits>
 #include <utility>
 #include <vector>
 
@@ -306,7 +307,12 @@ namespace glz
 
          operator const V&() const { return value_ref; }
 
+         // Constrained so that a proxy answers a `requires { proxy = x; }` probe the same way its
+         // element would. Left unconstrained, a proxy claims every assignment compiles and then
+         // hard errors in the body, which is how a reader that probes for null assignment
+         // (the YAML reader) fails to compile on a proxy of a non-nullable element.
          template <class T>
+            requires std::is_assignable_v<V&, const T&>
          value_proxy& operator=(const T& other)
          {
             value_ref = other;
@@ -332,6 +338,7 @@ namespace glz
             assert(shared_lock_ptr);
          }
 
+         static constexpr bool glaze_value_proxy = true;
          static constexpr bool glaze_reflect = false;
 
          // Disable Copy and Move
