@@ -1030,6 +1030,18 @@ namespace glz
    template <auto Options, class T, class V, class B>
    void write_toml_object_with_path(V&& value, is_context auto&& ctx, B&& b, auto& ix, std::string_view path_prefix);
 
+   namespace detail
+   {
+      // The object writer below emits an always-null member itself, as nothing: `write_inline_value`
+      // handles `always_null_t` before it would dispatch to `to<TOML, M>`, and TOML has no
+      // `to<TOML, std::monostate>` or `to<TOML, std::nullopt_t>`. The member check in
+      // core/reflect.hpp asks whether `to<TOML, M>` exists, so without this a struct TOML writes
+      // (it skips the field) is reported as one it cannot write.
+      template <class M>
+         requires always_null_t<M>
+      inline constexpr bool writer_emits_member_inline<TOML, M> = true;
+   }
+
    template <class T>
       requires(glaze_object_t<T> || reflectable<T>)
    struct to<TOML, T>
@@ -1038,6 +1050,7 @@ namespace glz
          requires(not std::is_pointer_v<std::remove_cvref_t<V>>)
       static void op(V&& value, is_context auto&& ctx, B&& b, auto& ix)
       {
+         static_assert(detail::writable_members<TOML, T>, "One of this object's members has no writer for TOML.");
          // Call the path-aware version with empty prefix for top-level
          write_toml_object_with_path<Options, T>(std::forward<V>(value), ctx, b, ix, "");
       }

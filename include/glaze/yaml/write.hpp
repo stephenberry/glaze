@@ -1709,6 +1709,7 @@ namespace glz
       template <auto Opts, class B>
       static void op(auto&& value, is_context auto&& ctx, B&& b, auto& ix)
       {
+         static_assert(detail::writable_members<YAML, T>, "One of this object's members has no writer for YAML.");
          if constexpr (yaml::check_flow_style(Opts) || yaml::check_flow_context(Opts)) {
             yaml::write_flow_mapping<Opts>(value, ctx, b, ix);
          }

@@ -696,6 +696,214 @@ namespace glz
       }
    }();
 
+   // =============================================================================================
+   // Diagnostics for object members with no writer or reader for the format being compiled
+   // =============================================================================================
+   //
+   // Without these, a struct with one unsupported member fails from inside the member loop, where the
+   // only clue is `error: incomplete type 'glz::to<10, Opaque>' used in nested name specifier`: an
+   // opaque format id, no member, and a stack of frames around it. The helpers below reduce that to a
+   // single error that names the member, and they cost nothing until a writer or reader is
+   // instantiated for T.
+   //
+   // None of this may move to class scope on `to<Format, T>`: `write_supported` is
+   // `requires { to<Format, T>{}; }`, so an assert in the class body turns that feature probe into a
+   // hard error instead of `false`. The same reasoning is recorded on the variant writers in jsonb and
+   // yaml. Inside the body of `op()` the assert is invisible to the probe, because `op` is a member
+   // template and is therefore only instantiated when the writer or reader actually runs.
+   namespace detail
+   {
+      // Members a format's object writer emits itself, inside its own member loop, instead of
+      // dispatching to `to<Format, M>`. BSON is the case that exists today: a BSON element carries
+      // its type next to its key, and the object writer emits that pair itself for nullable, null
+      // and variant members (`bson_detail::write_member_element`), so `write_supported` is false for
+      // those types even though the format writes them. TOML declares the same thing for members
+      // that are always null, which its writer emits as nothing (see toml/write.hpp).
+      template <uint32_t Format, class M>
+      inline constexpr bool writer_emits_member_inline = false;
+
+      // How many members T has, and what each one is, without instantiating `reflect<T>` for a
+      // reflectable type. `reflect<T>` declares `static constexpr auto keys = member_names<V>`, and
+      // deducing `auto` there evaluates the member names -- which is a hard error in GCC for a type
+      // with no linkage, because the pre-C++26 implementation passes the type through
+      // `external<T>`, a variable template that cannot be defined for a type declared inside a
+      // function. MSGPACK's reflectable path forwards through `to_tie` and never touches the names,
+      // so it writes such a type today and asking about its members must not be what breaks it.
+      //
+      // The tie is that path's own view of the members, so both answers come from it and match what
+      // `reflect<T>` reports for a type that has linkage.
+      template <class T, bool Reflectable = reflectable<T>>
+      struct member_counter
+      {
+         static constexpr size_t value = reflect<T>::size;
+      };
+
+      template <class T>
+      struct member_counter<T, true>
+      {
+         static constexpr size_t value = glz::tuple_size_v<decltype(to_tie(std::declval<T&>()))>;
+      };
+
+      template <class T>
+      consteval size_t member_count()
+      {
+         return member_counter<T>::value;
+      }
+
+      template <class T, size_t I, bool Reflectable = reflectable<T>>
+      struct member_type
+      {
+         using type = refl_t<T, I>;
+      };
+
+      // `reflect<T>::type<I>` for a reflectable type is exactly this expression
+      template <class T, size_t I>
+      struct member_type<T, I, true>
+      {
+         using type = member_t<std::remove_cvref_t<T>, decltype(get<I>(to_tie(std::declval<T&>())))>;
+      };
+
+      template <class T, size_t I>
+      using member_type_t = std::remove_cvref_t<typename member_type<T, I>::type>;
+
+      // Whether the member at index I is written/read as usual for Format, or the operation skips it
+      // by design. A member skipped by design must not be diagnosed: `meta::skip` exists so that a
+      // field whose type has no `to`/`from` can sit in a struct without breaking it, and writers only
+      // emit function pointers when write_function_pointers is on.
+      //
+      // Which formats pass function pointers over is not uniform: JSON, BSON, JSONB, BEVE and CBOR
+      // drop both kinds, TOML drops member function pointers, and YAML, MSGPACK and CSV drop neither.
+      // The exemption below is therefore the lenient direction -- such a member is never *reported*
+      // here, which is not the same as being writable everywhere.
+      //
+      // The order of the questions is not free. Each one below the first is only reached when the
+      // ones above it are false, so the cheap and common answers come first and the ones that cost a
+      // template instantiation -- `skipped_by_meta`, which is only asked of a type that has a meta to
+      // ask, and the format's own exemption, which is only asked of a member no format claims to
+      // write -- are not instantiated for members that are simply fine.
+      //
+      // The question is about the member's own type. A member whose type *contains* a type with no
+      // writer -- `std::vector<Opaque>`, `std::optional<Opaque>` -- answers true here, because
+      // `to<Format, ...>` for the container exists, and the failure then comes from inside that
+      // container's own op(), with the message this check was written to replace. Reporting it would
+      // mean instantiating the container's writer to find out, which is the cost the check exists to
+      // avoid.
+      template <operation Op, uint32_t Format, class T, size_t I>
+      consteval bool member_supported()
+      {
+         using M = member_type_t<T, I>;
+         if constexpr (always_skipped<M> || is_any_function_ptr<M>) {
+            return true;
+         }
+         else {
+            if constexpr (meta_has_skip<std::remove_cvref_t<T>>) {
+               if (skipped_by_meta<T, I, Op>) {
+                  return true;
+               }
+            }
+            if constexpr (Op == operation::serialize) {
+               return write_supported<M, Format> || writer_emits_member_inline<Format, M>;
+            }
+            else {
+               return read_supported<M, Format>;
+            }
+         }
+      }
+
+      // The key the member is written under and the name of its type, both as template arguments so
+      // that the instantiation trace below can print them. The key comes from the member names, and
+      // those require a type the compiler can name: the pre-C++26 reflection passes the type through
+      // `external<T>`, which GCC will not define for a type declared inside a function, and clang
+      // rejects outright for a type with no linkage ("cannot be defined in any other translation unit
+      // because its type does not have linkage"). A report about such a type therefore surfaces the
+      // compiler's error instead of this message. Every format that writes keys needs those names
+      // anyway, so the case that reaches it is MSGPACK's tie-based path.
+      template <class T, size_t I>
+      inline constexpr auto member_key_of = string_literal_from_view<key_name_v<I, T>.size()>(key_name_v<I, T>);
+
+      template <class T, size_t I>
+      inline constexpr auto member_type_of =
+         string_literal_from_view<type_name<member_type_t<T, I>>.size()>(type_name<member_type_t<T, I>>);
+
+      // Instantiating one of these reports the error, and every template argument is load bearing: the
+      // compiler prints them in the instantiation trace, and that trace is what names the member.
+      // `unsupported_writer<outer_t, 10, 1, glz::string_literal<2>{"o"}, glz::string_literal<7>{"Opaque"}>`
+      // reads as: object `outer_t`, format 10 (JSON), member 1 of `glz::reflect<T>`, key `o`, type
+      // `Opaque`.
+      //
+      // The key and the type are arguments rather than defaults for that reason: MSVC substitutes the
+      // defaults of a template-id that appears in a branch it does not take, and there they would be
+      // asked for the member at index `I` of a type whose members stop before it.
+      template <class T, uint32_t Format, size_t I, auto Key, auto Type>
+      struct unsupported_writer
+      {
+         static_assert(member_supported<operation::serialize, Format, T, I>(),
+                       "glz::to<Format, T>: one of this object's members has no writer for this format. "
+                       "The glz::detail::unsupported_writer specialization in the trace above names it: "
+                       "after the object come the format id and the member's index in glz::reflect<T>, "
+                       "then the member's key and the name of its type. Give that type a glz::meta "
+                       "specialization, make it reflectable, or exclude the member with glz::skip.");
+         static constexpr bool value = true;
+      };
+
+      template <class T, uint32_t Format, size_t I, auto Key, auto Type>
+      struct unsupported_reader
+      {
+         static_assert(member_supported<operation::parse, Format, T, I>(),
+                       "glz::from<Format, T>: one of this object's members has no reader for this format. "
+                       "The glz::detail::unsupported_reader specialization in the trace above names it: "
+                       "after the object come the format id and the member's index in glz::reflect<T>, "
+                       "then the member's key and the name of its type. Give that type a glz::meta "
+                       "specialization, make it reflectable, or exclude the member with glz::skip.");
+         static constexpr bool value = true;
+      };
+
+      // Index of the first member with no support, or the member count when there is none. Kept
+      // separate from the reporting below because a member count is not a member: the branch that
+      // does not report still names the report, and a report named with the member count would ask
+      // for a member that does not exist.
+      template <operation Op, uint32_t Format, class T>
+      inline constexpr size_t first_unsupported_member = [] {
+         constexpr size_t N = member_count<T>();
+         size_t first{N};
+         [&]<size_t... I>(std::index_sequence<I...>) {
+            ((member_supported<Op, Format, T, I>() ? void() : (void)(first = first < I ? first : I)), ...);
+         }(std::make_index_sequence<N>{});
+         return first;
+      }();
+
+      // True when every member is supported. Only the branch that reports instantiates the report,
+      // and so the error.
+      template <operation Op, uint32_t Format, class T>
+      inline constexpr bool object_members_supported = [] {
+         constexpr size_t bad = first_unsupported_member<Op, Format, T>;
+         // `at` names a member for the branch that is not taken, for a compiler that substitutes a
+         // template-id appearing in a branch it discards (MSVC does). With nothing to report it has
+         // to name a member that exists, and index 0 is one for every type that has members; a type
+         // with none never reads the name.
+         constexpr size_t at = bad < member_count<T>() ? bad : 0;
+         if constexpr (bad == member_count<T>()) {
+            return true;
+         }
+         else if constexpr (Op == operation::serialize) {
+            return unsupported_writer<T, Format, at, member_key_of<T, at>, member_type_of<T, at>>::value;
+         }
+         else {
+            return unsupported_reader<T, Format, at, member_key_of<T, at>, member_type_of<T, at>>::value;
+         }
+      }();
+
+      // The names a format's object writer and reader ask for, as the first statement of `op()`.
+      // Nothing enforces that: a format that never asks keeps the old error from inside its member
+      // loop, and one that emits some members itself declares them with `writer_emits_member_inline`
+      // above. `docs/compile-time-diagnostics.md` carries the table of formats and the detail.
+      template <uint32_t Format, class T>
+      inline constexpr bool writable_members = object_members_supported<operation::serialize, Format, T>;
+
+      template <uint32_t Format, class T>
+      inline constexpr bool readable_members = object_members_supported<operation::parse, Format, T>;
+   }
+
    // Check if a custom_t setter (From) accepts a nullable type (read side).
    // Complement of custom_getter_returns_nullable which checks the To/getter (write side).
    template <class V, class From>

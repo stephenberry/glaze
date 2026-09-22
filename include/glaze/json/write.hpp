@@ -2476,6 +2476,7 @@ namespace glz
          requires(not std::is_pointer_v<std::remove_cvref_t<V>>)
       static void op(V&& value, is_context auto&& ctx, B&& b, auto& ix)
       {
+         static_assert(detail::writable_members<JSON, T>, "One of this object's members has no writer for JSON.");
          using ValueType = std::decay_t<V>;
          if constexpr (has_unknown_writer<ValueType> && not check_disable_write_unknown(Options)) {
             constexpr auto& writer = meta_unknown_write_v<ValueType>;
