@@ -1039,6 +1039,35 @@ suite spec_tests = [] {
       expect(j.error().ec == glz::error_code::exceeded_max_recursive_depth);
    };
 
+   "jsonb_to_json binds at the same level as the readers"_test = [] {
+      // Only containers take a level, so a scalar fits inside the deepest container the limit allows.
+      constexpr auto limit = glz::max_recursive_depth_limit;
+      const auto build = [](size_t levels, std::string innermost) {
+         for (size_t i = 0; i < levels; ++i) {
+            uint64_t size = innermost.size();
+            if constexpr (std::endian::native == std::endian::little) size = std::byteswap(size);
+            std::string header(9, '\0');
+            header[0] = static_cast<char>((15u << 4) | 11u); // ARRAY, u64_follows
+            std::memcpy(&header[1], &size, 8);
+            innermost = header + innermost;
+         }
+         return innermost;
+      };
+      const std::string one = std::string{static_cast<char>((1u << 4) | 3u)} + "1"; // INT, size 1
+      const std::string empty{static_cast<char>(11u)}; // ARRAY, size 0
+
+      glz::generic out{};
+      expect(not glz::read_jsonb(out, build(limit, one)));
+      auto j = glz::jsonb_to_json(build(limit, one));
+      expect(j.has_value());
+      expect(j.value_or("") == std::string(limit, '[') + "1" + std::string(limit, ']'));
+      expect(glz::jsonb_to_json(build(limit - 1, empty)).has_value());
+
+      expect(glz::read_jsonb(out, build(limit, empty)) == glz::error_code::exceeded_max_recursive_depth);
+      j = glz::jsonb_to_json(build(limit, empty));
+      expect(!j.has_value() && j.error().ec == glz::error_code::exceeded_max_recursive_depth);
+   };
+
    "reasonably-nested blob within depth cap succeeds"_test = [] {
       // Ten levels of nesting is comfortably under the 256 cap.
       std::vector<std::vector<std::vector<std::vector<std::vector<int>>>>> v{{{{{1, 2, 3}}}}};
