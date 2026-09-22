@@ -20,8 +20,20 @@ namespace glz
 
          using enum json_type;
 
-         std::vector<json_type> state(64);
+         // Indexed by nesting level, with level 0 the top. Sized for the depth the readers accept (see
+         // enter_depth), so that every document glz::validate_jsonc passes can be prettified.
+         std::array<json_type, max_recursive_depth_limit + 1> state{};
          int64_t indent{};
+
+         // Enters one level of nesting, failing past the readers' limit.
+         const auto open_level = [&](const json_type type) {
+            if (size_t(indent) >= max_recursive_depth_limit) [[unlikely]] {
+               ctx.error = error_code::exceeded_max_recursive_depth;
+               return false;
+            }
+            state[++indent] = type;
+            return true;
+         };
 
          // Set while the output cursor sits on a line that a `//` comment has commented out. Only
          // the comment-enabled path can set it, so the plain JSON writer keeps the code it had.
@@ -125,15 +137,9 @@ namespace glz
                   return;
                }
                ++it;
-               ++indent;
-               if (size_t(indent) >= state.size()) [[unlikely]] {
-                  state.resize(state.size() * 2);
-                  if (state.size() >= max_recursive_depth_limit) [[unlikely]] {
-                     ctx.error = error_code::exceeded_max_recursive_depth;
-                     return;
-                  }
+               if (not open_level(Array_Start)) [[unlikely]] {
+                  return;
                }
-               state[indent] = Array_Start;
                if constexpr (check_new_lines_in_arrays(Opts)) {
                   if constexpr (not Opts.null_terminated) {
                      if (it != end && *it != ']') {
@@ -209,15 +215,9 @@ namespace glz
                   return;
                }
                ++it;
-               ++indent;
-               if (size_t(indent) >= state.size()) [[unlikely]] {
-                  state.resize(state.size() * 2);
-                  if (state.size() >= max_recursive_depth_limit) [[unlikely]] {
-                     ctx.error = error_code::exceeded_max_recursive_depth;
-                     return;
-                  }
+               if (not open_level(Object_Start)) [[unlikely]] {
+                  return;
                }
-               state[indent] = Object_Start;
                if constexpr (not Opts.null_terminated) {
                   if (it != end && *it != '}') {
                      if (not new_line()) [[unlikely]] {
