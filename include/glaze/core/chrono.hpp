@@ -7,6 +7,7 @@
 #include <cstdint>
 #include <string_view>
 #include <type_traits>
+#include <utility>
 
 #include "glaze/core/context.hpp"
 #include "glaze/core/meta.hpp"
@@ -475,6 +476,58 @@ namespace glz
          ymd = candidate;
       }
 
+      // Assemble a system_clock time_point from whole seconds since the epoch plus a
+      // sub-second part in [0s, 1s). The sum is formed in the target's own precision: an
+      // int64 nanosecond count only spans 1677-09-21 to 2262-04-11, so summing in
+      // nanoseconds first wraps for dates a coarser target holds comfortably (year 9999
+      // fits sys_seconds). Returns false and leaves value unchanged when the target cannot
+      // represent the instant, rather than wrapping.
+      template <is_system_time_point TP>
+      [[nodiscard]] constexpr bool make_sys_time(TP& value, std::chrono::seconds secs,
+                                                 std::chrono::nanoseconds subsec) noexcept
+      {
+         using namespace std::chrono;
+         using Duration = typename TP::duration;
+
+         // time_point_cast truncates toward zero. Measuring a pre-epoch instant back from
+         // the next whole second keeps both parts on the same side of zero, so truncating
+         // them separately matches truncating their sum.
+         if (secs < seconds{0} && subsec > nanoseconds{0}) {
+            secs += seconds{1};
+            subsec -= seconds{1};
+         }
+
+         const Duration frac = duration_cast<Duration>(subsec);
+
+         if constexpr (!treat_as_floating_point_v<typename Duration::rep>) {
+            if constexpr (std::ratio_less_v<typename Duration::period, std::ratio<1>>) {
+               // A target finer than seconds scales the count up. max()/min() are not whole
+               // seconds (nanoseconds::max() is 2262-04-11T23:47:16.854775807), so the boundary
+               // second accepts exactly the fraction the target still holds past it.
+               constexpr seconds max_secs = duration_cast<seconds>((Duration::max)());
+               constexpr seconds min_secs = duration_cast<seconds>((Duration::min)());
+               constexpr Duration max_frac = (Duration::max)() - duration_cast<Duration>(max_secs);
+               constexpr Duration min_frac = (Duration::min)() - duration_cast<Duration>(min_secs);
+               if (secs > max_secs || secs < min_secs || (secs == max_secs && frac > max_frac) ||
+                   (secs == min_secs && frac < min_frac)) {
+                  return false;
+               }
+            }
+            else {
+               // A target of seconds or coarser divides the count down, which cannot overflow
+               // in int64, but its rep may still be narrower than int64 (MSVC's minutes is int).
+               const auto ticks = duration_cast<duration<int64_t, typename Duration::period>>(secs).count();
+               if (std::cmp_greater(ticks, (Duration::max)().count()) ||
+                   std::cmp_less(ticks, (Duration::min)().count())) {
+                  return false;
+               }
+            }
+         }
+
+         value = TP{duration_cast<Duration>(secs) + frac};
+         return true;
+      }
+
       // Parse an RFC 3339 / ISO 8601 date-time string into a system_clock time_point.
       // On failure, sets ec to parse_error and leaves value unchanged.
       template <is_system_time_point TP>
@@ -585,11 +638,13 @@ namespace glz
             return;
          }
 
-         const auto tp = sys_days{ymd} + hours{hr} + minutes{mi} + seconds{sc} + seconds{tz_offset_seconds} +
-                         nanoseconds{subsec_nanos};
-
-         using Duration = typename std::remove_cvref_t<TP>::duration;
-         value = time_point_cast<Duration>(tp);
+         // Anchored at seconds so the time-of-day is folded in with 64-bit arithmetic (MSVC's
+         // hours and minutes use a 32-bit rep).
+         const auto tp =
+            sys_seconds{sys_days{ymd}} + hours{hr} + minutes{mi} + seconds{sc} + seconds{tz_offset_seconds};
+         if (!make_sys_time(value, tp.time_since_epoch(), nanoseconds{subsec_nanos})) {
+            ec = error_code::parse_error;
+         }
       }
 
       // ============================================

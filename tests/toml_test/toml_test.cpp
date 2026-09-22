@@ -1884,6 +1884,37 @@ hours_val = 1)";
       expect(time_point_cast<seconds>(tp) == time_point_cast<seconds>(expected));
    };
 
+   "system_time_far_range_dates_do_not_wrap"_test = [] {
+      using namespace std::chrono;
+      // An int64 nanosecond count only spans 1677-2262; a seconds target holds every
+      // four-digit year, so the datetime must not be summed in nanoseconds on the way in
+      // (9999-12-31T23:59:59Z used to read back as a date in 1816).
+      sys_time<seconds> tp{};
+      std::string input = "9999-12-31T23:59:59Z";
+      auto error = glz::read_toml(tp, input);
+      expect(!error) << glz::format_error(error, input);
+      expect(tp == sys_time<seconds>{sys_days{year{9999} / month{12} / day{31}}} + seconds{86399});
+
+      input = "0001-01-01T00:00:00Z";
+      error = glz::read_toml(tp, input);
+      expect(!error) << glz::format_error(error, input);
+      expect(tp == sys_time<seconds>{sys_days{year{1} / month{1} / day{1}}});
+
+      // A nanosecond target cannot hold the date at all: an error, not a wrapped value.
+      sys_time<nanoseconds> ns_tp{};
+      input = "2300-01-01T00:00:00Z";
+      expect(glz::read_toml(ns_tp, input) == glz::error_code::parse_error);
+      input = "2262-04-11T23:47:16Z";
+      expect(!glz::read_toml(ns_tp, input));
+      expect(ns_tp.time_since_epoch() == nanoseconds{seconds{9223372036}});
+      // The boundary second's fraction up to max() still fits; one nanosecond more does not.
+      input = "2262-04-11T23:47:16.854775807Z";
+      expect(!glz::read_toml(ns_tp, input));
+      expect(ns_tp.time_since_epoch() == (nanoseconds::max)());
+      input = "2262-04-11T23:47:16.854775808Z";
+      expect(glz::read_toml(ns_tp, input) == glz::error_code::parse_error);
+   };
+
    "system_time_struct_write"_test = [] {
       using namespace std::chrono;
       system_time_test_struct s{};

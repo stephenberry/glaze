@@ -867,8 +867,16 @@ namespace glz
       {
          using namespace std::chrono;
          const auto epoch = value.time_since_epoch();
-         const auto secs = duration_cast<seconds>(epoch);
-         const auto nsecs = duration_cast<nanoseconds>(epoch - secs);
+         auto secs = duration_cast<seconds>(epoch);
+         auto nsecs = duration_cast<nanoseconds>(epoch - secs);
+         // Floor the split: truncating toward zero leaves a pre-epoch fraction as a negative
+         // count, which wraps in the uint32 field and reads back as a positive fraction.
+         // Adjusting the parts keeps the field in [0, 1s) without the overflow that
+         // floor<seconds>(epoch) hits at the clock's min().
+         if (nsecs < nanoseconds{0}) {
+            secs -= seconds{1};
+            nsecs += seconds{1};
+         }
 
          msgpack::timestamp ts;
          ts.seconds = secs.count();

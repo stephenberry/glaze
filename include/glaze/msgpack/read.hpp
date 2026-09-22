@@ -1038,9 +1038,14 @@ namespace glz
             return;
          }
 
+         // The seconds field is a full int64 off the wire and the spec caps nanoseconds at
+         // 999999999. Summing the two in nanoseconds wraps int64 past 2262, so the instant is
+         // assembled in the clock's own precision and rejected when that cannot hold it.
          using namespace std::chrono;
-         value = system_clock::time_point{
-            duration_cast<system_clock::duration>(seconds{ts.seconds} + nanoseconds{ts.nanoseconds})};
+         if (ts.nanoseconds > 999999999 ||
+             !chrono_detail::make_sys_time(value, seconds{ts.seconds}, nanoseconds{ts.nanoseconds})) {
+            ctx.error = error_code::parse_error;
+         }
       }
    };
 

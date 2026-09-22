@@ -1264,11 +1264,13 @@ namespace glz
             return;
          }
 
-         const auto tp = sys_days{ymd} + hours{hr} + minutes{mi} + seconds{sc} + seconds{tz_offset_seconds} +
-                         nanoseconds{subsec_nanos};
-
-         using Duration = typename std::remove_cvref_t<T>::duration;
-         value = time_point_cast<Duration>(tp);
+         // Summed in seconds and cast by make_sys_time: a nanosecond intermediate wraps int64
+         // for years outside 1677-2262 even when the target can hold them.
+         const auto tp =
+            sys_seconds{sys_days{ymd}} + hours{hr} + minutes{mi} + seconds{sc} + seconds{tz_offset_seconds};
+         if (!chrono_detail::make_sys_time(value, tp.time_since_epoch(), nanoseconds{subsec_nanos})) [[unlikely]] {
+            ctx.error = error_code::parse_error;
+         }
       }
    };
 
