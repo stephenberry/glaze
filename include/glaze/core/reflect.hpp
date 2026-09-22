@@ -3,11 +3,15 @@
 
 #pragma once
 
+#include <bit>
+#include <cstring>
+
 #include "glaze/beve/header.hpp"
 #include "glaze/core/common.hpp"
 #include "glaze/core/opts.hpp"
 #include "glaze/core/wrappers.hpp"
 #include "glaze/reflection/get_name.hpp"
+#include "glaze/util/bit.hpp"
 #include "glaze/util/primes_64.hpp"
 
 #if GLZ_REFLECTION26
@@ -1839,16 +1843,41 @@ namespace glz
    // This is because most cases that require full hashes are because
    // the tail end is the only unique part
 
+   // Both paths fold the key length in, because the consumed bytes alone do not identify the key.
+   //
+   // The long path walks whole 8 byte chunks and then takes the final 8 bytes as a tail, so the tail
+   // overlaps the last chunk by whatever the length leaves over and no partial load is ever needed.
+   // Changing the length slides that overlap, and for some keys it slides exactly far enough that a
+   // longer key yields the same chunks followed by the same tail. "field_name_10500_value" and
+   // "field_name_105000_value" both fold "field_na" and "me_10500" and then both take "00_value".
+   // Without the length nothing else in the mix differs, so the two hash alike under every seed: the
+   // seed is only the initial accumulator here, and an identical sequence of chunks carries any
+   // starting value to the same result. The seed search then exhausts and hashing is reported as
+   // failed, which is a hard error for the object readers rather than a slower path.
+   //
+   // Folding the length into that initial accumulator as `seed ^ (n << 1)` fixes it. The shift by
+   // one keeps a primes_64 seed odd, which matters: the accumulator is the multiplier argument of
+   // every chunk's bitmix, and multiplying by an odd number is a bijection, so no chunk bit is lost.
+   //
+   // The short path has a narrower version of the same problem, since to_uint64_n_below_8 zero fills
+   // and so a key and that key with trailing NULs produce the same value. A key below 8 bytes fills
+   // at most seven of them, which leaves the top byte provably free, so putting the length there
+   // makes the short path injective in (bytes, length).
+   //
+   // full_hash_impl and full_hash must agree bit for bit: the first builds the table at compile time
+   // and the second indexes it at runtime, so every path here has a counterpart there.
+
    // Do not call this at runtime, it is assumes the key lies within min_length and max_length
    inline constexpr uint64_t full_hash_impl(const sv key, const uint64_t seed, const auto min_length,
                                             const auto max_length) noexcept
    {
       if (max_length < 8) {
-         return bitmix(to_uint64_n_below_8(key.data(), key.size()), seed);
+         const auto n = key.size();
+         return bitmix(to_uint64_n_below_8(key.data(), n) | (uint64_t(n) << 56), seed);
       }
       else if (min_length > 7) {
          const auto n = key.size();
-         uint64_t h = seed;
+         uint64_t h = seed ^ (uint64_t(n) << 1);
          const auto* data = key.data();
          const auto* end7 = data + n - 7;
          for (auto d0 = data; d0 < end7; d0 += 8) {
@@ -1862,10 +1891,10 @@ namespace glz
          const auto* data = key.data();
 
          if (n < 8) {
-            return bitmix(to_uint64_n_below_8(data, n), seed);
+            return bitmix(to_uint64_n_below_8(data, n) | (uint64_t(n) << 56), seed);
          }
 
-         uint64_t h = seed;
+         uint64_t h = seed ^ (uint64_t(n) << 1);
          const auto* end7 = data + n - 7;
          for (auto d0 = data; d0 < end7; d0 += 8) {
             h = bitmix(to_uint64(d0), h);
@@ -1876,6 +1905,7 @@ namespace glz
    }
 
    // runtime full hash algorithm
+   // Must stay bit for bit identical to full_hash_impl, which built the table this indexes
    template <uint64_t min_length, uint64_t max_length, uint64_t seed>
    inline constexpr uint64_t full_hash(const auto* it, const size_t n) noexcept
    {
@@ -1883,13 +1913,13 @@ namespace glz
          if (n > 7) {
             return seed;
          }
-         return bitmix(to_uint64_n_below_8(it, n), seed);
+         return bitmix(to_uint64_n_below_8(it, n) | (uint64_t(n) << 56), seed);
       }
       else if constexpr (min_length > 7) {
          if (n < 8) {
             return seed;
          }
-         uint64_t h = seed;
+         uint64_t h = seed ^ (uint64_t(n) << 1);
          const auto* end7 = it + n - 7;
          for (auto d0 = it; d0 < end7; d0 += 8) {
             h = bitmix(to_uint64(d0), h);
@@ -1899,10 +1929,10 @@ namespace glz
       }
       else {
          if (n < 8) {
-            return bitmix(to_uint64_n_below_8(it, n), seed);
+            return bitmix(to_uint64_n_below_8(it, n) | (uint64_t(n) << 56), seed);
          }
 
-         uint64_t h = seed;
+         uint64_t h = seed ^ (uint64_t(n) << 1);
          const auto* end7 = it + n - 7;
          for (auto d0 = it; d0 < end7; d0 += 8) {
             h = bitmix(to_uint64(d0), h);
@@ -2426,12 +2456,24 @@ namespace glz
       }
    }();
 
-   template <size_t min_length>
+   // Finds the closing quote of an object key, or nullptr when there is none where one could be.
+   //
+   // Bounded by the longest reflected key rather than by `end`: a key longer than that matches
+   // nothing, so "not found" is already the right answer for the callers and there is no reason to
+   // run off down the rest of the document looking for a quote. That bound is what makes an inline
+   // scan the better choice over std::memchr, whose call overhead alone outweighs walking the two
+   // or three words a key spans.
+   template <size_t min_length, size_t max_length>
    GLZ_ALWAYS_INLINE constexpr const void* quote_memchr(auto&& it, auto end) noexcept
    {
+      // A key shorter than min_length matches nothing either, so starting the scan there is safe:
+      // it can only fail to find the quote, which is the answer such a key deserves.
+      const size_t available = size_t(end - it);
+      const size_t limit = available < max_length + 1 ? available : max_length + 1;
+      size_t i = min_length < limit ? min_length : limit;
+
       if consteval {
-         const auto count = size_t(end - it);
-         for (std::size_t i = 0; i < count; ++i) {
+         for (; i < limit; ++i) {
             if (it[i] == '"') {
                return it + i;
             }
@@ -2439,19 +2481,23 @@ namespace glz
          return nullptr;
       }
       else {
-         if constexpr (min_length >= 4) {
-            // Skipping makes the bifurcation worth it
-            const auto* start = it + min_length;
-            if (start >= end) [[unlikely]] {
-               return nullptr;
+         for (; limit - i >= 8; i += 8) {
+            uint64_t chunk;
+            std::memcpy(&chunk, it + i, 8);
+            if constexpr (std::endian::native == std::endian::big) {
+               chunk = std::byteswap(chunk);
             }
-            else [[likely]] {
-               return std::memchr(start, '"', size_t(end - start));
+            const uint64_t test = has_quote(chunk);
+            if (test) {
+               return it + i + (size_t(countr_zero(test)) >> 3);
             }
          }
-         else {
-            return std::memchr(it, '"', size_t(end - it));
+         for (; i < limit; ++i) {
+            if (it[i] == '"') {
+               return it + i;
+            }
          }
+         return nullptr;
       }
    }
 
@@ -2502,7 +2548,7 @@ namespace glz
       GLZ_ALWAYS_INLINE static constexpr size_t op(auto&& it, auto end) noexcept
       {
          if constexpr (HashInfo.sized_hash) {
-            const auto* c = quote_memchr<HashInfo.min_length>(it, end);
+            const auto* c = quote_memchr<HashInfo.min_length, HashInfo.max_length>(it, end);
             if (c) [[likely]] {
                const auto n = size_t(static_cast<std::decay_t<decltype(it)>>(c) - it);
                if (n == 0 || n > HashInfo.max_length || HashInfo.unique_index >= size_t(end - it)) [[unlikely]] {
@@ -2637,7 +2683,7 @@ namespace glz
 
       GLZ_ALWAYS_INLINE static constexpr size_t op(auto&& it, auto end) noexcept
       {
-         const auto* c = quote_memchr<HashInfo.min_length>(it, end);
+         const auto* c = quote_memchr<HashInfo.min_length, HashInfo.max_length>(it, end);
          if (c) [[likely]] {
             const auto n = uint8_t(static_cast<std::decay_t<decltype(it)>>(c) - it);
             const auto pos = per_length_info<T>.unique_index[n];
@@ -2677,19 +2723,20 @@ namespace glz
          }
          else {
             if constexpr (length_range == 1) {
-               auto quote = it + min_length;
-               // Ensure we can read *quote to determine if string is min_length or max_length.
-               // The check (quote + 1) > end ensures quote < end, making *quote dereferenceable.
-               if ((quote + 1) > end) [[unlikely]] {
+               // Bound before forming the pointer, not after: `it + min_length` is undefined once it
+               // runs past one-past-the-end, whether or not it is dereferenced, and a key shorter
+               // than min_length gets here. The test is the same one, written as a count.
+               if ((end - it) <= std::ptrdiff_t(min_length)) [[unlikely]] {
                   return N;
                }
+               const auto* const quote = it + min_length; // in bounds, and readable
 
                const auto n = min_length + uint8_t(*quote != '"');
                const auto h = full_hash<HashInfo.min_length, HashInfo.max_length, HashInfo.seed>(it, n);
                return HashInfo.table[h % bsize];
             }
             else {
-               const auto* c = quote_memchr<HashInfo.min_length>(it, end);
+               const auto* c = quote_memchr<HashInfo.min_length, HashInfo.max_length>(it, end);
                if (c) [[likely]] {
                   const auto n = uint8_t(static_cast<std::decay_t<decltype(it)>>(c) - it);
                   const auto h = full_hash<HashInfo.min_length, HashInfo.max_length, HashInfo.seed>(it, n);

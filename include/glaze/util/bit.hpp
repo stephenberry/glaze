@@ -68,4 +68,38 @@ namespace glz
    }
 
    constexpr int int_log2(uint32_t x) noexcept { return 31 - glz::countl_zero(x | 1); }
+
+   consteval uint32_t repeat_byte4(const auto repeat) { return uint32_t(0x01010101u) * uint8_t(repeat); }
+
+   consteval uint64_t repeat_byte8(const uint8_t repeat) { return 0x0101010101010101ull * repeat; }
+
+   // Byte-granular tests over a word, the SWAR technique from Mycroft's bit twiddling notes: a
+   // byte that matches becomes zero after the xor, and a zero byte is the only one that borrows
+   // into its own high bit. The result marks the low bit group of every match, so the first match
+   // is the lowest set bit however many bytes matched.
+   GLZ_ALWAYS_INLINE constexpr uint64_t has_zero(const uint64_t chunk) noexcept
+   {
+      return (((chunk - 0x0101010101010101ull) & ~chunk) & 0x8080808080808080ull);
+   }
+
+   GLZ_ALWAYS_INLINE constexpr uint64_t has_quote(const uint64_t chunk) noexcept
+   {
+      return has_zero(chunk ^ repeat_byte8('"'));
+   }
+
+   GLZ_ALWAYS_INLINE constexpr uint64_t has_escape(const uint64_t chunk) noexcept
+   {
+      return has_zero(chunk ^ repeat_byte8('\\'));
+   }
+
+   GLZ_ALWAYS_INLINE constexpr uint64_t has_space(const uint64_t chunk) noexcept
+   {
+      return has_zero(chunk ^ repeat_byte8(' '));
+   }
+
+   template <char Char>
+   GLZ_ALWAYS_INLINE constexpr uint64_t has_char(const uint64_t chunk) noexcept
+   {
+      return has_zero(chunk ^ repeat_byte8(Char));
+   }
 }

@@ -401,6 +401,34 @@ std::string minified = glz::minify_json(pretty_json);
 auto ec = glz::read<glz::opts{.minified = true}>(person, minified_buffer);
 ```
 
+### Formatting JSONC
+
+`glz::minify_jsonc` and `glz::prettify_jsonc` accept both comment styles. Minifying preserves block comments and drops line comments, because minifying is what removes the newline that terminates a line comment. Pretty printing keeps both, and puts whatever follows a line comment onto a new line so the comment cannot swallow it.
+
+```cpp
+std::string jsonc = R"({"name":"John", // Person's name
+"age":30})";
+
+std::string minified = glz::minify_jsonc(jsonc); // {"name":"John","age":30}
+```
+
+The plain `glz::minify_json` and `glz::prettify_json` reject a comment rather than formatting around it, so a document that may carry one wants the `jsonc` entry points.
+
+The overloads that write into a buffer return an `error_ctx`, which is what distinguishes malformed input such as an unterminated comment or string from a successful run. It is not `[[nodiscard]]`, since formatting auto-generated JSON does not fail:
+
+```cpp
+std::string out{};
+if (const auto ec = glz::minify_jsonc(jsonc, out)) {
+   // ec == glz::error_code::expected_end_comment, for example
+}
+```
+
+The overloads that return the formatted text have nowhere to put an error, so on failure they return an empty string rather than the partial output, which is rarely a valid document.
+
+`error_ctx::count` is the number of bytes written, which is how a fixed-capacity output learns where its result ends. It is an offset into the output rather than the input, so `glz::format_error(ec, source)` does not point at the offending byte for these functions.
+
+Neither function validates the structure of the document. They report what they actually parse -- strings, comments and literals -- and copy the rest, so `[1 2]` minifies to `[12]`. Use `glz::validate_json` or `glz::validate_jsonc` to check a document that may not be well formed.
+
 ### Custom Serialization
 
 For complex custom behavior, use `glz::custom`:

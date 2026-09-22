@@ -12,6 +12,7 @@
 #include "glaze/core/write.hpp"
 #include "glaze/core/write_chars.hpp"
 #include "glaze/core/write_wrappers.hpp"
+#include "glaze/toml/common.hpp"
 #include "glaze/util/dump.hpp"
 #include "glaze/util/for_each.hpp"
 #include "glaze/util/itoa.hpp"
@@ -34,6 +35,71 @@ namespace glz
    template <class T, auto Options>
    constexpr bool skip_toml_field =
       always_skipped<T> || (!check_write_function_pointers(Options) && is_member_function_pointer<T>);
+
+   // TOML bare keys admit only [A-Za-z0-9_-]. A runtime map key holding any other
+   // byte (a dot, whitespace, '=', a quote, a line break, an empty key) is not a
+   // bare key: written verbatim it splices into the document, turning one entry
+   // into a different structure or several forged entries. Detect the bare case so
+   // ordinary keys stay byte-identical.
+   GLZ_ALWAYS_INLINE constexpr bool toml_key_is_bare(const sv key) noexcept
+   {
+      if (key.empty()) return false;
+      for (const char c : key) {
+         const auto u = uint8_t(c);
+         const bool ok =
+            (u >= 'A' && u <= 'Z') || (u >= 'a' && u <= 'z') || (u >= '0' && u <= '9') || u == '_' || u == '-';
+         if (!ok) return false;
+      }
+      return true;
+   }
+
+   // Write a TOML map key. A bare key is written unquoted (output unchanged);
+   // anything else becomes a quoted basic string. Characters with a short escape use
+   // it, control bytes without one go out as \u00XX, so the key round-trips instead
+   // of altering the surrounding structure or reparsing as invalid TOML.
+   template <class B>
+   GLZ_ALWAYS_INLINE void write_toml_key(const sv key, is_context auto&& ctx, B&& b, auto& ix) noexcept
+   {
+      if (toml_key_is_bare(key)) {
+         if (!ensure_space(ctx, b, ix + key.size() + write_padding_bytes)) [[unlikely]] {
+            return;
+         }
+         std::memcpy(&b[ix], key.data(), key.size());
+         ix += key.size();
+         return;
+      }
+      // Quoted basic string. Worst case a control byte with no short escape
+      // expands to a six-character \u00XX sequence.
+      if (!ensure_space(ctx, b, ix + 6 * key.size() + 2 + write_padding_bytes)) [[unlikely]] {
+         return;
+      }
+      std::memcpy(&b[ix], "\"", 1);
+      ++ix;
+      for (const char c : key) {
+         if (const auto escaped = char_escape_table[uint8_t(c)]; escaped) {
+            std::memcpy(&b[ix], &escaped, 2);
+            ix += 2;
+         }
+         else if (toml::is_toml_control(c)) {
+            // A control byte with no two-character escape must go out as \u00XX,
+            // otherwise it would sit raw in the basic string and reparse as invalid TOML.
+            // TOML excludes DEL (0x7F) from basic strings alongside the C0 range, so it
+            // is escaped here too.
+            char unicode_escape[6] = {'\\', 'u', '0', '0', '0', '0'};
+            constexpr char hex_digits[] = "0123456789ABCDEF";
+            unicode_escape[4] = hex_digits[(uint8_t(c) >> 4) & 0xF];
+            unicode_escape[5] = hex_digits[uint8_t(c) & 0xF];
+            std::memcpy(&b[ix], unicode_escape, 6);
+            ix += 6;
+         }
+         else {
+            std::memcpy(&b[ix], &c, 1);
+            ++ix;
+         }
+      }
+      std::memcpy(&b[ix], "\"", 1);
+      ++ix;
+   }
 
    template <>
    struct serialize<TOML>
@@ -440,6 +506,20 @@ namespace glz
                else if (value == '\0') {
                   // null character treated as empty string
                }
+               else if constexpr (check_escape_control_characters(Opts)) {
+                  if (toml::is_toml_control(value)) {
+                     char unicode_escape[6] = {'\\', 'u', '0', '0', '0', '0'};
+                     constexpr char hex_digits[] = "0123456789ABCDEF";
+                     unicode_escape[4] = hex_digits[(uint8_t(value) >> 4) & 0xF];
+                     unicode_escape[5] = hex_digits[uint8_t(value) & 0xF];
+                     std::memcpy(&b[ix], unicode_escape, 6);
+                     ix += 6;
+                  }
+                  else {
+                     std::memcpy(&b[ix], &value, 1);
+                     ++ix;
+                  }
+               }
                else {
                   std::memcpy(&b[ix], &value, 1);
                   ++ix;
@@ -476,8 +556,14 @@ namespace glz
                   }
                }();
                const auto n = str.size();
+               if constexpr (check_escape_control_characters(Opts)) {
+                  // Worst case: every char is a control byte written as \u00XX, plus quotes
+                  if (!ensure_space(ctx, b, ix + 10 + 6 * n + write_padding_bytes)) [[unlikely]] {
+                     return;
+                  }
+               }
                // Worst case: each char becomes 2 chars when escaped, plus quotes
-               if (!ensure_space(ctx, b, ix + 10 + 2 * n + write_padding_bytes)) [[unlikely]] {
+               else if (!ensure_space(ctx, b, ix + 10 + 2 * n + write_padding_bytes)) [[unlikely]] {
                   return;
                }
 
@@ -496,6 +582,35 @@ namespace glz
                   const auto start = &b[ix];
                   auto data = start;
 
+                  // By default control characters are not escaped, for the same reason as in
+                  // JSON: the check costs on every string and the developer owns what they
+                  // hand the writer. A control byte with no two-character escape then leaves
+                  // null bytes in the output, making it invalid TOML that the reader rejects.
+                  // Enable `escape_control_characters` to emit them as \u00XX instead.
+
+                  // Escape handler: writes the escaped form of *c into data, advances both
+                  auto write_escape = [&]() {
+                     if constexpr (check_escape_control_characters(Opts)) {
+                        if (const auto escaped = char_escape_table[uint8_t(*c)]; escaped) {
+                           std::memcpy(data, &escaped, 2);
+                           data += 2;
+                        }
+                        else {
+                           char unicode_escape[6] = {'\\', 'u', '0', '0', '0', '0'};
+                           constexpr char hex_digits[] = "0123456789ABCDEF";
+                           unicode_escape[4] = hex_digits[(uint8_t(*c) >> 4) & 0xF];
+                           unicode_escape[5] = hex_digits[uint8_t(*c) & 0xF];
+                           std::memcpy(data, unicode_escape, 6);
+                           data += 6;
+                        }
+                     }
+                     else {
+                        std::memcpy(data, &char_escape_table[uint8_t(*c)], 2);
+                        data += 2;
+                     }
+                     ++c;
+                  };
+
                   if (n > 7) {
                      for (const auto end_m7 = e - 7; c < end_m7;) {
                         std::memcpy(data, c, 8);
@@ -510,7 +625,13 @@ namespace glz
                         const uint64_t quote = (lo7 ^ repeat_byte8('"')) + lo7_mask;
                         const uint64_t backslash = (lo7 ^ repeat_byte8('\\')) + lo7_mask;
                         const uint64_t less_32 = (swar & repeat_byte8(0b01100000)) + lo7_mask;
-                        uint64_t next = ~((quote & backslash & less_32) | swar);
+                        uint64_t match = quote & backslash & less_32;
+                        if constexpr (check_escape_control_characters(Opts)) {
+                           // TOML excludes DEL from basic strings, and the mask above only
+                           // spots the C0 range, so give 0x7F its own equality term.
+                           match &= (lo7 ^ repeat_byte8(0x7f)) + lo7_mask;
+                        }
+                        uint64_t next = ~(match | swar);
 
                         next &= repeat_byte8(0b10000000);
                         if (next == 0) {
@@ -523,9 +644,7 @@ namespace glz
                         c += length;
                         data += length;
 
-                        std::memcpy(data, &char_escape_table[uint8_t(*c)], 2);
-                        data += 2;
-                        ++c;
+                        write_escape();
                      }
                   }
 
@@ -533,6 +652,20 @@ namespace glz
                      if (const auto escaped = char_escape_table[uint8_t(*c)]; escaped) {
                         std::memcpy(data, &escaped, 2);
                         data += 2;
+                     }
+                     else if constexpr (check_escape_control_characters(Opts)) {
+                        if (toml::is_toml_control(*c)) {
+                           char unicode_escape[6] = {'\\', 'u', '0', '0', '0', '0'};
+                           constexpr char hex_digits[] = "0123456789ABCDEF";
+                           unicode_escape[4] = hex_digits[(uint8_t(*c) >> 4) & 0xF];
+                           unicode_escape[5] = hex_digits[uint8_t(*c) & 0xF];
+                           std::memcpy(data, unicode_escape, 6);
+                           data += 6;
+                        }
+                        else {
+                           std::memcpy(data, c, 1);
+                           ++data;
+                        }
                      }
                      else {
                         std::memcpy(data, c, 1);
@@ -801,19 +934,23 @@ namespace glz
             return;
          }
 
-         if (!ensure_space(ctx, b, ix + key.size() + 5 + write_padding_bytes)) [[unlikely]] {
-            return;
-         }
-
          if (!first) {
+            if (!ensure_space(ctx, b, ix + 2 + write_padding_bytes)) [[unlikely]] {
+               return;
+            }
             dump(", ", b, ix);
          }
          else {
             first = false;
          }
 
-         std::memcpy(&b[ix], key.data(), key.size());
-         ix += key.size();
+         write_toml_key(key, ctx, b, ix);
+         if (bool(ctx.error)) [[unlikely]] {
+            return;
+         }
+         if (!ensure_space(ctx, b, ix + 3 + write_padding_bytes)) [[unlikely]] {
+            return;
+         }
          dump(" = ", b, ix);
 
          write_inline_value<Options>(val, ctx, b, ix);
@@ -1348,12 +1485,14 @@ namespace glz
             else {
                first = false;
             }
-            // Write the key as a bare key
-            if (!ensure_space(ctx, b, ix + key.size() + 4 + write_padding_bytes)) [[unlikely]] {
+            // Write the key, quoting it when it is not a valid TOML bare key.
+            write_toml_key(key, ctx, b, ix);
+            if (bool(ctx.error)) [[unlikely]] {
                return;
             }
-            std::memcpy(&b[ix], key.data(), key.size());
-            ix += key.size();
+            if (!ensure_space(ctx, b, ix + 3 + write_padding_bytes)) [[unlikely]] {
+               return;
+            }
             std::memcpy(&b[ix], " = ", 3);
             ix += 3;
 

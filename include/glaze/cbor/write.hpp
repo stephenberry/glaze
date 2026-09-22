@@ -47,7 +47,7 @@ namespace glz
       GLZ_ALWAYS_INLINE void dump_byte(uint8_t byte, B& b, IX& ix)
       {
          if (ix >= b.size()) [[unlikely]] {
-            b.resize(b.size() == 0 ? 128 : b.size() * 2);
+            grow_buffer(b, b.size() == 0 ? 64 : ix + 1);
          }
          b[ix] = static_cast<typename std::decay_t<B>::value_type>(byte);
          ++ix;
@@ -76,7 +76,7 @@ namespace glz
       {
          constexpr auto n = sizeof(T);
          if (const auto k = ix + n; k > b.size()) [[unlikely]] {
-            b.resize(2 * k);
+            grow_buffer(b, k);
          }
 
          if constexpr (std::endian::native == std::endian::little && n > 1) {

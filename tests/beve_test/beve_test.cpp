@@ -30,6 +30,7 @@
 #include "glaze/json/json_ptr.hpp"
 #include "glaze/json/read.hpp"
 #include "glaze/trace/trace.hpp"
+#include "minimal_buffer.hpp"
 #include "scratch_directory.hpp"
 #include "ut/ut.hpp"
 
@@ -9197,6 +9198,32 @@ suite beve_recursion_depth_limit = [] {
       expect(glz::read_beve(out, nest) == glz::error_code::exceeded_max_recursive_depth);
    };
 
+   "beve_to_json binds at the same level as the readers"_test = [] {
+      // Only containers take a level, so a scalar fits inside the deepest container the limit allows.
+      constexpr auto limit = glz::max_recursive_depth_limit;
+      const auto build = [](size_t levels, std::string_view innermost) {
+         std::string b;
+         for (size_t i = 0; i < levels; ++i) {
+            b.push_back(char(glz::tag::generic_array));
+            b.push_back(char(1 << 2)); // one element
+         }
+         b += innermost;
+         return b;
+      };
+      const std::string one{char(glz::tag::u8), char(1)};
+      const std::string empty{char(glz::tag::generic_array), char(0)};
+
+      glz::generic out{};
+      std::string json{};
+      expect(not glz::read_beve(out, build(limit, one)));
+      expect(not glz::beve_to_json(build(limit, one), json));
+      expect(json == std::string(limit, '[') + "1" + std::string(limit, ']'));
+      expect(not glz::beve_to_json(build(limit - 1, empty), json));
+
+      expect(glz::read_beve(out, build(limit, empty)) == glz::error_code::exceeded_max_recursive_depth);
+      expect(glz::beve_to_json(build(limit, empty), json) == glz::error_code::exceeded_max_recursive_depth);
+   };
+
    "an ambiguous nest cannot multiply the work of resolving it"_test = [] {
       // Resolution is speculative: an alternative is parsed to find out whether it fits, and a
       // rejected one is rewound and the next tried. Nest that and the re-parses multiply -- measured
@@ -9242,6 +9269,70 @@ suite beve_recursion_depth_limit = [] {
 
       std::set<std::vector<int>> out{};
       expect(glz::read_beve(out, buffer) == glz::error_code::invalid_length);
+   };
+};
+
+// Regression coverage for GitHub issue #2854: the BEVE readers each carry their own emptiness
+// check, so the shared fix in core/read.hpp proves nothing about them.
+template <class Buffer>
+concept appendable_with_delimiter = requires(Buffer& buffer) { glz::write_beve_append_with_delimiter(1, buffer); };
+
+suite contiguous_buffer_without_empty = [] {
+   "read_beve round trip"_test = [] {
+      test_buffers::qt_style_buffer buffer{};
+      expect(not glz::write_beve(std::vector<int>{1, 2, 3}, buffer));
+
+      std::vector<int> value{};
+      expect(not glz::read_beve(value, buffer));
+      expect(value == std::vector<int>{1, 2, 3});
+   };
+
+   "read_beve_delimited"_test = [] {
+      std::string written{};
+      expect(not glz::write_beve_delimited(std::vector<int>{4, 5, 6}, written));
+
+      test_buffers::qt_style_buffer buffer{};
+      buffer.assign(written);
+
+      std::vector<int> values{};
+      expect(not glz::read_beve_delimited(values, buffer));
+      expect(values == std::vector<int>{4, 5, 6});
+   };
+
+   "read_beve_delimited on an empty buffer"_test = [] {
+      test_buffers::qt_style_buffer buffer{};
+      std::vector<int> values{1, 2};
+      expect(not glz::read_beve_delimited(values, buffer));
+      expect(values.empty());
+   };
+
+   "lazy_beve"_test = [] {
+      // read_only_buffer, not qt_style_buffer: lazy_beve used to index the buffer directly, and a
+      // fixture with operator[] would compile either way and prove nothing.
+      std::string written{};
+      expect(not glz::write_beve(std::vector<int>{7, 8}, written));
+
+      const test_buffers::read_only_buffer buffer{written};
+      expect(glz::lazy_beve(buffer).has_value());
+
+      const test_buffers::read_only_buffer empty{};
+      expect(not glz::lazy_beve(empty).has_value());
+   };
+
+   "append a delimiter to a buffer without push_back"_test = [] {
+      // qt_style_buffer has no push_back, which is what the delimiter write used to require.
+      // Appending also needs a buffer that can grow, so a fixed-size one is rejected at the call
+      // site rather than inside the body.
+      static_assert(appendable_with_delimiter<std::string>);
+      static_assert(not appendable_with_delimiter<std::array<char, 64>>);
+
+      test_buffers::qt_style_buffer buffer{};
+      expect(not glz::write_beve(1, buffer));
+      expect(not glz::write_beve_append_with_delimiter(2, buffer));
+
+      std::vector<int> values{};
+      expect(not glz::read_beve_delimited(values, buffer));
+      expect(values == std::vector<int>{1, 2});
    };
 };
 

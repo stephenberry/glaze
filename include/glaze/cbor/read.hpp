@@ -912,7 +912,9 @@ namespace glz
                      return;
                   }
                   value.resize(old_size + static_cast<size_t>(chunk_len));
-                  std::memcpy(value.data() + old_size, it, chunk_len);
+                  if (chunk_len > 0) {
+                     std::memcpy(value.data() + old_size, it, chunk_len);
+                  }
                }
                else {
                   // Fixed-size std::array<std::byte, N>: accumulate with bounds checking.
@@ -961,7 +963,9 @@ namespace glz
                   return;
                }
                value.resize(static_cast<size_t>(length));
-               std::memcpy(value.data(), it, length);
+               if (length > 0) {
+                  std::memcpy(value.data(), it, length);
+               }
             }
             else {
                // Fixed-size std::array<std::byte, N>: bounds-check, copy, zero-fill remainder.

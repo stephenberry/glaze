@@ -1568,7 +1568,7 @@ namespace glz
 
          if constexpr (resizable<B>) {
             if (ix + n > b.size()) [[unlikely]] {
-               b.resize((std::max)(b.size() * 2, ix + n));
+               grow_buffer(b, ix + n);
             }
          }
          else {

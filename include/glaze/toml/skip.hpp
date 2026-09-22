@@ -9,7 +9,8 @@ namespace glz::toml
    template <class It, class End>
    inline void skip_comment(It& it, End end) noexcept
    {
-      while (it != end && *it != '\n' && *it != '\r') {
+      // See the note in common.hpp: stopping on a forbidden byte is what reports it.
+      while (it != end && !comment_end_or_control_table[uint8_t(*it)]) {
          ++it;
       }
    }
@@ -40,6 +41,10 @@ namespace glz::toml
                it += 3;
                break;
             }
+            if (forbidden_control_multiline_table[uint8_t(*it)]) [[unlikely]] {
+               ctx.error = error_code::invalid_control_character;
+               return;
+            }
             if (*it == '\\') {
                ++it;
                if (it == end) [[unlikely]] {
@@ -68,6 +73,10 @@ namespace glz::toml
             }
             if (*it == '\n' || *it == '\r') [[unlikely]] {
                ctx.error = error_code::syntax_error;
+               return;
+            }
+            if (forbidden_control_table[uint8_t(*it)]) [[unlikely]] {
+               ctx.error = error_code::invalid_control_character;
                return;
             }
             ++it;
@@ -102,6 +111,10 @@ namespace glz::toml
                it += 3;
                break;
             }
+            if (forbidden_control_multiline_table[uint8_t(*it)]) [[unlikely]] {
+               ctx.error = error_code::invalid_control_character;
+               return;
+            }
             ++it;
          }
       }
@@ -110,6 +123,10 @@ namespace glz::toml
          while (it != end && *it != '\'') {
             if (*it == '\n' || *it == '\r') [[unlikely]] {
                ctx.error = error_code::syntax_error;
+               return;
+            }
+            if (forbidden_control_table[uint8_t(*it)]) [[unlikely]] {
+               ctx.error = error_code::invalid_control_character;
                return;
             }
             ++it;

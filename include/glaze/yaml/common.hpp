@@ -515,6 +515,15 @@ namespace glz::yaml
 
    // Table for characters that terminate a plain scalar in flow context
    // Terminators: space, tab, newline, carriage return, colon, comma, [ ] { } #
+   // Control characters YAML's c-printable set excludes outright: the C0 range apart from
+   // tab, line feed and carriage return, plus DEL. A reader must reject these; they are
+   // the bytes the writer escapes when escape_control_characters is enabled.
+   inline constexpr bool is_yaml_forbidden_control(char c) noexcept
+   {
+      const auto u = uint8_t(c);
+      return (u < 0x20 && u != 0x09 && u != 0x0a && u != 0x0d) || u == 0x7f;
+   }
+
    inline constexpr std::array<bool, 256> plain_scalar_end_table = [] {
       std::array<bool, 256> t{};
       t[' '] = true;
@@ -528,6 +537,81 @@ namespace glz::yaml
       t['{'] = true;
       t['}'] = true;
       t['#'] = true;
+      return t;
+   }();
+
+   // Bytes that end a plain scalar's ordinary run and need the full dispatch: line
+   // breaks, the indicators that may terminate the scalar, and the control bytes a
+   // reader must reject. Everything else is content and can be copied in bulk, so the
+   // control-character check costs nothing per byte.
+   inline constexpr std::array<bool, 256> plain_scalar_dispatch_table = [] {
+      std::array<bool, 256> t{};
+      t['\n'] = true;
+      t['\r'] = true;
+      t['#'] = true;
+      t[':'] = true;
+      t[','] = true;
+      t[']'] = true;
+      t['}'] = true;
+      for (size_t i = 0; i < 256; ++i) {
+         if (is_yaml_forbidden_control(char(uint8_t(i)))) {
+            t[i] = true;
+         }
+      }
+      return t;
+   }();
+
+   // The block-context form of plain_scalar_dispatch_table. Flow indicators do not end
+   // a plain scalar outside a flow collection, so they stay part of the bulk-copied run.
+   inline constexpr std::array<bool, 256> plain_scalar_block_dispatch_table = [] {
+      std::array<bool, 256> t{};
+      t['\n'] = true;
+      t['\r'] = true;
+      t['#'] = true;
+      t[':'] = true;
+      for (size_t i = 0; i < 256; ++i) {
+         if (is_yaml_forbidden_control(char(uint8_t(i)))) {
+            t[i] = true;
+         }
+      }
+      return t;
+   }();
+
+   // Line terminators plus the control bytes a comment may not contain. Scanning a
+   // comment with this table costs no more than the two compares it replaces, and makes
+   // the scan stop on an invalid byte instead of swallowing it to end of line.
+   inline constexpr std::array<bool, 256> comment_end_or_control_table = [] {
+      std::array<bool, 256> t{};
+      t['\n'] = true;
+      t['\r'] = true;
+      for (size_t i = 0; i < 256; ++i) {
+         if (is_yaml_forbidden_control(char(uint8_t(i)))) {
+            t[i] = true;
+         }
+      }
+      return t;
+   }();
+
+   // O(1) lookup for the reject predicate, for the scalar parsers that are char-by-char
+   // state machines rather than table-driven scans.
+   inline constexpr std::array<bool, 256> forbidden_control_table = [] {
+      std::array<bool, 256> t{};
+      for (size_t i = 0; i < 256; ++i) {
+         t[i] = is_yaml_forbidden_control(char(uint8_t(i)));
+      }
+      return t;
+   }();
+
+   // plain_scalar_end_table plus the control bytes a reader must reject. Scanning with
+   // this table makes the rejection free: the loop already performs the lookup, so it
+   // stops on a forbidden byte and the caller raises the error at the stop point.
+   inline constexpr std::array<bool, 256> plain_scalar_end_or_control_table = [] {
+      auto t = plain_scalar_end_table;
+      for (size_t i = 0; i < 256; ++i) {
+         if (is_yaml_forbidden_control(char(uint8_t(i)))) {
+            t[i] = true;
+         }
+      }
       return t;
    }();
 
@@ -802,7 +886,9 @@ namespace glz::yaml
    inline void skip_comment(It&& it, End end) noexcept
    {
       if (it != end && *it == '#') {
-         while (it != end && *it != '\n' && *it != '\r') {
+         // Stops on a forbidden control byte rather than consuming it, leaving the
+         // caller's line-end validation to reject the document.
+         while (it != end && !comment_end_or_control_table[static_cast<uint8_t>(*it)]) {
             ++it;
          }
       }
@@ -927,6 +1013,77 @@ namespace glz::yaml
       return true;
    }
 
+   // Advances `it` past the quoted scalar whose opening quote it points at, for the implicit-key
+   // probes. Returns false when the scalar does not close before `stop`, or when it runs into a
+   // line break: an implicit key must fit on one line, so either way the text under the probe is
+   // not one.
+   //
+   // The single-quoted case is the reason this is shared. `''` is the only escape a single-quoted
+   // scalar has, and a probe that misses it mistakes the first quote of the pair for the closing
+   // one, resumes scanning inside the scalar, and reads a ':' that is content as a separator.
+   template <class It, class End>
+   inline bool skip_probe_quoted_scalar(It& it, End stop)
+   {
+      const char quote = *it;
+      ++it;
+      while (it != stop) {
+         const char c = *it;
+         if (c == '\n' || c == '\r') {
+            return false;
+         }
+         if (c == quote) {
+            ++it;
+            if (quote == '\'' && it != stop && *it == '\'') {
+               ++it; // '' is an escaped quote, not the end of the scalar
+               continue;
+            }
+            // A closing quote on the last byte of the window reports closed, though the byte past
+            // it could have made the pair an escape. Harmless: `it` is then `stop`, so the caller's
+            // loop ends and the probe answers false either way.
+            return true;
+         }
+         if (c == '\\' && quote == '"') {
+            ++it; // Skip escape character
+            if (it == stop) {
+               return false;
+            }
+            if (*it == '\n' || *it == '\r') {
+               return false;
+            }
+         }
+         ++it;
+      }
+      return false;
+   }
+
+   // A node's properties (`&anchor`, `!tag`) and the explicit key indicator `? ` precede the node
+   // proper, so a node is still starting after one. Advances `it` past one such token and reports
+   // whether it consumed one. `it` must be where a node can begin, which is what makes `&`, `!`
+   // and `?` indicators here rather than the plain content they would be inside a scalar.
+   template <class It, class End>
+   inline bool skip_probe_node_property(It& it, End stop)
+   {
+      const char c = *it;
+      if (c == '&' || c == '!') {
+         // An anchor name and a tag shorthand both run to the next whitespace or flow indicator.
+         ++it;
+         while (it != stop && *it != ' ' && *it != '\t' && *it != ',' && *it != '[' && *it != ']' && *it != '{' &&
+                *it != '}' && *it != '\n' && *it != '\r') {
+            ++it;
+         }
+         return true;
+      }
+      // Only "? " is the explicit key indicator; "?foo" is an ordinary plain scalar.
+      if (c == '?') {
+         const auto next = it + 1;
+         if (next != stop && (*next == ' ' || *next == '\t')) {
+            ++it;
+            return true;
+         }
+      }
+      return false;
+   }
+
    // Quick check if current line contains a colon that could indicate a block mapping key.
    // Scans no further than the end of the line or `max_implicit_key_lookahead` bytes, whichever
    // comes first, so the cost of a probe is bounded by a constant rather than by the line.
@@ -935,13 +1092,31 @@ namespace glz::yaml
    inline bool line_could_be_block_mapping(It it, End end)
    {
       const auto stop = implicit_key_scan_end(it, end);
-      bool prev_was_whitespace = true; // Start of value acts like after whitespace
+      // A quote is an indicator only where a node can begin. Once a plain scalar is under way it
+      // runs to the end of the line, and the spaces and quotes inside it are content ("a 'b'" is
+      // one plain scalar, "a '''" likewise), so the guard is whether a node starts here rather
+      // than what the preceding character was. A node starts at the beginning of the scan, after
+      // an indicator that ends the node before it, and after the properties that precede one. The
+      // other implicit-key probes carry the same model and point here for it.
+      bool at_node_start = true;
+      bool prev_was_whitespace = true; // For the '#' rule, which is about the preceding character
       int flow_depth = 0;
       while (it != stop) {
          const char c = *it;
          if (c == '\n' || c == '\r') {
             return false;
          }
+         if (c == ' ' || c == '\t') {
+            prev_was_whitespace = true; // Whitespace separates nodes, it does not end one
+            ++it;
+            continue;
+         }
+         // Past here `c` is an indicator or content. Either way it ends a run of whitespace, and
+         // unless a branch below says otherwise it begins a plain scalar that owns the rest of the
+         // line, so both flags clear by default and a branch opts back in.
+         const bool after_whitespace = std::exchange(prev_was_whitespace, false);
+         const bool node_start = std::exchange(at_node_start, false);
+
          if (c == ':' && flow_depth == 0) {
             ++it;
             // Colon followed by space, newline, or end indicates a mapping key
@@ -950,49 +1125,45 @@ namespace glz::yaml
             }
             // Otherwise this ':' is part of plain content (e.g., "::", "http://").
             // Continue scanning for a later mapping separator on the same line.
-            prev_was_whitespace = false;
             continue;
          }
          // Per YAML spec: # only starts a comment when preceded by whitespace
          // Stop scanning if we hit a comment - any colon after is not a key indicator
-         if (c == '#' && flow_depth == 0 && prev_was_whitespace) {
+         if (c == '#' && flow_depth == 0 && after_whitespace) {
             return false;
          }
-         // Skip over quoted strings only when they start a quoted token.
-         // Quote characters are otherwise valid in plain scalars/keys.
-         if ((c == '"' || c == '\'') && prev_was_whitespace) {
-            const char quote = c;
-            ++it;
-            while (it != stop && *it != quote) {
-               if (*it == '\\' && quote == '"') {
-                  ++it; // Skip escape character
-                  if (it != stop) ++it; // Skip escaped character
-               }
-               else if (*it == '\n' || *it == '\r') {
-                  // Unterminated quote on this line
-                  return false;
-               }
-               else {
-                  ++it;
-               }
+         if ((c == '"' || c == '\'') && node_start) {
+            if (not skip_probe_quoted_scalar(it, stop)) {
+               return false;
             }
-            if (it != stop) ++it; // Skip closing quote
-            prev_was_whitespace = false;
             continue;
          }
-         if (c == '[' || c == '{') {
+         // A flow collection opens only where a node can begin, and thereafter every bracket is
+         // an indicator because ns-plain-safe-in excludes them. In block context a plain scalar
+         // already under way swallows them instead: "a['][]" is one plain key.
+         if ((c == '[' || c == '{') && (node_start || flow_depth > 0)) {
             ++flow_depth;
-            prev_was_whitespace = false;
+            at_node_start = true;
             ++it;
             continue;
          }
          if ((c == ']' || c == '}') && flow_depth > 0) {
-            --flow_depth;
-            prev_was_whitespace = false;
+            --flow_depth; // A closing bracket ends a node; it never starts one
             ++it;
             continue;
          }
-         prev_was_whitespace = (c == ' ' || c == '\t');
+         // Inside a flow collection ',' separates entries and ':' ends a key, so a node begins
+         // after either. Outside one both are ordinary plain content -- ns-plain-safe-out admits
+         // them, which is why "a,'b: c" is a single plain key and "a[b]'c: d" another.
+         if (flow_depth > 0 && (c == ',' || c == ':')) {
+            at_node_start = true;
+            ++it;
+            continue;
+         }
+         if (node_start && skip_probe_node_property(it, stop)) {
+            at_node_start = true; // Properties precede the node, so it is still starting
+            continue;
+         }
          ++it;
       }
       return false;
@@ -1378,7 +1549,24 @@ namespace glz::yaml
    // Check if character is a YAML indicator that needs quoting
    inline constexpr bool is_yaml_indicator(char c) noexcept { return yaml_indicator_table[static_cast<uint8_t>(c)]; }
 
-   // Check if string needs quoting when written
+   // Check if a byte is a control character that YAML's c-printable set excludes:
+   // the C0 range and DEL. Such a byte cannot appear literally in a plain, single-quoted
+   // or block scalar, so it forces the double-quoted style, which escapes it as \xXX.
+   // Tab, line feed and carriage return are C0 controls that some styles do permit, so
+   // callers exempt those individually where the style allows them.
+   inline constexpr bool is_yaml_control(char c) noexcept
+   {
+      const auto u = uint8_t(c);
+      return u < 0x20 || u == 0x7f;
+   }
+
+   // Check if string needs quoting when written.
+   // EscapeControls mirrors glz::opts::escape_control_characters. When it is off (the
+   // default) only the line breaks and tab that would structurally break a plain scalar
+   // force quoting, so the common path pays nothing for control-character conformance;
+   // rejecting a spec-invalid control byte is the reader's job. When it is on, any byte
+   // outside YAML's c-printable set forces a quoted style and gets escaped as \xXX.
+   template <bool EscapeControls = false>
    inline bool needs_quoting(std::string_view s) noexcept
    {
       if (s.empty()) return true;
@@ -1400,10 +1588,23 @@ namespace glz::yaml
          return true;
       }
 
-      // Check for characters that require quoting
+      // Check for characters that require quoting.
       for (char c : s) {
-         if (c == ':' || c == '#' || c == ',' || c == '\n' || c == '\r' || c == '\t') {
+         if (c == ':' || c == '#' || c == ',') {
             return true;
+         }
+         if constexpr (EscapeControls) {
+            // Subsumes \n, \r and \t, which are themselves control characters.
+            if (is_yaml_control(c)) {
+               return true;
+            }
+         }
+         else {
+            // A raw line break ends a plain scalar and a tab is stripped by the plain
+            // parser, so these break the round trip regardless of the escaping option.
+            if (c == '\n' || c == '\r' || c == '\t') {
+               return true;
+            }
          }
       }
 

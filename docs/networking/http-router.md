@@ -281,7 +281,7 @@ server.mount("/api", router);
 // Streaming routes are now reachable at /api/items/:id/events, etc.
 ```
 
-Streaming handlers take over the connection (no keep-alive loop) and write chunked responses through `streaming_response`.
+Streaming handlers take over the connection (no keep-alive loop) and write chunked responses through `streaming_response`. The server closes the connection when the stream ends, so the response carries `Connection: close` unless the handler sets its own. An empty `send` writes nothing, since a zero-length chunk would end the body.
 
 > **Behavior change.** Before streaming and WebSocket routes shared the matcher, `streaming_handlers_` was an exact-path lookup, so registering `/items/:id` as a streaming route was effectively dead and a request to `/items/42` fell through to the normal router. After the unification, streaming routes are matched first (see [Route Priority](#route-priority)), so a streaming `/items/:id` will intercept requests that a static normal `/items/42` would otherwise handle. Code that registered both kinds on the same path needs to be aware of the new ordering.
 

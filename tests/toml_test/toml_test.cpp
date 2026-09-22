@@ -5838,4 +5838,317 @@ suite recursion_depth_tests = [] {
    };
 };
 
+suite toml_map_key_quoting_tests = [] {
+   // A runtime map key that is not a valid TOML bare key must be quoted, or it
+   // splices into the document: a dotted key becomes a nested table and a key
+   // holding '=' / a line break forges extra entries.
+   "dotted key is quoted"_test = [] {
+      std::map<std::string, int> m{{"a.b", 1}};
+      std::string buffer{};
+      expect(not glz::write_toml(m, buffer));
+      expect(buffer == R"("a.b" = 1)") << buffer;
+      std::map<std::string, int> back{};
+      expect(not glz::read_toml(back, buffer)) << buffer;
+      expect(back == m);
+   };
+
+   "key with '=' and newline does not inject"_test = [] {
+      std::map<std::string, int> m{{"x = 1\ninjected", 2}};
+      std::string buffer{};
+      expect(not glz::write_toml(m, buffer));
+      expect(buffer == R"("x = 1\ninjected" = 2)") << buffer;
+      std::map<std::string, int> back{};
+      expect(not glz::read_toml(back, buffer)) << buffer;
+      expect(back.size() == 1);
+      expect(back == m);
+   };
+
+   "key with space and quote is quoted"_test = [] {
+      std::map<std::string, int> m{{"a b\"c", 3}};
+      std::string buffer{};
+      expect(not glz::write_toml(m, buffer));
+      expect(buffer == R"("a b\"c" = 3)") << buffer;
+      std::map<std::string, int> back{};
+      expect(not glz::read_toml(back, buffer)) << buffer;
+      expect(back == m);
+   };
+
+   "empty key is quoted"_test = [] {
+      std::map<std::string, int> m{{"", 4}};
+      std::string buffer{};
+      expect(not glz::write_toml(m, buffer));
+      expect(buffer == R"("" = 4)") << buffer;
+      std::map<std::string, int> back{};
+      expect(not glz::read_toml(back, buffer)) << buffer;
+      expect(back == m);
+   };
+
+   "bare keys stay unquoted"_test = [] {
+      std::map<std::string, int> m{{"normal_key-1", 5}, {"a", 6}};
+      std::string buffer{};
+      expect(not glz::write_toml(m, buffer));
+      expect(buffer == R"(a = 6
+normal_key-1 = 5)")
+         << buffer;
+      std::map<std::string, int> back{};
+      expect(not glz::read_toml(back, buffer)) << buffer;
+      expect(back == m);
+   };
+
+   // A control byte with no short escape must go out as \u00XX, not raw, or the
+   // key sits unescaped in the basic string and reparses as invalid TOML.
+   "control byte key is escaped as \\u00XX"_test = [] {
+      std::map<std::string, int> m{{std::string("a\x01\x1f", 3), 8}};
+      std::string buffer{};
+      expect(not glz::write_toml(m, buffer));
+      expect(buffer == R"("a\u0001\u001F" = 8)") << buffer;
+      std::map<std::string, int> back{};
+      expect(not glz::read_toml(back, buffer)) << buffer;
+      expect(back == m);
+   };
+
+   // The inline-table map writer (a map nested as a value) shares the same key path.
+   "inline map key is quoted"_test = [] {
+      std::map<std::string, std::map<std::string, int>> m{{"outer", {{"in.ner", 7}}}};
+      std::string buffer{};
+      expect(not glz::write_toml(m, buffer));
+      expect(buffer == R"(outer = {"in.ner" = 7})") << buffer;
+      std::map<std::string, std::map<std::string, int>> back{};
+      expect(not glz::read_toml(back, buffer)) << buffer;
+      expect(back == m);
+   };
+};
+
+// TOML v1.0.0 excludes raw control characters from strings, keys and comments: a
+// single-line string or a comment admits tab and nothing else in the C0 range, the
+// multi-line forms also admit line feed and carriage return, and DEL (0x7F) is
+// excluded everywhere. Reading rejects them; writing escapes them only on request.
+struct toml_escape_opts : glz::toml_opts
+{
+   bool escape_control_characters = true;
+};
+
+struct control_value_t
+{
+   std::string v{};
+};
+
+suite toml_control_character_reader_tests = [] {
+   "basic string rejects raw control"_test = [] {
+      control_value_t obj{};
+      expect(glz::read_toml(obj,
+                            "v = \"a\x01"
+                            "b\"") == glz::error_code::invalid_control_character);
+   };
+
+   "basic string rejects DEL"_test = [] {
+      control_value_t obj{};
+      expect(glz::read_toml(obj,
+                            "v = \"a\x7f"
+                            "b\"") == glz::error_code::invalid_control_character);
+   };
+
+   "literal string rejects raw control"_test = [] {
+      control_value_t obj{};
+      expect(glz::read_toml(obj,
+                            "v = 'a\x01"
+                            "b'") == glz::error_code::invalid_control_character);
+   };
+
+   "literal string rejects DEL"_test = [] {
+      control_value_t obj{};
+      expect(glz::read_toml(obj,
+                            "v = 'a\x7f"
+                            "b'") == glz::error_code::invalid_control_character);
+   };
+
+   "multiline basic string rejects raw control"_test = [] {
+      control_value_t obj{};
+      expect(glz::read_toml(obj,
+                            "v = \"\"\"a\x01"
+                            "b\"\"\"") == glz::error_code::invalid_control_character);
+   };
+
+   "multiline basic string rejects DEL"_test = [] {
+      control_value_t obj{};
+      expect(glz::read_toml(obj,
+                            "v = \"\"\"a\x7f"
+                            "b\"\"\"") == glz::error_code::invalid_control_character);
+   };
+
+   "multiline literal string rejects raw control"_test = [] {
+      control_value_t obj{};
+      expect(glz::read_toml(obj,
+                            "v = '''a\x01"
+                            "b'''") == glz::error_code::invalid_control_character);
+   };
+
+   "quoted key rejects raw control"_test = [] {
+      std::map<std::string, std::string> m{};
+      expect(glz::read_toml(m,
+                            "\"k\x01"
+                            "e\" = \"x\"") == glz::error_code::invalid_control_character);
+   };
+
+   "literal key rejects DEL"_test = [] {
+      std::map<std::string, std::string> m{};
+      expect(glz::read_toml(m,
+                            "'k\x7f"
+                            "e' = \"x\"") == glz::error_code::invalid_control_character);
+   };
+
+   // The comment scan is noexcept and takes no context, so it stops on a forbidden
+   // byte rather than reporting it; the caller then rejects the unexpected character.
+   // The byte is refused either way, so the test pins rejection and not the code.
+   "comment rejects raw control"_test = [] {
+      control_value_t obj{};
+      expect(bool(glz::read_toml(obj,
+                                 "v = \"x\" # c\x01"
+                                 "d\n")));
+   };
+
+   "comment rejects DEL"_test = [] {
+      control_value_t obj{};
+      expect(bool(glz::read_toml(obj,
+                                 "v = \"x\" # c\x7f"
+                                 "d\n")));
+   };
+
+   // An escape is how a control character is meant to reach a TOML string, so the
+   // rejection above must not touch it.
+   "escaped control characters are accepted"_test = [] {
+      control_value_t obj{};
+      expect(not glz::read_toml(obj, "v = \"a\\u0001b\""));
+      expect(obj.v == std::string("a\x01"
+                                  "b"));
+   };
+
+   "tab is allowed raw in every string style"_test = [] {
+      control_value_t obj{};
+      expect(not glz::read_toml(obj, "v = \"a\tb\""));
+      expect(obj.v == "a\tb");
+      expect(not glz::read_toml(obj, "v = 'a\tb'"));
+      expect(obj.v == "a\tb");
+      expect(not glz::read_toml(obj, "v = \"\"\"a\tb\"\"\""));
+      expect(obj.v == "a\tb");
+      expect(not glz::read_toml(obj, "v = \"x\" # a\tb\n"));
+      expect(obj.v == "x");
+   };
+
+   "line breaks stay legal in multiline strings"_test = [] {
+      control_value_t obj{};
+      expect(not glz::read_toml(obj, "v = \"\"\"a\nb\"\"\""));
+      expect(obj.v == "a\nb");
+      expect(not glz::read_toml(obj, "v = '''a\nb'''"));
+      expect(obj.v == "a\nb");
+   };
+
+   // The scans now run as bulk runs broken by a dispatch table, so the cases that
+   // make a run stop without ending the string need to keep working.
+   "quotes inside multiline strings survive the scan"_test = [] {
+      control_value_t obj{};
+      expect(not glz::read_toml(obj, "v = \"\"\"a\"b\"\"\""));
+      expect(obj.v == "a\"b");
+      expect(not glz::read_toml(obj, "v = \"\"\"a\"\"b\"\"\""));
+      expect(obj.v == "a\"\"b");
+      expect(not glz::read_toml(obj, "v = '''a'b'''"));
+      expect(obj.v == "a'b");
+      expect(not glz::read_toml(obj, "v = \"\"\"a\\\n   b\"\"\""));
+      expect(obj.v == "ab");
+      expect(not glz::read_toml(obj, "v = \"a\\tb\\u0041\""));
+      expect(obj.v == "a\tbA");
+   };
+};
+
+suite toml_control_character_writer_tests = [] {
+   // Escaping costs a check on every string, so like JSON it is opt-in and the
+   // default output is unchanged.
+   "control characters are not escaped by default"_test = [] {
+      control_value_t obj{
+         std::string("a\x01"
+                     "b")};
+      std::string buffer{};
+      expect(not glz::write_toml(obj, buffer));
+      expect(buffer == std::string("v = \"a\x01"
+                                   "b\""))
+         << buffer;
+   };
+
+   "escape_control_characters emits unicode escapes"_test = [] {
+      control_value_t obj{
+         std::string("a\x01"
+                     "b")};
+      std::string buffer{};
+      expect(not glz::write<toml_escape_opts{}>(obj, buffer));
+      expect(buffer == R"(v = "a\u0001b")") << buffer;
+   };
+
+   "escape_control_characters emits DEL"_test = [] {
+      control_value_t obj{
+         std::string("a\x7f"
+                     "b")};
+      std::string buffer{};
+      expect(not glz::write<toml_escape_opts{}>(obj, buffer));
+      expect(buffer == R"(v = "a\u007Fb")") << buffer;
+   };
+
+   // Strings longer than eight bytes go through the SWAR scan rather than the scalar
+   // tail, and its mask only spots the C0 range until DEL is given its own term.
+   "escaping covers the SWAR path"_test = [] {
+      control_value_t obj{
+         std::string("abcdefghij\x01"
+                     "klmnopqrst")};
+      std::string buffer{};
+      expect(not glz::write<toml_escape_opts{}>(obj, buffer));
+      expect(buffer == R"(v = "abcdefghij\u0001klmnopqrst")") << buffer;
+
+      control_value_t del{
+         std::string("abcdefghij\x7f"
+                     "klmnopqrst")};
+      buffer.clear();
+      expect(not glz::write<toml_escape_opts{}>(del, buffer));
+      expect(buffer == R"(v = "abcdefghij\u007Fklmnopqrst")") << buffer;
+   };
+
+   "short escapes are preferred over unicode escapes"_test = [] {
+      control_value_t obj{"a\tb\nc\rd"};
+      std::string buffer{};
+      expect(not glz::write<toml_escape_opts{}>(obj, buffer));
+      expect(buffer == R"(v = "a\tb\nc\rd")") << buffer;
+   };
+
+   "ordinary strings are untouched by escaping"_test = [] {
+      control_value_t obj{"hello world, nothing special here at all"};
+      std::string buffer{};
+      expect(not glz::write<toml_escape_opts{}>(obj, buffer));
+      expect(buffer == R"(v = "hello world, nothing special here at all")") << buffer;
+   };
+
+   // A key is escaped whether or not the option is on: it is quoted only because it
+   // is not bare, and a raw control byte there would reparse as invalid TOML.
+   "DEL in a key is escaped without the option"_test = [] {
+      std::map<std::string, int> m{{std::string("a\x7f"
+                                                "b"),
+                                    8}};
+      std::string buffer{};
+      expect(not glz::write_toml(m, buffer));
+      expect(buffer == R"("a\u007Fb" = 8)") << buffer;
+      std::map<std::string, int> back{};
+      expect(not glz::read_toml(back, buffer)) << buffer;
+      expect(back == m);
+   };
+
+   "escaped control characters round-trip"_test = [] {
+      control_value_t obj{
+         std::string("a\x01"
+                     "b\x7f"
+                     "c")};
+      std::string buffer{};
+      expect(not glz::write<toml_escape_opts{}>(obj, buffer));
+      control_value_t back{};
+      expect(not glz::read_toml(back, buffer)) << buffer;
+      expect(back.v == obj.v);
+   };
+};
+
 int main() { return 0; }

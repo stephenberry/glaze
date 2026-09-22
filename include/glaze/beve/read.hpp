@@ -3286,7 +3286,7 @@ namespace glz
    {
       static_assert(sizeof(decltype(*buffer.data())) == 1);
 
-      if (buffer.empty()) {
+      if (buffer.size() == 0) {
          if constexpr (resizable<Container>) {
             values.clear();
          }

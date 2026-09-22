@@ -78,12 +78,6 @@ namespace glz
       template <auto Opts, bool Key = false, class Buffer>
       void term_to_json_value(auto&& ctx, auto&& it, auto&& end, Buffer& out, auto&& ix, uint32_t recursive_depth)
       {
-         // Check recursion depth limit
-         if (recursive_depth >= max_recursive_depth_limit) [[unlikely]] {
-            ctx.error = error_code::exceeded_max_recursive_depth;
-            return;
-         }
-
          if (invalid_end(ctx, it, end)) [[unlikely]] {
             return;
          }
@@ -114,6 +108,17 @@ namespace glz
          };
 
          const auto type = uint8_t(*it);
+
+         // `recursive_depth` is the number of levels enclosing this term. Lists, tuples and maps open
+         // another, the empty list included since it is written as `[]`; scalars do not, so as in
+         // the readers a scalar may sit inside the deepest container the limit allows.
+         const bool opens_level = type == ERL_LIST_EXT || type == ERL_NIL_EXT || type == ERL_SMALL_TUPLE_EXT ||
+                                  type == ERL_LARGE_TUPLE_EXT || type == ERL_MAP_EXT;
+         if (opens_level && recursive_depth >= max_recursive_depth_limit) [[unlikely]] {
+            ctx.error = error_code::exceeded_max_recursive_depth;
+            return;
+         }
+
          switch (type) {
          case ERL_SMALL_INTEGER_EXT:
          case ERL_INTEGER_EXT: {

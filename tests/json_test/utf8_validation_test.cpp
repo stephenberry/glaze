@@ -148,17 +148,18 @@ namespace
       std::string_view detected{};
       std::string_view utf8{}; // validator: needs a byte-granular shuffle, else falls back
       std::string_view escape{}; // string escaping: no AVX-512 or WASM helper exists
+      std::string_view skip{}; // structural skip: needs only a byte compare and a bit gather
    };
 
    inline constexpr build_shape known_builds[]{
-      {"AVX512BW", "AVX512BW", "AVX2"}, // no AVX-512 escape helper
-      {"AVX2", "AVX2", "AVX2"}, //
-      {"SSSE3", "SSSE3", "SSE2"}, // no SSSE3 escape helper
-      {"SSE2", "scalar", "SSE2"}, // SSE2 has no byte-granular shuffle
-      {"NEON64", "NEON64", "NEON"}, //
-      {"NEON", "scalar", "NEON"}, // 32 bit NEON has no vqtbl1q_u8
-      {"WASM_SIMD128", "WASM_SIMD128", "SWAR"}, // no WASM escape helper
-      {"scalar", "scalar", "SWAR"}, //
+      {"AVX512BW", "AVX512BW", "AVX2", "AVX512BW"}, // no AVX-512 escape helper
+      {"AVX2", "AVX2", "AVX2", "AVX2"}, //
+      {"SSSE3", "SSSE3", "SSE2", "SSE2"}, // no SSSE3 escape helper; the skip needs only SSE2
+      {"SSE2", "scalar", "SSE2", "SSE2"}, // SSE2 has no byte-granular shuffle
+      {"NEON64", "NEON64", "NEON", "NEON64"}, //
+      {"NEON", "scalar", "NEON", "SWAR"}, // 32 bit NEON has no vqtbl1q_u8 and no pairwise gather
+      {"WASM_SIMD128", "WASM_SIMD128", "SWAR", "WASM_SIMD128"}, // no WASM escape helper
+      {"scalar", "scalar", "SWAR", "SWAR"}, //
    };
 
    constexpr const build_shape* shape_for(std::string_view detected) noexcept
@@ -205,6 +206,10 @@ static_assert(width_for(glz::simd_info.utf8_validation) != unknown_width,
 static_assert(glz::simd_info.float_write == "NEON" || glz::simd_info.float_write == "SSE4.1" ||
                  glz::simd_info.float_write == "SSE2" || glz::simd_info.float_write == "scalar",
               "simd_info.float_write reports a value this test does not know");
+
+// The structural skip is likewise a pure function of what was detected.
+static_assert(shape_for(glz::simd_info.detected)->skip == glz::simd_info.structural_skip,
+              "simd_info.structural_skip does not match the backend detection");
 
 // String escaping is a pure function of what was detected, with no testing hook to fence against.
 static_assert(shape_for(glz::simd_info.detected)->escape == glz::simd_info.string_escape,

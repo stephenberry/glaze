@@ -3922,6 +3922,27 @@ suite cbor_byte_and_char_array_tests = [] {
       expect(dst == src);
    };
 
+   // An empty payload into a default-constructed vector leaves data() null, and memcpy is not
+   // allowed a null argument even for a zero count. Both the definite and the indefinite byte
+   // string reach that memcpy, so both are covered here -- this is a UBSan-only failure.
+   "cbor empty byte string does not memcpy from a null pointer"_test = [] {
+      {
+         std::vector<std::byte> dst{}; // data() == nullptr
+         expect(not glz::read_cbor(dst, std::string("\x40", 1))); // bstr(0)
+         expect(dst.empty());
+      }
+      {
+         std::vector<std::byte> dst{};
+         expect(not glz::read_cbor(dst, std::string("\x5F\x40\xFF", 3))); // bstr(*) { bstr(0) }
+         expect(dst.empty());
+      }
+      {
+         std::vector<std::byte> dst{};
+         expect(not glz::read_cbor(dst, std::string("\x5F\xFF", 2))); // bstr(*) {}
+         expect(dst.empty());
+      }
+   };
+
    "cbor std::array<std::byte, N> round trips"_test = [] {
       std::array<std::byte, 4> src{std::byte{1}, std::byte{2}, std::byte{3}, std::byte{4}};
       std::string buffer{};
@@ -5177,6 +5198,24 @@ suite cbor_recursion_depth_limit = [] {
       tree_node deep_out{};
       expect(glz::read_cbor(deep_out, nested_tree(glz::max_recursive_depth_limit)) ==
              glz::error_code::exceeded_max_recursive_depth);
+   };
+
+   "cbor_to_json binds at the same level as the readers"_test = [] {
+      // Only containers take a level, so a scalar fits inside the deepest container the limit allows.
+      constexpr auto limit = glz::max_recursive_depth_limit;
+      const auto build = [](size_t levels, char innermost) {
+         std::string b(levels, char(0x81)); // array(1)
+         b.push_back(innermost);
+         return b;
+      };
+      constexpr char one = 0x01;
+      constexpr char empty = char(0x80); // array(0)
+
+      std::string json{};
+      expect(not glz::cbor_to_json(build(limit, one), json));
+      expect(json == std::string(limit, '[') + "1" + std::string(limit, ']'));
+      expect(not glz::cbor_to_json(build(limit - 1, empty), json));
+      expect(glz::cbor_to_json(build(limit, empty), json) == glz::error_code::exceeded_max_recursive_depth);
    };
 };
 

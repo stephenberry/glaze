@@ -33,6 +33,7 @@ int main() {
 ## Features
 
 - **Connection Pooling**: Automatically reuses connections for better performance, with stale-connection detection (timestamp eviction + active TCP peek)
+- **Redirect Following**: Opt-in automatic following of 3xx responses, with RFC 9110 method rewriting and cross-origin credential stripping
 - **Transparent Retry**: Idempotent requests (GET, HEAD, OPTIONS, PUT, DELETE, TRACE) are retried once on connection-level failures when the server has not yet started responding. POST and PATCH are never auto-retried.
 - **Chunked Transfer-Encoding**: Transparent decoding of chunked responses across synchronous, asynchronous, and streaming paths
 - **Asynchronous Operations**: Non-blocking requests with futures or completion handlers
@@ -298,6 +299,7 @@ struct stream_request_params_v2 {
     glz::http_headers headers;
     http_data_handler on_data;
     http_error_handler on_error;
+    http_progress_handler on_progress;
     http_connect_handler on_connect;
     http_disconnect_handler on_disconnect;
     std::function<bool(int)> status_is_error{[](int status){ return status >= 400; }};
@@ -313,6 +315,7 @@ struct stream_request_params_v2 {
 -   `headers`: The HTTP headers to send.
 -   `on_data`: A callback that's called when data is received.
 -   `on_error`: A callback that's called when an error occurs.
+-   `on_progress`: An optional callback reporting download progress; returning `false` cancels the transfer. See [Progress and Cancellation](#progress-and-cancellation).
 -   `on_connect`: A callback that's called when the connection is established and the headers are received.
 -   `on_disconnect`: A callback that's called when the connection is closed.
 -   `status_is_error`: Optional predicate to decide whether a status code should trigger `on_error` (defaults to checking for codes ≥ 400).
@@ -329,6 +332,53 @@ auto conn = client.stream_request_v2({
 ```
 
 The `http_stream_connection` object contains a `disconnect()` method that can be used to close the connection.
+
+### Progress and Cancellation
+
+`on_progress` reports how much of the response body has arrived, which is what a download needs to drive a progress bar and to let the user cancel:
+
+```cpp
+using http_progress_handler = std::function<bool(size_t transferred, size_t total)>;
+```
+
+-   `transferred`: body bytes handed to `on_data` so far.
+-   `total`: the size the response framed itself with, or `0` when no total is knowable in advance - a chunked body, or one framed by connection close. A response framed as empty also reports `0`. In every case, treat `0` as "no determinate total to show" and fall back to an indeterminate display.
+-   Return `false` to cancel. The stream stops where it is, the socket is closed rather than returned to the pool, and `on_disconnect` follows exactly as it would for a caller-initiated `disconnect()`.
+
+The callback runs once with `(0, total)` as soon as the response headers are parsed, so the total is in hand before any body arrives, and again after every span passed to `on_data`. It runs on the client's I/O thread, so keep it cheap and marshal to your UI thread rather than blocking in it.
+
+Writing a download straight to disk, with a cancellable progress display:
+
+```cpp
+std::ofstream file{"download.bin", std::ios::binary};
+std::atomic<bool> cancelled{false}; // set from wherever the user can cancel
+
+auto conn = client.stream_request_v2({
+    .url = "https://example.com/large-file",
+    .on_data = [&](std::string_view data) { file.write(data.data(), data.size()); },
+    .on_error = [](std::error_code ec) { std::cerr << "Download failed: " << ec.message() << '\n'; },
+    .on_progress = [&](size_t transferred, size_t total) {
+        if (total) {
+            std::cout << (transferred * 100 / total) << "%\r" << std::flush;
+        }
+        return !cancelled.load();
+    },
+    .on_disconnect = [&] { file.close(); }
+});
+```
+
+### Body Framing
+
+A streamed response ends where its framing says it does:
+
+-   No body at all: a reply to `HEAD`, or a `1xx`, `204` or `304`, ends as soon as its headers are read. A `Content-Length` on such a reply states the length the equivalent `GET` would have had (RFC 9110 6.4.1), so it is reported as the total but no body is waited for.
+-   `Content-Length`: the stream ends after exactly that many body bytes. `on_disconnect` fires at the body boundary without waiting for the peer to close, and the connection goes back to the pool for reuse.
+-   `Transfer-Encoding: chunked`: the stream ends after the terminal chunk and its trailer section; the connection is reusable.
+-   Neither: the body runs until the peer closes the connection, and the socket is not reusable afterwards. An HTTP/1.0 response that did not ask for `Connection: keep-alive` is single-use for the same reason (RFC 9112 9.3).
+
+A peer that closes before the last declared byte has sent an incomplete message (RFC 9112 8); `on_error` reports it rather than letting a truncated download pass for a complete one.
+
+A response carrying `Content-Length` fields that disagree frames no body at all (RFC 9112 6.3) and is refused with `glz::http_client_error::unframed_response` rather than framed by a guess.
 
 ### Handling HTTP Errors During Streaming
 
@@ -347,6 +397,45 @@ auto on_error = [](std::error_code ec) {
     std::cerr << "Stream error: " << ec.message() << "\n";
 };
 ```
+
+## Following Redirects
+
+Redirects are not followed by default: a 3xx response is returned to the caller as-is. Set `max_redirects` to the number of hops the client may follow automatically.
+
+```cpp
+glz::http_client client{};
+client.max_redirects(10);
+
+auto response = client.get("http://example.com/old-path");
+// response is whatever the chain ends on
+```
+
+The option applies to the synchronous and asynchronous request methods. Streaming requests (`stream_request_v2`) always deliver the 3xx response itself.
+
+Each hop takes the target of the response's `Location` field, resolved against the URL that produced it, so absolute, scheme-relative (`//host/path`), root-relative (`/path`), query-only (`?page=2`) and relative (`../v2/thing`) values all work.
+
+**Method rewriting** follows RFC 9110 15.4:
+
+| Status | Effect |
+|---|---|
+| 301, 302 | `POST` continues as `GET` with no body; every other method is kept |
+| 303 | Continues as `GET` with no body, unless the request was `HEAD` |
+| 307, 308 | Method and body are preserved |
+
+When a hop drops the body, `Content-Type` is dropped with it.
+
+300 (Multiple Choices) and 305 (Use Proxy) are never followed; they name no single target to continue onto.
+
+**Credentials** (`Authorization`, `Proxy-Authorization`, `Cookie`) and a caller-supplied `Host` are dropped when a hop crosses to a different scheme, host or port. Other caller headers travel with the whole chain.
+
+Two errors are specific to this path:
+
+- `glz::http_client_error::too_many_redirects` when the chain exceeds `max_redirects()`
+- `glz::http_client_error::invalid_redirect` when `Location` is missing, empty, does not resolve to an `http`/`https` target, or carries a control character
+
+A space in the target is percent-encoded rather than rejected, matching browsers and curl.
+
+Both are returned in place of the response, so the last 3xx of an over-long chain is not handed back. Set `max_redirects(0)` and follow the chain yourself if you need to see each hop.
 
 ## Response Structure
 
