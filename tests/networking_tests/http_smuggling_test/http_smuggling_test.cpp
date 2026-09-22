@@ -125,6 +125,13 @@ suite http_smuggling_suite = [] {
       res.send("stale");
       res.close();
    });
+   server.stream_get("/stream-empty-send", [](glz::request&, glz::streaming_response& res) {
+      res.start_stream(200, {{"Content-Type", "text/plain"}});
+      res.send("a");
+      res.send("");
+      res.send("b");
+      res.close();
+   });
    // A sender loop that only stops when a send fails or max_events is reached; 500
    // events 20 ms apart outlast the test's 5 second wait.
    server.stream(glz::http_method::HEAD, "/stream-head-events", [](glz::request&, glz::streaming_response& res) {
@@ -532,6 +539,28 @@ suite http_smuggling_suite = [] {
 
       expect(response.starts_with("HTTP/1.1 200")) << "got: " << response;
       expect(ends_at_header_section(response)) << "got: " << response;
+   };
+
+   // A zero-length chunk is the terminator, so an empty send must not write one.
+   "An empty streamed send does not end the chunked body"_test = [&] {
+      const auto response = stream_reply(
+         "GET /stream-empty-send HTTP/1.1\r\n"
+         "Host: localhost\r\n"
+         "\r\n");
+
+      expect(response.starts_with("HTTP/1.1 200")) << "got: " << response;
+      expect(response.ends_with("\r\n\r\n1\r\na\r\n1\r\nb\r\n0\r\n\r\n")) << "got: " << response;
+   };
+
+   // The stream closes the connection when it ends, and says so.
+   "A streamed response announces Connection: close"_test = [&] {
+      const auto response = stream_reply(
+         "GET /stream-empty-send HTTP/1.1\r\n"
+         "Host: localhost\r\n"
+         "\r\n");
+
+      expect(response.find("Connection: close\r\n") != std::string::npos) << "got: " << response;
+      expect(response.find("keep-alive") == std::string::npos) << "got: " << response;
    };
 
    server.stop();

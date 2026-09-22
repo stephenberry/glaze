@@ -1039,7 +1039,7 @@ namespace glz
          // Default headers for streaming. A control header that was dropped above
          // for containing CR/LF must not suppress its auto-generated default: a
          // dropped Transfer-Encoding/Connection would otherwise leave the stream
-         // unframed (no chunked framing, no keep-alive signal). Treat a
+         // unframed (no chunked framing, no close signal). Treat a
          // present-but-invalid header as absent, matching what was written.
          const auto present_and_valid = [&](std::string_view key) {
             return std::ranges::any_of(headers.fields(key), [](const http_header& field) {
@@ -1051,8 +1051,10 @@ namespace glz
             response_str.append("Transfer-Encoding: chunked\r\n");
             chunked_encoding_ = true;
          }
+         // The stream owns the socket and closes it when done, so the connection is never
+         // reused (RFC 9112 9.6).
          if (!present_and_valid("connection")) {
-            response_str.append("Connection: keep-alive\r\n");
+            response_str.append("Connection: close\r\n");
          }
          if (!present_and_valid("cache-control")) {
             response_str.append("Cache-Control: no-cache\r\n");
@@ -1075,6 +1077,15 @@ namespace glz
             if (handler) {
                asio::post(get_executor(),
                           [handler] { handler(std::make_error_code(std::errc::operation_not_permitted)); });
+            }
+            return;
+         }
+
+         // Nothing to send. In a chunked body a zero-length chunk is the terminator, so
+         // writing one here would end the body and leave later sends outside it.
+         if (data.empty()) {
+            if (handler) {
+               asio::post(get_executor(), [handler] { handler({}); });
             }
             return;
          }
