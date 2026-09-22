@@ -339,6 +339,8 @@ server.get("/report", get_report);
 server.route(glz::http_method::HEAD, "/report", get_report); // headers only, same Content-Length
 ```
 
+Streaming routes follow the same rule. After `start_stream` with a `1xx`, `204` or `304` status, or on a `HEAD` streaming route, `send` writes nothing and `close` ends the response without a terminating chunk. A send callback on the stream connection receives `std::errc::operation_not_permitted`, so sender loops such as `streaming_utils::send_periodic_data` close the stream right away. `Transfer-Encoding: chunked` is generated only for `HEAD`, where it states the framing `GET` would use. A `1xx` or `204` drops a `Content-Length` or `Transfer-Encoding` the handler passed to `start_stream`.
+
 ## Middleware
 
 ### Adding Middleware
