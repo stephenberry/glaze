@@ -1009,7 +1009,7 @@ namespace glz
          response_str.append("HTTP/1.1 ");
          response_str.append(std::to_string(status_code));
          response_str.append(" ");
-         response_str.append(get_status_message(status_code));
+         response_str.append(detail::http_status_reason_phrase(status_code));
          response_str.append("\r\n");
 
          // Add custom headers
@@ -1237,32 +1237,6 @@ namespace glz
                      timer->async_wait([self, timer](std::error_code) { self->start_disconnect_detection(); });
                   }
                });
-         }
-      }
-
-      std::string_view get_status_message(int status_code)
-      {
-         switch (status_code) {
-         case 200:
-            return "OK";
-         case 201:
-            return "Created";
-         case 204:
-            return "No Content";
-         case 304:
-            return "Not Modified";
-         case 400:
-            return "Bad Request";
-         case 401:
-            return "Unauthorized";
-         case 403:
-            return "Forbidden";
-         case 404:
-            return "Not Found";
-         case 500:
-            return "Internal Server Error";
-         default:
-            return "Unknown";
          }
       }
    };
@@ -2621,7 +2595,7 @@ namespace glz
          if (!request_line.has_value()) {
             int status_code = request_line.error();
             result.status = parse_status::error;
-            send_error_response_with_close(conn, status_code, get_status_message(status_code));
+            send_error_response_with_close(conn, status_code, detail::http_status_reason_phrase(status_code));
             return result;
          }
 
@@ -3100,7 +3074,7 @@ namespace glz
             auto* end = glz::to_chars(num_buf, static_cast<int32_t>(response.status_code));
             h.append(num_buf, size_t(end - num_buf));
             h.append(" ");
-            h.append(get_status_message(response.status_code));
+            h.append(detail::http_status_reason_phrase(response.status_code));
             h.append("\r\n");
          }
 
@@ -3309,42 +3283,6 @@ namespace glz
             stream_conn->close();
             // Log the error
             error_handler(std::make_error_code(std::errc::invalid_argument), std::source_location::current());
-         }
-      }
-
-      inline std::string_view get_status_message(int status_code)
-      {
-         switch (status_code) {
-         case 200:
-            return "OK";
-         case 201:
-            return "Created";
-         case 204:
-            return "No Content";
-         case 304:
-            return "Not Modified";
-         case 400:
-            return "Bad Request";
-         case 401:
-            return "Unauthorized";
-         case 403:
-            return "Forbidden";
-         case 404:
-            return "Not Found";
-         case 405:
-            return "Method Not Allowed";
-         case 409:
-            return "Conflict";
-         case 418:
-            return "I'm a teapot";
-         case 500:
-            return "Internal Server Error";
-         case 501:
-            return "Not Implemented";
-         case 503:
-            return "Service Unavailable";
-         default:
-            return "Unknown";
          }
       }
 
