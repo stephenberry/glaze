@@ -15647,6 +15647,25 @@ suite json_recursion_depth_limit = [] {
       expect(glz::read_json(out, nested_arrays(100'000)) == glz::error_code::exceeded_max_recursive_depth);
    };
 
+   "prettify binds at the same level as the readers"_test = [] {
+      // Prettify has to accept every document the validator does, and reject the next level with the
+      // same error.
+      const auto at_limit = nested_arrays(glz::max_recursive_depth_limit);
+      expect(not glz::validate_jsonc(at_limit));
+      std::string pretty{};
+      expect(not glz::prettify_jsonc(at_limit, pretty));
+      expect(glz::minify_json(pretty) == at_limit);
+
+      const auto past_limit = nested_arrays(glz::max_recursive_depth_limit + 1);
+      expect(glz::validate_jsonc(past_limit) == glz::error_code::exceeded_max_recursive_depth);
+      expect(glz::prettify_jsonc(past_limit, pretty) == glz::error_code::exceeded_max_recursive_depth);
+      expect(glz::prettify_json(past_limit, pretty) == glz::error_code::exceeded_max_recursive_depth);
+
+      expect(not glz::prettify_jsonc(nested_objects(glz::max_recursive_depth_limit), pretty));
+      expect(glz::prettify_jsonc(nested_objects(glz::max_recursive_depth_limit + 1), pretty) ==
+             glz::error_code::exceeded_max_recursive_depth);
+   };
+
    "a validated skip of an unknown key is bounded"_test = [] {
       // The default skip walks the nest iteratively; validate_skipped parses it, which recurses.
       struct validating : glz::opts
