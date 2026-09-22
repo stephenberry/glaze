@@ -54,9 +54,8 @@ static void error_handler(std::error_code, std::source_location) {}
 suite http_status_line_suite = [] {
    auto io_ctx = std::make_shared<asio::io_context>();
    glz::http_server<> server(io_ctx, error_handler);
-   server.get("/found", [](const glz::request&, glz::response& res) {
-      res.status(302).header("Location", "/elsewhere");
-   });
+   server.get("/found",
+              [](const glz::request&, glz::response& res) { res.status(302).header("Location", "/elsewhere"); });
    server.get("/unprocessable", [](const glz::request&, glz::response& res) { res.status(422); });
    server.get("/unregistered", [](const glz::request&, glz::response& res) { res.status(299); });
    server.stream_get("/stream-conflict", [](glz::request&, glz::streaming_response& res) {

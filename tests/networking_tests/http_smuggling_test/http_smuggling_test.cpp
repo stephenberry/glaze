@@ -136,8 +136,7 @@ suite http_smuggling_suite = [] {
    // events 20 ms apart outlast the test's 5 second wait.
    server.stream(glz::http_method::HEAD, "/stream-head-events", [](glz::request&, glz::streaming_response& res) {
       res.as_event_stream();
-      glz::streaming_utils::send_periodic_data<int>(
-         res.stream, [] { return 1; }, std::chrono::milliseconds(20), 500);
+      glz::streaming_utils::send_periodic_data<int>(res.stream, [] { return 1; }, std::chrono::milliseconds(20), 500);
    });
    server.enable_cors();
    server.bind(test_host, 0);
