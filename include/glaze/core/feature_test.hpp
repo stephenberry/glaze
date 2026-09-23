@@ -53,6 +53,15 @@ namespace glz
 
 // Glaze Feature Test Macros for breaking changes
 
+// v8.5.0 honors meta<T>::skip in every format that writes keyed objects
+//
+// meta<T>::skip was only consulted by JSON and YAML. BEVE, CBOR, MessagePack, TOML, BSON and
+// JSONB wrote a key skipped on serialize and read a key skipped on parse. They now leave the
+// key out of their output and consume it without reading, as JSON does, and a skipped member
+// needs no reader or writer in these formats either. Positional layouts (structs_as_arrays)
+// have no keys and are unchanged.
+#define glaze_v8_5_0_meta_skip_all_formats
+
 // v8.5.0 removes glz::invoke_update and makes writing a glz::invoke member an error
 //
 // glz::invoke_update is gone. It detected change by comparing the raw JSON text of the

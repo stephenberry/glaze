@@ -560,17 +560,7 @@ namespace glz
       template <auto Opts, size_t I>
       static consteval bool should_skip_field()
       {
-         using V = field_t<T, I>;
-
-         if constexpr (always_skipped<V>) {
-            return true;
-         }
-         else if constexpr (is_any_function_ptr<V>) {
-            return !check_write_function_pointers(Opts);
-         }
-         else {
-            return false;
-         }
+         return skipped_on_write<Opts, T, I>;
       }
 
       template <auto Opts>
