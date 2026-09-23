@@ -3,9 +3,15 @@
 
 #pragma once
 
+#include <cstddef>
 #include <filesystem>
+#include <string>
 
 #include "glaze/core/common.hpp"
+#include "glaze/file/file_ops.hpp"
+#include "glaze/json/read.hpp"
+#include "glaze/util/dump.hpp"
+#include "glaze/util/inline.hpp"
 
 namespace glz
 {

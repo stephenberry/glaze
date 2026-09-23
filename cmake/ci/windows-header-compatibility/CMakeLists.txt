@@ -90,18 +90,11 @@ while(glaze_lean_changed)
   endforeach()
 endwhile()
 
-# Some headers are include-fragments rather than standalone units: they specialize
-# templates whose primary declaration lives only in a parent header that #includes
-# them (e.g. the *_registry_impl.hpp fragments are pulled in by rpc/registry.hpp and
-# fail to compile on their own). They must never be #included directly, so we drop
-# them from the generated translation units; they are still exercised transitively
-# through their parent. This also removes the load-bearing include-ordering hack the
-# directory-based approach needed for registry.hpp.
-set(glaze_non_standalone_fragments
-  "glaze/net/rest_registry_impl.hpp"
-  "glaze/rpc/jsonrpc_registry_impl.hpp"
-  "glaze/rpc/repe/repe_registry_impl.hpp"
-)
+# Include-fragments (see non-standalone-headers.cmake) must never be #included
+# directly, so we drop them from the generated translation units; they are still
+# exercised transitively through their parent. This also removes the load-bearing
+# include-ordering hack the directory-based approach needed for registry.hpp.
+include("${CMAKE_CURRENT_LIST_DIR}/../non-standalone-headers.cmake")
 list(REMOVE_ITEM glaze_public_headers ${glaze_non_standalone_fragments})
 list(REMOVE_ITEM glaze_windows_lean_headers ${glaze_non_standalone_fragments})
 
@@ -189,17 +182,12 @@ endfunction()
 
 # Each header group is compiled as ONE aggregate translation unit (Windows.h once,
 # followed by every header in the group), rather than one TU per header or per
-# directory. This is deliberate, not just a speed optimization:
-#
-#   * Glaze headers are not all standalone. Many rely on declarations established by
-#     an earlier include (e.g. util/dump.hpp uses string_literal, core/array_apply.hpp
-#     uses size_t) and do not compile in isolation. Splitting per-header or per-subdir
-#     would produce spurious failures that have nothing to do with Windows macros, so
-#     the aggregate TU in a stable (sorted) order is what actually reflects real usage.
-#   * A genuine Windows-macro collision is still pinpointed: the compiler reports the
-#     offending header through its #include stack, and the macro-preservation #error
-#     below names the exact header it followed. So the aggregate model does not lose
-#     the ability to locate a failure.
+# directory. Per-header self-containment is checked separately by the
+# standalone-headers workflow, so this job only needs to see every header once after
+# <Windows.h>. A genuine Windows-macro collision is still pinpointed: the compiler
+# reports the offending header through its #include stack, and the macro-preservation
+# #error below names the exact header it followed. So the aggregate model does not
+# lose the ability to locate a failure.
 #
 # Writes a .cpp file that includes Windows.h, then tests every provided Glaze header.
 function(write_header_test_source source_path use_win32_lean_and_mean)

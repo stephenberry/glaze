@@ -3,9 +3,17 @@
 
 #pragma once
 
+#include <algorithm>
+#include <iterator>
+#include <string>
+#include <string_view>
+#include <type_traits>
+#include <utility>
+
 #include "glaze/core/read.hpp"
 #include "glaze/core/reflect.hpp"
 #include "glaze/core/write.hpp"
+#include "glaze/json/write.hpp"
 
 namespace glz
 {

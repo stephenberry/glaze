@@ -5,6 +5,9 @@
 
 #include <array>
 #include <bit>
+#include <concepts>
+#include <cstddef>
+#include <cstdint>
 #include <limits>
 
 namespace glz
