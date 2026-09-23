@@ -222,17 +222,41 @@ constexpr auto count = glz::detail::count_members<Derived>;
 // count == 3 (2 from Base + 1 from Derived)
 ```
 
-> **Note:** Two shapes still need a `glz::meta`. The first is two members with one name: a member
-> that hides a member of a base class is a member of its own, and two bases can repeat a name as
-> well, so the reflection lists both under that name, the writer emits the key twice and the reader
-> cannot be instantiated for the type at all. Give such a type a `glz::meta` that names its members
-> apart, such as `glz::object("base_x", &Base::x, "x", &Derived::x)`. The second is a base inherited
-> twice *non*-virtually: it has two subobjects, whose members the compiler refuses to name
-> unambiguously, while a virtual base is a single shared subobject and is reflected once.
+> **Note:** Two shapes need a `glz::meta`. The first is a base whose second subobject is reachable
+> through a non-virtual edge — a base inherited twice *non*-virtually that holds members, or one that
+> another path reaches virtually and this one does not. It has two subobjects, whose members the
+> compiler refuses to name through the derived type, while a base reached virtually on every path is
+> a single shared subobject and is reflected once, and the same holds inside a repeated base: members
+> that all come from a virtual base of it are reflected once as well. Reflecting a type of the refused
+> shape is refused with a `static_assert` that names it, rather than handing out a count that leaves
+> one of the subobjects out. An empty base repeated non-virtually reflects nothing twice and stays
+> reflectable. A `glz::meta` written for the refused shape has to reach the members through lambdas —
+> `&B::a` is an `int A::*` when `a` is declared in `A`, so applying it to the derived type is
+> ambiguous, while `[](auto& self) -> auto& { return self.C::a; }` names one of the two subobjects.
+>
+> The second is two members with one name: a member that hides a member of a base class is a member of
+> its own, and two bases can repeat a name as well, so no key can be told from the other. The writer
+> emits that key twice while the keyed reader cannot be instantiated for the type at all, so give such
+> a type a `glz::meta` that names its members apart, such as
+> `glz::object("base_x", &Base::x, "x", &Derived::x)`. The array-shaped writes carry the members
+> positionally and still round-trip, so it is only the keyed formats that need the `glz::meta`.
 >
 > A `glz::meta` written for a base class is not consulted for a derived type that is reflected
 > automatically, because the reflection reads the base's data members: the same base serializes as
 > `{"renamed":1}` on its own and as `{"raw":1,"extra":2}` inside such a derived type.
+>
+> Inheriting now means reflecting what the base holds, so a base whose members glaze cannot serialize
+> — a `std::mutex`, say — breaks its derived types at compile time. The escape is the same: a
+> `glz::meta` for the derived type that names the members to keep.
+>
+> Two consequences of the base members being part of the reflection are worth knowing when upgrading.
+> `glz::meta<T>::modify` layers on top of the inherited members as well, so a derived type that used
+> `modify` writes its base members where it did not before. Both that and the array-shaped writes
+> (`structs_as_arrays`, `glz::reflect_array`, which gain one element per inherited member) change what
+> is stored for a derived type. A payload an earlier version wrote for the array-shaped writes is
+> rejected when read, because the element count no longer matches. A keyed payload still reads without
+> an error, but the members that used to be left out are simply absent from it, so they keep the value
+> they were already holding.
 
 ### Automatic Enum String Serialization
 
@@ -363,7 +387,9 @@ The P2996 implementation uses these key primitives:
 // Reflect on a type to get meta-info
 constexpr auto type_info = ^^Person;
 
-// Get all non-static data members
+// Get all non-static data members, the inherited ones included
+// (glz::detail::all_members_of walks std::meta::bases_of depth-first before asking for the members
+// the type declares itself, and skips a base it has already reached)
 constexpr auto members = std::meta::nonstatic_data_members_of(
     ^^Person,
     std::meta::access_context::unchecked()
