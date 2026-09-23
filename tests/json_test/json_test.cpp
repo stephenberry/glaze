@@ -854,6 +854,15 @@ struct partial_reuse_pair_t
    int a{};
    int b{};
 };
+struct context_reuse_node
+{
+   std::vector<context_reuse_node> c{};
+};
+struct context_reuse_nested_t
+{
+   partial_reuse_pair_t pair{};
+   std::vector<int> list{};
+};
 
 suite basic_types = [] {
    using namespace ut;
@@ -1286,6 +1295,120 @@ suite basic_types = [] {
       expect(glz::read<options>(p, std::string_view{buf2.data(), buf2.size()}, ctx) == glz::error_code::none);
       expect(p.a == 1);
       expect(p.b == 2);
+   };
+
+   // A failed read has to leave nothing behind in a context that a later read would see. The reader
+   // bails out of an error without closing the containers it entered, so depth used to stay raised
+   // and settle every later non-null-terminated read to unexpected_end, however well formed, and
+   // the error itself made the next read return it without parsing anything.
+   "a context reused after a failed read still reads"_test = [] {
+      static constexpr glz::opts options{.null_terminated = false};
+      const std::string_view bad = R"({"a":1,"b":)";
+      const std::string_view good = R"({"a":1,"b":2})";
+
+      glz::context ctx{};
+      partial_reuse_pair_t v{};
+      expect(glz::read<options>(v, bad, ctx) == glz::error_code::unexpected_end);
+      expect(ctx.depth == 0u) << ctx.depth;
+
+      for (int i = 0; i < 3; ++i) {
+         partial_reuse_pair_t out{};
+         const auto ec = glz::read<options>(out, good, ctx);
+         expect(ec == glz::error_code::none) << glz::format_error(ec, good);
+         expect(out.a == 1);
+         expect(out.b == 2);
+      }
+   };
+
+   "a context reused after a failed read deep in a document still reads"_test = [] {
+      // Each level is an object and an array, so a failure 100 levels down leaves depth near 200.
+      // Carried into the next read, that would also push a valid 60 level document past the
+      // recursion limit, which a null-terminated read is subject to as well.
+      const auto nest = [](const size_t levels, const std::string_view innermost) {
+         std::string s{};
+         for (size_t i = 0; i < levels; ++i) s += R"({"c":[)";
+         s += innermost;
+         for (size_t i = 0; i < levels; ++i) s += "]}";
+         return s;
+      };
+      const std::string bad = nest(100, "1");
+      const std::string good = nest(60, "");
+
+      for (const bool null_terminated : {true, false}) {
+         glz::context ctx{};
+         context_reuse_node first{};
+         const auto ec_bad = null_terminated ? glz::read<glz::opts{}>(first, bad, ctx)
+                                             : glz::read<glz::opts{.null_terminated = false}>(
+                                                  first, std::string_view{bad}, ctx);
+         expect(bool(ec_bad));
+         expect(ctx.depth == 0u) << ctx.depth;
+
+         context_reuse_node second{};
+         const auto ec = null_terminated ? glz::read<glz::opts{}>(second, good, ctx)
+                                         : glz::read<glz::opts{.null_terminated = false}>(
+                                              second, std::string_view{good}, ctx);
+         expect(ec == glz::error_code::none) << glz::format_error(ec, good);
+      }
+   };
+
+   "a context reused after a failed read reports only its own message"_test = [] {
+      static constexpr glz::opts options{.error_on_missing_keys = true};
+      glz::context ctx{};
+      partial_reuse_pair_t v{};
+      const auto ec_bad = glz::read<options>(v, std::string{R"({"a":1})"}, ctx);
+      expect(ec_bad == glz::error_code::missing_key);
+      expect(ec_bad.custom_error_message == "b") << ec_bad.custom_error_message;
+
+      const auto ec = glz::read<options>(v, std::string{R"({"a":1,"b":2})"}, ctx);
+      expect(ec == glz::error_code::none);
+      expect(ec.custom_error_message.empty()) << ec.custom_error_message;
+      expect(ctx.custom_error_message.empty()) << ctx.custom_error_message;
+   };
+
+   "an ndjson context reused after a failed read still reads"_test = [] {
+      static constexpr glz::opts options{.format = glz::NDJSON, .null_terminated = false};
+      const std::string_view bad = "[1,2]\n[3,";
+      const std::string_view good = "[1,2]\n[3,4]";
+
+      glz::context ctx{};
+      std::vector<std::vector<int>> v{};
+      expect(bool(glz::read<options>(v, bad, ctx)));
+      expect(ctx.depth == 0u) << ctx.depth;
+
+      std::vector<std::vector<int>> out{};
+      const auto ec = glz::read<options>(out, good, ctx);
+      expect(ec == glz::error_code::none) << glz::format_error(ec, good);
+      expect(out == std::vector<std::vector<int>>{{1, 2}, {3, 4}});
+   };
+
+   // Prettified writing indents by depth, and the writer leaves a container without closing it
+   // when a nested value fails, so a failed write used to indent every later write through the
+   // same context further in.
+   "a context reused after a failed write still writes"_test = [] {
+      static constexpr glz::opts options{.prettify = true};
+      const context_reuse_nested_t value{{1, 2}, {1, 2, 3}};
+      const auto expected = glz::write<options>(value);
+      expect(expected.has_value());
+
+      glz::context ctx{};
+      std::array<char, 24> too_small{};
+      expect(glz::write<options>(value, too_small, ctx) == glz::error_code::buffer_overflow);
+      expect(ctx.depth == 0u) << ctx.depth;
+
+      std::string out{};
+      expect(glz::write<options>(value, out, ctx) == glz::error_code::none);
+      expect(out == expected.value()) << out;
+   };
+
+   "a write through a context left holding a read error still writes"_test = [] {
+      glz::context ctx{};
+      partial_reuse_pair_t v{};
+      expect(bool(glz::read<glz::opts{}>(v, std::string{R"({"a":)"}, ctx)));
+
+      std::string out{};
+      const auto ec = glz::write<glz::opts{}>(partial_reuse_pair_t{1, 2}, out, ctx);
+      expect(ec == glz::error_code::none);
+      expect(out == R"({"a":1,"b":2})") << out;
    };
 
    "bool write"_test = [] {

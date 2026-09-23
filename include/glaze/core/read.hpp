@@ -156,6 +156,8 @@ namespace glz
    {
       static_assert(sizeof(decltype(*buffer.data())) == 1);
 
+      call_scope scope{ctx};
+
       if constexpr (Opts.format != NDJSON) {
          if (buffer.size() == 0) [[unlikely]] {
             ctx.error = error_code::no_read_input;
@@ -178,9 +180,6 @@ namespace glz
 
       auto [it, end] = read_iterators<ParseOpts>(buffer);
       auto start = it;
-      if (bool(ctx.error)) [[unlikely]] {
-         goto finish;
-      }
 
       // Bound the speculative re-parsing a variant resolution may do, in bytes, relative to this
       // input. Seeded per read so a reused context starts fresh. See charge_speculation.
@@ -281,10 +280,19 @@ namespace glz
          return o;
       }();
 
+      call_scope scope{ctx};
+
       // A stream window is never padded, whatever a reused context was told on its last read.
       // Left set, `chunk_min` would hand every scan in this parse the unbounded chunk path and
       // let it load up to seven bytes past the window.
       ctx.padded_input = false;
+
+      // A stream has no size to scale a speculation budget by, so a streaming read runs unbudgeted
+      // (see charge_speculation) -- including on a context whose last read, a buffered one, left
+      // part of its own budget behind.
+      if constexpr (requires { ctx.speculation_budget; }) {
+         ctx.speculation_budget = 0;
+      }
 
       // Initial fill if buffer is empty
       if (buffer.empty()) {

@@ -303,6 +303,24 @@ suite istream_buffer_basic_tests = [] {
 };
 
 suite json_read_streaming_tests = [] {
+   "a streaming context reused after a failed read still reads"_test = [] {
+      glz::streaming_context ctx{};
+      {
+         std::istringstream iss(R"({"a":[[1,2],[3)");
+         glz::istream_buffer<> buffer(iss);
+         std::map<std::string, std::vector<std::vector<int>>> first{};
+         expect(glz::read_streaming<glz::opts{}>(first, buffer, ctx) == glz::error_code::unexpected_end);
+         expect(ctx.depth == 0u) << ctx.depth;
+      }
+
+      std::istringstream iss(R"({"a":[[1,2],[3]]})");
+      glz::istream_buffer<> buffer(iss);
+      std::map<std::string, std::vector<std::vector<int>>> second{};
+      const auto ec = glz::read_streaming<glz::opts{}>(second, buffer, ctx);
+      expect(ec == glz::error_code::none) << int(ec.ec);
+      expect(second == std::map<std::string, std::vector<std::vector<int>>>{{"a", {{1, 2}, {3}}}});
+   };
+
    "read_json with istream_buffer - simple object"_test = [] {
       std::istringstream iss(R"({"id":42,"name":"test"})");
       glz::istream_buffer<> buffer(iss);

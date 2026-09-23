@@ -6197,4 +6197,22 @@ suite toml_control_character_writer_tests = [] {
    };
 };
 
+suite toml_context_reuse = [] {
+   "a context reused after a failed read still reads"_test = [] {
+      static constexpr glz::opts options{.format = glz::TOML};
+      const std::string bad = "a = [[1, 2], [3\n";
+      const std::string good = "a = [[1, 2], [3]]\nb = [[4]]\n";
+
+      glz::context ctx{};
+      std::map<std::string, std::vector<std::vector<int>>> first{};
+      expect(bool(glz::read<options>(first, bad, ctx)));
+      expect(ctx.depth == 0u) << ctx.depth;
+
+      std::map<std::string, std::vector<std::vector<int>>> second{};
+      const auto ec = glz::read<options>(second, good, ctx);
+      expect(ec == glz::error_code::none) << glz::format_error(ec, good);
+      expect(second == std::map<std::string, std::vector<std::vector<int>>>{{"a", {{1, 2}, {3}}}, {"b", {{4}}}});
+   };
+};
+
 int main() { return 0; }

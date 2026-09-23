@@ -17,6 +17,7 @@ namespace glz
    [[nodiscard]] error_ctx write(T&& value, Buffer& buffer, is_context auto&& ctx)
    {
       using traits = buffer_traits<std::remove_cvref_t<Buffer>>;
+      call_scope scope{ctx};
 
       if constexpr (traits::is_resizable) {
          // A buffer could be size 1, to ensure we have sufficient memory we can't just check `empty()`
@@ -111,6 +112,7 @@ namespace glz
       requires write_supported<T, Opts.format>
    [[nodiscard]] error_ctx write(T&& value, Buffer&& buffer, is_context auto&& ctx)
    {
+      call_scope scope{ctx};
       size_t ix = 0;
       to<Opts.format, std::remove_cvref_t<T>>::template op<Opts>(std::forward<T>(value), ctx, buffer, ix);
       if (bool(ctx.error)) [[unlikely]] {
