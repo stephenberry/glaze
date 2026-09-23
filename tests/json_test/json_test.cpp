@@ -32,7 +32,6 @@
 #include "glaze/containers/flat_map.hpp"
 #include "glaze/core/feature_test.hpp"
 #include "glaze/core/std_error_code.hpp"
-#include "glaze/file/hostname_include.hpp"
 #include "glaze/file/raw_or_file.hpp"
 #include "glaze/hardware/volatile_array.hpp"
 #include "glaze/json.hpp"
@@ -4783,6 +4782,32 @@ suite file_include_test = [] {
       std::string s = R"({"include": "../abs.json", "i": 100})";
       const auto ec = glz::read_json(obj, s);
       expect(bool(ec));
+   };
+
+   "file_include with comments and key order"_test = [] {
+      includer_struct obj{};
+
+      const auto config_buffer = R"(
+// testing opening whitespace and comment
+)" + glz::write_json(obj).value_or("error");
+      expect(glz::buffer_to_file(config_buffer, "./include_comments.jsonc") == glz::error_code::none);
+
+      obj.str = "";
+      obj.i = 0;
+
+      std::string_view s = R"(
+// testing opening whitespace and comment
+{"include": "./include_comments.jsonc", "i": 100})";
+      const auto ec = glz::read_jsonc(obj, s);
+      expect(ec == glz::error_code::none) << glz::format_error(ec, s);
+      expect(obj.str == "Hello") << obj.str;
+      expect(obj.i == 100) << obj.i;
+
+      // an include listed last overwrites the keys before it
+      s = R"({"i": 100, "include": "./include_comments.jsonc"})";
+      expect(!glz::read_jsonc(obj, s));
+      expect(obj.str == "Hello") << obj.str;
+      expect(obj.i == 55) << obj.i;
    };
 };
 
@@ -10721,77 +10746,6 @@ suite reader_writer_test = [] {
    };
 };
 
-struct hostname_include_struct
-{
-   glz::hostname_include hostname_include{};
-   std::string str = "Hello";
-   int i = 55;
-};
-
-static_assert(glz::detail::count_members<hostname_include_struct> == 3);
-
-suite hostname_include_test = [] {
-   "hostname_include"_test = [] {
-      hostname_include_struct obj{};
-
-      glz::context ctx{};
-      const auto hostname = glz::get_hostname(ctx);
-
-      std::string file_name = "../{}_config.json";
-      glz::replace_first_braces(file_name, hostname);
-
-      const auto config_buffer = R"(
-// testing opening whitespace and comment
-)" + glz::write_json(obj).value_or("error");
-      expect(glz::buffer_to_file(config_buffer, file_name) == glz::error_code::none);
-      // expect(glz::write_file_json(obj, file_name, std::string{}) == glz::error_code::none);
-
-      obj.str = "";
-      obj.i = 0;
-
-      std::string_view s = R"(
-// testing opening whitespace and comment
-{"hostname_include": "../{}_config.json", "i": 100})";
-      const auto ec = glz::read_jsonc(obj, s);
-      expect(ec == glz::error_code::none) << glz::format_error(ec, s);
-
-      expect(obj.str == "Hello") << obj.str;
-      expect(obj.i == 100) << obj.i;
-
-      obj.str = "";
-
-      std::string buffer{};
-      expect(!glz::read_file_jsonc(obj, file_name, buffer));
-      expect(obj.str == "Hello") << obj.str;
-      expect(obj.i == 55) << obj.i;
-
-      s = R"({"i": 100, "hostname_include": "../{}_config.json"})";
-      expect(!glz::read_jsonc(obj, s));
-
-      expect(obj.str == "Hello") << obj.str;
-      expect(obj.i == 55) << obj.i;
-   };
-
-   "hostname_include with error_on_missing_keys"_test = [] {
-      glz::context ctx{};
-      std::string file_name = "./{}_missing_keys.json";
-      glz::replace_first_braces(file_name, glz::get_hostname(ctx));
-      expect(glz::buffer_to_file(std::string{R"({"str":"Hello"})"}, file_name) == glz::error_code::none);
-
-      static constexpr glz::opts strict{.error_on_missing_keys = true};
-
-      hostname_include_struct obj{};
-      std::string s = R"({"hostname_include": "./{}_missing_keys.json", "i": 100})";
-      const auto ec = glz::read<strict>(obj, s);
-      expect(!ec) << glz::format_error(ec, s);
-      expect(obj.str == "Hello") << obj.str;
-      expect(obj.i == 100) << obj.i;
-
-      s = R"({"hostname_include": "./{}_missing_keys.json"})"; // "i" is in neither document
-      expect(glz::read<strict>(obj, s) == glz::error_code::missing_key);
-   };
-};
-
 struct core_struct
 {
    glz::file_include include{};
@@ -10800,7 +10754,7 @@ struct core_struct
 
 struct nested_include_struct
 {
-   glz::hostname_include hostname_include{};
+   glz::file_include include{};
    std::string str = "Hello";
    int integer = 55;
    core_struct core{};
@@ -10809,26 +10763,18 @@ struct nested_include_struct
 suite nested_include_tests = [] {
    "nested_include"_test = [] {
       expect(glz::error_code::none == glz::buffer_to_file(std::string_view{R"({"number":3.5})"}, "./core.jsonc"));
-
-      glz::context ctx{};
-      const auto hostname = glz::get_hostname(ctx);
-
-      std::string file_name = "./{}_include_test.jsonc";
-      glz::replace_first_braces(file_name, hostname);
+      expect(glz::error_code::none == glz::buffer_to_file(std::string_view{R"({"core":{"include": "./core.jsonc"}})"},
+                                                          "./include_test.jsonc"));
       expect(glz::error_code::none ==
-             glz::buffer_to_file(std::string_view{R"({"core":{"include": "./core.jsonc"}})"}, file_name));
-
-      expect(glz::error_code::none ==
-             glz::buffer_to_file(
-                std::string_view{R"({"str":"goodbye","integer":4,"hostname_include":"./{}_include_test.jsonc"})"},
-                "./start.jsonc"));
+             glz::buffer_to_file(std::string_view{R"({"str":"goodbye","integer":4,"include":"./include_test.jsonc"})"},
+                                 "./start.jsonc"));
 
       nested_include_struct obj{};
       std::string buffer{};
       auto ec = glz::read_file_jsonc(obj, "./start.jsonc", buffer);
       expect(not ec) << glz::format_error(ec, buffer);
       expect(obj.str == "goodbye");
-      expect(obj.integer = 4);
+      expect(obj.integer == 4);
       expect(obj.core.number == 3.5f);
    };
 };
