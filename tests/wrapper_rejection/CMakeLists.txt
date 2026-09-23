@@ -19,7 +19,9 @@ function(glz_add_invoke_rejection direction format message)
 
     add_test(
         NAME ${target}
-        COMMAND "${CMAKE_COMMAND}" --build "${PROJECT_BINARY_DIR}" --target ${target} --config $<CONFIG>
+        # The top of the build tree: single-file generators such as Ninja have no build file in this
+        # subdirectory, and project() above makes PROJECT_BINARY_DIR point here.
+        COMMAND "${CMAKE_COMMAND}" --build "${CMAKE_BINARY_DIR}" --target ${target} --config $<CONFIG>
     )
     set_tests_properties(${target} PROPERTIES
         PASS_REGULAR_EXPRESSION "${message}"
