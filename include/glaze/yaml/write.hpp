@@ -230,22 +230,39 @@ namespace glz
          dump('\'', b, ix);
       }
 
-      // Write a literal block scalar (|)
+      // A literal block scalar, as write_literal_block emits it, reproduces `str` exactly only when:
+      // - Some line has content and the first such line does not start with a space. The block's
+      //   indentation is detected from its first non-empty line, so leading spaces there would be
+      //   taken as indentation, and a whitespace-only line before it would be an empty line
+      //   indented past the content (a syntax error). With no content line at all, chomping
+      //   discards every line break.
+      // - It ends in at most one line break. More would need keep chomping (|+), which also keeps
+      //   any blank line after the scalar, and every block caller ends the scalar's line with a
+      //   line break of its own.
+      inline bool literal_block_represents(std::string_view str) noexcept
+      {
+         const auto first_content = str.find_first_not_of('\n');
+         if (first_content == std::string_view::npos || str[first_content] == ' ') {
+            return false;
+         }
+         return !str.ends_with("\n\n");
+      }
+
+      // Write a literal block scalar (|), clipped when `str` ends in a line break and stripped
+      // (|-) otherwise. The caller must have checked literal_block_represents(str).
       template <class B>
       inline void write_literal_block(std::string_view str, is_context auto&& ctx, B&& b, auto& ix,
-                                      int32_t indent_level, uint8_t indent_width, char chomping)
+                                      int32_t indent_level, uint8_t indent_width)
       {
          if (!ensure_space(ctx, b, ix + str.size() + 64 + write_padding_bytes)) [[unlikely]] {
             return;
          }
 
-         if (chomping == '-' || chomping == '+') {
-            dump('|', b, ix);
-            dump(chomping, b, ix);
-            dump('\n', b, ix);
+         if (str.ends_with('\n')) {
+            dump("|\n", b, ix);
          }
          else {
-            dump("|\n", b, ix);
+            dump("|-\n", b, ix);
          }
 
          // Write each line with proper indentation
@@ -325,23 +342,14 @@ namespace glz
                }
             }
 
-            size_t trailing_newlines = 0;
-            for (size_t i = str.size(); i > 0; --i) {
-               if (str[i - 1] == '\n') {
-                  ++trailing_newlines;
-               }
-               else {
-                  break;
-               }
+            // Leading spaces, only line breaks, or a run of trailing line breaks: the escaped
+            // double-quoted form is the one that round trips.
+            if (!literal_block_represents(str)) {
+               write_double_quoted_string<Opts>(str, ctx, b, ix);
+               return;
             }
-            char chomping = '\0';
-            if (trailing_newlines == 0) {
-               chomping = '-';
-            }
-            else if (trailing_newlines > 1) {
-               chomping = '+';
-            }
-            write_literal_block(str, ctx, b, ix, indent_level, indent_width, chomping);
+
+            write_literal_block(str, ctx, b, ix, indent_level, indent_width);
             return;
          }
 
@@ -385,6 +393,19 @@ namespace glz
 #ifdef _MSC_VER
 #pragma warning(pop)
 #endif
+
+      // Write a string as an implicit block-mapping key. An implicit key is confined to one line,
+      // so a key holding a line break is written double-quoted rather than as a block scalar.
+      template <auto Opts, class B>
+      inline void write_yaml_key_string(std::string_view str, is_context auto&& ctx, B&& b, auto& ix)
+      {
+         if (str.find('\n') != std::string_view::npos) {
+            write_double_quoted_string<Opts>(str, ctx, b, ix);
+         }
+         else {
+            write_yaml_string<Opts>(str, ctx, b, ix);
+         }
+      }
    } // namespace yaml
 
    // str_t (strings)
@@ -1218,7 +1239,7 @@ namespace glz
 
          // Write key
          if constexpr (str_t<first_type>) {
-            write_yaml_string<Opts>(str_view<first_type>(key), ctx, b, ix);
+            write_yaml_key_string<Opts>(str_view<first_type>(key), ctx, b, ix);
          }
          else {
             serialize<YAML>::op<Opts>(key, ctx, b, ix);
@@ -1424,7 +1445,7 @@ namespace glz
                // Write key
                using key_t = std::remove_cvref_t<decltype(k)>;
                if constexpr (str_t<key_t>) {
-                  write_yaml_string<Opts>(str_view<key_t>(k), ctx, b, ix);
+                  write_yaml_key_string<Opts>(str_view<key_t>(k), ctx, b, ix);
                }
                else {
                   serialize<YAML>::op<Opts>(k, ctx, b, ix);
