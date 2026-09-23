@@ -4802,6 +4802,24 @@ struct glz::meta<cbor_variant_shapes::tree>
    static constexpr std::array<std::string_view, 2> ids{"leaf", "branch"};
 };
 
+namespace cbor_ambiguous
+{
+   // Two alternatives with an identical wire shape at every level: resolution must try both at each
+   // level, which is the shape the speculation budget exists to bound. The nesting is carried by the
+   // data rather than by a chain of distinct types, which GCC instantiates at super-linear cost.
+   struct nest_a;
+   struct nest_b;
+   using node = std::variant<nest_a, nest_b>;
+   struct nest_a
+   {
+      std::vector<node> x{};
+   };
+   struct nest_b
+   {
+      std::vector<node> x{};
+   };
+}
+
 // A variant takes the shape glz::meta declares, as it does in JSON and BEVE. The [index, value]
 // array written before was compact but meaningless to any CBOR implementation that did not already
 // know Glaze's convention.
@@ -5021,6 +5039,41 @@ suite cbor_variant_tagging = [] {
       tree decoded{};
       expect(not glz::read_cbor(decoded, buffer));
       expect(tree_depth(decoded) == 100);
+   };
+
+   // Untagged resolution is speculative, so an ambiguous nest re-parses each subtree per alternative
+   // at every level: the work doubles per level and ~100 bytes would cost minutes. The speculation
+   // budget caps the re-parsed bytes, so past the depth where it binds the cost stops growing (~10 ms
+   // in Release, a few hundred under a sanitizer, whatever the nesting). Timed as the BEVE and JSON
+   // guards are, with their bound: a reversion is a hang, which is orders of magnitude past it, while
+   // a tighter bound only measures how loaded the runner is.
+   "an ambiguous nest is bounded rather than exponential"_test = [] {
+      const auto build = [](size_t levels) {
+         std::string buffer;
+         for (size_t i = 0; i < levels; ++i) {
+            buffer.push_back(char(0xa1)); // map(1)
+            buffer.push_back(char(0x61)); // text(1)
+            buffer += "x";
+            buffer.push_back(char(0x81)); // array(1): the next level down
+         }
+         buffer.push_back(char(0x61));
+         buffer += "z"; // a string where a map is required: nothing matches, at any level
+         return buffer;
+      };
+
+      const auto start = std::chrono::steady_clock::now();
+      for (size_t levels : {4u, 8u, 16u, 64u}) {
+         cbor_ambiguous::node decoded{};
+         glz::context ctx{};
+         expect(glz::read<glz::opts{.format = glz::CBOR}>(decoded, build(levels), ctx) ==
+                glz::error_code::no_matching_variant_type)
+            << "levels=" << levels;
+         // A shallow nest is resolved exhaustively; what ends a deep one is the budget.
+         if (levels == 4) expect(not glz::speculation_exhausted(ctx));
+         if (levels == 64) expect(glz::speculation_exhausted(ctx));
+      }
+      const auto ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count();
+      expect(ms < 5000.0) << "resolving ambiguous nests took " << ms << " ms";
    };
 };
 

@@ -988,22 +988,38 @@ suite msgpack_variant_tagging = [] {
    };
 
    // Untagged resolution is speculative, so an ambiguous nest re-parses each subtree per alternative
-   // at every level. The speculation budget bounds that; without it ~100 bytes cost minutes.
+   // at every level: the work doubles per level and ~100 bytes would cost minutes. The speculation
+   // budget caps the re-parsed bytes, so past the depth where it binds the cost stops growing (~10 ms
+   // in Release, a few hundred under a sanitizer, whatever the nesting). Timed as the BEVE and JSON
+   // guards are, with their bound: a reversion is a hang, which is orders of magnitude past it, while
+   // a tighter bound only measures how loaded the runner is.
    "an ambiguous nest is bounded rather than exponential"_test = [] {
-      std::string buffer;
-      for (int i = 0; i < 40; ++i) {
-         buffer.push_back(char(0x81)); // fixmap(1)
-         buffer.push_back(char(0xa1)); // fixstr(1)
-         buffer += "x";
-         buffer.push_back(char(0x91)); // fixarray(1): the next level down
+      const auto build = [](size_t levels) {
+         std::string buffer;
+         for (size_t i = 0; i < levels; ++i) {
+            buffer.push_back(char(0x81)); // fixmap(1)
+            buffer.push_back(char(0xa1)); // fixstr(1)
+            buffer += "x";
+            buffer.push_back(char(0x91)); // fixarray(1): the next level down
+         }
+         buffer.push_back(char(0xa1));
+         buffer += "z"; // a string where a map is required: nothing matches, at any level
+         return buffer;
+      };
+
+      const auto start = std::chrono::steady_clock::now();
+      for (size_t levels : {4u, 8u, 16u, 64u}) {
+         ambiguous::node decoded{};
+         glz::context ctx{};
+         expect(glz::read<glz::opts{.format = glz::MSGPACK}>(decoded, build(levels), ctx) ==
+                glz::error_code::no_matching_variant_type)
+            << "levels=" << levels;
+         // A shallow nest is resolved exhaustively; what ends a deep one is the budget.
+         if (levels == 4) expect(not glz::speculation_exhausted(ctx));
+         if (levels == 64) expect(glz::speculation_exhausted(ctx));
       }
-      buffer.push_back(char(0xa1));
-      buffer += "z"; // a string where a map is required: nothing matches, at any level
-      ambiguous::node decoded{};
-      const auto t0 = std::chrono::steady_clock::now();
-      expect(bool(glz::read_msgpack(decoded, buffer)));
-      const auto ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
-      expect(ms < 2000.0) << ms;
+      const auto ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count();
+      expect(ms < 5000.0) << "resolving ambiguous nests took " << ms << " ms";
    };
 
    // An over-nested or truncated buffer is a property of the input, not of the alternative set.
