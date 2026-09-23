@@ -3589,6 +3589,44 @@ namespace glz
       template <class Variant>
       struct beve_positional_tagging_needs_content : std::false_type
       {};
+
+      // MessagePack and CBOR maps are length-prefixed exactly as BEVE objects are, so they inherit
+      // the same representation limit: the member count of a custom body is not knowable in advance.
+      template <class Variant, class Alternative>
+      struct binary_internal_tagging_needs_reflected_alternative : std::false_type
+      {};
+   }
+
+   // `ids` may declare fewer entries than the variant has alternatives -- the readers treat the first
+   // unlabeled alternative as the default for an unrecognized id -- so an alternative past the end of
+   // `ids` has no id to write. Indexing there reads past a static array. A valueless variant has no
+   // alternative to name at all, and neither does an index past the alternative list.
+   template <is_variant T>
+   [[nodiscard]] inline bool variant_missing_id(auto&& value, is_context auto&& ctx) noexcept
+   {
+      if (value.index() >= ids_v<T>.size()) [[unlikely]] {
+         ctx.error = error_code::no_matching_variant_type;
+         ctx.custom_error_message = variant_ids_string_v<T>;
+         return true;
+      }
+      return false;
+   }
+
+   // Map an already-decoded discriminator to an alternative index. Returns variant_size when the id
+   // names no alternative and there is no unlabeled default. The formats differ only in how they
+   // decode the id from their own bytes; this rule is the same for all of them.
+   template <is_variant T>
+   [[nodiscard]] constexpr size_t variant_index_from_id(size_t index) noexcept
+   {
+      if (index < ids_v<T>.size()) [[likely]] {
+         return index;
+      }
+      if constexpr (ids_v<T>.size() < std::variant_size_v<T>) {
+         // Fewer ids than alternatives: the first unlabeled alternative is the default for an
+         // unrecognized id, matching the BEVE and JSON readers.
+         return ids_v<T>.size();
+      }
+      return std::variant_size_v<T>;
    }
 
    template <is_variant T>
@@ -3646,6 +3684,87 @@ namespace glz
 
    template <is_variant T>
    inline constexpr bool adjacently_tagged_v = variant_tagging_v<T> == variant_tagging_kind::adjacent;
+
+   // The kinds of self-describing value a MessagePack or CBOR reader for a type accepts, with
+   // conversions allowed. Undeclared variant resolution uses them to find the alternatives that can
+   // compete for one value. A type not classified here is assumed to accept anything, which is always
+   // safe: it only keeps a strict pass that might have been skipped.
+   namespace binary_value_kind
+   {
+      inline constexpr uint8_t null = 1 << 0;
+      inline constexpr uint8_t boolean = 1 << 1;
+      inline constexpr uint8_t integer = 1 << 2;
+      inline constexpr uint8_t floating = 1 << 3;
+      inline constexpr uint8_t string = 1 << 4;
+      inline constexpr uint8_t sequence = 1 << 5; // arrays, byte strings, and typed-array tags
+      inline constexpr uint8_t map = 1 << 6;
+      inline constexpr uint8_t any = 0xff;
+   }
+
+   template <class T>
+   consteval uint8_t binary_value_kinds() noexcept
+   {
+      using V = std::remove_cvref_t<T>;
+      namespace kind = binary_value_kind;
+      if constexpr (custom_read<V>) {
+         return kind::any;
+      }
+      else if constexpr (always_null_t<V>) {
+         return kind::null;
+      }
+      else if constexpr (bool_t<V>) {
+         return kind::boolean;
+      }
+      else if constexpr (int_t<V>) {
+         return kind::integer;
+      }
+      else if constexpr (std::floating_point<V>) {
+         return kind::integer | kind::floating; // an integer converts
+      }
+      else if constexpr (str_t<V>) {
+         return kind::string;
+      }
+      else if constexpr (readable_map_t<V>) {
+         return kind::map;
+      }
+      else if constexpr (readable_array_t<V>) {
+         return kind::sequence;
+      }
+      else if constexpr (is_variant<V>) {
+         if constexpr (variant_tagging_v<V> == variant_tagging_kind::none) {
+            return []<size_t... I>(std::index_sequence<I...>) {
+               return uint8_t((binary_value_kinds<std::variant_alternative_t<I, V>>() | ...));
+            }(std::make_index_sequence<std::variant_size_v<V>>{});
+         }
+         else {
+            return kind::any;
+         }
+      }
+      else {
+         return kind::any;
+      }
+   }
+
+   // Which alternatives of an undeclared variant accept a kind of value another alternative also
+   // accepts. Only these need resolving strictly before leniently: an uncontested alternative is the
+   // sole candidate for every value it accepts, so a single lenient read lands where the strict and
+   // lenient pair would, without parsing its subtree twice at every level of a nest.
+   template <is_variant T>
+   inline constexpr auto binary_contested_alternatives_v = [] {
+      constexpr size_t N = std::variant_size_v<T>;
+      const auto kinds = []<size_t... I>(std::index_sequence<I...>) {
+         return std::array<uint8_t, N>{binary_value_kinds<std::variant_alternative_t<I, T>>()...};
+      }(std::make_index_sequence<N>{});
+      std::array<bool, N> contested{};
+      for (size_t i = 0; i < N; ++i) {
+         for (size_t j = 0; j < N; ++j) {
+            if (i != j && (kinds[i] & kinds[j])) {
+               contested[i] = true;
+            }
+         }
+      }
+      return contested;
+   }();
 }
 
 #if defined(_MSC_VER) && !defined(__clang__)

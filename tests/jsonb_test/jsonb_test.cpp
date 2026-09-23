@@ -1858,6 +1858,59 @@ suite generic_tests = [] {
       expect(o.size() == 2);
    };
 
+   // The integer alternatives are tried in declaration order, as the JSON reader tries them: a
+   // negative value has no unsigned alternative to land in, and reading it as one failed outright
+   // rather than falling through to int64_t.
+   "generic_u64 negative integer falls back to int64_t"_test = [] {
+      glz::generic_u64 g;
+      expect(not glz::read_json(g, R"({"i":-7})"));
+      std::string buf;
+      expect(not glz::write_jsonb(g, buf));
+      glz::generic_u64 out;
+      expect(not glz::read_jsonb(out, buf));
+      expect(out.is_object());
+      expect(out["i"].is_int64());
+      expect(out["i"].get<int64_t>() == -7);
+   };
+
+   "generic_i64 integer past its range falls back to double"_test = [] {
+      glz::generic_u64 g;
+      g.data = (std::numeric_limits<uint64_t>::max)();
+      std::string buf;
+      expect(not glz::write_jsonb(g, buf));
+      glz::generic_i64 out;
+      expect(not glz::read_jsonb(out, buf));
+      expect(out.is_double());
+      expect(out.get<double>() == static_cast<double>((std::numeric_limits<uint64_t>::max)()));
+   };
+
+   // Glaze writes a number of this magnitude as a float element, so this blob has to be built by
+   // hand -- but SQLite's jsonb() emits an INT token with arbitrary digits, and JSONB is the format
+   // where blobs come from elsewhere. Every mode must reach double rather than fail.
+   "generic integer past every integer alternative falls back to double"_test = [] {
+      const std::string digits = "99999999999999999999999";
+      std::string blob;
+      blob.push_back(char((12 << 4) | glz::jsonb::type::int_)); // 12: one size byte follows
+      blob.push_back(char(digits.size()));
+      blob += digits;
+
+      const double expected = 1e23;
+
+      glz::generic_u64 as_u64;
+      expect(not glz::read_jsonb(as_u64, blob));
+      expect(as_u64.is_double());
+      expect(as_u64.get<double>() == expected);
+
+      glz::generic_i64 as_i64;
+      expect(not glz::read_jsonb(as_i64, blob));
+      expect(as_i64.is_double());
+      expect(as_i64.get<double>() == expected);
+
+      glz::generic as_f64;
+      expect(not glz::read_jsonb(as_f64, blob));
+      expect(as_f64.get<double>() == expected);
+   };
+
    "generic round-trips through JSON parse"_test = [] {
       glz::generic g;
       expect(not glz::read_json(g, R"({"x":1.5,"y":[true,null,"z"]})"));

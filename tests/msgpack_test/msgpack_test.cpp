@@ -23,6 +23,7 @@
 #include <variant>
 #include <vector>
 
+#include "glaze/json/generic.hpp"
 #include "glaze/json/ptr.hpp"
 #include "ut/ut.hpp"
 
@@ -632,11 +633,9 @@ suite msgpack_reserve_amplification_tests = [] {
    };
 };
 
-// A variant whose `ids` array is shorter than its alternative list. That is a supported read-side
-// feature -- the first unlabeled alternative is the default for an unrecognized id -- so it is
-// reachable from a legal glz::meta. Writing the unlabeled alternative has no id to emit; indexing
-// ids_v there read past the end of a static array and emitted the adjacent static data as the tag
-// value (~4 GB read under ASan). The writer must report an error instead.
+// A variant whose `ids` array is shorter than its alternative list. The readers treat the first
+// unlabeled alternative as the default for an unrecognized id, so a short `ids` is a legal and
+// useful declaration -- but an alternative past its end has no id for the writer to emit.
 namespace short_ids_guard
 {
    struct labeled
@@ -658,12 +657,615 @@ struct glz::meta<short_ids_guard::v_t>
 };
 
 suite short_ids_write_guard = [] {
-   "writing an alternative with no declared id errors instead of reading out of bounds"_test = [] {
-      using namespace short_ids_guard;
+   using namespace short_ids_guard;
+
+   "an alternative past the end of ids cannot be written"_test = [] {
       std::string buffer{};
-      expect(bool(glz::write_msgpack(v_t{unlabeled{7}}, buffer)));
+      expect(glz::write_msgpack(v_t{unlabeled{7}}, buffer) == glz::error_code::no_matching_variant_type);
+   };
+
+   "a labeled alternative round trips through its id"_test = [] {
+      std::string buffer{};
+      expect(not glz::write_msgpack(v_t{labeled{3}}, buffer));
+      v_t decoded{};
+      expect(not glz::read_msgpack(decoded, buffer));
+      expect(decoded.index() == 0);
+      expect(std::get<labeled>(decoded).a == 3);
+   };
+
+   "an unrecognized id falls back to the first unlabeled alternative"_test = [] {
+      std::string buffer; // { "t" : "zzz", "b" : 7 }
+      buffer.push_back(char(0x82));
+      buffer.push_back(char(0xa1));
+      buffer += "t";
+      buffer.push_back(char(0xa3));
+      buffer += "zzz";
+      buffer.push_back(char(0xa1));
+      buffer += "b";
+      buffer.push_back(char(0x07));
+
+      v_t decoded{};
+      expect(not glz::read_msgpack(decoded, buffer));
+      expect(decoded.index() == 1);
+      expect(std::get<unlabeled>(decoded).b == 7);
+   };
+};
+
+namespace ambiguous
+{
+   // Two alternatives with an identical wire shape at every level: resolution must try both at each
+   // level, which is the shape the speculation budget exists to bound.
+   //
+   // The nesting is carried by the data, not by the type. A chain of N distinct types costs GCC
+   // super-linear instantiation memory -- 3.6 GB at N=20 and unbounded by N=40, where clang stays
+   // flat -- and what this measures is a property of the input, which one recursive type expresses
+   // just as well.
+   struct nest_a;
+   struct nest_b;
+   using node = std::variant<nest_a, nest_b>;
+   struct nest_a
+   {
+      std::vector<node> x{};
+   };
+   struct nest_b
+   {
+      std::vector<node> x{};
+   };
+}
+
+namespace variant_shapes
+{
+   struct circle
+   {
+      double radius{};
+      bool operator==(const circle&) const = default;
+   };
+   struct square
+   {
+      double side{};
+      bool operator==(const square&) const = default;
+   };
+   using adjacent_t = std::variant<circle, square>;
+
+   struct dot
+   {
+      int n{};
+      bool operator==(const dot&) const = default;
+   };
+   struct dash
+   {
+      int n{};
+      bool operator==(const dash&) const = default;
+   };
+   using internal_t = std::variant<dot, dash>;
+
+   struct idot
+   {
+      int n{};
+      bool operator==(const idot&) const = default;
+   };
+   struct idash
+   {
+      int n{};
+      bool operator==(const idash&) const = default;
+   };
+   using int_ids_t = std::variant<idot, idash>;
+
+   // A recursive internally tagged variant, for how deep a tagged nest may go.
+   struct leaf
+   {
+      int n{};
+   };
+   struct branch;
+   using tree = std::variant<leaf, branch>;
+   struct branch
+   {
+      std::vector<tree> kids{};
+   };
+
+   inline tree make_tree(int depth)
+   {
+      tree t = leaf{1};
+      for (int i = 0; i < depth; ++i) {
+         branch b{};
+         b.kids.push_back(std::move(t));
+         t = std::move(b);
+      }
+      return t;
+   }
+
+   inline int tree_depth(const tree& t)
+   {
+      int depth = 0;
+      for (const tree* node = &t; std::holds_alternative<branch>(*node); ++depth) {
+         node = &std::get<branch>(*node).kids.at(0);
+      }
+      return depth;
+   }
+}
+
+template <>
+struct glz::meta<variant_shapes::adjacent_t>
+{
+   static constexpr std::string_view tag = "kind";
+   static constexpr std::string_view content = "data";
+   static constexpr std::array<std::string_view, 2> ids{"circle", "square"};
+};
+
+template <>
+struct glz::meta<variant_shapes::internal_t>
+{
+   static constexpr std::string_view tag = "kind";
+   static constexpr std::array<std::string_view, 2> ids{"dot", "dash"};
+};
+
+template <>
+struct glz::meta<variant_shapes::int_ids_t>
+{
+   static constexpr std::string_view tag = "kind";
+   static constexpr std::string_view content = "data";
+   static constexpr std::array<int, 2> ids{7, 9};
+};
+
+template <>
+struct glz::meta<variant_shapes::tree>
+{
+   static constexpr std::string_view tag = "kind";
+   static constexpr std::array<std::string_view, 2> ids{"leaf", "branch"};
+};
+
+// A variant takes the shape glz::meta declares, as it does in JSON and BEVE. Glaze 8.3.0 and earlier
+// wrote [id, value] for every variant, where an undeclared id fell back to glz::name_v -- the
+// compiler's own spelling of the type, so msgpack written by MSVC could not be read by a GCC build,
+// let alone by another MessagePack implementation.
+suite msgpack_variant_tagging = [] {
+   using namespace variant_shapes;
+
+   "an undeclared variant is written bare"_test = [] {
+      std::variant<int, std::string> v{std::string{"x"}};
+      std::string buffer{};
+      expect(not glz::write_msgpack(v, buffer));
+      // fixstr(1), 'x' -- no wrapper of any kind
+      expect(buffer == std::string{"\xa1x", 2});
+
+      std::variant<int, std::string> decoded{};
+      expect(not glz::read_msgpack(decoded, buffer));
+      expect(decoded == v);
+   };
+
+   "a bare variant is byte-identical to the alternative alone"_test = [] {
+      std::variant<int, std::string> v{std::string{"hello"}};
+      std::string as_variant{}, as_alternative{};
+      expect(not glz::write_msgpack(v, as_variant));
+      expect(not glz::write_msgpack(std::string{"hello"}, as_alternative));
+      expect(as_variant == as_alternative);
+
+      // and so it reads back as the plain alternative type, which is what a foreign
+      // MessagePack implementation would see.
+      std::string plain{};
+      expect(not glz::read_msgpack(plain, as_variant));
+      expect(plain == "hello");
+   };
+
+   "an undeclared variant resolves from the type byte"_test = [] {
+      using v_t = std::variant<std::monostate, bool, int64_t, std::string, std::vector<int>>;
+      const auto roundtrip = [](v_t original) {
+         std::string buffer{};
+         expect(not glz::write_msgpack(original, buffer));
+         v_t decoded{};
+         expect(not glz::read_msgpack(decoded, buffer));
+         expect(decoded.index() == original.index()) << decoded.index();
+         return decoded;
+      };
+      roundtrip(v_t{std::monostate{}});
+      roundtrip(v_t{true});
+      roundtrip(v_t{int64_t{-42}});
+      roundtrip(v_t{std::string{"s"}});
+      roundtrip(v_t{std::vector<int>{1, 2, 3}});
+   };
+
+   "adjacent tagging writes the declared tag and content keys"_test = [] {
+      std::string buffer{};
+      expect(not glz::write_msgpack(adjacent_t{square{2.0}}, buffer));
+
+      std::string expected; // { "kind" : "square", "data" : { "side" : 2.0 } }
+      expected.push_back(char(0x82));
+      expected.push_back(char(0xa4));
+      expected += "kind";
+      expected.push_back(char(0xa6));
+      expected += "square";
+      expected.push_back(char(0xa4));
+      expected += "data";
+      expected.push_back(char(0x81));
+      expected.push_back(char(0xa4));
+      expected += "side";
+      expected.push_back(char(0xcb)); // float64 2.0, big endian
+      expected.push_back(char(0x40));
+      expected.append(7, char(0x00));
+      expect(buffer == expected);
+
+      adjacent_t decoded{};
+      expect(not glz::read_msgpack(decoded, buffer));
+      expect(decoded == adjacent_t{square{2.0}});
+   };
+
+   "internal tagging merges the discriminator into the object"_test = [] {
+      std::string buffer{};
+      expect(not glz::write_msgpack(internal_t{dash{5}}, buffer));
+
+      std::string expected; // { "kind" : "dash", "n" : 5 }
+      expected.push_back(char(0x82));
+      expected.push_back(char(0xa4));
+      expected += "kind";
+      expected.push_back(char(0xa4));
+      expected += "dash";
+      expected.push_back(char(0xa1));
+      expected += "n";
+      expected.push_back(char(0x05));
+      expect(buffer == expected);
+
+      internal_t decoded{};
+      expect(not glz::read_msgpack(decoded, buffer));
+      expect(decoded == internal_t{dash{5}});
+   };
+
+   "the discriminator may sit after the members"_test = [] {
+      std::string buffer; // { "n" : 5, "kind" : "dash" } -- key order is not significant
+      buffer.push_back(char(0x82));
+      buffer.push_back(char(0xa1));
+      buffer += "n";
+      buffer.push_back(char(0x05));
+      buffer.push_back(char(0xa4));
+      buffer += "kind";
+      buffer.push_back(char(0xa4));
+      buffer += "dash";
+
+      internal_t decoded{};
+      expect(not glz::read_msgpack(decoded, buffer));
+      expect(decoded == internal_t{dash{5}});
+   };
+
+   "an id naming no alternative is rejected"_test = [] {
+      std::string buffer; // { "kind" : "hexagon", "data" : 0 }
+      buffer.push_back(char(0x82));
+      buffer.push_back(char(0xa4));
+      buffer += "kind";
+      buffer.push_back(char(0xa7));
+      buffer += "hexagon";
+      buffer.push_back(char(0xa4));
+      buffer += "data";
+      buffer.push_back(char(0x00));
+
+      adjacent_t decoded{};
+      expect(glz::read_msgpack(decoded, buffer) == glz::error_code::no_matching_variant_type);
+   };
+
+   "an undeclared variant that matches nothing is rejected"_test = [] {
+      std::variant<int, std::string> decoded{};
+      // a MessagePack map matches neither alternative
+      expect(glz::read_msgpack(decoded, std::string{"\x80", 1}) == glz::error_code::no_matching_variant_type);
+   };
+
+   "a failed variant read leaves the destination untouched"_test = [] {
+      std::variant<int, std::string> decoded{std::string{"keep"}};
+      expect(glz::read_msgpack(decoded, std::string{"\x80", 1}) == glz::error_code::no_matching_variant_type);
+      expect(std::get<std::string>(decoded) == "keep");
+   };
+
+   // Resolving the discriminator is not enough: without the content key there is no value, and
+   // succeeding here would hand back a default-constructed alternative.
+   "adjacent tagging requires the content key"_test = [] {
+      std::string buffer; // { "kind" : "circle", "kind" : "circle" } -- two entries, no content
+      buffer.push_back(char(0x82));
+      for (int i = 0; i < 2; ++i) {
+         buffer.push_back(char(0xa4));
+         buffer += "kind";
+         buffer.push_back(char(0xa6));
+         buffer += "circle";
+      }
+      adjacent_t decoded{square{9.0}};
+      expect(glz::read_msgpack(decoded, buffer) == glz::error_code::missing_key);
+      expect(std::holds_alternative<square>(decoded)); // rejected before the destination is disturbed
+   };
+
+   // An integer is a number, so the floating point reader accepts one -- but only as a conversion.
+   // Resolution runs a strict pass first so `double` cannot claim a value `int64_t` holds exactly.
+   "an exact alternative wins over a converting one"_test = [] {
+      std::variant<double, int64_t> v{int64_t{42}};
+      std::string buffer{};
+      expect(not glz::write_msgpack(v, buffer));
+      std::variant<double, int64_t> decoded{};
+      expect(not glz::read_msgpack(decoded, buffer));
+      expect(decoded.index() == 1);
+      expect(std::get<int64_t>(decoded) == 42);
+
+      // A genuine float still reaches the double alternative.
+      std::variant<double, int64_t> f{2.5};
       buffer.clear();
-      expect(not glz::write_msgpack(v_t{labeled{3}}, buffer)); // the labeled alternative is unaffected
+      expect(not glz::write_msgpack(f, buffer));
+      expect(not glz::read_msgpack(decoded, buffer));
+      expect(decoded.index() == 0);
+   };
+
+   // Untagged resolution is speculative, so an ambiguous nest re-parses each subtree per alternative
+   // at every level. The speculation budget bounds that; without it ~100 bytes cost minutes.
+   "an ambiguous nest is bounded rather than exponential"_test = [] {
+      std::string buffer;
+      for (int i = 0; i < 40; ++i) {
+         buffer.push_back(char(0x81)); // fixmap(1)
+         buffer.push_back(char(0xa1)); // fixstr(1)
+         buffer += "x";
+         buffer.push_back(char(0x91)); // fixarray(1): the next level down
+      }
+      buffer.push_back(char(0xa1));
+      buffer += "z"; // a string where a map is required: nothing matches, at any level
+      ambiguous::node decoded{};
+      const auto t0 = std::chrono::steady_clock::now();
+      expect(bool(glz::read_msgpack(decoded, buffer)));
+      const auto ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
+      expect(ms < 2000.0) << ms;
+   };
+
+   // An over-nested or truncated buffer is a property of the input, not of the alternative set.
+   "an input-level failure is reported as itself"_test = [] {
+      std::string deep(400, char(0x91));
+      deep.push_back(char(0x90));
+      glz::generic decoded;
+      expect(glz::read_msgpack(decoded, deep) == glz::error_code::exceeded_max_recursive_depth);
+   };
+
+   // Positional writes have no keys, so adjacent tagging projects to the two element array
+   // [id, value] -- the same projection BEVE makes.
+   "structs_as_arrays projects adjacent tagging positionally"_test = [] {
+      constexpr auto positional = glz::opt_true<glz::opts{.format = glz::MSGPACK}, glz::structs_as_arrays_opt_tag{}>;
+      std::string buffer{};
+      expect(not glz::write<positional>(adjacent_t{square{2.0}}, buffer));
+      expect(static_cast<uint8_t>(buffer[0]) == 0x92); // fixarray(2), not a map
+
+      adjacent_t decoded{};
+      expect(not glz::read<positional>(decoded, buffer));
+      expect(decoded == adjacent_t{square{2.0}});
+   };
+
+   // Narrowing a float64 rounds it, so a float alternative takes one only through a conversion.
+   "a narrower float alternative does not claim a double"_test = [] {
+      std::string buffer{};
+      expect(not glz::write_msgpack(std::variant<float, double>{0.1}, buffer));
+      std::variant<float, double> decoded{};
+      expect(not glz::read_msgpack(decoded, buffer));
+      const double* d = std::get_if<double>(&decoded);
+      expect(d && *d == 0.1);
+
+      // A float32 still reaches the float alternative.
+      buffer.clear();
+      expect(not glz::write_msgpack(std::variant<float, double>{0.5f}, buffer));
+      expect(not glz::read_msgpack(decoded, buffer));
+      expect(decoded.index() == 0);
+   };
+
+   "integral ids round trip"_test = [] {
+      int_ids_t v{idash{5}};
+      std::string buffer{};
+      expect(not glz::write_msgpack(v, buffer));
+      int_ids_t decoded{};
+      expect(not glz::read_msgpack(decoded, buffer));
+      expect(decoded == v);
+   };
+
+   // 2^32 + 9 truncated to int is 9, which names idash. It must not be read as that id.
+   "an integral id past the id type's range is rejected"_test = [] {
+      std::string buffer; // { "kind" : 2^32 + 9, "data" : { "n" : 5 } }
+      buffer.push_back(char(0x82));
+      buffer.push_back(char(0xa4));
+      buffer += "kind";
+      buffer.push_back(char(0xcf)); // uint64, big endian
+      for (const uint8_t byte : {0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x09}) {
+         buffer.push_back(char(byte));
+      }
+      buffer.push_back(char(0xa4));
+      buffer += "data";
+      buffer.push_back(char(0x81));
+      buffer.push_back(char(0xa1));
+      buffer += "n";
+      buffer.push_back(char(0x05));
+      int_ids_t decoded{};
+      expect(bool(glz::read_msgpack(decoded, buffer)));
+      expect(std::holds_alternative<idot>(decoded));
+   };
+
+   // The internal form's map is the alternative's own object, so it takes one level of nesting, as
+   // a plain struct does -- not two.
+   "an internally tagged nest may go as deep as a struct nest"_test = [] {
+      std::string buffer{};
+      expect(not glz::write_msgpack(make_tree(100), buffer));
+      tree decoded{};
+      expect(not glz::read_msgpack(decoded, buffer));
+      expect(tree_depth(decoded) == 100);
+   };
+};
+
+// glz::generic is a glaze_value_t over a variant of exactly the JSON value categories, which
+// MessagePack already distinguishes in its own type byte. Without a dedicated writer it took the
+// variant writer's [index, value] shape, which cost bytes on every element and made the output
+// unreadable by any MessagePack library that does not know Glaze's variant convention.
+suite msgpack_generic_tests = [] {
+   "generic writes native MessagePack, not a variant wrapper"_test = [] {
+      glz::generic_u64 g;
+      expect(not glz::read_json(g, R"({"a":[1,2,3],"c":"txt"})"));
+
+      std::string buffer{};
+      expect(not glz::write_msgpack(g, buffer));
+      // fixmap(2) 'a' fixarray(3) 1 2 3 'c' fixstr(3) "txt"
+      expect(buffer == std::string{"\x82\xa1\x61\x93\x01\x02\x03\xa1\x63\xa3txt", 13});
+
+      glz::generic_u64 out;
+      expect(not glz::read_msgpack(out, buffer));
+      std::string dumped{};
+      expect(not glz::write_json(out, dumped));
+      expect(dumped == R"({"a":[1,2,3],"c":"txt"})");
+   };
+
+   "generic round-trips every JSON value category"_test = [] {
+      const std::string json =
+         R"({"null":null,"true":true,"false":false,"int":64,"neg":-7,"double":6.28,"str":"text","arr":[1,"two",null],"obj":{"k":1}})";
+      glz::generic_u64 g;
+      expect(not glz::read_json(g, json));
+
+      std::string buffer{};
+      expect(not glz::write_msgpack(g, buffer));
+      // Smaller than the JSON it came from, which the variant wrapper's per-element type name was not
+      expect(buffer.size() < json.size());
+
+      glz::generic_u64 out;
+      expect(not glz::read_msgpack(out, buffer));
+      expect(out["int"].is_uint64());
+      expect(out["neg"].is_int64());
+      expect(out["double"].is_double());
+
+      std::string dumped{};
+      expect(not glz::write_json(out, dumped));
+      expect(dumped == json);
+   };
+
+   "which numeric alternative an integer lands in follows the mode"_test = [] {
+      glz::generic_u64 wide;
+      wide.data = (std::numeric_limits<uint64_t>::max)();
+      std::string buffer{};
+      expect(not glz::write_msgpack(wide, buffer));
+
+      glz::generic_u64 as_u64;
+      expect(not glz::read_msgpack(as_u64, buffer));
+      expect(as_u64.is_uint64());
+      expect(as_u64.get<uint64_t>() == (std::numeric_limits<uint64_t>::max)());
+
+      // No exact alternative for that magnitude in i64 mode, so it falls back to double
+      glz::generic_i64 as_i64;
+      expect(not glz::read_msgpack(as_i64, buffer));
+      expect(as_i64.is_double());
+
+      glz::generic as_f64;
+      expect(not glz::read_msgpack(as_f64, buffer));
+      expect(as_f64.is_number());
+   };
+
+   "every generic mode round trips"_test = [] {
+      const std::string json = R"({"a":-7,"b":[1,2.5,null,true,"s"],"c":{},"d":[]})";
+
+      glz::generic as_f64;
+      expect(not glz::read_json(as_f64, json));
+      std::string buffer{};
+      expect(not glz::write_msgpack(as_f64, buffer));
+      glz::generic f64_out;
+      expect(not glz::read_msgpack(f64_out, buffer));
+      std::string dumped{};
+      expect(not glz::write_json(f64_out, dumped));
+      expect(dumped == R"({"a":-7,"b":[1,2.5,null,true,"s"],"c":{},"d":[]})");
+
+      glz::generic_i64 as_i64;
+      expect(not glz::read_json(as_i64, json));
+      buffer.clear();
+      expect(not glz::write_msgpack(as_i64, buffer));
+      glz::generic_i64 i64_out;
+      expect(not glz::read_msgpack(i64_out, buffer));
+      expect(i64_out["a"].is_int64());
+      dumped.clear();
+      expect(not glz::write_json(i64_out, dumped));
+      expect(dumped == json);
+   };
+
+   // The readers build the alternative separately and move it in, so a value that fails to parse is
+   // left as it was rather than half-filled.
+   "a failed read leaves the destination untouched"_test = [] {
+      glz::generic_u64 out;
+      out.data = std::string{"unchanged"};
+      // fixarray(1) with the element truncated away
+      expect(glz::read_msgpack(out, std::string{"\x91", 1}));
+      expect(out.is_string());
+      expect(out.get<std::string>() == "unchanged");
+   };
+
+   "a MessagePack item with no JSON counterpart is rejected"_test = [] {
+      glz::generic_u64 out;
+      expect(glz::read_msgpack(out, std::string{"\xc4\x01\x00", 3})); // bin8
+      expect(glz::read_msgpack(out, std::string{"\xd4\x00\x00", 3})); // fixext1
+   };
+
+   // Other encoders write integers, which the f64 mode reads only through a conversion. Only
+   // alternatives that compete for a value are read strictly first, so the array alternative is not
+   // parsed twice at every level, which exhausted the speculation budget on a valid document.
+   "a deep document with integers reads within the speculation budget"_test = [] {
+      glz::generic_i64 doc = int64_t{1};
+      for (int i = 0; i < 20; ++i) {
+         glz::generic_i64::array_t level{};
+         level.emplace_back(std::string(50'000, 'x'));
+         level.emplace_back(std::move(doc));
+         doc = std::move(level);
+      }
+      std::string buffer{};
+      expect(not glz::write_msgpack(doc, buffer));
+      expect(buffer.size() > 1'000'000u);
+
+      glz::generic decoded{};
+      expect(not glz::read_msgpack(decoded, buffer));
+      expect(glz::write_json(decoded) == glz::write_json(doc));
+   };
+};
+
+// glz::cast and other glaze_value_t wrappers hand the already-read type byte to the wrapped
+// reader by turning on no_header. That says the tag of THAT value was consumed, not the tags of its
+// children -- leaving it set made the header-reading parse overload not viable one level down, so
+// any such wrapper around a container or an aggregate failed to compile on read.
+namespace value_wrapper
+{
+   struct point
+   {
+      int x{};
+      int y{};
+   };
+
+   struct wraps_container
+   {
+      std::vector<int> v{};
+   };
+
+   struct wraps_struct
+   {
+      point p{};
+   };
+}
+
+template <>
+struct glz::meta<value_wrapper::wraps_container>
+{
+   using T = value_wrapper::wraps_container;
+   static constexpr auto value = &T::v;
+};
+
+template <>
+struct glz::meta<value_wrapper::wraps_struct>
+{
+   using T = value_wrapper::wraps_struct;
+   static constexpr auto value = &T::p;
+};
+
+suite msgpack_glaze_value_wrapper_tests = [] {
+   "a glaze_value_t wrapping a container reads back"_test = [] {
+      using namespace value_wrapper;
+      std::string buffer{};
+      expect(not glz::write_msgpack(wraps_container{{1, 2, 3}}, buffer));
+      wraps_container out{};
+      expect(not glz::read_msgpack(out, buffer));
+      expect(out.v == std::vector<int>{1, 2, 3});
+   };
+
+   "a glaze_value_t wrapping a struct reads back"_test = [] {
+      using namespace value_wrapper;
+      std::string buffer{};
+      expect(not glz::write_msgpack(wraps_struct{{4, 5}}, buffer));
+      wraps_struct out{};
+      expect(not glz::read_msgpack(out, buffer));
+      expect(out.p.x == 4);
+      expect(out.p.y == 5);
    };
 };
 
@@ -674,16 +1276,22 @@ namespace msgpack_depth
       std::vector<tree_node> children{};
    };
 
-   // Structs are written as arrays, so every level is fixarray(1) for the struct plus fixarray(1)
-   // for its member: two bytes of input per level of nesting.
+   // Structs are keyed maps, so every level is fixmap(1) carrying the "children" key plus fixarray(1)
+   // for the vector itself: two nesting levels per tree node, as when they were written as arrays.
    inline std::string nested_tree(size_t levels)
    {
+      constexpr std::string_view key = "children";
       std::string b;
+      const auto open_node = [&] {
+         b.push_back(char(0x81)); // fixmap(1)
+         b.push_back(char(0xa0 | key.size())); // fixstr(8)
+         b.append(key);
+      };
       for (size_t i = 0; i < levels; ++i) {
-         b.push_back(char(0x91));
-         b.push_back(char(0x91));
+         open_node();
+         b.push_back(char(0x91)); // fixarray(1)
       }
-      b.push_back(char(0x91));
+      open_node();
       b.push_back(char(0x90)); // innermost node, no children
       return b;
    }
@@ -712,8 +1320,32 @@ suite msgpack_recursion_depth_limit = [] {
    };
 };
 
+namespace local_aggregates
+{
+   struct event
+   {
+      std::string name;
+      glz::msgpack::timestamp time;
+      bool operator==(const event&) const = default;
+   };
+
+   struct simple_msgpack_obj
+   {
+      int x = 42;
+      std::string name = "hello";
+   };
+
+   struct large_msgpack_obj
+   {
+      int x = 42;
+      std::string long_name = "this is a very long string that definitely won't fit in a tiny buffer";
+      std::vector<int> data = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
+   };
+}
+
 int main()
 {
+   using namespace local_aggregates;
    // Only the write side is exercised here: MessagePack passes its type-tag byte
    // positionally to from::op, so a generic JSON-style custom from signature cannot be
    // read-tested (a separate MessagePack custom-type limitation). The from exclusion is
@@ -1377,13 +2009,6 @@ int main()
    };
 
    "timestamp in struct"_test = [] {
-      struct event
-      {
-         std::string name;
-         glz::msgpack::timestamp time;
-         bool operator==(const event&) const = default;
-      };
-
       event original{"test_event", {1700000000, 123000000}};
       expect_roundtrip_equal(original);
    };
@@ -1548,19 +2173,6 @@ int main()
 
    // Bounded buffer overflow tests for MessagePack
    {
-      struct simple_msgpack_obj
-      {
-         int x = 42;
-         std::string name = "hello";
-      };
-
-      struct large_msgpack_obj
-      {
-         int x = 42;
-         std::string long_name = "this is a very long string that definitely won't fit in a tiny buffer";
-         std::vector<int> data = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
-      };
-
       "msgpack write to std::array with sufficient space succeeds"_test = [] {
          simple_msgpack_obj obj{};
          std::array<char, 512> buffer{};
