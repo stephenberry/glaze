@@ -324,6 +324,8 @@ constexpr auto opts = glz::is_padded_on<glz::opts{}>();
 auto ec = glz::read<opts>(value, std::string_view{buffer.data(), size});
 ```
 
+The promise covers only the buffer you pass to `glz::read`. Where Glaze reads a buffer it filled itself, such as a file loaded by `read_file_json` or another `read_file_*` helper, `read_directory`, or a `glz::file_include`, and wherever a registry reads a request, it leaves `is_padded` off whatever your options say.
+
 > [!WARNING]
 >
 > The reader takes this at its word and cannot check it. A buffer without that slack is read out of bounds, which is undefined behavior: a crash, or silently wrong values, depending on what follows the buffer in memory.

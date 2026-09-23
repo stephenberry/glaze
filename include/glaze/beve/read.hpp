@@ -3216,7 +3216,8 @@ namespace glz
          return error_ctx{0, file_error};
       }
 
-      return read<set_beve<Opts>()>(value, buffer, ctx);
+      // The buffer was sized to the file, so the caller's is_padded promise does not cover it.
+      return read<is_padded_off<set_beve<Opts>()>()>(value, buffer, ctx);
    }
 
    template <read_supported<BEVE> T, class Buffer>

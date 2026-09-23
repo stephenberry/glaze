@@ -2962,6 +2962,7 @@ namespace glz
          return error_ctx{file_error};
       }
 
-      return read<set_cbor<Opts>()>(value, buffer, ctx);
+      // The buffer was sized to the file, so the caller's is_padded promise does not cover it.
+      return read<is_padded_off<set_cbor<Opts>()>()>(value, buffer, ctx);
    }
 }
