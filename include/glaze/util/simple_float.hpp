@@ -1309,8 +1309,17 @@ namespace glz::simple_float
          int32_t exp2;
          approximate_decimal(dec.mantissa, dec.exp10, hi, lo, exp2);
          const bool exact = is_exact_decimal(dec.exp10);
-         if (exact && !dec.truncated) {
-            return round_offset<T>(hi, lo, exp2, 0);
+         if (!dec.truncated) {
+            // One rounding suffices unless the error can reach the bits that decide it. For a normal result those
+            // are the kept bits and the round bit of hi: an offset below 2^64 changes hi by at most one, which
+            // cannot carry or borrow into them unless the bits below the round bit are all ones or all zeros.
+            constexpr int round_shift = 63 - std::numeric_limits<T>::digits; // position of the round bit in hi
+            constexpr uint64_t below_round = (uint64_t(1) << round_shift) - 1;
+            constexpr int32_t min_normal_exp2 = 1 - 127 - (std::numeric_limits<T>::max_exponent - 1);
+            const uint64_t tail = hi & below_round;
+            if (exact || (tail != 0 && tail != below_round && exp2 >= min_normal_exp2)) [[likely]] {
+               return round_offset<T>(hi, lo, exp2, 0);
+            }
          }
          // Bound the true value: it lies in [mantissa, mantissa + 1) × 10^exp10 when digits were truncated,
          // widened by the approximation error. When both bounds round alike, so does every value between them.
