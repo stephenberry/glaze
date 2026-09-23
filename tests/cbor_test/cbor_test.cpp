@@ -21,6 +21,7 @@
 #include "glaze/base64/base64.hpp"
 #include "glaze/glaze_exceptions.hpp"
 #include "glaze/json/generic.hpp"
+#include "speculation_guard.hpp"
 #include "ut/ut.hpp"
 
 using namespace ut;
@@ -5042,11 +5043,7 @@ suite cbor_variant_tagging = [] {
    };
 
    // Untagged resolution is speculative, so an ambiguous nest re-parses each subtree per alternative
-   // at every level: the work doubles per level and ~100 bytes would cost minutes. The speculation
-   // budget caps the re-parsed bytes, so once it binds the cost stops growing with depth. That is
-   // what is timed: a nest four times deeper must cost about the same. An absolute bound measured the
-   // build instead -- a capped read is ~10 ms in Release but seconds under a sanitizer on a slow
-   // runner -- while the ratio holds on any build and a reversion is exponential in the extra depth.
+   // at every level. The speculation budget caps that; see speculation_guard.hpp for what is timed.
    "an ambiguous nest is bounded rather than exponential"_test = [] {
       const auto build = [](size_t levels) {
          std::string buffer;
@@ -5060,29 +5057,13 @@ suite cbor_variant_tagging = [] {
          buffer += "z"; // a string where a map is required: nothing matches, at any level
          return buffer;
       };
-      struct outcome
-      {
-         double ms{};
-         bool exhausted{};
-      };
-      const auto resolve = [&](size_t levels) {
-         const auto buffer = build(levels);
-         cbor_ambiguous::node decoded{};
-         glz::context ctx{};
-         const auto start = std::chrono::steady_clock::now();
-         const auto ec = glz::read<glz::opts{.format = glz::CBOR}>(decoded, buffer, ctx);
-         const auto ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count();
-         expect(ec == glz::error_code::no_matching_variant_type) << "levels=" << levels;
-         return outcome{ms, glz::speculation_exhausted(ctx)};
-      };
-
-      // A shallow nest is resolved exhaustively; what ends a deep one is the budget.
-      expect(not resolve(4).exhausted);
-      const auto shallow = resolve(24);
-      const auto deep = resolve(96);
-      expect(shallow.exhausted && deep.exhausted);
-      expect(deep.ms < 4.0 * shallow.ms + 50.0)
-         << "24 levels took " << shallow.ms << " ms but 96 levels took " << deep.ms << " ms";
+      glz_test::expect_bounded_by_speculation_budget(
+         build,
+         [](const std::string& buffer, glz::context& ctx) {
+            cbor_ambiguous::node decoded{};
+            return glz::read<glz::opts{.format = glz::CBOR}>(decoded, buffer, ctx);
+         },
+         glz::error_code::no_matching_variant_type, 4, 24, 96);
    };
 };
 

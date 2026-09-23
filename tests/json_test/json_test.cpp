@@ -42,6 +42,7 @@
 #include "json_test_shared_types.hpp"
 #include "minimal_buffer.hpp"
 #include "scratch_directory.hpp"
+#include "speculation_guard.hpp"
 #include "ut/ut.hpp"
 
 using namespace ut;
@@ -15934,7 +15935,7 @@ suite json_recursion_depth_limit = [] {
       // The JSON analogue of the BEVE cascade: two array alternatives, so every level tries both,
       // with a malformed leaf at the bottom that every level retries. 339 bytes took 40 seconds
       // before the speculation budget capped the total re-parsed bytes; the cost no longer grows
-      // with depth.
+      // with depth. See speculation_guard.hpp for what is timed.
       const auto build = [](size_t levels) {
          std::string b;
          for (size_t i = 0; i < levels; ++i) b += R"([{"child":)";
@@ -15943,13 +15944,13 @@ suite json_recursion_depth_limit = [] {
          return b;
       };
 
-      const auto start = std::chrono::steady_clock::now();
-      for (size_t levels : {8u, 16u, 28u, 36u}) {
-         two_arrays out{};
-         expect(bool(glz::read_json(out, build(levels)))) << "levels=" << levels;
-      }
-      const auto ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count();
-      expect(ms < 5000.0) << "resolving ambiguous nests took " << ms << " ms";
+      glz_test::expect_bounded_by_speculation_budget(
+         build,
+         [](const std::string& buffer, glz::context& ctx) {
+            two_arrays out{};
+            return glz::read<glz::opts{}>(out, buffer, ctx);
+         },
+         glz::error_code::expected_quote, 8, 24, 96);
    };
 
    "rejected variant alternatives do not spend the depth budget"_test = [] {

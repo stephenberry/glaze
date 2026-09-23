@@ -32,6 +32,7 @@
 #include "glaze/trace/trace.hpp"
 #include "minimal_buffer.hpp"
 #include "scratch_directory.hpp"
+#include "speculation_guard.hpp"
 #include "ut/ut.hpp"
 
 using namespace ut;
@@ -9125,6 +9126,7 @@ namespace beve_depth
    inline std::string ambiguous_nest(size_t levels)
    {
       amb_v v{amb_leaf{1}};
+      const auto leaf = glz::write_beve(v).value();
       for (size_t i = 0; i < levels; ++i) {
          auto n = std::make_shared<amb_node_b>();
          n->child = std::move(v);
@@ -9132,10 +9134,14 @@ namespace beve_depth
          v = std::move(n);
       }
       auto buffer = glz::write_beve(v).value();
-      // Rename the innermost leaf's only key so the bottom of the nest fails with unknown_key. Its
-      // key is the last "v" written, and no later byte can be one: what follows is the leaf's
-      // numeric value and then each enclosing node's "n" key and value.
-      buffer[buffer.rfind('v')] = 'q';
+      // Rename the innermost leaf's only key so the bottom of the nest fails with unknown_key. The
+      // leaf is found by its whole encoding rather than by its key's byte: an enclosing node's "n"
+      // value is a byte too, and n = 118 is a 'v'.
+      const auto at = buffer.find(leaf);
+      if (at == std::string::npos || buffer.find(leaf, at + 1) != std::string::npos) {
+         std::abort(); // the nest must contain the leaf exactly once
+      }
+      buffer[at + leaf.find('v')] = 'q';
       return buffer;
    }
 }
@@ -9228,16 +9234,15 @@ suite beve_recursion_depth_limit = [] {
       // Resolution is speculative: an alternative is parsed to find out whether it fits, and a
       // rejected one is rewound and the next tried. Nest that and the re-parses multiply -- measured
       // at ~4.3x per level, so 189 bytes took 55 seconds and 256 levels would never return. The
-      // speculation budget caps the total re-parsed bytes, so the cost stops growing with depth
-      // (~8 ms here, whatever the nesting). Timed rather than asserted on the error alone: a
-      // reversion is a hang, and a hung suite is a worse signal than a failed expectation.
-      const auto start = std::chrono::steady_clock::now();
-      for (size_t levels : {4u, 8u, 16u, 32u}) {
-         amb_v out{};
-         expect(bool(glz::read_beve(out, ambiguous_nest(levels)))) << "levels=" << levels;
-      }
-      const auto ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count();
-      expect(ms < 5000.0) << "resolving ambiguous nests took " << ms << " ms";
+      // speculation budget caps the total re-parsed bytes, so the cost stops growing with depth;
+      // see speculation_guard.hpp for what is timed.
+      glz_test::expect_bounded_by_speculation_budget(
+         ambiguous_nest,
+         [](const std::string& buffer, glz::context& ctx) {
+            amb_v out{};
+            return glz::read<glz::opts{.format = glz::BEVE}>(out, buffer, ctx);
+         },
+         glz::error_code::unknown_key, 4, 16, 64);
    };
 
    "the budget does not penalise many variants side by side"_test = [] {
