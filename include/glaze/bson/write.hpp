@@ -20,6 +20,7 @@
 #include "glaze/core/reflect.hpp"
 #include "glaze/core/to.hpp"
 #include "glaze/core/write.hpp"
+#include "glaze/core/write_wrappers.hpp"
 #include "glaze/file/file_ops.hpp"
 #include "glaze/util/dump.hpp"
 #include "glaze/util/for_each.hpp"
@@ -645,6 +646,18 @@ namespace glz
          if constexpr (always_null_t<DT>) {
             (void)write_element_prefix(ctx, bson::type::null, key, b, ix);
          }
+         else if constexpr (is_specialization_v<DT, custom_t>) {
+            // The element type byte depends on what the getter yields, which may itself be nullable or
+            // a variant, so the getter is resolved here and its result dispatched like any other member.
+            unwrap_write_value(std::forward<T>(value), ctx, [&]<class Resolved>(Resolved&& resolved) {
+               if constexpr (is_specialization_v<std::remove_cvref_t<Resolved>, custom_t>) {
+                  static_assert(false_v<Resolved>, "glz::custom getter must be invocable on the parent object");
+               }
+               else {
+                  write_member_element<Opts>(key, std::forward<Resolved>(resolved), ctx, b, ix);
+               }
+            });
+         }
          else if constexpr (nullable_like<DT>) {
             if (value) {
                write_member_element<Opts>(key, *value, ctx, b, ix);
@@ -668,7 +681,8 @@ namespace glz
       // output under the given options (skip_null_members on an empty optional,
       // skip_default_members on a default-valued field, etc.).
       template <class T, auto Opts, size_t I, class Value, class Tie>
-      GLZ_ALWAYS_INLINE bool should_skip_field_runtime(const Value& value, [[maybe_unused]] const Tie& t) noexcept
+      GLZ_ALWAYS_INLINE bool should_skip_field_runtime(const Value& value, [[maybe_unused]] const Tie& t,
+                                                       [[maybe_unused]] is_context auto& ctx) noexcept
       {
          using val_t = field_t<T, I>;
 
@@ -691,6 +705,9 @@ namespace glz
             else {
                if (!bool(get_member(value, member))) return true;
             }
+         }
+         else if constexpr (Opts.skip_null_members && custom_getter_returns_nullable<val_t>()) {
+            if (custom_getter_is_null(get_member(value, member), ctx)) return true;
          }
          if constexpr (check_skip_default_members(Opts) && has_skippable_default<val_t>) {
             if (is_default_value(get_member(value, member))) return true;
@@ -738,7 +755,7 @@ namespace glz
                return;
             }
             else {
-               if (bson_detail::should_skip_field_runtime<T, Opts, I>(value, t)) return;
+               if (bson_detail::should_skip_field_runtime<T, Opts, I>(value, t, ctx)) return;
 
                decltype(auto) member = [&]() -> decltype(auto) {
                   if constexpr (reflectable<T>) {

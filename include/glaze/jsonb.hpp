@@ -3,6 +3,7 @@
 
 #pragma once
 
+#include "glaze/core/custom.hpp"
 #include "glaze/jsonb/header.hpp"
 #include "glaze/jsonb/jsonb_to_json.hpp"
 #include "glaze/jsonb/read.hpp"

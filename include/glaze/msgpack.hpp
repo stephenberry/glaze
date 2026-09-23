@@ -4,4 +4,5 @@
 #pragma once
 
 #include "glaze/msgpack/read.hpp"
+#include "glaze/msgpack/wrappers.hpp"
 #include "glaze/msgpack/write.hpp"

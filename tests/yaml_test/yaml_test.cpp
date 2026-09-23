@@ -9648,7 +9648,39 @@ count: 42
    };
 };
 
+// A glz::custom getter yielding a nullable, to check that skip_null_members drops a null result the
+// same way it drops a plain null member.
+struct yaml_nullable_custom
+{
+   std::optional<int> opt{};
+   int plain{7};
+   const std::optional<int>& get_opt() const { return opt; }
+   void set_opt(std::optional<int> in) { opt = in; }
+};
+
+template <>
+struct glz::meta<yaml_nullable_custom>
+{
+   using T = yaml_nullable_custom;
+   static constexpr auto value = object("opt", custom<&T::set_opt, &T::get_opt>, "plain", &T::plain);
+};
+
 suite yaml_custom_write_tests = [] {
+   "yaml_custom_null_getter_is_skipped"_test = [] {
+      yaml_nullable_custom obj{};
+      std::string yaml;
+      expect(!glz::write_yaml(obj, yaml));
+      expect(yaml == "plain: 7\n") << yaml;
+
+      constexpr glz::yaml::yaml_opts flow{.flow_style = true};
+      expect(!glz::write<flow>(obj, yaml));
+      expect(yaml == "{plain: 7}") << yaml;
+
+      constexpr glz::yaml::yaml_opts keep_nulls{.skip_null_members = false};
+      expect(!glz::write<keep_nulls>(obj, yaml));
+      expect(yaml.find("opt: null") != std::string::npos) << yaml;
+   };
+
    "yaml_custom_lambda_write_inline"_test = [] {
       yaml_custom_lambda_struct obj{"hello", 99};
       std::string yaml;

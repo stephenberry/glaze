@@ -390,6 +390,29 @@ struct glz::meta<bson_test::meta_nested_s>
    static constexpr auto value = glz::object("child", &T::child, "v", &T::value);
 };
 
+namespace bson_test
+{
+   struct custom_nullable_getter
+   {
+      std::optional<int32_t> opt{};
+      int32_t plain{7};
+      const std::optional<int32_t>& get_opt() const { return opt; }
+      void set_opt(std::optional<int32_t> in) { opt = in; }
+   };
+
+   struct custom_plain_only
+   {
+      int32_t plain{};
+   };
+}
+
+template <>
+struct glz::meta<bson_test::custom_nullable_getter>
+{
+   using T = bson_test::custom_nullable_getter;
+   static constexpr auto value = glz::object("opt", glz::custom<&T::set_opt, &T::get_opt>, "plain", &T::plain);
+};
+
 using namespace bson_test;
 
 namespace
@@ -1232,6 +1255,47 @@ namespace
          expect(out.size() == 2);
          expect(out.at("a") == 1);
          expect(!out.at("b").has_value());
+      };
+   };
+
+   // A glz::custom getter yields its value only at runtime, so the element type byte, and whether a
+   // null result is skipped, have to be decided from what the getter returns.
+   suite bson_custom_getter_tests = [] {
+      "custom-null-getter-skipped-by-default"_test = [] {
+         custom_nullable_getter in{};
+         std::vector<std::byte> buf{};
+         expect(not glz::write_bson(in, buf));
+
+         custom_plain_only out{};
+         auto rec = glz::read_bson(out, buf); // errors on the unknown key "opt" if it was written
+         expect(not rec);
+         expect(out.plain == 7);
+      };
+
+      "custom-null-getter-written-as-null-when-kept"_test = [] {
+         constexpr auto preserve = glz::opts{.skip_null_members = false};
+         custom_nullable_getter in{};
+         std::vector<std::byte> buf{};
+         expect(not glz::write_bson<preserve>(in, buf));
+
+         custom_nullable_getter out{};
+         out.opt = 99;
+         auto rec = glz::read_bson<preserve>(out, buf);
+         expect(not rec);
+         expect(not out.opt.has_value());
+         expect(out.plain == 7);
+      };
+
+      "custom-engaged-getter-round-trips"_test = [] {
+         custom_nullable_getter in{};
+         in.opt = 5;
+         std::vector<std::byte> buf{};
+         expect(not glz::write_bson(in, buf));
+
+         custom_nullable_getter out{};
+         auto rec = glz::read_bson(out, buf);
+         expect(not rec);
+         expect(out.opt == 5);
       };
    };
 

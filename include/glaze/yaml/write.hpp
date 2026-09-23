@@ -1296,6 +1296,11 @@ namespace glz
                      }
                   }
                }
+               else if constexpr (Opts.skip_null_members && custom_getter_returns_nullable<val_t>()) {
+                  if (custom_getter_is_null(member, ctx)) {
+                     return;
+                  }
+               }
 
                if constexpr (check_skip_default_members(Opts) && has_skippable_default<val_t>) {
                   if (is_default_value(member)) return;
@@ -1531,6 +1536,11 @@ namespace glz
                      if (!member) {
                         return;
                      }
+                  }
+               }
+               else if constexpr (Opts.skip_null_members && custom_getter_returns_nullable<val_t>()) {
+                  if (custom_getter_is_null(member, ctx)) {
+                     return;
                   }
                }
 
