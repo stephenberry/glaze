@@ -3458,16 +3458,15 @@ suite read_tests = [] {
          expect(glz::read_json(d, res) != glz::error_code::none);
       }
       {
+         // An exponent marker needs at least one digit after it
          std::string res = R"(1.0e)";
          double d{};
-         expect(not glz::read_json(d, res));
-         expect(d == 1.0);
+         expect(glz::read_json(d, res) == glz::error_code::parse_number_failure);
       }
       {
          std::string res = R"(1.0e-)";
          double d{};
-         expect(not glz::read_json(d, res));
-         expect(d == 1.0);
+         expect(glz::read_json(d, res) == glz::error_code::parse_number_failure);
       }
    };
 
