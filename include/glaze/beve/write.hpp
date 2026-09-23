@@ -89,7 +89,7 @@ namespace glz
          // Optimized single-byte path: direct assignment instead of memcpy
          if constexpr (vector_like<Buffer>) {
             if (ix == b.size()) [[unlikely]] {
-               b.resize(b.size() == 0 ? 128 : b.size() * 2);
+               grow_buffer(b, b.size() == 0 ? 64 : ix + 1);
             }
          }
          b[ix] = static_cast<std::decay_t<decltype(b[0])>>(value);
@@ -98,7 +98,7 @@ namespace glz
       else {
          if constexpr (vector_like<Buffer>) {
             if (const auto k = ix + n; k > b.size()) [[unlikely]] {
-               b.resize(2 * k);
+               grow_buffer(b, k);
             }
          }
 
@@ -1897,10 +1897,15 @@ namespace glz
 
    // Write the BEVE delimiter byte to a buffer
    // Used to separate multiple BEVE values in a stream/buffer (like NDJSON's newline)
+   // Resizable because appending has no meaning for a fixed-size buffer, whose size is already its
+   // capacity. resize/index is also all that `output_buffer` promises; push_back is not.
    template <class Buffer>
+      requires output_buffer<Buffer> && resizable<Buffer>
    void write_beve_delimiter(Buffer& buffer)
    {
-      buffer.push_back(static_cast<typename Buffer::value_type>(tag::delimiter));
+      const size_t ix = buffer.size();
+      buffer.resize(ix + 1);
+      buffer[ix] = static_cast<typename Buffer::value_type>(tag::delimiter);
    }
 
    // Append a BEVE value to an existing buffer without clearing it
@@ -1923,6 +1928,13 @@ namespace glz
       to<BEVE, std::remove_cvref_t<T>>::template op<set_beve<Opts>()>(std::forward<T>(value), ctx, buffer, ix);
 
       if (bool(ctx.error)) [[unlikely]] {
+         // Truncate to what was written, as the other write entry points do: the buffer grows
+         // unfilled from here on, so leaving it at its grown length hands the caller indeterminate
+         // bytes past `count`. Not `finalize`, which for a streaming buffer means flushing -- a
+         // failed write must not push the partial document downstream on its way out.
+         if constexpr (traits::is_resizable && not traits::is_output_streaming) {
+            buffer.resize(ix);
+         }
          return {ix - start_ix, ctx.error, ctx.custom_error_message};
       }
 
@@ -1933,7 +1945,7 @@ namespace glz
    // Append a BEVE value to an existing buffer with a delimiter prefix
    // Useful for streaming multiple values
    template <auto Opts = opts{}, write_supported<BEVE> T, class Buffer>
-      requires output_buffer<Buffer>
+      requires output_buffer<Buffer> && resizable<Buffer>
    [[nodiscard]] error_ctx write_beve_append_with_delimiter(T&& value, Buffer& buffer)
    {
       write_beve_delimiter(buffer);
@@ -1954,7 +1966,7 @@ namespace glz
 
       if constexpr (traits::is_resizable) {
          if (buffer.size() < 2 * write_padding_bytes) {
-            buffer.resize(2 * write_padding_bytes);
+            resize_unfilled(buffer, 2 * write_padding_bytes);
          }
       }
 

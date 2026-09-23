@@ -213,4 +213,6 @@ The following `glz::opts` fields influence JSONB read/write:
 
 Options marked *(custom)* are not part of the base `glz::opts` struct — define a custom opts struct inheriting from `glz::opts` and add the field.
 
-Options that apply only to text formats (`prettify`, `minified`, `comments`, `null_terminated`, `indentation_char`, `escape_control_characters`) have no effect on JSONB.
+Options that apply only to text formats (`prettify`, `minified`, `comments`, `null_terminated`, `indentation_char`, `escape_control_characters`) have no effect on reading or writing JSONB itself.
+
+`jsonb_to_json` produces JSON text, so text options do apply to it. Two are fixed: it always escapes control characters, since a JSONB blob stores a JSON document that may have contained `\uXXXX` to begin with, and it validates UTF-8 unless `validate_utf8` is off. The other binary-to-JSON converters do neither by default; see [String Escaping](binary.md#string-escaping).

@@ -4,7 +4,7 @@
 #pragma once
 
 #include "glaze/core/meta.hpp"
-#include "glaze/tuplet/tuple.hpp"
+#include "glaze/core/tuple.hpp"
 
 namespace glz
 {

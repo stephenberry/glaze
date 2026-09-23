@@ -1169,6 +1169,113 @@ suite hash_tests = [] {
    // to work around GCC compiler bug with large translation units
 };
 
+// full_hash_impl builds the perfect hash table at compile time and full_hash indexes that same table
+// at runtime, so the two must produce identical values for identical keys. A single differing bit
+// would send a lookup to the wrong member, silently. Both carry three branches -- max_length < 8,
+// min_length > 7, and a mixed case holding both a short and a long path -- and every one of them is
+// pinned here.
+
+template <uint64_t MinLength, uint64_t MaxLength, uint64_t Seed>
+bool full_hash_agrees(const std::string_view key)
+{
+   return glz::full_hash_impl(key, Seed, MinLength, MaxLength) ==
+          glz::full_hash<MinLength, MaxLength, Seed>(key.data(), key.size());
+}
+
+std::string hash_filler(const size_t n)
+{
+   std::string s;
+   s.reserve(n);
+   for (size_t i = 0; i < n; ++i) {
+      s.push_back(char('a' + (i % 26)));
+   }
+   return s;
+}
+
+template <uint64_t Seed>
+void check_full_hash_agreement()
+{
+   // 0 through 40 straddles every chunk boundary the folding loop can stop on, 7/8, 15/16, 23/24
+   // and 31/32, from both sides.
+   for (size_t n = 0; n <= 40; ++n) {
+      const auto key = hash_filler(n);
+      // The mixed branch, which dispatches to its short path below 8 bytes and its long path above.
+      expect(full_hash_agrees<1, 40, Seed>(key)) << "mixed branch, n = " << n;
+      if (n < 8) {
+         // The max_length < 8 branch. Longer keys are out of range for it.
+         expect(full_hash_agrees<1, 7, Seed>(key)) << "short branch, n = " << n;
+      }
+      else {
+         // The min_length > 7 branch. Shorter keys are out of range for it.
+         expect(full_hash_agrees<8, 40, Seed>(key)) << "long branch, n = " << n;
+      }
+   }
+}
+
+suite full_hash_agreement_tests = [] {
+   "full_hash agrees with full_hash_impl"_test = [] {
+      check_full_hash_agreement<glz::primes_64[0]>();
+      check_full_hash_agreement<glz::primes_64[1]>();
+      check_full_hash_agreement<glz::primes_64[64]>();
+      check_full_hash_agreement<glz::primes_64[127]>();
+   };
+
+   "full_hash separates keys differing only in length"_test = [] {
+      // Same chunks and the same final 8 bytes, different lengths. Before the length was folded in
+      // these were equal for every seed, so no seed could ever separate them.
+      constexpr std::string_view a = "field_name_10500_value";
+      constexpr std::string_view b = "field_name_105000_value";
+      for (const auto seed : glz::primes_64) {
+         expect(glz::full_hash_impl(a, seed, a.size(), b.size()) != glz::full_hash_impl(b, seed, a.size(), b.size()));
+      }
+   };
+
+   "full_hash separates short keys differing only in trailing nulls"_test = [] {
+      // to_uint64_n_below_8 zero fills, so without the length these are the same value.
+      const std::string_view a{"a", 1};
+      const std::string_view b{"a\0", 2};
+      for (const auto seed : glz::primes_64) {
+         expect(glz::full_hash_impl(a, seed, 1, 7) != glz::full_hash_impl(b, seed, 1, 7));
+         expect(glz::full_hash<1, 7, glz::primes_64[0]>(a.data(), a.size()) !=
+                glz::full_hash<1, 7, glz::primes_64[0]>(b.data(), b.size()));
+      }
+   };
+};
+
+// Two pairs whose members fold the same chunks and then take the same tail, differing only in
+// length, plus two members that exist to keep the cheaper rungs from claiming these keys first:
+// they share a length and agree over the whole of min_length, so no character column is unique
+// either on its own or paired with the length. Selection therefore has to reach the full hash,
+// and before the length was folded in it could not, which made this struct fail to compile.
+struct length_blind_keys
+{
+   int field_name_abcxxxxxxxx{};
+   int field_name_abcxxxxxxxxx{};
+   int field_name_abdxxxxxxxx{};
+   int field_name_abdxxxxxxxxx{};
+   int field_name_abcxxxxxxxxA{};
+   int field_name_abcxxxxxxxxB{};
+};
+
+suite length_blind_keys_tests = [] {
+   "length_blind_keys"_test = [] {
+      static constexpr auto info = glz::make_keys_info(glz::reflect<length_blind_keys>::keys);
+      static_assert(info.type == glz::hash_type::full_flat);
+
+      length_blind_keys obj{1, 2, 3, 4, 5, 6};
+      std::string buffer{};
+      expect(not glz::write_json(obj, buffer));
+      obj = {};
+      expect(not glz::read_json(obj, buffer)) << buffer;
+      expect(obj.field_name_abcxxxxxxxx == 1);
+      expect(obj.field_name_abcxxxxxxxxx == 2);
+      expect(obj.field_name_abdxxxxxxxx == 3);
+      expect(obj.field_name_abdxxxxxxxxx == 4);
+      expect(obj.field_name_abcxxxxxxxxA == 5);
+      expect(obj.field_name_abcxxxxxxxxB == 6);
+   };
+};
+
 struct custom_state
 {
    std::array<uint32_t, 8> statuses() { return {}; }

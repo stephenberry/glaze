@@ -180,10 +180,11 @@ namespace glz
       }
       else {
          auto* start = it;
-         skip_string_view(ctx, it, end);
+         uint64_t ascii_acc{};
+         skip_string_view(ctx, it, end, ascii_acc);
          if (bool(ctx.error)) [[unlikely]]
             return;
-         if (validate_utf8_span<Opts>(ctx, start, it)) [[unlikely]]
+         if (validate_utf8_span<Opts>(ctx, start, it, ascii_acc)) [[unlikely]]
             return;
          const sv key = {start, size_t(it - start)};
          ++it;
@@ -313,7 +314,11 @@ namespace glz
       static constexpr auto KeyWithEndQuote = join_v<Key, chars<"\"">>;
       static constexpr auto Length = KeyWithEndQuote.size();
 
-      if (((it + Length) < end) && comparitor<KeyWithEndQuote>(it)) [[likely]] {
+      // Compared as a count rather than by forming `it + Length` first: a pointer past one-past-the-end
+      // is undefined even when it is never dereferenced, and a key near the end of a short buffer
+      // reaches this with fewer than `Length` bytes left. Signed, so a cursor that has overshot
+      // `end` does not read as room.
+      if (((end - it) > std::ptrdiff_t(Length)) && comparitor<KeyWithEndQuote>(it)) [[likely]] {
          it += Length;
          if constexpr (not Opts.null_terminated) {
             if (it == end) [[unlikely]] {
@@ -347,7 +352,8 @@ namespace glz
       static constexpr auto TargetKey = glz::get<I>(reflect<T>::keys);
       static constexpr auto Length = TargetKey.size();
 
-      if (((it + Length) < end) && comparitor<TargetKey>(it)) [[likely]] {
+      // A count, not a formed pointer -- see the note in the object overload above.
+      if (((end - it) > std::ptrdiff_t(Length)) && comparitor<TargetKey>(it)) [[likely]] {
          it += Length;
          if (*it != '"') [[unlikely]] {
             ctx.error = error_code::unexpected_enum;
@@ -646,16 +652,8 @@ namespace glz
             }
          }
          static constexpr sv null_string = "null";
-         if constexpr (not check_is_padded(Opts)) {
-            const auto n = size_t(end - it);
-            if ((n < 4) || not comparitor<null_string>(it)) [[unlikely]] {
-               ctx.error = error_code::syntax_error;
-            }
-         }
-         else {
-            if (not comparitor<null_string>(it)) [[unlikely]] {
-               ctx.error = error_code::syntax_error;
-            }
+         if ((end - it < 4) || not comparitor<null_string>(it)) [[unlikely]] {
+            ctx.error = error_code::syntax_error;
          }
          it += 4; // always advance for performance
       }
@@ -697,11 +695,9 @@ namespace glz
             }
          }
          else {
-            if constexpr (not check_is_padded(Opts)) {
-               if (size_t(end - it) < 4) [[unlikely]] {
-                  ctx.error = error_code::expected_true_or_false;
-                  return;
-               }
+            if (end - it < 4) [[unlikely]] {
+               ctx.error = error_code::expected_true_or_false;
+               return;
             }
 
             uint32_t c;
@@ -887,158 +883,6 @@ namespace glz
    struct from<JSON, T>
    {
       template <auto Opts, class It, class End>
-         requires(check_is_padded(Opts))
-      static void op(auto& value, is_context auto&& ctx, It&& it, End end)
-      {
-         if constexpr (check_string_as_number(Opts)) {
-            auto start = it;
-            skip_number<Opts>(ctx, it, end);
-            if (bool(ctx.error)) [[unlikely]] {
-               return;
-            }
-            value.append(start, size_t(it - start));
-         }
-         else {
-            if constexpr (!check_opening_handled(Opts)) {
-               if constexpr (!check_ws_handled(Opts)) {
-                  if (skip_ws<Opts>(ctx, it, end)) {
-                     return;
-                  }
-               }
-
-               if (match_invalid_end<'"', Opts>(ctx, it, end)) {
-                  return;
-               }
-            }
-
-            if constexpr (not check_raw_string(Opts)) {
-               static constexpr auto string_padding_bytes = 8;
-
-               auto start = it;
-               uint64_t ascii_acc{};
-               while (true) {
-                  if (it >= end) [[unlikely]] {
-                     ctx.error = error_code::unexpected_end;
-                     return;
-                  }
-
-                  uint64_t chunk;
-                  std::memcpy(&chunk, it, 8);
-                  if constexpr (std::endian::native == std::endian::big) {
-                     chunk = std::byteswap(chunk);
-                  }
-                  ascii_acc |= chunk;
-                  const uint64_t test_chars = has_quote(chunk);
-                  if (test_chars) {
-                     it += (countr_zero(test_chars) >> 3);
-
-                     auto* prev = it - 1;
-                     while (*prev == '\\') {
-                        --prev;
-                     }
-                     if (size_t(it - prev) % 2) {
-                        break;
-                     }
-                     ++it; // skip the escaped quote
-                  }
-                  else {
-                     it += 8;
-                  }
-               }
-
-               if (validate_utf8_span<Opts>(ctx, start, it, ascii_acc)) [[unlikely]] {
-                  return;
-               }
-
-               auto n = size_t(it - start);
-               value.resize(n + string_padding_bytes);
-
-               auto* p = value.data();
-
-               while (true) {
-                  if (start >= it) {
-                     break;
-                  }
-
-                  std::memcpy(p, start, 8);
-                  uint64_t swar;
-                  std::memcpy(&swar, p, 8);
-                  if constexpr (std::endian::native == std::endian::big) {
-                     swar = std::byteswap(swar);
-                  }
-
-                  constexpr uint64_t lo7_mask = repeat_byte8(0b01111111);
-                  const uint64_t lo7 = swar & lo7_mask;
-                  const uint64_t backslash = (lo7 ^ repeat_byte8('\\')) + lo7_mask;
-                  const uint64_t less_32 = (swar & repeat_byte8(0b01100000)) + lo7_mask;
-                  uint64_t next = ~((backslash & less_32) | swar);
-
-                  next &= repeat_byte8(0b10000000);
-                  if (next == 0) {
-                     start += 8;
-                     p += 8;
-                     continue;
-                  }
-
-                  next = countr_zero(next) >> 3;
-                  start += next;
-                  if (start >= it) {
-                     break;
-                  }
-
-                  if ((*start & 0b11100000) == 0) [[unlikely]] {
-                     ctx.error = error_code::syntax_error;
-                     return;
-                  }
-                  ++start; // skip the escape
-                  if (*start == 'u') {
-                     ++start;
-                     p += next;
-                     const auto mark = start;
-                     const auto offset = handle_unicode_code_point(start, p, end);
-                     if (offset == 0) [[unlikely]] {
-                        ctx.error = error_code::unicode_escape_conversion_failure;
-                        return;
-                     }
-                     n += offset;
-                     // escape + u + unicode code points
-                     n -= 2 + uint32_t(start - mark);
-                  }
-                  else {
-                     p += next;
-                     *p = char_unescape_table[uint8_t(*start)];
-                     if (*p == 0) [[unlikely]] {
-                        ctx.error = error_code::invalid_escape;
-                        return;
-                     }
-                     ++p;
-                     ++start;
-                     --n;
-                  }
-               }
-
-               value.resize(n);
-               ++it;
-            }
-            else {
-               // raw_string
-               auto start = it;
-               skip_string_view(ctx, it, end);
-               if (bool(ctx.error)) [[unlikely]]
-                  return;
-
-               if (validate_utf8_span<Opts>(ctx, start, it)) [[unlikely]] {
-                  return;
-               }
-
-               value.assign(start, size_t(it - start));
-               ++it;
-            }
-         }
-      }
-
-      template <auto Opts, class It, class End>
-         requires(not check_is_padded(Opts))
       static void op(auto& value, is_context auto&& ctx, It&& it, End end)
       {
          if constexpr (check_string_as_number(Opts)) {
@@ -1069,15 +913,22 @@ namespace glz
             if constexpr (not check_raw_string(Opts)) {
                static constexpr auto string_padding_bytes = 8;
 
+               // How much buffer has to remain for an eight byte load at the cursor to stay inside
+               // it. One on a padded input, where the last chunk is free to straddle the end of the
+               // document, so the byte tails below are unreachable; eight otherwise, which costs the
+               // final bytes of the buffer their chunked path and nothing else.
+               const std::ptrdiff_t scan_min = chunk_min<8>(ctx.padded_input);
+
                if (size_t(end - it) >= 8) {
+                  // The bound as a pointer, so the loops below spend a compare per chunk rather
+                  // than a subtract and a compare. Well defined here and nowhere else in this
+                  // reader: the branch has just established that at least eight bytes remain, and
+                  // `scan_min` is at most eight.
+                  const auto* const chunk_limit = end - scan_min;
+
                   auto start = it;
                   uint64_t ascii_acc{};
-                  const auto end8 = end - 8;
-                  while (true) {
-                     if (it >= end8) [[unlikely]] {
-                        break;
-                     }
-
+                  while (it <= chunk_limit) {
                      uint64_t chunk;
                      std::memcpy(&chunk, it, 8);
                      if constexpr (std::endian::native == std::endian::big) {
@@ -1132,67 +983,112 @@ namespace glz
                      return;
                   }
 
-                  const auto available_padding = size_t(end - it);
                   auto n = size_t(it - start);
-                  if (available_padding >= 8) [[likely]] {
-                     value.resize(n + string_padding_bytes);
+                  resize_unfilled(value, n + string_padding_bytes);
 
-                     auto* p = value.data();
+                  auto* p = value.data();
 
-                     while (true) {
-                        if (start >= it) {
-                           break;
-                        }
+                  // An error below returns with the tail of `value` still unwritten. Leave the size at
+                  // what was actually written rather than at the padded length, which resize_unfilled
+                  // did not fill.
+                  auto* const written_begin = p;
 
-                        std::memcpy(p, start, 8);
-                        uint64_t swar;
-                        std::memcpy(&swar, p, 8);
-                        if constexpr (std::endian::native == std::endian::big) {
-                           swar = std::byteswap(swar);
-                        }
+                  // Copy eight bytes at a time for as long as eight bytes are there to read, then
+                  // finish the span below. The chunked form reads past the character it is looking
+                  // at, so on an unpadded buffer it has to stop short of the end; splitting it this
+                  // way keeps it for the body of every string rather than giving it up whenever the
+                  // string happens to finish near the end of the buffer -- which, for a document
+                  // that is itself one string, is every string.
+                  while (start < it && start <= chunk_limit) {
+                     std::memcpy(p, start, 8);
+                     uint64_t swar;
+                     std::memcpy(&swar, p, 8);
+                     if constexpr (std::endian::native == std::endian::big) {
+                        swar = std::byteswap(swar);
+                     }
 
-                        constexpr uint64_t lo7_mask = repeat_byte8(0b01111111);
-                        const uint64_t lo7 = swar & lo7_mask;
-                        const uint64_t backslash = (lo7 ^ repeat_byte8('\\')) + lo7_mask;
-                        const uint64_t less_32 = (swar & repeat_byte8(0b01100000)) + lo7_mask;
-                        uint64_t next = ~((backslash & less_32) | swar);
+                     constexpr uint64_t lo7_mask = repeat_byte8(0b01111111);
+                     const uint64_t lo7 = swar & lo7_mask;
+                     const uint64_t backslash = (lo7 ^ repeat_byte8('\\')) + lo7_mask;
+                     const uint64_t less_32 = (swar & repeat_byte8(0b01100000)) + lo7_mask;
+                     uint64_t next = ~((backslash & less_32) | swar);
 
-                        next &= repeat_byte8(0b10000000);
-                        if (next == 0) {
-                           start += 8;
-                           p += 8;
-                           continue;
-                        }
+                     next &= repeat_byte8(0b10000000);
+                     if (next == 0) {
+                        start += 8;
+                        p += 8;
+                        continue;
+                     }
 
-                        next = countr_zero(next) >> 3;
-                        start += next;
-                        if (start >= it) {
-                           break;
-                        }
+                     next = countr_zero(next) >> 3;
+                     start += next;
+                     if (start >= it) {
+                        break;
+                     }
 
-                        if ((*start & 0b11100000) == 0) [[unlikely]] {
-                           ctx.error = error_code::syntax_error;
+                     if ((*start & 0b11100000) == 0) [[unlikely]] {
+                        ctx.error = error_code::syntax_error;
+                        value.resize(size_t(p - written_begin));
+                        return;
+                     }
+                     ++start; // skip the escape
+                     if (*start == 'u') {
+                        ++start;
+                        p += next;
+                        const auto mark = start;
+                        const auto decoded = handle_unicode_code_point(start, p, end);
+                        if (decoded.written == 0) [[unlikely]] {
+                           ctx.error = decoded.truncated ? error_code::unexpected_end
+                                                         : error_code::unicode_escape_conversion_failure;
+                           value.resize(size_t(p - written_begin));
                            return;
                         }
+                        n += decoded.written;
+                        // escape + u + unicode code points
+                        n -= 2 + uint32_t(start - mark);
+                     }
+                     else {
+                        p += next;
+                        *p = char_unescape_table[uint8_t(*start)];
+                        if (*p == 0) [[unlikely]] {
+                           ctx.error = error_code::invalid_escape;
+                           value.resize(size_t(p - written_begin));
+                           return;
+                        }
+                        ++p;
+                        ++start;
+                        --n;
+                     }
+                  }
+
+                  // Whatever the chunked copy could not reach. `p` and `start` stay in step across
+                  // that loop, so this picks up exactly where it stopped.
+                  while (start < it) {
+                     if ((*start & 0b11100000) == 0) [[unlikely]] {
+                        ctx.error = error_code::syntax_error;
+                        value.resize(size_t(p - written_begin));
+                        return;
+                     }
+                     if (*start == '\\') {
                         ++start; // skip the escape
                         if (*start == 'u') {
                            ++start;
-                           p += next;
                            const auto mark = start;
-                           const auto offset = handle_unicode_code_point(start, p, end);
-                           if (offset == 0) [[unlikely]] {
-                              ctx.error = error_code::unicode_escape_conversion_failure;
+                           const auto decoded = handle_unicode_code_point(start, p, end);
+                           if (decoded.written == 0) [[unlikely]] {
+                              ctx.error = decoded.truncated ? error_code::unexpected_end
+                                                            : error_code::unicode_escape_conversion_failure;
+                              value.resize(size_t(p - written_begin));
                               return;
                            }
-                           n += offset;
-                           // escape + u + unicode code points
+                           n += decoded.written;
                            n -= 2 + uint32_t(start - mark);
                         }
                         else {
-                           p += next;
                            *p = char_unescape_table[uint8_t(*start)];
                            if (*p == 0) [[unlikely]] {
                               ctx.error = error_code::invalid_escape;
+                              value.resize(size_t(p - written_begin));
                               return;
                            }
                            ++p;
@@ -1200,57 +1096,15 @@ namespace glz
                            --n;
                         }
                      }
-
-                     value.resize(n);
-                     ++it;
-                  }
-                  else {
-                     // For large inputs this case of running out of buffer is very rare
-                     value.resize(n);
-                     auto* p = value.data();
-
-                     it = start;
-                     while (it < end) [[likely]] {
-                        if (*it == '"') {
-                           value.resize(size_t(p - value.data()));
-                           ++it;
-                           return;
-                        }
-
-                        if ((*it & 0b11100000) == 0) [[unlikely]] {
-                           ctx.error = error_code::syntax_error;
-                           return;
-                        }
-
-                        *p = *it;
-
-                        if (*it == '\\') {
-                           ++it; // skip the escape
-                           if (*it == 'u') {
-                              ++it;
-                              if (!handle_unicode_code_point(it, p, end)) [[unlikely]] {
-                                 ctx.error = error_code::unicode_escape_conversion_failure;
-                                 return;
-                              }
-                           }
-                           else {
-                              *p = char_unescape_table[uint8_t(*it)];
-                              if (*p == 0) [[unlikely]] {
-                                 ctx.error = error_code::invalid_escape;
-                                 return;
-                              }
-                              ++p;
-                              ++it;
-                           }
-                        }
-                        else {
-                           ++it;
-                           ++p;
-                        }
+                     else {
+                        *p = *start;
+                        ++p;
+                        ++start;
                      }
-
-                     ctx.error = error_code::unexpected_end;
                   }
+
+                  value.resize(n);
+                  ++it;
                }
                else {
                   // For short strings
@@ -1281,23 +1135,25 @@ namespace glz
                         return;
                      }
                      else if (*it == '\\') {
+                        // Bounded whatever `null_terminated` says: a document cut off inside an
+                        // escape has run out of input, and saying so beats blaming the terminator
+                        // the cut exposed -- which is what reading on would find, and would report
+                        // as a malformed escape.
                         ++it; // skip the escape
-                        if constexpr (not Opts.null_terminated) {
+                        if (it == end) [[unlikely]] {
+                           ctx.error = error_code::unexpected_end;
+                           return;
+                        }
+                        if (*it == 'u') {
+                           ++it;
                            if (it == end) [[unlikely]] {
                               ctx.error = error_code::unexpected_end;
                               return;
                            }
-                        }
-                        if (*it == 'u') {
-                           ++it;
-                           if constexpr (not Opts.null_terminated) {
-                              if (it == end) [[unlikely]] {
-                                 ctx.error = error_code::unexpected_end;
-                                 return;
-                              }
-                           }
-                           if (!handle_unicode_code_point(it, p, end)) [[unlikely]] {
-                              ctx.error = error_code::unicode_escape_conversion_failure;
+                           const auto decoded = handle_unicode_code_point(it, p, end);
+                           if (decoded.written == 0) [[unlikely]] {
+                              ctx.error = decoded.truncated ? error_code::unexpected_end
+                                                            : error_code::unicode_escape_conversion_failure;
                               return;
                            }
                         }
@@ -1348,158 +1204,6 @@ namespace glz
    struct from<JSON, T>
    {
       template <auto Opts, class It, class End>
-         requires(check_is_padded(Opts))
-      static void op(auto& value, is_context auto&& ctx, It&& it, End end)
-      {
-         if constexpr (check_string_as_number(Opts)) {
-            auto start = it;
-            skip_number<Opts>(ctx, it, end);
-            if (bool(ctx.error)) [[unlikely]] {
-               return;
-            }
-            value.append(reinterpret_cast<const char8_t*>(start), size_t(it - start));
-         }
-         else {
-            if constexpr (!check_opening_handled(Opts)) {
-               if constexpr (!check_ws_handled(Opts)) {
-                  if (skip_ws<Opts>(ctx, it, end)) {
-                     return;
-                  }
-               }
-
-               if (match_invalid_end<'"', Opts>(ctx, it, end)) {
-                  return;
-               }
-            }
-
-            if constexpr (not check_raw_string(Opts)) {
-               static constexpr auto string_padding_bytes = 8;
-
-               auto start = it;
-               uint64_t ascii_acc{};
-               while (true) {
-                  if (it >= end) [[unlikely]] {
-                     ctx.error = error_code::unexpected_end;
-                     return;
-                  }
-
-                  uint64_t chunk;
-                  std::memcpy(&chunk, it, 8);
-                  if constexpr (std::endian::native == std::endian::big) {
-                     chunk = std::byteswap(chunk);
-                  }
-                  ascii_acc |= chunk;
-                  const uint64_t test_chars = has_quote(chunk);
-                  if (test_chars) {
-                     it += (countr_zero(test_chars) >> 3);
-
-                     auto* prev = it - 1;
-                     while (*prev == '\\') {
-                        --prev;
-                     }
-                     if (size_t(it - prev) % 2) {
-                        break;
-                     }
-                     ++it; // skip the escaped quote
-                  }
-                  else {
-                     it += 8;
-                  }
-               }
-
-               if (validate_utf8_span<Opts>(ctx, start, it, ascii_acc)) [[unlikely]] {
-                  return;
-               }
-
-               auto n = size_t(it - start);
-               value.resize(n + string_padding_bytes);
-
-               auto* p = reinterpret_cast<char*>(value.data());
-
-               while (true) {
-                  if (start >= it) {
-                     break;
-                  }
-
-                  std::memcpy(p, start, 8);
-                  uint64_t swar;
-                  std::memcpy(&swar, p, 8);
-                  if constexpr (std::endian::native == std::endian::big) {
-                     swar = std::byteswap(swar);
-                  }
-
-                  constexpr uint64_t lo7_mask = repeat_byte8(0b01111111);
-                  const uint64_t lo7 = swar & lo7_mask;
-                  const uint64_t backslash = (lo7 ^ repeat_byte8('\\')) + lo7_mask;
-                  const uint64_t less_32 = (swar & repeat_byte8(0b01100000)) + lo7_mask;
-                  uint64_t next = ~((backslash & less_32) | swar);
-
-                  next &= repeat_byte8(0b10000000);
-                  if (next == 0) {
-                     start += 8;
-                     p += 8;
-                     continue;
-                  }
-
-                  next = countr_zero(next) >> 3;
-                  start += next;
-                  if (start >= it) {
-                     break;
-                  }
-
-                  if ((*start & 0b11100000) == 0) [[unlikely]] {
-                     ctx.error = error_code::syntax_error;
-                     return;
-                  }
-                  ++start; // skip the escape
-                  if (*start == 'u') {
-                     ++start;
-                     p += next;
-                     const auto mark = start;
-                     const auto offset = handle_unicode_code_point(start, p, end);
-                     if (offset == 0) [[unlikely]] {
-                        ctx.error = error_code::unicode_escape_conversion_failure;
-                        return;
-                     }
-                     n += offset;
-                     // escape + u + unicode code points
-                     n -= 2 + uint32_t(start - mark);
-                  }
-                  else {
-                     p += next;
-                     *p = char_unescape_table[uint8_t(*start)];
-                     if (*p == 0) [[unlikely]] {
-                        ctx.error = error_code::invalid_escape;
-                        return;
-                     }
-                     ++p;
-                     ++start;
-                     --n;
-                  }
-               }
-
-               value.resize(n);
-               ++it;
-            }
-            else {
-               // raw_string
-               auto start = it;
-               skip_string_view(ctx, it, end);
-               if (bool(ctx.error)) [[unlikely]]
-                  return;
-
-               if (validate_utf8_span<Opts>(ctx, start, it)) [[unlikely]] {
-                  return;
-               }
-
-               value.assign(reinterpret_cast<const char8_t*>(start), size_t(it - start));
-               ++it;
-            }
-         }
-      }
-
-      template <auto Opts, class It, class End>
-         requires(not check_is_padded(Opts))
       static void op(auto& value, is_context auto&& ctx, It&& it, End end)
       {
          if constexpr (check_string_as_number(Opts)) {
@@ -1530,15 +1234,22 @@ namespace glz
             if constexpr (not check_raw_string(Opts)) {
                static constexpr auto string_padding_bytes = 8;
 
+               // How much buffer has to remain for an eight byte load at the cursor to stay inside
+               // it. One on a padded input, where the last chunk is free to straddle the end of the
+               // document, so the byte tails below are unreachable; eight otherwise, which costs the
+               // final bytes of the buffer their chunked path and nothing else.
+               const std::ptrdiff_t scan_min = chunk_min<8>(ctx.padded_input);
+
                if (size_t(end - it) >= 8) {
+                  // The bound as a pointer, so the loops below spend a compare per chunk rather
+                  // than a subtract and a compare. Well defined here and nowhere else in this
+                  // reader: the branch has just established that at least eight bytes remain, and
+                  // `scan_min` is at most eight.
+                  const auto* const chunk_limit = end - scan_min;
+
                   auto start = it;
                   uint64_t ascii_acc{};
-                  const auto end8 = end - 8;
-                  while (true) {
-                     if (it >= end8) [[unlikely]] {
-                        break;
-                     }
-
+                  while (it <= chunk_limit) {
                      uint64_t chunk;
                      std::memcpy(&chunk, it, 8);
                      if constexpr (std::endian::native == std::endian::big) {
@@ -1593,67 +1304,112 @@ namespace glz
                      return;
                   }
 
-                  const auto available_padding = size_t(end - it);
                   auto n = size_t(it - start);
-                  if (available_padding >= 8) [[likely]] {
-                     value.resize(n + string_padding_bytes);
+                  resize_unfilled(value, n + string_padding_bytes);
 
-                     auto* p = reinterpret_cast<char*>(value.data());
+                  auto* p = reinterpret_cast<char*>(value.data());
 
-                     while (true) {
-                        if (start >= it) {
-                           break;
-                        }
+                  // An error below returns with the tail of `value` still unwritten. Leave the size at
+                  // what was actually written rather than at the padded length, which resize_unfilled
+                  // did not fill.
+                  auto* const written_begin = p;
 
-                        std::memcpy(p, start, 8);
-                        uint64_t swar;
-                        std::memcpy(&swar, p, 8);
-                        if constexpr (std::endian::native == std::endian::big) {
-                           swar = std::byteswap(swar);
-                        }
+                  // Copy eight bytes at a time for as long as eight bytes are there to read, then
+                  // finish the span below. The chunked form reads past the character it is looking
+                  // at, so on an unpadded buffer it has to stop short of the end; splitting it this
+                  // way keeps it for the body of every string rather than giving it up whenever the
+                  // string happens to finish near the end of the buffer -- which, for a document
+                  // that is itself one string, is every string.
+                  while (start < it && start <= chunk_limit) {
+                     std::memcpy(p, start, 8);
+                     uint64_t swar;
+                     std::memcpy(&swar, p, 8);
+                     if constexpr (std::endian::native == std::endian::big) {
+                        swar = std::byteswap(swar);
+                     }
 
-                        constexpr uint64_t lo7_mask = repeat_byte8(0b01111111);
-                        const uint64_t lo7 = swar & lo7_mask;
-                        const uint64_t backslash = (lo7 ^ repeat_byte8('\\')) + lo7_mask;
-                        const uint64_t less_32 = (swar & repeat_byte8(0b01100000)) + lo7_mask;
-                        uint64_t next = ~((backslash & less_32) | swar);
+                     constexpr uint64_t lo7_mask = repeat_byte8(0b01111111);
+                     const uint64_t lo7 = swar & lo7_mask;
+                     const uint64_t backslash = (lo7 ^ repeat_byte8('\\')) + lo7_mask;
+                     const uint64_t less_32 = (swar & repeat_byte8(0b01100000)) + lo7_mask;
+                     uint64_t next = ~((backslash & less_32) | swar);
 
-                        next &= repeat_byte8(0b10000000);
-                        if (next == 0) {
-                           start += 8;
-                           p += 8;
-                           continue;
-                        }
+                     next &= repeat_byte8(0b10000000);
+                     if (next == 0) {
+                        start += 8;
+                        p += 8;
+                        continue;
+                     }
 
-                        next = countr_zero(next) >> 3;
-                        start += next;
-                        if (start >= it) {
-                           break;
-                        }
+                     next = countr_zero(next) >> 3;
+                     start += next;
+                     if (start >= it) {
+                        break;
+                     }
 
-                        if ((*start & 0b11100000) == 0) [[unlikely]] {
-                           ctx.error = error_code::syntax_error;
+                     if ((*start & 0b11100000) == 0) [[unlikely]] {
+                        ctx.error = error_code::syntax_error;
+                        value.resize(size_t(p - written_begin));
+                        return;
+                     }
+                     ++start; // skip the escape
+                     if (*start == 'u') {
+                        ++start;
+                        p += next;
+                        const auto mark = start;
+                        const auto decoded = handle_unicode_code_point(start, p, end);
+                        if (decoded.written == 0) [[unlikely]] {
+                           ctx.error = decoded.truncated ? error_code::unexpected_end
+                                                         : error_code::unicode_escape_conversion_failure;
+                           value.resize(size_t(p - written_begin));
                            return;
                         }
+                        n += decoded.written;
+                        // escape + u + unicode code points
+                        n -= 2 + uint32_t(start - mark);
+                     }
+                     else {
+                        p += next;
+                        *p = char_unescape_table[uint8_t(*start)];
+                        if (*p == 0) [[unlikely]] {
+                           ctx.error = error_code::invalid_escape;
+                           value.resize(size_t(p - written_begin));
+                           return;
+                        }
+                        ++p;
+                        ++start;
+                        --n;
+                     }
+                  }
+
+                  // Whatever the chunked copy could not reach. `p` and `start` stay in step across
+                  // that loop, so this picks up exactly where it stopped.
+                  while (start < it) {
+                     if ((*start & 0b11100000) == 0) [[unlikely]] {
+                        ctx.error = error_code::syntax_error;
+                        value.resize(size_t(p - written_begin));
+                        return;
+                     }
+                     if (*start == '\\') {
                         ++start; // skip the escape
                         if (*start == 'u') {
                            ++start;
-                           p += next;
                            const auto mark = start;
-                           const auto offset = handle_unicode_code_point(start, p, end);
-                           if (offset == 0) [[unlikely]] {
-                              ctx.error = error_code::unicode_escape_conversion_failure;
+                           const auto decoded = handle_unicode_code_point(start, p, end);
+                           if (decoded.written == 0) [[unlikely]] {
+                              ctx.error = decoded.truncated ? error_code::unexpected_end
+                                                            : error_code::unicode_escape_conversion_failure;
+                              value.resize(size_t(p - written_begin));
                               return;
                            }
-                           n += offset;
-                           // escape + u + unicode code points
+                           n += decoded.written;
                            n -= 2 + uint32_t(start - mark);
                         }
                         else {
-                           p += next;
                            *p = char_unescape_table[uint8_t(*start)];
                            if (*p == 0) [[unlikely]] {
                               ctx.error = error_code::invalid_escape;
+                              value.resize(size_t(p - written_begin));
                               return;
                            }
                            ++p;
@@ -1661,57 +1417,15 @@ namespace glz
                            --n;
                         }
                      }
-
-                     value.resize(n);
-                     ++it;
-                  }
-                  else {
-                     // For large inputs this case of running out of buffer is very rare
-                     value.resize(n);
-                     auto* p = reinterpret_cast<char*>(value.data());
-
-                     it = start;
-                     while (it < end) [[likely]] {
-                        if (*it == '"') {
-                           value.resize(size_t(p - reinterpret_cast<char*>(value.data())));
-                           ++it;
-                           return;
-                        }
-
-                        if ((*it & 0b11100000) == 0) [[unlikely]] {
-                           ctx.error = error_code::syntax_error;
-                           return;
-                        }
-
-                        *p = *it;
-
-                        if (*it == '\\') {
-                           ++it; // skip the escape
-                           if (*it == 'u') {
-                              ++it;
-                              if (!handle_unicode_code_point(it, p, end)) [[unlikely]] {
-                                 ctx.error = error_code::unicode_escape_conversion_failure;
-                                 return;
-                              }
-                           }
-                           else {
-                              *p = char_unescape_table[uint8_t(*it)];
-                              if (*p == 0) [[unlikely]] {
-                                 ctx.error = error_code::invalid_escape;
-                                 return;
-                              }
-                              ++p;
-                              ++it;
-                           }
-                        }
-                        else {
-                           ++it;
-                           ++p;
-                        }
+                     else {
+                        *p = *start;
+                        ++p;
+                        ++start;
                      }
-
-                     ctx.error = error_code::unexpected_end;
                   }
+
+                  value.resize(n);
+                  ++it;
                }
                else {
                   // For short strings
@@ -1738,23 +1452,25 @@ namespace glz
                         return;
                      }
                      else if (*it == '\\') {
+                        // Bounded whatever `null_terminated` says: a document cut off inside an
+                        // escape has run out of input, and saying so beats blaming the terminator
+                        // the cut exposed -- which is what reading on would find, and would report
+                        // as a malformed escape.
                         ++it; // skip the escape
-                        if constexpr (not Opts.null_terminated) {
+                        if (it == end) [[unlikely]] {
+                           ctx.error = error_code::unexpected_end;
+                           return;
+                        }
+                        if (*it == 'u') {
+                           ++it;
                            if (it == end) [[unlikely]] {
                               ctx.error = error_code::unexpected_end;
                               return;
                            }
-                        }
-                        if (*it == 'u') {
-                           ++it;
-                           if constexpr (not Opts.null_terminated) {
-                              if (it == end) [[unlikely]] {
-                                 ctx.error = error_code::unexpected_end;
-                                 return;
-                              }
-                           }
-                           if (!handle_unicode_code_point(it, p, end)) [[unlikely]] {
-                              ctx.error = error_code::unicode_escape_conversion_failure;
+                           const auto decoded = handle_unicode_code_point(it, p, end);
+                           if (decoded.written == 0) [[unlikely]] {
+                              ctx.error = decoded.truncated ? error_code::unexpected_end
+                                                            : error_code::unicode_escape_conversion_failure;
                               return;
                            }
                         }
@@ -2920,7 +2636,10 @@ namespace glz
 
          // We need to allocate a new buffer here because we could call another includer that uses the buffer
          std::string nested_buffer = buffer;
-         static constexpr auto NestedOpts = opt_true<disable_padding_on<Opts>(), &opts::null_terminated>;
+         static constexpr auto NestedOpts = opt_true<Opts, &opts::null_terminated>;
+         // The included file fills in part of the object we belong to, so its keys count toward
+         // that object's missing key check rather than being required all over again here.
+         const include_key_scope include_keys{ctx, &include_key_tag<std::remove_cvref_t<decltype(value.value)>>};
          const auto ecode = glz::read<NestedOpts>(value.value, nested_buffer, ctx);
          if (bool(ctx.error)) [[unlikely]] {
             ctx.error = error_code::includer_error;
@@ -3155,6 +2874,41 @@ namespace glz
                }
             }();
 
+            // A file include merges an external document into this object, so with
+            // error_on_missing_keys the keys have to be counted across both documents (see
+            // context::key_bits). While this object parses, its bits are published for its
+            // includer members to hand down; and if this parse is itself an included document,
+            // it claims the bits of the object that included us and merges into them at the
+            // closing brace instead of running a check of its own.
+            static constexpr bool tracks_include_keys = [] {
+               // Nested so that reflecting over the members is only asked for when it can matter
+               if constexpr ((glaze_object_t<T> || reflectable<T>) && Opts.error_on_missing_keys) {
+                  return has_includer_member<T>;
+               }
+               else {
+                  return false;
+               }
+            }();
+            [[maybe_unused]] bit_array<num_members>* include_bits{};
+            if constexpr (tracks_include_keys) {
+               if (ctx.include_key_type == &include_key_tag<T>) {
+                  include_bits = static_cast<bit_array<num_members>*>(ctx.include_key_bits);
+                  ctx.include_key_bits = nullptr;
+                  ctx.include_key_type = nullptr;
+               }
+            }
+            [[maybe_unused]] const std::conditional_t<tracks_include_keys,
+                                                      key_bits_scope<std::remove_reference_t<decltype(ctx)>>,
+                                                      inert_key_bits_scope> published_bits{
+               ctx, [&]() -> void* {
+                  if constexpr (tracks_include_keys) {
+                     return &fields;
+                  }
+                  else {
+                     return nullptr;
+                  }
+               }()};
+
             size_t read_count{}; // for partial_read
 
             bool first = true;
@@ -3198,8 +2952,19 @@ namespace glz
                if (*it == '}') {
                   --ctx.depth;
                   if constexpr ((glaze_object_t<T> || reflectable<T>) && Opts.error_on_missing_keys) {
+                     const bool defer_to_includer = [&] {
+                        if constexpr (tracks_include_keys) {
+                           if (include_bits) {
+                              // An included document is a fragment: hand the keys it supplied to
+                              // the object that included it, which checks the union of both.
+                              *include_bits |= fields;
+                              return true;
+                           }
+                        }
+                        return false;
+                     }();
                      constexpr auto req_fields = required_fields<T, Opts>();
-                     if ((req_fields & fields) != req_fields) {
+                     if (not defer_to_includer && (req_fields & fields) != req_fields) {
                         for (size_t i = 0; i < num_members; ++i) {
                            if (not fields[i] && req_fields[i]) {
                               ctx.custom_error_message = reflect<T>::keys[i];
@@ -3273,10 +3038,11 @@ namespace glz
                      // handled by the user.
 
                      const auto start = it;
-                     skip_string_view(ctx, it, end);
+                     uint64_t ascii_acc{};
+                     skip_string_view(ctx, it, end, ascii_acc);
                      if (bool(ctx.error)) [[unlikely]]
                         return;
-                     if (validate_utf8_span<Opts>(ctx, start, it)) [[unlikely]]
+                     if (validate_utf8_span<Opts>(ctx, start, it, ascii_acc)) [[unlikely]]
                         return;
                      const sv key{start, size_t(it - start)};
                      ++it;
@@ -3298,6 +3064,7 @@ namespace glz
                            skip_value<JSON>::op<Opts>(ctx, it, end);
                            if (bool(ctx.error)) [[unlikely]]
                               return;
+                           resync_window_end(ctx, end); // a streaming skip refills
                            if (skip_ws<Opts>(ctx, it, end)) {
                               return;
                            }
@@ -3339,10 +3106,11 @@ namespace glz
                      // We only need to do this if the tag is not part of the keys
 
                      const auto start = it;
-                     skip_string_view(ctx, it, end);
+                     uint64_t ascii_acc{};
+                     skip_string_view(ctx, it, end, ascii_acc);
                      if (bool(ctx.error)) [[unlikely]]
                         return;
-                     if (validate_utf8_span<Opts>(ctx, start, it)) [[unlikely]]
+                     if (validate_utf8_span<Opts>(ctx, start, it, ascii_acc)) [[unlikely]]
                         return;
                      const sv key{start, size_t(it - start)};
                      ++it;
@@ -3906,18 +3674,24 @@ namespace glz
          }
          ++ctx.depth;
 
-         const auto obj_start = it;
+         // Adjacent tagging reads the object twice -- once to find the discriminator, once to read
+         // the content into the alternative it named -- so `walk` returns here at the start of each
+         // pass. Under a streaming read those two passes straddle refills, which is what the anchor
+         // is for; a raw pointer would address relocated bytes by the second one.
+         auto obj_start = make_rewind_anchor(ctx, it);
 
          // Walk the members, handing each key to `on_key`, which must consume that key's value.
          // Leaves `it` just past the closing brace. Returns false once an error has been set.
          const auto walk = [&](auto&& on_key) {
-            it = obj_start;
+            if (!obj_start.rewind(ctx, it, end)) {
+               return false;
+            }
             if (skip_ws<Opts>(ctx, it, end)) {
                return false;
             }
-            const auto first = it;
+            bool first_key = true;
             while (*it != '}') {
-               if (it != first) {
+               if (!first_key) {
                   if (match_invalid_end<',', Opts>(ctx, it, end)) {
                      return false;
                   }
@@ -3946,6 +3720,10 @@ namespace glz
                if (!on_key(key)) {
                   return false;
                }
+               // on_key consumed a value, and a streaming read refills inside one, which leaves the
+               // window edge this frame is holding behind.
+               resync_window_end(ctx, end);
+               first_key = false;
                if (skip_ws<Opts>(ctx, it, end)) {
                   return false;
                }
@@ -3968,7 +3746,9 @@ namespace glz
                       from<JSON, id_type>::template op<ws_handled<Opts>()>(type_id, ctx, it, end);
                    }
                    else {
-                      from<JSON, sv>::template op<ws_handled<Opts>()>(type_id, ctx, it, end);
+                      // The id is turned into an index below and never leaves this reader, so the
+                      // view of the window it borrows cannot outlive that window.
+                      parse_transient_string_view<ws_handled<Opts>()>(type_id, ctx, it, end);
                    }
                    if (bool(ctx.error)) [[unlikely]] {
                       return false;
@@ -4114,7 +3894,11 @@ namespace glz
                   if (skip_ws<Opts>(ctx, it, end)) {
                      return;
                   }
-                  auto start = it;
+                  // Once the reader knows which alternative this object holds it may have to read
+                  // it again from here. Anchor the position rather than keep the pointer: the scan
+                  // below skips values, and a streaming skip refills, which moves the window out
+                  // from under a raw pointer (see rewind_anchor).
+                  auto start = make_rewind_anchor(ctx, it);
                   bool first_key = true;
                   // Parse bifurcation for tagged variants:
                   //
@@ -4130,17 +3914,20 @@ namespace glz
                   // One exception: if the tag name is also a field on the resolved struct
                   // (contains_tag), we must re-parse regardless so the value is stored in
                   // the struct field. This override is applied inside each std::visit lambda.
+                  //
+                  // Either way the rewind can fail under a streaming read: the window only holds so
+                  // much, and an object wider than it has no start left to return to.
                   auto position_after_tag = [&] {
                      if (first_key) {
                         if (*it == ',') ++it; // skip comma; handles tag-only objects where *it == '}'
+                        return true;
                      }
-                     else {
-                        it = start; // tag was not the first key, re-parse from the beginning
-                     }
+                     return start.rewind(ctx, it, end); // tag came later, re-parse from the beginning
                   };
-                  while (*it != '}') {
-                     if (it != start) {
-                        first_key = false;
+                  // `first_key` also answers "were we reset to the object start", which is what
+                  // position_after_tag does for every key but the first.
+                  for (; *it != '}'; first_key = false) {
+                     if (!first_key) {
                         if (match_invalid_end<',', Opts>(ctx, it, end)) {
                            return;
                         }
@@ -4180,7 +3967,9 @@ namespace glz
                                  from<JSON, id_type>::template op<ws_handled<Opts>()>(type_id, ctx, it, end);
                               }
                               else {
-                                 from<JSON, sv>::template op<ws_handled<Opts>()>(type_id, ctx, it, end);
+                                 // The id is turned into an index below and never leaves this
+                                 // reader, so the view of the window it borrows cannot outlive it.
+                                 parse_transient_string_view<ws_handled<Opts>()>(type_id, ctx, it, end);
                               }
                               if (bool(ctx.error)) [[unlikely]]
                                  return;
@@ -4213,7 +4002,7 @@ namespace glz
                                     return;
                                  }
 
-                                 position_after_tag();
+                                 if (!position_after_tag()) return;
                                  tag_specified_index = type_index; // Store the tag-specified type
                                  if (value.index() != type_index) emplace_runtime_variant(value, type_index);
                                  std::visit(
@@ -4232,7 +4021,8 @@ namespace glz
                                        }
                                        else if constexpr (is_object) {
                                           if constexpr (contains_tag<V, tag_literal>()) {
-                                             it = start; // tag is a struct field, must re-parse
+                                             // tag is a struct field, must re-parse
+                                             if (!start.rewind(ctx, it, end)) return;
                                           }
                                           from<JSON, V>::template op<opening_handled<Opts>(), tag_literal>(v, ctx, it,
                                                                                                            end);
@@ -4269,7 +4059,8 @@ namespace glz
                                              }
                                           }
                                           if constexpr (contains_tag<memory_type<V>, tag_literal>()) {
-                                             it = start; // tag is a struct field, must re-parse
+                                             // tag is a struct field, must re-parse
+                                             if (!start.rewind(ctx, it, end)) return;
                                           }
                                           from<JSON, memory_type<V>>::template op<opening_handled<Opts>(), tag_literal>(
                                              *v, ctx, it, end);
@@ -4280,7 +4071,7 @@ namespace glz
                                           // This only works when the tag was the first key. If it came later,
                                           // we were reset to the object start and the custom handler would
                                           // absorb the tag, so error rather than corrupt the value.
-                                          if (it == start) {
+                                          if (!first_key) {
                                              ctx.error = error_code::feature_not_supported;
                                              ctx.custom_error_message =
                                                 "the tag must be the first key for a custom variant alternative";
@@ -4301,7 +4092,7 @@ namespace glz
                                     // Use the first unlabeled type as the default
                                     const auto default_type_index = ids_size;
 
-                                    position_after_tag();
+                                    if (!position_after_tag()) return;
                                     tag_specified_index = default_type_index; // Store the default type index
                                     if (value.index() != default_type_index)
                                        emplace_runtime_variant(value, default_type_index);
@@ -4322,7 +4113,8 @@ namespace glz
                                           }
                                           else if constexpr (is_object) {
                                              if constexpr (contains_tag<V, tag_literal>()) {
-                                                it = start; // tag is a struct field, must re-parse
+                                                // tag is a struct field, must re-parse
+                                                if (!start.rewind(ctx, it, end)) return;
                                              }
                                              from<JSON, V>::template op<opening_handled<Opts>()>(v, ctx, it, end);
                                           }
@@ -4356,7 +4148,8 @@ namespace glz
                                                 }
                                              }
                                              if constexpr (contains_tag<memory_type<V>, tag_literal>()) {
-                                                it = start; // tag is a struct field, must re-parse
+                                                // tag is a struct field, must re-parse
+                                                if (!start.rewind(ctx, it, end)) return;
                                              }
                                              from<JSON, memory_type<V>>::template op<opening_handled<Opts>()>(*v, ctx,
                                                                                                               it, end);
@@ -4366,7 +4159,7 @@ namespace glz
                                              // works when the tag was the first key (see above). If it came
                                              // later we were reset to the object start, so error rather than
                                              // let the custom handler absorb the tag.
-                                             if (it == start) {
+                                             if (!first_key) {
                                                 ctx.error = error_code::feature_not_supported;
                                                 ctx.custom_error_message =
                                                    "the tag must be the first key for a custom variant alternative";
@@ -4410,8 +4203,10 @@ namespace glz
                               return;
                            }
 
+                           // The id is turned into an index below and never leaves this reader,
+                           // so the view of the window it borrows cannot outlive that window.
                            std::string_view type_id{};
-                           parse<JSON>::op<ws_handled<Opts>()>(type_id, ctx, it, end);
+                           parse_transient_string_view<ws_handled<Opts>()>(type_id, ctx, it, end);
                            if (bool(ctx.error)) [[unlikely]]
                               return;
                            if (skip_ws<Opts>(ctx, it, end)) {
@@ -4421,7 +4216,7 @@ namespace glz
                            const auto type_index = variant_id_to_index<T>::op(
                               type_id.data(), type_id.data() + type_id.size(), type_id.size());
                            if (type_index < ids_v<T>.size()) [[likely]] {
-                              position_after_tag();
+                              if (!position_after_tag()) return;
                               tag_specified_index = type_index; // Store the tag-specified type
                               if (value.index() != type_index) emplace_runtime_variant(value, type_index);
                            }
@@ -4431,7 +4226,7 @@ namespace glz
                               constexpr auto variant_size = std::variant_size_v<T>;
                               if constexpr (ids_size < variant_size) {
                                  // Use the first unlabeled type as the default
-                                 position_after_tag();
+                                 if (!position_after_tag()) return;
                                  const auto default_index = ids_size;
                                  tag_specified_index = default_index; // Store the default type index
                                  if (value.index() != default_index) emplace_runtime_variant(value, default_index);
@@ -4453,7 +4248,7 @@ namespace glz
                                     // just consumed). If the tag came after other keys, position_after_tag()
                                     // reset us to the object start and the custom handler would absorb the tag
                                     // into its value, so error here rather than corrupt the result.
-                                    if (it == start) {
+                                    if (!first_key) {
                                        ctx.error = error_code::feature_not_supported;
                                        ctx.custom_error_message =
                                           "the tag must be the first key for a custom variant alternative";
@@ -4463,7 +4258,8 @@ namespace glz
                                  }
                                  else {
                                     if constexpr (contains_tag<V, tag_literal>()) {
-                                       it = start; // tag is a struct field, must re-parse
+                                       // tag is a struct field, must re-parse
+                                       if (!start.rewind(ctx, it, end)) return;
                                     }
                                     from<JSON, V>::template op<opening_handled<Opts>(), tag_literal>(v, ctx, it, end);
                                  }
@@ -4483,6 +4279,7 @@ namespace glz
                            skip_value<JSON>::op<Opts>(ctx, it, end);
                            if (bool(ctx.error)) [[unlikely]]
                               return;
+                           resync_window_end(ctx, end); // a streaming skip refills
                            if (skip_ws<Opts>(ctx, it, end)) {
                               return;
                            }
@@ -4502,7 +4299,7 @@ namespace glz
                      // Only short-circuit for variants without tags
                      else if constexpr (tag_v<T>.empty()) {
                         if (matching_types == 1) {
-                           it = start;
+                           if (!start.rewind(ctx, it, end)) return;
                            const auto type_index = possible_types.countr_zero();
 
                            if (value.index() != static_cast<size_t>(type_index))
@@ -4574,6 +4371,7 @@ namespace glz
                      skip_value<JSON>::op<Opts>(ctx, it, end);
                      if (bool(ctx.error)) [[unlikely]]
                         return;
+                     resync_window_end(ctx, end); // a streaming skip refills
                      if (skip_ws<Opts>(ctx, it, end)) {
                         return;
                      }
@@ -4597,7 +4395,7 @@ namespace glz
                            return;
                         }
 
-                        it = start;
+                        if (!start.rewind(ctx, it, end)) return;
                         if (value.index() != static_cast<size_t>(type_index))
                            emplace_runtime_variant(value, type_index);
                         std::visit(
@@ -4699,7 +4497,7 @@ namespace glz
                               return;
                            }
 
-                           it = start;
+                           if (!start.rewind(ctx, it, end)) return;
                            if (value.index() != chosen_index) emplace_runtime_variant(value, chosen_index);
                            std::visit(
                               [&](auto&& v) {

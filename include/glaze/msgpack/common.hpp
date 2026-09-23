@@ -150,7 +150,7 @@ namespace glz::msgpack
    template <class It>
    GLZ_ALWAYS_INLINE bool read_uint16(is_context auto& ctx, It& it, const It& end, uint16_t& out) noexcept
    {
-      if ((it + 2) > end) [[unlikely]] {
+      if ((end - it) < 2) [[unlikely]] {
          ctx.error = error_code::unexpected_end;
          return false;
       }
@@ -164,7 +164,7 @@ namespace glz::msgpack
    template <class It>
    GLZ_ALWAYS_INLINE bool read_uint32(is_context auto& ctx, It& it, const It& end, uint32_t& out) noexcept
    {
-      if ((it + 4) > end) [[unlikely]] {
+      if ((end - it) < 4) [[unlikely]] {
          ctx.error = error_code::unexpected_end;
          return false;
       }
@@ -181,7 +181,7 @@ namespace glz::msgpack
    template <class It>
    GLZ_ALWAYS_INLINE bool read_uint64(is_context auto& ctx, It& it, const It& end, uint64_t& out) noexcept
    {
-      if ((it + 8) > end) [[unlikely]] {
+      if ((end - it) < 8) [[unlikely]] {
          ctx.error = error_code::unexpected_end;
          return false;
       }

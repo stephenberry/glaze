@@ -32,7 +32,7 @@ struct chunked_test_server
    chunked_test_server() : port_(0), running_(false) {}
    ~chunked_test_server() { stop(); }
 
-   bool start()
+   bool start(size_t threads = 1)
    {
       if (running_) return true;
 
@@ -43,9 +43,9 @@ struct chunked_test_server
          port_ = server_.port();
 
          running_ = true;
-         server_thread_ = std::thread([this] {
+         server_thread_ = std::thread([this, threads] {
             try {
-               server_.start(1);
+               server_.start(threads);
             }
             catch (...) {
                running_ = false;
@@ -403,6 +403,25 @@ suite chunked_sync_tests = [] {
       if (result) {
          expect(result->status_code == 200) << "Status should be 200";
          expect(result->response_body == "Hello!") << "Single-byte chunks should reassemble correctly";
+      }
+
+      server.stop();
+   };
+
+   // With several io threads the completions of a stream's writes run concurrently, so
+   // the stream must not close its socket until the terminating chunk is written. One
+   // client serves every request: each stream announces Connection: close, so the client
+   // must not keep the closed connection for the next request.
+   "sync_chunked_on_multithreaded_server"_test = [] {
+      chunked_test_server server;
+      expect(server.start(4)) << "Server should start";
+
+      glz::http_client client;
+      for (int i = 0; i < 200; ++i) {
+         auto result = client.get(server.base_url() + "/many-tiny-chunks");
+         expect(result.has_value()) << "Request " << i << " should succeed";
+         if (!result) break;
+         expect(result->response_body == "Hello!") << "Request " << i << " got: " << result->response_body;
       }
 
       server.stop();
@@ -1153,8 +1172,6 @@ suite chunked_streaming_tests = [] {
          .url = server.base_url() + "/single-chunk",
          .body = {},
          .headers = {},
-         .on_connect = {},
-         .on_disconnect = [&] { done_promise.set_value(); },
          .on_data =
             [&](std::string_view data) {
                std::lock_guard lock(data_mutex);
@@ -1162,6 +1179,8 @@ suite chunked_streaming_tests = [] {
                ++chunk_count;
             },
          .on_error = [](std::error_code) {},
+         .on_connect = {},
+         .on_disconnect = [&] { done_promise.set_value(); },
       });
 
       auto status = done_future.wait_for(std::chrono::seconds(5));
@@ -1189,8 +1208,6 @@ suite chunked_streaming_tests = [] {
          .url = server.base_url() + "/multi-chunk",
          .body = {},
          .headers = {},
-         .on_connect = {},
-         .on_disconnect = [&] { done_promise.set_value(); },
          .on_data =
             [&](std::string_view data) {
                std::lock_guard lock(data_mutex);
@@ -1198,6 +1215,8 @@ suite chunked_streaming_tests = [] {
                ++chunk_count;
             },
          .on_error = [](std::error_code) {},
+         .on_connect = {},
+         .on_disconnect = [&] { done_promise.set_value(); },
       });
 
       auto status = done_future.wait_for(std::chrono::seconds(5));
@@ -1224,14 +1243,14 @@ suite chunked_streaming_tests = [] {
          .url = server.base_url() + "/large-chunked",
          .body = {},
          .headers = {},
-         .on_connect = {},
-         .on_disconnect = [&] { done_promise.set_value(); },
          .on_data =
             [&](std::string_view data) {
                std::lock_guard lock(data_mutex);
                received_data.append(data);
             },
          .on_error = [](std::error_code) {},
+         .on_connect = {},
+         .on_disconnect = [&] { done_promise.set_value(); },
       });
 
       auto status = done_future.wait_for(std::chrono::seconds(10));
@@ -1258,14 +1277,14 @@ suite chunked_streaming_tests = [] {
          .url = server.base_url() + "/empty-chunked",
          .body = {},
          .headers = {},
-         .on_connect = {},
-         .on_disconnect = [&] { done_promise.set_value(); },
          .on_data =
             [&](std::string_view data) {
                std::lock_guard lock(data_mutex);
                received_data.append(data);
             },
          .on_error = [](std::error_code) {},
+         .on_connect = {},
+         .on_disconnect = [&] { done_promise.set_value(); },
       });
 
       auto status = done_future.wait_for(std::chrono::seconds(5));
@@ -1652,8 +1671,6 @@ suite chunked_raw_socket_tests = [] {
          .url = "http://127.0.0.1:" + std::to_string(port) + "/test",
          .body = {},
          .headers = {},
-         .on_connect = {},
-         .on_disconnect = [&] { finish(); },
          .on_data =
             [&](std::string_view data) {
                // Record only the claimed size; reading the bytes of an oversized view is
@@ -1663,6 +1680,8 @@ suite chunked_raw_socket_tests = [] {
                }
             },
          .on_error = [&](std::error_code) { error_fired = true; },
+         .on_connect = {},
+         .on_disconnect = [&] { finish(); },
       });
 
       done_future.wait_for(std::chrono::seconds(5));

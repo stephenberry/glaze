@@ -95,7 +95,7 @@ namespace glz
       elements_not_convertible_to_design, //
       unknown_distribution, //
       invalid_distribution_elements, //
-      hostname_failure, //
+      hostname_failure, // unused: retained so that later codes keep their values
       includer_error, //
       // Feature support
       feature_not_supported, //
@@ -108,8 +108,15 @@ namespace glz
       invalid_length, // Length exceeds allowed limit (buffer size or user-configured max)
       // Encoding errors
       invalid_utf8, // Malformed UTF-8 in a string; checked on read unless validate_utf8 is disabled
+      invalid_control_character, // A string carries a control character with no two-character JSON
+      // escape, and escape_control_characters is off so it cannot be
+      // written. Raised by the binary-to-JSON converters, which refuse
+      // to emit a byte they would have to corrupt or hide.
       // Streaming errors
-      streaming_unsupported, // Document outruns the buffer window and this format's reader cannot refill
+      // The buffer window is too small for what the read needs: either the format's reader has no
+      // refill points and the document outruns one window, or a value has to be re-read from its
+      // start and is longer than the window. custom_error_message says which.
+      streaming_unsupported,
       // Expansion errors
       // A YAML read produced more text than its budgets allow. Both budgets bound the same thing
       // -- text a small document can multiply into an unbounded amount -- and both call for the
@@ -143,10 +150,28 @@ namespace glz
       // seeded per read from the input size, 0 means unlimited. See charge_speculation below.
       uint32_t depth{}; // Nesting depth of structures (objects/arrays)
       // Used for indentation when writing and for stack overflow protection when reading
+      // Whether the input has `padding_bytes` of readable slack past `end`, so a fixed width load
+      // that straddles the end of the document stays inside the buffer. The readers scan in 8 byte
+      // chunks and use this to decide how much of the tail they have to finish a byte at a time;
+      // see `chunk_min`. False is always correct -- it only costs the last few bytes of a buffer
+      // their chunked path -- so a context that reaches a reader without being told stays right.
+      bool padded_input{};
       std::string current_file; // top level file path
       // NOTE: The default constructor is valid for std::string_view, so we use this rather than {}
       // because debuggers like jumping to std::string_view initialization calls
       std::string scratch{}; // Reusable scratch buffer for intermediate parsing (key lookup, etc.)
+      // A file include (glz::file_include) merges an external document into
+      // the object that names it, which makes that document a fragment: some of the object's keys
+      // come from it and the rest come from the including document. With error_on_missing_keys the
+      // check therefore belongs to the including object, over the union of both. These carry the
+      // including object's key bits across the nested read: an object publishes its bits in
+      // key_bits while it parses, an includer member hands them to the read of its file in
+      // include_key_bits, and that file's top level merges its own keys into them instead of
+      // running a check of its own. include_key_type identifies the type the bits belong to so an
+      // included document of some other type never reinterprets them. See glz::include_key_scope.
+      void* key_bits{};
+      void* include_key_bits{};
+      const void* include_key_type{};
    };
 
    // Concept for any context type (base or streaming)
@@ -165,15 +190,19 @@ namespace glz
    // ctx.depth as a completion counter (a value that closed cleanly ends at depth 0, which is how
    // finalize_read_context tells "the buffer ended exactly here" from "the buffer was truncated"),
    // so they count by hand and enforce the same limit inline.
+   //
+   // `limit` defaults to the shared cap but is a parameter because the cap is a stack budget, not a
+   // document property: a reader whose levels cost several times what a JSON level costs has to
+   // stop several times sooner to stay inside the same stack. See `yaml::max_yaml_recursive_depth`.
    template <class Ctx>
    struct depth_guard
    {
       Ctx& ctx;
       bool entered = false;
 
-      depth_guard(Ctx& c) noexcept : ctx(c)
+      depth_guard(Ctx& c, const size_t limit = max_recursive_depth_limit) noexcept : ctx(c)
       {
-         if (ctx.depth >= max_recursive_depth_limit) [[unlikely]] {
+         if (ctx.depth >= limit) [[unlikely]] {
             ctx.error = error_code::exceeded_max_recursive_depth;
             return;
          }
@@ -185,6 +214,26 @@ namespace glz
          if (entered) --ctx.depth;
       }
       explicit operator bool() const noexcept { return entered; }
+   };
+
+   // Raises the indentation depth for the lifetime of a container being written, so that every way
+   // out of it -- including an error return from a nested value -- puts the depth back. The step is
+   // the writer's indentation width, passed in because it is a formatting option the context knows
+   // nothing about.
+   template <class Ctx>
+   struct indent_guard
+   {
+      Ctx& ctx;
+      size_t step;
+
+      indent_guard(Ctx& c, const size_t indentation_step) noexcept : ctx(c), step(indentation_step)
+      {
+         ctx.depth += step;
+      }
+      ~indent_guard() { ctx.depth -= step; }
+
+      indent_guard(const indent_guard&) = delete;
+      indent_guard& operator=(const indent_guard&) = delete;
    };
 
    // A variant read is speculative: an alternative is parsed to find out whether it fits, and a

@@ -34,6 +34,9 @@ on:
       - '.github/workflows/windows-header-compatibility.yml'
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 concurrency:
   # Supersede an in-flight run when a branch is pushed again, so a fixup commit
   # does not leave the previous run competing for the same runners. Pushes to main

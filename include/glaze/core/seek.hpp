@@ -3,6 +3,10 @@
 
 #pragma once
 
+#include <charconv>
+#include <limits>
+#include <optional>
+
 #include "glaze/core/custom.hpp"
 #include "glaze/core/read.hpp"
 #include "glaze/core/reflect.hpp"
@@ -54,6 +58,25 @@ namespace glz
          return json_ptr.substr(i);
       }
 
+      // RFC 6901 section 4: array-index = %x30 / ( %x31-39 *(%x30-39) ), that is "0" or a non-zero
+      // digit followed by digits. Leading zeros are rejected, as is "-" (the "end of array" token,
+      // which never names an existing element) and anything that overflows size_t. This is the
+      // single definition of the rule; every JSON Pointer array lookup goes through it.
+      [[nodiscard]] inline constexpr std::optional<size_t> parse_json_ptr_array_index(const sv token) noexcept
+      {
+         if (token.empty()) return {};
+         if (token.size() > 1 && token[0] == '0') return {};
+
+         size_t index{};
+         for (const char c : token) {
+            if (c < '0' || c > '9') return {};
+            const size_t digit = size_t(c - '0');
+            if (index > ((std::numeric_limits<size_t>::max)() - digit) / 10) return {};
+            index = index * 10 + digit;
+         }
+         return index;
+      }
+
       // Convenience wrapper that returns {token, remaining}
       inline std::pair<std::string, sv> parse_json_ptr_token(sv json_ptr)
       {
@@ -62,6 +85,22 @@ namespace glz
          return {std::move(token), remaining};
       }
    } // namespace detail
+
+   // Splits "/token/rest" into {"token", "/rest"}; the trailing token yields {"token", ""}
+   // and an empty pointer yields {"", ""}.
+   // TODO: handle ~ and / characters for full JSON pointer support
+   constexpr std::pair<sv, sv> tokenize_json_ptr(sv s)
+   {
+      if (s.empty()) {
+         return {"", ""};
+      }
+      s.remove_prefix(1);
+      const auto i = s.find('/');
+      if (i == sv::npos) {
+         return {s, ""};
+      }
+      return {s.substr(0, i), s.substr(i)};
+   }
 
    template <class T>
    struct seek_op;
@@ -119,10 +158,11 @@ namespace glz
          }
          if (json_ptr[0] != '/' || json_ptr.size() < 2) return false;
 
-         size_t index{};
-         auto [p, ec] = std::from_chars(&json_ptr[1], json_ptr.data() + json_ptr.size(), index);
-         if (ec != std::errc{}) return false;
-         json_ptr = json_ptr.substr(p - json_ptr.data());
+         const auto [token, remaining] = tokenize_json_ptr(json_ptr);
+         const auto parsed_index = detail::parse_json_ptr_array_index(token);
+         if (!parsed_index) return false;
+         const size_t index = *parsed_index;
+         json_ptr = remaining;
 
          if constexpr (glaze_array_t<T>) {
             static constexpr auto member_array = glz::detail::make_array<T>();
@@ -432,20 +472,6 @@ namespace glz
       return count;
    }
 
-   // TODO: handle ~ and / characters for full JSON pointer support
-   constexpr std::pair<sv, sv> tokenize_json_ptr(sv s)
-   {
-      if (s.empty()) {
-         return {"", ""};
-      }
-      s.remove_prefix(1);
-      if (s.find('/') == std::string::npos) {
-         return {s, ""};
-      }
-      const auto i = s.find_first_of('/');
-      return {s.substr(0, i), s.substr(i, s.size() - i)};
-   }
-
    inline constexpr auto first_key(sv s) { return tokenize_json_ptr(s).first; }
 
    inline constexpr auto remove_first_key(sv s) { return tokenize_json_ptr(s).second; }
@@ -566,7 +592,7 @@ namespace glz
    template <auto Arr, std::size_t... Is>
    constexpr auto make_arrays(std::index_sequence<Is...>)
    {
-      return glz::tuplet::make_tuple(pair{sv{}, std::array<sv, Arr[Is]>{}}...);
+      return glz::make_tuple(pair{sv{}, std::array<sv, Arr[Is]>{}}...);
    }
 
    template <size_t N, auto& Arr>
@@ -637,7 +663,7 @@ namespace glz
          }
          else if constexpr (glz::glaze_array_t<V>) {
             constexpr auto member_array = glz::detail::make_array<std::decay_t<V>>();
-            constexpr auto optional_index = stoui(key_str); // TODO: Will not build if not int
+            constexpr auto optional_index = detail::parse_json_ptr_array_index(key_str);
             if constexpr (optional_index) {
                constexpr auto index = *optional_index;
                if constexpr (index >= 0 && index < member_array.size()) {
@@ -655,7 +681,7 @@ namespace glz
             }
          }
          else if constexpr (glz::array_t<V>) {
-            if (stoui(key_str)) {
+            if (detail::parse_json_ptr_array_index(key_str)) {
                return valid<range_value_t<V>, rem_ptr, Expected>();
             }
             return false;

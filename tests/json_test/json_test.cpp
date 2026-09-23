@@ -15,6 +15,7 @@
 #include <iostream>
 #include <list>
 #include <map>
+#include <memory>
 #include <numbers>
 #include <random>
 #include <ranges>
@@ -31,7 +32,6 @@
 #include "glaze/containers/flat_map.hpp"
 #include "glaze/core/feature_test.hpp"
 #include "glaze/core/std_error_code.hpp"
-#include "glaze/file/hostname_include.hpp"
 #include "glaze/file/raw_or_file.hpp"
 #include "glaze/hardware/volatile_array.hpp"
 #include "glaze/json.hpp"
@@ -40,6 +40,7 @@
 #include "glaze/record/recorder.hpp"
 #include "glaze/trace/trace.hpp"
 #include "json_test_shared_types.hpp"
+#include "minimal_buffer.hpp"
 #include "scratch_directory.hpp"
 #include "ut/ut.hpp"
 
@@ -1171,15 +1172,16 @@ suite basic_types = [] {
          expect(glz::read<options>(v, input) == glz::error_code::no_read_input) << commented;
       }
 
-      // An unterminated block comment runs to the end of the buffer without skip_comment flagging
-      // it, so it arrives here as an input that held no value. That is the same answer as an empty
-      // buffer, which is a coarse diagnosis but a true one.
+      // An unterminated block comment is flagged by skip_comment, so it names the comment rather
+      // than arriving here as an input that held no value. That used to be the answer, which is the
+      // same one an empty buffer gets: true but coarse, and it left validate_jsonc accepting a
+      // document with a comment left open at the end of it.
       {
          const std::string_view unterminated{"/* never closed"};
          const std::vector<char> buf{unterminated.begin(), unterminated.end()};
          const std::string_view input{buf.data(), buf.size()};
          int i{42};
-         expect(glz::read<options>(i, input) == glz::error_code::no_read_input);
+         expect(glz::read<options>(i, input) == glz::error_code::expected_end_comment);
          expect(i == 42) << "destination must be left alone";
       }
 
@@ -2376,6 +2378,51 @@ suite json_pointer = [] {
       expect(b.has_value() && std::any_cast<std::string>(b) == thing.thing.b);
    };
 
+   // RFC 6901 section 4: array-index = %x30 / ( %x31-39 *(%x30-39) ), so a leading zero is not a
+   // valid index and must not resolve to the element it would name without it.
+   "seek rejects leading zero array indices"_test = [] {
+      std::vector<std::vector<int>> v{{1, 2, 3}, {4, 5, 6}};
+
+      int found{};
+      expect(glz::seek(
+         [&](auto&& val) {
+            if constexpr (std::same_as<std::remove_cvref_t<decltype(val)>, int>) {
+               found = val;
+            }
+         },
+         v, "/1/2"));
+      expect(found == 6);
+
+      expect(not glz::seek([](auto&&) {}, v, "/01/2"));
+      expect(not glz::seek([](auto&&) {}, v, "/1/02"));
+      expect(not glz::seek([](auto&&) {}, v, "/00/0"));
+
+      // The rest of the index grammar, which must keep behaving as it always has
+      for (const auto ptr :
+           {"/-/0", "/+1/0", "/ 1/0", "/1 /0", "//0", "/~01/0", "/1abc/0", "/99999999999999999999999/0"}) {
+         expect(not glz::seek([](auto&&) {}, v, ptr)) << ptr;
+      }
+   };
+
+   "get_view_json rejects leading zero array indices"_test = [] {
+      std::string buffer = R"({"items":[1,2,3,4,5,6,7,8,9,10,11]})";
+
+      auto view = glz::get_view_json<"/items/10">(buffer);
+      expect(view.has_value());
+      expect(glz::sv{view->data(), view->size()} == "11");
+
+      expect(not glz::get_view_json<"/items/00">(buffer).has_value());
+      expect(not glz::get_view_json<"/items/01">(buffer).has_value());
+      expect(not glz::get_view_json<"/items/010">(buffer).has_value());
+
+      // The runtime overload follows the same rule
+      expect(glz::get_view_json("/items/10", buffer).has_value());
+      expect(not glz::get_view_json("/items/00", buffer).has_value());
+      expect(not glz::get_view_json("/items/01", buffer).has_value());
+      expect(not glz::get_view_json("/items/010", buffer).has_value());
+      expect(not glz::get_view_json("/items/99999999999999999999999", buffer).has_value());
+   };
+
    "get"_test = [] {
       Thing thing{};
       expect(thing.thing.a == glz::get<double>(thing, "/thing_ptr/a"));
@@ -2438,6 +2485,9 @@ suite json_pointer = [] {
 
       static_assert(glz::valid<Thing, "/vec3/2", double>());
       static_assert(glz::valid<Thing, "/vec3/3", double>() == false);
+      // RFC 6901 section 4 forbids leading zeros in an array index
+      static_assert(glz::valid<Thing, "/vec3/02", double>() == false);
+      static_assert(glz::valid<Thing, "/vector/01", V3>() == false);
 
       static_assert(glz::valid<Thing, "/map/f", int>());
       static_assert(glz::valid<Thing, "/vector", std::vector<V3>>());
@@ -4264,6 +4314,82 @@ suite raw_json_tests = [] {
    };
 };
 
+// An empty raw_json carries no JSON document, so the writer stands null in its place. Writing
+// nothing produced `{"payload":}` from a member that was simply never filled.
+struct raw_json_holder
+{
+   int id{};
+   glz::raw_json payload{};
+};
+
+struct raw_json_view_holder
+{
+   int id{};
+   glz::raw_json_view payload{};
+};
+
+suite empty_raw_json_tests = [] {
+   "empty raw_json member writes null"_test = [] {
+      raw_json_holder obj{};
+      std::string s{};
+      expect(not glz::write_json(obj, s));
+      expect(s == R"({"id":0,"payload":null})") << s;
+      expect(not glz::validate_json(s)) << s;
+   };
+
+   "empty raw_json_view member writes null"_test = [] {
+      raw_json_view_holder obj{};
+      std::string s{};
+      expect(not glz::write_json(obj, s));
+      expect(s == R"({"id":0,"payload":null})") << s;
+      expect(not glz::validate_json(s)) << s;
+   };
+
+   "raw_json cleared after being filled writes null"_test = [] {
+      raw_json_holder obj{42, R"({"a":1})"};
+      std::string s{};
+      expect(not glz::write_json(obj, s));
+      expect(s == R"({"id":42,"payload":{"a":1}})") << s;
+
+      obj.payload.str.clear();
+      s.clear();
+      expect(not glz::write_json(obj, s));
+      expect(s == R"({"id":42,"payload":null})") << s;
+   };
+
+   "empty raw_json is written as null at the top level"_test = [] {
+      expect(glz::write_json(glz::raw_json{}).value() == "null");
+      expect(glz::write_json(glz::raw_json_view{}).value() == "null");
+   };
+
+   "empty raw_json elements write null"_test = [] {
+      std::vector<glz::raw_json> v(3);
+      std::string s{};
+      expect(not glz::write_json(v, s));
+      expect(s == R"([null,null,null])") << s;
+   };
+
+   "empty raw_json prettifies as null"_test = [] {
+      raw_json_holder obj{};
+      std::string s{};
+      expect(not glz::write<glz::opts{.prettify = true}>(obj, s));
+      expect(s == "{\n   \"id\": 0,\n   \"payload\": null\n}") << s;
+   };
+
+   "the null stands only in the output, the member stays empty"_test = [] {
+      raw_json_holder obj{};
+      expect(obj.payload.str.empty());
+      std::string s{};
+      expect(not glz::write_json(obj, s));
+      expect(obj.payload.str.empty());
+
+      // Reading the written document back fills the member with the literal that was written.
+      raw_json_holder read{};
+      expect(not glz::read_json(read, s));
+      expect(read.payload.str == "null") << read.payload.str;
+   };
+};
+
 // Test struct for raw_json whitespace issue (GitHub issue)
 struct Properties
 {
@@ -4657,6 +4783,32 @@ suite file_include_test = [] {
       const auto ec = glz::read_json(obj, s);
       expect(bool(ec));
    };
+
+   "file_include with comments and key order"_test = [] {
+      includer_struct obj{};
+
+      const auto config_buffer = R"(
+// testing opening whitespace and comment
+)" + glz::write_json(obj).value_or("error");
+      expect(glz::buffer_to_file(config_buffer, "./include_comments.jsonc") == glz::error_code::none);
+
+      obj.str = "";
+      obj.i = 0;
+
+      std::string_view s = R"(
+// testing opening whitespace and comment
+{"include": "./include_comments.jsonc", "i": 100})";
+      const auto ec = glz::read_jsonc(obj, s);
+      expect(ec == glz::error_code::none) << glz::format_error(ec, s);
+      expect(obj.str == "Hello") << obj.str;
+      expect(obj.i == 100) << obj.i;
+
+      // an include listed last overwrites the keys before it
+      s = R"({"i": 100, "include": "./include_comments.jsonc"})";
+      expect(!glz::read_jsonc(obj, s));
+      expect(obj.str == "Hello") << obj.str;
+      expect(obj.i == 55) << obj.i;
+   };
 };
 
 suite file_include_test_auto = [] {
@@ -4678,6 +4830,96 @@ suite file_include_test_auto = [] {
       expect(!glz::read_file_json(obj, "./auto.json", std::string{}));
       expect(obj.str == "Hello") << obj.str;
       expect(obj.i == 55) << obj.i;
+   };
+};
+
+struct missing_keys_sub
+{
+   int a{};
+   int b{};
+};
+
+struct missing_keys_includer
+{
+   glz::file_include include{};
+   std::string str{};
+   int i{};
+   missing_keys_sub sub{};
+};
+
+struct recursive_includer
+{
+   glz::file_include include{};
+   std::string str{};
+   std::unique_ptr<recursive_includer> child{};
+};
+
+// An included file fills in part of the object that names it, so with error_on_missing_keys the
+// check belongs to the including object, over the union of both documents.
+suite file_include_missing_keys_test = [] {
+   static constexpr glz::opts strict{.error_on_missing_keys = true};
+
+   "include supplies a missing key"_test = [] {
+      expect(glz::buffer_to_file(std::string{R"({"str":"Hello","sub":{"a":1,"b":2}})"}, "./include_fragment.json") ==
+             glz::error_code::none);
+
+      missing_keys_includer obj{};
+      std::string s = R"({"include": "./include_fragment.json", "i": 100})";
+      const auto ec = glz::read<strict>(obj, s);
+      expect(!ec) << glz::format_error(ec, s);
+      expect(obj.str == "Hello") << obj.str;
+      expect(obj.i == 100) << obj.i;
+      expect(obj.sub.b == 2);
+   };
+
+   "keys absent from both documents still error"_test = [] {
+      expect(glz::buffer_to_file(std::string{R"({"str":"Hello","sub":{"a":1,"b":2}})"}, "./include_fragment.json") ==
+             glz::error_code::none);
+
+      missing_keys_includer obj{};
+      std::string s = R"({"include": "./include_fragment.json"})"; // "i" is in neither document
+      expect(glz::read<strict>(obj, s) == glz::error_code::missing_key);
+   };
+
+   "objects nested within an include are still checked"_test = [] {
+      expect(glz::buffer_to_file(std::string{R"({"str":"Hello","sub":{"a":1}})"}, "./include_partial_sub.json") ==
+             glz::error_code::none);
+
+      missing_keys_includer obj{};
+      std::string s = R"({"include": "./include_partial_sub.json", "i": 100})";
+      expect(glz::read<strict>(obj, s) == glz::error_code::includer_error);
+   };
+
+   "unknown keys within an include are still checked"_test = [] {
+      expect(glz::buffer_to_file(std::string{R"({"str":"Hello","sub":{"a":1,"b":2},"nope":1})"},
+                                 "./include_unknown_key.json") == glz::error_code::none);
+
+      missing_keys_includer obj{};
+      std::string s = R"({"include": "./include_unknown_key.json", "i": 100})";
+      expect(glz::read<strict>(obj, s) == glz::error_code::includer_error);
+   };
+
+   "keys accumulate across nested includes"_test = [] {
+      expect(glz::buffer_to_file(std::string{R"({"sub":{"a":1,"b":2}})"}, "./include_inner.json") ==
+             glz::error_code::none);
+      expect(glz::buffer_to_file(std::string{R"({"include":"./include_inner.json","str":"Hello"})"},
+                                 "./include_outer.json") == glz::error_code::none);
+
+      missing_keys_includer obj{};
+      std::string s = R"({"include": "./include_outer.json", "i": 100})";
+      const auto ec = glz::read<strict>(obj, s);
+      expect(!ec) << glz::format_error(ec, s);
+      expect(obj.str == "Hello") << obj.str;
+      expect(obj.sub.b == 2);
+   };
+
+   "a nested value of the same type is checked on its own"_test = [] {
+      recursive_includer obj{};
+      std::string s = R"({"str": "a", "child": {}})";
+      expect(glz::read<strict>(obj, s) == glz::error_code::missing_key);
+
+      std::string t = R"({"child": {"str": "b"}})"; // the child's keys do not satisfy the parent
+      expect(glz::read<strict>(obj, t) == glz::error_code::missing_key);
    };
 };
 
@@ -8691,6 +8933,12 @@ struct glz::meta<invoke_struct>
 {
    using T = invoke_struct;
    static constexpr auto value = object("square", invoke<&T::square>, "add_one", invoke<&T::add_one>);
+
+   // invoke members are call sites rather than state, so they are read-only
+   static constexpr bool skip(const std::string_view key, const glz::meta_context& ctx)
+   {
+      return ctx.op == glz::operation::serialize && (key == "square" || key == "add_one");
+   }
 };
 
 suite invoke_test = [] {
@@ -8704,6 +8952,57 @@ suite invoke_test = [] {
       auto ec = glz::read_json(obj, s);
       expect(!ec) << glz::format_error(ec, s);
       expect(obj.y == 26); // 5 * 5 + 1
+   };
+
+   "invoke members are skipped when writing"_test = [] {
+      invoke_struct obj{};
+      std::string s{};
+      expect(not glz::write_json(obj, s));
+      expect(s == "{}") << s;
+   };
+};
+
+// invoke members interleaved with data members, to cover separator placement when the skipped
+// keys are in the middle and at the end of the object
+struct invoke_mixed
+{
+   int a = 1;
+   int b = 2;
+   std::function<void(int)> set_a{};
+   void bump_b() { ++b; }
+
+   // MSVC requires this constructor for 'this' to be captured
+   invoke_mixed()
+   {
+      set_a = [&](int v) { a = v; };
+   }
+};
+
+template <>
+struct glz::meta<invoke_mixed>
+{
+   using T = invoke_mixed;
+   static constexpr auto value =
+      object("a", &T::a, "set_a", invoke<&T::set_a>, "b", &T::b, "bump_b", invoke<&T::bump_b>);
+
+   static constexpr bool skip(const std::string_view key, const glz::meta_context& ctx)
+   {
+      return ctx.op == glz::operation::serialize && (key == "set_a" || key == "bump_b");
+   }
+};
+
+suite invoke_mixed_test = [] {
+   "invoke mixed with data members"_test = [] {
+      invoke_mixed obj{};
+      std::string s = R"({"set_a":[7],"bump_b":[]})";
+      auto ec = glz::read_json(obj, s);
+      expect(!ec) << glz::format_error(ec, s);
+      expect(obj.a == 7) << obj.a;
+      expect(obj.b == 3) << obj.b;
+
+      std::string buffer{};
+      expect(not glz::write_json(obj, buffer));
+      expect(buffer == R"({"a":7,"b":3})") << buffer;
    };
 };
 
@@ -9968,92 +10267,6 @@ suite trade_quote_test = [] {
    };
 };
 
-suite invoke_update_test = [] {
-   "invoke"_test = [] {
-      int x = 5;
-
-      std::map<std::string, glz::invoke_update<void()>> funcs;
-      funcs["square"] = [&] { x *= x; };
-      funcs["add_one"] = [&] { x += 1; };
-
-      std::string s = R"(
- {
-    "square":[],
-    "add_one":[]
- })";
-      expect(!glz::read_json(funcs, s));
-      expect(x == 5);
-
-      std::string s2 = R"(
- {
-    "square":[],
-    "add_one":[ ]
- })";
-      expect(!glz::read_json(funcs, s2));
-      expect(x == 6);
-
-      std::string s3 = R"(
- {
-    "square":[ ],
-    "add_one":[ ]
- })";
-      expect(!glz::read_json(funcs, s3));
-      expect(x == 36);
-   };
-};
-
-struct updater
-{
-   int x = 5;
-   glz::invoke_update<void()> square;
-   glz::invoke_update<void()> add_one;
-
-   // constructor required by MSVC
-   updater()
-   {
-      square = [&] { x *= x; };
-      add_one = [&] { x += 1; };
-   }
-};
-
-template <>
-struct glz::meta<updater>
-{
-   using T = updater;
-   static constexpr auto value = object(&T::x, &T::square, &T::add_one);
-};
-
-suite invoke_updater_test = [] {
-   "invoke_updater"_test = [] {
-      updater obj{};
-      auto& x = obj.x;
-
-      std::string s = R"(
- {
-    "square":[],
-    "add_one":[]
- })";
-      expect(!glz::read_json(obj, s));
-      expect(x == 5) << x;
-
-      std::string s2 = R"(
- {
-    "square":[],
-    "add_one":[ ]
- })";
-      expect(!glz::read_json(obj, s2));
-      expect(x == 6) << x;
-
-      std::string s3 = R"(
- {
-    "square":[ ],
-    "add_one":[ ]
- })";
-      expect(!glz::read_json(obj, s3));
-      expect(x == 36) << x;
-   };
-};
-
 struct raw_stuff
 {
    std::string a{};
@@ -10533,58 +10746,6 @@ suite reader_writer_test = [] {
    };
 };
 
-struct hostname_include_struct
-{
-   glz::hostname_include hostname_include{};
-   std::string str = "Hello";
-   int i = 55;
-};
-
-static_assert(glz::detail::count_members<hostname_include_struct> == 3);
-
-suite hostname_include_test = [] {
-   "hostname_include"_test = [] {
-      hostname_include_struct obj{};
-
-      glz::context ctx{};
-      const auto hostname = glz::get_hostname(ctx);
-
-      std::string file_name = "../{}_config.json";
-      glz::replace_first_braces(file_name, hostname);
-
-      const auto config_buffer = R"(
-// testing opening whitespace and comment
-)" + glz::write_json(obj).value_or("error");
-      expect(glz::buffer_to_file(config_buffer, file_name) == glz::error_code::none);
-      // expect(glz::write_file_json(obj, file_name, std::string{}) == glz::error_code::none);
-
-      obj.str = "";
-      obj.i = 0;
-
-      std::string_view s = R"(
-// testing opening whitespace and comment
-{"hostname_include": "../{}_config.json", "i": 100})";
-      const auto ec = glz::read_jsonc(obj, s);
-      expect(ec == glz::error_code::none) << glz::format_error(ec, s);
-
-      expect(obj.str == "Hello") << obj.str;
-      expect(obj.i == 100) << obj.i;
-
-      obj.str = "";
-
-      std::string buffer{};
-      expect(!glz::read_file_jsonc(obj, file_name, buffer));
-      expect(obj.str == "Hello") << obj.str;
-      expect(obj.i == 55) << obj.i;
-
-      s = R"({"i": 100, "hostname_include": "../{}_config.json"})";
-      expect(!glz::read_jsonc(obj, s));
-
-      expect(obj.str == "Hello") << obj.str;
-      expect(obj.i == 55) << obj.i;
-   };
-};
-
 struct core_struct
 {
    glz::file_include include{};
@@ -10593,7 +10754,7 @@ struct core_struct
 
 struct nested_include_struct
 {
-   glz::hostname_include hostname_include{};
+   glz::file_include include{};
    std::string str = "Hello";
    int integer = 55;
    core_struct core{};
@@ -10602,26 +10763,18 @@ struct nested_include_struct
 suite nested_include_tests = [] {
    "nested_include"_test = [] {
       expect(glz::error_code::none == glz::buffer_to_file(std::string_view{R"({"number":3.5})"}, "./core.jsonc"));
-
-      glz::context ctx{};
-      const auto hostname = glz::get_hostname(ctx);
-
-      std::string file_name = "./{}_include_test.jsonc";
-      glz::replace_first_braces(file_name, hostname);
+      expect(glz::error_code::none == glz::buffer_to_file(std::string_view{R"({"core":{"include": "./core.jsonc"}})"},
+                                                          "./include_test.jsonc"));
       expect(glz::error_code::none ==
-             glz::buffer_to_file(std::string_view{R"({"core":{"include": "./core.jsonc"}})"}, file_name));
-
-      expect(glz::error_code::none ==
-             glz::buffer_to_file(
-                std::string_view{R"({"str":"goodbye","integer":4,"hostname_include":"./{}_include_test.jsonc"})"},
-                "./start.jsonc"));
+             glz::buffer_to_file(std::string_view{R"({"str":"goodbye","integer":4,"include":"./include_test.jsonc"})"},
+                                 "./start.jsonc"));
 
       nested_include_struct obj{};
       std::string buffer{};
       auto ec = glz::read_file_jsonc(obj, "./start.jsonc", buffer);
       expect(not ec) << glz::format_error(ec, buffer);
       expect(obj.str == "goodbye");
-      expect(obj.integer = 4);
+      expect(obj.integer == 4);
       expect(obj.core.number == 3.5f);
    };
 };
@@ -13597,9 +13750,25 @@ suite custom_error = [] {
 
 suite minify_prettify_safety = [] {
    "invalid minify"_test = [] {
+      // A lone 'f' is not a document. Minifying used to answer "false", because the type table
+      // matched on that one byte and the step over the rest of the literal landed in padding that
+      // the caller never supplied; the output was three bytes of nothing. Bounded, it is an error
+      // and nothing is written.
       std::string buffer("f");
       auto minified = glz::minify_json(buffer);
-      expect(minified == "false");
+      expect(minified == "");
+
+      buffer = "tru";
+      minified = glz::minify_json(buffer);
+      expect(minified == "");
+
+      buffer = "nul";
+      minified = glz::minify_json(buffer);
+      expect(minified == "");
+
+      buffer = "true";
+      minified = glz::minify_json(buffer);
+      expect(minified == "true");
 
       buffer = "\"";
       minified = glz::minify_json(buffer);
@@ -14011,6 +14180,17 @@ suite ndjson_options = [] {
    };
 };
 
+struct atomic_pair
+{
+   int a{};
+   int b{};
+};
+
+struct atomic_pair_holder
+{
+   std::atomic<atomic_pair> p{};
+};
+
 suite atomics = [] {
    "atomics"_test = [] {
       std::atomic<int> i{};
@@ -14028,6 +14208,26 @@ suite atomics = [] {
 
       expect(not glz::write_json(b, buffer));
       expect(buffer == R"(true)");
+   };
+
+   "atomic read failure leaves value unchanged"_test = [] {
+      std::atomic<int> i{5};
+      expect(glz::read_json(i, R"(not_a_number)"));
+      expect(i.load() == 5);
+
+      std::atomic<bool> b{true};
+      expect(glz::read_json(b, R"(42)"));
+      expect(b.load());
+   };
+
+   // partial_read_complete is a non-error code, so the parsed value still has to be stored
+   "atomic partial read stores the value"_test = [] {
+      atomic_pair_holder h{};
+      h.p.store(atomic_pair{7, 8});
+      constexpr glz::opts opts{.error_on_unknown_keys = false, .partial_read = true};
+      expect(not glz::read<opts>(h, R"({"p":{"a":1,"b":2,"junk":3}})"));
+      expect(h.p.load().a == 1) << h.p.load().a;
+      expect(h.p.load().b == 2) << h.p.load().b;
    };
 };
 
@@ -14830,6 +15030,11 @@ suite member_function_pointer_serialization = [] {
       // MSVC produces fully qualified type names with calling convention
       expect(buffer.find("MemberFunctionThing") != std::string::npos && buffer.find("test_item") != std::string::npos)
          << buffer;
+#elif defined(__clang__) && defined(__GLIBCXX__)
+      // Clang printing libstdc++ types strips the __cxx11 inline namespace regardless of ABI.
+      expect(buffer ==
+             R"({"name":"test_item","description":"std::basic_string<char> (MemberFunctionThing::*)() const"})")
+         << buffer;
 #else
       expect(buffer == R"({"name":"test_item","description":"std::string (MemberFunctionThing::*)() const"})")
          << buffer;
@@ -15049,6 +15254,12 @@ namespace bounded_buffer_test_types
       std::vector<int> data = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20};
       int b = 2;
    };
+
+   // escape_control_characters is an inheritable option rather than a member of glz::opts.
+   struct escape_control_opts : glz::opts
+   {
+      bool escape_control_characters = true;
+   };
 }
 
 suite bounded_buffer_overflow_tests = [] {
@@ -15073,6 +15284,59 @@ suite bounded_buffer_overflow_tests = [] {
 
       auto result = glz::write_json(obj, buffer);
       expect(result.ec == glz::error_code::buffer_overflow) << "should return buffer_overflow error";
+   };
+
+   "bounded buffer reserves what an escaped string escapes to"_test = [] {
+      // escape_control_characters reserves 6 bytes per character, a ceiling only a string of
+      // nothing but control characters reaches. A resizable buffer over-allocates against it,
+      // but a fixed one has nowhere to grow, so the ceiling would reject output that fits.
+      const std::string value = std::string(100, 'a') + '\001' + std::string(100, 'b');
+      std::array<char, 512> buffer{}; // 208 bytes of output, 1216 of worst case
+
+      auto result = glz::write<escape_control_opts{}>(value, buffer);
+      expect(not result) << "208 bytes of output should fit in a 512 byte buffer";
+      expect(std::string_view(buffer.data(), result.count) ==
+             '"' + std::string(100, 'a') + "\\u0001" + std::string(100, 'b') + '"');
+   };
+
+   "escaped_string_size matches what the writer emits"_test = [] {
+      // The bounded buffer reservation is only correct while this stays exact, and it skips
+      // whole 8-byte blocks, so cover every byte value at offsets landing in the block scan
+      // and in the scalar tail.
+      constexpr std::array lengths{size_t(1), size_t(7), size_t(8), size_t(9), size_t(16), size_t(40)};
+      size_t mismatches = 0;
+      size_t checked = 0;
+      size_t expected = 0;
+      for (int byte = 0; byte < 256; ++byte) {
+         for (size_t len : lengths) {
+            expected += len;
+            for (size_t pos = 0; pos < len; ++pos) {
+               std::string value(len, 'x');
+               value[pos] = char(byte);
+               std::string out{};
+               if (glz::write<escape_control_opts{}>(value, out)) {
+                  ++mismatches;
+                  continue;
+               }
+               ++checked;
+               if (glz::detail::escaped_string_size(value) != out.size() - 2) { // less the quotes
+                  ++mismatches;
+               }
+            }
+         }
+      }
+      expect(checked == expected) << checked << " of " << expected;
+      expect(mismatches == 0) << mismatches;
+   };
+
+   "bounded buffer still overflows when the escaped string does not fit"_test = [] {
+      // Measuring the string must not lose the overflow error for output that genuinely
+      // does not fit: every character here escapes to 6 bytes.
+      const std::string value(100, '\001');
+      std::array<char, 128> buffer{};
+
+      auto result = glz::write<escape_control_opts{}>(value, buffer);
+      expect(result.ec == glz::error_code::buffer_overflow) << "600 bytes of escapes must not fit in 128";
    };
 
    "write to std::span with sufficient space succeeds"_test = [] {
@@ -15409,6 +15673,79 @@ suite bounded_buffer_overflow_tests = [] {
       expect(not ec) << "prettify with many fields should not crash";
       expect(buffer.size() > 0) << "output should not be empty";
    };
+
+   "prettify into a bounded buffer that is too small"_test = [] {
+      // `dump` grows a resizable destination but writes straight through a bounded one, so
+      // prettify owes it the room for every write. Without those checks this ran off the end of
+      // the array and reported nothing at all.
+      const std::string in = R"({"a":1,"b":[1,2,3]})";
+      std::array<char, 8> buffer{};
+
+      glz::context ctx{};
+      glz::detail::prettify_json<glz::opts{}>(ctx, in, buffer);
+      expect(ctx.error == glz::error_code::buffer_overflow) << int(ctx.error);
+   };
+
+   "prettify into a bounded buffer that fits exactly"_test = [] {
+      // The two sizes below pin the reservations from both sides, which is the only way to catch a
+      // reservation that is wrong rather than merely present. Exactly enough room has to succeed,
+      // or some reserve is asking for more than its write stores and output that fits is being
+      // refused. One byte less has to be refused, which is the case that walks off the end of the
+      // array without the checks. A buffer with room to spare proves neither, since it never
+      // reaches a reservation that can fail. The comment carries a write of its own, which is why
+      // the input is JSONC.
+      const std::string in = R"({"a":1,/* note */"b":[1,2,3]})";
+      const std::string expected = glz::prettify_jsonc(in);
+      expect(expected.size() == 65u) << expected.size();
+
+      std::array<char, 65> exact{};
+      glz::context exact_ctx{};
+      glz::detail::prettify_json<glz::opts{.comments = true}>(exact_ctx, in, exact);
+      expect(not bool(exact_ctx.error)) << int(exact_ctx.error);
+      expect(std::string_view{exact.data(), exact.size()} == expected);
+
+      // And one byte short has to be refused rather than rounded off
+      std::array<char, 64> short_by_one{};
+      glz::context short_ctx{};
+      glz::detail::prettify_json<glz::opts{.comments = true}>(short_ctx, in, short_by_one);
+      expect(short_ctx.error == glz::error_code::buffer_overflow) << int(short_ctx.error);
+   };
+
+   "prettify does not write inside a line comment it could not close"_test = [] {
+      // The break a line comment defers is itself a write, so on a bounded output it can be the
+      // write that runs out of room. Reporting that rather than swallowing it is what keeps the
+      // token behind the comment out of it: with the failure ignored, a 23 byte output comes back
+      // as `// c"b"`, which is not a truncated document but a wrong one, with the key commented
+      // out. 23 is the size that tells the two apart -- the break needs four bytes and does not
+      // fit, while the three the key needs still do.
+      const std::string in = "{\"a\":1, // c\n\"b\":2}";
+
+      std::array<char, 23> tight{};
+      glz::context tight_ctx{};
+      const auto written = glz::detail::prettify_json<glz::opts{.comments = true}>(tight_ctx, in, tight);
+      expect(tight_ctx.error == glz::error_code::buffer_overflow) << int(tight_ctx.error);
+      expect(written == 20u) << written;
+      expect(std::string_view{tight.data(), written} == "{\n   \"a\": 1,\n   // c")
+         << std::string_view{tight.data(), written};
+
+      // With room for the break the document completes
+      std::array<char, 32> roomy{};
+      glz::context roomy_ctx{};
+      const auto complete = glz::detail::prettify_json<glz::opts{.comments = true}>(roomy_ctx, in, roomy);
+      expect(not bool(roomy_ctx.error)) << int(roomy_ctx.error);
+      expect(std::string_view{roomy.data(), complete} == glz::prettify_jsonc(in));
+   };
+
+   "prettify grows past twice its input"_test = [] {
+      // Pins the premise rather than the fix: prettified output has no bound that a single upfront
+      // reservation could use, which is why the writes are checked one at a time. A resizable
+      // destination starts at twice the input size and every nesting level adds a newline and its
+      // indentation, so this document expands more than sixteen fold.
+      const std::string in = "[[[[[[[[[[1]]]]]]]]]]";
+      auto pretty = glz::prettify_json(in);
+      expect(pretty.size() > 2 * in.size()) << pretty.size();
+      expect(glz::minify_json(pretty) == in) << pretty;
+   };
 };
 
 namespace json_depth
@@ -15488,6 +15825,25 @@ suite json_recursion_depth_limit = [] {
    "untyped reads are bounded too"_test = [] {
       glz::generic out{};
       expect(glz::read_json(out, nested_arrays(100'000)) == glz::error_code::exceeded_max_recursive_depth);
+   };
+
+   "prettify binds at the same level as the readers"_test = [] {
+      // Prettify has to accept every document the validator does, and reject the next level with the
+      // same error.
+      const auto at_limit = nested_arrays(glz::max_recursive_depth_limit);
+      expect(not glz::validate_jsonc(at_limit));
+      std::string pretty{};
+      expect(not glz::prettify_jsonc(at_limit, pretty));
+      expect(glz::minify_json(pretty) == at_limit);
+
+      const auto past_limit = nested_arrays(glz::max_recursive_depth_limit + 1);
+      expect(glz::validate_jsonc(past_limit) == glz::error_code::exceeded_max_recursive_depth);
+      expect(glz::prettify_jsonc(past_limit, pretty) == glz::error_code::exceeded_max_recursive_depth);
+      expect(glz::prettify_json(past_limit, pretty) == glz::error_code::exceeded_max_recursive_depth);
+
+      expect(not glz::prettify_jsonc(nested_objects(glz::max_recursive_depth_limit), pretty));
+      expect(glz::prettify_jsonc(nested_objects(glz::max_recursive_depth_limit + 1), pretty) ==
+             glz::error_code::exceeded_max_recursive_depth);
    };
 
    "a validated skip of an unknown key is bounded"_test = [] {
@@ -15611,6 +15967,510 @@ suite json_recursion_depth_limit = [] {
       const auto ec = glz::read<glz::opts{.error_on_unknown_keys = false}>(out, buffer);
       expect(not ec) << glz::format_error(ec, buffer);
       expect(out.size() == 2 * glz::max_recursive_depth_limit);
+   };
+};
+
+// Buffers that promise only what glaze's concepts require; see tests/minimal_buffer.hpp.
+// Regression coverage for GitHub issue #2854.
+using test_buffers::qt_style_buffer;
+using test_buffers::read_only_buffer;
+
+// contiguous is the constraint glz::read actually selects on; is_buffer is the weaker public
+// spelling the issue reported against. Both must hold.
+static_assert(glz::contiguous<qt_style_buffer>);
+static_assert(glz::is_buffer<qt_style_buffer>);
+static_assert(glz::contiguous<read_only_buffer>);
+
+struct no_empty_payload
+{
+   int i{};
+   std::string s{};
+};
+
+suite buffer_without_member_empty = [] {
+   "round trip"_test = [] {
+      qt_style_buffer buffer{};
+      expect(not glz::write_json(no_empty_payload{42, "hello"}, buffer));
+      expect(std::string_view(buffer.data(), buffer.size()) == R"({"i":42,"s":"hello"})");
+
+      no_empty_payload value{};
+      expect(not glz::read_json(value, buffer));
+      expect(value.i == 42);
+      expect(value.s == "hello");
+   };
+
+   "empty buffer reports no_read_input"_test = [] {
+      qt_style_buffer buffer{};
+      no_empty_payload value{};
+      expect(glz::read_json(value, buffer).ec == glz::error_code::no_read_input);
+   };
+
+   "get_view_json"_test = [] {
+      qt_style_buffer buffer{};
+      expect(not glz::write_json(no_empty_payload{5, "view"}, buffer));
+
+      const auto view = glz::get_view_json<"/i">(buffer);
+      expect(view.has_value());
+      if (view) {
+         expect(std::string_view(view->data(), view->size()) == "5");
+      }
+   };
+
+   "get_view_json with a runtime pointer"_test = [] {
+      // A separate overload from the compile-time one above, with its own empty check.
+      qt_style_buffer buffer{};
+      expect(not glz::write_json(no_empty_payload{6, "runtime"}, buffer));
+
+      const auto view = glz::get_view_json("/i", buffer);
+      expect(view.has_value());
+      if (view) {
+         expect(std::string_view(view->data(), view->size()) == "6");
+      }
+   };
+
+   "get_view_json on an empty buffer"_test = [] {
+      qt_style_buffer buffer{};
+      const auto view = glz::get_view_json<"/i">(buffer);
+      expect(not view.has_value());
+      if (not view) {
+         expect(view.error().ec == glz::error_code::no_read_input);
+      }
+   };
+
+   "prettify and minify"_test = [] {
+      qt_style_buffer buffer{};
+      expect(not glz::write_json(no_empty_payload{9, "p"}, buffer));
+
+      // Both sides are custom buffers: the output side is what catches prettify reaching for
+      // clear(), which output_buffer never promised.
+      qt_style_buffer pretty{};
+      glz::prettify_json(buffer, pretty);
+      expect(std::string_view(pretty.data(), pretty.size()).contains("\n"));
+
+      qt_style_buffer minified{};
+      glz::minify_json(pretty, minified);
+      expect(std::string_view(minified.data(), minified.size()) == R"({"i":9,"s":"p"})");
+   };
+
+   // A buffer that keeps no '\0' of its own is read with bounds rather than a sentinel, because
+   // nothing pads it any more. Nothing here can be spelled with std::string: it terminates itself,
+   // so it never takes that path.
+   "buffer without its own terminator"_test = [] {
+      static_assert(not glz::self_terminating<qt_style_buffer>);
+      static_assert(glz::self_terminating<std::string>);
+
+      qt_style_buffer buffer{};
+      buffer.assign(R"({"i":7,"s":"tail"})");
+      no_empty_payload value{};
+      expect(not glz::read_json(value, buffer));
+      expect(value.i == 7);
+      expect(value.s == "tail");
+      // The read must not have grown it to make room for a sentinel, or shrunk it back after.
+      expect(buffer.size() == 18);
+
+      // Every truncation of a valid document is rejected rather than read off the end of the buffer.
+      const std::string_view full = R"({"i":7,"s":"aéb"})";
+      for (size_t n = 1; n < full.size(); ++n) {
+         qt_style_buffer cut{};
+         cut.assign(full.substr(0, n));
+         no_empty_payload partial{};
+         expect(bool(glz::read_json(partial, cut))) << "truncation at " << n;
+      }
+   };
+
+   "prettify an empty buffer"_test = [] {
+      qt_style_buffer in{};
+      qt_style_buffer out{};
+      out.assign("stale");
+      glz::prettify_json(in, out);
+      expect(out.size() == 0);
+   };
+
+   "minify_jsonc"_test = [] {
+      // The two-argument overload once took `in` by const reference while the implementation
+      // resized it, so no argument type could ever match it. Nothing resizes the input now, but the
+      // overload still has to be callable.
+      std::string in = R"({"i":1, /* note */ "s":"x"})";
+      std::string out{};
+      glz::minify_jsonc(in, out);
+      expect(out == R"({"i":1,/* note */"s":"x"})") << out;
+   };
+
+   "jsonc line comments survive the formatters (#2864)"_test = [] {
+      // A line comment used to be scanned as a block comment: the scan looked for a closing
+      // delimiter all the way to the end of the buffer, found none, and everything after the
+      // comment was dropped without a word.
+      std::string in = "{\"i\":1, // note\n \"s\":\"x\"}";
+      expect(glz::minify_jsonc(in) == R"({"i":1,"s":"x"})") << glz::minify_jsonc(in);
+
+      // A file that opens with a comment, which is how most hand-written ones do, is still a
+      // document afterwards. This whole input used to minify to an empty string.
+      std::string header = "// Copyright 2026 Example Corp\n// SPDX-License-Identifier: MIT\n{\n  \"a\": 1\n}\n";
+      expect(glz::minify_jsonc(header) == R"({"a":1})") << glz::minify_jsonc(header);
+
+      // Block comments are still carried through as written
+      std::string block = R"({"a":1, /* note */ "b":2})";
+      expect(glz::minify_jsonc(block) == R"({"a":1,/* note */"b":2})") << glz::minify_jsonc(block);
+
+      // Comment delimiters inside a string are string content, not comments
+      std::string strings = R"({"u":"http://x","v":"a/*b"})";
+      expect(glz::minify_jsonc(strings) == strings) << glz::minify_jsonc(strings);
+   };
+
+   "jsonc line comments in prettify end their line (#2864)"_test = [] {
+      // Prettifying drops the newline that ends a line comment along with the rest of the input's
+      // whitespace, so it has to emit one of its own or the comment swallows the rest of the line.
+      const std::string in = "{\"i\":1, // note\n \"s\":\"x\"}";
+      std::string out{};
+      expect(not glz::prettify_jsonc(in, out));
+      expect(out == "{\n   \"i\": 1,\n   // note\n   \"s\": \"x\"\n}") << out;
+
+      // The same document either way round
+      auto canonical = [](const std::string& text) {
+         glz::generic value{};
+         std::string copy = text;
+         if (glz::read_jsonc(value, copy)) {
+            return std::string{"<unreadable>"};
+         }
+         std::string serialized{};
+         (void)glz::write_json(value, serialized);
+         return serialized;
+      };
+      expect(canonical(out) == canonical(in)) << canonical(out) << " vs " << canonical(in);
+
+      // A leading comment takes its own line, and the value behind it survives
+      std::string leading = "// c\n{\"a\":1}";
+      std::string leading_out{};
+      expect(not glz::prettify_jsonc(leading, leading_out));
+      expect(leading_out == "// c\n{\n   \"a\": 1\n}") << leading_out;
+
+      // Two in a row each get a line
+      std::string pair_in = "{\n// one\n// two\n\"a\":1}";
+      std::string pair_out{};
+      expect(not glz::prettify_jsonc(pair_in, pair_out));
+      expect(pair_out == "{\n   // one\n   // two\n   \"a\": 1\n}") << pair_out;
+
+      // A comment at the end of the input does not leave a trailing newline behind: the break is
+      // deferred to the next write, and there is none.
+      std::string trailing = R"({"a":1} // tail)";
+      std::string trailing_out{};
+      expect(not glz::prettify_jsonc(trailing, trailing_out));
+      expect(trailing_out == "{\n   \"a\": 1\n}// tail") << trailing_out;
+   };
+
+   "jsonc a line comment before a closing bracket keeps its own line (#2864)"_test = [] {
+      // The deferred break must neither go missing nor be doubled when the write that follows a
+      // line comment is a closing bracket, which emits a break of its own.
+      std::string object = "{\"a\":1, // c\n}";
+      std::string object_out{};
+      expect(not glz::prettify_jsonc(object, object_out));
+      expect(object_out == "{\n   \"a\": 1,\n   // c\n}") << object_out;
+
+      std::string array = "[\"a\", // c\n]";
+      std::string array_out{};
+      expect(not glz::prettify_jsonc(array, array_out));
+      expect(array_out == "[\n   \"a\",\n   // c\n]") << array_out;
+   };
+
+   "jsonc line comments end on a carriage return (#2864)"_test = [] {
+      // A carriage return ends a line comment on its own, so a document written with CR line
+      // endings is not swallowed from its first comment onwards.
+      for (const std::string& in :
+           {std::string{"{\"a\":1, // c\r\"b\":2}"}, std::string{"{\"a\":1, // c\r\n\"b\":2}"}}) {
+         std::string copy = in;
+         expect(glz::minify_jsonc(copy) == R"({"a":1,"b":2})") << in;
+
+         glz::generic value{};
+         std::string read_copy = in;
+         expect(not glz::read_jsonc(value, read_copy)) << in;
+         expect(not glz::validate_jsonc(std::string_view{in})) << in;
+
+         std::string pretty{};
+         expect(not glz::prettify_jsonc(in, pretty)) << in;
+         expect(pretty.find("// c\n") != std::string::npos) << pretty;
+         glz::generic round_tripped{};
+         std::string pretty_copy = pretty;
+         expect(not glz::read_jsonc(round_tripped, pretty_copy)) << pretty;
+      }
+   };
+
+   "jsonc unterminated comments and strings are reported (#2864)"_test = [] {
+      // An empty view out of the string and comment scanners was indistinguishable from a
+      // successful scan. Minify read it as nothing to write and truncated; prettify handed it to a
+      // memcpy that read from a null pointer. Both report the reason for it now.
+      std::string out{};
+
+      std::string unterminated_comment = R"({"a":1} /* oops)";
+      expect(glz::minify_jsonc(unterminated_comment, out) == glz::error_code::expected_end_comment);
+      expect(glz::prettify_jsonc(unterminated_comment, out) == glz::error_code::expected_end_comment);
+
+      std::string unterminated_string = R"({"a":"oops)";
+      expect(glz::minify_jsonc(unterminated_string, out) == glz::error_code::unexpected_end);
+      expect(glz::prettify_jsonc(unterminated_string, out) == glz::error_code::unexpected_end);
+
+      // A '/' that opens no comment, and one that is the last byte there is
+      std::string opens_nothing = R"({"a":1}/x)";
+      expect(glz::minify_jsonc(opens_nothing, out) == glz::error_code::expected_end_comment);
+      std::string lone_slash = R"({"a":1}/)";
+      expect(glz::minify_jsonc(lone_slash, out) == glz::error_code::unexpected_end);
+
+      // The validator checks what follows a complete value, which is where a comment left open at
+      // the end of a document sits. It used to accept these silently.
+      expect(glz::validate_jsonc(std::string_view{unterminated_comment}) == glz::error_code::expected_end_comment);
+      expect(bool(glz::validate_jsonc(std::string_view{unterminated_string})));
+      expect(bool(glz::validate_jsonc(std::string_view{opens_nothing})));
+
+      // A read validates the value itself rather than what trails it, so the open comment is
+      // covered here from inside the document.
+      glz::generic value{};
+      std::string inner = R"({"a":1 /* oops)";
+      expect(glz::read_jsonc(value, inner) == glz::error_code::expected_end_comment);
+
+      // A line comment is ended by the end of the buffer, so this one is well formed
+      std::string no_newline = R"({"a":1} // no newline at eof)";
+      expect(not glz::minify_jsonc(no_newline, out));
+      expect(out == R"({"a":1})") << out;
+   };
+
+   "jsonc a block comment is not closed by its own opening (#2864)"_test = [] {
+      // The scan took any '*' before a '/' as the closing delimiter, including the '*' of the
+      // opener, so "/*/" looked complete and swallowed whatever followed it.
+      std::string out{};
+      std::string bare = R"({"a":1, /*/ "b":2})";
+      expect(glz::minify_jsonc(bare, out) == glz::error_code::expected_end_comment);
+      glz::generic value{};
+      std::string bare_copy = bare;
+      expect(glz::read_jsonc(value, bare_copy) == glz::error_code::expected_end_comment);
+
+      // Given the rest of it, the delimiter that counts is the real one
+      std::string closed = R"({"a":1} /*/ x */)";
+      expect(not glz::minify_jsonc(closed, out));
+      expect(out == R"({"a":1}/*/ x */)") << out;
+   };
+
+   "jsonc a run of stars before the closing delimiter (#2864)"_test = [] {
+      // skip_comment stepped two bytes over every star it did not close on, so a star was examined
+      // as a candidate delimiter only at an even offset within its run: the closing delimiter of
+      // "/***\/" sat in plain sight and was never looked at. The formatters scanned these
+      // correctly, so minify_jsonc emitted comments read_jsonc could not read back.
+      //
+      // Both parities are exercised because only the even ones used to fail.
+      for (size_t stars = 1; stars <= 8; ++stars) {
+         const std::string comment = "/*" + std::string(stars, '*') + "/";
+         std::string in = "{" + comment + " \"s\":\"x\"}";
+
+         glz::generic value{};
+         std::string copy = in;
+         expect(not glz::read_jsonc(value, copy)) << comment;
+         expect(not glz::validate_jsonc(std::string_view{in})) << comment;
+         expect(value["s"].get<std::string>() == "x") << comment;
+
+         const std::string minified = glz::minify_jsonc(in);
+         glz::generic round_tripped{};
+         std::string minified_copy = minified;
+         expect(not glz::read_jsonc(round_tripped, minified_copy)) << comment << " -> " << minified;
+         expect(round_tripped["s"].get<std::string>() == "x") << comment << " -> " << minified;
+      }
+
+      // Two delimiter sequences in a row are where the stepping and the self-closing scan pulled in
+      // opposite directions: the reader accepted all three of these, closing on the second
+      // delimiter and swallowing the stray bytes, while the formatter closed on the first and
+      // truncated its output without a word. What matters is that the three entry points now agree,
+      // whichever way each shape falls -- "/*" "/***" "/" is one whole comment, the other two leave
+      // a stray "*" "/" behind -- so this asks for agreement rather than pinning a verdict.
+      for (std::string_view shape : {"/***/*/", "/*/***/", "/***/***/"}) {
+         const std::string in = "{\"a\":1, " + std::string{shape} + " \"b\":2}";
+
+         glz::generic value{};
+         std::string copy = in;
+         const bool read_rejected = bool(glz::read_jsonc(value, copy));
+         const bool validate_rejected = bool(glz::validate_jsonc(std::string_view{in}));
+         std::string out{};
+         std::string minify_copy = in;
+         const bool minify_rejected = bool(glz::minify_jsonc(minify_copy, out));
+
+         expect(read_rejected == validate_rejected) << shape;
+         expect(read_rejected == minify_rejected) << shape;
+
+         // And when they all accept it, the output has to read back to the same value
+         if (not read_rejected) {
+            glz::generic round_tripped{};
+            std::string out_copy = out;
+            expect(not glz::read_jsonc(round_tripped, out_copy)) << shape << " -> " << out;
+            expect(round_tripped["b"].get<double>() == 2.0) << shape << " -> " << out;
+         }
+      }
+   };
+
+   "the formatters report no error on valid jsonc (#2864)"_test = [] {
+      // Minifying ended its null terminated run by classifying the terminator, which is not a JSON
+      // token, so it left syntax_error behind on every input it was ever given, valid or not. That
+      // is what made the error not worth returning, so a spurious error here is worth failing on.
+      auto expect_no_error = [](const std::string& in) {
+         std::string copy = in;
+         std::string minified{};
+         expect(not glz::minify_jsonc(copy, minified)) << in;
+
+         std::string pretty{};
+         expect(not glz::prettify_jsonc(in, pretty)) << in;
+
+         // And the same for the non-comment entry points, which share the scan
+         std::string plain_copy = in;
+         std::string plain_minified{};
+         expect(not glz::minify_json(plain_copy, plain_minified) || in.find('/') != std::string::npos) << in;
+         return minified;
+      };
+
+      expect(expect_no_error(R"({"a":1,"b":2})") == R"({"a":1,"b":2})");
+      expect(expect_no_error(R"({"a":1, /* c */ "b":2})") == R"({"a":1,/* c */"b":2})");
+      expect(expect_no_error("{\"a\":1, // c\n \"b\":2}") == R"({"a":1,"b":2})");
+      expect(expect_no_error(R"({"in_place":/* c */1})") == R"({"in_place":/* c */1})");
+      (void)expect_no_error(R"([1,2,3])");
+      (void)expect_no_error(R"({"nested":{"deep":[{"x":null},true,false]}})");
+      (void)expect_no_error(R"({"empty":{},"earr":[],"s":"","num":-1.5e3})");
+   };
+
+   "the formatters do not invent literal bytes (#2864)"_test = [] {
+      // The type table matches a literal on its first byte, and the writers then dump their own
+      // spelling of it: {"a":tru } came out as {"a":true}, a well-formed document the input never
+      // said. Five such inputs round-tripped to a different value.
+      std::string out{};
+      for (std::string_view in : {R"({"a":tru })", R"({"a":fals })", R"([nul ])", R"({"a":nulll})"}) {
+         std::string copy{in};
+         expect(bool(glz::minify_jsonc(copy, out))) << in;
+         expect(bool(glz::prettify_jsonc(copy, out))) << in;
+      }
+
+      // And an input that stops inside a literal is short rather than wrong
+      std::string truncated = R"([tru)";
+      expect(glz::minify_jsonc(truncated, out) == glz::error_code::unexpected_end);
+
+      // The literals themselves still pass
+      std::string literals = R"([null,true,false])";
+      expect(not glz::minify_jsonc(literals, out));
+      expect(out == literals) << out;
+   };
+
+   "the plain JSON formatters both reject a comment (#2864)"_test = [] {
+      // Without comments enabled a '/' opens nothing, and prettify_json used to skip it as though
+      // it were whitespace: the bytes behind it were formatted as document content, so
+      // {"a":1} // tail came out as {"a":1}true, the 't' of "tail" taken for a literal.
+      // minify_json has always reported it.
+      // The bodies that start with a digit or a structural byte are the ones that pin this: with a
+      // body like `tail` the literal check rejects the input first, so the whole test passed with
+      // the Comment case reverted to skipping the '/' as whitespace.
+      for (std::string_view in : {R"({"a":1} // 123)", R"({"a":1} // {"b":2})", R"({"a":1} // tail)",
+                                  R"({"a":1, /* c */ "b":2})", R"(// head)"}) {
+         std::string out{};
+         std::string copy{in};
+         expect(bool(glz::minify_json(copy, out))) << in;
+         expect(bool(glz::prettify_json(in, out))) << in;
+
+         // The JSONC entry points are the ones that accept them
+         std::string jsonc_copy{in};
+         std::string jsonc_out{};
+         expect(not glz::minify_jsonc(jsonc_copy, jsonc_out)) << in;
+         expect(not glz::prettify_jsonc(in, jsonc_out)) << in;
+      }
+   };
+
+   "minify bounds a fixed-capacity output (#2864)"_test = [] {
+      // Dumping into the output is unchecked, which the one-shot sizing covers for a resizable
+      // destination. A bounded one used to get no check at all and was written past the end of,
+      // which ASan reports, on valid JSON with no comments in it.
+      const std::string in = R"({"a":1,"b":[1,2,3]})";
+
+      // Not named `small`: the Windows SDK's rpcndr.h defines that as a macro for `char`
+      std::array<char, 8> cramped{};
+      std::string cramped_in = in;
+      expect(glz::minify_json(cramped_in, cramped) == glz::error_code::buffer_overflow);
+
+      std::array<char, 64> roomy{};
+      std::string roomy_in = in;
+      // A bounded output has no size to be shrunk to the result, so the byte count in the
+      // error_ctx is the only way the caller learns where its output ends
+      const auto ec = glz::minify_json(roomy_in, roomy);
+      expect(not ec);
+      expect(ec.count == in.size()) << ec.count;
+      expect(std::string_view{roomy.data(), ec.count} == in);
+   };
+
+   "minify accepts an output sized to the minified length (#2864)"_test = [] {
+      // Reserving the input's length in one call up front is the obvious way to bound this, and it
+      // is wrong: minifying shrinks, so sizing the output to the result is the natural thing for a
+      // caller to do, and the whole input's length refuses a buffer that fits. Checking each write
+      // instead costs a bounded destination one compare per token and a resizable one nothing.
+      const std::string in = R"({ "a" : 1 })"; // 11 bytes in, 7 out
+
+      std::array<char, 7> exact{};
+      std::string exact_in = in;
+      const auto exact_ec = glz::minify_json(exact_in, exact);
+      expect(not exact_ec) << int(exact_ec.ec);
+      expect(exact_ec.count == 7u) << exact_ec.count;
+      expect(std::string_view{exact.data(), exact.size()} == R"({"a":1})");
+
+      // And one byte short is still refused
+      std::array<char, 6> short_by_one{};
+      std::string short_in = in;
+      expect(glz::minify_json(short_in, short_by_one) == glz::error_code::buffer_overflow);
+   };
+
+   "the formatters return nothing rather than a truncated document (#2864)"_test = [] {
+      // The overloads that return the text have nowhere to report a failure, and the prefix the
+      // scan managed is not a document: `{"a":"` is an unterminated string. Handing that back is
+      // the silent truncation this change is about, one layer up.
+      std::string unterminated_string = R"({"a":"oops)";
+      expect(glz::minify_jsonc(unterminated_string).empty()) << glz::minify_jsonc(unterminated_string);
+      expect(glz::prettify_jsonc(unterminated_string).empty());
+
+      std::string unterminated_comment = R"({"a":1 /* oops)";
+      expect(glz::minify_jsonc(unterminated_comment).empty());
+      expect(glz::prettify_jsonc(unterminated_comment).empty());
+
+      // A document that formats cleanly still comes back
+      std::string good = R"({"a":1, /* c */ "b":2})";
+      expect(glz::minify_jsonc(good) == R"({"a":1,/* c */"b":2})");
+   };
+
+   "prettify keeps its break for a whitespace only container (#2864)"_test = [] {
+      // The break before a closing bracket stays unconditional, so whitespace inside an otherwise
+      // empty container still produces the blank indented line it always has. Pinned because the
+      // line comment handling had to start routing every break through one place.
+      const std::string in = R"({"a":1,"b":[1,2],"c":{ }})";
+      std::string out{};
+      const auto ec = glz::prettify_json(in, out);
+      expect(not ec);
+      expect(out == "{\n   \"a\": 1,\n   \"b\": [\n      1,\n      2\n   ],\n   \"c\": {\n      \n   }\n}") << out;
+      expect(ec.count == out.size()) << ec.count;
+   };
+
+   "format_error on a failed read"_test = [] {
+      // The call that follows a failed read must accept the buffer the read accepted.
+      qt_style_buffer buffer{};
+      buffer.assign(R"({"i":1,)"
+                    "\n"
+                    R"( "s":})");
+
+      no_empty_payload value{};
+      const auto ec = glz::read_json(value, buffer);
+      expect(bool(ec));
+
+      const auto message = glz::format_error(ec, buffer);
+      expect(message.starts_with("2:6:")) << message; // line 2, column 6, where the bad value sits
+   };
+
+   "read through a buffer that is only contiguous"_test = [] {
+      // No subscript, no iterators, no emptiness member of any spelling. Const, so this is also
+      // the unpadded read path.
+      const read_only_buffer buffer{R"({"i":3,"s":"minimal"})"};
+      no_empty_payload value{};
+      expect(not glz::read_json(value, buffer));
+      expect(value.i == 3);
+      expect(value.s == "minimal");
+
+      const read_only_buffer empty{};
+      expect(glz::read_json(value, empty).ec == glz::error_code::no_read_input);
+      expect(glz::format_error(glz::read_json(value, empty), empty).size() > 0);
    };
 };
 

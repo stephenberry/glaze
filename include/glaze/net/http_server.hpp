@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <array>
 #include <atomic>
+#include <cassert>
 #include <cctype>
 #include <charconv>
 #include <chrono>
@@ -992,8 +993,8 @@ namespace glz
       using data_sent_handler = std::function<void(std::error_code)>;
       using disconnect_handler = std::function<void()>;
 
-      streaming_connection(std::shared_ptr<SocketType> socket)
-         : socket_(socket), is_headers_sent_(false), is_closed_(false)
+      streaming_connection(std::shared_ptr<SocketType> socket, http_method request_method = http_method::GET)
+         : socket_(socket), request_method_(request_method), is_headers_sent_(false), is_closed_(false)
       {}
 
       // Send initial headers for streaming response
@@ -1008,12 +1009,25 @@ namespace glz
          response_str.append("HTTP/1.1 ");
          response_str.append(std::to_string(status_code));
          response_str.append(" ");
-         response_str.append(get_status_message(status_code));
+         response_str.append(detail::http_status_reason_phrase(status_code));
          response_str.append("\r\n");
+
+         // RFC 9112 6.3: a reply to HEAD, and any 1xx, 204 or 304 response, ends at the
+         // empty line after its header section, so nothing sent after it is content.
+         // RFC 9110 8.6 and RFC 9112 6.1: a 1xx or 204 response carries neither
+         // Content-Length nor Transfer-Encoding, so ones the handler set are dropped. A
+         // HEAD reply keeps the framing its GET would use; a 304 keeps what the handler set.
+         const bool bodyless_status = status_code / 100 == 1 || status_code == 204 || status_code == 304;
+         const bool framing_forbidden = status_code / 100 == 1 || status_code == 204;
+         body_forbidden_ = bodyless_status || request_method_ == http_method::HEAD;
 
          // Add custom headers
          for (const auto& [name, value] : headers) {
             if (header_field_has_crlf(name, value)) [[unlikely]] {
+               continue;
+            }
+            if (framing_forbidden &&
+                (glz::striequal(name, "content-length") || glz::striequal(name, "transfer-encoding"))) [[unlikely]] {
                continue;
             }
             response_str.append(name);
@@ -1025,7 +1039,7 @@ namespace glz
          // Default headers for streaming. A control header that was dropped above
          // for containing CR/LF must not suppress its auto-generated default: a
          // dropped Transfer-Encoding/Connection would otherwise leave the stream
-         // unframed (no chunked framing, no keep-alive signal). Treat a
+         // unframed (no chunked framing, no close signal). Treat a
          // present-but-invalid header as absent, matching what was written.
          const auto present_and_valid = [&](std::string_view key) {
             return std::ranges::any_of(headers.fields(key), [](const http_header& field) {
@@ -1033,12 +1047,14 @@ namespace glz
             });
          };
 
-         if (!present_and_valid("transfer-encoding")) {
+         if (!bodyless_status && !present_and_valid("transfer-encoding")) {
             response_str.append("Transfer-Encoding: chunked\r\n");
             chunked_encoding_ = true;
          }
+         // The stream owns the socket and closes it when done, so the connection is never
+         // reused (RFC 9112 9.6).
          if (!present_and_valid("connection")) {
-            response_str.append("Connection: keep-alive\r\n");
+            response_str.append("Connection: close\r\n");
          }
          if (!present_and_valid("cache-control")) {
             response_str.append("Cache-Control: no-cache\r\n");
@@ -1046,12 +1062,7 @@ namespace glz
 
          response_str.append("\r\n");
 
-         auto buffer = std::make_shared<std::string>(std::move(response_str));
-         auto self = this->shared_from_this();
-
-         asio::async_write(*socket_, asio::buffer(*buffer), [self, buffer, handler](std::error_code ec, std::size_t) {
-            if (handler) handler(ec);
-         });
+         write_tracked(std::make_shared<std::string>(std::move(response_str)), std::move(handler));
       }
 
       // Send a chunk of data
@@ -1059,7 +1070,25 @@ namespace glz
       {
          if (is_closed_) return;
 
-         auto self = this->shared_from_this();
+         if (body_forbidden_) {
+            // The response ended with its header section, so the data is discarded. It is
+            // reported as unsent so a sender loop (see streaming_utils) closes the stream
+            // instead of producing content no recipient will read.
+            if (handler) {
+               asio::post(get_executor(),
+                          [handler] { handler(std::make_error_code(std::errc::operation_not_permitted)); });
+            }
+            return;
+         }
+
+         // Nothing to send. In a chunked body a zero-length chunk is the terminator, so
+         // writing one here would end the body and leave later sends outside it.
+         if (data.empty()) {
+            if (handler) {
+               asio::post(get_executor(), [handler] { handler({}); });
+            }
+            return;
+         }
 
          if (chunked_encoding_) {
             // Format as HTTP chunk
@@ -1076,19 +1105,11 @@ namespace glz
             chunk.append(data);
             chunk.append("\r\n");
 
-            auto buffer = std::make_shared<std::string>(std::move(chunk));
-            asio::async_write(*socket_, asio::buffer(*buffer),
-                              [self, buffer, handler](std::error_code ec, std::size_t) {
-                                 if (handler) handler(ec);
-                              });
+            write_tracked(std::make_shared<std::string>(std::move(chunk)), std::move(handler));
          }
          else {
             // Send raw data
-            auto buffer = std::make_shared<std::string>(data);
-            asio::async_write(*socket_, asio::buffer(*buffer),
-                              [self, buffer, handler](std::error_code ec, std::size_t) {
-                                 if (handler) handler(ec);
-                              });
+            write_tracked(std::make_shared<std::string>(data), std::move(handler));
          }
       }
 
@@ -1124,23 +1145,19 @@ namespace glz
          if (is_closed_) return;
          is_closed_ = true;
 
-         auto self = this->shared_from_this();
+         close_handler_ = std::move(handler);
 
-         if (chunked_encoding_) {
-            // Send final chunk
-            std::string final_chunk = "0\r\n\r\n";
-            auto buffer = std::make_shared<std::string>(std::move(final_chunk));
-
-            asio::async_write(*socket_, asio::buffer(*buffer), [self, buffer, handler](asio::error_code, std::size_t) {
-               if (handler) handler();
-               asio::error_code close_ec;
-               self->socket_->lowest_layer().close(close_ec);
-            });
+         // A chunked body ends with the zero-length chunk; a response that carries no
+         // body has none to end. The socket closes once every write queued so far,
+         // the headers included, is on the wire. The terminator is queued before the
+         // close is marked pending, so a write completing on another io thread cannot
+         // see a pending close with nothing in flight and close ahead of it.
+         if (chunked_encoding_ && !body_forbidden_) {
+            write_tracked(std::make_shared<std::string>("0\r\n\r\n"), {});
          }
-         else {
-            if (handler) handler();
-            asio::error_code ec;
-            socket_->lowest_layer().close(ec);
+         close_pending_ = true;
+         if (writes_in_flight_ == 0) {
+            close_socket();
          }
       }
 
@@ -1186,10 +1203,45 @@ namespace glz
       std::shared_ptr<SocketType> socket_;
 
      private:
+      http_method request_method_;
       disconnect_handler disconnect_handler_;
+      disconnect_handler close_handler_;
       bool is_headers_sent_;
       bool is_closed_;
       bool chunked_encoding_ = false;
+      bool body_forbidden_ = false; // Set by send_headers for a HEAD reply and a 1xx, 204 or 304
+      // Write completions run on whichever io thread the server's pool picks, concurrently
+      // with each other and with the handler that queues writes, so the close bookkeeping
+      // they share is atomic.
+      std::atomic<bool> close_pending_{false};
+      std::atomic<bool> socket_closed_{false};
+      std::atomic<size_t> writes_in_flight_{0};
+
+      // Writes are counted until they complete so close() can wait for the bytes already
+      // queued rather than cancel them by closing the socket underneath.
+      void write_tracked(std::shared_ptr<std::string> buffer, data_sent_handler handler)
+      {
+         ++writes_in_flight_;
+         auto self = this->shared_from_this();
+         asio::async_write(*socket_, asio::buffer(*buffer),
+                           [self, buffer, handler = std::move(handler)](std::error_code ec, std::size_t) {
+                              --self->writes_in_flight_;
+                              if (handler) handler(ec);
+                              if (self->close_pending_ && self->writes_in_flight_ == 0) {
+                                 self->close_socket();
+                              }
+                           });
+      }
+
+      // Both close() and the last write completion can see the close due at once, so only
+      // the first caller closes.
+      void close_socket()
+      {
+         if (socket_closed_.exchange(true)) return;
+         if (close_handler_) close_handler_();
+         asio::error_code ec;
+         socket_->lowest_layer().close(ec);
+      }
 
       void start_disconnect_detection()
       {
@@ -1236,30 +1288,6 @@ namespace glz
                      timer->async_wait([self, timer](std::error_code) { self->start_disconnect_detection(); });
                   }
                });
-         }
-      }
-
-      std::string_view get_status_message(int status_code)
-      {
-         switch (status_code) {
-         case 200:
-            return "OK";
-         case 201:
-            return "Created";
-         case 204:
-            return "No Content";
-         case 400:
-            return "Bad Request";
-         case 401:
-            return "Unauthorized";
-         case 403:
-            return "Forbidden";
-         case 404:
-            return "Not Found";
-         case 500:
-            return "Internal Server Error";
-         default:
-            return "Unknown";
          }
       }
    };
@@ -1497,7 +1525,15 @@ namespace glz
          // Initialize SSL context for TLS-enabled servers
          if constexpr (EnableTLS) {
 #ifdef GLZ_ENABLE_SSL
-            ssl_context = std::make_unique<asio::ssl::context>(asio::ssl::context::tlsv12);
+            // Use tls_server so the handshake negotiates the highest mutually supported
+            // version (TLS 1.2 or TLS 1.3), mirroring the tls_client that
+            // http_connection_pool already uses. asio sets the floor for tls_server to
+            // TLS 1.0, so the protocols deprecated by RFC 8996 are disabled explicitly
+            // here rather than assumed.
+            ssl_context = std::make_unique<asio::ssl::context>(asio::ssl::context::tls_server);
+            ssl_context->set_options(asio::ssl::context::default_workarounds | asio::ssl::context::no_sslv2 |
+                                     asio::ssl::context::no_sslv3 | asio::ssl::context::no_tlsv1 |
+                                     asio::ssl::context::no_tlsv1_1);
             ssl_context->set_default_verify_paths();
 #else
             static_assert(!EnableTLS, "TLS support requires GLZ_ENABLE_SSL to be defined and OpenSSL to be available");
@@ -2203,6 +2239,60 @@ namespace glz
       }
 
       /**
+       * @brief Configure the SSL context directly
+       *
+       * Gives access to the underlying asio::ssl::context for the settings this class does
+       * not wrap: ALPN protocols, cipher suites, protocol version bounds, session tickets,
+       * or a certificate callback (SSL_CTX_set_cert_cb) for per-handshake certificate
+       * selection.
+       *
+       * Call before start(). Every accepted connection reads this context and the server
+       * performs no locking around it, so a modification once the acceptor is running races
+       * with the handshakes in flight.
+       *
+       * Example:
+       * @code
+       * server.configure_ssl_context([](asio::ssl::context& ctx) {
+       *    SSL_CTX_set_alpn_select_cb(ctx.native_handle(), select_alpn, nullptr);
+       * });
+       * @endcode
+       *
+       * @param func Callable invoked with asio::ssl::context&
+       * @return Reference to this server for method chaining
+       */
+      template <typename Func>
+      inline http_server& configure_ssl_context([[maybe_unused]] Func&& func)
+      {
+         if constexpr (EnableTLS) {
+#ifdef GLZ_ENABLE_SSL
+            assert(!running &&
+                   "configure_ssl_context() must be called before start(); the server holds no lock "
+                   "around the SSL context, so modifying it while the acceptor is running races with "
+                   "the handshakes in flight");
+            func(*ssl_context);
+#endif
+         }
+         return *this;
+      }
+
+#ifdef GLZ_ENABLE_SSL
+      // Direct access to SSL context (NOT thread-safe)
+      // WARNING: Call before start(); the server performs no locking around the context
+      // This is provided for advanced use cases where the caller manages synchronization
+      inline asio::ssl::context& ssl_context_unsafe()
+      {
+         static_assert(EnableTLS,
+                       "ssl_context_unsafe() requires a TLS-enabled server (glz::https_server, or "
+                       "glz::http_server<true>); http_server<false> holds no SSL context");
+         assert(!running &&
+                "ssl_context_unsafe() must be called before start(); the server holds no lock around "
+                "the SSL context, so modifying it while the acceptor is running races with the "
+                "handshakes in flight");
+         return *ssl_context;
+      }
+#endif
+
+      /**
        * @brief Enable signal handling for graceful shutdown
        *
        * Registers signal handlers for SIGINT (Ctrl+C) and SIGTERM.
@@ -2556,7 +2646,7 @@ namespace glz
          if (!request_line.has_value()) {
             int status_code = request_line.error();
             result.status = parse_status::error;
-            send_error_response_with_close(conn, status_code, get_status_message(status_code));
+            send_error_response_with_close(conn, status_code, detail::http_status_reason_phrase(status_code));
             return result;
          }
 
@@ -3035,12 +3125,30 @@ namespace glz
             auto* end = glz::to_chars(num_buf, static_cast<int32_t>(response.status_code));
             h.append(num_buf, size_t(end - num_buf));
             h.append(" ");
-            h.append(get_status_message(response.status_code));
+            h.append(detail::http_status_reason_phrase(response.status_code));
             h.append("\r\n");
          }
 
+         // RFC 9112 6.3: a response to HEAD, and any 1xx, 204 or 304 response, ends at the
+         // empty line after its header section whatever its fields say, so a recipient
+         // never reads content from one. Content written there stays on the connection
+         // and is taken for the start of the next response, which is the response-side
+         // desync http_client's carries_no_body already guards against as a reader.
+         const bool bodyless_status =
+            response.status_code / 100 == 1 || response.status_code == 204 || response.status_code == 304;
+         const bool carries_no_body = bodyless_status || conn->request_.method == http_method::HEAD;
+
+         // RFC 9110 8.6: a server must not send Content-Length in a 1xx or 204 response,
+         // so one the handler set is dropped below like Transfer-Encoding. A 304 may carry
+         // one the handler knows to be the length of the 200 it stands in for, and a HEAD
+         // reply keeps its own: the body the handler built is the one GET returns.
+         const bool content_length_forbidden = response.status_code / 100 == 1 || response.status_code == 204;
+
          for (const auto& [name, value] : response.response_headers) {
             if (header_field_has_crlf(name, value)) [[unlikely]] {
+               continue;
+            }
+            if (content_length_forbidden && glz::striequal(name, "content-length")) [[unlikely]] {
                continue;
             }
             // This writer sends a complete, already-buffered body and frames it with
@@ -3062,7 +3170,9 @@ namespace glz
             h.append("\r\n");
          }
 
-         if (!(response.user_headers_set & response::has_content_length)) {
+         // No Content-Length is generated for a 1xx, 204 or 304: forbidden on the first two,
+         // and on a 304 the length of the 200 it stands in for is not one this writer knows.
+         if (!bodyless_status && !(response.user_headers_set & response::has_content_length)) {
             h.append("Content-Length: ");
             auto* end = glz::to_chars(num_buf, static_cast<uint64_t>(response.response_body.size()));
             h.append(num_buf, size_t(end - num_buf));
@@ -3106,7 +3216,10 @@ namespace glz
          // Scatter-gather write: send headers and body as separate buffers.
          // Zero-copy for the body — write directly from conn->response_.response_body.
          // conn (shared_ptr) keeps header_buf and response_body alive during the async write.
-         std::array<asio::const_buffer, 2> bufs = {asio::buffer(h), asio::buffer(response.response_body)};
+         // A response that carries no body sends the header section alone.
+         const asio::const_buffer body =
+            carries_no_body ? asio::const_buffer{} : asio::const_buffer{asio::buffer(response.response_body)};
+         std::array<asio::const_buffer, 2> bufs = {asio::buffer(h), body};
 
          // Custom completion condition: removes the default 64KB-per-chunk cap
          // in asio::async_write (transfer_all uses 65536). Without this, a 960KB
@@ -3128,6 +3241,9 @@ namespace glz
                               }
                               else {
                                  // Keep-alive: compact buffer (shift leftover pipelined data to front)
+                                 // The method resets too, so a request line that fails to parse is not
+                                 // answered as though it were the HEAD that came before it.
+                                 conn->request_.method = {};
                                  conn->request_.params.clear();
                                  conn->request_.query.clear();
                                  conn->request_.headers.clear();
@@ -3202,7 +3318,7 @@ namespace glz
       {
          // Create streaming connection (works for both HTTP and HTTPS via interface)
          auto socket_ptr = std::make_shared<socket_type>(std::move(conn->socket));
-         auto stream_conn = std::make_shared<streaming_connection<socket_type>>(socket_ptr);
+         auto stream_conn = std::make_shared<streaming_connection<socket_type>>(socket_ptr, conn->request_.method);
          streaming_response stream_res(stream_conn);
 
          try {
@@ -3218,40 +3334,6 @@ namespace glz
             stream_conn->close();
             // Log the error
             error_handler(std::make_error_code(std::errc::invalid_argument), std::source_location::current());
-         }
-      }
-
-      inline std::string_view get_status_message(int status_code)
-      {
-         switch (status_code) {
-         case 200:
-            return "OK";
-         case 201:
-            return "Created";
-         case 204:
-            return "No Content";
-         case 400:
-            return "Bad Request";
-         case 401:
-            return "Unauthorized";
-         case 403:
-            return "Forbidden";
-         case 404:
-            return "Not Found";
-         case 405:
-            return "Method Not Allowed";
-         case 409:
-            return "Conflict";
-         case 418:
-            return "I'm a teapot";
-         case 500:
-            return "Internal Server Error";
-         case 501:
-            return "Not Implemented";
-         case 503:
-            return "Service Unavailable";
-         default:
-            return "Unknown";
          }
       }
 

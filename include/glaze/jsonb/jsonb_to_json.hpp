@@ -21,23 +21,14 @@ namespace glz
 {
    namespace jsonb_detail
    {
-      // Emit a JSON string literal from a raw UTF-8 byte payload. Uses the JSON writer so all
-      // control characters and structural JSON chars are correctly escaped.
+      // Emit a JSON string literal from a raw UTF-8 byte payload, sharing the option pinning in
+      // detail::emit_untrusted_string with every other binary-to-JSON converter.
       //
-      // Three writer options would each let payload bytes reach the output document unescaped,
-      // and all three are inheritable, so a caller's opts would otherwise silently reopen the
-      // hole this converter exists to close:
-      //   * escape_control_characters (off by default) leaves raw control bytes in place,
-      //   * raw_string emits the payload without escaping it at all,
-      //   * unquoted drops the surrounding quotes as well.
-      // Each default is reasonable for a C++ string being serialized, because that is the
-      // program's own data. None of them is reasonable for a blob, which is someone else's.
-      // The converter promises strict JSON, so it pins all three rather than inheriting them.
-      template <auto Opts>
-      inline constexpr auto raw_string_emit_opts =
-         opt_false<opt_false<opt_true<Opts, escape_control_characters_opt_tag{}>, raw_string_opt_tag{}>,
-                   unquoted_opt_tag{}>;
-
+      // JSONB differs from those converters in one respect: a control character in a payload is
+      // expected rather than anomalous, because a JSONB blob is the storage form of a JSON
+      // document that could itself have carried \uXXXX. Escaping is pinned on here so the
+      // converter keeps round-tripping such a document instead of refusing it, which is also the
+      // behavior this converter shipped with.
       template <auto Opts, class B>
       inline void emit_raw_string_as_json(is_context auto& ctx, const char* data, size_t size, B& out, size_t& ix)
       {
@@ -48,8 +39,8 @@ namespace glz
          if (validate_utf8_span<Opts>(ctx, data, data + size)) [[unlikely]] {
             return;
          }
-         const sv s{data, size};
-         to<JSON, sv>::template op<raw_string_emit_opts<Opts>>(s, ctx, out, ix);
+         detail::emit_untrusted_string<opt_true<Opts, escape_control_characters_opt_tag{}>>(ctx, sv{data, size}, out,
+                                                                                            ix);
       }
 
       // The spec marks several payloads as "already valid JSON text" so that a converter can
@@ -218,6 +209,14 @@ namespace glz
       inline void jsonb_to_json_container(is_context auto& ctx, const uint8_t* it, const uint8_t* stop, B& out,
                                           size_t& ix, char open, char close, uint32_t depth)
       {
+         // DoS protection: cap recursion on pathologically nested blobs so untrusted input can't
+         // blow the stack. `depth` is this container's own level, counting from 1, and only
+         // containers take one, so as in the readers a scalar may sit inside the deepest container
+         // the limit allows.
+         if (depth > max_recursive_depth_limit) [[unlikely]] {
+            ctx.error = error_code::exceeded_max_recursive_depth;
+            return;
+         }
          if (!ensure_space(ctx, out, ix + 2 + write_padding_bytes)) return;
          out[ix++] = static_cast<typename std::decay_t<B>::value_type>(open);
          bool first = true;
@@ -263,13 +262,6 @@ namespace glz
       inline void jsonb_to_json_value(is_context auto& ctx, const uint8_t*& it, const uint8_t* end, B& out, size_t& ix,
                                       uint32_t depth)
       {
-         // DoS protection: cap recursion on pathologically nested blobs so untrusted input
-         // can't blow the stack. Only containers bump depth below; scalar emission leaves
-         // it alone. Matches the limit used by CBOR's converter.
-         if (depth >= max_recursive_depth_limit) [[unlikely]] {
-            ctx.error = error_code::exceeded_max_recursive_depth;
-            return;
-         }
          uint8_t tc{};
          uint64_t sz{};
          if (!jsonb::read_header(ctx, it, end, tc, sz)) return;
@@ -493,16 +485,18 @@ namespace glz
 
       jsonb_detail::jsonb_to_json_value<Opts>(ctx, it, end, out, ix, 0);
       if (bool(ctx.error)) {
-         return {0, ctx.error};
+         return {ix, ctx.error};
       }
       if (it != end) {
-         return {0, error_code::syntax_error};
+         return {ix, error_code::syntax_error};
       }
 
       if constexpr (resizable<JSONBuffer>) {
          out.resize(ix);
       }
-      return {};
+      // count is the number of bytes written. A resizable buffer carries its own size, but a
+      // fixed-size one has no other way to learn how much of it now holds JSON.
+      return {ix};
    }
 
    template <auto Opts = glz::opts{}, class JSONBBuffer>

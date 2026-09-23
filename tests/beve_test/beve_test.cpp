@@ -30,6 +30,7 @@
 #include "glaze/json/json_ptr.hpp"
 #include "glaze/json/read.hpp"
 #include "glaze/trace/trace.hpp"
+#include "minimal_buffer.hpp"
 #include "scratch_directory.hpp"
 #include "ut/ut.hpp"
 
@@ -2803,6 +2804,11 @@ suite beve_custom_key_tests = [] {
    "vector pair CastModuleID"_test = [] { verify_vector_pair_roundtrip<CastModuleID>(); };
 };
 
+struct beve_escape_opts : glz::opts
+{
+   bool escape_control_characters = true;
+};
+
 suite beve_to_json_tests = [] {
    "beve_to_json bool"_test = [] {
       bool b = true;
@@ -2835,6 +2841,54 @@ suite beve_to_json_tests = [] {
       std::string json{};
       expect(!glz::beve_to_json(buffer, json));
       expect(json == R"("Hello World")") << json;
+   };
+
+   "beve_to_json rejects control characters by default"_test = [] {
+      // A control byte is legal in a BEVE string but cannot be written as JSON without \uXXXX.
+      // The default refuses it rather than emitting bytes that will not re-parse, so the caller
+      // gets a signal instead of a malformed document.
+      std::map<std::string, std::string> v = {{std::string("k\001"), std::string("a\001b")}};
+      std::string buffer{};
+      expect(not glz::write_beve(v, buffer));
+
+      std::string json{};
+      expect(glz::beve_to_json(buffer, json).ec == glz::error_code::invalid_control_character);
+   };
+
+   "beve_to_json escapes control characters when asked"_test = [] {
+      // escape_control_characters opts into carrying them across. Covers a value and a map key.
+      std::map<std::string, std::string> v = {{std::string("k\001"), std::string("a\001b")}};
+      std::string buffer{};
+      expect(not glz::write_beve(v, buffer));
+
+      std::string json{};
+      expect(!glz::beve_to_json<beve_escape_opts{}>(buffer, json));
+      expect(json == "{\"k\\u0001\":\"a\\u0001b\"}") << json;
+      std::map<std::string, std::string> round_trip{};
+      expect(!glz::read_json(round_trip, json)) << json;
+      expect(round_trip == v);
+   };
+
+   "beve_to_json passes through control characters that have a short escape"_test = [] {
+      // The default refuses only control characters with no two-character JSON escape. Backspace,
+      // tab, newline, form feed and carriage return have one, so they keep converting normally.
+      // The reject sits in the else of the escape table lookup and cannot see them. The long
+      // value puts the run past the scalar tail and into the writer's block scan, which rejects
+      // at a separate site.
+      const std::string shorts = "\b\t\n\f\r";
+      std::map<std::string, std::string> v = {{"k" + shorts, shorts},
+                                              {"long", std::string(64, 'a') + shorts + std::string(64, 'b')}};
+      std::string buffer{};
+      expect(not glz::write_beve(v, buffer));
+
+      std::string json{};
+      expect(!glz::beve_to_json(buffer, json)) << json;
+      expect(json.find("\\b\\t\\n\\f\\r") != std::string::npos) << json;
+      expect(json.find_first_of(shorts) == std::string::npos) << json;
+
+      std::map<std::string, std::string> round_trip{};
+      expect(!glz::read_json(round_trip, json)) << json;
+      expect(round_trip == v);
    };
 
    "beve_to_json std::map"_test = [] {
@@ -2893,6 +2947,51 @@ suite beve_to_json_tests = [] {
       std::string json{};
       expect(!glz::beve_to_json(buffer, json));
       expect(json == R"([99,"spiders"])") << json;
+   };
+
+   // An empty buffer holds no value, and no value is not a JSON document. The conversion used to
+   // report success while producing nothing.
+   "beve_to_json requires a value"_test = [] {
+      std::string json{};
+      expect(glz::beve_to_json(std::string_view{}, json).ec == glz::error_code::unexpected_end);
+   };
+
+   // Several values in one buffer convert to one JSON document per line. A delimiter tag writes
+   // that newline; without one the converter writes it, rather than running the two documents
+   // together into text that is no longer JSON.
+   "beve_to_json separates several values"_test = [] {
+      std::string delimited{};
+      expect(not glz::write_beve_append(1, delimited));
+      expect(not glz::write_beve_append_with_delimiter(2, delimited));
+
+      std::string json{};
+      expect(not glz::beve_to_json(delimited, json));
+      expect(json == "1\n2") << json;
+
+      std::string concatenated{};
+      expect(not glz::write_beve_append(1, concatenated));
+      expect(not glz::write_beve_append(2, concatenated));
+
+      expect(not glz::beve_to_json(concatenated, json));
+      expect(json == "1\n2") << json;
+   };
+
+   // dump() does not bounds check a buffer it cannot grow, so the converter reserves every write.
+   "beve_to_json fixed buffer"_test = [] {
+      std::vector<std::vector<int>> v{{}, {}};
+      std::string buffer{};
+      expect(not glz::write_beve(v, buffer));
+
+      std::array<char, 64> room{};
+      const auto ec = glz::beve_to_json(buffer, room);
+      expect(not ec);
+      // count carries the written length, which a fixed-size buffer has no other way to learn
+      expect(std::string_view{room.data(), ec.count} == "[[],[]]");
+
+      // Nested arrays write nothing but structural characters, the writes that used to go
+      // unchecked, so they overflow a small buffer without ever reaching a value writer.
+      std::array<char, 2> cramped{};
+      expect(glz::beve_to_json(buffer, cramped).ec == glz::error_code::buffer_overflow);
    };
 
    "beve_to_json std::variant<int, std::string>"_test = [] {
@@ -6193,6 +6292,26 @@ suite beve_bounded_buffer_overflow_tests = [] {
       expect(!ec) << "read should succeed";
       expect(decoded == obj) << "decoded map should match";
    };
+
+   "beve_to_json into a bounded buffer reserves what the strings escape to"_test = [] {
+      // Under escape_control_characters the worst-case reservation is 6 bytes per character.
+      // A fixed buffer cannot grow, so it is sized by what the string actually escapes to and
+      // a payload that fits is not rejected.
+      std::map<std::string, std::string> v{{"k", std::string("a\001b") + std::string(200, 'c')}};
+      std::string beve{};
+      expect(not glz::write_beve(v, beve));
+
+      std::string reference{};
+      expect(not glz::beve_to_json<beve_escape_opts{}>(beve, reference));
+      expect(reference.size() == 216) << reference.size(); // 1222 of worst case
+
+      std::array<char, 512> buffer{};
+      expect(not glz::beve_to_json<beve_escape_opts{}>(beve, buffer)) << "216 bytes should fit in 512";
+      expect(std::string_view(buffer.data(), reference.size()) == reference);
+
+      std::array<char, 16> tiny{};
+      expect(glz::beve_to_json<beve_escape_opts{}>(beve, tiny).ec == glz::error_code::buffer_overflow);
+   };
 };
 
 // Structs for DoS prevention tests
@@ -9079,6 +9198,32 @@ suite beve_recursion_depth_limit = [] {
       expect(glz::read_beve(out, nest) == glz::error_code::exceeded_max_recursive_depth);
    };
 
+   "beve_to_json binds at the same level as the readers"_test = [] {
+      // Only containers take a level, so a scalar fits inside the deepest container the limit allows.
+      constexpr auto limit = glz::max_recursive_depth_limit;
+      const auto build = [](size_t levels, std::string_view innermost) {
+         std::string b;
+         for (size_t i = 0; i < levels; ++i) {
+            b.push_back(char(glz::tag::generic_array));
+            b.push_back(char(1 << 2)); // one element
+         }
+         b += innermost;
+         return b;
+      };
+      const std::string one{char(glz::tag::u8), char(1)};
+      const std::string empty{char(glz::tag::generic_array), char(0)};
+
+      glz::generic out{};
+      std::string json{};
+      expect(not glz::read_beve(out, build(limit, one)));
+      expect(not glz::beve_to_json(build(limit, one), json));
+      expect(json == std::string(limit, '[') + "1" + std::string(limit, ']'));
+      expect(not glz::beve_to_json(build(limit - 1, empty), json));
+
+      expect(glz::read_beve(out, build(limit, empty)) == glz::error_code::exceeded_max_recursive_depth);
+      expect(glz::beve_to_json(build(limit, empty), json) == glz::error_code::exceeded_max_recursive_depth);
+   };
+
    "an ambiguous nest cannot multiply the work of resolving it"_test = [] {
       // Resolution is speculative: an alternative is parsed to find out whether it fits, and a
       // rejected one is rewound and the next tried. Nest that and the re-parses multiply -- measured
@@ -9124,6 +9269,70 @@ suite beve_recursion_depth_limit = [] {
 
       std::set<std::vector<int>> out{};
       expect(glz::read_beve(out, buffer) == glz::error_code::invalid_length);
+   };
+};
+
+// Regression coverage for GitHub issue #2854: the BEVE readers each carry their own emptiness
+// check, so the shared fix in core/read.hpp proves nothing about them.
+template <class Buffer>
+concept appendable_with_delimiter = requires(Buffer& buffer) { glz::write_beve_append_with_delimiter(1, buffer); };
+
+suite contiguous_buffer_without_empty = [] {
+   "read_beve round trip"_test = [] {
+      test_buffers::qt_style_buffer buffer{};
+      expect(not glz::write_beve(std::vector<int>{1, 2, 3}, buffer));
+
+      std::vector<int> value{};
+      expect(not glz::read_beve(value, buffer));
+      expect(value == std::vector<int>{1, 2, 3});
+   };
+
+   "read_beve_delimited"_test = [] {
+      std::string written{};
+      expect(not glz::write_beve_delimited(std::vector<int>{4, 5, 6}, written));
+
+      test_buffers::qt_style_buffer buffer{};
+      buffer.assign(written);
+
+      std::vector<int> values{};
+      expect(not glz::read_beve_delimited(values, buffer));
+      expect(values == std::vector<int>{4, 5, 6});
+   };
+
+   "read_beve_delimited on an empty buffer"_test = [] {
+      test_buffers::qt_style_buffer buffer{};
+      std::vector<int> values{1, 2};
+      expect(not glz::read_beve_delimited(values, buffer));
+      expect(values.empty());
+   };
+
+   "lazy_beve"_test = [] {
+      // read_only_buffer, not qt_style_buffer: lazy_beve used to index the buffer directly, and a
+      // fixture with operator[] would compile either way and prove nothing.
+      std::string written{};
+      expect(not glz::write_beve(std::vector<int>{7, 8}, written));
+
+      const test_buffers::read_only_buffer buffer{written};
+      expect(glz::lazy_beve(buffer).has_value());
+
+      const test_buffers::read_only_buffer empty{};
+      expect(not glz::lazy_beve(empty).has_value());
+   };
+
+   "append a delimiter to a buffer without push_back"_test = [] {
+      // qt_style_buffer has no push_back, which is what the delimiter write used to require.
+      // Appending also needs a buffer that can grow, so a fixed-size one is rejected at the call
+      // site rather than inside the body.
+      static_assert(appendable_with_delimiter<std::string>);
+      static_assert(not appendable_with_delimiter<std::array<char, 64>>);
+
+      test_buffers::qt_style_buffer buffer{};
+      expect(not glz::write_beve(1, buffer));
+      expect(not glz::write_beve_append_with_delimiter(2, buffer));
+
+      std::vector<int> values{};
+      expect(not glz::read_beve_delimited(values, buffer));
+      expect(values == std::vector<int>{1, 2});
    };
 };
 

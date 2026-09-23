@@ -186,6 +186,7 @@ Glaze reads array-of-tables syntax correctly, including:
 - Multiple `[[name]]` sections that append to the same array
 - Empty table entries (`[[name]]` followed immediately by another `[[name]]`)
 - Nested dotted paths like `[[parent.child]]`
+- Sub-tables of an element, written `[name.sub]`, which fill in the most recent `[[name]]`
 
 ```cpp
 std::string input = R"(
@@ -203,6 +204,22 @@ sku = 284758393
 catalog c{};
 glz::read_toml(c, input);
 // c.products.size() == 3 (second entry is empty/default)
+```
+
+A `[name.sub]` header names a sub-table of the element the most recent `[[name]]` opened, per TOML v1.0.0:
+
+```toml
+[[products]]
+name = "Hammer"
+
+[products.origin]     # belongs to "Hammer"
+country = "US"
+
+[[products]]
+name = "Nail"
+
+[products.origin]     # belongs to "Nail"
+country = "DE"
 ```
 
 ### Write Ordering
@@ -336,6 +353,46 @@ if (ec) {
 ```
 
 Setting `.error_on_unknown_keys = false` allows dotted keys that do not correspond to reflected members to be skipped gracefully. Any other option in `glz::opts` (for example `.skip_null_members` or `.error_on_missing_keys`) can be combined the same way.
+
+## Required Keys
+
+`.error_on_missing_keys = true` requires every non-nullable reflected field to be assigned by the document, and reports `glz::error_code::missing_key` naming the first one that was not:
+
+```cpp
+struct config
+{
+   std::string host{};
+   uint16_t port{};
+   std::string topic{};
+};
+
+std::string_view toml = R"(
+host = "localhost"
+port = 1883
+)";
+
+config cfg{};
+auto ec = glz::read<glz::opts{.format = glz::TOML, .error_on_missing_keys = true}>(cfg, toml);
+// ec.ec == glz::error_code::missing_key, ec.custom_error_message == "topic"
+```
+
+Which fields count as required follows the same rules as every other format, including the `glz::meta<T>::requires_key` customization point. See [Field Validation](field-validation.md).
+
+A key counts as assigned however TOML lets the document reach it: a key-value line, a dotted key, a `[table]` header, or an inline table. Because a struct can be filled from more than one place in a document, the check runs once the whole document has been read rather than where a table body ends:
+
+```toml
+[server]
+host = "h"
+port = 1
+
+[logging]      # an unrelated table between the two halves of [server]
+level = "info"
+
+[server.tls]   # still fills in server.tls
+enabled = true
+```
+
+Each element of an array of tables is checked on its own, so a single incomplete `[[items]]` entry is an error even when the others are complete.
 
 The write side uses the same mechanism:
 
@@ -583,6 +640,29 @@ glz::read_toml(value, "\"text\"");  // value holds std::string{"text"}
 glz::read_toml(value, "true");      // value holds bool{true}
 ```
 
+An inline table tells Glaze the value is an object, but not which object alternative it is. Glaze parses the first object alternative and, if that does not fit, rewinds and tries each of the others, taking the first that reads cleanly:
+
+```cpp
+struct point { int x{}; int y{}; };
+struct pair { std::string a{}; int b{}; };
+
+struct config
+{
+   std::variant<point, pair> v{};
+};
+
+config cfg{};
+glz::read_toml(cfg, R"(v = { a = "s", b = 2 })");  // cfg.v holds pair
+```
+
+When no alternative fits, the error reported is the one from the first object alternative.
+
+With `error_on_unknown_keys = true` a `missing_key` failure is not retried past: that is your own `error_on_missing_keys` strictness being enforced, so an incomplete `point` is reported as incomplete rather than answered with a `pair`. With unknown keys skipped the two cases are indistinguishable — a wrong alternative also fails with `missing_key` — so the remaining alternatives are still tried, and an alternative that is merely incomplete still reports its own error because nothing else fits.
+
+Retrying is bounded by a per-read speculation budget, so an ambiguous nest of variants cannot cost exponential time. Once the budget is spent, the remaining alternatives are not tried and the failure stands.
+
+Because any alternative may be tried, every object alternative's reader is instantiated. A variant holding an alternative that Glaze cannot read as TOML at all will not compile, even if no document ever selects it — the same as for JSON.
+
 ### Generic JSON Types
 
 The generic JSON types provide a convenient way to parse arbitrary TOML data:
@@ -744,3 +824,52 @@ auto ec = glz::read_toml(config, toml);
 - **Null values**: TOML has no native null type. When writing `std::nullptr_t` or a variant holding null, an empty string `""` is written.
 - **Type coercion**: The parser does not coerce types. If the variant has no matching alternative for the detected type, an error is returned.
 - **Array of tables in maps**: The `[[array_of_tables]]` syntax is not fully supported when reading into map types. Use struct-based types for this pattern.
+
+## Control Characters
+
+TOML v1.0.0 excludes raw control characters from strings, keys and comments. A single-line basic or literal string and a comment admit tab and nothing else in the C0 range; the multi-line forms (`"""` and `'''`) additionally admit line feed and carriage return. DEL (`0x7F`) is excluded from all of them.
+
+### Reading
+
+Reading rejects a raw control byte with `error_code::invalid_control_character`:
+
+```c++
+struct config { std::string note{}; };
+
+config c{};
+auto ec = glz::read_toml(c, "note = \"a\x01" "b\"");
+// ec == glz::error_code::invalid_control_character
+```
+
+An escape is the supported way to carry one, and is accepted as before:
+
+```c++
+auto ec = glz::read_toml(c, R"(note = "a\u0001b")");
+// ec is empty, c.note == "a\x01" "b"
+```
+
+### Writing
+
+Escaping costs a check on every string, so as in JSON it is off by default and the writer emits the byte as given:
+
+```c++
+config out{std::string("a\x01" "b")};
+std::string buffer{};
+(void)glz::write_toml(out, buffer);
+// buffer holds a raw 0x01, which is not valid TOML
+```
+
+Turn on `escape_control_characters` to have them written as `\u00XX`, so the document round-trips:
+
+```c++
+struct escape_opts : glz::toml_opts {
+   bool escape_control_characters = true;
+};
+
+(void)glz::write<escape_opts{}>(out, buffer);
+// buffer == R"(note = "a\u0001b")"
+```
+
+Characters with a short escape (`\t`, `\n`, `\r`, `\"`, `\\`) use it; the rest become `\u00XX`.
+
+Map keys are a separate case: a key that is not bare is written as a quoted basic string with its control characters always escaped, whatever the option says. A raw control byte there would reparse as invalid TOML and change the surrounding structure, so correctness of the key is not left to the option.

@@ -5,6 +5,7 @@
 
 #include <cstring>
 
+#include "glaze/core/buffer_traits.hpp"
 #include "glaze/json/read.hpp"
 #include "glaze/json/write.hpp"
 
@@ -356,8 +357,8 @@ namespace glz
    template <writable_array_t T>
    struct to<NDJSON, T>
    {
-      template <auto Opts, class... Args>
-      static void op(auto&& value, is_context auto&& ctx, auto&& b, auto& ix)
+      template <auto Opts, class B>
+      static void op(auto&& value, is_context auto&& ctx, B&& b, auto& ix)
       {
          const auto is_empty = [&]() -> bool {
             if constexpr (has_size<T>) {
@@ -376,6 +377,12 @@ namespace glz
             const auto end = value.end();
             for (; it != end; ++it) {
                dump('\n', b, ix);
+               // A record boundary is the one point where no value is half-written, so it is
+               // where a streaming buffer can release what it has. Without this the window
+               // grows with the document, even though every record is independent.
+               if constexpr (is_output_streaming<B>) {
+                  flush_buffer(b, ix);
+               }
                to<JSON, Value>::template op<Opts>(*it, ctx, b, ix);
             }
          }
@@ -386,8 +393,8 @@ namespace glz
       requires glaze_array_t<T> || tuple_t<T>
    struct to<NDJSON, T>
    {
-      template <auto Opts, class... Args>
-      static void op(auto&& value, is_context auto&& ctx, Args&&... args)
+      template <auto Opts, class B>
+      static void op(auto&& value, is_context auto&& ctx, B&& b, auto& ix)
       {
          static constexpr auto N = []() constexpr {
             if constexpr (glaze_array_t<std::decay_t<T>>) {
@@ -401,14 +408,17 @@ namespace glz
          using V = std::decay_t<T>;
          for_each<N>([&]<auto I>() {
             if constexpr (glaze_array_t<V>) {
-               serialize<JSON>::op<Opts>(get_member(value, glz::get<I>(meta_v<T>)), ctx, args...);
+               serialize<JSON>::op<Opts>(get_member(value, glz::get<I>(meta_v<T>)), ctx, b, ix);
             }
             else {
-               serialize<JSON>::op<Opts>(glz::get<I>(value), ctx, args...);
+               serialize<JSON>::op<Opts>(glz::get<I>(value), ctx, b, ix);
             }
             constexpr bool needs_new_line = I < N - 1;
             if constexpr (needs_new_line) {
-               dump('\n', args...);
+               dump('\n', b, ix);
+               if constexpr (is_output_streaming<B>) {
+                  flush_buffer(b, ix);
+               }
             }
          });
       }
@@ -418,8 +428,8 @@ namespace glz
       requires is_std_tuple<std::decay_t<T>>
    struct to<NDJSON, T>
    {
-      template <auto Opts, class... Args>
-      static void op(auto&& value, is_context auto&& ctx, Args&&... args)
+      template <auto Opts, class B>
+      static void op(auto&& value, is_context auto&& ctx, B&& b, auto& ix)
       {
          static constexpr auto N = []() constexpr {
             if constexpr (glaze_array_t<std::decay_t<T>>) {
@@ -433,14 +443,17 @@ namespace glz
          using V = std::decay_t<T>;
          for_each<N>([&]<auto I>() {
             if constexpr (glaze_array_t<V>) {
-               serialize<JSON>::op<Opts>(value.*std::get<I>(meta_v<V>), ctx, std::forward<Args>(args)...);
+               serialize<JSON>::op<Opts>(value.*std::get<I>(meta_v<V>), ctx, b, ix);
             }
             else {
-               serialize<JSON>::op<Opts>(std::get<I>(value), ctx, std::forward<Args>(args)...);
+               serialize<JSON>::op<Opts>(std::get<I>(value), ctx, b, ix);
             }
             constexpr bool needs_new_line = I < N - 1;
             if constexpr (needs_new_line) {
-               dump('\n', std::forward<Args>(args)...);
+               dump('\n', b, ix);
+               if constexpr (is_output_streaming<B>) {
+                  flush_buffer(b, ix);
+               }
             }
          });
       }

@@ -230,6 +230,34 @@ This allows building unified deserializers that scale security based on the trus
 > [!WARNING]
 > When enabling `allocate_raw_pointers`, your application is responsible for tracking and freeing all allocated memory. Consider using smart pointers (`std::unique_ptr`, `std::shared_ptr`) instead, which Glaze handles automatically and safely.
 
+## Converting Untrusted Binary to JSON
+
+`glz::beve_to_json`, `glz::cbor_to_json`, `glz::bson_to_json`, `glz::eetf_to_json`, and `glz::jsonb_to_json` convert a document you received into JSON text.
+
+### Control Characters in Decoded Strings
+
+BEVE, CBOR, BSON, and EETF all allow control characters (0x00–1F) inside a string. JSON does not. A hostile or corrupt payload can therefore contain bytes that have no JSON representation, and writing them anyway produces a document that strict parsers reject.
+
+Escaping them as `\uXXXX` is valid JSON, but it has a consequence worth knowing: every parser then accepts the result, so a NUL in the payload reaches whatever consumes the JSON. Embedded nulls can truncate C strings, split log lines, and cause two systems to disagree about where a value ends.
+
+#### How Glaze Protects Against This
+
+The conversion fails instead. Control characters with no short escape produce `error_code::invalid_control_character`, so you get a signal rather than a document that is malformed or that quietly carries nulls onward.
+
+```cpp
+// a BEVE string holding a 0x01 byte
+std::string json{};
+auto ec = glz::beve_to_json(beve, json);
+// ec.ec == glz::error_code::invalid_control_character
+```
+
+If the payload legitimately contains control bytes, opt in with `escape_control_characters`. For Erlang binaries, prefer `binary_as_base64`, which keeps raw bytes out of the JSON string entirely. See [String Escaping](binary.md#string-escaping).
+
+### Other Converter Defaults
+
+- `raw_string` and `unquoted` are ignored. Both would produce output that is not JSON.
+- UTF-8 is not checked during conversion, except by `glz::jsonb_to_json`. Reading the JSON checks it, and `validate_utf8` is on by default there.
+
 ## JSON Format Security
 
 ### Safe Parsing Defaults
@@ -242,7 +270,7 @@ This allows building unified deserializers that scale security based on the trus
 
 When parsing JSON from untrusted sources:
 
-1. **Recursion depth is bounded**: the readers, skippers, and format converters cap nesting at `max_recursive_depth_limit` (256 levels) and return `error_code::exceeded_max_recursive_depth`, so deeply nested input cannot overflow the stack. Every object and every array counts as a level, so a struct holding a vector of itself reaches the cap at 128 struct levels. Flatten your data structures if you legitimately need to exceed that.
+1. **Recursion depth is bounded**: the readers, skippers, and format converters cap nesting at `max_recursive_depth_limit` (256 levels) and return `error_code::exceeded_max_recursive_depth`, so deeply nested input cannot overflow the stack. Every object and every array counts as a level, so a struct holding a vector of itself reaches the cap at 128 struct levels. YAML caps lower, at `glz::yaml::max_yaml_recursive_depth` (64 levels): a YAML level routes through the variant reader's speculative mapping probe and costs several times the stack a JSON level does, so it has to stop sooner to stay inside the same stack. Flatten your data structures if you legitimately need to exceed that.
 
 2. **Limit string sizes**: Very large strings can consume excessive memory. Control this through input buffer size limits.
 

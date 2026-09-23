@@ -11,7 +11,8 @@ namespace glz::toml
    template <class It, class End>
    inline void skip_comment(It& it, End end) noexcept
    {
-      while (it != end && *it != '\n' && *it != '\r') {
+      // See the note in common.hpp: stopping on a forbidden byte is what reports it.
+      while (it != end && !comment_end_or_control_table[uint8_t(*it)]) {
          ++it;
       }
    }
@@ -24,23 +25,27 @@ namespace glz::toml
          return;
       }
 
-      if ((it + 2) < end && *it == '"' && *(it + 1) == '"' && *(it + 2) == '"') {
+      if (size_t(end - it) > 2 && *it == '"' && *(it + 1) == '"' && *(it + 2) == '"') {
          it += 3;
          if (it != end && *it == '\n') {
             ++it;
          }
-         else if ((it + 1) < end && *it == '\r' && *(it + 1) == '\n') {
+         else if (size_t(end - it) > 1 && *it == '\r' && *(it + 1) == '\n') {
             it += 2;
          }
 
          while (true) {
-            if ((it + 2) >= end) [[unlikely]] {
+            if (size_t(end - it) <= 2) [[unlikely]] {
                ctx.error = error_code::syntax_error;
                return;
             }
             if (*it == '"' && *(it + 1) == '"' && *(it + 2) == '"') {
                it += 3;
                break;
+            }
+            if (forbidden_control_multiline_table[uint8_t(*it)]) [[unlikely]] {
+               ctx.error = error_code::invalid_control_character;
+               return;
             }
             if (*it == '\\') {
                ++it;
@@ -72,6 +77,10 @@ namespace glz::toml
                ctx.error = error_code::syntax_error;
                return;
             }
+            if (forbidden_control_table[uint8_t(*it)]) [[unlikely]] {
+               ctx.error = error_code::invalid_control_character;
+               return;
+            }
             ++it;
          }
          ctx.error = error_code::syntax_error;
@@ -86,23 +95,27 @@ namespace glz::toml
          return;
       }
 
-      if ((it + 2) < end && *it == '\'' && *(it + 1) == '\'' && *(it + 2) == '\'') {
+      if (size_t(end - it) > 2 && *it == '\'' && *(it + 1) == '\'' && *(it + 2) == '\'') {
          it += 3;
          if (it != end && *it == '\n') {
             ++it;
          }
-         else if ((it + 1) < end && *it == '\r' && *(it + 1) == '\n') {
+         else if (size_t(end - it) > 1 && *it == '\r' && *(it + 1) == '\n') {
             it += 2;
          }
 
          while (true) {
-            if ((it + 2) >= end) [[unlikely]] {
+            if (size_t(end - it) <= 2) [[unlikely]] {
                ctx.error = error_code::syntax_error;
                return;
             }
             if (*it == '\'' && *(it + 1) == '\'' && *(it + 2) == '\'') {
                it += 3;
                break;
+            }
+            if (forbidden_control_multiline_table[uint8_t(*it)]) [[unlikely]] {
+               ctx.error = error_code::invalid_control_character;
+               return;
             }
             ++it;
          }
@@ -112,6 +125,10 @@ namespace glz::toml
          while (it != end && *it != '\'') {
             if (*it == '\n' || *it == '\r') [[unlikely]] {
                ctx.error = error_code::syntax_error;
+               return;
+            }
+            if (forbidden_control_table[uint8_t(*it)]) [[unlikely]] {
+               ctx.error = error_code::invalid_control_character;
                return;
             }
             ++it;

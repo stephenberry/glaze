@@ -118,6 +118,38 @@ server.set_ssl_verify_mode(SSL_VERIFY_NONE);    // No verification
 server.set_ssl_verify_mode(SSL_VERIFY_PEER);    // Verify peer certificate
 ```
 
+#### `configure_ssl_context(func)`
+Reach the underlying `asio::ssl::context` for settings the server does not wrap: ALPN protocols, cipher suites, protocol version bounds, session tickets, or `SSL_CTX_set_cert_cb` for per-handshake certificate selection. Returns the server for chaining.
+
+```cpp
+server.configure_ssl_context([](asio::ssl::context& ctx) {
+   SSL_CTX_set_alpn_select_cb(ctx.native_handle(), select_alpn, nullptr);
+});
+```
+
+Call this **before** `start()`. Every accepted connection reads the context and the server does no locking around it, so modifying it once the acceptor is running races with the handshakes in flight. On an `http_server<false>` the callable is not invoked.
+
+#### `ssl_context_unsafe()`
+Direct reference to the `asio::ssl::context`, for cases the callable form does not cover. The same "before `start()`" rule applies; the name is a reminder that the server provides no synchronization. Only available on a TLS-enabled server.
+
+```cpp
+SSL_CTX_set_min_proto_version(server.ssl_context_unsafe().native_handle(), TLS1_3_VERSION);
+```
+
+## Protocol Versions
+
+The server context is built as `asio::ssl::context::tls_server`, so a handshake settles on the highest version both sides support: TLS 1.3 where the client offers it, TLS 1.2 otherwise. The protocols deprecated by RFC 8996 (SSLv2, SSLv3, TLS 1.0, TLS 1.1) are disabled explicitly rather than left to the OpenSSL build's defaults.
+
+To pin a different window, for example to require TLS 1.3:
+
+```cpp
+server.configure_ssl_context([](asio::ssl::context& ctx) {
+   SSL_CTX_set_min_proto_version(ctx.native_handle(), TLS1_3_VERSION);
+});
+```
+
+Note that lowering OpenSSL's security level to reach an older protocol will not re-enable TLS 1.0 or 1.1, since those are disabled by explicit context options.
+
 ## Design Benefits
 
 ### Zero Overhead for HTTP

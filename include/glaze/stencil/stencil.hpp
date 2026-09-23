@@ -40,17 +40,17 @@ namespace glz
       return result;
    }
 
-   template <auto Opts = opts{.format = STENCIL}, class Template, class T, resizable Buffer>
+   template <auto Opts = opts{.format = STENCIL}, contiguous Template, class T, resizable Buffer>
    [[nodiscard]] error_ctx stencil(Template&& layout, T&& value, Buffer& buffer)
    {
       context ctx{};
 
-      if (layout.empty()) [[unlikely]] {
+      if (layout.size() == 0) [[unlikely]] {
          ctx.error = error_code::no_read_input;
          return {0, ctx.error, ctx.custom_error_message};
       }
 
-      auto p = read_iterators<Opts, false>(layout);
+      auto p = read_iterators<Opts>(layout);
       auto it = p.first;
       auto end = p.second;
       auto outer_start = it;
@@ -130,9 +130,14 @@ namespace glz
                         return {size_t(it - outer_start), ctx.error, "Closing tag not found for section"};
                      }
 
-                     if (it + 1 < end) {
-                        it += 2; // Skip '}}'
+                     // The opening tag must close with '}}' before the section body. Without this
+                     // check a tag left open (e.g. "{{#key {{/key}}") advances past closing_pos and
+                     // std::string_view(it, closing_pos) becomes a reversed range of length (size_t)-2.
+                     if (it + 1 >= end || *it != '}' || *(it + 1) != '}') [[unlikely]] {
+                        ctx.error = error_code::syntax_error;
+                        return {size_t(it - outer_start), ctx.error, "Expected '}}' to close section tag"};
                      }
+                     it += 2; // Skip '}}'
 
                      // Extract inner template between current position and closing tag
                      std::string_view inner_template(it, closing_pos);
@@ -313,7 +318,7 @@ namespace glz
                            static constexpr auto TargetKey = get<I>(reflect<T>::keys);
                            if ((TargetKey.size() == key.size()) && comparitor<TargetKey>(start)) [[likely]] {
                               size_t ix = 0;
-                              temp_buffer.resize(2 * write_padding_bytes);
+                              resize_unfilled(temp_buffer, 2 * write_padding_bytes);
 
                               if constexpr (reflectable<T>) {
                                  serialize<JSON>::template op<RawOpts>(get_member(value, get<I>(to_tie(value))), ctx,

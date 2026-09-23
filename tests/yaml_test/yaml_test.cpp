@@ -24,6 +24,7 @@
 #include <vector>
 
 #include "glaze/json/generic.hpp"
+#include "minimal_buffer.hpp"
 #include "scratch_directory.hpp"
 #include "ut/ut.hpp"
 
@@ -275,6 +276,23 @@ template <>
 struct glz::meta<yaml_skip_struct>
 {
    static constexpr bool skip(const std::string_view key, const glz::meta_context&) { return key == "secret"; }
+};
+
+// Struct whose skip fires only while parsing, so writing is left untouched
+struct yaml_skip_on_parse_struct
+{
+   std::string name{};
+   std::string computed{};
+   int version{};
+};
+
+template <>
+struct glz::meta<yaml_skip_on_parse_struct>
+{
+   static constexpr bool skip(const std::string_view key, const glz::meta_context& ctx)
+   {
+      return key == "computed" && ctx.op == glz::operation::parse;
+   }
 };
 
 // Struct with runtime skip_if for YAML
@@ -810,6 +828,80 @@ name: >
    };
 };
 
+suite yaml_control_character_reader_tests = [] {
+   // YAML's character stream excludes the C0 range apart from \t, \n and \r, plus DEL.
+   // The reader is the conformance gate for these, so every scalar style must reject a
+   // raw one rather than carry it into a value.
+   "read_rejects_raw_control_in_every_scalar_style"_test = [] {
+      const char c1 = char(0x01);
+      const std::vector<std::pair<const char*, std::string>> cases{
+         {"plain", std::string("key: abc") + c1 + "def\n"},
+         {"single-quoted", std::string("key: 'abc") + c1 + "def'\n"},
+         {"double-quoted", std::string("key: \"abc") + c1 + "def\"\n"},
+         {"literal block", std::string("key: |\n  abc") + c1 + "def\n"},
+         {"folded block", std::string("key: >\n  abc") + c1 + "def\n"},
+         {"mapping key", std::string("k") + c1 + ": v\n"},
+      };
+      for (const auto& [style, yaml] : cases) {
+         std::map<std::string, std::string> parsed{};
+         auto ec = glz::read_yaml(parsed, yaml);
+         expect(ec == glz::error_code::invalid_control_character) << style;
+      }
+   };
+
+   "read_rejects_raw_control_in_comments"_test = [] {
+      // A comment's bytes never reach a value, but they are still part of the character
+      // stream, so the document must be rejected either way.
+      const char c1 = char(0x01);
+      for (const auto& yaml : {std::string("# c") + c1 + "\nkey: v\n", std::string("key: v # c") + c1 + "\n"}) {
+         std::map<std::string, std::string> parsed{};
+         auto ec = glz::read_yaml(parsed, yaml);
+         expect(bool(ec)) << "comment control byte must be rejected";
+      }
+
+      // Clean comments are unaffected.
+      std::map<std::string, std::string> ok{};
+      const std::string good = "# fine\nkey: v # also fine\n";
+      auto ec = glz::read_yaml(ok, good);
+      expect(!ec) << glz::format_error(ec, good);
+      expect(ok.at("key") == "v");
+   };
+
+   "read_rejects_raw_del"_test = [] {
+      const std::string yaml = std::string("key: abc") + char(0x7f) + "def\n";
+      std::map<std::string, std::string> parsed{};
+      auto ec = glz::read_yaml(parsed, yaml);
+      expect(ec == glz::error_code::invalid_control_character);
+   };
+
+   "read_accepts_escaped_control_in_double_quoted"_test = [] {
+      // The \xXX escape is how a control character is legitimately carried, and is what
+      // the writer emits under escape_control_characters. It must still be accepted.
+      const std::string yaml = "key: \"abc\\x01def\"\n";
+      std::map<std::string, std::string> parsed{};
+      auto ec = glz::read_yaml(parsed, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(parsed.at("key") == std::string("abc") + char(0x01) + "def");
+   };
+
+   "read_still_accepts_tab_newline_carriage_return"_test = [] {
+      // These three are control characters YAML permits; they must not be swept up.
+      const std::string yaml = "key: \"a\\tb\"\nother: |\n  line1\n  line2\n";
+      std::map<std::string, std::string> parsed{};
+      auto ec = glz::read_yaml(parsed, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(parsed.at("key") == "a\tb");
+      expect(parsed.at("other") == "line1\nline2\n");
+   };
+};
+
+// Opt in to control-character escaping, which is off by default so that the common
+// write path pays nothing for it.
+struct yaml_escape_opts : glz::opts
+{
+   bool escape_control_characters = true;
+};
+
 suite yaml_writer_edge_case_tests = [] {
    "write_string_chomping_strip_marker"_test = [] {
       const std::string original = "line1\nline2";
@@ -886,6 +978,110 @@ suite yaml_writer_edge_case_tests = [] {
       std::string parsed{};
       auto rec = glz::read_yaml(parsed, yaml);
       expect(!rec) << glz::format_error(rec, yaml);
+      expect(parsed == original);
+   };
+
+   "write_control_char_raw_by_default"_test = [] {
+      // Escaping control characters is opt-in, so by default the byte is written through
+      // untouched and the plain style is kept. The reader is the conformance gate and
+      // rejects it, so the default write is deliberately not round-trippable here --
+      // the same asymmetry glz::write_json / glz::read_json already have. Callers that
+      // need the round trip enable escape_control_characters.
+      const std::string original = std::string("abc") + char(0x01) + "def";
+      std::string yaml{};
+      auto wec = glz::write_yaml(original, yaml);
+      expect(!wec);
+      expect(yaml == original) << "control byte should pass through unquoted";
+
+      std::string parsed{};
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(rec == glz::error_code::invalid_control_character) << "reader must reject it";
+   };
+
+   "write_control_char_escaped_under_opt_in"_test = [] {
+      // With escape_control_characters the byte forces a quoted style and is escaped.
+      const std::string original = std::string("abc") + char(0x01) + "def";
+      std::string yaml{};
+      auto wec = glz::write<yaml_escape_opts{{.format = glz::YAML}}>(original, yaml);
+      expect(!wec);
+      expect(yaml == "\"abc\\x01def\"");
+
+      std::string parsed{};
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+      expect(parsed == original);
+   };
+
+   "write_embedded_nul_raw_by_default_escaped_under_opt_in"_test = [] {
+      const std::string original = std::string("a\0b", 3);
+
+      std::string plain{};
+      expect(!glz::write_yaml(original, plain));
+      expect(plain == original) << "NUL should pass through by default";
+
+      std::string escaped{};
+      expect(!glz::write<yaml_escape_opts{{.format = glz::YAML}}>(original, escaped));
+      expect(escaped == "\"a\\0b\"");
+
+      std::string parsed{};
+      auto rec = glz::read_yaml(parsed, escaped);
+      expect(!rec) << glz::format_error(rec, escaped);
+      expect(parsed == original);
+   };
+
+   "write_map_key_with_control_char_follows_the_option"_test = [] {
+      std::map<std::string, int> value{{std::string("k") + char(0x1b), 1}};
+
+      std::string plain{};
+      expect(!glz::write_yaml(value, plain));
+      expect(plain == std::string("k") + char(0x1b) + ": 1\n");
+
+      std::string escaped{};
+      expect(!glz::write<yaml_escape_opts{{.format = glz::YAML}}>(value, escaped));
+      expect(escaped == "\"k\\x1b\": 1\n");
+
+      std::map<std::string, int> parsed{};
+      auto rec = glz::read_yaml(parsed, escaped);
+      expect(!rec) << glz::format_error(rec, escaped);
+      expect(parsed == value);
+   };
+
+   "write_del_follows_the_option"_test = [] {
+      // DEL (0x7f) is outside YAML's c-printable set just as the C0 range is, so the
+      // opt-in path escapes it even though it is not < 0x20.
+      const std::string original = std::string("a") + char(0x7f) + "b";
+
+      std::string plain{};
+      expect(!glz::write_yaml(original, plain));
+      expect(plain == original) << "DEL should pass through by default";
+
+      std::string escaped{};
+      expect(!glz::write<yaml_escape_opts{{.format = glz::YAML}}>(original, escaped));
+      expect(escaped == "\"a\\x7fb\"");
+
+      std::string parsed{};
+      auto rec = glz::read_yaml(parsed, escaped);
+      expect(!rec) << glz::format_error(rec, escaped);
+      expect(parsed == original);
+   };
+
+   "write_multiline_with_del_avoids_block_under_opt_in"_test = [] {
+      // A literal block has no escape mechanism, so opting in must abandon the block
+      // style for this value rather than emit the byte raw.
+      const std::string original = std::string("line1\n") + char(0x7f) + "\nline2";
+
+      std::string plain{};
+      expect(!glz::write_yaml(original, plain));
+      expect(plain.find('|') != std::string::npos) << "default still uses a literal block";
+
+      std::string escaped{};
+      expect(!glz::write<yaml_escape_opts{{.format = glz::YAML}}>(original, escaped));
+      expect(escaped == "\"line1\\n\\x7f\\nline2\"");
+      expect(escaped.find('|') == std::string::npos);
+
+      std::string parsed{};
+      auto rec = glz::read_yaml(parsed, escaped);
+      expect(!rec) << glz::format_error(rec, escaped);
       expect(parsed == original);
    };
 
@@ -4471,6 +4667,101 @@ ship-to: *id001)";
       expect(!ec) << glz::format_error(ec, view);
       expect(glz::write_json(parsed).value_or("WRITE_ERR") == R"("x")");
    };
+
+   "pair_flow_mapping_truncated_stays_in_bounds"_test = [] {
+      static constexpr glz::opts options{.format = glz::YAML, .null_terminated = false};
+      // A flow-mapping pair whose input ends right after the opening '{' (once any inline
+      // whitespace is consumed) leaves the cursor at the end of the buffer. The key peek must
+      // stop there rather than read the byte past a non-null-terminated buffer.
+      for (const std::string_view s : {"{", "{ ", "{\t", "{  "}) {
+         std::vector<char> buf{s.begin(), s.end()};
+         const std::string_view view{buf.data(), buf.data() + buf.size()};
+         std::pair<std::string, int> p{};
+         const auto ec = glz::read<options>(p, view);
+         expect(ec.ec == glz::error_code::unexpected_end) << s;
+         expect(ec.count <= view.size()) << s;
+      }
+
+      // A complete flow-mapping pair still parses.
+      const std::string_view valid = "{answer: 42}";
+      std::vector<char> buf{valid.begin(), valid.end()};
+      const std::string_view view{buf.data(), buf.data() + buf.size()};
+      std::pair<std::string, int> p{};
+      const auto ec = glz::read<options>(p, view);
+      expect(!ec) << glz::format_error(ec, view);
+      expect(p.first == "answer");
+      expect(p.second == 42);
+   };
+
+   "content_left_over_on_a_line_is_rejected"_test = [] {
+      // A node can stop part way along its line: a plain scalar ends at a ':' it is not allowed
+      // to take as a separator, a flow collection ends at its bracket. Both the root tail scan
+      // and the block mapping loop then read the rest of that line as though it were the start of
+      // a new one, which let a leftover ':' pass as an explicit-key continuation and dropped
+      // everything after it -- silently, with no error. `"'q' zz"` read as "q" and `"a: 1 b: 2"`
+      // as its first pair. Whatever the reader could not use has to be an error instead.
+      for (const std::string_view doc :
+           {"'q' zz", "'q' zz\n", "[1, 2] zz\n", "- 'q' zz\n", "outer:\n  'q' zz\n", "a: 1 b: 2\n"}) {
+         glz::generic parsed{};
+         expect(bool(glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, doc))) << doc;
+      }
+
+      // Only what the line may legitimately end with still passes: nothing, whitespace, or a
+      // comment -- and a following line is still a following line.
+      for (const std::string_view doc :
+           {"'q'", "'q'   \n", "'q' # c\n", "[1, 2] # c\n", "a: 1 # c\n", "a: 1\nb: 2\n", "? a : b\n",
+            "- a: 1\n  b: 2\n", "a: 1\n...\n", "a: 1\n---\nb: 2\n", "url: http://x.y/z\n"}) {
+         glz::generic parsed{};
+         expect(!glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, doc)) << doc;
+      }
+   };
+
+   "implicit_key_lookahead_is_bounded"_test = [] {
+      // What bounds those probes is the spec's own bound on how far a ':' may sit from the key it
+      // terminates: at most 1024 characters (7.4.2, 8.2.2). The widest conforming key is 1024
+      // four-byte characters, which puts its ':' at byte offset 4096, and it must still parse.
+      const auto is_mapping = [](size_t characters) {
+         std::string doc;
+         for (size_t i = 0; i < characters; ++i) doc += "\xF0\x9F\x98\x80"; // U+1F600, four bytes
+         doc += ": v";
+         glz::generic parsed{};
+         const auto ec = glz::read_yaml(parsed, doc);
+         expect(!ec) << characters << ' ' << glz::format_error(ec, doc);
+         return parsed.is_object();
+      };
+      expect(is_mapping(1024));
+
+      // One character further and that ':' is past the bound, so it no longer separates a key
+      // from a value. Nothing else on the line can, either, which leaves the line with content
+      // the document has no reading for -- so it is rejected rather than quietly reinterpreted.
+      // The spec does not allow a key this long in the first place.
+      std::string over(glz::yaml::max_implicit_key_lookahead, 'k');
+      over += ": v";
+      for (const std::string& doc : {over, over + "\nsecond: 2\n", "outer:\n  " + over + "\n", "- " + over + "\n"}) {
+         glz::generic parsed{};
+         expect(bool(glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, doc))) << doc.size();
+      }
+   };
+
+   "long_line_columns_are_measured_correctly"_test = [] {
+      // The column of a position is memoized across queries rather than recomputed by walking
+      // back to the line start. Long lines are where that memo does the work, so they are where
+      // a stale one would show: an indent misread by one changes the shape of the result.
+      const std::string key(2000, 'k');
+      const std::string value(20000, 'v');
+
+      glz::generic nested{};
+      const std::string doc = "outer:\n  " + key + ": " + value + "\n  second: 2\n";
+      const auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(nested, doc);
+      expect(!ec) << glz::format_error(ec, doc);
+      expect(nested["outer"][key].as<std::string>() == value);
+      expect(nested["outer"]["second"].as<int>() == 2);
+
+      // A tab in the indentation of a long line is still rejected.
+      glz::generic tabbed{};
+      const std::string tab_doc = "outer:\n\t" + key + ": " + value + "\n";
+      expect(bool(glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(tabbed, tab_doc)));
+   };
 };
 
 // ============================================================
@@ -7008,6 +7299,231 @@ suite generic_colon_in_value_tests = [] {
    };
 };
 
+// Test for issue #2826: quotes in plain scalars must not affect later quoted values
+suite plain_scalar_quotes_preserve_later_quotes = [] {
+   "plain quotes do not affect later mapping values"_test = [] {
+      struct test_case
+      {
+         std::string_view yaml;
+         std::string_view one;
+      };
+
+      const test_case cases[] = {
+         {"one: a'b\ntwo: 'c: d'\n", "a'b"},
+         {"one: a'b\r\ntwo: 'c: d'\r\n", "a'b"},
+         {"one: a'b\rtwo: 'c: d'\r", "a'b"},
+         {"one: a'b\ntwo: 'c: d'", "a'b"},
+         {"one: a\"b\ntwo: \"c: d\"\n", "a\"b"},
+         {"one: a 'b\ntwo: 'c: d'\n", "a 'b"},
+         {"one: a \"b\ntwo: \"c: d\"\n", "a \"b"},
+         {"one: a\"b\\\ntwo: \"c: d\"\n", "a\"b\\"},
+         {"one: a\"b\\\r\ntwo: \"c: d\"\r\n", "a\"b\\"},
+         {"one: a'b\n# comment ' with: a colon\ntwo: 'c: d'\n", "a'b"},
+         {"one: 'a''b'\ntwo: 'c: d'\n", "a'b"},
+         {"one: a'b\ntwo: \"c: d\"\n", "a'b"},
+         {"two: 'c: d'\none: a'b\n", "a'b"},
+         {"one: \"a\\\"b: c\"\ntwo: 'c: d'\n", "a\"b: c"},
+         {"one: \"a\\\"\"\ntwo: 'c: d'\n", "a\""},
+         {"one: \"a\\\\\"\ntwo: 'c: d'\n", "a\\"},
+      };
+
+      const auto check = [&]<class T>() {
+         for (const auto& [yaml, one] : cases) {
+            T parsed{};
+            const auto ec = glz::read_yaml(parsed, yaml);
+            expect(!ec) << glz::format_error(ec, yaml);
+            if (ec) continue;
+
+            expect(parsed.size() == 2u) << yaml;
+            expect(glz::write_json(parsed["one"]).value_or("WRITE_ERROR") == glz::write_json(one).value()) << yaml;
+            expect(glz::write_json(parsed["two"]).value_or("WRITE_ERROR") == R"("c: d")") << yaml;
+         }
+      };
+
+      check.template operator()<glz::generic>();
+      check.template operator()<glz::generic_u64>();
+      check.template operator()<glz::generic_i64>();
+      check.template operator()<std::map<std::string, std::string>>();
+   };
+
+   "plain quotes do not allow inconsistent sibling indentation"_test = [] {
+      const std::string_view yaml = "one: a'b\n two: 'c: d'\n";
+      glz::generic_u64 parsed{};
+      const auto ec = glz::read_yaml(parsed, yaml);
+      expect(ec == glz::error_code::syntax_error);
+   };
+
+   "multiline implicit block keys are rejected"_test = [] {
+      for (const std::string_view yaml : {"key: \"line1\n  line2\": value\n", "key: 'line1\n  line2': value\n",
+                                          "\"line1\n  line2\": value\n", "'line1\n  line2': value\n"}) {
+         glz::generic parsed{};
+         std::map<std::string, std::string> typed{};
+         expect(bool(glz::read_yaml(parsed, yaml))) << yaml;
+         expect(bool(glz::read_yaml(typed, yaml))) << yaml;
+      }
+   };
+
+   "multiline explicit block and flow keys remain supported"_test = [] {
+      for (const std::string_view yaml :
+           {"key:\n  ? \"line1\n    line2\"\n  : value\n", "key:\n  ? 'line1\n    line2'\n  : value\n",
+            "key: {? \"line1\n    line2\": value}\n", "key: {? 'line1\n    line2': value}\n",
+            "key: {\"line1\n    line2\": value}\n"}) {
+         glz::generic parsed{};
+         std::map<std::string, std::map<std::string, std::string>> typed{};
+         const auto ec = glz::read_yaml(parsed, yaml);
+         const auto typed_ec = glz::read_yaml(typed, yaml);
+         expect(!ec) << glz::format_error(ec, yaml);
+         expect(!typed_ec) << glz::format_error(typed_ec, yaml);
+         expect(glz::write_json(parsed).value_or("WRITE_ERROR") == R"({"key":{"line1 line2":"value"}})");
+         expect(glz::write_json(typed).value_or("WRITE_ERROR") == R"({"key":{"line1 line2":"value"}})");
+      }
+   };
+
+   "quote lookahead preserves nested collections and multiline strings"_test = [] {
+      for (const std::string_view yaml :
+           {"outer:\n  one: a'b\n  two: 'c: d'\n", "outer: {\"one\":\"a'b\",\"two\":\"c: d\"}\n",
+            "outer: {\"one\":\"} : payload\",\"two\":\"c: d\"}\n", "outer:\n  one: 'a\n    b'\n  two: 'c: d'\n",
+            "outer:\n  one: \"a\\\n    b\"\n  two: 'c: d'\n"}) {
+         glz::generic parsed{};
+         std::map<std::string, std::map<std::string, std::string>> typed{};
+         const auto ec = glz::read_yaml(parsed, yaml);
+         const auto typed_ec = glz::read_yaml(typed, yaml);
+         expect(!ec) << glz::format_error(ec, yaml);
+         expect(!typed_ec) << glz::format_error(typed_ec, yaml);
+         if (ec || typed_ec) continue;
+
+         expect(glz::write_json(parsed).value_or("GENERIC_WRITE_ERROR") ==
+                glz::write_json(typed).value_or("TYPED_WRITE_ERROR"))
+            << yaml;
+         expect(parsed["outer"]["two"].as<std::string>() == "c: d");
+      }
+   };
+};
+
+// Test for issue #2889: the '' escape in a single-quoted scalar must not fool the implicit-key
+// probes into reading a ':' that is scalar content as a mapping separator.
+suite single_quoted_escape_probe_tests = [] {
+   "'' escape hides a colon from every implicit-key probe"_test = [] {
+      struct test_case
+      {
+         std::string_view yaml;
+         std::string_view json;
+      };
+
+      const test_case cases[] = {
+         // Block mapping value, block mapping key, and a bare document scalar.
+         {"one: 'it''s: here'\n", R"({"one":"it's: here"})"},
+         {"'it''s: here': v\n", R"({"it's: here":"v"})"},
+         {"'it''s: here'\n", R"("it's: here")"},
+         // Block sequence entry.
+         {"- 'a''b: c'\n", R"(["a'b: c"])"},
+         // Flow sequence, alone and beside a sibling.
+         {"[ 'a''b: c' ]\n", R"(["a'b: c"])"},
+         {"[ 'a''b: c', d ]\n", R"(["a'b: c","d"])"},
+         {"one: [ 'x''y: z' ]\n", R"({"one":["x'y: z"]})"},
+         // Flow mapping key.
+         {"{ 'a''b: c': v }\n", R"({"a'b: c":"v"})"},
+         {"one: { 'x''y: z': w }\n", R"({"one":{"x'y: z":"w"}})"},
+         // A trailing '' pair, so the scalar ends on an escape.
+         {"one: 'a: b'''\n", R"({"one":"a: b'"})"},
+         // The double-quoted counterpart, whose escape the probes already handled.
+         {"one: \"a\\\": b\"\n", R"({"one":"a\": b"})"},
+      };
+
+      for (const auto& [yaml, json] : cases) {
+         glz::generic parsed{};
+         const auto ec = glz::read_yaml(parsed, yaml);
+         expect(!ec) << glz::format_error(ec, yaml);
+         if (ec) continue;
+         expect(glz::write_json(parsed).value_or("WRITE_ERROR") == json) << yaml;
+      }
+   };
+
+   "the generic and typed readers agree on the '' escape"_test = [] {
+      const std::string_view yaml = "one: 'it''s: here'\n";
+
+      glz::generic parsed{};
+      std::map<std::string, std::string> typed{};
+      const auto ec = glz::read_yaml(parsed, yaml);
+      const auto typed_ec = glz::read_yaml(typed, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(!typed_ec) << glz::format_error(typed_ec, yaml);
+      if (ec || typed_ec) return;
+      expect(glz::write_json(parsed).value_or("GENERIC_WRITE_ERROR") ==
+             glz::write_json(typed).value_or("TYPED_WRITE_ERROR"));
+   };
+
+   // A quote is an indicator only where a node can begin. Once a plain scalar is under way it runs
+   // to the end of the line, so the spaces and quotes inside it are content and a probe must not
+   // read one as opening a quoted scalar -- least of all as opening one whose '' it then escapes.
+   "quotes inside a plain scalar stay content"_test = [] {
+      struct test_case
+      {
+         std::string_view yaml;
+         std::string_view json;
+      };
+
+      const test_case cases[] = {
+         {"one: a 'b'\n", R"({"one":"a 'b'"})"},
+         {"one: a '''\n", R"({"one":"a '''"})"},
+         {"one: a \"b\"\n", R"({"one":"a \"b\""})"},
+         // The plain key ends at the ": " the quote never protected.
+         {"a 'b: c'\n", R"({"a 'b":"c'"})"},
+         {"a ''': x\n", R"({"a '''":"x"})"},
+         // ',' opens no node outside a flow collection: ns-plain-safe-out admits it as content.
+         {"a,'b: c\n", R"({"a,'b":"c"})"},
+      };
+
+      for (const auto& [yaml, json] : cases) {
+         glz::generic parsed{};
+         const auto ec = glz::read_yaml(parsed, yaml);
+         expect(!ec) << glz::format_error(ec, yaml);
+         if (ec) continue;
+         expect(glz::write_json(parsed).value_or("WRITE_ERROR") == json) << yaml;
+      }
+   };
+
+   // A node begins at the start of the scan, after the indicators that end the node before it, and
+   // after the properties that precede one. Anywhere else -- inside a plain scalar already under
+   // way, or after a closing bracket -- a quote is content, and a probe that opens a scalar there
+   // runs off the end of the line and loses the separator that follows.
+   "brackets and node properties do not move the node start"_test = [] {
+      struct test_case
+      {
+         std::string_view yaml;
+         std::string_view json;
+      };
+
+      const test_case cases[] = {
+         // In block context ns-plain-safe-out admits brackets, so these are plain keys, not flow
+         // collections, and the apostrophes in them are content.
+         {"list[0]'s value: x\n", R"({"list[0]'s value":"x"})"},
+         {"a[b]'c: d\n", R"({"a[b]'c":"d"})"},
+         {"a{b}'c: d\n", R"({"a{b}'c":"d"})"},
+         {"a['][]: v\n", R"({"a['][]":"v"})"},
+         {"- a[b]'c: d\n", R"([{"a[b]'c":"d"}])"},
+         // An anchor or a tag precedes the node, so the scalar after one is still at a node start.
+         {"[ &an 'c]d': v ]\n", R"([{"c]d":"v"}])"},
+         {"[ !!str 'c]d': v ]\n", R"([{"c]d":"v"}])"},
+         {"[ a, &an 'c]d': v ]\n", R"(["a",{"c]d":"v"}])"},
+         // ',' separates flow entries, so a node begins after one.
+         {"[a, 'c]d': e]\n", R"(["a",{"c]d":"e"}])"},
+         // Both halves together: a property in front of a scalar carrying the '' escape.
+         {"one: &an 'it''s: here'\n", R"({"one":"it's: here"})"},
+         {"[ &an 'it''s: here' ]\n", R"(["it's: here"])"},
+         {"k: !!str 'it''s: here'\n", R"({"k":"it's: here"})"},
+      };
+
+      for (const auto& [yaml, json] : cases) {
+         glz::generic parsed{};
+         const auto ec = glz::read_yaml(parsed, yaml);
+         expect(!ec) << glz::format_error(ec, yaml);
+         if (ec) continue;
+         expect(glz::write_json(parsed).value_or("WRITE_ERROR") == json) << yaml;
+      }
+   };
+};
+
 suite generic_malformed_flow_tests = [] {
    "generic_malformed_flow_array_in_value"_test = [] {
       // Unclosed flow array in a block mapping value should produce an error
@@ -8936,6 +9452,200 @@ suite yaml_skip_tests = [] {
       expect(yaml.find("age: 30") != std::string::npos);
       expect(yaml.find("city: LA") != std::string::npos);
    };
+
+   // A field meta::skip excludes from parsing still owns its key: its entry is consumed and
+   // discarded, leaving the member at whatever value it already held.
+   "yaml_read_skip_ignores_field"_test = [] {
+      yaml_skip_struct obj{"", "untouched", 0};
+      const std::string yaml = "id: abc\nsecret: leaked\ncount: 42\n";
+      auto ec = glz::read_yaml(obj, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(obj.id == "abc");
+      expect(obj.secret == "untouched") << obj.secret;
+      expect(obj.count == 42);
+   };
+
+   "yaml_read_skip_ignores_field_in_flow_style"_test = [] {
+      yaml_skip_struct obj{"", "untouched", 0};
+      const std::string yaml = "{id: abc, secret: leaked, count: 42}";
+      auto ec = glz::read_yaml(obj, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(obj.id == "abc");
+      expect(obj.secret == "untouched") << obj.secret;
+      expect(obj.count == 42);
+   };
+
+   // The skipped entry's value may be a block that spans following lines. All of it belongs to the
+   // skipped key, and the sibling entry after it must still be parsed.
+   "yaml_read_skip_ignores_nested_block_value"_test = [] {
+      yaml_skip_struct obj{"", "untouched", 0};
+      const std::string yaml = R"(id: abc
+secret:
+  nested: value
+  items:
+    - 1
+    - 2
+count: 42
+)";
+      auto ec = glz::read_yaml(obj, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(obj.id == "abc");
+      expect(obj.secret == "untouched") << obj.secret;
+      expect(obj.count == 42);
+   };
+
+   // A skipped key is a known key, so it is accepted rather than rejected as unknown
+   "yaml_read_skip_with_error_on_unknown_keys"_test = [] {
+      yaml_skip_struct obj{"", "untouched", 0};
+      const std::string yaml = "id: abc\nsecret: leaked\ncount: 42\n";
+      expect(!glz::read<glz::yaml::yaml_opts{.error_on_unknown_keys = true}>(obj, yaml));
+      expect(obj.id == "abc");
+      expect(obj.secret == "untouched") << obj.secret;
+      expect(obj.count == 42);
+   };
+
+   // error_on_missing_keys must not require a field that parsing skips
+   "yaml_read_skip_not_required_by_error_on_missing_keys"_test = [] {
+      yaml_skip_struct obj{"", "untouched", 0};
+      const std::string yaml = "id: abc\ncount: 42\n";
+      expect(!glz::read<glz::yaml::yaml_opts{.error_on_missing_keys = true}>(obj, yaml));
+      expect(obj.id == "abc");
+      expect(obj.secret == "untouched") << obj.secret;
+      expect(obj.count == 42);
+   };
+
+   // An implicit "key: value" pair inside a flow collection is read by the block-mapping parser in
+   // flow context, where the value ends at ',' or ']' rather than at a column. A skipped value must
+   // stop at those delimiters too, or the rest of the collection goes with it.
+   "yaml_read_skip_in_implicit_flow_pair"_test = [] {
+      std::vector<yaml_skip_struct> v;
+      const std::string yaml = "[secret: leaked, id: abc]";
+      auto ec = glz::read_yaml(v, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(v.size() == 2u) << v.size();
+      if (v.size() == 2u) {
+         expect(v[0].secret == "") << v[0].secret;
+         expect(v[1].id == "abc") << v[1].id;
+      }
+   };
+
+   // A skipped key that begins mid-line ("- key: value") is measured against the enclosing
+   // mapping's column, not its own, so its value must not swallow the siblings that follow it.
+   "yaml_read_skip_first_key_of_sequence_entry"_test = [] {
+      std::vector<yaml_skip_struct> v;
+      const std::string yaml = R"(- secret: leaked
+  id: abc
+  count: 42
+- secret: also_leaked
+  id: def
+  count: 7
+)";
+      auto ec = glz::read_yaml(v, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(v.size() == 2u) << v.size();
+      if (v.size() == 2u) {
+         expect(v[0].id == "abc") << v[0].id;
+         expect(v[0].count == 42);
+         expect(v[0].secret == "") << v[0].secret;
+         expect(v[1].id == "def") << v[1].id;
+         expect(v[1].count == 7);
+      }
+   };
+
+   // Same shape, but the skipped value is a block that begins on the following lines
+   "yaml_read_skip_nested_value_in_sequence_entry"_test = [] {
+      std::vector<yaml_skip_struct> v;
+      const std::string yaml = R"(- secret:
+    nested: value
+  id: abc
+  count: 42
+)";
+      auto ec = glz::read_yaml(v, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(v.size() == 1u) << v.size();
+      if (v.size() == 1u) {
+         expect(v[0].id == "abc") << v[0].id;
+         expect(v[0].count == 42);
+      }
+   };
+
+   // A multi-line plain scalar under a skipped key folds its deeper continuation lines, then ends
+   // at the first line that reads as a sibling entry
+   "yaml_read_skip_multiline_plain_scalar"_test = [] {
+      yaml_skip_struct obj{};
+      const std::string yaml = R"(secret: first
+  continued
+id: abc
+count: 42
+)";
+      auto ec = glz::read_yaml(obj, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(obj.id == "abc") << obj.id;
+      expect(obj.count == 42);
+   };
+
+   // The skipped value's own deeper entries belong to it, including a nested block that returns to
+   // the value's column. Under error_on_unknown_keys a value cut short would surface as a spurious
+   // unknown key, so this pins the skip to consume exactly the value and no more.
+   "yaml_read_skip_nested_value_returning_to_its_column"_test = [] {
+      yaml_skip_struct obj{};
+      const std::string yaml = R"(secret:
+  first:
+    deep: 1
+  second: 2
+id: abc
+count: 42
+)";
+      expect(!glz::read<glz::yaml::yaml_opts{.error_on_unknown_keys = true}>(obj, yaml))
+         << "the skipped value's own entries must not be reported as unknown keys";
+      expect(obj.id == "abc") << obj.id;
+      expect(obj.count == 42);
+   };
+
+   // An indentless sequence sits at its key's column, where only the dash separates it from the
+   // skipped key's siblings
+   "yaml_read_skip_indentless_sequence_value"_test = [] {
+      yaml_skip_struct obj{};
+      const std::string yaml = R"(secret:
+- 1
+- 2
+id: abc
+count: 42
+)";
+      auto ec = glz::read_yaml(obj, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(obj.id == "abc") << obj.id;
+      expect(obj.count == 42);
+   };
+
+   // A plain scalar in flow context folds across lines, so a skipped one must consume its
+   // continuation rather than leave it to be read as the mapping's next entry
+   "yaml_read_skip_multiline_flow_scalar"_test = [] {
+      yaml_skip_struct obj{};
+      const std::string yaml = "{id: abc, secret: foo\n  bar, count: 42}";
+      auto ec = glz::read_yaml(obj, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(obj.id == "abc") << obj.id;
+      expect(obj.count == 42);
+      expect(obj.secret == "") << obj.secret;
+   };
+
+   // A skip() that fires only on parse excludes nothing from serialization
+   "yaml_skip_on_parse_leaves_serialization_untouched"_test = [] {
+      yaml_skip_on_parse_struct obj{"data", "computed_value", 1};
+      std::string yaml;
+      expect(!glz::write_yaml(obj, yaml));
+      expect(yaml.find("name: data") != std::string::npos) << yaml;
+      expect(yaml.find("computed: computed_value") != std::string::npos) << yaml;
+      expect(yaml.find("version: 1") != std::string::npos) << yaml;
+
+      const std::string input = "name: new\ncomputed: ignored\nversion: 2\n";
+      auto ec = glz::read_yaml(obj, input);
+      expect(!ec) << glz::format_error(ec, input);
+      expect(obj.name == "new");
+      expect(obj.computed == "computed_value") << obj.computed;
+      expect(obj.version == 2);
+   };
 };
 
 suite yaml_custom_write_tests = [] {
@@ -10626,8 +11336,9 @@ suite recursion_depth_tests = [] {
    "flow nesting at the depth limit boundary"_test = [] {
       // Pin the exact contract against the named constant: a generic value nested exactly to the
       // limit parses, one level deeper is rejected. The bracket-count-based deep tests above sit far
-      // from the boundary and would not catch an off-by-one in the guard.
-      constexpr size_t limit = glz::max_recursive_depth_limit;
+      // from the boundary and would not catch an off-by-one in the guard. YAML caps lower than the
+      // shared limit because a YAML level costs several times the stack a JSON one does.
+      constexpr size_t limit = glz::yaml::max_yaml_recursive_depth;
       {
          const std::string yaml = std::string(limit, '[') + std::string(limit, ']');
          glz::generic value{};
@@ -10636,6 +11347,37 @@ suite recursion_depth_tests = [] {
       }
       {
          const std::string yaml = std::string(limit + 1, '[') + std::string(limit + 1, ']');
+         glz::generic value{};
+         auto ec = glz::read_yaml(value, yaml);
+         expect(ec.ec == glz::error_code::exceeded_max_recursive_depth);
+      }
+   };
+
+   "block mapping nesting at the depth limit boundary"_test = [] {
+      // Block mappings are the expensive shape: every level runs the variant reader's speculative
+      // mapping probe, so one level is a chain of large frames rather than a single small one. This
+      // is what exhausted the stack before the limit could report itself back when YAML shared the
+      // JSON cap. The innermost scalar is a level of its own, so `limit - 1` mappings is the
+      // deepest document that fits.
+      constexpr size_t limit = glz::yaml::max_yaml_recursive_depth;
+      const auto nested = [](const size_t mappings) {
+         std::string yaml{};
+         for (size_t i = 0; i < mappings; ++i) {
+            yaml += std::string(2 * i, ' ');
+            yaml += "k:\n";
+         }
+         yaml += std::string(2 * mappings, ' ');
+         yaml += "v\n";
+         return yaml;
+      };
+      {
+         const std::string yaml = nested(limit - 1);
+         glz::generic value{};
+         auto ec = glz::read_yaml(value, yaml);
+         expect(!ec) << glz::format_error(ec, yaml);
+      }
+      {
+         const std::string yaml = nested(limit);
          glz::generic value{};
          auto ec = glz::read_yaml(value, yaml);
          expect(ec.ec == glz::error_code::exceeded_max_recursive_depth);
@@ -11444,6 +12186,837 @@ suite yaml_under_indented_block_value_tests = [] {
          expect(m.at("k") == std::vector{1, 2});
          expect(m.at("z") == std::vector{3});
       }
+   };
+};
+
+namespace i2829
+{
+   struct pair_wrapper
+   {
+      std::pair<double, double> value{};
+      bool operator==(const pair_wrapper&) const = default;
+   };
+
+   struct inner
+   {
+      int a{};
+      std::string b{};
+      bool operator==(const inner&) const = default;
+   };
+
+   struct map_wrapper
+   {
+      std::map<std::string, int> value{};
+      bool operator==(const map_wrapper&) const = default;
+   };
+
+   struct str_pair_wrapper
+   {
+      std::pair<std::string, int> value{};
+      bool operator==(const str_pair_wrapper&) const = default;
+   };
+
+   // Struct members used to reach the pair reader through the struct dispatcher, which pushes a
+   // different indent than the map dispatcher does.
+   struct pair_of_string
+   {
+      std::pair<std::string, std::string> p{};
+      bool operator==(const pair_of_string&) const = default;
+   };
+
+   struct pair_of_object
+   {
+      std::pair<std::string, inner> p{};
+      bool operator==(const pair_of_object&) const = default;
+   };
+
+   struct pair_of_map
+   {
+      std::pair<std::string, std::map<std::string, int>> p{};
+      bool operator==(const pair_of_map&) const = default;
+   };
+
+   struct pair_of_seq
+   {
+      std::pair<std::string, std::vector<int>> p{};
+      bool operator==(const pair_of_seq&) const = default;
+   };
+
+   // Transparent write wrapper over a sequence; `mimic` makes it serialize exactly as its
+   // single member, so the pair writer must lay it out by the resolved type.
+   struct mimic_seq
+   {
+      std::vector<int> v{};
+      bool operator==(const mimic_seq&) const = default;
+   };
+
+   struct nested_pairs
+   {
+      std::pair<std::string, std::vector<int>> seq{};
+      std::pair<std::string, std::map<std::string, int>> mapping{};
+      std::pair<std::string, inner> object{};
+      std::pair<std::string, std::pair<std::string, int>> nested{};
+      bool operator==(const nested_pairs&) const = default;
+   };
+}
+
+template <>
+struct glz::meta<i2829::mimic_seq>
+{
+   using mimic = std::vector<int>;
+   static constexpr auto value = &i2829::mimic_seq::v;
+};
+
+// A pair is a single-entry mapping, so in block style it nests under its key rather than
+// running onto the key's line (which produced the invalid "value: 0.5: -3.25").
+suite issue_2829_pair_block_layout = [] {
+   using namespace i2829;
+
+   "pair member nests under its key"_test = [] {
+      const pair_wrapper w{{0.5, -3.25}};
+      const auto written = glz::write_yaml(w);
+      expect(written.has_value());
+      expect(written.value() == "value:\n  0.5: -3.25\n") << written.value();
+
+      pair_wrapper parsed{};
+      const auto ec = glz::read_yaml(parsed, written.value());
+      expect(!ec) << glz::format_error(ec, written.value());
+      expect(parsed == w);
+   };
+
+   "pair member matches a single-entry map member"_test = [] {
+      const map_wrapper m{{{"answer", 42}}};
+      const str_pair_wrapper p{{"answer", 42}};
+
+      const auto ms = glz::write_yaml(m);
+      const auto ps = glz::write_yaml(p);
+      expect(ms.has_value());
+      expect(ps.has_value());
+      expect(ms.value() == ps.value()) << ps.value();
+   };
+
+   "pair values that are containers or objects nest one level deeper"_test = [] {
+      nested_pairs original{};
+      original.seq = {"nums", {1, 2, 3}};
+      original.mapping = {"m", {{"x", 1}, {"y", 2}}};
+      original.object = {"o", {7, "seven"}};
+      original.nested = {"outer", {"inner", 3}};
+
+      const auto written = glz::write_yaml(original);
+      expect(written.has_value());
+      expect(written.value() ==
+             "seq:\n"
+             "  nums:\n"
+             "    - 1\n"
+             "    - 2\n"
+             "    - 3\n"
+             "mapping:\n"
+             "  m:\n"
+             "    x: 1\n"
+             "    y: 2\n"
+             "object:\n"
+             "  o:\n"
+             "    a: 7\n"
+             "    b: seven\n"
+             "nested:\n"
+             "  outer:\n"
+             "    inner: 3\n")
+         << written.value();
+
+      nested_pairs parsed{};
+      const auto ec = glz::read_yaml(parsed, written.value());
+      expect(!ec) << glz::format_error(ec, written.value());
+      expect(parsed == original);
+   };
+
+   "block sequence of pairs uses the compact dash form"_test = [] {
+      const std::vector<std::pair<std::string, int>> original{{"a", 1}, {"b", 2}};
+      const auto written = glz::write_yaml(original);
+      expect(written.has_value());
+      expect(written.value() == "- a: 1\n- b: 2\n") << written.value();
+
+      std::vector<std::pair<std::string, int>> parsed{};
+      const auto ec = glz::read_yaml(parsed, written.value());
+      expect(!ec) << glz::format_error(ec, written.value());
+      expect(parsed == original);
+   };
+
+   "block sequence of pairs holding sequences"_test = [] {
+      const std::vector<std::pair<std::string, std::vector<int>>> original{{"a", {1, 2}}, {"b", {3}}};
+      const auto written = glz::write_yaml(original);
+      expect(written.has_value());
+      expect(written.value() ==
+             "- a:\n"
+             "    - 1\n"
+             "    - 2\n"
+             "- b:\n"
+             "    - 3\n")
+         << written.value();
+
+      std::vector<std::pair<std::string, std::vector<int>>> parsed{};
+      const auto ec = glz::read_yaml(parsed, written.value());
+      expect(!ec) << glz::format_error(ec, written.value());
+      expect(parsed == original);
+   };
+
+   "map value that is a pair nests under its key"_test = [] {
+      const std::map<std::string, std::pair<std::string, int>> original{{"x", {"a", 1}}};
+      const auto written = glz::write_yaml(original);
+      expect(written.has_value());
+      expect(written.value() == "x:\n  a: 1\n") << written.value();
+
+      std::map<std::string, std::pair<std::string, int>> parsed{};
+      const auto ec = glz::read_yaml(parsed, written.value());
+      expect(!ec) << glz::format_error(ec, written.value());
+      expect(parsed == original);
+   };
+
+   "empty container pair value stays inline"_test = [] {
+      const std::pair<std::string, std::vector<int>> original{"e", {}};
+      const auto written = glz::write_yaml(original);
+      expect(written.has_value());
+      expect(written.value() == "e: []\n") << written.value();
+
+      std::pair<std::string, std::vector<int>> parsed{"", {9}};
+      const auto ec = glz::read_yaml(parsed, written.value());
+      expect(!ec) << glz::format_error(ec, written.value());
+      expect(parsed == original);
+   };
+
+   // The struct, map, and sequence dispatchers each push an indent before handing off to the
+   // pair reader; all three must agree that what they pushed is the pair's key column, or the
+   // pair rejects layouts the equivalent map accepts.
+   "reader accepts every child column the equivalent map accepts"_test = [] {
+      {
+         pair_of_string v{};
+         const std::string yaml = "p:\n  k: foo\n   bar\n";
+         const auto ec = glz::read_yaml(v, yaml);
+         expect(!ec) << glz::format_error(ec, yaml);
+         expect(v.p.first == "k");
+         expect(v.p.second == "foo bar");
+      }
+      {
+         pair_of_string v{};
+         const std::string yaml = "p:\n  k: |\n   a\n";
+         const auto ec = glz::read_yaml(v, yaml);
+         expect(!ec) << glz::format_error(ec, yaml);
+         expect(v.p.second == "a\n");
+      }
+      {
+         pair_of_object v{};
+         const std::string yaml = "p:\n  k:\n   a: 1\n   b: x\n";
+         const auto ec = glz::read_yaml(v, yaml);
+         expect(!ec) << glz::format_error(ec, yaml);
+         expect(v.p.second == inner{1, "x"});
+      }
+      {
+         pair_of_map v{};
+         const std::string yaml = "p:\n  k:\n   x: 1\n";
+         const auto ec = glz::read_yaml(v, yaml);
+         expect(!ec) << glz::format_error(ec, yaml);
+         expect(v.p.second.at("x") == 1);
+      }
+      {
+         // An indentless sequence under a pair key. This used to "succeed" while silently
+         // dropping every element.
+         pair_of_seq v{};
+         const std::string yaml = "p:\n  k:\n  - 1\n  - 2\n";
+         const auto ec = glz::read_yaml(v, yaml);
+         expect(!ec) << glz::format_error(ec, yaml);
+         expect(v.p.second == std::vector{1, 2});
+      }
+      {
+         pair_of_seq v{};
+         const std::string yaml = "p:\n  k:\n   - 1\n   - 2\n";
+         const auto ec = glz::read_yaml(v, yaml);
+         expect(!ec) << glz::format_error(ec, yaml);
+         expect(v.p.second == std::vector{1, 2});
+      }
+   };
+
+   "pair value behind a transparent write wrapper nests by its resolved type"_test = [] {
+      {
+         // Resolves to an object.
+         const std::pair<std::string, i2595::mimic_leaf> original{"k", {{"asdf", 7}}};
+         const auto written = glz::write_yaml(original);
+         expect(written.has_value());
+         expect(written.value() == "k:\n  name: asdf\n  id: 7\n") << written.value();
+
+         std::pair<std::string, i2595::mimic_leaf> parsed{};
+         const auto ec = glz::read_yaml(parsed, written.value());
+         expect(!ec) << glz::format_error(ec, written.value());
+         expect(parsed == original);
+      }
+      {
+         // Resolves to a sequence.
+         const std::pair<std::string, mimic_seq> original{"k", {{1, 2}}};
+         const auto written = glz::write_yaml(original);
+         expect(written.has_value());
+         expect(written.value() == "k:\n  - 1\n  - 2\n") << written.value();
+
+         std::pair<std::string, mimic_seq> parsed{};
+         const auto ec = glz::read_yaml(parsed, written.value());
+         expect(!ec) << glz::format_error(ec, written.value());
+         expect(parsed == original);
+      }
+   };
+
+   // A pair's key is a runtime value, so unlike a struct's compile-time key the writer cannot
+   // fold its length into the up-front reservation. A fixed buffer must report an error rather
+   // than run past its end.
+   "bounded buffer write reports an error instead of overflowing"_test = [] {
+      constexpr glz::yaml::yaml_opts opts{};
+      {
+         const std::pair<bool, std::vector<int>> p{false, {}};
+         std::array<char, 8> buffer{};
+         const auto ec = glz::write<opts>(p, buffer);
+         expect(ec.ec == glz::error_code::buffer_overflow);
+      }
+      {
+         const std::pair<char, std::map<std::string, int>> p{'x', {}};
+         std::array<char, 8> buffer{};
+         const auto ec = glz::write<opts>(p, buffer);
+         expect(ec.ec == glz::error_code::buffer_overflow);
+      }
+      {
+         // Enough room for the whole document, so it must succeed.
+         const std::pair<bool, std::vector<int>> p{false, {}};
+         std::array<char, 32> buffer{};
+         const auto ec = glz::write<opts>(p, buffer);
+         expect(!ec);
+         expect(std::string_view{buffer.data()} == "false: []\n");
+      }
+   };
+
+   "glz::pair matches std::pair"_test = [] {
+      const glz::pair<std::string, std::vector<int>> original{"k", {1, 2}};
+      const auto written = glz::write_yaml(original);
+      expect(written.has_value());
+      expect(written.value() == glz::write_yaml(std::pair<std::string, std::vector<int>>{"k", {1, 2}}).value())
+         << written.value();
+      expect(written.value() == "k:\n  - 1\n  - 2\n") << written.value();
+   };
+
+   "non-string key with a nested value"_test = [] {
+      const std::pair<int, std::vector<int>> original{7, {1, 2}};
+      const auto written = glz::write_yaml(original);
+      expect(written.has_value());
+      expect(written.value() == "7:\n  - 1\n  - 2\n") << written.value();
+
+      std::pair<int, std::vector<int>> parsed{};
+      const auto ec = glz::read_yaml(parsed, written.value());
+      expect(!ec) << glz::format_error(ec, written.value());
+      expect(parsed == original);
+   };
+
+   "flow style is unchanged"_test = [] {
+      nested_pairs original{};
+      original.seq = {"nums", {1, 2, 3}};
+      original.mapping = {"m", {{"x", 1}}};
+      original.object = {"o", {7, "seven"}};
+      original.nested = {"outer", {"inner", 3}};
+
+      std::string buffer{};
+      constexpr glz::yaml::yaml_opts opts{.flow_style = true};
+      expect(!glz::write<opts>(original, buffer));
+      expect(buffer ==
+             "{seq: {nums: [1, 2, 3]}, mapping: {m: {x: 1}}, object: {o: {a: 7, b: seven}}, "
+             "nested: {outer: {inner: 3}}}")
+         << buffer;
+
+      nested_pairs parsed{};
+      const auto ec = glz::read_yaml(parsed, buffer);
+      expect(!ec) << glz::format_error(ec, buffer);
+      expect(parsed == original);
+   };
+};
+
+namespace i2827
+{
+   struct member_t
+   {
+      std::optional<int> chance{};
+      bool operator==(const member_t&) const = default;
+   };
+
+   struct slot_t
+   {
+      std::map<std::string, member_t> members{};
+      bool operator==(const slot_t&) const = default;
+   };
+
+   struct slots_t
+   {
+      std::optional<std::vector<slot_t>> slots{};
+      bool operator==(const slots_t&) const = default;
+   };
+
+   struct containers_t
+   {
+      std::map<std::string, int> mapping{};
+      std::vector<int> sequence{};
+      std::optional<std::map<std::string, int>> optional_mapping{};
+      bool operator==(const containers_t&) const = default;
+   };
+
+   struct all_optional_t
+   {
+      std::optional<int> a{};
+      bool operator==(const all_optional_t&) const = default;
+   };
+
+   struct holds_all_optional_t
+   {
+      all_optional_t inner{};
+      int after{};
+      bool operator==(const holds_all_optional_t&) const = default;
+   };
+
+   // The collapsed mapping is the LAST thing written, so nothing overwrites what the rewind
+   // abandoned -- the shape that exposes stale bytes in a buffer that is never truncated.
+   struct trailing_all_optional_t
+   {
+      int before{};
+      all_optional_t inner{};
+      bool operator==(const trailing_all_optional_t&) const = default;
+   };
+
+   // A tagged variant alternative whose members are all skipped: the discriminator entry is the
+   // whole mapping, so the writer must NOT also emit `{}` under it.
+   struct empty_alt_t
+   {
+      std::optional<int> unset{};
+      bool operator==(const empty_alt_t&) const = default;
+   };
+   struct filled_alt_t
+   {
+      int a{};
+      bool operator==(const filled_alt_t&) const = default;
+   };
+   using tagged_t = std::variant<empty_alt_t, filled_alt_t>;
+
+   // Both glaze_value_t and custom_write (the float_format_t pattern): the custom writer owns the
+   // representation, including when the wrapped container is empty.
+   struct custom_joined_t
+   {
+      std::vector<int> data{};
+   };
+
+   struct holds_custom_t
+   {
+      custom_joined_t joined{};
+      int after{};
+   };
+}
+
+template <>
+struct glz::meta<i2827::empty_alt_t>
+{
+   using T = i2827::empty_alt_t;
+   static constexpr auto value = object("unset", &T::unset);
+};
+template <>
+struct glz::meta<i2827::filled_alt_t>
+{
+   using T = i2827::filled_alt_t;
+   static constexpr auto value = object("a", &T::a);
+};
+template <>
+struct glz::meta<i2827::tagged_t>
+{
+   static constexpr std::string_view tag = "kind";
+   static constexpr auto ids = std::array{"EMPTY", "FILLED"};
+};
+template <>
+struct glz::meta<i2827::custom_joined_t>
+{
+   static constexpr auto value = &i2827::custom_joined_t::data;
+   static constexpr bool custom_write = true;
+};
+
+namespace glz
+{
+   template <uint32_t Format>
+   struct to<Format, i2827::custom_joined_t>
+   {
+      template <auto Opts, class B>
+      static void op(auto&& value, is_context auto&& ctx, B&& b, auto& ix)
+      {
+         std::string joined{};
+         for (size_t i = 0; i < value.data.size(); ++i) {
+            if (i) joined += ',';
+            joined += std::to_string(value.data[i]);
+         }
+         serialize<Format>::template op<Opts>(joined, ctx, b, ix);
+      }
+   };
+}
+
+// An empty mapping has no block form: a bare `key:` reads back as null, not as an empty
+// mapping, so the writer emits the flow token `{}` (as it already did for `[]`).
+suite issue_2827_empty_mapping_round_trip = [] {
+   using namespace i2827;
+
+   "generic empty mapping round trips"_test = [] {
+      glz::generic_u64 document{};
+      expect(!glz::read_yaml(document, std::string{"a: {}\n"}));
+      expect(document["a"].is_object());
+
+      const auto written = glz::write_yaml(document);
+      expect(written.has_value());
+      expect(written.value() == "a: {}\n") << written.value();
+
+      glz::generic_u64 reread{};
+      expect(!glz::read_yaml(reread, written.value()));
+      expect(reread["a"].is_object());
+      expect(!reread["a"].is_null());
+   };
+
+   "generic empty sequence round trips"_test = [] {
+      glz::generic_u64 document{};
+      expect(!glz::read_yaml(document, std::string{"a: []\n"}));
+
+      const auto written = glz::write_yaml(document);
+      expect(written.has_value());
+      expect(written.value() == "a: []\n") << written.value();
+
+      glz::generic_u64 reread{};
+      expect(!glz::read_yaml(reread, written.value()));
+      expect(reread["a"].is_array());
+   };
+
+   "empty containers as map values"_test = [] {
+      const std::map<std::string, std::map<std::string, int>> nested{{"a", {}}, {"z", {{"k", 1}}}};
+      const auto written = glz::write_yaml(nested);
+      expect(written.has_value());
+      expect(written.value() == "a: {}\nz:\n  k: 1\n") << written.value();
+
+      std::map<std::string, std::map<std::string, int>> parsed{};
+      const auto ec = glz::read_yaml(parsed, written.value());
+      expect(!ec) << glz::format_error(ec, written.value());
+      expect(parsed == nested);
+   };
+
+   "empty containers as object members"_test = [] {
+      const containers_t original{};
+      const auto written = glz::write_yaml(original);
+      expect(written.has_value());
+      expect(written.value() == "mapping: {}\nsequence: []\n") << written.value();
+
+      // Reading a mapping MERGES (like JSON and BEVE), so a pre-existing key the document does
+      // not mention survives; a sequence is replaced outright.
+      containers_t parsed{.mapping = {{"stale", 1}}, .sequence = {9}};
+      const auto ec = glz::read_yaml(parsed, written.value());
+      expect(!ec) << glz::format_error(ec, written.value());
+      expect(parsed.mapping.size() == 1);
+      expect(parsed.mapping.contains("stale"));
+      expect(parsed.sequence.empty());
+   };
+
+   "empty container behind an optional"_test = [] {
+      const containers_t original{.optional_mapping = std::map<std::string, int>{}};
+      const auto written = glz::write_yaml(original);
+      expect(written.has_value());
+      expect(written.value() == "mapping: {}\nsequence: []\noptional_mapping: {}\n") << written.value();
+
+      containers_t parsed{};
+      const auto ec = glz::read_yaml(parsed, written.value());
+      expect(!ec) << glz::format_error(ec, written.value());
+      expect(parsed.optional_mapping.has_value());
+      expect(parsed.optional_mapping->empty());
+   };
+
+   "empty mapping as a sequence element"_test = [] {
+      const std::vector<std::map<std::string, int>> sequence{{}, {{"k", 1}}};
+      const auto written = glz::write_yaml(sequence);
+      expect(written.has_value());
+      expect(written.value() == "- {}\n-\n  k: 1\n") << written.value();
+
+      std::vector<std::map<std::string, int>> parsed{};
+      const auto ec = glz::read_yaml(parsed, written.value());
+      expect(!ec) << glz::format_error(ec, written.value());
+      expect(parsed == sequence);
+   };
+
+   "an object whose members are all skipped is an empty mapping"_test = [] {
+      const holds_all_optional_t original{.inner = {}, .after = 5};
+      const auto written = glz::write_yaml(original);
+      expect(written.has_value());
+      expect(written.value() == "inner: {}\nafter: 5\n") << written.value();
+
+      holds_all_optional_t parsed{};
+      const auto ec = glz::read_yaml(parsed, written.value());
+      expect(!ec) << glz::format_error(ec, written.value());
+      expect(parsed == original);
+   };
+
+   "empty documents"_test = [] {
+      expect(glz::write_yaml(std::map<std::string, int>{}).value() == "{}");
+      expect(glz::write_yaml(all_optional_t{}).value() == "{}");
+      expect(glz::write_yaml(std::vector<int>{}).value() == "[]");
+   };
+
+   "nested struct target round trips"_test = [] {
+      const std::string source{"slots:\n  - members:\n      '17186822': {}\n      '17186837': {}\n"};
+
+      glz::generic_u64 document{};
+      expect(!glz::read_yaml(document, source));
+
+      const auto written = glz::write_yaml(document);
+      expect(written.has_value());
+
+      slots_t parsed{};
+      const auto ec = glz::read_yaml(parsed, written.value());
+      expect(!ec) << glz::format_error(ec, written.value());
+      expect(parsed.slots.has_value());
+      if (parsed.slots.has_value() && parsed.slots->size() == 1) {
+         expect(parsed.slots->front().members.size() == 2);
+      }
+      else {
+         expect(false) << written.value();
+      }
+   };
+
+   // The first key of a nested mapping has no indentation left to measure (the enclosing reader
+   // consumed it), so its column has to be recovered; otherwise an entry with an empty value
+   // swallows the sibling line that follows it.
+   "an empty value does not consume the next sibling"_test = [] {
+      const std::string source{"members:\n  '1':\n  '2':\n"};
+
+      slot_t parsed{};
+      const auto ec = glz::read_yaml(parsed, source);
+      expect(!ec) << glz::format_error(ec, source);
+      expect(parsed.members.size() == 2);
+      expect(parsed.members.contains("1"));
+      expect(parsed.members.contains("2"));
+   };
+
+   "an empty value does not consume the next sibling in a nested map"_test = [] {
+      const std::string source{"outer:\n  a:\n  b:\n"};
+
+      std::map<std::string, std::map<std::string, int>> parsed{};
+      const auto ec = glz::read_yaml(parsed, source);
+      expect(!ec) << glz::format_error(ec, source);
+      expect(parsed.size() == 1);
+      expect(parsed["outer"].size() == 2) << glz::write_json(parsed).value_or("");
+   };
+
+   // The empty-mapping collapse rewinds the write buffer, so it must leave nothing behind in a
+   // buffer that is never truncated to the written length (finalize is a no-op for std::array).
+   "the collapse leaves no stale bytes in a fixed buffer"_test = [] {
+      std::array<char, 512> buffer{};
+      const auto ec = glz::write<glz::yaml::yaml_opts{}>(trailing_all_optional_t{.before = 5}, buffer);
+      expect(!ec);
+      expect(std::string_view{buffer.data(), ec.count} == "before: 5\ninner: {}\n");
+      // The repo reads fixed buffers through data(); stale bytes past the length show up here.
+      expect(std::string_view{buffer.data()} == "before: 5\ninner: {}\n") << std::string_view{buffer.data()};
+   };
+
+   "an all-skipped object nests in every position"_test = [] {
+      const std::map<std::string, all_optional_t> as_map_value{{"k", {}}};
+      expect(glz::write_yaml(as_map_value).value() == "k: {}\n") << glz::write_yaml(as_map_value).value();
+
+      const std::vector<all_optional_t> as_sequence_element{{}, {}};
+      expect(glz::write_yaml(as_sequence_element).value() == "- {}\n- {}\n")
+         << glz::write_yaml(as_sequence_element).value();
+
+      const std::optional<all_optional_t> behind_optional{all_optional_t{}};
+      const std::map<std::string, std::optional<all_optional_t>> optional_value{{"k", behind_optional}};
+      expect(glz::write_yaml(optional_value).value() == "k: {}\n") << glz::write_yaml(optional_value).value();
+
+      // Each form must read back as the same (default) object.
+      std::map<std::string, all_optional_t> parsed{};
+      const auto ec = glz::read_yaml(parsed, std::string{"k: {}\n"});
+      expect(!ec);
+      expect(parsed.size() == 1);
+   };
+
+   // A discriminator entry IS the mapping's content, so an alternative with nothing left to write
+   // must not get a `{}` appended under it -- that document does not read back.
+   "a tagged alternative with no members written keeps just its discriminator"_test = [] {
+      const tagged_t root{empty_alt_t{}};
+      const auto written = glz::write_yaml(root);
+      expect(written.has_value());
+      expect(written.value() == "kind: EMPTY\n") << written.value();
+
+      tagged_t reread{filled_alt_t{}};
+      const auto ec = glz::read_yaml(reread, written.value());
+      expect(!ec) << glz::format_error(ec, written.value());
+      expect(std::holds_alternative<empty_alt_t>(reread));
+
+      const std::map<std::string, tagged_t> as_value{{"entry", empty_alt_t{}}};
+      const auto nested = glz::write_yaml(as_value);
+      expect(nested.has_value());
+      expect(nested.value() == "entry:\n  kind: EMPTY\n") << nested.value();
+
+      std::map<std::string, tagged_t> nested_reread{};
+      const auto nested_ec = glz::read_yaml(nested_reread, nested.value());
+      expect(!nested_ec) << glz::format_error(nested_ec, nested.value());
+      expect(std::holds_alternative<empty_alt_t>(nested_reread.at("entry")));
+   };
+
+   // A type that is both glaze_value_t and custom_write writes itself, empty payload included:
+   // classifying it by the container it wraps would bypass its writer.
+   "a custom writer keeps its representation when empty"_test = [] {
+      const auto written = glz::write_yaml(holds_custom_t{});
+      expect(written.has_value());
+      expect(written.value() == "joined: ''\nafter: 0\n") << written.value();
+
+      const auto filled = glz::write_yaml(holds_custom_t{{{1, 2, 3}}, 7});
+      expect(filled.has_value());
+      expect(filled.value() == "joined: '1,2,3'\nafter: 7\n") << filled.value();
+   };
+
+   "an indented document keeps its top-level keys as siblings"_test = [] {
+      const std::string source{"  a:\n  b: 1\n"};
+
+      glz::generic_u64 document{};
+      const auto ec = glz::read_yaml(document, source);
+      expect(!ec) << glz::format_error(ec, source);
+      expect(document["a"].is_null());
+      expect(document["b"].as<int>() == 1);
+   };
+};
+
+namespace indent_width_tests
+{
+   struct leaf_t
+   {
+      int x{1};
+      std::vector<int> list{7, 8};
+      bool operator==(const leaf_t&) const = default;
+   };
+
+   struct doc_t
+   {
+      leaf_t nested{};
+      std::map<std::string, int> mapping{{"a", 1}};
+      std::map<std::string, int> empty_mapping{};
+      std::vector<int> empty_sequence{};
+      std::string block{"l1\nl2"};
+      bool operator==(const doc_t&) const = default;
+   };
+
+   struct item_t
+   {
+      int a{};
+      int b{};
+      bool operator==(const item_t&) const = default;
+   };
+
+   struct seq_doc_t
+   {
+      std::vector<item_t> items{{1, 2}, {3, 4}};
+      bool operator==(const seq_doc_t&) const = default;
+   };
+
+   // Round trips `value` at the given width, both under the writing options and under the default
+   // ones -- YAML indentation is self describing, so a reader needs no matching width.
+   template <uint8_t Width, class T>
+   void expect_round_trip(const T& value)
+   {
+      constexpr glz::yaml::yaml_opts opts{.indent_width = Width};
+
+      std::string buffer{};
+      expect(!glz::write<opts>(value, buffer)) << "width " << int(Width);
+
+      T same_width{};
+      const auto ec = glz::read<opts>(same_width, buffer);
+      expect(!ec) << "width " << int(Width) << ": " << glz::format_error(ec, buffer);
+      expect(same_width == value) << buffer;
+
+      T default_width{};
+      const auto default_ec = glz::read_yaml(default_width, buffer);
+      expect(!default_ec) << "width " << int(Width) << ": " << glz::format_error(default_ec, buffer);
+      expect(default_width == value) << buffer;
+   }
+}
+
+// yaml_opts::indent_width reached every writer as a default-constructed yaml_opts, so it was always
+// 2 no matter what the caller asked for.
+suite yaml_indent_width_tests = [] {
+   using namespace indent_width_tests;
+
+   "the default width is unchanged"_test = [] {
+      const auto written = glz::write_yaml(doc_t{});
+      expect(written.has_value());
+      expect(written.value() ==
+             "nested:\n  x: 1\n  list:\n    - 7\n    - 8\nmapping:\n  a: 1\nempty_mapping: {}\n"
+             "empty_sequence: []\nblock: |-\n  l1\n  l2\n\n")
+         << written.value();
+   };
+
+   "block indentation follows the requested width"_test = [] {
+      constexpr glz::yaml::yaml_opts opts{.indent_width = 4};
+      std::string buffer{};
+      expect(!glz::write<opts>(doc_t{}, buffer));
+      expect(buffer ==
+             "nested:\n    x: 1\n    list:\n        -   7\n        -   8\nmapping:\n    a: 1\n"
+             "empty_mapping: {}\nempty_sequence: []\nblock: |-\n    l1\n    l2\n\n")
+         << buffer;
+   };
+
+   // The dash takes the first column of the element's indent, so a mapping continued on following
+   // lines has to line up with its own first key -- `- a: 1` only happens to do that at width 2.
+   "a sequence dash is padded to the width"_test = [] {
+      constexpr glz::yaml::yaml_opts four{.indent_width = 4};
+      std::string buffer{};
+      expect(!glz::write<four>(seq_doc_t{}, buffer));
+      expect(buffer == "items:\n    -   a: 1\n        b: 2\n    -   a: 3\n        b: 4\n") << buffer;
+
+      constexpr glz::yaml::yaml_opts three{.indent_width = 3};
+      std::string odd{};
+      expect(!glz::write<three>(seq_doc_t{}, odd));
+      expect(odd == "items:\n   -  a: 1\n      b: 2\n   -  a: 3\n      b: 4\n") << odd;
+
+      // Unchanged at the default width.
+      expect(glz::write_yaml(seq_doc_t{}).value() == "items:\n  - a: 1\n    b: 2\n  - a: 3\n    b: 4\n");
+   };
+
+   "documents round trip at every width"_test = [] {
+      expect_round_trip<2>(doc_t{});
+      expect_round_trip<3>(doc_t{});
+      expect_round_trip<4>(doc_t{});
+      expect_round_trip<8>(doc_t{});
+
+      expect_round_trip<2>(seq_doc_t{});
+      expect_round_trip<3>(seq_doc_t{});
+      expect_round_trip<4>(seq_doc_t{});
+      expect_round_trip<8>(seq_doc_t{});
+   };
+
+   "flow style ignores the width"_test = [] {
+      constexpr glz::yaml::yaml_opts opts{.indent_width = 8, .flow_style = true};
+      std::string buffer{};
+      expect(!glz::write<opts>(seq_doc_t{}, buffer));
+      expect(buffer == "{items: [{a: 1, b: 2}, {a: 3, b: 4}]}") << buffer;
+   };
+};
+
+// Regression coverage for GitHub issue #2854: read_yaml has its own emptiness check, separate from
+// the shared one in core/read.hpp.
+suite contiguous_buffer_without_empty = [] {
+   "read_yaml round trip"_test = [] {
+      test_buffers::qt_style_buffer buffer{};
+      expect(not glz::write_yaml(std::map<std::string, int>{{"a", 1}}, buffer));
+
+      std::map<std::string, int> value{};
+      expect(not glz::read_yaml(value, buffer));
+      expect(value == std::map<std::string, int>{{"a", 1}});
+   };
+
+   "read_yaml on an empty buffer"_test = [] {
+      test_buffers::qt_style_buffer buffer{};
+      std::optional<int> value{42};
+      expect(not glz::read_yaml(value, buffer));
+      expect(not value.has_value());
+   };
+
+   "read through a buffer that is only contiguous"_test = [] {
+      const test_buffers::read_only_buffer buffer{"a: 2"};
+      std::map<std::string, int> value{};
+      expect(not glz::read_yaml(value, buffer));
+      expect(value == std::map<std::string, int>{{"a", 2}});
    };
 };
 

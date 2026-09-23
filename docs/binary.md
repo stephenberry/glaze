@@ -480,6 +480,47 @@ Writing is Version 2 only. Version 2 output is not decodable as a variant by a G
 
 `glaze/binary/beve_to_json.hpp` provides `glz::beve_to_json`, which directly converts a buffer of BEVE data to a buffer of JSON data.
 
+An empty buffer holds no value, which is not a document, and fails with `error_code::unexpected_end` rather than converting to empty output. On success the returned `error_ctx::count` is the number of bytes written, which is how a fixed-size output buffer learns how much of it holds JSON.
+
+A buffer holding several values converts to one JSON document per line. See [Delimiter Format](#delimiter-format).
+
+### String Escaping
+
+A BEVE string can hold any byte, including control characters (0x00–1F). JSON cannot. `\n`, `\t`, `\b`, `\f` and `\r` are escaped normally, but the rest have no short escape, and by default the conversion fails rather than write something that will not parse:
+
+```c++
+// a BEVE string holding a 0x01 byte
+std::string json{};
+auto ec = glz::beve_to_json(beve, json);
+// ec.ec == glz::error_code::invalid_control_character
+```
+
+To keep those bytes, turn on `escape_control_characters`. They are written as `\uXXXX` and the document round-trips:
+
+```c++
+struct escaping : glz::opts {
+   bool escape_control_characters = true;
+};
+
+std::string json{};
+auto ec = glz::beve_to_json<escaping{}>(beve, json);   // {"k":"a\u0001b"}
+```
+
+Which to pick:
+
+- **Your data legitimately contains control bytes.** Use `escape_control_characters`. A `std::string` holding a `\0` round-trips through BEVE, and escaping is the only way JSON can carry it.
+- **The bytes are arbitrary,** as in an Erlang binary. Use `binary_as_base64` instead, so no raw bytes end up in a JSON string at all.
+- **You want to know when they appear.** Keep the default and check for `invalid_control_character`.
+
+One thing to weigh when escaping: `\u0000` is valid JSON that every parser accepts, so a NUL in your data reaches whatever reads the JSON back. Embedded nulls can truncate C strings and split log lines.
+
+The same applies to `glz::cbor_to_json`, `glz::bson_to_json`, and `glz::eetf_to_json`. `glz::jsonb_to_json` always escapes, because a JSONB blob stores a JSON document that may have contained `\uXXXX` to begin with.
+
+**Other notes**
+
+- `raw_string` and `unquoted` are ignored by these converters. Both would produce output that is not JSON.
+- UTF-8 is not checked, except by `glz::jsonb_to_json`. Reading the JSON checks it, and `validate_utf8` is on by default there.
+
 ### Function Pointers
 
 Objects that expose function pointers (both member and non-member) through `glz::meta` are skipped by the BEVE writer by default. This mirrors JSON/TOML behaviour and avoids emitting unusable callable placeholders in binary payloads.
@@ -700,6 +741,8 @@ auto ec = glz::read_beve_delimited(messages, buffer);
 ### Delimiter Format
 
 The BEVE delimiter is a single byte: `0x06` (extensions type 6 with subtype 0). When converting delimited BEVE to JSON via `glz::beve_to_json`, each delimiter is converted to a newline character (`\n`), producing NDJSON-compatible output.
+
+Values concatenated without delimiters, which `glz::read_beve_delimited` also accepts, get the same newline between them. Two JSON documents never run together into text that is no longer JSON.
 
 ## Lazy BEVE Parsing
 

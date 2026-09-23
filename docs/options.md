@@ -41,14 +41,14 @@ These options are **not** in `glz::opts` by default. Add them to a custom option
 | `bool bools_as_numbers` | `false` | Read/write booleans as `1` and `0` |
 | `bool write_function_pointers` | `false` | Serialize function pointers (both member and non-member) in `glz::meta` as their type name (off by default) |
 | `bool concatenate` | `true` | Concatenate ranges of `std::pair` into single objects |
-| `bool allow_conversions` | `true` | Allow type conversions in BEVE (e.g., `double` → `float`) |
+| `bool allow_conversions` | `true` | Allow type conversions in BEVE, MessagePack, and CBOR (e.g., `double` → `float`) |
 | `bool write_type_info` | `true` | Write type info for meta objects in variants |
 | `bool append_arrays` | `false` | Append to arrays instead of replacing contents |
 | `bool shrink_to_fit` | `false` | Shrink dynamic containers after reading |
 | `bool error_on_missing_array_elements` | `false` | Require arrays to have all elements expected by the target type (tuples, `glaze_array_t`, `tuple_t`) |
 | `bool error_on_const_read` | `false` | Error when attempting to read into a const value |
 | `bool hide_non_invocable` | `true` | Hide non-invocable members from `cli_menu` |
-| `bool escape_control_characters` | `false` | Escape control characters as unicode sequences |
+| `bool escape_control_characters` | `false` | Escape control characters rather than writing them raw |
 | `char indentation_char` | `' '` | Prettified JSON indentation character |
 | `uint8_t indentation_width` | `3` | Prettified JSON indentation size |
 | `bool new_lines_in_arrays` | `true` | Whether prettified arrays have new lines per element |
@@ -154,6 +154,8 @@ Selects the serialization format. Built-in formats include:
 #### `null_terminated`
 When `true` (default), Glaze assumes input buffers are null-terminated, enabling certain optimizations. Set to `false` for non-null-terminated buffers with a small performance cost.
 
+`glz::read` derives this for you from the buffer type: a resizable buffer that does not keep a terminator of its own (a `std::vector<char>`, or a container shaped like `QByteArray`) is read with bounds regardless of what you asked for. A non-resizable buffer such as a `std::string_view` is taken at your word, so a view over memory with no terminator needs `null_terminated = false`. See also `is_padded`, a separate promise about readable slack past the end.
+
 #### `comments`
 Enable JSONC-style comment parsing (`//` and `/* */`).
 
@@ -175,7 +177,7 @@ Performs full JSON validation on values that are skipped (unknown keys). Without
 Validates that content after the parsed value contains only valid whitespace.
 
 #### `validate_utf8`
-On by default, because RFC 8259 section 8.1 requires JSON text to be UTF-8. Every string the reader materializes is checked, including map keys, unknown keys, and values that are skipped; malformed input fails with `error_code::invalid_utf8`.
+On by default, because RFC 8259 section 8.1 requires JSON text to be UTF-8. Every string the reader materializes is checked, including map keys, unknown keys, and values that are skipped; malformed input fails with `error_code::invalid_utf8`. Of the binary-to-JSON converters, only `jsonb_to_json` checks UTF-8; see [String Escaping](binary.md#string-escaping).
 
 ```cpp
 struct unchecked_opts : glz::opts {
@@ -283,7 +285,21 @@ glz::write<compact_arrays{.prettify = true}>(obj, json);
 Control string quoting and escape sequence handling. Useful for embedding pre-formatted content. See [Type Handling Options](#type-handling-options) for details.
 
 #### `escape_control_characters`
-When `true`, control characters (0x00-0x1F) are escaped as `\uXXXX` sequences. The default (`false`) does not escape these characters for performance and safety (embedding nulls can cause issues, especially with C APIs). Glaze will error when parsing non-escaped control characters per the JSON spec—this option allows writing them as escaped unicode to avoid such errors on re-read.
+When `true`, control characters are escaped rather than written raw. The default (`false`) does not escape them, for performance and safety (embedding nulls can cause issues, especially with C APIs). Readers reject non-escaped control characters, so this option is what makes such a value survive a write/read round trip.
+
+The exact set and escape form follow the target format:
+
+| Format | Escaped set | Escape written |
+|--------|-------------|----------------|
+| JSON | `0x00`-`0x1F` | `\uXXXX` |
+| YAML | `0x00`-`0x1F` except `\t`, `\n`, `\r`, plus `0x7F` (DEL) | `\xXX` |
+
+YAML's set follows its `c-printable` production, which permits tab, line feed and carriage return but excludes DEL. In YAML the option also decides the scalar style: a value carrying such a byte is forced to the double-quoted style, since plain, single-quoted and block scalars have no escape mechanism.
+
+TOML honors this option too, writing `\u00XX` for the control characters TOML forbids raw: the C0 range apart from tab, plus DEL (0x7F). Reading TOML rejects those bytes whether or not the option is set. See [Control Characters](toml.md#control-characters).
+
+The binary-to-JSON converters use this option to decide what to do with control characters in a converted value. Off, they fail with `error_code::invalid_control_character`. On, the bytes are escaped. They ignore `raw_string` and `unquoted` either way. See [String Escaping](binary.md#string-escaping).
+
 
 ### Performance Options
 
@@ -292,6 +308,31 @@ Exits parsing after reading the deepest structural object. Useful for reading he
 
 #### `append_arrays`
 When reading into arrays, appends new elements instead of replacing existing contents.
+
+#### `is_padded`
+Off by default, and off is always correct. Turning it on promises that `glz::padding_bytes` (16) bytes past the end of the input buffer are readable memory, which lets the reader's fixed width loads run past the end of the document instead of bounding themselves against it.
+
+Set it with `glz::is_padded_on<Opts>()`:
+
+```cpp
+std::string buffer = get_json();
+const size_t size = buffer.size();
+buffer.resize(size + glz::padding_bytes);   // the slack being promised
+buffer.resize(size);                         // capacity stays; size is the document
+
+constexpr auto opts = glz::is_padded_on<glz::opts{}>();
+auto ec = glz::read<opts>(value, std::string_view{buffer.data(), size});
+```
+
+> [!WARNING]
+>
+> The reader takes this at its word and cannot check it. A buffer without that slack is read out of bounds, which is undefined behavior: a crash, or silently wrong values, depending on what follows the buffer in memory.
+>
+> Address Sanitizer catches the over-read, but only when the allocation really does end where the document does. A `std::string` usually has spare capacity past `size()`, which absorbs the read and lets a broken promise look fine in testing. To check one, put the document in an exactly sized allocation.
+>
+> `is_padded` says nothing about null termination -- that is `null_terminated`, a separate promise.
+>
+> Earlier versions of Glaze set this flag internally, after growing a resizable input buffer themselves and shrinking it back when the parse finished. Glaze no longer touches your buffer, so the flag now means only what a caller asserts with it.
 
 #### `shrink_to_fit`
 Calls `shrink_to_fit()` on dynamic containers after reading to minimize memory usage.

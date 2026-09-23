@@ -16,6 +16,9 @@ on:
       - 'docs/**'
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 concurrency:
   # Supersede an in-flight run when a branch is pushed again, so a fixup commit
   # does not leave the previous run competing for the same runners. Pushes to main
@@ -31,7 +34,11 @@ jobs:
     strategy:
       matrix:
         cpp_version: [23]
-        build_type: [Debug, Release]
+        # A Release build here runs well past 30 minutes, which is too long to spend on every
+        # push and pull request. It runs on merges to main, where a slow and complete check is
+        # worth having on the record, and on a manual dispatch when a branch wants one before
+        # merging. Everywhere else Debug stands guard on its own.
+        build_type: ${{ (github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == 'refs/heads/main')) && fromJSON('["Debug", "Release"]') || fromJSON('["Debug"]') }}
 
     steps:
     - uses: actions/checkout@v6

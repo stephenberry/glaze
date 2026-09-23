@@ -135,6 +135,20 @@ namespace glz
          return ret &= rhs;
       }
 
+      constexpr bit_array& operator|=(const bit_array& rhs) noexcept
+      {
+         for (size_t i{}; i < n_chunks; ++i) {
+            data[i] |= rhs.data[i];
+         }
+         return *this;
+      }
+
+      constexpr bit_array operator|(const bit_array& rhs) const noexcept
+      {
+         auto ret = *this;
+         return ret |= rhs;
+      }
+
       constexpr bool operator==(const bit_array& rhs) const noexcept { return data == rhs.data; }
    };
 }

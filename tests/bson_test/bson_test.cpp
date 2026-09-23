@@ -158,6 +158,13 @@ namespace bson_test
       bool operator==(const time_s&) const = default;
    };
 
+   // Same key as time_s, but carrying the raw millisecond count so a test can put any int64
+   // datetime on the wire.
+   struct raw_time_s
+   {
+      glz::bson::datetime t{};
+   };
+
    struct duration_s
    {
       std::chrono::milliseconds ms{}; // int64 element
@@ -387,6 +394,11 @@ using namespace bson_test;
 
 namespace
 {
+   struct bson_escape_opts : glz::opts
+   {
+      bool escape_control_characters = true;
+   };
+
    suite bson_interop_tests = [] {
       "spec-canonical-hello-world"_test = [] {
          // {"hello": "world"} — the canonical example from bsonspec.org.
@@ -644,6 +656,26 @@ namespace
          using namespace std::chrono;
          time_s v{system_clock::time_point{milliseconds{1700000000000LL}}};
          expect_roundtrip_equal(v);
+      };
+
+      "chrono-datetime-out-of-range-rejected"_test = [] {
+         using namespace std::chrono;
+         // The datetime is a full int64 of milliseconds, and system_clock counts in something
+         // finer, so the extremes cannot be held. They used to wrap (INT64_MAX decoded as one
+         // millisecond before the epoch) and now fail.
+         for (const int64_t ms : {(std::numeric_limits<int64_t>::max)(), (std::numeric_limits<int64_t>::min)()}) {
+            std::string buffer;
+            expect(!glz::write_bson(raw_time_s{glz::bson::datetime{ms}}, buffer));
+            time_s out{};
+            expect(glz::read_bson(out, buffer) == glz::error_code::parse_error);
+         }
+
+         // Pre-epoch datetimes keep decoding as before.
+         std::string buffer;
+         expect(!glz::write_bson(raw_time_s{glz::bson::datetime{-1500}}, buffer));
+         time_s out{};
+         expect(!glz::read_bson(out, buffer));
+         expect(out.t == system_clock::time_point{milliseconds{-1500}});
       };
 
       "roundtrip-duration"_test = [] {
@@ -1445,6 +1477,50 @@ namespace
          auto json = glz::bson_to_json(bson.value());
          expect(json.has_value());
          expect(json.value() == R"({"a":1,"b":9000000000,"c":1.5,"d":true,"e":"hi"})");
+      };
+
+      "convert-rejects-control-characters-by-default"_test = [] {
+         // A control byte is legal in a BSON string but cannot be written as JSON without
+         // \uXXXX, so the default refuses it rather than emitting output that will not re-parse.
+         std::map<std::string, std::string> v{{"k", std::string("a\001b")}};
+         auto bson = glz::write_bson(v);
+         expect(bson.has_value());
+         auto json = glz::bson_to_json(bson.value());
+         expect(not json.has_value());
+         expect(json.error().ec == glz::error_code::invalid_control_character);
+      };
+
+      "convert-escapes-control-characters-when-asked"_test = [] {
+         std::map<std::string, std::string> v{{"k", std::string("a\001b")}};
+         auto bson = glz::write_bson(v);
+         expect(bson.has_value());
+         auto json = glz::bson_to_json<bson_escape_opts{}>(bson.value());
+         expect(json.has_value());
+         expect(json.value() == "{\"k\":\"a\\u0001b\"}") << json.value();
+         std::map<std::string, std::string> round_trip{};
+         expect(!glz::read_json(round_trip, json.value())) << json.value();
+         expect(round_trip == v);
+      };
+
+      "convert-passes-through-short-escape-control-characters"_test = [] {
+         // The default refuses only control characters with no two-character JSON escape.
+         // Backspace, tab, newline, form feed and carriage return have one, so they keep
+         // converting normally. The reject sits in the else of the escape table lookup and
+         // cannot see them. The long value puts the run past the scalar tail and into the
+         // writer's block scan, which rejects at a separate site.
+         const std::string shorts = "\b\t\n\f\r";
+         std::map<std::string, std::string> v{{"k" + shorts, shorts},
+                                              {"long", std::string(64, 'a') + shorts + std::string(64, 'b')}};
+         auto bson = glz::write_bson(v);
+         expect(bson.has_value());
+         auto json = glz::bson_to_json(bson.value());
+         expect(json.has_value());
+         expect(json.value().find("\\b\\t\\n\\f\\r") != std::string::npos) << json.value();
+         expect(json.value().find_first_of(shorts) == std::string::npos) << json.value();
+
+         std::map<std::string, std::string> round_trip{};
+         expect(!glz::read_json(round_trip, json.value())) << json.value();
+         expect(round_trip == v);
       };
 
       "convert-nested-document"_test = [] {

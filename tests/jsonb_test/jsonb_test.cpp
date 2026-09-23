@@ -1039,6 +1039,35 @@ suite spec_tests = [] {
       expect(j.error().ec == glz::error_code::exceeded_max_recursive_depth);
    };
 
+   "jsonb_to_json binds at the same level as the readers"_test = [] {
+      // Only containers take a level, so a scalar fits inside the deepest container the limit allows.
+      constexpr auto limit = glz::max_recursive_depth_limit;
+      const auto build = [](size_t levels, std::string innermost) {
+         for (size_t i = 0; i < levels; ++i) {
+            uint64_t size = innermost.size();
+            if constexpr (std::endian::native == std::endian::little) size = std::byteswap(size);
+            std::string header(9, '\0');
+            header[0] = static_cast<char>((15u << 4) | 11u); // ARRAY, u64_follows
+            std::memcpy(&header[1], &size, 8);
+            innermost = header + innermost;
+         }
+         return innermost;
+      };
+      const std::string one = std::string{static_cast<char>((1u << 4) | 3u)} + "1"; // INT, size 1
+      const std::string empty{static_cast<char>(11u)}; // ARRAY, size 0
+
+      glz::generic out{};
+      expect(not glz::read_jsonb(out, build(limit, one)));
+      auto j = glz::jsonb_to_json(build(limit, one));
+      expect(j.has_value());
+      expect(j.value_or("") == std::string(limit, '[') + "1" + std::string(limit, ']'));
+      expect(glz::jsonb_to_json(build(limit - 1, empty)).has_value());
+
+      expect(glz::read_jsonb(out, build(limit, empty)) == glz::error_code::exceeded_max_recursive_depth);
+      j = glz::jsonb_to_json(build(limit, empty));
+      expect(!j.has_value() && j.error().ec == glz::error_code::exceeded_max_recursive_depth);
+   };
+
    "reasonably-nested blob within depth cap succeeds"_test = [] {
       // Ten levels of nesting is comfortably under the 256 cap.
       std::vector<std::vector<std::vector<std::vector<std::vector<int>>>>> v{{{{{1, 2, 3}}}}};
@@ -1827,6 +1856,59 @@ suite generic_tests = [] {
       expect(out.is_object());
       const auto& o = out.get_object();
       expect(o.size() == 2);
+   };
+
+   // The integer alternatives are tried in declaration order, as the JSON reader tries them: a
+   // negative value has no unsigned alternative to land in, and reading it as one failed outright
+   // rather than falling through to int64_t.
+   "generic_u64 negative integer falls back to int64_t"_test = [] {
+      glz::generic_u64 g;
+      expect(not glz::read_json(g, R"({"i":-7})"));
+      std::string buf;
+      expect(not glz::write_jsonb(g, buf));
+      glz::generic_u64 out;
+      expect(not glz::read_jsonb(out, buf));
+      expect(out.is_object());
+      expect(out["i"].is_int64());
+      expect(out["i"].get<int64_t>() == -7);
+   };
+
+   "generic_i64 integer past its range falls back to double"_test = [] {
+      glz::generic_u64 g;
+      g.data = (std::numeric_limits<uint64_t>::max)();
+      std::string buf;
+      expect(not glz::write_jsonb(g, buf));
+      glz::generic_i64 out;
+      expect(not glz::read_jsonb(out, buf));
+      expect(out.is_double());
+      expect(out.get<double>() == static_cast<double>((std::numeric_limits<uint64_t>::max)()));
+   };
+
+   // Glaze writes a number of this magnitude as a float element, so this blob has to be built by
+   // hand -- but SQLite's jsonb() emits an INT token with arbitrary digits, and JSONB is the format
+   // where blobs come from elsewhere. Every mode must reach double rather than fail.
+   "generic integer past every integer alternative falls back to double"_test = [] {
+      const std::string digits = "99999999999999999999999";
+      std::string blob;
+      blob.push_back(char((12 << 4) | glz::jsonb::type::int_)); // 12: one size byte follows
+      blob.push_back(char(digits.size()));
+      blob += digits;
+
+      const double expected = 1e23;
+
+      glz::generic_u64 as_u64;
+      expect(not glz::read_jsonb(as_u64, blob));
+      expect(as_u64.is_double());
+      expect(as_u64.get<double>() == expected);
+
+      glz::generic_i64 as_i64;
+      expect(not glz::read_jsonb(as_i64, blob));
+      expect(as_i64.is_double());
+      expect(as_i64.get<double>() == expected);
+
+      glz::generic as_f64;
+      expect(not glz::read_jsonb(as_f64, blob));
+      expect(as_f64.get<double>() == expected);
    };
 
    "generic round-trips through JSON parse"_test = [] {

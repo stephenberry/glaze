@@ -26,6 +26,7 @@
 #include <openssl/pem.h>
 #include <openssl/rand.h>
 #include <openssl/rsa.h>
+#include <openssl/ssl.h>
 #include <openssl/x509.h>
 #include <openssl/x509v3.h>
 
@@ -383,6 +384,14 @@ class HTTPSTestServer
          std::cerr << "❌ Failed to start HTTPS server: " << e.what() << std::endl;
          return false;
       }
+   }
+
+   // Reach the server's SSL context before start(), for cases that need to vary the TLS
+   // configuration. Must be called before start(), as configure_ssl_context requires.
+   template <typename Func>
+   void configure_ssl_context(Func&& func)
+   {
+      server_.configure_ssl_context(std::forward<Func>(func));
    }
 
    uint16_t port() const { return port_; }
@@ -855,6 +864,128 @@ suite stress_tests = [] {
       }
 
       expect(true) << "Many route registrations should work\n";
+   };
+};
+
+// Connects to `port` offering only the version window [min_version, max_version] and answers
+// what the handshake settled on, or an empty string when it did not complete. The probe drops
+// its own security level so that every refusal is the server's decision rather than the
+// client declining to offer a protocol.
+static std::string negotiated_protocol(uint16_t port, int min_version, int max_version)
+{
+   try {
+      asio::io_context io_context;
+      asio::ssl::context ctx(asio::ssl::context::tls_client);
+      ctx.set_verify_mode(asio::ssl::verify_none);
+      SSL_CTX_set_security_level(ctx.native_handle(), 0);
+      if (SSL_CTX_set_min_proto_version(ctx.native_handle(), min_version) != 1) {
+         return {};
+      }
+      if (SSL_CTX_set_max_proto_version(ctx.native_handle(), max_version) != 1) {
+         return {};
+      }
+
+      asio::ssl::stream<asio::ip::tcp::socket> stream(io_context, ctx);
+      stream.lowest_layer().connect(asio::ip::tcp::endpoint(asio::ip::make_address("127.0.0.1"), port));
+      stream.handshake(asio::ssl::stream_base::client);
+
+      const char* version = SSL_get_version(stream.native_handle());
+      std::string negotiated = version ? version : "";
+
+      asio::error_code ignored;
+      stream.shutdown(ignored);
+      return negotiated;
+   }
+   catch (const std::exception&) {
+      return {};
+   }
+}
+
+suite tls_version_tests = [] {
+   "server_negotiates_tls13"_test = [] {
+      if (!certificates_exist()) {
+         CertificateGenerator::generate_test_certificates();
+      }
+
+      HTTPSTestServer test_server;
+      expect(test_server.start()) << "HTTPS server should start successfully\n";
+
+      const std::string negotiated = negotiated_protocol(test_server.port(), TLS1_3_VERSION, TLS1_3_VERSION);
+
+      expect(negotiated == std::string("TLSv1.3"))
+         << "a TLS 1.3 client should complete the handshake, got '" << negotiated << "'\n";
+
+      test_server.stop();
+   };
+
+   "server_still_negotiates_tls12"_test = [] {
+      if (!certificates_exist()) {
+         CertificateGenerator::generate_test_certificates();
+      }
+
+      HTTPSTestServer test_server;
+      expect(test_server.start()) << "HTTPS server should start successfully\n";
+
+      const std::string negotiated = negotiated_protocol(test_server.port(), TLS1_2_VERSION, TLS1_2_VERSION);
+
+      expect(negotiated == std::string("TLSv1.2"))
+         << "a TLS 1.2 client must keep working, got '" << negotiated << "'\n";
+
+      test_server.stop();
+   };
+
+   "server_refuses_tls11"_test = [] {
+      if (!certificates_exist()) {
+         CertificateGenerator::generate_test_certificates();
+      }
+
+      HTTPSTestServer test_server;
+      expect(test_server.start()) << "HTTPS server should start successfully\n";
+
+      const std::string negotiated = negotiated_protocol(test_server.port(), TLS1_1_VERSION, TLS1_1_VERSION);
+
+      expect(negotiated.empty()) << "TLS 1.1 is deprecated by RFC 8996 and must not negotiate, got '" << negotiated
+                                 << "'\n";
+
+      test_server.stop();
+   };
+
+   // The RFC 8996 floor has to hold on its own, not merely because OpenSSL's default
+   // security level happens to reject TLS 1.1 as well. Dropping the server's security level
+   // to 0 removes that second line of defense, leaving only the explicit no_tlsv1 and
+   // no_tlsv1_1 context options standing between the client and a deprecated protocol.
+   // Without those options this case negotiates TLS 1.1.
+   "server_refuses_tls11_without_security_level_backstop"_test = [] {
+      if (!certificates_exist()) {
+         CertificateGenerator::generate_test_certificates();
+      }
+
+      HTTPSTestServer test_server;
+      test_server.configure_ssl_context(
+         [](asio::ssl::context& ctx) { SSL_CTX_set_security_level(ctx.native_handle(), 0); });
+      expect(test_server.start()) << "HTTPS server should start successfully\n";
+
+      const std::string negotiated = negotiated_protocol(test_server.port(), TLS1_1_VERSION, TLS1_1_VERSION);
+
+      expect(negotiated.empty()) << "TLS 1.1 must stay disabled by the explicit context options even when the "
+                                    "security level no longer rejects it, got '"
+                                 << negotiated << "'\n";
+
+      test_server.stop();
+   };
+
+   "configure_ssl_context_reaches_the_context"_test = [] {
+      glz::https_server server;
+
+      bool invoked = false;
+      auto& server_ref = server.configure_ssl_context([&](asio::ssl::context& ctx) {
+         invoked = true;
+         expect(ctx.native_handle() != nullptr) << "the context should be constructed by now\n";
+      });
+
+      expect(invoked) << "configure_ssl_context should invoke the callable\n";
+      expect(&server_ref == &server) << "configure_ssl_context should be chainable\n";
+      expect(server.ssl_context_unsafe().native_handle() != nullptr) << "ssl_context_unsafe should expose it\n";
    };
 };
 

@@ -105,6 +105,31 @@ suite csv_bounded_buffer_overflow_tests = [] {
       auto result = glz::write_csv(obj, buffer);
       expect(not result) << "write should succeed";
    };
+
+   // A leading double is written relying only on the numeric capacity guard. glz::to_chars
+   // may use up to zmij::double_buffer_size (34) bytes of scratch, so a 32/33-byte buffer must
+   // report buffer_overflow rather than write past the end.
+   "csv leading double into undersized buffer returns buffer_overflow"_test = [] {
+      std::vector<double> v{-2000000000000000.0};
+      for (size_t n : {size_t{32}, size_t{33}, size_t{34}, size_t{37}}) {
+         std::vector<char> storage(n);
+         std::span<char> buffer(storage.data(), storage.size());
+         auto result = glz::write_csv(v, buffer);
+         expect(result.ec == glz::error_code::buffer_overflow) << "size " << n << " should overflow cleanly";
+      }
+   };
+
+   "csv leading double into sufficient bounded buffer succeeds"_test = [] {
+      std::vector<double> v{-2000000000000000.0};
+      std::array<char, 64> buffer{};
+
+      auto result = glz::write_csv(v, buffer);
+      expect(not result) << "write should succeed";
+      expect(result.count > 0) << "count should be non-zero";
+
+      std::string_view csv(buffer.data(), result.count);
+      expect(csv.find("-2000000000000000") != std::string_view::npos) << "value should round-trip";
+   };
 };
 
 int main() { return 0; }

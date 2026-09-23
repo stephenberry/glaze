@@ -35,6 +35,26 @@ glz::ostream_buffer<> buf3(any_ostream);                       // Polymorphic, 6
 glz::ostream_buffer<4096> buf4(any_ostream);                   // Polymorphic, 4KB
 ```
 
+### What still has to fit in the window
+
+Flush points sit *between* values, never inside one: between array elements, between object members, and between NDJSON records. A value is written in one piece, so the window has to cover the largest single value rather than the document.
+
+Outrunning the window is not an error the way it is on the read side. The window simply grows to hold the value, and stays at that high-water mark for the rest of the write, so the cost of one oversized value is paid for the whole document. `buffer_capacity()` reports the high-water mark if you want to check what a write actually held:
+
+```cpp
+std::ofstream file("output.json");
+glz::basic_ostream_buffer<std::ofstream, 4096> buffer(file);
+auto ec = glz::write_json(obj, buffer);
+buffer.buffer_capacity();  // physical bytes held; near the capacity unless a value outran it
+```
+
+Two cases are worth knowing about:
+
+- **A string larger than the window.** The writer reserves for the worst case, where every character needs an escape, before it knows how the string actually escapes. A string the window cannot already hold therefore grows it to roughly twice the string's length.
+- **An array of numbers.** The numeric fast path reserves worst-case space for the whole array before writing any element, so the window covers the array rather than one element of it. A `std::vector<double>` reserves about 39 bytes per element whatever the configured capacity.
+
+Everything else stays near the configured capacity, independent of how large the document is.
+
 ## Input Streaming (`basic_istream_buffer`)
 
 Read directly from files or input streams with automatic refilling:
@@ -135,7 +155,7 @@ Read into the owning equivalent (`std::string`, `glz::raw_json`, `glz::text`) wh
 
 The check is on the readers that point into the buffer rather than on the shape of the destination, so it applies equally to a view reached through a container, a `std::tuple`, a map key, or a `glz::custom` setter. A `std::span` over your own storage is not affected — only `std::span<const T>` is ever aimed at the input.
 
-What the check is aimed at is a view the *caller* keeps. A reader that borrows a view of the string it just parsed and turns it into a value before returning — how `std::chrono::system_clock::time_point`, `std::chrono::year_month_day`, and `glz::date_format` fields are read — holds it across nothing that refills, so those types stream normally.
+What the check is aimed at is a view the *caller* keeps. A reader that borrows a view of the string it just parsed and turns it into a value before returning — how `std::chrono::system_clock::time_point`, `std::chrono::year_month_day`, and `glz::date_format` fields are read, and how a tagged variant turns its discriminator into an alternative index — holds it across nothing that refills, so those types stream normally.
 
 Buffered reads are unaffected. A buffer holds the whole document for the duration of the call, so views into it stay valid and remain a supported zero-copy idiom.
 
@@ -161,6 +181,15 @@ glz::basic_istream_buffer<std::ifstream, 1 << 20> buffer(file);  // 1 MB window
 ```
 
 Leading whitespace is also read without refilling, so whitespace wider than the window stops a read before it reaches the value behind it.
+
+A `std::variant` of objects adds one more case. When the alternative is decided by the shape of the object, or by a tag that is not the first key, the reader scans the object once to work out which alternative it is and then reads it again from the opening brace. Adjacent tagging (`tag` plus `content`) always reads it twice, whatever the key order.
+
+That second pass needs the opening brace to still be in the window. A refill releases whatever the parse has stepped over, so the object has to fit in the room the window has left *at the point it starts* — not in the window's full capacity, since the reader tops the window up between elements rather than at every byte. Where it does not fit, the read stops with `error_code::streaming_unsupported` rather than re-reading relocated bytes. Give the window several times the size of the largest such object, or put an internal tag first, which skips the second pass entirely and streams at any size:
+
+```jsonc
+{"type":"circle","points":[ ... a megabyte of them ... ]}  // streams in a 64 KB window
+{"points":[ ... a megabyte of them ... ],"type":"circle"}  // needs room for the whole object
+```
 
 ## See Also
 

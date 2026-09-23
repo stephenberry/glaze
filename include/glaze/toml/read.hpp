@@ -5,7 +5,11 @@
 
 #include <cctype>
 #include <charconv>
+#include <iterator>
 #include <limits>
+#include <memory>
+#include <utility>
+#include <vector>
 
 #include "glaze/core/chrono.hpp"
 #include "glaze/core/common.hpp"
@@ -57,7 +61,7 @@ namespace glz
       char utf8[4]{};
       char* dst = utf8;
 
-      if (!handle_unicode_code_point(cursor, dst, hex_end)) {
+      if (handle_unicode_code_point(cursor, dst, hex_end).written == 0) {
          return false;
       }
 
@@ -167,20 +171,29 @@ namespace glz
       if (*it == '"') {
          // Quoted key
          ++it;
-         while (it != end && *it != '"') {
-            if (*it == '\\') {
+         while (true) {
+            const auto run_start = it;
+            while (it != end && !toml::basic_string_dispatch_table[uint8_t(*it)]) {
                ++it;
-               if (it == end) {
-                  ctx.error = error_code::unexpected_end;
-                  return false;
-               }
-               if (!append_toml_basic_escape(key, it, end)) {
-                  ctx.error = error_code::syntax_error;
-                  return false;
-               }
             }
-            else {
-               key.push_back(*it);
+            if (it != run_start) {
+               key.append(run_start, it);
+            }
+            if (it == end || *it == '"') {
+               break;
+            }
+            if (toml::forbidden_control_table[uint8_t(*it)]) [[unlikely]] {
+               ctx.error = error_code::invalid_control_character;
+               return false;
+            }
+            ++it; // the scan only stops on a backslash once controls are ruled out
+            if (it == end) {
+               ctx.error = error_code::unexpected_end;
+               return false;
+            }
+            if (!append_toml_basic_escape(key, it, end)) {
+               ctx.error = error_code::syntax_error;
+               return false;
             }
             ++it;
          }
@@ -194,13 +207,23 @@ namespace glz
       else if (*it == '\'') {
          // Single-quoted (literal) key
          ++it;
-         while (it != end && *it != '\'') {
+         while (true) {
+            const auto run_start = it;
+            while (it != end && !toml::literal_string_dispatch_table[uint8_t(*it)]) {
+               ++it;
+            }
+            if (it != run_start) {
+               key.append(run_start, it);
+            }
+            if (it == end || *it == '\'') {
+               break;
+            }
             if (*it == '\n' || *it == '\r') {
                ctx.error = error_code::syntax_error;
                return false;
             }
-            key.push_back(*it);
-            ++it;
+            ctx.error = error_code::invalid_control_character;
+            return false;
          }
 
          if (it == end || *it != '\'') {
@@ -246,20 +269,29 @@ namespace glz
 
          if (*it == '"') {
             ++it;
-            while (it != end && *it != '"') {
-               if (*it == '\\') {
+            while (true) {
+               const auto run_start = it;
+               while (it != end && !toml::basic_string_dispatch_table[uint8_t(*it)]) {
                   ++it;
-                  if (it == end) {
-                     ctx.error = error_code::unexpected_end;
-                     return false;
-                  }
-                  if (!append_toml_basic_escape(key, it, end)) {
-                     ctx.error = error_code::syntax_error;
-                     return false;
-                  }
                }
-               else {
-                  key.push_back(*it);
+               if (it != run_start) {
+                  key.append(run_start, it);
+               }
+               if (it == end || *it == '"') {
+                  break;
+               }
+               if (toml::forbidden_control_table[uint8_t(*it)]) [[unlikely]] {
+                  ctx.error = error_code::invalid_control_character;
+                  return false;
+               }
+               ++it; // the scan only stops on a backslash once controls are ruled out
+               if (it == end) {
+                  ctx.error = error_code::unexpected_end;
+                  return false;
+               }
+               if (!append_toml_basic_escape(key, it, end)) {
+                  ctx.error = error_code::syntax_error;
+                  return false;
                }
                ++it;
             }
@@ -272,13 +304,23 @@ namespace glz
          }
          else if (*it == '\'') {
             ++it;
-            while (it != end && *it != '\'') {
+            while (true) {
+               const auto run_start = it;
+               while (it != end && !toml::literal_string_dispatch_table[uint8_t(*it)]) {
+                  ++it;
+               }
+               if (it != run_start) {
+                  key.append(run_start, it);
+               }
+               if (it == end || *it == '\'') {
+                  break;
+               }
                if (*it == '\n' || *it == '\r') {
                   ctx.error = error_code::syntax_error;
                   return false;
                }
-               key.push_back(*it);
-               ++it;
+               ctx.error = error_code::invalid_control_character;
+               return false;
             }
 
             if (it == end || *it != '\'') {
@@ -767,7 +809,27 @@ namespace glz
                   }
                }
                else {
-                  value.push_back(*it);
+                  const auto run_start = it;
+                  while (it + 2 < end && !toml::multiline_basic_dispatch_table[uint8_t(*it)]) {
+                     ++it;
+                  }
+                  if (it != run_start) {
+                     value.append(run_start, it);
+                  }
+                  if (it + 2 >= end) {
+                     break; // unterminated; reported by the check after the loop
+                  }
+                  if (toml::forbidden_control_multiline_table[uint8_t(*it)]) [[unlikely]] {
+                     ctx.error = error_code::invalid_control_character;
+                     return;
+                  }
+                  if (*it == '\\') {
+                     continue; // hand the escape back to the branch above
+                  }
+                  if (*(it + 1) == '"' && *(it + 2) == '"') {
+                     break; // closing delimiter
+                  }
+                  value.push_back('"'); // a lone quote inside the string
                }
                ++it;
             }
@@ -782,24 +844,33 @@ namespace glz
             // Basic string
             ++it; // Skip opening quote
 
-            while (it != end && *it != '"') {
-               if (*it == '\\') {
+            while (true) {
+               const auto run_start = it;
+               while (it != end && !toml::basic_string_dispatch_table[uint8_t(*it)]) {
                   ++it;
-                  if (it == end) {
-                     ctx.error = error_code::unexpected_end;
-                     return;
-                  }
-                  if (!append_toml_basic_escape(value, it, end)) {
-                     ctx.error = error_code::syntax_error;
-                     return;
-                  }
                }
-               else if (*it == '\n' || *it == '\r') { // Newlines not allowed in single-line basic strings
+               if (it != run_start) {
+                  value.append(run_start, it);
+               }
+               if (it == end || *it == '"') {
+                  break;
+               }
+               if (*it == '\n' || *it == '\r') { // Newlines not allowed in single-line basic strings
                   ctx.error = error_code::syntax_error;
                   return;
                }
-               else {
-                  value.push_back(*it);
+               if (toml::forbidden_control_table[uint8_t(*it)]) [[unlikely]] {
+                  ctx.error = error_code::invalid_control_character;
+                  return;
+               }
+               ++it; // the scan only stops on a backslash once controls are ruled out
+               if (it == end) {
+                  ctx.error = error_code::unexpected_end;
+                  return;
+               }
+               if (!append_toml_basic_escape(value, it, end)) {
+                  ctx.error = error_code::syntax_error;
+                  return;
                }
                ++it;
             }
@@ -821,7 +892,24 @@ namespace glz
             }
 
             while (it + 2 < end && !(*it == '\'' && *(it + 1) == '\'' && *(it + 2) == '\'')) {
-               value.push_back(*it);
+               const auto run_start = it;
+               while (it + 2 < end && !toml::multiline_literal_dispatch_table[uint8_t(*it)]) {
+                  ++it;
+               }
+               if (it != run_start) {
+                  value.append(run_start, it);
+               }
+               if (it + 2 >= end) {
+                  break;
+               }
+               if (toml::forbidden_control_multiline_table[uint8_t(*it)]) [[unlikely]] {
+                  ctx.error = error_code::invalid_control_character;
+                  return;
+               }
+               if (*(it + 1) == '\'' && *(it + 2) == '\'') {
+                  break; // closing delimiter
+               }
+               value.push_back(*it); // a lone quote inside the string
                ++it;
             }
 
@@ -835,13 +923,23 @@ namespace glz
             // Literal string
             ++it; // Skip opening quote
 
-            while (it != end && *it != '\'') {
+            while (true) {
+               const auto run_start = it;
+               while (it != end && !toml::literal_string_dispatch_table[uint8_t(*it)]) {
+                  ++it;
+               }
+               if (it != run_start) {
+                  value.append(run_start, it);
+               }
+               if (it == end || *it == '\'') {
+                  break;
+               }
                if (*it == '\n' || *it == '\r') { // Newlines not allowed in single-line literal strings
                   ctx.error = error_code::syntax_error;
                   return;
                }
-               value.push_back(*it);
-               ++it;
+               ctx.error = error_code::invalid_control_character;
+               return;
             }
 
             if (it == end || *it != '\'') {
@@ -1166,11 +1264,13 @@ namespace glz
             return;
          }
 
-         const auto tp = sys_days{ymd} + hours{hr} + minutes{mi} + seconds{sc} + seconds{tz_offset_seconds} +
-                         nanoseconds{subsec_nanos};
-
-         using Duration = typename std::remove_cvref_t<T>::duration;
-         value = time_point_cast<Duration>(tp);
+         // Summed in seconds and cast by make_sys_time: a nanosecond intermediate wraps int64
+         // for years outside 1677-2262 even when the target can hold them.
+         const auto tp =
+            sys_seconds{sys_days{ymd}} + hours{hr} + minutes{mi} + seconds{sc} + seconds{tz_offset_seconds};
+         if (!chrono_detail::make_sys_time(value, tp.time_since_epoch(), nanoseconds{subsec_nanos})) [[unlikely]] {
+            ctx.error = error_code::parse_error;
+         }
       }
    };
 
@@ -1512,13 +1612,164 @@ namespace glz
 
    namespace detail
    {
+      // Report the first required key of U that the document never assigned.
+      template <auto Opts, class U, class Ctx>
+      void check_required_fields(const bit_array<reflect<U>::size>& fields, Ctx& ctx)
+      {
+         if constexpr (check_error_on_missing_keys(Opts)) {
+            if (bool(ctx.error)) {
+               return;
+            }
+            static constexpr auto required = required_fields<U, Opts>();
+            for (size_t i = 0; i < reflect<U>::size; ++i) {
+               if (required[i] && not fields[i]) {
+                  ctx.custom_error_message = reflect<U>::keys[i];
+                  ctx.error = error_code::missing_key;
+                  return;
+               }
+            }
+         }
+      }
+
+      // TOML lets one struct be assembled from disjoint regions of a document: [server] may be
+      // followed by an unrelated table and then [server.tls], and a dotted key can reach into a
+      // table that a later section fills in further. Which members were assigned therefore cannot
+      // be settled where a table body ends, the way it can for a JSON or YAML object -- the rest of
+      // the document may still be carrying them.
+      //
+      // missing_key_record accumulates that across the whole read. Nodes mirror the shape of the
+      // values the document actually touched: one per struct, and for an array of tables one for
+      // the array holding one per element. error_on_missing_keys is then resolved by walking the
+      // tree once the document has been parsed.
+      struct missing_key_record
+      {
+         std::vector<bool> assigned{}; // one flag per reflected member of the struct this node mirrors
+         // Keyed by member index, or by element index on the node standing in for an array of
+         // tables. A vector rather than a map: a document names a handful of keys per struct.
+         std::vector<std::pair<size_t, std::unique_ptr<missing_key_record>>> children{};
+         // An inline table is self-contained by the TOML grammar, so it is checked where it is
+         // parsed and this node's flags are never filled in. Set to keep the final walk off it.
+         bool checked_in_place = false;
+
+         explicit missing_key_record(const size_t member_count) : assigned(member_count, false) {}
+
+         void assign(const size_t index)
+         {
+            if (index < assigned.size()) {
+               assigned[index] = true;
+            }
+         }
+
+         missing_key_record* child(const size_t key, const size_t member_count)
+         {
+            for (auto& [k, node] : children) {
+               if (k == key) {
+                  return node.get();
+               }
+            }
+            children.emplace_back(key, std::make_unique<missing_key_record>(member_count));
+            return children.back().second.get();
+         }
+      };
+
+      // Whether a value is a TOML table -- a reflected struct, seen through any nullable wrapper.
+      // The missing-key tracker follows required keys into one, and a "[array.sub]" header descends
+      // into one. A custom reader owns its own parsing, so it is left alone by both.
+      template <class T>
+      consteval bool toml_table_like()
+      {
+         using U = std::remove_cvref_t<T>;
+         if constexpr (custom_read<U> || glaze_value_t<U>) {
+            return false;
+         }
+         else if constexpr (glaze_object_t<U> || reflectable<U>) {
+            return true;
+         }
+         else if constexpr (nullable_like<U>) {
+            return toml_table_like<std::remove_cvref_t<decltype(*std::declval<U&>())>>();
+         }
+         else {
+            return false;
+         }
+      }
+
+      template <class T>
+      consteval size_t tracked_member_count()
+      {
+         using U = std::remove_cvref_t<T>;
+         if constexpr (custom_read<U> || glaze_value_t<U>) {
+            return 0;
+         }
+         else if constexpr (glaze_object_t<U> || reflectable<U>) {
+            return reflect<U>::size;
+         }
+         else if constexpr (nullable_like<U>) {
+            return tracked_member_count<std::remove_cvref_t<decltype(*std::declval<U&>())>>();
+         }
+         else {
+            return 0;
+         }
+      }
+
+      // Whether a "[array.sub]" header can descend into this value's last element: a growable array
+      // whose elements are tables, seen through any nullable wrapper. resolve_array_of_tables
+      // unwraps the member before it classifies it, so this has to as well or "[[a]]" and "[a.sub]"
+      // disagree about whether the same optional<vector<T>> is tracked.
+      template <class T>
+      consteval bool is_toml_array_of_tables()
+      {
+         using U = std::remove_cvref_t<T>;
+         if constexpr (glaze_object_t<U> || reflectable<U> || custom_read<U>) {
+            return false; // a struct that happens to have emplace_back is still a struct
+         }
+         else if constexpr (nullable_like<U>) {
+            return is_toml_array_of_tables<std::remove_cvref_t<decltype(*std::declval<U&>())>>();
+         }
+         else if constexpr (emplace_backable<U> && requires { typename U::value_type; }) {
+            return toml_table_like<typename U::value_type>();
+         }
+         else {
+            return false;
+         }
+      }
+
+      // Element type of an array of tables, unwrapped the same way, so its node can be sized. The
+      // nullable case has to come first: std::optional<std::vector<T>> has a value_type of its own,
+      // and reading that one would size every element node at zero.
+      template <class T>
+      consteval size_t tracked_element_count()
+      {
+         using U = std::remove_cvref_t<T>;
+         if constexpr (nullable_like<U>) {
+            return tracked_element_count<std::remove_cvref_t<decltype(*std::declval<U&>())>>();
+         }
+         else if constexpr (requires { typename U::value_type; }) {
+            return tracked_member_count<typename U::value_type>();
+         }
+         else {
+            return 0;
+         }
+      }
+
+      template <auto Opts, class T, class It, class End>
+      void read_tracked(T& value, auto& ctx, It& it, End end, missing_key_record* node);
+
+      template <auto Opts, class T, class Ctx>
+      void check_missing_keys(T&& value, const missing_key_record& node, Ctx& ctx);
+
+      template <auto Opts, class T, class Ctx>
+      void check_missing_keys_at(T&& value, const missing_key_record& node, Ctx& ctx);
+
       template <auto Opts, class T, class It, class End, class Ctx>
-      inline void parse_toml_object_members(T&& value, It&& it, End end, Ctx&& ctx, bool is_inline_table)
+      inline void parse_inline_table_members(T&& value, It&& it, End end, Ctx&& ctx)
       {
          using U = std::remove_cvref_t<T>;
          static constexpr auto N = reflect<U>::size;
          static constexpr auto HashInfo = hash_info<U>;
-         // TODO: Think if we should make inline table a constexpr to reduce runtime checks
+         // An inline table is the complete value of the struct it fills -- the grammar forbids
+         // adding to it from anywhere else in the document -- so its required keys are settled here
+         // rather than deferred to the whole-document walk.
+         [[maybe_unused]] bit_array<N> fields{};
          // TODO: Think if it's feasible to write a function to find out the deepest nested structure
          // and use it instead of vector
 
@@ -1526,39 +1777,23 @@ namespace glz
             skip_ws_and_comments(it, end);
 
             if (it == end) {
-               if (is_inline_table) ctx.error = error_code::unexpected_end; // Inline table must end with '}'
-               break;
+               break; // Truncated; settled below the loop
             }
 
-            if (is_inline_table && (*it == '\n' || *it == '\r')) {
+            if (*it == '\n' || *it == '\r') {
                skip_to_next_line(ctx, it, end);
                continue;
             }
 
-            if (is_inline_table && *it == '}') {
+            if (*it == '}') {
                ++it; // Consume '}'
+               check_required_fields<Opts, U>(fields, ctx);
                return; // End of inline table
-            }
-
-            // Skip empty lines (only if not in an inline table, inline tables don't have newlines)
-            if (!is_inline_table && (*it == '\n' || *it == '\r')) {
-               skip_to_next_line(ctx, it, end);
-               continue;
             }
 
             std::string key_str;
             // std::vector<std::string> key_str; // TODO: std::string is used temporarily, we may swap it to view later
             // on or as said before completely switch to array
-
-            // Handle section headers [section] (only if not in an inline table)
-            if (!is_inline_table && *it == '[') {
-               // For now, skip section headers - we'll implement nested object support later
-               // Or, this could be where we handle table arrays or nested tables.
-               // For the current task, we are focusing on inline tables.
-               // This part might need to be more sophisticated for full TOML table support.
-               skip_to_next_line(ctx, it, end);
-               continue;
-            }
 
             if (!parse_toml_key(key_str, ctx, it, end)) {
                return;
@@ -1585,6 +1820,9 @@ namespace glz
             const bool key_matches = index < N && key_str == reflect<U>::keys[index];
 
             if (key_matches) [[likely]] {
+               if constexpr (check_error_on_missing_keys(Opts)) {
+                  fields[index] = true;
+               }
                visit<N>(
                   [&]<size_t I>() {
                      if (I == index) {
@@ -1627,45 +1865,59 @@ namespace glz
 
             skip_ws_and_comments(it, end);
             if (it == end) {
-               if (is_inline_table) ctx.error = error_code::unexpected_end; // Inline table must end with '}'
-               break;
+               break; // Truncated; settled below the loop
             }
 
-            if (is_inline_table) {
-               if (*it == '}') {
-                  // Handled at the start of the loop
-                  continue;
-               }
-               else if (*it == ',') {
-                  ++it; // Consume comma
-                  skip_ws_and_comments(it, end);
-                  if (it != end && *it == '}') { // Trailing comma case like { key = "val", }
-                     // This is allowed by TOML v1.0.0 for inline tables
-                     // The '}' will be consumed at the start of the next iteration.
-                  }
-               }
-               else {
-                  ctx.error = error_code::syntax_error; // Expected comma or '}'
-                  return;
+            if (*it == '}') {
+               // Handled at the start of the loop
+               continue;
+            }
+            else if (*it == ',') {
+               ++it; // Consume comma
+               skip_ws_and_comments(it, end);
+               if (it != end && *it == '}') { // Trailing comma case like { key = "val", }
+                  // This is allowed by TOML v1.0.0 for inline tables
+                  // The '}' will be consumed at the start of the next iteration.
                }
             }
             else {
-               // For top-level or standard tables, expect newline or EOF
-               if (it != end && (*it == '\n' || *it == '\r')) {
-                  skip_to_next_line(ctx, it, end);
-               }
-               else if (it != end && *it != '#') { // If not a comment, it's an error unless it's EOF
-                  // Could be an issue if there's no newline before EOF for the last key-value
-               }
+               ctx.error = error_code::syntax_error; // Expected comma or '}'
+               return;
             }
+         }
+
+         // A well-formed inline table returns at its '}' above, so falling out of the loop means
+         // the document ended inside it.
+         if (not bool(ctx.error)) {
+            ctx.error = error_code::unexpected_end;
          }
       }
    }
 
    template <auto Opts, class T>
-   inline bool resolve_nested(T& root, std::span<std::string> path, auto& ctx, auto& it, auto& end)
+   inline bool resolve_nested(T& root, std::span<std::string> path, auto& ctx, auto& it, auto& end,
+                              detail::missing_key_record* node)
    {
-      if constexpr (!(glz::reflectable<T> || glz::glaze_object_t<T>)) {
+      if constexpr (not nullable_like<T> && detail::is_toml_array_of_tables<T>()) {
+         // "[array.sub]" names a sub-table of the last element "[[array]]" defined, per TOML
+         // v1.0.0. Without descending here the header resolves to nothing and the body under it is
+         // read as though it belonged to the enclosing table.
+         if (root.empty()) {
+            // Nothing has opened an element for this to belong to. No TOML document reaches here:
+            // "[a.sub]" requires a preceding "[[a]]", and a dotted "a.sub = 1" cannot address an
+            // array at all. Inventing an element would accept both.
+            ctx.error = error_code::syntax_error;
+            return false;
+         }
+         [[maybe_unused]] detail::missing_key_record* element_node = nullptr;
+         if constexpr (check_error_on_missing_keys(Opts)) {
+            if (node) {
+               element_node = node->child(root.size() - 1, detail::tracked_element_count<T>());
+            }
+         }
+         return resolve_nested<Opts>(root.back(), path, ctx, it, end, element_node);
+      }
+      else if constexpr (!(glz::reflectable<T> || glz::glaze_object_t<T>)) {
          return true;
       }
       else {
@@ -1678,6 +1930,13 @@ namespace glz
          const bool key_matches = index < N && path.front() == reflect<U>::keys[index];
 
          if (key_matches) [[likely]] {
+            if constexpr (check_error_on_missing_keys(Opts)) {
+               // Naming a key assigns it, whether the document stops here or reaches through it
+               // into a deeper table.
+               if (node) {
+                  node->assign(index);
+               }
+            }
             visit<N>(
                [&]<size_t I>() {
                   if (I == index) {
@@ -1690,12 +1949,31 @@ namespace glz
                         }
                      }();
 
+                     using member_type = std::decay_t<decltype(member_obj)>;
+                     [[maybe_unused]] detail::missing_key_record* member_node = nullptr;
+                     if constexpr (check_error_on_missing_keys(Opts)) {
+                        if (node) {
+                           if constexpr (detail::toml_table_like<member_type>()) {
+                              member_node = node->child(I, detail::tracked_member_count<member_type>());
+                           }
+                           else if constexpr (detail::is_toml_array_of_tables<member_type>()) {
+                              // The array's node holds one child per element; the descent below
+                              // picks the element out of it.
+                              member_node = node->child(I, 0);
+                           }
+                        }
+                     }
+
                      if (!(path.size() - 1)) {
-                        using member_type = std::decay_t<decltype(member_obj)>;
-                        from<TOML, member_type>::template op<toml::is_internal_on<Opts>()>(member_obj, ctx, it, end);
+                        if constexpr (check_error_on_missing_keys(Opts) && detail::toml_table_like<member_type>()) {
+                           detail::read_tracked<toml::is_internal_on<Opts>()>(member_obj, ctx, it, end, member_node);
+                        }
+                        else {
+                           from<TOML, member_type>::template op<toml::is_internal_on<Opts>()>(member_obj, ctx, it, end);
+                        }
                      }
                      else {
-                        return resolve_nested<Opts>(member_obj, path.subspan(1), ctx, it, end);
+                        return resolve_nested<Opts>(member_obj, path.subspan(1), ctx, it, end, member_node);
                      }
                   }
                   return !bool(ctx.error);
@@ -1717,20 +1995,22 @@ namespace glz
    }
 
    template <auto Opts, nullable_like T>
-   inline bool resolve_nested(T& root, std::span<std::string> path, auto& ctx, auto& it, auto& end)
+   inline bool resolve_nested(T& root, std::span<std::string> path, auto& ctx, auto& it, auto& end,
+                              detail::missing_key_record* node)
    {
       if (!root) {
          if (!nullable_emplace<Opts>(root, ctx)) {
             return false;
          }
       }
-      return resolve_nested<Opts>(*root, path, ctx, it, end);
+      return resolve_nested<Opts>(*root, path, ctx, it, end, node);
    }
 
    // Helper to resolve an array-of-tables path and emplace a new element
    // Returns true if successful, false if error
    template <auto Opts, class T>
-   inline bool resolve_array_of_tables(T& root, std::span<std::string> path, auto& ctx, auto& it, auto& end)
+   inline bool resolve_array_of_tables(T& root, std::span<std::string> path, auto& ctx, auto& it, auto& end,
+                                       detail::missing_key_record* node)
    {
       if constexpr (!(glz::reflectable<T> || glz::glaze_object_t<T>)) {
          ctx.error = error_code::syntax_error;
@@ -1746,6 +2026,11 @@ namespace glz
          const bool key_matches = index < N && path.front() == reflect<U>::keys[index];
 
          if (key_matches) [[likely]] {
+            if constexpr (check_error_on_missing_keys(Opts)) {
+               if (node) {
+                  node->assign(index);
+               }
+            }
             bool success = false;
             visit<N>(
                [&]<size_t I>() {
@@ -1775,14 +2060,38 @@ namespace glz
                      }();
                      using member_type = std::decay_t<decltype(member_obj)>;
 
+                     // The array itself gets a node whose children are its elements, so that a
+                     // later [array.of.tables.sub] header lands on the element it extends.
+                     [[maybe_unused]] detail::missing_key_record* member_node = nullptr;
+                     if constexpr (check_error_on_missing_keys(Opts)) {
+                        if (node) {
+                           if constexpr (emplace_backable<member_type>) {
+                              member_node = node->child(I, 0);
+                           }
+                           else if constexpr (detail::toml_table_like<member_type>()) {
+                              member_node = node->child(I, detail::tracked_member_count<member_type>());
+                           }
+                        }
+                     }
+
                      if (path.size() == 1) {
                         // This is the final element in the path - it should be an array
                         if constexpr (emplace_backable<member_type>) {
                            // Emplace a new element and parse into it
                            auto& new_element = member_obj.emplace_back();
                            using element_type = std::decay_t<decltype(new_element)>;
-                           from<TOML, element_type>::template op<toml::is_internal_on<Opts>()>(new_element, ctx, it,
-                                                                                               end);
+                           if constexpr (check_error_on_missing_keys(Opts) && detail::toml_table_like<element_type>()) {
+                              detail::missing_key_record* element_node =
+                                 member_node ? member_node->child(member_obj.size() - 1,
+                                                                  detail::tracked_member_count<element_type>())
+                                             : nullptr;
+                              detail::read_tracked<toml::is_internal_on<Opts>()>(new_element, ctx, it, end,
+                                                                                 element_node);
+                           }
+                           else {
+                              from<TOML, element_type>::template op<toml::is_internal_on<Opts>()>(new_element, ctx, it,
+                                                                                                  end);
+                           }
                            success = !bool(ctx.error);
                         }
                         else {
@@ -1799,11 +2108,20 @@ namespace glz
                               // Need to add an element first
                               member_obj.emplace_back();
                            }
-                           success = resolve_array_of_tables<Opts>(member_obj.back(), path.subspan(1), ctx, it, end);
+                           [[maybe_unused]] detail::missing_key_record* element_node = nullptr;
+                           if constexpr (check_error_on_missing_keys(Opts)) {
+                              if (member_node) {
+                                 element_node = member_node->child(member_obj.size() - 1,
+                                                                   detail::tracked_element_count<member_type>());
+                              }
+                           }
+                           success = resolve_array_of_tables<Opts>(member_obj.back(), path.subspan(1), ctx, it, end,
+                                                                   element_node);
                         }
                         else if constexpr (glz::reflectable<member_type> || glz::glaze_object_t<member_type> ||
                                            nullable_like<member_type>) {
-                           success = resolve_array_of_tables<Opts>(member_obj, path.subspan(1), ctx, it, end);
+                           success =
+                              resolve_array_of_tables<Opts>(member_obj, path.subspan(1), ctx, it, end, member_node);
                         }
                         else {
                            ctx.error = error_code::syntax_error;
@@ -1830,14 +2148,15 @@ namespace glz
    }
 
    template <auto Opts, nullable_like T>
-   inline bool resolve_array_of_tables(T& root, std::span<std::string> path, auto& ctx, auto& it, auto& end)
+   inline bool resolve_array_of_tables(T& root, std::span<std::string> path, auto& ctx, auto& it, auto& end,
+                                       detail::missing_key_record* node)
    {
       if (!root) {
          if (!nullable_emplace<Opts>(root, ctx)) {
             return false;
          }
       }
-      return resolve_array_of_tables<Opts>(*root, path, ctx, it, end);
+      return resolve_array_of_tables<Opts>(*root, path, ctx, it, end, node);
    }
 
    // ============================================
@@ -2306,6 +2625,35 @@ namespace glz
       template <auto Opts, class It>
       static void op(auto&& value, is_context auto&& ctx, It&& it, auto end)
       {
+         if constexpr (check_error_on_missing_keys(Opts)) {
+            // An inline table settles its own required keys where it is parsed, so a record built
+            // for one is never read -- and an array of inline tables would allocate one per element.
+            auto peek = it;
+            skip_ws_newlines_and_comments(peek, end);
+            if (peek != end && *peek == '{') {
+               op_tracked<Opts>(value, ctx, it, end, nullptr);
+               return;
+            }
+            // Entered without a record of what the enclosing document has already assigned, so this
+            // parse owns the whole tree and resolves it once the value is complete.
+            detail::missing_key_record record{reflect<std::remove_cvref_t<decltype(value)>>::size};
+            op_tracked<Opts>(value, ctx, it, end, &record);
+            if (not bool(ctx.error)) {
+               detail::check_missing_keys<Opts>(value, record, ctx);
+            }
+         }
+         else {
+            op_tracked<Opts>(value, ctx, it, end, nullptr);
+         }
+      }
+
+      // node carries which members the enclosing document has already assigned to this same value,
+      // and collects the ones this call assigns. Null when error_on_missing_keys is off.
+      template <auto Opts, class It>
+      static void op_tracked(auto&& value, is_context auto&& ctx, It&& it, auto end,
+                             [[maybe_unused]] detail::missing_key_record* node)
+      {
+         using U = std::remove_cvref_t<decltype(value)>;
          while (it != end) {
             // TODO: Introduce OPTS here
             skip_ws_and_comments(it, end);
@@ -2319,15 +2667,23 @@ namespace glz
 
             // TODO: We probably should reorder that so that we dont check against less used inline table more often
             if (*it == '{') { // Check if it's an inline table
+               // parse_inline_table_members settles required keys itself, so keep the document walk
+               // off this node rather than reporting every member of it as missing.
+               if constexpr (check_error_on_missing_keys(Opts)) {
+                  if (node) {
+                     node->checked_in_place = true;
+                  }
+               }
                ++it; // Consume '{'
                skip_ws_and_comments(it, end);
                if (it != end && *it == '}') { // Empty inline table {}
                   ++it;
+                  detail::check_required_fields<Opts, U>({}, ctx);
                   return;
                }
                // TODO: Rewrite logic here, for now it works just fine so we leave it.
-               detail::parse_toml_object_members<Opts>(value, it, end, ctx, true); // true for is_inline_table
-               // parse_toml_object_members consumes the final '}'. The inline table is the
+               detail::parse_inline_table_members<Opts>(value, it, end, ctx);
+               // parse_inline_table_members consumes the final '}'. The inline table is the
                // entire value for this struct, so return rather than looping; otherwise an
                // enclosing inline table's ',' or '}' would be misparsed as the start of a key.
                return;
@@ -2362,7 +2718,7 @@ namespace glz
                      ++it; // skip second ']'
 
                      // Navigate to the array and emplace a new element
-                     if (!resolve_array_of_tables<Opts>(value, std::span{path}, ctx, it, end)) {
+                     if (!resolve_array_of_tables<Opts>(value, std::span{path}, ctx, it, end, node)) {
                         return;
                      }
                   }
@@ -2378,7 +2734,7 @@ namespace glz
                         return;
                      }
                      ++it; // skip ']'
-                     if (!resolve_nested<Opts>(value, std::span{path}, ctx, it, end)) {
+                     if (!resolve_nested<Opts>(value, std::span{path}, ctx, it, end, node)) {
                         return;
                      }
                   }
@@ -2404,13 +2760,112 @@ namespace glz
                   ctx.error = error_code::unexpected_end; // Value expected
                   return;
                }
-               if (!resolve_nested<Opts>(value, std::span{path}, ctx, it, end)) {
+               if (!resolve_nested<Opts>(value, std::span{path}, ctx, it, end, node)) {
                   return;
                }
             }
          }
       }
    };
+
+   namespace detail
+   {
+      template <auto Opts, class T, class It, class End>
+      void read_tracked(T& value, auto& ctx, It& it, End end, missing_key_record* node)
+      {
+         using U = std::remove_cvref_t<T>;
+         if constexpr (nullable_like<U>) {
+            // Mirrors from<TOML, nullable_like>::op, but hands the node to the value inside rather
+            // than losing it at the wrapper.
+            skip_ws_and_comments(it, end);
+            if (it == end) {
+               value = {};
+               return;
+            }
+            if (!value) {
+               if (!nullable_emplace<Opts>(value, ctx)) {
+                  return;
+               }
+            }
+            read_tracked<Opts>(*value, ctx, it, end, node);
+         }
+         else {
+            from<TOML, U>::template op_tracked<Opts>(value, ctx, it, end, node);
+         }
+      }
+
+      template <auto Opts, class T, class Ctx>
+      void check_missing_keys(T&& value, const missing_key_record& node, Ctx& ctx)
+      {
+         using U = std::remove_cvref_t<T>;
+         static constexpr auto N = reflect<U>::size;
+
+         if (node.checked_in_place) {
+            return;
+         }
+
+         static constexpr auto required = required_fields<U, Opts>();
+         for (size_t i = 0; i < N; ++i) {
+            if (required[i] && not(i < node.assigned.size() && node.assigned[i])) {
+               ctx.custom_error_message = reflect<U>::keys[i];
+               ctx.error = error_code::missing_key;
+               return;
+            }
+         }
+
+         if constexpr (N > 0) {
+            for (const auto& [index, child] : node.children) {
+               visit<N>(
+                  [&]<size_t I>() {
+                     if (I == index) {
+                        decltype(auto) member_obj = [&]() -> decltype(auto) {
+                           if constexpr (reflectable<U>) {
+                              return get<I>(to_tie(value));
+                           }
+                           else {
+                              return get_member(value, get<I>(reflect<U>::values));
+                           }
+                        }();
+                        check_missing_keys_at<Opts>(member_obj, *child, ctx);
+                     }
+                     return not bool(ctx.error);
+                  },
+                  index);
+               if (bool(ctx.error)) {
+                  return;
+               }
+            }
+         }
+      }
+
+      template <auto Opts, class T, class Ctx>
+      void check_missing_keys_at(T&& value, const missing_key_record& node, Ctx& ctx)
+      {
+         using U = std::remove_cvref_t<T>;
+         if constexpr (nullable_like<U>) {
+            if (value) {
+               check_missing_keys_at<Opts>(*value, node, ctx);
+            }
+         }
+         else if constexpr (glaze_object_t<U> || reflectable<U>) {
+            check_missing_keys<Opts>(value, node, ctx);
+         }
+         else if constexpr (emplace_backable<U>) {
+            // An array of tables: this node's children are keyed by element index.
+            for (const auto& [element, child] : node.children) {
+               if (element >= value.size()) {
+                  continue;
+               }
+               auto iter = std::begin(value);
+               std::advance(iter, static_cast<std::ptrdiff_t>(element));
+               check_missing_keys_at<Opts>(*iter, *child, ctx);
+               if (bool(ctx.error)) {
+                  return;
+               }
+            }
+         }
+      }
+   }
 
    // ============================================
    // Variant support for TOML
@@ -2507,6 +2962,78 @@ namespace glz
 
       template <class Variant, template <class> class Trait>
       constexpr size_t toml_variant_first_index_v = toml_variant_first_index_impl<Variant, Trait>::value;
+
+      // A '{' says the value is an inline table, but not which object alternative it is. Parse the
+      // structurally deduced one, and on failure rewind and try each of the others, taking the
+      // first that reads cleanly.
+      //
+      // Structural deduction is a guess, so a failure means "probably the wrong alternative" -- but
+      // only for failures that say the shape does not fit. A missing_key failure is the caller's own
+      // error_on_missing_keys strictness being enforced; retrying past it would answer a strict read
+      // with a different alternative instead of the error the caller asked for. A depth overrun is a
+      // property of the input rather than of the alternative, so retrying re-parses the whole
+      // subtree for nothing, once per alternative at every level of the nest.
+      template <auto Opts, class Variant, class It, class End>
+      void read_object_alternative(Variant& value, auto& ctx, It& it, End end)
+      {
+         static constexpr auto n_alts = std::variant_size_v<Variant>;
+         static constexpr auto deduced = toml_variant_first_index_v<Variant, is_toml_variant_object>;
+         const auto start = it;
+
+         const auto attempt = [&]<size_t I>() {
+            it = start;
+            ctx.error = error_code::none;
+            ctx.custom_error_message = {};
+            if (value.index() != I) {
+               value.template emplace<I>();
+            }
+            using V = std::variant_alternative_t<I, Variant>;
+            from<TOML, V>::template op<Opts>(std::get<I>(value), ctx, it, end);
+         };
+
+         attempt.template operator()<deduced>();
+         // missing_key is the caller's own strictness rather than a sign the alternative is wrong --
+         // but only while a wrong alternative would announce itself as unknown_key. With unknown
+         // keys skipped the two are indistinguishable, so the others still have to be tried; when
+         // none of them fits, the restore below hands back the strictness error either way.
+         constexpr bool missing_key_is_final = Opts.error_on_unknown_keys;
+         if (not bool(ctx.error) || ctx.error == error_code::exceeded_max_recursive_depth ||
+             (missing_key_is_final && ctx.error == error_code::missing_key)) {
+            return;
+         }
+
+         const auto deduced_error = ctx.error;
+         const auto deduced_message = ctx.custom_error_message;
+         const auto deduced_it = it;
+
+         bool recovered = false;
+         // Seeded from the latched budget rather than false: once it is spent, a level that still
+         // ran one retry before finding out would parse its subtree twice, which is 2^depth over an
+         // ambiguous nest. A spent budget has to stop the retry before it starts.
+         bool exhausted = speculation_exhausted(ctx);
+         for_each<n_alts>([&]<size_t I>() {
+            if (recovered || exhausted || I == deduced) {
+               return;
+            }
+            if constexpr (toml_variant_object_type<std::variant_alternative_t<I, Variant>>) {
+               attempt.template operator()<I>();
+               recovered = not bool(ctx.error);
+               if (not recovered && not charge_speculation(ctx, size_t(it - start))) {
+                  // Out of budget: an ambiguous nest re-parses the same subtree per alternative at
+                  // every level, which is exponential. Stop retrying and keep what we have.
+                  exhausted = true;
+               }
+            }
+         });
+
+         if (not recovered) {
+            // Report what the structurally deduced alternative said rather than whichever retry
+            // happened to run last.
+            it = deduced_it;
+            ctx.error = deduced_error;
+            ctx.custom_error_message = deduced_message;
+         }
+      }
 
       // Detect if a TOML number is a float by scanning ahead
       // Returns true if the number contains float indicators (., e, E, inf, nan)
@@ -2712,13 +3239,16 @@ namespace glz
                ctx.error = error_code::no_matching_variant_type;
                return;
             }
-            else {
+            else if constexpr (obj_count == 1) {
                constexpr auto idx = detail::toml_variant_first_index_v<Variant, detail::is_toml_variant_object>;
                using V = std::variant_alternative_t<idx, Variant>;
                if (!std::holds_alternative<V>(value)) {
                   value.template emplace<idx>();
                }
                from<TOML, V>::template op<Opts>(std::get<V>(value), ctx, it, end);
+            }
+            else {
+               detail::read_object_alternative<Opts>(value, ctx, it, end);
             }
          }
          else if ((c == 't' || c == 'f') && detail::is_toml_bool(it, end)) {

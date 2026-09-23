@@ -61,6 +61,63 @@ Glaze CBOR implements the following standards:
 | [RFC 8746](https://www.rfc-editor.org/rfc/rfc8746.html) | Typed arrays and multi-dimensional arrays |
 | [IANA CBOR Tags](https://www.iana.org/assignments/cbor-tags/cbor-tags.xhtml) | Registered semantic tags |
 
+## Variants and `glz::generic`
+
+A variant takes the shape its `glz::meta` declares, exactly as it does in JSON and BEVE:
+
+| `glz::meta` | Shape |
+|---|---|
+| `tag` alone | `{ tag : id, ...members }` — the discriminator merged into the alternative's map |
+| `tag` and `content` | `{ tag : id, content : value }` — the discriminator beside a value of any shape |
+| neither | the active alternative's own value, bare |
+
+Reading an undeclared variant tries the alternatives in declaration order and keeps the first that matches the major type. Alternatives that share a wire shape cannot be told apart; declare a `tag` when that matters.
+
+> **Wire format change.** Glaze 8.3.0 and earlier wrote every variant as the two element array `[index, value]`. That was compact but no more self-describing than a type name, and meaningless to any CBOR implementation that did not already know Glaze's convention. CBOR containing a variant written by an older Glaze will not read back.
+
+`glz::generic` is a variant of exactly the JSON value categories and declares no `tag`, so it falls out of the rule above as plain CBOR:
+
+```c++
+glz::generic_u64 value;
+auto ec = glz::read_json(value, R"({"a":[1,2,3],"c":"text"})");
+
+std::string buffer;
+ec = glz::write_cbor(value, buffer); // map(2), no per-element type information
+```
+
+Reading into a `glz::generic` accepts every CBOR major type that has a JSON counterpart. Byte strings, semantic tags, and the simple values other than `false`, `true`, and `null` do not — so a tagged item (a date, a bignum, a COSE structure) has to be read into a type that models it rather than into a `glz::generic`.
+
+## CBOR to JSON Conversion
+
+`glz::cbor_to_json` converts a buffer of CBOR directly to a buffer of JSON.
+
+```c++
+std::string json{};
+auto ec = glz::cbor_to_json(cbor, json);
+```
+
+A CBOR text string can hold control characters (0x00–1F), which JSON cannot. Those without a short escape make the conversion fail with `error_code::invalid_control_character`. To keep them, turn on `escape_control_characters`. See [String Escaping](binary.md#string-escaping).
+
+On success the returned `error_ctx::count` is the number of bytes written. A resizable buffer is resized to fit, but a fixed-size one (`std::array`, `std::span`) has no other way to learn how much of it now holds JSON. The same applies to `glz::beve_to_json`, `glz::bson_to_json`, `glz::jsonb_to_json`, and `glz::eetf_to_json`.
+
+The buffer must hold exactly one CBOR data item, which is what a CBOR document is. An empty buffer fails with `error_code::unexpected_end`, and bytes left over after the first item (a CBOR sequence, RFC 8742) fail with `error_code::syntax_error` rather than running the items together into text no JSON parser accepts.
+
+### What CBOR Types Become
+
+CBOR says more than JSON can, so a few types are mapped rather than translated:
+
+| CBOR | JSON | Note |
+|------|------|------|
+| Byte string | String of hex digit pairs | Two lowercase hex digits per byte. Applies to byte-string keys too. |
+| `undefined` | `null` | JSON has one empty value where CBOR has two, so `undefined` and `null` become the same thing. |
+| Integer key | Quoted decimal string | A JSON object key must be a string. RFC 8949 section 6.1 allows a converter to pick a string form. |
+| Tag | The tagged value | The tag number is dropped, except for typed arrays (RFC 8746), which become JSON arrays. |
+| Simple value | Its number | Values other than `false`, `true`, `null`, and `undefined` have no JSON form. |
+
+A typed array of IEEE binary128 elements (tags 83 and 87) fails with `error_code::feature_not_supported`; no C++ floating point type Glaze reads or writes represents it. Half precision elements (tags 80 and 84) widen to double.
+
+A key that has no JSON string form at all, such as an array, a map, or a float, fails with `error_code::syntax_error`.
+
 ## Typed Arrays (RFC 8746)
 
 Glaze automatically uses RFC 8746 typed arrays for contiguous numeric containers, enabling bulk memory operations for maximum performance.

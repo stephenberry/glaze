@@ -3,11 +3,15 @@
 
 #pragma once
 
+#include <bit>
+#include <cstring>
+
 #include "glaze/beve/header.hpp"
 #include "glaze/core/common.hpp"
 #include "glaze/core/opts.hpp"
 #include "glaze/core/wrappers.hpp"
 #include "glaze/reflection/get_name.hpp"
+#include "glaze/util/bit.hpp"
 #include "glaze/util/primes_64.hpp"
 
 #if GLZ_REFLECTION26
@@ -397,7 +401,7 @@ namespace glz
          return result;
       }();
 
-      // Flat values tuple built directly — avoids tuplet::tuple_cat (which has GCC issues)
+      // Flat values tuple built directly — avoids tuple_cat (which has GCC issues)
       static constexpr auto values = []<size_t... I>(std::index_sequence<I...>) {
          return tuple{detail::merge_accessor<V, flat_layout[I].outer, flat_layout[I].inner>{}...};
       }(std::make_index_sequence<size>{});
@@ -804,6 +808,24 @@ namespace glz
       }();
       return custom_getter_is_null(custom_val, ctx);
    }
+
+   // Whether any member of T performs a file include. Only these objects pay for the key-bit
+   // bookkeeping that lets an included document satisfy the including object's missing-key check.
+   template <class T>
+   constexpr bool has_includer_member = []() constexpr {
+      if constexpr (glaze_object_t<T> || reflectable<T>) {
+         bool found = false;
+         for_each<reflect<T>::size>([&]<auto I>() constexpr {
+            if constexpr (is_includer<std::decay_t<refl_t<T, I>>>) {
+               found = true;
+            }
+         });
+         return found;
+      }
+      else {
+         return false;
+      }
+   }();
 
    template <class T, auto Opts>
    constexpr auto required_fields()
@@ -1839,16 +1861,41 @@ namespace glz
    // This is because most cases that require full hashes are because
    // the tail end is the only unique part
 
+   // Both paths fold the key length in, because the consumed bytes alone do not identify the key.
+   //
+   // The long path walks whole 8 byte chunks and then takes the final 8 bytes as a tail, so the tail
+   // overlaps the last chunk by whatever the length leaves over and no partial load is ever needed.
+   // Changing the length slides that overlap, and for some keys it slides exactly far enough that a
+   // longer key yields the same chunks followed by the same tail. "field_name_10500_value" and
+   // "field_name_105000_value" both fold "field_na" and "me_10500" and then both take "00_value".
+   // Without the length nothing else in the mix differs, so the two hash alike under every seed: the
+   // seed is only the initial accumulator here, and an identical sequence of chunks carries any
+   // starting value to the same result. The seed search then exhausts and hashing is reported as
+   // failed, which is a hard error for the object readers rather than a slower path.
+   //
+   // Folding the length into that initial accumulator as `seed ^ (n << 1)` fixes it. The shift by
+   // one keeps a primes_64 seed odd, which matters: the accumulator is the multiplier argument of
+   // every chunk's bitmix, and multiplying by an odd number is a bijection, so no chunk bit is lost.
+   //
+   // The short path has a narrower version of the same problem, since to_uint64_n_below_8 zero fills
+   // and so a key and that key with trailing NULs produce the same value. A key below 8 bytes fills
+   // at most seven of them, which leaves the top byte provably free, so putting the length there
+   // makes the short path injective in (bytes, length).
+   //
+   // full_hash_impl and full_hash must agree bit for bit: the first builds the table at compile time
+   // and the second indexes it at runtime, so every path here has a counterpart there.
+
    // Do not call this at runtime, it is assumes the key lies within min_length and max_length
    inline constexpr uint64_t full_hash_impl(const sv key, const uint64_t seed, const auto min_length,
                                             const auto max_length) noexcept
    {
       if (max_length < 8) {
-         return bitmix(to_uint64_n_below_8(key.data(), key.size()), seed);
+         const auto n = key.size();
+         return bitmix(to_uint64_n_below_8(key.data(), n) | (uint64_t(n) << 56), seed);
       }
       else if (min_length > 7) {
          const auto n = key.size();
-         uint64_t h = seed;
+         uint64_t h = seed ^ (uint64_t(n) << 1);
          const auto* data = key.data();
          const auto* end7 = data + n - 7;
          for (auto d0 = data; d0 < end7; d0 += 8) {
@@ -1862,10 +1909,10 @@ namespace glz
          const auto* data = key.data();
 
          if (n < 8) {
-            return bitmix(to_uint64_n_below_8(data, n), seed);
+            return bitmix(to_uint64_n_below_8(data, n) | (uint64_t(n) << 56), seed);
          }
 
-         uint64_t h = seed;
+         uint64_t h = seed ^ (uint64_t(n) << 1);
          const auto* end7 = data + n - 7;
          for (auto d0 = data; d0 < end7; d0 += 8) {
             h = bitmix(to_uint64(d0), h);
@@ -1876,6 +1923,7 @@ namespace glz
    }
 
    // runtime full hash algorithm
+   // Must stay bit for bit identical to full_hash_impl, which built the table this indexes
    template <uint64_t min_length, uint64_t max_length, uint64_t seed>
    inline constexpr uint64_t full_hash(const auto* it, const size_t n) noexcept
    {
@@ -1883,13 +1931,13 @@ namespace glz
          if (n > 7) {
             return seed;
          }
-         return bitmix(to_uint64_n_below_8(it, n), seed);
+         return bitmix(to_uint64_n_below_8(it, n) | (uint64_t(n) << 56), seed);
       }
       else if constexpr (min_length > 7) {
          if (n < 8) {
             return seed;
          }
-         uint64_t h = seed;
+         uint64_t h = seed ^ (uint64_t(n) << 1);
          const auto* end7 = it + n - 7;
          for (auto d0 = it; d0 < end7; d0 += 8) {
             h = bitmix(to_uint64(d0), h);
@@ -1899,10 +1947,10 @@ namespace glz
       }
       else {
          if (n < 8) {
-            return bitmix(to_uint64_n_below_8(it, n), seed);
+            return bitmix(to_uint64_n_below_8(it, n) | (uint64_t(n) << 56), seed);
          }
 
-         uint64_t h = seed;
+         uint64_t h = seed ^ (uint64_t(n) << 1);
          const auto* end7 = it + n - 7;
          for (auto d0 = it; d0 < end7; d0 += 8) {
             h = bitmix(to_uint64(d0), h);
@@ -2426,12 +2474,24 @@ namespace glz
       }
    }();
 
-   template <size_t min_length>
+   // Finds the closing quote of an object key, or nullptr when there is none where one could be.
+   //
+   // Bounded by the longest reflected key rather than by `end`: a key longer than that matches
+   // nothing, so "not found" is already the right answer for the callers and there is no reason to
+   // run off down the rest of the document looking for a quote. That bound is what makes an inline
+   // scan the better choice over std::memchr, whose call overhead alone outweighs walking the two
+   // or three words a key spans.
+   template <size_t min_length, size_t max_length>
    GLZ_ALWAYS_INLINE constexpr const void* quote_memchr(auto&& it, auto end) noexcept
    {
+      // A key shorter than min_length matches nothing either, so starting the scan there is safe:
+      // it can only fail to find the quote, which is the answer such a key deserves.
+      const size_t available = size_t(end - it);
+      const size_t limit = available < max_length + 1 ? available : max_length + 1;
+      size_t i = min_length < limit ? min_length : limit;
+
       if consteval {
-         const auto count = size_t(end - it);
-         for (std::size_t i = 0; i < count; ++i) {
+         for (; i < limit; ++i) {
             if (it[i] == '"') {
                return it + i;
             }
@@ -2439,19 +2499,23 @@ namespace glz
          return nullptr;
       }
       else {
-         if constexpr (min_length >= 4) {
-            // Skipping makes the bifurcation worth it
-            const auto* start = it + min_length;
-            if (start >= end) [[unlikely]] {
-               return nullptr;
+         for (; limit - i >= 8; i += 8) {
+            uint64_t chunk;
+            std::memcpy(&chunk, it + i, 8);
+            if constexpr (std::endian::native == std::endian::big) {
+               chunk = std::byteswap(chunk);
             }
-            else [[likely]] {
-               return std::memchr(start, '"', size_t(end - start));
+            const uint64_t test = has_quote(chunk);
+            if (test) {
+               return it + i + (size_t(countr_zero(test)) >> 3);
             }
          }
-         else {
-            return std::memchr(it, '"', size_t(end - it));
+         for (; i < limit; ++i) {
+            if (it[i] == '"') {
+               return it + i;
+            }
          }
+         return nullptr;
       }
    }
 
@@ -2502,7 +2566,7 @@ namespace glz
       GLZ_ALWAYS_INLINE static constexpr size_t op(auto&& it, auto end) noexcept
       {
          if constexpr (HashInfo.sized_hash) {
-            const auto* c = quote_memchr<HashInfo.min_length>(it, end);
+            const auto* c = quote_memchr<HashInfo.min_length, HashInfo.max_length>(it, end);
             if (c) [[likely]] {
                const auto n = size_t(static_cast<std::decay_t<decltype(it)>>(c) - it);
                if (n == 0 || n > HashInfo.max_length || HashInfo.unique_index >= size_t(end - it)) [[unlikely]] {
@@ -2519,7 +2583,7 @@ namespace glz
          else {
             if constexpr (N == 2) {
                if constexpr (uindex > 0) {
-                  if ((it + uindex) >= end) [[unlikely]] {
+                  if (size_t(end - it) <= uindex) [[unlikely]] {
                      return N; // error
                   }
                }
@@ -2529,7 +2593,7 @@ namespace glz
             }
             else {
                if constexpr (uindex > 0) {
-                  if ((it + uindex) >= end) [[unlikely]] {
+                  if (size_t(end - it) <= uindex) [[unlikely]] {
                      return N; // error
                   }
                }
@@ -2548,7 +2612,7 @@ namespace glz
       GLZ_ALWAYS_INLINE static constexpr size_t op(auto&& it, auto end) noexcept
       {
          if constexpr (uindex > 0) {
-            if ((it + uindex) >= end) [[unlikely]] {
+            if (size_t(end - it) <= uindex) [[unlikely]] {
                return N; // error
             }
          }
@@ -2567,7 +2631,7 @@ namespace glz
       GLZ_ALWAYS_INLINE static constexpr size_t op(auto&& it, auto end) noexcept
       {
          if constexpr (HashInfo.front_hash_bytes == 2) {
-            if ((it + 2) >= end) [[unlikely]] {
+            if (size_t(end - it) <= 2) [[unlikely]] {
                return N; // error
             }
             uint16_t h;
@@ -2586,7 +2650,7 @@ namespace glz
             return HashInfo.table[bitmix(h, HashInfo.seed) % bsize];
          }
          else if constexpr (HashInfo.front_hash_bytes == 4) {
-            if ((it + 4) >= end) [[unlikely]] {
+            if (size_t(end - it) <= 4) [[unlikely]] {
                return N;
             }
             uint32_t h;
@@ -2605,7 +2669,7 @@ namespace glz
             return HashInfo.table[bitmix(h, HashInfo.seed) % bsize];
          }
          else if constexpr (HashInfo.front_hash_bytes == 8) {
-            if ((it + 8) >= end) [[unlikely]] {
+            if (size_t(end - it) <= 8) [[unlikely]] {
                return N;
             }
             uint64_t h;
@@ -2637,11 +2701,11 @@ namespace glz
 
       GLZ_ALWAYS_INLINE static constexpr size_t op(auto&& it, auto end) noexcept
       {
-         const auto* c = quote_memchr<HashInfo.min_length>(it, end);
+         const auto* c = quote_memchr<HashInfo.min_length, HashInfo.max_length>(it, end);
          if (c) [[likely]] {
             const auto n = uint8_t(static_cast<std::decay_t<decltype(it)>>(c) - it);
             const auto pos = per_length_info<T>.unique_index[n];
-            if ((it + pos) >= end) [[unlikely]] {
+            if (size_t(end - it) <= pos) [[unlikely]] {
                return N; // error
             }
             const auto h = bitmix(uint16_t(it[pos]) | (uint16_t(n) << 8), HashInfo.seed);
@@ -2669,7 +2733,7 @@ namespace glz
          // extra characters exist after the closing quote (e.g., standalone enum: "value")
 
          if constexpr (length_range == 0) {
-            if ((it + min_length) >= end) [[unlikely]] {
+            if (size_t(end - it) <= min_length) [[unlikely]] {
                return N;
             }
             const auto h = full_hash<HashInfo.min_length, HashInfo.max_length, HashInfo.seed>(it, min_length);
@@ -2677,19 +2741,20 @@ namespace glz
          }
          else {
             if constexpr (length_range == 1) {
-               auto quote = it + min_length;
-               // Ensure we can read *quote to determine if string is min_length or max_length.
-               // The check (quote + 1) > end ensures quote < end, making *quote dereferenceable.
-               if ((quote + 1) > end) [[unlikely]] {
+               // Bound before forming the pointer, not after: `it + min_length` is undefined once it
+               // runs past one-past-the-end, whether or not it is dereferenced, and a key shorter
+               // than min_length gets here. The test is the same one, written as a count.
+               if ((end - it) <= std::ptrdiff_t(min_length)) [[unlikely]] {
                   return N;
                }
+               const auto* const quote = it + min_length; // in bounds, and readable
 
                const auto n = min_length + uint8_t(*quote != '"');
                const auto h = full_hash<HashInfo.min_length, HashInfo.max_length, HashInfo.seed>(it, n);
                return HashInfo.table[h % bsize];
             }
             else {
-               const auto* c = quote_memchr<HashInfo.min_length>(it, end);
+               const auto* c = quote_memchr<HashInfo.min_length, HashInfo.max_length>(it, end);
                if (c) [[likely]] {
                   const auto n = uint8_t(static_cast<std::decay_t<decltype(it)>>(c) - it);
                   const auto h = full_hash<HashInfo.min_length, HashInfo.max_length, HashInfo.seed>(it, n);
@@ -2884,7 +2949,7 @@ namespace glz
          // a gap of [min_length, max_length] would read it[255]. The wrapper's length pre-screen
          // does not catch that, so this reader keeps its own end check.
          const auto pos = per_length_info<T>.unique_index[uint8_t(n)];
-         if ((it + pos) >= end) [[unlikely]] {
+         if (size_t(end - it) <= pos) [[unlikely]] {
             return N; // error
          }
          const auto h = bitmix(uint16_t(it[pos]) | (uint16_t(n) << 8), HashInfo.seed);
@@ -3542,6 +3607,44 @@ namespace glz
       template <class Variant>
       struct beve_positional_tagging_needs_content : std::false_type
       {};
+
+      // MessagePack and CBOR maps are length-prefixed exactly as BEVE objects are, so they inherit
+      // the same representation limit: the member count of a custom body is not knowable in advance.
+      template <class Variant, class Alternative>
+      struct binary_internal_tagging_needs_reflected_alternative : std::false_type
+      {};
+   }
+
+   // `ids` may declare fewer entries than the variant has alternatives -- the readers treat the first
+   // unlabeled alternative as the default for an unrecognized id -- so an alternative past the end of
+   // `ids` has no id to write. Indexing there reads past a static array. A valueless variant has no
+   // alternative to name at all, and neither does an index past the alternative list.
+   template <is_variant T>
+   [[nodiscard]] inline bool variant_missing_id(auto&& value, is_context auto&& ctx) noexcept
+   {
+      if (value.index() >= ids_v<T>.size()) [[unlikely]] {
+         ctx.error = error_code::no_matching_variant_type;
+         ctx.custom_error_message = variant_ids_string_v<T>;
+         return true;
+      }
+      return false;
+   }
+
+   // Map an already-decoded discriminator to an alternative index. Returns variant_size when the id
+   // names no alternative and there is no unlabeled default. The formats differ only in how they
+   // decode the id from their own bytes; this rule is the same for all of them.
+   template <is_variant T>
+   [[nodiscard]] constexpr size_t variant_index_from_id(size_t index) noexcept
+   {
+      if (index < ids_v<T>.size()) [[likely]] {
+         return index;
+      }
+      if constexpr (ids_v<T>.size() < std::variant_size_v<T>) {
+         // Fewer ids than alternatives: the first unlabeled alternative is the default for an
+         // unrecognized id, matching the BEVE and JSON readers.
+         return ids_v<T>.size();
+      }
+      return std::variant_size_v<T>;
    }
 
    template <is_variant T>
@@ -3599,6 +3702,87 @@ namespace glz
 
    template <is_variant T>
    inline constexpr bool adjacently_tagged_v = variant_tagging_v<T> == variant_tagging_kind::adjacent;
+
+   // The kinds of self-describing value a MessagePack or CBOR reader for a type accepts, with
+   // conversions allowed. Undeclared variant resolution uses them to find the alternatives that can
+   // compete for one value. A type not classified here is assumed to accept anything, which is always
+   // safe: it only keeps a strict pass that might have been skipped.
+   namespace binary_value_kind
+   {
+      inline constexpr uint8_t null = 1 << 0;
+      inline constexpr uint8_t boolean = 1 << 1;
+      inline constexpr uint8_t integer = 1 << 2;
+      inline constexpr uint8_t floating = 1 << 3;
+      inline constexpr uint8_t string = 1 << 4;
+      inline constexpr uint8_t sequence = 1 << 5; // arrays, byte strings, and typed-array tags
+      inline constexpr uint8_t map = 1 << 6;
+      inline constexpr uint8_t any = 0xff;
+   }
+
+   template <class T>
+   consteval uint8_t binary_value_kinds() noexcept
+   {
+      using V = std::remove_cvref_t<T>;
+      namespace kind = binary_value_kind;
+      if constexpr (custom_read<V>) {
+         return kind::any;
+      }
+      else if constexpr (always_null_t<V>) {
+         return kind::null;
+      }
+      else if constexpr (bool_t<V>) {
+         return kind::boolean;
+      }
+      else if constexpr (int_t<V>) {
+         return kind::integer;
+      }
+      else if constexpr (std::floating_point<V>) {
+         return kind::integer | kind::floating; // an integer converts
+      }
+      else if constexpr (str_t<V>) {
+         return kind::string;
+      }
+      else if constexpr (readable_map_t<V>) {
+         return kind::map;
+      }
+      else if constexpr (readable_array_t<V>) {
+         return kind::sequence;
+      }
+      else if constexpr (is_variant<V>) {
+         if constexpr (variant_tagging_v<V> == variant_tagging_kind::none) {
+            return []<size_t... I>(std::index_sequence<I...>) {
+               return uint8_t((binary_value_kinds<std::variant_alternative_t<I, V>>() | ...));
+            }(std::make_index_sequence<std::variant_size_v<V>>{});
+         }
+         else {
+            return kind::any;
+         }
+      }
+      else {
+         return kind::any;
+      }
+   }
+
+   // Which alternatives of an undeclared variant accept a kind of value another alternative also
+   // accepts. Only these need resolving strictly before leniently: an uncontested alternative is the
+   // sole candidate for every value it accepts, so a single lenient read lands where the strict and
+   // lenient pair would, without parsing its subtree twice at every level of a nest.
+   template <is_variant T>
+   inline constexpr auto binary_contested_alternatives_v = [] {
+      constexpr size_t N = std::variant_size_v<T>;
+      const auto kinds = []<size_t... I>(std::index_sequence<I...>) {
+         return std::array<uint8_t, N>{binary_value_kinds<std::variant_alternative_t<I, T>>()...};
+      }(std::make_index_sequence<N>{});
+      std::array<bool, N> contested{};
+      for (size_t i = 0; i < N; ++i) {
+         for (size_t j = 0; j < N; ++j) {
+            if (i != j && (kinds[i] & kinds[j])) {
+               contested[i] = true;
+            }
+         }
+      }
+      return contested;
+   }();
 }
 
 #if defined(_MSC_VER) && !defined(__clang__)

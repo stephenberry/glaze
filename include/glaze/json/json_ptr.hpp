@@ -4,7 +4,6 @@
 #pragma once
 
 #include <algorithm>
-#include <charconv>
 
 #include "glaze/core/seek.hpp"
 #include "glaze/json/read.hpp"
@@ -40,7 +39,7 @@ namespace glz
 
       auto start = it;
 
-      if (buffer.empty()) [[unlikely]] {
+      if (buffer.size() == 0) [[unlikely]] {
          ctx.error = error_code::no_read_input;
       }
 
@@ -115,7 +114,7 @@ namespace glz
                case '[': {
                   ++it;
                   // Could optimize by counting commas
-                  static constexpr auto n = stoui(key);
+                  static constexpr auto n = detail::parse_json_ptr_array_index(key);
                   if constexpr (n) {
                      for_each<n.value()>([&]<size_t>() {
                         skip_value<JSON>::op<Opts>(ctx, it, end);
@@ -229,9 +228,18 @@ namespace glz
       return unexpected(s.error());
    }
 
+   // write_at replaces a value in place, which needs the index-based erase/insert of a std::string.
+   // `contiguous` promises only data() and size(), so it would admit buffers (std::vector<char>
+   // among them) that cannot splice; spelling the requirement out rejects them at the call site.
+   template <class T>
+   concept spliceable_buffer = contiguous<T> && requires(T& buffer, size_t index, std::string_view value) {
+      buffer.erase(index, index);
+      buffer.insert(index, value);
+   };
+
    // Write raw text to a JSON value denoted by a JSON Pointer
    template <string_literal Path, auto Opts = opts{}>
-   [[nodiscard]] inline error_ctx write_at(const std::string_view value, contiguous auto&& buffer)
+   [[nodiscard]] inline error_ctx write_at(const std::string_view value, spliceable_buffer auto&& buffer)
    {
       auto view = glz::get_view_json<Path, Opts>(buffer);
       if (view) {
@@ -246,15 +254,6 @@ namespace glz
          return view.error();
       }
    }
-
-   namespace detail
-   {
-      // Check if a string could be a numeric array index
-      inline bool runtime_maybe_numeric(const std::string& s)
-      {
-         return !s.empty() && s.find_first_not_of("0123456789") == std::string::npos;
-      }
-   } // namespace detail
 
    // Runtime version of get_view_json - navigate to a JSON value using a runtime JSON pointer
    template <auto Opts = opts{}>
@@ -271,7 +270,7 @@ namespace glz
 
       auto start = it;
 
-      if (buffer.empty()) [[unlikely]] {
+      if (buffer.size() == 0) [[unlikely]] {
          return result_t{unexpected(error_ctx{0, error_code::no_read_input})};
       }
 
@@ -299,8 +298,6 @@ namespace glz
          if (it >= end) {
             return result_t{unexpected(error_ctx{size_t(it - start), error_code::unexpected_end})};
          }
-
-         const bool is_numeric = runtime_maybe_numeric(token);
 
          if (*it == '{') {
             ++it;
@@ -374,15 +371,11 @@ namespace glz
             }
          }
          else if (*it == '[') {
-            if (!is_numeric) {
+            const auto parsed_index = detail::parse_json_ptr_array_index(token);
+            if (!parsed_index) {
                return result_t{unexpected(error_ctx{size_t(it - start), error_code::array_element_not_found})};
             }
-
-            size_t index{};
-            auto [p, ec] = std::from_chars(token.data(), token.data() + token.size(), index);
-            if (ec != std::errc{}) {
-               return result_t{unexpected(error_ctx{size_t(it - start), error_code::array_element_not_found})};
-            }
+            const size_t index = *parsed_index;
 
             ++it; // skip '['
 
@@ -426,7 +419,7 @@ namespace glz
 
    // Runtime version of write_at - write a JSON value at a runtime JSON pointer location
    template <auto Opts = opts{}>
-   [[nodiscard]] inline error_ctx write_at(const sv json_ptr, const sv value, contiguous auto&& buffer)
+   [[nodiscard]] inline error_ctx write_at(const sv json_ptr, const sv value, spliceable_buffer auto&& buffer)
    {
       auto view = glz::get_view_json<Opts>(json_ptr, buffer);
       if (view) {

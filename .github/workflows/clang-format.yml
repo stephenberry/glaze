@@ -9,6 +9,10 @@ on:
       - 'docs/**'
   workflow_dispatch:
 
+permissions:
+  # Commits the clang-format fixes back to the branch.
+  contents: write
+
 jobs:
   build:
     runs-on: ubuntu-latest

@@ -119,6 +119,28 @@ glz::write_json(json, buffer);
 expect(buffer == R"({"pi":3.141,"happy":true,"name":"Stephen","nothing":null,"answer":{"everything":42},"list":[1,0,2],"object":{"currency":"USD","value":42.99}})");
 ```
 
+## Constructing generic Values
+
+A braced list always selects the array or object constructor, **including when it holds a
+single element**. Use parentheses or assignment to build a scalar:
+
+```c++
+glz::generic{"bar"}   // ["bar"] - a one element array
+glz::generic("bar")   // "bar"   - a string
+```
+
+This is ordinary C++ list initialization, not a Glaze rule: a viable
+`std::initializer_list` constructor is preferred over every other candidate.
+`std::vector<int>{3}` is `[3]` while `std::vector<int>(3)` is `[0,0,0]` for the same
+reason.
+
+The case worth watching is copying, where braces wrap rather than copy:
+
+```c++
+glz::generic copy = other;    // copy of other
+glz::generic wrapped{other};  // one element array containing other
+```
+
 ## get() vs as()
 
 All generic types are variants underneath. The `get<T>()` method mimics a `std::get` call for a variant, which rejects conversions and throws if the type doesn't match. The `as<T>()` method performs conversions.
@@ -302,6 +324,31 @@ auto names_array = glz::get<std::array<std::string, 3>>(json, "/names");
 ```
 
 This works because `glz::generic` stores arrays as `std::vector<glz::generic>` and objects as `glz::ordered_small_map<glz::generic>`. When you request a specific container type, Glaze deserializes the generic representation into your desired type.
+
+## Binary Formats
+
+`glz::generic` is not JSON-only. Every binary format Glaze supports writes it as that format's own native data, with no per-element type information, so the result is readable by any implementation of that format rather than only by Glaze:
+
+| Format | Representation |
+|--------|----------------|
+| BEVE | The alternative's own self-describing BEVE value |
+| CBOR | The matching CBOR major type |
+| MessagePack | The matching MessagePack type byte |
+| JSONB | The matching JSONB element type |
+
+```cpp
+glz::generic_u64 value;
+auto ec = glz::read_json(value, R"({"a":[1,2,3],"c":"text"})");
+
+std::string buffer;
+ec = glz::write_cbor(value, buffer); // or write_msgpack, write_beve, write_jsonb
+```
+
+Reading back chooses the number alternative the JSON reader would: the alternatives are tried in declaration order, so a value lands in the widest one the mode holds exactly and falls back to `double` when the sign or magnitude does not fit. A `glz::generic_u64` that held a `uint64_t` still holds one after a round trip, and a negative value still holds an `int64_t`.
+
+This is not a special case for `glz::generic`: it is a variant that declares no `glz::meta::tag`, and every format writes such a variant as the active alternative's own value, with no discriminator.
+
+A format can express values JSON cannot — CBOR byte strings and semantic tags, MessagePack `bin` and `ext`. Those have no `glz::generic` alternative and are rejected; read them into a type that models them. See [MessagePack](./msgpack.md#variants-and-glzgeneric) and [CBOR](./cbor.md#variants-and-glzgeneric).
 
 ## Compilation time optimization
 

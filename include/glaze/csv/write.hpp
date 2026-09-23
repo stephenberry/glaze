@@ -51,7 +51,9 @@ namespace glz
                      return size_t{64};
                   }
                   else if constexpr (sizeof(T) > 4) {
-                     return size_t{32};
+                     // glz::to_chars may use up to zmij::double_buffer_size bytes of the
+                     // buffer as scratch; 32 was two short. Matches required_padding<double>().
+                     return size_t{zmij::double_buffer_size + 4};
                   }
                   else {
                      return size_t{24};

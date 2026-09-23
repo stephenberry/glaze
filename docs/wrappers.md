@@ -848,6 +848,25 @@ expect(obj.y == 26); // 5 * 5 + 1
 };
 ```
 
+An `invoke` member is a call site rather than state, so it cannot be written: there is no value to serialize, and reading an invoke member back invokes it. Writing one is a compile error. Exclude it from output by adding a [skip](./skip-keys.md) to the `meta` above that returns `true` for `glz::operation::serialize`:
+
+```c++
+template <>
+struct glz::meta<invoke_struct>
+{
+   using T = invoke_struct;
+   static constexpr auto value = object("square", invoke<&T::square>, "add_one", invoke<&T::add_one>);
+
+   // added: invoke members are read-only
+   static constexpr bool skip(const std::string_view key, const glz::meta_context& ctx)
+   {
+      return ctx.op == glz::operation::serialize && (key == "square" || key == "add_one");
+   }
+};
+```
+
+> Before v8.5.0 an invoke member was written as `[]` (member function pointer) or `[[0]]` (a `std::function` with by-value arguments), neither of which is meaningful output. Add the `skip` above to keep such a struct writable.
+
 ## write_float32
 
 Writes out numbers with a maximum precision of `float32_t`.

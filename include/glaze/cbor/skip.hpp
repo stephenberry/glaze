@@ -35,7 +35,7 @@ namespace glz
             return val;
          }
          case info::uint16_follows: {
-            if ((it + 2) > end) [[unlikely]] {
+            if ((end - it) < 2) [[unlikely]] {
                ctx.error = error_code::unexpected_end;
                return 0;
             }
@@ -48,7 +48,7 @@ namespace glz
             return val;
          }
          case info::uint32_follows: {
-            if ((it + 4) > end) [[unlikely]] {
+            if ((end - it) < 4) [[unlikely]] {
                ctx.error = error_code::unexpected_end;
                return 0;
             }
@@ -61,7 +61,7 @@ namespace glz
             return val;
          }
          case info::uint64_follows: {
-            if ((it + 8) > end) [[unlikely]] {
+            if ((end - it) < 8) [[unlikely]] {
                ctx.error = error_code::unexpected_end;
                return 0;
             }
@@ -74,7 +74,11 @@ namespace glz
             return val;
          }
          case info::indefinite:
-            return 0; // Caller handles indefinite specially
+            // Indefinite length is only well-formed for byte/text strings, arrays, and maps,
+            // and those callers intercept additional_info == 31 before reaching here. Any other
+            // major type (uint, nint, tag) carrying it is not well-formed per RFC 8949 Appendix C.
+            ctx.error = error_code::syntax_error;
+            return 0;
          default:
             ctx.error = error_code::syntax_error; // Reserved (28-30)
             return 0;
@@ -291,21 +295,21 @@ namespace glz
                ++it; // Simple value in next byte
                break;
             case simple::float16:
-               if ((it + 2) > end) [[unlikely]] {
+               if ((end - it) < 2) [[unlikely]] {
                   ctx.error = error_code::unexpected_end;
                   return;
                }
                it += 2;
                break;
             case simple::float32:
-               if ((it + 4) > end) [[unlikely]] {
+               if ((end - it) < 4) [[unlikely]] {
                   ctx.error = error_code::unexpected_end;
                   return;
                }
                it += 4;
                break;
             case simple::float64:
-               if ((it + 8) > end) [[unlikely]] {
+               if ((end - it) < 8) [[unlikely]] {
                   ctx.error = error_code::unexpected_end;
                   return;
                }
