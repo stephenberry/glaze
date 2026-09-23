@@ -10,6 +10,7 @@
 // (Serialization is handled by glz::to_chars in glaze/util/zmij.hpp; with
 // `OptSize=true` it offers a similarly small footprint at higher throughput.)
 
+#include <bit>
 #include <charconv>
 #include <cmath>
 #include <cstdint>
@@ -23,20 +24,32 @@ namespace glz::simple_float
 {
    // ============================================================================
    // FLOAT PARSING - Computational approach with tiny power-of-5 tables
-   // Uses 128-bit arithmetic for correct rounding on all platforms
+   // 128-bit arithmetic bounds the result; the rare inputs whose bounds straddle a rounding boundary
+   // are decided by an exact big integer comparison, so every result is correctly rounded
    // ============================================================================
 
    namespace detail
    {
+      // Decimal significand digits kept in the 64-bit mantissa: 10^19 - 1 < 2^64
+      inline constexpr int max_mantissa_digits = 19;
+
       struct decimal_number
       {
          bool negative{};
+         bool truncated{}; // nonzero digits past max_mantissa_digits were dropped
          uint64_t mantissa{};
-         int32_t exp10{};
+         int32_t exp10{}; // clamped to [min_exp10, max_exp10]
+         // Full digit span, re-read only to resolve inputs near a rounding boundary
+         const char* digits_begin{}; // first integer digit
+         const char* int_end{}; // one past the integer digits
+         const char* digits_end{}; // one past the last integer or fraction digit
+         int64_t exp_part{}; // signed value of the exponent part (saturated)
       };
 
       inline constexpr int32_t max_exp10 = 400;
       inline constexpr int32_t min_exp10 = -400;
+      // Exponent part saturation: far beyond any meaningful scale, yet summing with digit counts cannot overflow
+      inline constexpr int64_t max_exp_part = int64_t(1) << 40;
 
       // Strict JSON-compliant number parser
       // JSON number format (RFC 8259):
@@ -85,14 +98,14 @@ namespace glz::simple_float
             return nullptr; // Error: no digits after sign or at start
          }
 
-         constexpr int max_sig_digits = 17;
          uint64_t mantissa = 0;
-         int32_t exp10 = 0;
          int sig_digits = 0;
+         bool truncated = false;
+         int64_t exp10 = 0;
 
          // Parse integer part
-         char first_digit = peek();
-         if (first_digit == '0') {
+         const char* const digits_begin = p;
+         if (peek() == '0') {
             // Leading zero - next char must NOT be a digit (JSON rule)
             ++p;
             if (!at_end() && is_digit(peek())) {
@@ -100,20 +113,20 @@ namespace glz::simple_float
             }
          }
          else {
-            // Non-zero digit - parse all integer digits
-            while (!at_end() && is_digit(peek())) {
-               unsigned digit = static_cast<unsigned>(*p - '0');
-               if (sig_digits < max_sig_digits) {
-                  mantissa = mantissa * 10u + digit;
-                  ++sig_digits;
-               }
-               else {
-                  // Mantissa full - adjust exponent for extra integer digits
-                  if (exp10 < max_exp10) ++exp10;
-               }
+            while (!at_end() && is_digit(peek()) && sig_digits < max_mantissa_digits) {
+               mantissa = mantissa * 10u + static_cast<unsigned>(*p - '0');
+               ++sig_digits;
                ++p;
             }
+            // Integer digits past the mantissa capacity each scale it by 10
+            const char* const dropped_begin = p;
+            while (!at_end() && is_digit(peek())) {
+               truncated = truncated || (*p != '0');
+               ++p;
+            }
+            exp10 = p - dropped_begin;
          }
+         const char* const int_end = p;
 
          // Parse optional fractional part
          if (!at_end() && peek() == '.') {
@@ -124,26 +137,23 @@ namespace glz::simple_float
                return nullptr; // Error: decimal point without following digit (e.g., "1.", "1.e5")
             }
 
-            // Parse fractional digits
+            const char* const frac_begin = p;
+            while (!at_end() && is_digit(peek()) && sig_digits < max_mantissa_digits) {
+               mantissa = mantissa * 10u + static_cast<unsigned>(*p - '0');
+               if (mantissa != 0) ++sig_digits; // leading fractional zeros are not significant
+               ++p;
+            }
+            exp10 -= p - frac_begin;
+            // Fractional digits past the mantissa capacity only affect rounding
             while (!at_end() && is_digit(peek())) {
-               unsigned digit = static_cast<unsigned>(*p - '0');
-
-               // Skip leading zeros in fraction (don't count as significant)
-               if (mantissa == 0 && digit == 0) {
-                  // Leading fractional zero: just adjust exponent
-                  if (exp10 > min_exp10) --exp10;
-               }
-               else if (sig_digits < max_sig_digits) {
-                  mantissa = mantissa * 10u + digit;
-                  ++sig_digits;
-                  if (exp10 > min_exp10) --exp10;
-               }
-               // else: mantissa full, digit is truncated (no exponent adjustment for fractions)
+               truncated = truncated || (*p != '0');
                ++p;
             }
          }
+         const char* const digits_end = p;
 
          // Parse optional exponent part
+         int64_t exp_part = 0;
          if (!at_end() && (peek() == 'e' || peek() == 'E')) {
             ++p;
 
@@ -159,29 +169,30 @@ namespace glz::simple_float
                return nullptr; // Error: exponent without digits (e.g., "1e", "1e+", "1e-")
             }
 
-            int32_t exp_part = 0;
             while (!at_end() && is_digit(peek())) {
-               unsigned digit = static_cast<unsigned>(*p - '0');
-               if (exp_part < max_exp10) {
-                  exp_part = exp_part * 10 + static_cast<int32_t>(digit);
-                  if (exp_part > max_exp10) exp_part = max_exp10;
+               if (exp_part < max_exp_part) {
+                  exp_part = exp_part * 10 + (*p - '0');
                }
                ++p;
             }
-
             if (exp_negative) {
-               exp10 -= exp_part;
-               if (exp10 < min_exp10) exp10 = min_exp10;
-            }
-            else {
-               exp10 += exp_part;
-               if (exp10 > max_exp10) exp10 = max_exp10;
+               exp_part = -exp_part;
             }
          }
 
+         // Clamping preserves the result: any mantissa scaled by 10^(+/-400) overflows or underflows
+         exp10 += exp_part;
+         if (exp10 > max_exp10) exp10 = max_exp10;
+         if (exp10 < min_exp10) exp10 = min_exp10;
+
          out.negative = negative;
+         out.truncated = truncated;
          out.mantissa = mantissa;
-         out.exp10 = exp10;
+         out.exp10 = static_cast<int32_t>(exp10);
+         out.digits_begin = digits_begin;
+         out.int_end = int_end;
+         out.digits_end = digits_end;
+         out.exp_part = exp_part;
          return p; // Return pointer to position after parsed number
       }
 
@@ -1061,6 +1072,234 @@ namespace glz::simple_float
          return false; // Need slow path for subnormals and edge cases
       }
 
+      // ============================================================================
+      // Correct rounding: bound the true value, resolve rare ties exactly
+      // ============================================================================
+
+      // Approximate w × 10^q as (hi:lo) × 2^exp2, normalized so the MSB of hi is set
+      GLZ_ALWAYS_INLINE constexpr void approximate_decimal(uint64_t w, int32_t q, uint64_t& hi, uint64_t& lo,
+                                                           int32_t& exp2) noexcept
+      {
+         bool round_bit, sticky_bit;
+#ifdef __SIZEOF_INT128__
+         // Hybrid approach: O(1) table lookup for common exponents (-16..+16), binary exp for extreme values
+         apply_pow5_hybrid(w, q, hi, lo, exp2, round_bit, sticky_bit);
+#else
+         // Fallback: pure binary exponentiation (slower but smaller, no __int128)
+         if (q >= 0) {
+            apply_pow5_impl(w, q, hi, lo, exp2, round_bit, sticky_bit, pow5_pos_table);
+         }
+         else {
+            apply_pow5_impl(w, -q, hi, lo, exp2, round_bit, sticky_bit, pow5_neg_table);
+         }
+         exp2 += q;
+#endif
+      }
+
+      // The approximation is exact when 5^q < 2^63, since w × 5^q then fits in 128 bits
+      GLZ_ALWAYS_INLINE constexpr bool is_exact_decimal(int32_t q) noexcept { return q >= 0 && q <= 27; }
+
+      // Otherwise every rounded pow5 table entry contributes under 2^-128 relative error and every truncated
+      // 128-bit product under 2^-126. At most 10 of each bounds the total below 2^-122, i.e. under 2^6 units in
+      // the last place of the normalized 128-bit result. The bound is padded, since it only sizes the rare tie check.
+      inline constexpr uint64_t max_approximation_error = 1024;
+
+      // Round the magnitude (hi:lo) × 2^exp2, with any bits below lo discarded (zero)
+      template <class T>
+      GLZ_ALWAYS_INLINE constexpr T assemble(uint64_t hi, uint64_t lo, int32_t exp2, bool sticky_bit = false) noexcept
+      {
+         if constexpr (std::is_same_v<T, float>) {
+            return assemble_float(hi, lo, exp2, false, false, sticky_bit);
+         }
+         else {
+            return assemble_double(hi, lo, exp2, false, false, sticky_bit);
+         }
+      }
+
+      // Round (hi:lo) × 2^exp2 lowered by `error` units in the last place
+      template <class T>
+      GLZ_ALWAYS_INLINE constexpr T round_below(uint64_t hi, uint64_t lo, int32_t exp2, uint64_t error) noexcept
+      {
+         // hi >= 2^63, so this cannot underflow
+         if (lo < error) --hi;
+         lo -= error;
+         return assemble<T>(hi, lo, exp2);
+      }
+
+      // Round (hi:lo) × 2^exp2 raised by `error` units in the last place
+      template <class T>
+      GLZ_ALWAYS_INLINE constexpr T round_above(uint64_t hi, uint64_t lo, int32_t exp2, uint64_t error) noexcept
+      {
+         lo += error;
+         if (lo < error && ++hi == 0) {
+            // Carried out of 128 bits: halve 2^128 + lo, keeping the shifted-out bit as sticky
+            return assemble<T>(uint64_t(1) << 63, lo >> 1, exp2 + 1, (lo & 1) != 0);
+         }
+         return assemble<T>(hi, lo, exp2);
+      }
+
+      // Unsigned big integer with just the operations needed for exact halfway comparisons
+      struct big_uint
+      {
+         // Operands stay below 2^2660 (see resolve_halfway), so 84 limbs suffice; the rest is margin
+         static constexpr uint32_t capacity = 88;
+         uint32_t limbs[capacity]{};
+         uint32_t size{}; // limbs in use, the most significant one nonzero
+
+         constexpr explicit big_uint(uint64_t value) noexcept
+         {
+            while (value != 0) {
+               limbs[size++] = static_cast<uint32_t>(value);
+               value >>= 32;
+            }
+         }
+
+         // *this = *this × multiplier + addend, false on overflow
+         constexpr bool mul_add(uint32_t multiplier, uint32_t addend) noexcept
+         {
+            uint64_t carry = addend;
+            for (uint32_t i = 0; i < size; ++i) {
+               carry += uint64_t(limbs[i]) * multiplier;
+               limbs[i] = static_cast<uint32_t>(carry);
+               carry >>= 32;
+            }
+            if (carry != 0) {
+               if (size == capacity) return false;
+               limbs[size++] = static_cast<uint32_t>(carry);
+            }
+            return true;
+         }
+
+         constexpr bool mul_pow5(uint64_t n) noexcept
+         {
+            constexpr uint32_t pow5_13 = 1220703125; // largest power of 5 that fits in 32 bits
+            for (; n >= 13; n -= 13) {
+               if (!mul_add(pow5_13, 0)) return false;
+            }
+            uint32_t rest = 1;
+            for (; n > 0; --n) {
+               rest *= 5;
+            }
+            return mul_add(rest, 0);
+         }
+
+         constexpr bool shift_left(uint64_t n) noexcept
+         {
+            if (size == 0) return true;
+            if (n >= uint64_t(capacity) * 32) return false;
+            const uint32_t limb_shift = static_cast<uint32_t>(n / 32);
+            const uint32_t bit_shift = static_cast<uint32_t>(n % 32);
+            const uint32_t carry_out = bit_shift ? limbs[size - 1] >> (32 - bit_shift) : 0;
+            const uint32_t new_size = size + limb_shift + (carry_out != 0 ? 1 : 0);
+            if (new_size > capacity) return false;
+            if (carry_out != 0) {
+               limbs[new_size - 1] = carry_out;
+            }
+            // Move from the top down so each source limb is read before it is overwritten
+            for (uint32_t i = size; i-- > 0;) {
+               uint32_t limb = limbs[i] << bit_shift;
+               if (bit_shift && i > 0) {
+                  limb |= limbs[i - 1] >> (32 - bit_shift);
+               }
+               limbs[i + limb_shift] = limb;
+            }
+            for (uint32_t i = 0; i < limb_shift; ++i) {
+               limbs[i] = 0;
+            }
+            size = new_size;
+            return true;
+         }
+
+         friend constexpr int compare(const big_uint& a, const big_uint& b) noexcept
+         {
+            if (a.size != b.size) return a.size < b.size ? -1 : 1;
+            for (uint32_t i = a.size; i-- > 0;) {
+               if (a.limbs[i] != b.limbs[i]) return a.limbs[i] < b.limbs[i] ? -1 : 1;
+            }
+            return 0;
+         }
+      };
+
+      // Significant digits that decide any halfway comparison: a double halfway point has at most 767
+      inline constexpr int max_exact_digits = 800;
+
+      // The true magnitude lies between `lower` and the next representable value, which round differently.
+      // Decide by comparing every input digit with the halfway point between them, exactly.
+      template <class T>
+      constexpr T resolve_halfway(const decimal_number& dec, T lower) noexcept
+      {
+         using bits_type = std::conditional_t<std::is_same_v<T, float>, uint32_t, uint64_t>;
+         constexpr int mantissa_bits = std::numeric_limits<T>::digits - 1;
+         constexpr int exponent_bias = std::numeric_limits<T>::max_exponent - 1;
+
+         const bits_type bits = std::bit_cast<bits_type>(lower);
+         const T upper = std::bit_cast<T>(bits_type(bits + 1)); // the largest finite value steps to infinity
+
+         // lower = m × 2^e, so the halfway point is (2m + 1) × 2^(e - 1)
+         const int biased_exp = static_cast<int>(bits >> mantissa_bits);
+         uint64_t m = bits & ((bits_type(1) << mantissa_bits) - 1);
+         int64_t e = 1 - exponent_bias - mantissa_bits;
+         if (biased_exp != 0) {
+            m |= uint64_t(1) << mantissa_bits;
+            e = biased_exp - exponent_bias - mantissa_bits;
+         }
+
+         // Input value = digits × 10^q, where digits holds the first max_exact_digits significant digits.
+         // Nonzero digits past those can only lift a value that compares equal: the halfway point is a multiple
+         // of 10^q, so it cannot fall strictly between digits × 10^q and (digits + 1) × 10^q.
+         big_uint digits{0};
+         bool ok = true;
+         bool more = false;
+         int count = 0;
+         const char* last = nullptr;
+         uint32_t chunk = 0;
+         uint32_t chunk_scale = 1;
+         for (const char* p = dec.digits_begin; p != dec.digits_end; ++p) {
+            if (*p == '.') continue;
+            const uint32_t digit = static_cast<uint32_t>(*p - '0');
+            if (count == 0 && digit == 0) continue; // leading zeros
+            if (count == max_exact_digits) {
+               if (digit != 0) {
+                  more = true;
+                  break;
+               }
+               continue;
+            }
+            chunk = chunk * 10 + digit;
+            chunk_scale *= 10;
+            ++count;
+            last = p;
+            if (chunk_scale == 1000000000) {
+               ok = ok && digits.mul_add(chunk_scale, chunk);
+               chunk = 0;
+               chunk_scale = 1;
+            }
+         }
+         ok = ok && digits.mul_add(chunk_scale, chunk);
+         // Decimal position of the last kept digit
+         const int64_t position = (last < dec.int_end) ? (dec.int_end - last - 1) : (dec.int_end - last);
+         const int64_t q = position + dec.exp_part;
+
+         // Compare digits × 10^q with (2m + 1) × 2^(e - 1), moving negative powers of 5 and 2 to the other side.
+         // For q < 0, (2m + 1) × 5^-q < 2^54 × 5^1075 < 2^2551 whenever it is the side shifted up. Otherwise the
+         // shifted side stays within a factor of two of digits × 5^max(q, 0), which is below 2^2659 for 800
+         // digits, or below 2^1025 for q >= 0 (the value is near the finite range).
+         big_uint halfway{2 * m + 1};
+         ok = ok && ((q >= 0) ? digits.mul_pow5(uint64_t(q)) : halfway.mul_pow5(uint64_t(-q)));
+         const int64_t shift = (e - 1) - q;
+         ok = ok && ((shift >= 0) ? halfway.shift_left(uint64_t(shift)) : digits.shift_left(uint64_t(-shift)));
+         if (!ok) [[unlikely]] {
+            return lower; // unreachable: operands are bounded above
+         }
+
+         int order = compare(digits, halfway);
+         if (order == 0 && more) order = 1;
+         if (order > 0 || (order == 0 && (m & 1))) {
+            return upper; // above halfway, or a tie broken to the even neighbor
+         }
+         return lower;
+      }
+
    } // namespace detail
 
    // ============================================================================
@@ -1089,36 +1328,33 @@ namespace glz::simple_float
 
       // Fast path for float: use 64-bit arithmetic for common cases
       if constexpr (std::is_same_v<T, float>) {
-         if (detail::try_fast_float_parse(dec.mantissa, dec.exp10, dec.negative, value)) {
+         if (!dec.truncated && detail::try_fast_float_parse(dec.mantissa, dec.exp10, dec.negative, value)) {
             return {end_ptr, std::errc{}};
          }
       }
 
       // Use 128-bit arithmetic for correct rounding
-      uint64_t rh, rl;
+      uint64_t hi, lo;
       int32_t exp2;
-      bool round_bit, sticky_bit;
-#ifdef __SIZEOF_INT128__
-      // Hybrid approach: O(1) table lookup for common exponents (-16..+16), binary exp for extreme values
-      detail::apply_pow5_hybrid(dec.mantissa, dec.exp10, rh, rl, exp2, round_bit, sticky_bit);
-#else
-      // Fallback: pure binary exponentiation (slower but smaller, no __int128)
-      if (dec.exp10 >= 0) {
-         detail::apply_pow5_impl(dec.mantissa, dec.exp10, rh, rl, exp2, round_bit, sticky_bit, detail::pow5_pos_table);
-         exp2 += dec.exp10;
+      detail::approximate_decimal(dec.mantissa, dec.exp10, hi, lo, exp2);
+      const bool exact = detail::is_exact_decimal(dec.exp10);
+      T magnitude;
+      if (exact && !dec.truncated) {
+         magnitude = detail::assemble<T>(hi, lo, exp2);
       }
       else {
-         detail::apply_pow5_impl(dec.mantissa, -dec.exp10, rh, rl, exp2, round_bit, sticky_bit, detail::pow5_neg_table);
-         exp2 += dec.exp10;
+         // Bound the true value: it lies in [mantissa, mantissa + 1) × 10^exp10 when digits were truncated,
+         // widened by the approximation error. When both bounds round alike, so does every value between them.
+         const uint64_t error = exact ? 0 : detail::max_approximation_error;
+         magnitude = detail::round_below<T>(hi, lo, exp2, error);
+         if (dec.truncated) {
+            detail::approximate_decimal(dec.mantissa + 1, dec.exp10, hi, lo, exp2);
+         }
+         if (magnitude != detail::round_above<T>(hi, lo, exp2, error)) [[unlikely]] {
+            magnitude = detail::resolve_halfway(dec, magnitude);
+         }
       }
-#endif
-
-      if constexpr (std::is_same_v<T, float>) {
-         value = detail::assemble_float(rh, rl, exp2, dec.negative, round_bit, sticky_bit);
-      }
-      else {
-         value = detail::assemble_double(rh, rl, exp2, dec.negative, round_bit, sticky_bit);
-      }
+      value = dec.negative ? -magnitude : magnitude;
       return {end_ptr, std::errc{}};
    }
 
