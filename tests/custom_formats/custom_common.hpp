@@ -188,44 +188,44 @@ namespace custom_formats
          };
 
          if constexpr (NullableAndVariant) {
-         test(format_name + ": getter returning a nullable") = [] {
-            nullable_getter o{};
-            std::string buf{};
-            expect(not glz::write<opts>(o, buf));
+            test(format_name + ": getter returning a nullable") = [] {
+               nullable_getter o{};
+               std::string buf{};
+               expect(not glz::write<opts>(o, buf));
 
-            nullable_getter r{};
-            r.plain = 0;
-            auto ec = glz::read<opts>(r, buf);
-            expect(not ec) << glz::format_error(ec, buf);
-            expect(not r.opt.has_value());
-            expect(r.plain == 7) << r.plain;
+               nullable_getter r{};
+               r.plain = 0;
+               auto ec = glz::read<opts>(r, buf);
+               expect(not ec) << glz::format_error(ec, buf);
+               expect(not r.opt.has_value());
+               expect(r.plain == 7) << r.plain;
 
-            o.opt = 5;
-            buf.clear();
-            expect(not glz::write<opts>(o, buf));
-            auto ec2 = glz::read<opts>(r, buf);
-            expect(not ec2) << glz::format_error(ec2, buf);
-            expect(r.opt == 5);
-         };
+               o.opt = 5;
+               buf.clear();
+               expect(not glz::write<opts>(o, buf));
+               auto ec2 = glz::read<opts>(r, buf);
+               expect(not ec2) << glz::format_error(ec2, buf);
+               expect(r.opt == 5);
+            };
 
-         test(format_name + ": getter returning a variant") = [] {
-            variant_getter o{};
-            o.v = std::string{"text"};
-            std::string buf{};
-            expect(not glz::write<opts>(o, buf));
+            test(format_name + ": getter returning a variant") = [] {
+               variant_getter o{};
+               o.v = std::string{"text"};
+               std::string buf{};
+               expect(not glz::write<opts>(o, buf));
 
-            variant_getter r{};
-            auto ec = glz::read<opts>(r, buf);
-            expect(not ec) << glz::format_error(ec, buf);
-            expect(r.v == o.v);
+               variant_getter r{};
+               auto ec = glz::read<opts>(r, buf);
+               expect(not ec) << glz::format_error(ec, buf);
+               expect(r.v == o.v);
 
-            o.v = 42;
-            buf.clear();
-            expect(not glz::write<opts>(o, buf));
-            auto ec2 = glz::read<opts>(r, buf);
-            expect(not ec2) << glz::format_error(ec2, buf);
-            expect(r.v == o.v);
-         };
+               o.v = 42;
+               buf.clear();
+               expect(not glz::write<opts>(o, buf));
+               auto ec2 = glz::read<opts>(r, buf);
+               expect(not ec2) << glz::format_error(ec2, buf);
+               expect(r.v == o.v);
+            };
          }
       };
    }
