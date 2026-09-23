@@ -517,19 +517,27 @@ namespace glz
             break;
          }
          case simple::float64: {
-            if ((end - it) < 8) [[unlikely]] {
-               ctx.error = error_code::unexpected_end;
-               return;
+            if constexpr (sizeof(T) < sizeof(double) && not check_allow_conversions(Opts)) {
+               // Narrowing a float64 rounds it, so without allow_conversions a narrower target rejects
+               // one. Variant resolution relies on this: a `float` alternative must not claim a value
+               // a later `double` alternative holds exactly.
+               ctx.error = error_code::syntax_error;
             }
-            uint64_t bits;
-            std::memcpy(&bits, it, 8);
-            if constexpr (std::endian::native == std::endian::little) {
-               bits = std::byteswap(bits);
+            else {
+               if ((end - it) < 8) [[unlikely]] {
+                  ctx.error = error_code::unexpected_end;
+                  return;
+               }
+               uint64_t bits;
+               std::memcpy(&bits, it, 8);
+               if constexpr (std::endian::native == std::endian::little) {
+                  bits = std::byteswap(bits);
+               }
+               double d;
+               std::memcpy(&d, &bits, 8);
+               it += 8;
+               value = static_cast<T>(d);
             }
-            double d;
-            std::memcpy(&d, &bits, 8);
-            it += 8;
-            value = static_cast<T>(d);
             break;
          }
          default:
@@ -2298,19 +2306,25 @@ namespace glz
    {
       static constexpr auto tagging = variant_tagging_v<T>;
       static constexpr size_t variant_size = std::variant_size_v<T>;
+      static constexpr auto contested = binary_contested_alternatives_v<T>;
 
-      // One pass over the alternatives at a fixed conversion strictness, rewinding after each miss.
+      // One pass over the alternatives, rewinding after each miss.
       // Every CBOR reader validates the major type it is handed, so a wrong alternative fails on the
       // head byte rather than consuming input. Alternatives that share a wire shape cannot be told
       // apart -- declare a `tag` in glz::meta when that matters.
-      template <auto Opts>
+      //
+      // The strict pass reads a contested alternative with conversions off and any other as asked; the
+      // lenient pass retries only the contested ones, as the rest have had their lenient read.
+      template <auto Opts, bool Strict>
       static bool try_each_pass(auto& value, is_context auto& ctx, auto& it, auto end, error_code& input_error) noexcept
       {
          bool matched = false;
          bool exhausted = false;
          const auto start = it;
          for_each<variant_size>([&]<size_t I>() {
-            if (matched || exhausted || input_error == error_code::exceeded_max_recursive_depth) {
+            // The strict pass already gave an uncontested alternative its lenient read.
+            constexpr bool already_read = not Strict && not contested[I];
+            if (already_read || matched || exhausted || input_error == error_code::exceeded_max_recursive_depth) {
                // Nesting past the limit is a property of the input: no other alternative can read it,
                // and re-parsing the subtree per alternative at every level is exponential.
                return;
@@ -2321,7 +2335,12 @@ namespace glz
             ctx.custom_error_message = {}; // else a rejected alternative's message outlives its error
             // Read into a fresh alternative and move it in, so a miss leaves `value` as it was.
             V v{};
-            from<CBOR, V>::template op<Opts>(v, ctx, it, end);
+            if constexpr (Strict && contested[I]) {
+               from<CBOR, V>::template op<opt_false<Opts, allow_conversions_opt_tag{}>>(v, ctx, it, end);
+            }
+            else {
+               from<CBOR, V>::template op<Opts>(v, ctx, it, end);
+            }
             // Charge only what a REJECTED attempt parsed. That is the wasted work the bound is about;
             // charging the match too would bill every enclosing level for the same bytes and make a
             // valid nest look exponential.
@@ -2350,19 +2369,20 @@ namespace glz
       {
          const auto start = it;
          error_code input_error{};
-         // Strict first, so a lenient reader cannot claim a value an exact alternative wants: the
-         // floating point reader accepts an integer under allow_conversions, which would otherwise
-         // let `double` take a value that a later `int64_t` alternative holds exactly.
+         // Strict first where alternatives compete, so a lenient reader cannot claim a value an exact
+         // alternative wants: the floating point reader accepts an integer under allow_conversions,
+         // which would otherwise let `double` take a value that a later `int64_t` alternative holds
+         // exactly.
+         if (try_each_pass<Opts, true>(value, ctx, it, end, input_error)) {
+            return;
+         }
          if constexpr (check_allow_conversions(Opts)) {
-            if (try_each_pass<opt_false<Opts, allow_conversions_opt_tag{}>>(value, ctx, it, end, input_error)) {
+            // A lenient retry cannot make over-nested input readable, and running it doubles the work
+            // at every level of a deep nest.
+            if (input_error != error_code::exceeded_max_recursive_depth &&
+                try_each_pass<Opts, false>(value, ctx, it, end, input_error)) {
                return;
             }
-         }
-         // A lenient retry cannot make over-nested input readable, and running it doubles the work at
-         // every level of a deep nest.
-         if (input_error != error_code::exceeded_max_recursive_depth &&
-             try_each_pass<Opts>(value, ctx, it, end, input_error)) {
-            return;
          }
          it = start;
          // An incomplete or over-nested buffer is a property of the input, not of the alternative set,
@@ -2485,99 +2505,106 @@ namespace glz
             try_each<Opts>(value, ctx, it, end);
             return;
          }
+         else if constexpr (tagging == variant_tagging_kind::adjacent) {
+            // The adjacent form is a map this reader consumes itself, so it owns that level.
+            depth_guard guard{ctx};
+            if (!guard) [[unlikely]] {
+               return;
+            }
+            read_tagged_map<Opts>(value, ctx, it, end);
+         }
          else {
-            // The adjacent form is a map this reader consumes itself, so it owns that level. The
-            // internal form hands the same map to the alternative's object reader, which guards it --
-            // counting it here too would halve the nesting a tagged variant is allowed.
-            [[maybe_unused]] depth_guard guard{ctx};
+            // The internal form hands the same map to the alternative's object reader, which guards
+            // it -- counting it here too would halve the nesting a tagged variant is allowed.
+            read_tagged_map<Opts>(value, ctx, it, end);
+         }
+      }
+
+      // Read the keyed map a tagged variant is written as.
+      template <auto Opts>
+      static void read_tagged_map(auto& value, is_context auto& ctx, auto& it, auto end) noexcept
+      {
+         static constexpr auto tag_literal = string_literal_from_view<tag_v<T>.size()>(tag_v<T>);
+         const auto start = it;
+
+         // One walk resolves the discriminator wherever it sits in the map and consumes the whole
+         // item, noting where the content value began so the adjacent form can return to it. An
+         // alternative that needs no body is therefore already finished when the walk returns.
+         auto content_it = it;
+         bool content_seen = false;
+         const size_t index = scan_map<Opts>(ctx, it, end, [&](sv key) {
             if constexpr (tagging == variant_tagging_kind::adjacent) {
-               if (!guard) [[unlikely]] {
-                  return;
+               if (not content_seen && key == content_v<T>) {
+                  content_it = it;
+                  content_seen = true;
                }
             }
+            skip_value<CBOR>::op<Opts>(ctx, it, end);
+         });
+         if (bool(ctx.error)) [[unlikely]] {
+            return;
+         }
+         if (index >= variant_size) [[unlikely]] {
+            ctx.error = error_code::no_matching_variant_type;
+            ctx.custom_error_message = variant_ids_string_v<T>;
+            return;
+         }
 
-            static constexpr auto tag_literal = string_literal_from_view<tag_v<T>.size()>(tag_v<T>);
-            const auto start = it;
+         if constexpr (tagging == variant_tagging_kind::adjacent) {
+            if (not content_seen) [[unlikely]] {
+               // Resolving the discriminator is not enough: without the content key there is no
+               // value. Checked before emplacing so a rejected buffer leaves `value` as it was.
+               ctx.error = error_code::missing_key;
+               ctx.custom_error_message = content_v<T>;
+               return;
+            }
+         }
 
-            // One walk resolves the discriminator wherever it sits in the map and consumes the whole
-            // item, noting where the content value began so the adjacent form can return to it. An
-            // alternative that needs no body is therefore already finished when the walk returns.
-            auto content_it = it;
-            bool content_seen = false;
-            const size_t index = scan_map<Opts>(ctx, it, end, [&](sv key) {
-               if constexpr (tagging == variant_tagging_kind::adjacent) {
-                  if (not content_seen && key == content_v<T>) {
-                     content_it = it;
-                     content_seen = true;
-                  }
-               }
-               skip_value<CBOR>::op<Opts>(ctx, it, end);
-            });
+         const auto after = it;
+         if (value.index() != index) {
+            emplace_runtime_variant(value, index);
+         }
+
+         if constexpr (tagging == variant_tagging_kind::adjacent) {
+            it = content_it;
+            std::visit([&](auto& v) { parse<CBOR>::op<Opts>(v, ctx, it, end); }, value);
             if (bool(ctx.error)) [[unlikely]] {
                return;
             }
-            if (index >= variant_size) [[unlikely]] {
-               ctx.error = error_code::no_matching_variant_type;
-               ctx.custom_error_message = variant_ids_string_v<T>;
-               return;
-            }
+            it = after; // the content entry need not be the last one
+         }
+         else {
+            visit<variant_size>(
+               [&]<size_t I>() {
+                  using V = std::variant_alternative_t<I, T>;
+                  using X = variant_alternative_object_t<V>;
+                  constexpr bool struct_like = (glaze_object_t<X> || reflectable<X>) && (not custom_read<X>);
 
-            if constexpr (tagging == variant_tagging_kind::adjacent) {
-               if (not content_seen) [[unlikely]] {
-                  // Resolving the discriminator is not enough: without the content key there is no
-                  // value. Checked before emplacing so a rejected buffer leaves `value` as it was.
-                  ctx.error = error_code::missing_key;
-                  ctx.custom_error_message = content_v<T>;
-                  return;
-               }
-            }
-
-            const auto after = it;
-            if (value.index() != index) {
-               emplace_runtime_variant(value, index);
-            }
-
-            if constexpr (tagging == variant_tagging_kind::adjacent) {
-               it = content_it;
-               std::visit([&](auto& v) { parse<CBOR>::op<Opts>(v, ctx, it, end); }, value);
-               if (bool(ctx.error)) [[unlikely]] {
-                  return;
-               }
-               it = after; // the content entry need not be the last one
-            }
-            else {
-               visit<variant_size>(
-                  [&]<size_t I>() {
-                     using V = std::variant_alternative_t<I, T>;
-                     using X = variant_alternative_object_t<V>;
-                     constexpr bool struct_like = (glaze_object_t<X> || reflectable<X>) && (not custom_read<X>);
-
-                     if constexpr (variant_unit_alternative<V>) {
-                        // Nothing but the discriminator: pass one already consumed the whole map.
-                     }
-                     else if constexpr (struct_like && (not is_memory_object<V>)) {
-                        // Thread the discriminator key through so it is skipped without disabling
-                        // unknown-key checking for the alternative's real fields. An alternative that
-                        // declares a member of that name keeps receiving its value (JSON parity).
-                        it = start;
-                        from<CBOR, X>::template op<Opts, tag_literal>(std::get<I>(value), ctx, it, end);
-                     }
-                     else if constexpr (requires { Opts.error_on_unknown_keys; }) {
-                        // memory_object / map / pair alternative: tolerate the discriminator key.
-                        static constexpr auto AltOpts = [] {
-                           auto o = Opts;
-                           o.error_on_unknown_keys = false;
-                           return o;
-                        }();
-                        it = start;
-                        from<CBOR, V>::template op<AltOpts>(std::get<I>(value), ctx, it, end);
-                     }
-                     else {
-                        it = after;
-                     }
-                  },
-                  index);
-            }
+                  if constexpr (variant_unit_alternative<V>) {
+                     // Nothing but the discriminator: pass one already consumed the whole map.
+                  }
+                  else if constexpr (struct_like && (not is_memory_object<V>)) {
+                     // Thread the discriminator key through so it is skipped without disabling
+                     // unknown-key checking for the alternative's real fields. An alternative that
+                     // declares a member of that name keeps receiving its value (JSON parity).
+                     it = start;
+                     from<CBOR, X>::template op<Opts, tag_literal>(std::get<I>(value), ctx, it, end);
+                  }
+                  else if constexpr (requires { Opts.error_on_unknown_keys; }) {
+                     // memory_object / map / pair alternative: tolerate the discriminator key.
+                     static constexpr auto AltOpts = [] {
+                        auto o = Opts;
+                        o.error_on_unknown_keys = false;
+                        return o;
+                     }();
+                     it = start;
+                     from<CBOR, V>::template op<AltOpts>(std::get<I>(value), ctx, it, end);
+                  }
+                  else {
+                     it = after;
+                  }
+               },
+               index);
          }
       }
    };

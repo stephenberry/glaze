@@ -41,7 +41,7 @@ These options are **not** in `glz::opts` by default. Add them to a custom option
 | `bool bools_as_numbers` | `false` | Read/write booleans as `1` and `0` |
 | `bool write_function_pointers` | `false` | Serialize function pointers (both member and non-member) in `glz::meta` as their type name (off by default) |
 | `bool concatenate` | `true` | Concatenate ranges of `std::pair` into single objects |
-| `bool allow_conversions` | `true` | Allow type conversions in BEVE (e.g., `double` → `float`) |
+| `bool allow_conversions` | `true` | Allow type conversions in BEVE, MessagePack, and CBOR (e.g., `double` → `float`) |
 | `bool write_type_info` | `true` | Write type info for meta objects in variants |
 | `bool append_arrays` | `false` | Append to arrays instead of replacing contents |
 | `bool shrink_to_fit` | `false` | Shrink dynamic containers after reading |

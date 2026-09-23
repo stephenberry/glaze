@@ -4738,6 +4738,38 @@ namespace cbor_variant_shapes
       bool operator==(const idash&) const = default;
    };
    using int_ids_t = std::variant<idot, idash>;
+
+   // A recursive internally tagged variant, for how deep a tagged nest may go.
+   struct leaf
+   {
+      int n{};
+   };
+   struct branch;
+   using tree = std::variant<leaf, branch>;
+   struct branch
+   {
+      std::vector<tree> kids{};
+   };
+
+   inline tree make_tree(int depth)
+   {
+      tree t = leaf{1};
+      for (int i = 0; i < depth; ++i) {
+         branch b{};
+         b.kids.push_back(std::move(t));
+         t = std::move(b);
+      }
+      return t;
+   }
+
+   inline int tree_depth(const tree& t)
+   {
+      int depth = 0;
+      for (const tree* node = &t; std::holds_alternative<branch>(*node); ++depth) {
+         node = &std::get<branch>(*node).kids.at(0);
+      }
+      return depth;
+   }
 }
 
 template <>
@@ -4761,6 +4793,13 @@ struct glz::meta<cbor_variant_shapes::int_ids_t>
    static constexpr std::string_view tag = "kind";
    static constexpr std::string_view content = "data";
    static constexpr std::array<int, 2> ids{7, 9};
+};
+
+template <>
+struct glz::meta<cbor_variant_shapes::tree>
+{
+   static constexpr std::string_view tag = "kind";
+   static constexpr std::array<std::string_view, 2> ids{"leaf", "branch"};
 };
 
 // A variant takes the shape glz::meta declares, as it does in JSON and BEVE. The [index, value]
@@ -4934,6 +4973,54 @@ suite cbor_variant_tagging = [] {
       int_ids_t decoded{};
       expect(not glz::read_cbor(decoded, buffer));
       expect(decoded == v);
+   };
+
+   // 2^32 + 9 truncated to int is 9, which names idash. It must not be read as that id. CBOR always
+   // range-checked the id; this pins parity with the MessagePack reader, which did not.
+   "an integral id past the id type's range is rejected"_test = [] {
+      std::string buffer; // { "kind" : 2^32 + 9, "data" : { "n" : 5 } }
+      buffer.push_back(char(0xa2));
+      buffer.push_back(char(0x64));
+      buffer += "kind";
+      buffer.push_back(char(0x1b)); // uint64, big endian
+      for (const uint8_t byte : {0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x09}) {
+         buffer.push_back(char(byte));
+      }
+      buffer.push_back(char(0x64));
+      buffer += "data";
+      buffer.push_back(char(0xa1));
+      buffer.push_back(char(0x61));
+      buffer += "n";
+      buffer.push_back(char(0x05));
+      int_ids_t decoded{};
+      expect(bool(glz::read_cbor(decoded, buffer)));
+      expect(std::holds_alternative<idot>(decoded));
+   };
+
+   // Narrowing a float64 rounds it, so a float alternative takes one only through a conversion.
+   "a narrower float alternative does not claim a double"_test = [] {
+      std::string buffer{};
+      expect(not glz::write_cbor(std::variant<float, double>{0.1}, buffer));
+      std::variant<float, double> decoded{};
+      expect(not glz::read_cbor(decoded, buffer));
+      const double* d = std::get_if<double>(&decoded);
+      expect(d && *d == 0.1);
+
+      // A float32 still reaches the float alternative.
+      buffer.clear();
+      expect(not glz::write_cbor(std::variant<float, double>{0.5f}, buffer));
+      expect(not glz::read_cbor(decoded, buffer));
+      expect(decoded.index() == 0);
+   };
+
+   // The internal form's map is the alternative's own object, so it takes one level of nesting, as
+   // a plain struct does -- not two.
+   "an internally tagged nest may go as deep as a struct nest"_test = [] {
+      std::string buffer{};
+      expect(not glz::write_cbor(make_tree(100), buffer));
+      tree decoded{};
+      expect(not glz::read_cbor(decoded, buffer));
+      expect(tree_depth(decoded) == 100);
    };
 };
 
@@ -5174,6 +5261,26 @@ suite cbor_generic_tests = [] {
       expect(glz::read_cbor(out, std::string{"\x41\x00", 2})); // byte string
       expect(glz::read_cbor(out, std::string{"\xf7", 1})); // undefined
       expect(glz::read_cbor(out, std::string{"\xc1\x01", 2})); // semantic tag
+   };
+
+   // Other encoders write integers, which the f64 mode reads only through a conversion. Only
+   // alternatives that compete for a value are read strictly first, so the array alternative is not
+   // parsed twice at every level, which exhausted the speculation budget on a valid document.
+   "a deep document with integers reads within the speculation budget"_test = [] {
+      glz::generic_i64 doc = int64_t{1};
+      for (int i = 0; i < 20; ++i) {
+         glz::generic_i64::array_t level{};
+         level.emplace_back(std::string(50'000, 'x'));
+         level.emplace_back(std::move(doc));
+         doc = std::move(level);
+      }
+      std::string buffer{};
+      expect(not glz::write_cbor(doc, buffer));
+      expect(buffer.size() > 1'000'000u);
+
+      glz::generic decoded{};
+      expect(not glz::read_cbor(decoded, buffer));
+      expect(glz::write_json(decoded) == glz::write_json(doc));
    };
 };
 
