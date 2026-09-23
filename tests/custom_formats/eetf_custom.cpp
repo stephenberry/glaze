@@ -6,4 +6,5 @@
 
 #include "custom_common.hpp"
 
-static const auto registered = custom_formats::make_suite<glz::eetf::eetf_opts{}>("eetf");
+// EETF has no std::optional or std::variant support for any field, custom or not.
+static const auto registered = custom_formats::make_suite<glz::eetf::eetf_opts{}, false>("eetf");

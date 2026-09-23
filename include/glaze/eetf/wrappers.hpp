@@ -21,7 +21,7 @@ namespace glz
       template <auto Opts>
       static void op(auto&& value, is_context auto&& ctx, auto&&... args)
       {
-         detail::custom_write<EETF, Opts, T>(value, ctx, args...);
+         detail::dispatch_custom_write<EETF, Opts, T>(value, ctx, args...);
       }
    };
 

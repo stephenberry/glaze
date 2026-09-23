@@ -10,7 +10,9 @@
 
 #pragma once
 
+#include <optional>
 #include <string>
+#include <variant>
 
 #include "ut/ut.hpp"
 
@@ -45,6 +47,25 @@ namespace custom_formats
    struct lambda_handlers
    {
       int age{};
+   };
+
+   // A getter yielding a nullable. Binary formats that pick an element type from the value (BSON) have
+   // to decide it from the getter's result at runtime, and a null result must either be skipped or
+   // written as the format's null so that it reads back.
+   struct nullable_getter
+   {
+      std::optional<int> opt{};
+      int plain{7};
+      const std::optional<int>& get_opt() const { return opt; }
+      void set_opt(std::optional<int> in) { opt = in; }
+   };
+
+   // A getter yielding a variant, whose alternative is only known at runtime.
+   struct variant_getter
+   {
+      std::variant<int, std::string> v{};
+      const std::variant<int, std::string>& get_v() const { return v; }
+      void set_v(std::variant<int, std::string> in) { v = std::move(in); }
    };
 }
 
@@ -85,11 +106,27 @@ struct glz::meta<custom_formats::lambda_handlers>
    static constexpr auto value = object("age", custom<read_age, &T::age>);
 };
 
+template <>
+struct glz::meta<custom_formats::nullable_getter>
+{
+   using T = custom_formats::nullable_getter;
+   static constexpr auto value = object("opt", custom<&T::set_opt, &T::get_opt>, "plain", &T::plain);
+};
+
+template <>
+struct glz::meta<custom_formats::variant_getter>
+{
+   using T = custom_formats::variant_getter;
+   static constexpr auto value = object("v", custom<&T::set_v, &T::get_v>);
+};
+
 namespace custom_formats
 {
-   // Registers the same four checks for whichever format the including TU selected. The options
+   // Registers the same checks for whichever format the including TU selected. The options
    // value is the parameter rather than the format id because EETF carries its own opts type.
-   template <auto opts>
+   // `NullableAndVariant` is false for a format that cannot express std::optional or std::variant
+   // even as a plain field, since a custom getter cannot do better than the type it yields.
+   template <auto opts, bool NullableAndVariant = true>
    ut::suite make_suite(const std::string& format_name)
    {
       using namespace ut;
@@ -149,6 +186,47 @@ namespace custom_formats
             expect(not ec2) << glz::format_error(ec2, buf);
             expect(r.age == 25) << r.age;
          };
+
+         if constexpr (NullableAndVariant) {
+         test(format_name + ": getter returning a nullable") = [] {
+            nullable_getter o{};
+            std::string buf{};
+            expect(not glz::write<opts>(o, buf));
+
+            nullable_getter r{};
+            r.plain = 0;
+            auto ec = glz::read<opts>(r, buf);
+            expect(not ec) << glz::format_error(ec, buf);
+            expect(not r.opt.has_value());
+            expect(r.plain == 7) << r.plain;
+
+            o.opt = 5;
+            buf.clear();
+            expect(not glz::write<opts>(o, buf));
+            auto ec2 = glz::read<opts>(r, buf);
+            expect(not ec2) << glz::format_error(ec2, buf);
+            expect(r.opt == 5);
+         };
+
+         test(format_name + ": getter returning a variant") = [] {
+            variant_getter o{};
+            o.v = std::string{"text"};
+            std::string buf{};
+            expect(not glz::write<opts>(o, buf));
+
+            variant_getter r{};
+            auto ec = glz::read<opts>(r, buf);
+            expect(not ec) << glz::format_error(ec, buf);
+            expect(r.v == o.v);
+
+            o.v = 42;
+            buf.clear();
+            expect(not glz::write<opts>(o, buf));
+            auto ec2 = glz::read<opts>(r, buf);
+            expect(not ec2) << glz::format_error(ec2, buf);
+            expect(r.v == o.v);
+         };
+         }
       };
    }
 }

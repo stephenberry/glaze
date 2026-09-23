@@ -6,7 +6,6 @@
 #include "glaze/core/custom.hpp"
 #include "glaze/msgpack/read.hpp"
 #include "glaze/msgpack/skip.hpp"
-#include "glaze/msgpack/write.hpp"
 
 namespace glz
 {
@@ -20,7 +19,7 @@ namespace glz
       template <auto Opts, class Value, is_context Ctx, class It, class End>
       static void op(Value&& value, uint8_t tag, Ctx&& ctx, It& it, const End& end)
       {
-         detail::custom_read<Opts, T>(
+         detail::dispatch_custom_read<Opts, T>(
             value, ctx,
             [&](auto& input) {
                from<MSGPACK, std::decay_t<decltype(input)>>::template op<Opts>(input, tag, ctx, it, end);
