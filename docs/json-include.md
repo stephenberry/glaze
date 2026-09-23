@@ -28,26 +28,11 @@ This will read the `./obj.json` file into the `obj` as it is parsed. Since glaze
 
 An included file is a fragment of the object that names it: some of the object's keys come from the include and the rest come from the including document. With `error_on_missing_keys` the check is therefore made by the including object over the union of both documents, so the example above reads without error even though neither document lists every key on its own. Keys that appear in neither document are still reported, as are missing keys of objects nested inside an included file.
 
-## Hostname Include
-
-Similar to `glz::file_include`, glaze provides `glz::hostname_include`. This is used for host-specific configuration files.
-
-> You must explicitly include the header file `#include "glaze/file/hostname_include.hpp"`
-
-In use:
-
-```c++
-std::string s = R"({"hostname_include": "../{}_config.json", "i": 100})";
-auto ec = glz::read_json(obj, s);
-```
-
-Note how the provided path contains `{}`, which will be replaced with the hostname when the file is read. Other than this, the `hostname_include` behaves the same as `file_include`.
-
 ## glz::raw_or_file
 
 `glz::raw_or_file` is somewhat like a `glz::file_include`, but also handles serialization. The purpose is to allow JSON files to be optionally referred to within higher level configuration files, but once loaded, the files behave as glz::raw_json, where the format does not need to be understood until deserialized.
 
-> Note that his approach only allows a single layer of includes. It does not allow infinitely deep includes like `glz::file_include` and `glz::hostname_include` support.
+> Note that his approach only allows a single layer of includes. It does not allow infinitely deep includes like `glz::file_include` supports.
 
 **How glz::raw_or_file behaves:**
 If the input is a valid file path within a string, the entire file will be read into a std::string within the glz::raw_or_file member. The internal buffer does not escape characters, as it is handled like glz::raw_json.

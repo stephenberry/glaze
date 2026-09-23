@@ -95,7 +95,7 @@ namespace glz
       elements_not_convertible_to_design, //
       unknown_distribution, //
       invalid_distribution_elements, //
-      hostname_failure, //
+      hostname_failure, // unused: retained so that later codes keep their values
       includer_error, //
       // Feature support
       feature_not_supported, //
@@ -160,7 +160,7 @@ namespace glz
       // NOTE: The default constructor is valid for std::string_view, so we use this rather than {}
       // because debuggers like jumping to std::string_view initialization calls
       std::string scratch{}; // Reusable scratch buffer for intermediate parsing (key lookup, etc.)
-      // A file include (glz::file_include, glz::hostname_include) merges an external document into
+      // A file include (glz::file_include) merges an external document into
       // the object that names it, which makes that document a fragment: some of the object's keys
       // come from it and the rest come from the including document. With error_on_missing_keys the
       // check therefore belongs to the including object, over the union of both. These carry the
