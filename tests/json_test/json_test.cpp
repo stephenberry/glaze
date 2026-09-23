@@ -10763,8 +10763,8 @@ struct nested_include_struct
 suite nested_include_tests = [] {
    "nested_include"_test = [] {
       expect(glz::error_code::none == glz::buffer_to_file(std::string_view{R"({"number":3.5})"}, "./core.jsonc"));
-      expect(glz::error_code::none == glz::buffer_to_file(std::string_view{R"({"core":{"include": "./core.jsonc"}})"},
-                                                          "./include_test.jsonc"));
+      expect(glz::error_code::none ==
+             glz::buffer_to_file(std::string_view{R"({"core":{"include": "./core.jsonc"}})"}, "./include_test.jsonc"));
       expect(glz::error_code::none ==
              glz::buffer_to_file(std::string_view{R"({"str":"goodbye","integer":4,"include":"./include_test.jsonc"})"},
                                  "./start.jsonc"));
