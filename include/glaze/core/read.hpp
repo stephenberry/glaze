@@ -91,27 +91,31 @@ namespace glz
       }
    }
 
-   template <auto Opts, is_context Ctx>
-   GLZ_ALWAYS_INLINE void finalize_read_context(Ctx&& ctx) noexcept
+   // A partial read stops as soon as it has the fields it was asked for, so it unwinds through its
+   // enclosing containers on an error code rather than through their closing braces, and none of
+   // them decrement depth on the way out. Depth is left standing at whatever nesting the last field
+   // sat at.
+   //
+   // That has to be cleared here rather than left for the next read to trip over. This is the one
+   // path that reports success with depth still raised, and depth is what settle_end_reached reads
+   // to tell a completed parse from a truncated one -- so a context reused after a partial read
+   // would see a later well-formed buffer settle to unexpected_end. Reads that end any other way
+   // either return depth to zero themselves or carry an error, and a context holding an error
+   // short-circuits the next read before it parses anything.
+   //
+   // Every read settles it, whatever its options: the glz::partial_read member wrapper turns the
+   // option on for one member, so a read whose own options leave partial_read off can still end in it.
+   GLZ_ALWAYS_INLINE void settle_partial_read_complete(is_context auto&& ctx) noexcept
    {
-      // A partial read stops as soon as it has the fields it was asked for, so it unwinds through
-      // its enclosing containers on an error code rather than through their closing braces, and
-      // none of them decrement depth on the way out. Depth is left standing at whatever nesting the
-      // last field sat at.
-      //
-      // That has to be cleared here rather than left for the next read to trip over. This is the
-      // one path that reports success with depth still raised, and depth is what settle_end_reached
-      // reads to tell a completed parse from a truncated one -- so a context reused after a partial
-      // read would see a later well-formed buffer settle to unexpected_end. Reads that end any
-      // other way either return depth to zero themselves or carry an error, and a context holding
-      // an error short-circuits the next read before it parses anything.
-      if constexpr (check_partial_read(Opts)) {
-         if (ctx.error == error_code::partial_read_complete) [[likely]] {
-            ctx.error = error_code::none;
-            ctx.depth = 0;
-            return;
-         }
+      if (ctx.error == error_code::partial_read_complete) {
+         ctx.error = error_code::none;
+         ctx.depth = 0;
       }
+   }
+
+   GLZ_ALWAYS_INLINE void finalize_read_context(is_context auto&& ctx) noexcept
+   {
+      settle_partial_read_complete(ctx);
       settle_end_reached(ctx);
    }
 
@@ -147,7 +151,7 @@ namespace glz
             }
          }
       }
-      finalize_read_context<Opts>(ctx);
+      finalize_read_context(ctx);
    }
 
    template <auto Opts, class T, contiguous Buf>
@@ -331,7 +335,7 @@ namespace glz
          finalize_top_level_read<StreamingOpts>(ctx, window, it, end);
       }
       else {
-         finalize_read_context<StreamingOpts>(ctx);
+         finalize_read_context(ctx);
       }
 
       // Only the JSON reader has refill points (see format_supports_streaming). Every other reader

@@ -975,6 +975,8 @@ namespace glz
       if (ctx.error == error_code::end_reached) [[unlikely]] {
          ctx.error = error_code::unexpected_end;
       }
+      // A partial read of the selected value is a completed one; see settle_partial_read_complete.
+      settle_partial_read_complete(ctx);
 
       return {size_t(it - start), ctx.error, ctx.custom_error_message};
    }
@@ -1172,6 +1174,8 @@ namespace glz
       if (ctx.error == error_code::end_reached) [[unlikely]] {
          ctx.error = error_code::unexpected_end;
       }
+      // A partial read of the selected value is a completed one; see settle_partial_read_complete.
+      settle_partial_read_complete(ctx);
 
       return {size_t(it - start), ctx.error, ctx.custom_error_message};
    }

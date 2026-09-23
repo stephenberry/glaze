@@ -11187,6 +11187,179 @@ suite nested_partial_read_tests = [] {
    };
 };
 
+// end_reached and partial_read_complete stop a parse without failing it, so a value that completed
+// with either one has to reach the setter, cast, constraint, or caller that is waiting for it.
+struct sentinel_pair
+{
+   int a{};
+   int b{};
+};
+
+struct sentinel_custom_holder
+{
+   sentinel_pair member_fn{};
+   sentinel_pair lambda{};
+   sentinel_pair function{};
+   std::function<void(const sentinel_pair&)> set_function = [this](const sentinel_pair& v) { function = v; };
+   std::chrono::system_clock::time_point time{};
+   bool time_set = false;
+
+   void set_member_fn(const sentinel_pair& v) { member_fn = v; }
+   const sentinel_pair& get_member_fn() const { return member_fn; }
+   void set_time(const std::chrono::system_clock::time_point& t)
+   {
+      time = t;
+      time_set = true;
+   }
+   std::chrono::system_clock::time_point get_time() const { return time; }
+};
+
+template <>
+struct glz::meta<sentinel_custom_holder>
+{
+   using T = sentinel_custom_holder;
+   static constexpr auto set_lambda = [](T& self, const sentinel_pair& v) { self.lambda = v; };
+   static constexpr auto get_lambda = [](const T& self) { return self.lambda; };
+   static constexpr auto get_function = [](const T& self) { return self.function; };
+   static constexpr auto value = object("member_fn", custom<&T::set_member_fn, &T::get_member_fn>, //
+                                        "lambda", custom<set_lambda, get_lambda>, //
+                                        "function", custom<&T::set_function, get_function>, //
+                                        "time", custom<&T::set_time, &T::get_time>);
+};
+
+struct sentinel_cast_target
+{
+   sentinel_pair pair{};
+
+   sentinel_cast_target() = default;
+   explicit sentinel_cast_target(const sentinel_pair& p) : pair(p) {}
+};
+
+struct sentinel_cast_holder
+{
+   sentinel_cast_target p{};
+};
+
+template <>
+struct glz::meta<sentinel_cast_holder>
+{
+   using T = sentinel_cast_holder;
+   static constexpr auto value = object("p", glz::cast<&T::p, sentinel_pair>);
+};
+
+struct sentinel_constraint_holder
+{
+   sentinel_pair p{};
+};
+
+template <>
+struct glz::meta<sentinel_constraint_holder>
+{
+   using T = sentinel_constraint_holder;
+   static constexpr auto ordered = [](const T&, const sentinel_pair& v) { return v.a < v.b; };
+   static constexpr auto value = object("p", read_constraint<&T::p, ordered, "a must be less than b">);
+};
+
+struct partial_read_wrapper_holder
+{
+   sentinel_pair in{};
+   int after{};
+};
+
+template <>
+struct glz::meta<partial_read_wrapper_holder>
+{
+   using T = partial_read_wrapper_holder;
+   static constexpr auto value = object("in", glz::partial_read<&T::in>, "after", &T::after);
+};
+
+suite partial_read_sentinel_tests = [] {
+   using namespace ut;
+
+   // Both null_terminated settings are spelled out because this file is also built with
+   // GLZ_NULL_TERMINATED=false.
+   static constexpr glz::opts partial_nt{.null_terminated = true, .error_on_unknown_keys = false, .partial_read = true};
+   static constexpr glz::opts partial_nnt{
+      .null_terminated = false, .error_on_unknown_keys = false, .partial_read = true};
+
+   "custom setters receive a value that completed a partial read"_test = [] {
+      auto check = []<auto Opts>() {
+         sentinel_custom_holder h{};
+         expect(not glz::read<Opts>(h, std::string{R"({"member_fn":{"a":1,"b":2,"junk":3}})"}));
+         expect(h.member_fn.a == 1 && h.member_fn.b == 2);
+
+         expect(not glz::read<Opts>(h, std::string{R"({"lambda":{"a":3,"b":4,"junk":5}})"}));
+         expect(h.lambda.a == 3 && h.lambda.b == 4);
+
+         expect(not glz::read<Opts>(h, std::string{R"({"function":{"a":5,"b":6,"junk":7}})"}));
+         expect(h.function.a == 5 && h.function.b == 6);
+      };
+      check.template operator()<partial_nt>();
+      check.template operator()<partial_nnt>();
+   };
+
+   // parse_error sorts below end_reached, so an ordinal "worse than end_reached" test let it through
+   "custom setter is not called on a failed parse"_test = [] {
+      auto check = []<auto Opts>() {
+         sentinel_custom_holder h{};
+         expect(glz::read<Opts>(h, std::string{R"({"time":"not a time"})"}) == glz::error_code::parse_error);
+         expect(not h.time_set);
+      };
+      check.template operator()<glz::opts{.null_terminated = true}>();
+      check.template operator()<glz::opts{.null_terminated = false}>();
+   };
+
+   "cast assigns a value that completed a partial read"_test = [] {
+      auto check = []<auto Opts>() {
+         sentinel_cast_holder h{};
+         expect(not glz::read<Opts>(h, std::string{R"({"p":{"a":1,"b":2,"junk":3}})"}));
+         expect(h.p.pair.a == 1 && h.p.pair.b == 2);
+      };
+      check.template operator()<partial_nt>();
+      check.template operator()<partial_nnt>();
+   };
+
+   "read_constraint checks and assigns a value that completed a partial read"_test = [] {
+      auto check = []<auto Opts>() {
+         sentinel_constraint_holder h{};
+         expect(not glz::read<Opts>(h, std::string{R"({"p":{"a":1,"b":2,"junk":3}})"}));
+         expect(h.p.a == 1 && h.p.b == 2);
+
+         sentinel_constraint_holder violated{};
+         expect(glz::read<Opts>(violated, std::string{R"({"p":{"a":2,"b":1,"junk":3}})"}) ==
+                glz::error_code::constraint_violated);
+      };
+      check.template operator()<partial_nt>();
+      check.template operator()<partial_nnt>();
+   };
+
+   "partial_read wrapper reports success"_test = [] {
+      auto check = []<auto Opts>() {
+         partial_read_wrapper_holder h{};
+         auto ec = glz::read<Opts>(h, std::string{R"({"in":{"a":1,"b":2,"junk":3},"after":4})"});
+         expect(not ec) << glz::format_error(ec);
+         expect(h.in.a == 1 && h.in.b == 2);
+         // The wrapper's partial read ends the whole read, so later members are left alone.
+         expect(h.after == 0);
+      };
+      check.template operator()<glz::opts{.null_terminated = true, .error_on_unknown_keys = false}>();
+      check.template operator()<glz::opts{.null_terminated = false, .error_on_unknown_keys = false}>();
+   };
+
+   "partial_read wrapper leaves a reusable context"_test = [] {
+      static constexpr glz::opts opts{.null_terminated = false, .error_on_unknown_keys = false};
+      glz::context ctx{};
+      partial_read_wrapper_holder h{};
+      expect(not glz::read<opts>(h, std::string{R"({"in":{"a":1,"b":2,"junk":3}})"}, ctx));
+      expect(ctx.depth == 0u);
+
+      std::vector<int> v{};
+      auto ec = glz::read<opts>(v, std::string{"[1,2,3]"}, ctx);
+      expect(not ec) << glz::format_error(ec);
+      expect(v == std::vector<int>{1, 2, 3});
+   };
+};
+
 struct array_holder_t
 {
    std::vector<int> x{0, 0, 0, 0, 0};

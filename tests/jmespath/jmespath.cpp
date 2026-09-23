@@ -616,4 +616,28 @@ suite key_prefixed_array_access = [] {
    };
 };
 
+struct jmespath_partial_pair
+{
+   int a{};
+   int b{};
+};
+
+suite jmespath_partial_read = [] {
+   // Reading the selected value with partial_read stops early on success, which is not an error
+   "partial read of the selected value reports success"_test = [] {
+      std::string buffer = R"({"in":{"a":1,"b":2,"junk":3}})";
+      static constexpr glz::opts opts{.error_on_unknown_keys = false, .partial_read = true};
+
+      jmespath_partial_pair compiled{};
+      auto ec = glz::read_jmespath<"in", opts>(compiled, buffer);
+      expect(not ec) << glz::format_error(ec, buffer);
+      expect(compiled.a == 1 && compiled.b == 2);
+
+      jmespath_partial_pair runtime{};
+      ec = glz::read_jmespath<opts>(glz::jmespath_expression{"in"}, runtime, buffer);
+      expect(not ec) << glz::format_error(ec, buffer);
+      expect(runtime.a == 1 && runtime.b == 2);
+   };
+};
+
 int main() { return 0; }

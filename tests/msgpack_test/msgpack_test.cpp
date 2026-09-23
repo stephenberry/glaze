@@ -1343,6 +1343,60 @@ namespace local_aggregates
    };
 }
 
+struct mp_sentinel_pair
+{
+   int a{};
+   int b{};
+};
+
+struct mp_sentinel_pair_full
+{
+   int a{};
+   int b{};
+   int junk{};
+};
+
+struct mp_sentinel_custom_holder
+{
+   mp_sentinel_pair p{};
+   bool called = false;
+
+   void set(const mp_sentinel_pair& v)
+   {
+      p = v;
+      called = true;
+   }
+   const mp_sentinel_pair& get() const { return p; }
+};
+
+template <>
+struct glz::meta<mp_sentinel_custom_holder>
+{
+   using T = mp_sentinel_custom_holder;
+   static constexpr auto value = object("p", custom<&T::set, &T::get>);
+};
+
+struct mp_sentinel_custom_source
+{
+   mp_sentinel_pair_full p{};
+};
+
+suite msgpack_partial_read_sentinel_tests = [] {
+   // partial_read_complete stops the parse without failing it, so the setter must see the value
+   "custom setter receives a value that completed a partial read"_test = [] {
+      std::string buffer{};
+      expect(not glz::write_msgpack(mp_sentinel_custom_source{{1, 2, 3}}, buffer));
+
+      mp_sentinel_custom_holder h{};
+      static constexpr glz::opts partial_opts{
+         .format = glz::MSGPACK, .error_on_unknown_keys = false, .partial_read = true};
+      auto ec = glz::read<partial_opts>(h, buffer);
+      expect(not ec) << glz::format_error(ec, buffer);
+      expect(h.called);
+      expect(h.p.a == 1 && h.p.b == 2);
+   };
+};
+
 int main()
 {
    using namespace local_aggregates;

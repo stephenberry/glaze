@@ -103,7 +103,7 @@ namespace glz
                   if constexpr (glz::tuple_size_v<TupleType> == 2) {
                      std::decay_t<glz::tuple_element_t<1, TupleType>> input{};
                      parse<JSON>::op<Opts>(input, ctx, it, end);
-                     if (bool(ctx.error)) [[unlikely]]
+                     if (parse_failed(ctx.error)) [[unlikely]]
                         return;
                      // Convert `sv` key to the method's first parameter type when needed
                      using KeyParam = std::decay_t<glz::tuple_element_t<0, TupleType>>;
@@ -4912,14 +4912,8 @@ namespace glz
       {
          ctx.scratch.clear();
          parse<JSON>::op<Opts>(ctx.scratch, ctx, it, end);
-         if constexpr (Opts.null_terminated) {
-            if (bool(ctx.error)) [[unlikely]]
-               return;
-         }
-         else {
-            if (size_t(ctx.error) > size_t(error_code::end_reached)) [[unlikely]] {
-               return;
-            }
+         if (parse_failed(ctx.error)) [[unlikely]] {
+            return;
          }
          value = ctx.scratch;
       }

@@ -17,7 +17,7 @@ namespace glz::detail
    // without producing anything. Both are supplied by the caller so that formats whose readers
    // take a tag the caller has already consumed (MSGPACK, BSON) can bind it here. What remains
    // is purely the shape of the user's handler, which is the same for every format.
-   template <auto Opts, class T, class ParseInto, class Discard>
+   template <class T, class ParseInto, class Discard>
    void dispatch_custom_read(auto&& value, is_context auto&& ctx, ParseInto&& parse_into, Discard&& discard)
    {
       using V = std::decay_t<decltype(value)>;
@@ -36,21 +36,15 @@ namespace glz::detail
                   // whatever its shape. skip_value is defined for every format, so this works
                   // outside JSON and it round-trips a getter that writes a non-array value.
                   discard();
-                  if (bool(ctx.error)) [[unlikely]]
+                  if (parse_failed(ctx.error)) [[unlikely]]
                      return;
                   (value.val.*(value.from))();
                }
                else if constexpr (glz::tuple_size_v<Tuple> == 1) {
                   std::decay_t<glz::tuple_element_t<0, Tuple>> input{};
                   parse_into(input);
-                  if constexpr (check_null_terminated(Opts)) {
-                     if (bool(ctx.error)) [[unlikely]]
-                        return;
-                  }
-                  else {
-                     if (size_t(ctx.error) > size_t(error_code::end_reached)) [[unlikely]]
-                        return;
-                  }
+                  if (parse_failed(ctx.error)) [[unlikely]]
+                     return;
                   (value.val.*(value.from))(std::move(input));
                }
                else {
@@ -72,21 +66,15 @@ namespace glz::detail
                   if constexpr (glz::tuple_size_v<Tuple> == 0) {
                      // See the member function case above.
                      discard();
-                     if (bool(ctx.error)) [[unlikely]]
+                     if (parse_failed(ctx.error)) [[unlikely]]
                         return;
                      from();
                   }
                   else if constexpr (glz::tuple_size_v<Tuple> == 1) {
                      std::decay_t<glz::tuple_element_t<0, Tuple>> input{};
                      parse_into(input);
-                     if constexpr (check_null_terminated(Opts)) {
-                        if (bool(ctx.error)) [[unlikely]]
-                           return;
-                     }
-                     else {
-                        if (size_t(ctx.error) > size_t(error_code::end_reached)) [[unlikely]]
-                           return;
-                     }
+                     if (parse_failed(ctx.error)) [[unlikely]]
+                        return;
                      from(std::move(input));
                   }
                   else {
@@ -117,21 +105,15 @@ namespace glz::detail
                else if constexpr (N == 1) {
                   // Only the class is taken, so there is no input to parse - discard the value.
                   discard();
-                  if (bool(ctx.error)) [[unlikely]]
+                  if (parse_failed(ctx.error)) [[unlikely]]
                      return;
                   value.from(value.val);
                }
                else if constexpr (N > 1) {
                   std::decay_t<glz::tuple_element_t<1, Tuple>> input{};
                   parse_into(input);
-                  if constexpr (check_null_terminated(Opts)) {
-                     if (bool(ctx.error)) [[unlikely]]
-                        return;
-                  }
-                  else {
-                     if (size_t(ctx.error) > size_t(error_code::end_reached)) [[unlikely]]
-                        return;
-                  }
+                  if (parse_failed(ctx.error)) [[unlikely]]
+                     return;
                   if constexpr (N == 2) {
                      value.from(value.val, std::move(input));
                   }
@@ -234,7 +216,7 @@ namespace glz
       template <auto Opts>
       static void op(auto&& value, is_context auto&& ctx, auto&& it, auto end)
       {
-         detail::dispatch_custom_read<Opts, T>(
+         detail::dispatch_custom_read<T>(
             value, ctx,
             [&](auto& input) {
                glz::from<Format, std::decay_t<decltype(input)>>::template op<Opts>(input, ctx, it, end);
