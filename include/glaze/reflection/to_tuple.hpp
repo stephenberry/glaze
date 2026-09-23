@@ -31,32 +31,89 @@ namespace glz
       // Helper to get access context for reflection
       inline consteval auto reflection_access_ctx() { return std::meta::access_context::unchecked(); }
 
-      // Collects every nonstatic data member of `type`, inherited ones included: a base subobject's
-      // members come before the members the type declares itself, and a base type reached through
-      // more than one path contributes once. That is exact for a virtual base, which is one shared
-      // subobject; a base inherited twice non-virtually has two subobjects, and its members cannot
-      // be named unambiguously, so a type shaped that way needs a glz::meta.
-      //
-      // The queries are indexed rather than ranged over on purpose: a range-for over a std::meta
-      // query inside a recursive consteval function silently yields nothing on GCC 16, so the bases
-      // of a type walked that way are invisible. A non-recursive range-for is fine.
-      inline consteval void collect_all_members(std::meta::info type, std::vector<std::meta::info>& members,
-                                                std::vector<std::meta::info>& visited)
+      // Whether the base on this edge is virtual, which is what makes it one shared subobject however
+      // many paths reach it. The answer belongs to the edge and not to the pair of types: a base that
+      // another path reaches virtually still has a second subobject when it is also inherited through
+      // a non-virtual edge. An implementation without the query is assumed to have reached a virtual
+      // base, which keeps this walk from rejecting a type that is in fact reflectable, and the test
+      // suite pins the verdict so a compiler that lacks the query does not pass unnoticed.
+      inline consteval bool is_virtual_edge(std::meta::info relationship)
       {
-         visited.push_back(type);
+         if constexpr (requires { std::meta::is_virtual(relationship); }) {
+            return std::meta::is_virtual(relationship);
+         }
+         else {
+            return true;
+         }
+      }
+
+      // Whether a second subobject of `type` would duplicate data members. Its own members count, and
+      // so do the members of its bases except those it shares through a virtual edge, which is one
+      // subobject however many paths reach it: an empty base repeated over and over reflects nothing
+      // new and stays reflectable.
+      inline consteval bool subobject_holds_members(std::meta::info type)
+      {
+         if (std::meta::nonstatic_data_members_of(type, reflection_access_ctx()).size() > 0) {
+            return true;
+         }
 
          auto bases = std::meta::bases_of(type, reflection_access_ctx());
          for (size_t i = 0; i < bases.size(); ++i) {
             const auto base = std::meta::type_of(bases[i]);
+            if (not is_virtual_edge(bases[i]) and subobject_holds_members(base)) {
+               return true;
+            }
+         }
+         return false;
+      }
+
+      // Collects every nonstatic data member of `type`, inherited ones included: a base subobject's
+      // members come before the members the type declares itself, and a base type reached through
+      // more than one path contributes once. That is exact for a virtual base, which is one shared
+      // subobject; a base inherited twice non-virtually has two subobjects, and the members of the
+      // second cannot be named through the derived type, so a type shaped that way needs a glz::meta.
+      // The walk returns whether it met that shape, because a count or a name handed out for it would
+      // be a quiet lie. `reached_nonvirtually` runs beside `visited` and remembers, per type already
+      // walked, whether the edge that reached it was non-virtual.
+      //
+      // The queries are indexed rather than ranged over on purpose: a range-for over a std::meta
+      // query inside a recursive consteval function silently yields nothing on GCC 16, so the bases
+      // of a type walked that way are invisible. A non-recursive range-for is fine.
+      inline consteval bool collect_all_members(std::meta::info type, std::vector<std::meta::info>& members,
+                                                std::vector<std::meta::info>& visited,
+                                                std::vector<bool>& reached_nonvirtually, bool via_nonvirtual_edge)
+      {
+         visited.push_back(type);
+         reached_nonvirtually.push_back(via_nonvirtual_edge);
+
+         bool repeated_base = false;
+         auto bases = std::meta::bases_of(type, reflection_access_ctx());
+         for (size_t i = 0; i < bases.size(); ++i) {
+            const auto base = std::meta::type_of(bases[i]);
+            const bool edge_is_virtual = is_virtual_edge(bases[i]);
+
             bool seen = false;
+            size_t seen_at = 0;
             for (size_t j = 0; j < visited.size(); ++j) {
+               // the walk only ever stores reflections that came from bases_of or from the type it
+               // started at, and those are canonical, so the two sides name one entity when equal
                if (visited[j] == base) {
                   seen = true;
+                  seen_at = j;
                   break;
                }
             }
+
             if (not seen) {
-               collect_all_members(base, members, visited);
+               const bool nested =
+                  collect_all_members(base, members, visited, reached_nonvirtually, not edge_is_virtual);
+               repeated_base = nested or repeated_base;
+            }
+            else if (not edge_is_virtual or reached_nonvirtually[seen_at]) {
+               // the base is already part of the hierarchy and at least one of the two reaches into it
+               // was through a non-virtual edge, so there is a second subobject to account for; two
+               // virtual edges leave the one shared subobject that a virtual base is
+               repeated_base = repeated_base or subobject_holds_members(base);
             }
          }
 
@@ -64,6 +121,7 @@ namespace glz
          for (size_t i = 0; i < direct.size(); ++i) {
             members.push_back(direct[i]);
          }
+         return repeated_base;
       }
 
       inline consteval std::vector<std::meta::info> all_members_of(std::meta::info type)
@@ -76,8 +134,26 @@ namespace glz
 
          std::vector<std::meta::info> members{};
          std::vector<std::meta::info> visited{};
-         collect_all_members(type, members, visited);
+         std::vector<bool> reached_nonvirtually{};
+         collect_all_members(type, members, visited, reached_nonvirtually, false);
          return members;
+      }
+
+      // Whether every member of the hierarchy can be named. A base inherited twice non-virtually whose
+      // subobject holds members has a second copy of them that the compiler refuses to name through
+      // the derived type, so a count or a name handed out for that shape would be a quiet lie: the type
+      // fails where it is reflected instead. A type whose repeated bases are all virtual, or empty,
+      // reflects exactly once and is answered without a walk of its own.
+      inline consteval bool members_are_namable(std::meta::info type)
+      {
+         if (std::meta::bases_of(type, reflection_access_ctx()).size() == 0) {
+            return true;
+         }
+
+         std::vector<std::meta::info> members{};
+         std::vector<std::meta::info> visited{};
+         std::vector<bool> reached_nonvirtually{};
+         return not collect_all_members(type, members, visited, reached_nonvirtually, false);
       }
 
       // Count members using P2996 reflection
@@ -85,7 +161,15 @@ namespace glz
       // Inherited members are counted, base members first
       template <class T>
          requires(std::is_class_v<std::remove_cvref_t<T>>)
-      inline constexpr size_t count_members = all_members_of(^^std::remove_cvref_t<T>).size();
+      inline constexpr size_t count_members = [] {
+         static_assert(members_are_namable(^^std::remove_cvref_t<T>),
+                       "glz::meta is needed for this type: a base class that holds members is inherited "
+                       "twice without being virtual, so it has two subobjects, and the compiler refuses "
+                       "to name the members of either through the derived type. Reach each subobject "
+                       "explicitly, such as "
+                       "glz::object(\"root\", [](auto& self) -> auto& { return self.Left::root; }, ...)");
+         return all_members_of(^^std::remove_cvref_t<T>).size();
+      }();
 
       // Helper struct to get member info at a specific index
       template <class T, size_t I>
