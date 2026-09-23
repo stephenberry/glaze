@@ -10771,6 +10771,25 @@ suite hostname_include_test = [] {
       expect(obj.str == "Hello") << obj.str;
       expect(obj.i == 55) << obj.i;
    };
+
+   "hostname_include with error_on_missing_keys"_test = [] {
+      glz::context ctx{};
+      std::string file_name = "./{}_missing_keys.json";
+      glz::replace_first_braces(file_name, glz::get_hostname(ctx));
+      expect(glz::buffer_to_file(std::string{R"({"str":"Hello"})"}, file_name) == glz::error_code::none);
+
+      static constexpr glz::opts strict{.error_on_missing_keys = true};
+
+      hostname_include_struct obj{};
+      std::string s = R"({"hostname_include": "./{}_missing_keys.json", "i": 100})";
+      const auto ec = glz::read<strict>(obj, s);
+      expect(!ec) << glz::format_error(ec, s);
+      expect(obj.str == "Hello") << obj.str;
+      expect(obj.i == 100) << obj.i;
+
+      s = R"({"hostname_include": "./{}_missing_keys.json"})"; // "i" is in neither document
+      expect(glz::read<strict>(obj, s) == glz::error_code::missing_key);
+   };
 };
 
 struct core_struct

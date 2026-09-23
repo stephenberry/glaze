@@ -164,9 +164,12 @@ namespace glz
    concept is_includer = requires(T t) { requires T::glaze_includer == true; };
 
    // Identity of the type an object's key bits belong to (see context::include_key_type). The
-   // address of each instantiation is unique, so comparing addresses compares types.
+   // address of each instantiation is unique, so comparing addresses compares types. Deliberately
+   // not const: linkers that fold identical read-only data (MSVC /OPT:ICF, gold --icf=all) could
+   // otherwise give every instantiation the same address, and a false match would reinterpret one
+   // type's key bits as another's.
    template <class T>
-   inline constexpr char include_key_tag{};
+   inline char include_key_tag{};
 
    // Publishes an object's missing-key bits on the context while it is parsed, so that an includer
    // member can hand them to the read of its file, and restores the previous value on the way out.
