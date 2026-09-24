@@ -3089,7 +3089,16 @@ namespace glz
                   }
                }
                else if constexpr (reflection_type) {
-                  static_assert(bool(hash_info<T>.type));
+                  static_assert(bool(hash_info<T>.type),
+                                "glaze cannot build a keyed lookup for this type: two of its keys are "
+                                "equal, or one of them is empty. Base members are part of the "
+                                "reflection, so two members of a hierarchy can answer to one name - a "
+                                "member that hides a member of a base class, or two bases that repeat "
+                                "a name - and no key can then be told from the other. Give the type a "
+                                "glz::meta whose value names the members apart, such as "
+                                "glz::object(\"base_x\", &Base::x, \"x\", &Derived::x). The "
+                                "array-shaped writes carry the members positionally and are not "
+                                "affected.");
 
                   if (*it != '"') [[unlikely]] {
                      ctx.error = error_code::expected_quote;
