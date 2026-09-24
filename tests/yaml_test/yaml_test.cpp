@@ -787,12 +787,11 @@ suite yaml_block_scalar_tests = [] {
       // Multiline strings should use block scalar or quoted string
    };
 
-   "roundtrip_literal_block_keep_multiple_newlines"_test = [] {
+   "roundtrip_multiple_trailing_newlines"_test = [] {
       std::string original = "line1\nline2\n\n\n";
       std::string yaml;
       auto wec = glz::write_yaml(original, yaml);
       expect(!wec);
-      expect(yaml.find("|+") != std::string::npos);
 
       std::string parsed{};
       auto rec = glz::read_yaml(parsed, yaml);
@@ -929,12 +928,13 @@ suite yaml_writer_edge_case_tests = [] {
       expect(parsed == original);
    };
 
-   "write_string_chomping_keep_marker"_test = [] {
+   "write_string_multiple_trailing_newlines_double_quoted"_test = [] {
+      // Keep chomping (|+) would also keep the blank line a caller writes after a block scalar.
       const std::string original = "line1\nline2\n\n\n";
       std::string yaml;
       auto wec = glz::write_yaml(original, yaml);
       expect(!wec);
-      expect(yaml == "|+\n  line1\n  line2\n  \n  \n");
+      expect(yaml == "\"line1\\nline2\\n\\n\\n\"");
 
       std::string parsed{};
       auto rec = glz::read_yaml(parsed, yaml);
@@ -5468,7 +5468,7 @@ suite yaml_large_writer_document_tests = [] {
       expect(yaml.size() > 4000);
       expect(yaml.find("description: |-") != std::string::npos);
       expect(yaml.find("runbook: |") != std::string::npos);
-      expect(yaml.find("audit_log: |+") != std::string::npos);
+      expect(yaml.find("audit_log: \"entry-a\\nentry-b\\n\\n\\n\"") != std::string::npos);
       expect(yaml.find("'true'") != std::string::npos);
       expect(yaml.find("'123'") != std::string::npos);
       expect(yaml.find("'alpha: beta'") != std::string::npos);
@@ -5483,7 +5483,7 @@ suite yaml_large_writer_document_tests = [] {
       expect(std::get<std::string>(root.at("description").data) ==
              "Large generated writer test document\nWith nested maps and sequences");
       expect(std::get<std::string>(root.at("runbook").data) == "step one\nstep two\n");
-      expect(std::get<std::string>(root.at("audit_log").data) == "entry-a\nentry-b\n\n\n\n");
+      expect(std::get<std::string>(root.at("audit_log").data) == "entry-a\nentry-b\n\n\n");
       expect(std::holds_alternative<std::nullptr_t>(root.at("note").data));
 
       auto& parsed_deployments = std::get<glz::generic::array_t>(root.at("deployments").data);
@@ -5528,7 +5528,7 @@ suite yaml_large_writer_document_tests = [] {
       expect(!wec);
       expect(yaml.size() > 1800);
       expect(yaml.find("description: |-") != std::string::npos);
-      expect(yaml.find("literal: |+") != std::string::npos);
+      expect(yaml.find("literal: \"line one\\n  line two\\nline three\\n\\n\\n\"") != std::string::npos);
       expect(yaml.find("note: |") != std::string::npos);
       expect(yaml.find("'true'") != std::string::npos);
       expect(yaml.find("'123'") != std::string::npos);
@@ -5541,7 +5541,7 @@ suite yaml_large_writer_document_tests = [] {
 
       expect(parsed.title == original.title);
       expect(parsed.description == original.description);
-      expect(parsed.literal == (original.literal + "\n"));
+      expect(parsed.literal == original.literal);
       expect(parsed.multiline_plain == original.multiline_plain);
       expect(parsed.quoted == original.quoted);
       expect(parsed.flags.enabled == original.flags.enabled);
@@ -13046,6 +13046,159 @@ suite contiguous_buffer_without_empty = [] {
       std::map<std::string, int> value{};
       expect(not glz::read_yaml(value, buffer));
       expect(value == std::map<std::string, int>{{"a", 2}});
+   };
+};
+
+// GitHub issue #2878: a string must round trip exactly whatever its line breaks and whitespace.
+// A literal block scalar cannot hold every multi-line string (leading spaces on its first content
+// line, only line breaks, several trailing line breaks), so those are written double-quoted.
+namespace i2878
+{
+   struct holder_t
+   {
+      std::string s{};
+      bool operator==(const holder_t&) const = default;
+   };
+
+   struct outer_t
+   {
+      holder_t inner{};
+      std::optional<std::string> opt{};
+      int after{};
+      bool operator==(const outer_t&) const = default;
+   };
+
+   std::string escaped(std::string_view str)
+   {
+      std::string out{};
+      for (const char c : str) {
+         switch (c) {
+         case '\n':
+            out += "\\n";
+            break;
+         case '\t':
+            out += "\\t";
+            break;
+         default:
+            out += c;
+         }
+      }
+      return out;
+   }
+
+   // Every string of length 0 through `max_length` over `alphabet`.
+   std::vector<std::string> strings_over(std::string_view alphabet, size_t max_length)
+   {
+      std::vector<std::string> result{std::string{}};
+      size_t level_begin = 0;
+      for (size_t length = 1; length <= max_length; ++length) {
+         const size_t level_end = result.size();
+         for (size_t i = level_begin; i < level_end; ++i) {
+            for (const char c : alphabet) {
+               result.push_back(result[i] + c);
+            }
+         }
+         level_begin = level_end;
+      }
+      return result;
+   }
+
+   // Round trips `str` through every position a string can take: the document root, an object
+   // member at two depths, an optional, a sequence element, a map value, a map key, both halves of
+   // a pair, and a member of a mapping nested in a sequence. Returns a description of the first
+   // failure, or an empty string.
+   template <auto Opts>
+   std::string round_trip_failure(const std::string& str)
+   {
+      std::string yaml{};
+      std::string failure{};
+      auto check = [&](const auto& value, std::string_view position) {
+         if (!failure.empty()) {
+            return;
+         }
+         using T = std::remove_cvref_t<decltype(value)>;
+         yaml.clear();
+         if (const auto ec = glz::write<Opts>(value, yaml); ec) {
+            failure = std::string{position} + ": write failed for \"" + escaped(str) + "\"";
+            return;
+         }
+         T parsed{};
+         if (const auto ec = glz::read<Opts>(parsed, yaml); ec) {
+            failure = std::string{position} + ": read failed for \"" + escaped(str) + "\"\n" +
+                      glz::format_error(ec, yaml);
+         }
+         else if (!(parsed == value)) {
+            failure = std::string{position} + ": \"" + escaped(str) + "\" did not round trip\n" + yaml;
+         }
+      };
+
+      check(str, "root");
+      check(holder_t{str}, "member");
+      check(outer_t{{str}, str, 1}, "nested member");
+      check(std::vector<std::string>{str, str}, "sequence element");
+      check(std::map<std::string, std::string>{{"a", str}, {"b", "tail"}}, "map value");
+      check(std::map<std::string, int>{{str, 1}}, "map key");
+      check(std::pair<std::string, std::string>{str, str}, "pair");
+      check(std::vector<holder_t>{{str}, {str}}, "mapping in sequence");
+      return failure;
+   }
+
+   template <auto Opts>
+   void expect_all_round_trip(const std::vector<std::string>& strings)
+   {
+      for (const auto& str : strings) {
+         const auto failure = round_trip_failure<Opts>(str);
+         if (!failure.empty()) {
+            expect(false) << failure;
+            return; // one counterexample is enough; the rest would repeat it
+         }
+      }
+   }
+
+   constexpr glz::opts yaml_default{.format = glz::YAML};
+   constexpr glz::yaml::yaml_opts width_four{.indent_width = 4};
+   constexpr glz::yaml::yaml_opts flow{.flow_style = true};
+   constexpr yaml_escape_opts escaping{{.format = glz::YAML}};
+}
+
+suite issue_2878_string_round_trip = [] {
+   using namespace i2878;
+
+   "the reported strings round trip"_test = [] {
+      for (const std::string str : {"\n", "\n newline", "\n\n", "\n\n\nx", "\n\t tab"}) {
+         const auto failure = round_trip_failure<yaml_default>(str);
+         expect(failure.empty()) << failure;
+      }
+   };
+
+   "a literal block is kept where it round trips"_test = [] {
+      expect(glz::write_yaml(holder_t{"a\n  b\n"}).value() == "s: |\n  a\n    b\n\n");
+      expect(glz::write_yaml(holder_t{"\n\tx"}).value() == "s: |-\n  \n  \tx\n\n");
+   };
+
+   "strings a literal block cannot hold are double-quoted"_test = [] {
+      expect(glz::write_yaml(holder_t{"\n"}).value() == "s: \"\\n\"\n");
+      expect(glz::write_yaml(holder_t{"\n newline"}).value() == "s: \"\\n newline\"\n");
+      expect(glz::write_yaml(holder_t{" a\nb"}).value() == "s: \" a\\nb\"\n");
+      expect(glz::write_yaml(holder_t{"a\n\n"}).value() == "s: \"a\\n\\n\"\n");
+   };
+
+   "a key with a line break is double-quoted"_test = [] {
+      expect(glz::write_yaml(std::map<std::string, int>{{"a\nb", 1}}).value() == "\"a\\nb\": 1\n");
+   };
+
+   "every short string over whitespace and line breaks round trips"_test = [] {
+      const auto strings = strings_over("\n \tx", 5);
+      expect_all_round_trip<yaml_default>(strings);
+      expect_all_round_trip<width_four>(strings);
+   };
+
+   "every short string over YAML indicators round trips"_test = [] {
+      const auto strings = strings_over("\n \tx#:-'\"\\", 3);
+      expect_all_round_trip<yaml_default>(strings);
+      expect_all_round_trip<width_four>(strings);
+      expect_all_round_trip<flow>(strings);
+      expect_all_round_trip<escaping>(strings);
    };
 };
 
