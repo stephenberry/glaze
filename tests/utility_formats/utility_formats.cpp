@@ -113,12 +113,11 @@ bool matches(const glz::bit_array<N, Chunk>& b, const naive_bits<N>& ref, const 
       }
    }
    const auto check = [&](const char* op, int got, int want) {
-      expect(got == want) << bit_array_label<N, Chunk>(what) + ": " + op + " = " + std::to_string(got) +
-                                ", expected " + std::to_string(want);
+      expect(got == want) << bit_array_label<N, Chunk>(what) + ": " + op + " = " + std::to_string(got) + ", expected " +
+                                std::to_string(want);
       return got == want;
    };
-   return check("popcount", b.popcount(), ref.popcount()) &&
-          check("countr_zero", b.countr_zero(), ref.countr_zero()) &&
+   return check("popcount", b.popcount(), ref.popcount()) && check("countr_zero", b.countr_zero(), ref.countr_zero()) &&
           check("countl_zero", b.countl_zero(), ref.countl_zero()) &&
           check("has_single_bit", int(b.has_single_bit()), int(ref.popcount() == 1));
 }
@@ -171,8 +170,8 @@ void check_bit_array()
          or_ref.bits[i] = or_ref.bits[j] = true;
          and_ref.bits[i] = (i == j);
          const auto label = "bits " + std::to_string(i) + ", " + std::to_string(j);
-         pairs_ok = matches(a | b, or_ref, label + " (|)") && matches(a & b, and_ref, label + " (&)") &&
-                    (a == b) == (i == j);
+         pairs_ok =
+            matches(a | b, or_ref, label + " (|)") && matches(a & b, and_ref, label + " (&)") && (a == b) == (i == j);
       }
    }
    expect(pairs_ok) << bit_array_label<N, Chunk>("pairs");

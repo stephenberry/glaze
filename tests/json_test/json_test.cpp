@@ -5000,8 +5000,7 @@ suite padded_promise_scope_test = [] {
    const std::string long_string = '"' + std::string(40, 'x') + '"';
 
    "file_include reads the included file unpadded"_test = [&] {
-      expect(glz::buffer_to_file(R"({"inner":)" + long_string + "}", "./padded_include.json") ==
-             glz::error_code::none);
+      expect(glz::buffer_to_file(R"({"inner":)" + long_string + "}", "./padded_include.json") == glz::error_code::none);
 
       std::string buffer = R"({"include":"./padded_include.json","outer":"y"})";
       const auto size = buffer.size();

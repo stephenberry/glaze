@@ -661,10 +661,9 @@ void check_exponent_all_modes(const sv num, const bool is_valid)
 // as trailing content: nested reads then failed on it, but a top-level read, which does not inspect
 // trailing content, accepted "1.0e" as 1.
 suite empty_exponent = [] {
-   static constexpr sv invalid[]{"1e",   "1E",    "1e+",   "1e-",   "1E+",  "1E-",
-                                 "1.0e", "1.0E",  "1.0e+", "1.0e-", "-1e",  "-1.5E-",
-                                 "0e",   "0.5e+", "-0e",   "123e",  "1.25e"};
-   static constexpr sv valid_float[]{"1e5",  "1E5",    "1e+5", "1E+5",   "1e-5", "1.0e5",
+   static constexpr sv invalid[]{"1e",    "1E",  "1e+",    "1e-", "1E+",   "1E-", "1.0e", "1.0E", "1.0e+",
+                                 "1.0e-", "-1e", "-1.5E-", "0e",  "0.5e+", "-0e", "123e", "1.25e"};
+   static constexpr sv valid_float[]{"1e5",    "1E5",    "1e+5",   "1E+5", "1e-5",  "1.0e5",
                                      "1.0e-5", "1.0E+5", "-1.5e2", "0e0",  "0.5E-0"};
    static constexpr sv valid_integer[]{"1e5", "1E5", "1e+5", "1E+5", "-1e2", "0e0", "12e0"};
 

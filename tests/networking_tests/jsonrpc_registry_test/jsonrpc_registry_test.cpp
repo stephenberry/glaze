@@ -735,8 +735,7 @@ suite unterminated_request_tests = [] {
 
       // Lengths across a chunk width, so the string's last chunk ends past the buffer for some.
       for (size_t n = 1; n <= 16; ++n) {
-         const auto request =
-            R"({"jsonrpc":"2.0","method":"/value","id":1,"params":")" + std::string(n, 'x') + R"("})";
+         const auto request = R"({"jsonrpc":"2.0","method":"/value","id":1,"params":")" + std::string(n, 'x') + R"("})";
          const auto response = call_exact(server, request);
          expect(api.value.size() == n) << response;
       }

@@ -43,8 +43,8 @@ namespace
       bool ok = true;
       for (size_t i = 0; ok && i < std::variant_size_v<V>; ++i) {
          std::string buffer{};
-         ok = !glz::write_json(wide_variant::make<V>(i, int(i) + 1), buffer) &&
-              reads_as<Opts, V>(buffer, i, int(i) + 1);
+         ok =
+            !glz::write_json(wide_variant::make<V>(i, int(i) + 1), buffer) && reads_as<Opts, V>(buffer, i, int(i) + 1);
       }
       expect(ok);
    }
