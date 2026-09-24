@@ -21,6 +21,7 @@
 #include "glaze/base64/base64.hpp"
 #include "glaze/glaze_exceptions.hpp"
 #include "glaze/json/generic.hpp"
+#include "speculation_guard.hpp"
 #include "ut/ut.hpp"
 
 using namespace ut;
@@ -4802,6 +4803,24 @@ struct glz::meta<cbor_variant_shapes::tree>
    static constexpr std::array<std::string_view, 2> ids{"leaf", "branch"};
 };
 
+namespace cbor_ambiguous
+{
+   // Two alternatives with an identical wire shape at every level: resolution must try both at each
+   // level, which is the shape the speculation budget exists to bound. The nesting is carried by the
+   // data rather than by a chain of distinct types, which GCC instantiates at super-linear cost.
+   struct nest_a;
+   struct nest_b;
+   using node = std::variant<nest_a, nest_b>;
+   struct nest_a
+   {
+      std::vector<node> x{};
+   };
+   struct nest_b
+   {
+      std::vector<node> x{};
+   };
+}
+
 // A variant takes the shape glz::meta declares, as it does in JSON and BEVE. The [index, value]
 // array written before was compact but meaningless to any CBOR implementation that did not already
 // know Glaze's convention.
@@ -5021,6 +5040,30 @@ suite cbor_variant_tagging = [] {
       tree decoded{};
       expect(not glz::read_cbor(decoded, buffer));
       expect(tree_depth(decoded) == 100);
+   };
+
+   // Untagged resolution is speculative, so an ambiguous nest re-parses each subtree per alternative
+   // at every level. The speculation budget caps that; see speculation_guard.hpp for what is timed.
+   "an ambiguous nest is bounded rather than exponential"_test = [] {
+      const auto build = [](size_t levels) {
+         std::string buffer;
+         for (size_t i = 0; i < levels; ++i) {
+            buffer.push_back(char(0xa1)); // map(1)
+            buffer.push_back(char(0x61)); // text(1)
+            buffer += "x";
+            buffer.push_back(char(0x81)); // array(1): the next level down
+         }
+         buffer.push_back(char(0x61));
+         buffer += "z"; // a string where a map is required: nothing matches, at any level
+         return buffer;
+      };
+      glz_test::expect_bounded_by_speculation_budget(
+         build,
+         [](const std::string& buffer, glz::context& ctx) {
+            cbor_ambiguous::node decoded{};
+            return glz::read<glz::opts{.format = glz::CBOR}>(decoded, buffer, ctx);
+         },
+         glz::error_code::no_matching_variant_type, 4, 24, 96);
    };
 };
 

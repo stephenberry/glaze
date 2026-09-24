@@ -25,6 +25,7 @@
 
 #include "glaze/json/generic.hpp"
 #include "glaze/json/ptr.hpp"
+#include "speculation_guard.hpp"
 #include "ut/ut.hpp"
 
 using namespace ut;
@@ -988,22 +989,27 @@ suite msgpack_variant_tagging = [] {
    };
 
    // Untagged resolution is speculative, so an ambiguous nest re-parses each subtree per alternative
-   // at every level. The speculation budget bounds that; without it ~100 bytes cost minutes.
+   // at every level. The speculation budget caps that; see speculation_guard.hpp for what is timed.
    "an ambiguous nest is bounded rather than exponential"_test = [] {
-      std::string buffer;
-      for (int i = 0; i < 40; ++i) {
-         buffer.push_back(char(0x81)); // fixmap(1)
-         buffer.push_back(char(0xa1)); // fixstr(1)
-         buffer += "x";
-         buffer.push_back(char(0x91)); // fixarray(1): the next level down
-      }
-      buffer.push_back(char(0xa1));
-      buffer += "z"; // a string where a map is required: nothing matches, at any level
-      ambiguous::node decoded{};
-      const auto t0 = std::chrono::steady_clock::now();
-      expect(bool(glz::read_msgpack(decoded, buffer)));
-      const auto ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
-      expect(ms < 2000.0) << ms;
+      const auto build = [](size_t levels) {
+         std::string buffer;
+         for (size_t i = 0; i < levels; ++i) {
+            buffer.push_back(char(0x81)); // fixmap(1)
+            buffer.push_back(char(0xa1)); // fixstr(1)
+            buffer += "x";
+            buffer.push_back(char(0x91)); // fixarray(1): the next level down
+         }
+         buffer.push_back(char(0xa1));
+         buffer += "z"; // a string where a map is required: nothing matches, at any level
+         return buffer;
+      };
+      glz_test::expect_bounded_by_speculation_budget(
+         build,
+         [](const std::string& buffer, glz::context& ctx) {
+            ambiguous::node decoded{};
+            return glz::read<glz::opts{.format = glz::MSGPACK}>(decoded, buffer, ctx);
+         },
+         glz::error_code::no_matching_variant_type, 4, 24, 96);
    };
 
    // An over-nested or truncated buffer is a property of the input, not of the alternative set.
