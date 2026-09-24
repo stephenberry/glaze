@@ -5369,6 +5369,26 @@ suite cbor_recursion_depth_limit = [] {
    };
 };
 
+suite cbor_context_reuse = [] {
+   "a context reused after a failed read still reads"_test = [] {
+      static constexpr glz::opts options{.format = glz::CBOR};
+      const std::map<std::string, std::vector<std::vector<int>>> value{{"a", {{1, 2}, {3, 4}}}, {"b", {{5}}}};
+      std::string good{};
+      expect(not glz::write_cbor(value, good));
+      const std::string bad = good.substr(0, good.size() / 2);
+
+      glz::context ctx{};
+      std::map<std::string, std::vector<std::vector<int>>> first{};
+      expect(bool(glz::read<options>(first, bad, ctx)));
+      expect(ctx.depth == 0u) << ctx.depth;
+
+      std::map<std::string, std::vector<std::vector<int>>> second{};
+      const auto ec = glz::read<options>(second, good, ctx);
+      expect(ec == glz::error_code::none) << glz::format_error(ec, good);
+      expect(second == value);
+   };
+};
+
 int main()
 {
    custom_variant_ambiguity_tests();

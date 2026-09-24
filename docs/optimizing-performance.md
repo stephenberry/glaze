@@ -195,7 +195,7 @@ This is most beneficial when parsing data that exercises the scratch buffer (e.g
 
 > [!NOTE]
 >
-> The context stores error state, so if you reuse a context you should check for errors after each call. The error state is overwritten by each subsequent call.
+> The context stores the error of the last call, so check the result of each call. Every read and write starts from a clean slate: the error, the custom error message, and the nesting depth left by a previous call (including a failed one) are reset, so nothing needs to be cleared between calls.
 
 Custom contexts that inherit from `glz::context` also benefit from scratch buffer reuse:
 

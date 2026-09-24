@@ -248,6 +248,38 @@ namespace glz
       indent_guard& operator=(const indent_guard&) = delete;
    };
 
+   // Opened by the read and write entry points (glz::read, glz::read_streaming, glz::write) for the
+   // call they make on a caller's context. A context is meant to be reused across calls, and part
+   // of what a call leaves in it describes that call alone. Settling that here, once, is what lets
+   // the readers and writers leave it behind on any of their many ways out of an error:
+   //   - error and custom_error_message report the previous call, so they are cleared on entry.
+   //     Left set, the error made the next call return it without reading anything.
+   //   - depth is restored on exit. The JSON readers (see enter_depth) and writers count it by hand
+   //     and return from an error without unwinding it, so a failed call left it raised: every
+   //     later non-null-terminated read settled to unexpected_end, every later prettified write was
+   //     indented further in, and every later read started that much closer to the recursion
+   //     limit. Restored rather than zeroed because a file include reads its file through glz::read
+   //     on the including document's context, and its levels have to count on top of its parent's
+   //     for a cycle of includes to still meet the limit.
+   // Per-read budgets are reseeded where they are seeded (speculation_budget in glz::read, the YAML
+   // expansion budgets in its outermost parse), since only those places know the input's size.
+   template <class Ctx>
+   struct call_scope
+   {
+      Ctx& ctx;
+      uint32_t depth;
+
+      explicit call_scope(Ctx& c) noexcept : ctx(c), depth(c.depth)
+      {
+         ctx.error = error_code::none;
+         ctx.custom_error_message = {};
+      }
+      ~call_scope() { ctx.depth = depth; }
+
+      call_scope(const call_scope&) = delete;
+      call_scope& operator=(const call_scope&) = delete;
+   };
+
    // A variant read is speculative: an alternative is parsed to find out whether it fits, and a
    // rejected one is rewound and the next tried. Nest that -- a variant whose alternatives contain
    // variants -- and the re-parses multiply, so a failure at the bottom of an ambiguous nest costs
@@ -305,8 +337,9 @@ namespace glz
    // Manual counterpart of depth_guard for the JSON/NDJSON readers described above: counts one
    // nesting level and returns true when the limit is reached, in which case the caller must return
    // immediately. The level is given back with a plain `--ctx.depth` at each syntactic close, so a
-   // bail-out leaves it counted, which is what keeps a truncated buffer from finalizing as success.
-   // Readers that rewind and retry (variant alternatives) must restore ctx.depth with the iterator.
+   // bail-out leaves it counted, which is what keeps a truncated buffer from finalizing as success;
+   // call_scope puts it back once the read has been finalized. Readers that rewind and retry
+   // (variant alternatives) must restore ctx.depth with the iterator.
    [[nodiscard]] GLZ_ALWAYS_INLINE bool enter_depth(is_context auto& ctx) noexcept
    {
       if (ctx.depth >= max_recursive_depth_limit) [[unlikely]] {

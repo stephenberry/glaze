@@ -70,10 +70,10 @@ namespace glz
          if constexpr (requires { ctx.stream_begin; }) {
             if (!ctx.stream_begin && it != end) {
                ctx.stream_begin = &*it;
-               // The line memo holds pointers into whatever buffer filled it, so a reused
-               // context must not carry a previous read's into this one.
-               if constexpr (requires { ctx.reset_line_memo(); }) {
-                  ctx.reset_line_memo();
+               // Anchors and the line memo hold pointers into whatever buffer filled them, so a
+               // reused context must not carry a previous read's into this one.
+               if constexpr (requires { ctx.reset_read_state(); }) {
+                  ctx.reset_read_state();
                }
                // Seed the alias replay budget from the document this read was handed. Done here
                // rather than in glz::read so every YAML entry point is covered, and only on the
