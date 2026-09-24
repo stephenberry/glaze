@@ -619,19 +619,27 @@ namespace glz
 
    // P2996 can reflect any class, but we must exclude types with their own Glaze specializations.
    // Types with custom serialization should specialize glz::specified<T> to std::true_type.
+   //
+   // A glaze_wrapper (glz::quoted, glz::invoke, glz::escape_bytes, ...) is a view onto a member, not
+   // a struct: its fields are a reference and perhaps a pointer. A format that has no specialization
+   // for a wrapper must fail to compile rather than reflect it, which would write the wrapper's
+   // internals (often an empty object) and read into them.
    template <class T>
    concept reflectable = std::is_class_v<std::remove_cvref_t<T>> &&
-                         !(is_no_reflect<T> || glaze_t<T> || meta_keys<T> || range<T> || pair_t<T> || null_t<T> ||
-                           str_t<T> || bool_t<T> || tuple_t<T> || func_t<T> || is_specified<T>);
+                         !(is_no_reflect<T> || glaze_wrapper<std::remove_cvref_t<T>> || glaze_t<T> || meta_keys<T> ||
+                           range<T> || pair_t<T> || null_t<T> || str_t<T> || bool_t<T> || tuple_t<T> || func_t<T> ||
+                           is_specified<T>);
 #else
    // Traditional reflection requires aggregates. The exclusion list mirrors P2996 for consistency.
    // These exclusions handle aggregate types that shouldn't be reflected as objects:
    // str_t: aggregate string-like types, tuple_t: std::array and custom tuple-like aggregates,
-   // func_t: aggregate callables, is_specified: types with explicit serialization.
+   // func_t: aggregate callables, is_specified: types with explicit serialization, glaze_wrapper: views
+   // onto a member (see the P2996 branch above).
    template <class T>
    concept reflectable = std::is_aggregate_v<std::remove_cvref_t<T>> && std::is_class_v<std::remove_cvref_t<T>> &&
-                         !(is_no_reflect<T> || glaze_t<T> || meta_keys<T> || range<T> || pair_t<T> || null_t<T> ||
-                           str_t<T> || bool_t<T> || tuple_t<T> || func_t<T> || is_specified<T>);
+                         !(is_no_reflect<T> || glaze_wrapper<std::remove_cvref_t<T>> || glaze_t<T> || meta_keys<T> ||
+                           range<T> || pair_t<T> || null_t<T> || str_t<T> || bool_t<T> || tuple_t<T> || func_t<T> ||
+                           is_specified<T>);
 #endif
 
    template <class T>
