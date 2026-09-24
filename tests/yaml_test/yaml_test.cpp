@@ -13124,8 +13124,8 @@ namespace i2878
          }
          T parsed{};
          if (const auto ec = glz::read<Opts>(parsed, yaml); ec) {
-            failure = std::string{position} + ": read failed for \"" + escaped(str) + "\"\n" +
-                      glz::format_error(ec, yaml);
+            failure =
+               std::string{position} + ": read failed for \"" + escaped(str) + "\"\n" + glz::format_error(ec, yaml);
          }
          else if (!(parsed == value)) {
             failure = std::string{position} + ": \"" + escaped(str) + "\" did not round trip\n" + yaml;
