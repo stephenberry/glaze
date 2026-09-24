@@ -107,7 +107,7 @@ if(glaze_EETF_FORMAT)
   list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
   find_package(Erlang REQUIRED)
   target_link_libraries(
-    glaze_glaze ${warning_guard}
+    glaze_glaze
     INTERFACE
       Erlang::EI
       Erlang::Erlang
@@ -120,7 +120,7 @@ option(glaze_ENABLE_SSL "Enable SSL/TLS support for HTTPS servers" OFF)
 if(glaze_ENABLE_SSL)
   find_package(OpenSSL REQUIRED)
   target_link_libraries(
-    glaze_glaze ${warning_guard}
+    glaze_glaze
     INTERFACE
       OpenSSL::SSL
       OpenSSL::Crypto
