@@ -8,9 +8,8 @@
 
 #include <string>
 #include <string_view>
-#include <vector>
-
 #include <ut/ut.hpp>
+#include <vector>
 
 #include "glaze/beve.hpp"
 #include "glaze/bson.hpp"

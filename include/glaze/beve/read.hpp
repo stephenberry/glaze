@@ -3006,8 +3006,7 @@ namespace glz
                                  parse<BEVE>::op<Opts>(get_member(value, get<I>(to_tie(value))), ctx, it, end);
                               }
                               else {
-                                 parse<BEVE>::op<Opts>(get_member(value, get<I>(reflect<T>::values)), ctx, it,
-                                                       end);
+                                 parse<BEVE>::op<Opts>(get_member(value, get<I>(reflect<T>::values)), ctx, it, end);
                               }
                            }
                         }
