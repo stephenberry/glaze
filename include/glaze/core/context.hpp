@@ -39,7 +39,7 @@ namespace glz
       // truncated reads to none, which is worse than leaking. Those need their own truncation
       // accounting before they can join.
       end_reached,
-      partial_read_complete, // A non-error code for short circuiting partial reads
+      partial_read_complete, // A non-error code for short circuiting partial reads; see parse_failed
       no_read_input, //
       data_must_be_null_terminated, //
       parse_number_failure, //
@@ -123,6 +123,18 @@ namespace glz
       // same response, so they share a code; custom_error_message names which one ran away.
       exceeded_max_expansion
    };
+
+   // Whether a parse failed, as opposed to having stopped. end_reached and partial_read_complete
+   // are truthy so that they unwind the parse like any error, but the value they end on was read:
+   // a caller that commits a parsed value (a custom setter, a cast, an atomic store) must still
+   // commit it and let the code propagate. The top level settles both, so callers never see them.
+   //
+   // This is the one place that lists them. Neither has an ordinal test: partial_read_complete
+   // sorts above end_reached, and the REPE codes sort below it.
+   [[nodiscard]] constexpr bool parse_failed(const error_code ec) noexcept
+   {
+      return ec != error_code::none && ec != error_code::end_reached && ec != error_code::partial_read_complete;
+   }
 
    // Unified error context for all read/write operations
    // Provides error information and byte count processed
