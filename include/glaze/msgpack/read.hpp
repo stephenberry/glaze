@@ -706,7 +706,8 @@ namespace glz
                bit_array<N> arr{};
                if constexpr (N > 0) {
                   for_each<N>([&]<size_t I>() {
-                     if constexpr (!msgpack::detail::should_skip_field<field_t<T, I>>()) {
+                     if constexpr (!msgpack::detail::should_skip_field<field_t<T, I>>() &&
+                                   !skipped_by_meta<T, I, operation::parse>) {
                         arr[I] = true;
                      }
                   });
@@ -760,7 +761,8 @@ namespace glz
 
                visit<N>(
                   [&]<size_t I>() {
-                     if constexpr (msgpack::detail::should_skip_field<field_t<T, I>>()) {
+                     if constexpr (msgpack::detail::should_skip_field<field_t<T, I>>() ||
+                                   skipped_by_meta<T, I, operation::parse>) {
                         skip_value<MSGPACK>::template op<Opts>(ctx, it, end);
                      }
                      else {

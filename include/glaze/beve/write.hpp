@@ -1369,17 +1369,7 @@ namespace glz
       template <auto Opts, class Value, size_t I>
       static consteval bool should_skip_field()
       {
-         using V = field_t<Value, I>;
-
-         if constexpr (always_skipped<V>) {
-            return true;
-         }
-         else if constexpr (is_any_function_ptr<V>) {
-            return !check_write_function_pointers(Opts);
-         }
-         else {
-            return false;
-         }
+         return skipped_on_write<Opts, Value, I>;
       }
 
       template <auto Opts, class Value>
@@ -1439,19 +1429,16 @@ namespace glz
    {
       static constexpr auto N = reflect<T>::size;
 
+      // A positional layout (structs_as_arrays) has no keys, so only a field's type can leave it out;
+      // meta<T>::skip names keys and applies to the keyed layout.
       template <auto Opts, size_t I>
       static consteval bool should_skip_field()
       {
-         using V = field_t<T, I>;
-
-         if constexpr (always_skipped<V>) {
-            return true;
-         }
-         else if constexpr (is_any_function_ptr<V>) {
-            return !check_write_function_pointers(Opts);
+         if constexpr (check_structs_as_arrays(Opts)) {
+            return never_written<Opts, field_t<T, I>>;
          }
          else {
-            return false;
+            return skipped_on_write<Opts, T, I>;
          }
       }
 

@@ -2129,8 +2129,7 @@ suite skip_test = [] {
    // three members and the member count in the header has to say three. The count and the members
    // themselves are decided by separate code, and this is what catches them disagreeing.
    //
-   // meta::skip is a JSON/YAML customization point; BEVE does not consult it in either direction, so
-   // the skipped member also survives the read here.
+   // The read then consumes the skipped member's value without assigning it.
    "a parse-only meta::skip writes every member"_test = [] {
       parse_skipped_t obj{7, 2.5, "written"};
       std::string s{};
@@ -2139,7 +2138,7 @@ suite skip_test = [] {
       parse_skipped_t restored{};
       expect(!glz::read_beve(restored, s));
       expect(restored.a == 7);
-      expect(restored.skipped_on_parse == 2.5);
+      expect(restored.skipped_on_parse == 0.0);
       expect(restored.s == "written");
    };
 };

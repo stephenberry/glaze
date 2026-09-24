@@ -361,6 +361,40 @@ namespace glz
       return true;
    }
 
+   // Consume the input that a key skipped by meta<T>::skip on parse names. After `key =` that is one
+   // value. After a [table] or [[array]] header it is the table's body, every `key = value` line up to
+   // the next header: skipping only the rest of the header line would leave those lines to be read
+   // into the enclosing table.
+   template <auto Opts, class Ctx, class It, class End>
+   inline void skip_toml_member(Ctx& ctx, It& it, End end)
+   {
+      skip_ws_and_comments(it, end);
+      if (it != end && *it != '\n' && *it != '\r') {
+         skip_value<TOML>::template op<Opts>(ctx, it, end);
+         return;
+      }
+
+      std::vector<std::string> key{};
+      while (true) {
+         skip_ws_newlines_and_comments(it, end);
+         if (it == end || *it == '[') {
+            return;
+         }
+         if (!parse_toml_key(key, ctx, it, end)) {
+            return;
+         }
+         if (it == end || *it != '=') {
+            ctx.error = error_code::syntax_error;
+            return;
+         }
+         ++it; // skip '='
+         skip_value<TOML>::template op<Opts>(ctx, it, end);
+         if (bool(ctx.error)) [[unlikely]] {
+            return;
+         }
+      }
+   }
+
    template <glaze_value_t T>
    struct from<TOML, T>
    {
@@ -1825,7 +1859,14 @@ namespace glz
                }
                visit<N>(
                   [&]<size_t I>() {
-                     if (I == index) {
+                     // A field skipped on parse consumes its value in a branch of its own, so its
+                     // reader is never instantiated -- see `skipped_by_meta`.
+                     if constexpr (skipped_by_meta<U, I, operation::parse>) {
+                        if (I == index) {
+                           skip_value<TOML>::template op<Opts>(ctx, it, end);
+                        }
+                     }
+                     else if (I == index) {
                         decltype(auto) member_obj = [&]() -> decltype(auto) {
                            if constexpr (reflectable<U>) {
                               // For reflectable types, to_tie provides access to members
@@ -1939,7 +1980,14 @@ namespace glz
             }
             visit<N>(
                [&]<size_t I>() {
-                  if (I == index) {
+                  // A field skipped on parse is consumed, value or table body, in a branch of its own
+                  // so its reader is never instantiated -- see `skipped_by_meta`.
+                  if constexpr (skipped_by_meta<U, I, operation::parse>) {
+                     if (I == index) {
+                        skip_toml_member<Opts>(ctx, it, end);
+                     }
+                  }
+                  else if (I == index) {
                      decltype(auto) member_obj = [&]() -> decltype(auto) {
                         if constexpr (reflectable<U>) {
                            return get<I>(to_tie(root));
@@ -2034,7 +2082,14 @@ namespace glz
             bool success = false;
             visit<N>(
                [&]<size_t I>() {
-                  if (I == index) {
+                  // See resolve_nested: a field skipped on parse is consumed without being read.
+                  if constexpr (skipped_by_meta<U, I, operation::parse>) {
+                     if (I == index) {
+                        skip_toml_member<Opts>(ctx, it, end);
+                        success = !bool(ctx.error);
+                     }
+                  }
+                  else if (I == index) {
                      decltype(auto) raw_member_obj = [&]() -> decltype(auto) {
                         if constexpr (reflectable<U>) {
                            return get<I>(to_tie(root));

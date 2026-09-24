@@ -1091,6 +1091,9 @@ namespace glz
                               // foreign input. Silently consume the value.
                               skip_value<BSON>::template op<Opts>(tag, ctx, it, stop);
                            }
+                           else if constexpr (skipped_by_meta<DT, I, operation::parse>) {
+                              skip_value<BSON>::template op<Opts>(tag, ctx, it, stop);
+                           }
                            else if constexpr (reflectable<DT>) {
                               from<BSON, MemberT>::template op<Opts>(get_member(value, get<I>(to_tie(value))), tag, ctx,
                                                                      it, stop);
