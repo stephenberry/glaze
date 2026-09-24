@@ -4897,6 +4897,12 @@ suite beve_v2_variant_resolution = [] {
       // (256), one level per nested object. Each buffer is read many times so the ratio does not
       // rest on a single sub-millisecond sample.
       //
+      // How many times depends on the clock, whose tick is platform-defined and can outlast a whole
+      // batch: FreeBSD's CLOCKS_PER_SEC is 128, a 7.8 ms tick, while an optimized build reads the
+      // shallow buffer 200 times in under 1 ms. That batch measured zero and the growth read as
+      // infinite. So the tick is measured, and the batch grows until the shallow read spans at
+      // least ten of them, which bounds the rounding at a tenth of the smaller sample.
+      //
       // The clock is process CPU time rather than wall time, because ctest runs this binary
       // alongside two others and a loaded machine deschedules the loops. Wall time counts that
       // waiting and the ratio stops describing the code: a three-way run on a macOS CI runner read
@@ -4920,7 +4926,6 @@ suite beve_v2_variant_resolution = [] {
          }
          return glz::write_beve(v).value();
       };
-      constexpr int reps = 200;
       constexpr int rounds = 5; // odd, so the median is the middle element
       auto bench_cpu_ms = [](const std::string& buf, int n) {
          const auto c0 = std::clock();
@@ -4937,8 +4942,23 @@ suite beve_v2_variant_resolution = [] {
          deep_v out{};
          expect(not glz::read_beve(out, deep));
       }
-      bench_cpu_ms(shallow, reps / 4); // warm both paths before timing
-      bench_cpu_ms(deep, reps / 4);
+      const double tick_ms = [] {
+         // Spin to a tick boundary first, so the second spin spans exactly one tick.
+         const auto start = std::clock();
+         auto edge = start;
+         while ((edge = std::clock()) == start) {
+         }
+         auto next = edge;
+         while ((next = std::clock()) == edge) {
+         }
+         return 1000.0 * double(next - edge) / double(CLOCKS_PER_SEC);
+      }();
+      const double min_sample_ms = std::max(5.0, 10.0 * tick_ms);
+      int reps = 64;
+      while (bench_cpu_ms(shallow, reps) < min_sample_ms) { // also warms the shallow path
+         reps *= 2;
+      }
+      bench_cpu_ms(deep, reps / 4); // warm the deep path before timing
       std::array<double, rounds> growth{};
       for (auto& g : growth) {
          const auto t_shallow = bench_cpu_ms(shallow, reps);
