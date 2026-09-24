@@ -868,7 +868,7 @@ struct glz::meta<invoke_struct>
 };
 ```
 
-> Before v8.5.0 an invoke member was written as `[]` (member function pointer) or `[[0]]` (a `std::function` with by-value arguments), neither of which is meaningful output. Add the `skip` above to keep such a struct writable.
+> Before v9.0.0 an invoke member was written as `[]` (member function pointer) or `[[0]]` (a `std::function` with by-value arguments), neither of which is meaningful output. Add the `skip` above to keep such a struct writable.
 
 This holds for every format. Reading an invoke member is JSON only, since the arguments are parsed as JSON; reading one in another format is also a compile error. A `skip` that returns `true` for `glz::operation::parse` makes the struct readable in other formats, at the cost of no longer invoking the member from JSON either, because `skip` does not depend on the format.
 
