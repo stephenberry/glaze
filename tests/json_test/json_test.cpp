@@ -1338,16 +1338,16 @@ suite basic_types = [] {
       for (const bool null_terminated : {true, false}) {
          glz::context ctx{};
          context_reuse_node first{};
-         const auto ec_bad = null_terminated ? glz::read<glz::opts{}>(first, bad, ctx)
-                                             : glz::read<glz::opts{.null_terminated = false}>(
-                                                  first, std::string_view{bad}, ctx);
+         const auto ec_bad = null_terminated
+                                ? glz::read<glz::opts{}>(first, bad, ctx)
+                                : glz::read<glz::opts{.null_terminated = false}>(first, std::string_view{bad}, ctx);
          expect(bool(ec_bad));
          expect(ctx.depth == 0u) << ctx.depth;
 
          context_reuse_node second{};
-         const auto ec = null_terminated ? glz::read<glz::opts{}>(second, good, ctx)
-                                         : glz::read<glz::opts{.null_terminated = false}>(
-                                              second, std::string_view{good}, ctx);
+         const auto ec = null_terminated
+                            ? glz::read<glz::opts{}>(second, good, ctx)
+                            : glz::read<glz::opts{.null_terminated = false}>(second, std::string_view{good}, ctx);
          expect(ec == glz::error_code::none) << glz::format_error(ec, good);
       }
    };
