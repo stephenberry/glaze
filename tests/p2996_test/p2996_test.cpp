@@ -569,6 +569,48 @@ struct glz::meta<ModifiedDerived>
    static constexpr auto modify = glz::object("renamed_own", &T::own);
 };
 
+// A base member and the member that hides it share a name, so a modify entry that names the member by
+// name alone would bind whichever comes first. The pointer carries the class the member was declared
+// in, and that is what says which of the two the entry means
+struct HidingBase
+{
+   int x{1};
+};
+
+struct HidingDerived : HidingBase
+{
+   int x{2};
+};
+
+template <>
+struct glz::meta<HidingDerived>
+{
+   static constexpr auto modify = glz::object("base_x", &HidingBase::x, "own_x", &HidingDerived::x);
+};
+
+// Two bases that repeat a name, with an entry for each: both name the same string, and only the
+// declaring class tells the entries apart
+struct RepeatingLeft
+{
+   int id{1};
+};
+
+struct RepeatingRight
+{
+   int id{2};
+};
+
+struct RepeatingBoth : RepeatingLeft, RepeatingRight
+{
+   int own{3};
+};
+
+template <>
+struct glz::meta<RepeatingBoth>
+{
+   static constexpr auto modify = glz::object("left_id", &RepeatingLeft::id, "right_id", &RepeatingRight::id);
+};
+
 // The array-shaped writes take their element count from the same member list, so they carry the
 // inherited members too
 struct ArrayBase
@@ -911,6 +953,41 @@ suite p2996_inherited_members = [] {
       expect(not glz::read_json(back, s));
       expect(back.inherited == 5);
       expect(back.own == 6);
+   };
+
+   "a modify entry reaches the member its pointer names"_test = [] {
+      // The name alone cannot say which member is meant here, because two of them answer to it: the
+      // entry used to bind to the first, rename that slot and leave the member it names to be written
+      // again under its own key, which dropped one of the two values from the document
+      RepeatingBoth obj{};
+      obj.RepeatingLeft::id = 11;
+      obj.RepeatingRight::id = 22;
+      obj.own = 33;
+
+      std::string s{};
+      expect(not glz::write_json(obj, s));
+      expect(s == R"({"left_id":11,"right_id":22,"own":33})") << s;
+
+      RepeatingBoth back{};
+      expect(not glz::read_json(back, s));
+      expect(back.RepeatingLeft::id == 11);
+      expect(back.RepeatingRight::id == 22);
+      expect(back.own == 33);
+   };
+
+   "a modify entry names the member that hides a base member"_test = [] {
+      HidingDerived obj{};
+      obj.HidingBase::x = 41;
+      obj.x = 42;
+
+      std::string s{};
+      expect(not glz::write_json(obj, s));
+      expect(s == R"({"base_x":41,"own_x":42})") << s;
+
+      HidingDerived back{};
+      expect(not glz::read_json(back, s));
+      expect(back.HidingBase::x == 41);
+      expect(back.x == 42);
    };
 
    "the array-shaped writes carry the inherited members"_test = [] {
