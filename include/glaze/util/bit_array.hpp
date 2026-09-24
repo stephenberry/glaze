@@ -5,16 +5,28 @@
 
 #include <array>
 #include <bit>
+#include <cstddef>
+#include <cstdint>
 #include <limits>
 
 namespace glz
 {
    // Basically std::bitset but exposes things normally not available like the bitscan functions
+   //
+   // Bit `pos` lives in chunk `pos / n_chunk_bits`, so data[0] holds the least significant bits. The bit
+   // scans treat the array as a single N-bit unsigned integer: countr_zero is the index of the lowest set
+   // bit and countl_zero the number of zeros above the highest one, and both return N when no bit is set.
+   //
+   // The bits of the top chunk at and above N are padding and are kept zero (flip masks them), so the
+   // counts, popcount, and equality never see them. Writing through operator[] requires pos < N.
    template <size_t N, std::unsigned_integral Chunk = uint64_t>
    struct bit_array
    {
       static constexpr size_t n_chunk_bits = std::numeric_limits<Chunk>::digits;
       static constexpr size_t n_chunks = (N == 0) ? 0 : (N - 1) / n_chunk_bits + 1;
+      static constexpr size_t n_padding_bits = n_chunks * n_chunk_bits - N;
+      // The valid (non-padding) bits of the top chunk
+      static constexpr Chunk top_chunk_mask = Chunk(~Chunk{}) >> n_padding_bits;
 
       struct reference
       {
@@ -26,7 +38,7 @@ namespace glz
             if (other)
                *data |= maskbit;
             else
-               *data &= ~maskbit;
+               *data &= Chunk(~maskbit);
             return *this;
          }
 
@@ -37,73 +49,41 @@ namespace glz
 
       std::array<Chunk, n_chunks> data{};
 
-      constexpr reference operator[](size_t pos)
-      {
-         const auto chunk = pos / n_chunk_bits;
-         const auto offset = pos % n_chunk_bits;
-         const auto maskbit = Chunk{1} << offset;
-         return reference{&data[chunk], maskbit};
-      }
+      constexpr reference operator[](size_t pos) { return reference{&data[pos / n_chunk_bits], mask_of(pos)}; }
 
-      constexpr bool operator[](size_t pos) const
-      {
-         const auto chunk = pos / n_chunk_bits;
-         const auto offset = pos % n_chunk_bits;
-         const auto maskbit = Chunk{1} << offset;
-         return data[chunk] & maskbit;
-      }
+      constexpr bool operator[](size_t pos) const { return (data[pos / n_chunk_bits] & mask_of(pos)) != 0; }
 
-      constexpr int popcount() noexcept
+      constexpr int popcount() const noexcept
       {
-         if constexpr (n_chunks == 1) {
-            return std::popcount(data[0]);
+         int res{};
+         for (const auto item : data) {
+            res += std::popcount(item);
          }
-         else {
-            int res{};
-            for (auto&& item : data) {
-               res += std::popcount(item);
+         return res;
+      }
+
+      constexpr int countl_zero() const noexcept
+      {
+         for (size_t i = n_chunks; i-- > 0;) {
+            if (data[i]) {
+               // The top chunk's padding bits are zero and are counted by std::countl_zero, so remove them
+               return int((n_chunks - 1 - i) * n_chunk_bits + size_t(std::countl_zero(data[i])) - n_padding_bits);
             }
-            return res;
          }
+         return int(N);
       }
 
-      constexpr int countl_zero() noexcept
+      constexpr int countr_zero() const noexcept
       {
-         if constexpr (n_chunks == 1) {
-            return std::countl_zero(data[0]);
-         }
-         else {
-            int res{};
-            for (auto&& item : data) {
-               const auto leading_zeros = std::countl_zero(item);
-               res += leading_zeros;
-               if (leading_zeros < n_chunk_bits) {
-                  return res;
-               }
+         for (size_t i = 0; i < n_chunks; ++i) {
+            if (data[i]) {
+               return int(i * n_chunk_bits + size_t(std::countr_zero(data[i])));
             }
-            return res;
          }
+         return int(N);
       }
 
-      constexpr int countr_zero() noexcept
-      {
-         if constexpr (n_chunks == 1) {
-            return std::countr_zero(data[0]);
-         }
-         else {
-            int res{};
-            for (int i = static_cast<int>(data.size()) - 1; i > -1; --i) {
-               const auto trailing_zeros = std::countr_zero(data[i]);
-               res += trailing_zeros;
-               if (trailing_zeros < n_chunk_bits) {
-                  return res;
-               }
-            }
-            return res;
-         }
-      }
-
-      constexpr int has_single_bit() noexcept
+      constexpr bool has_single_bit() const noexcept
       {
          if constexpr (n_chunks == 1) {
             return std::has_single_bit(data[0]);
@@ -116,7 +96,10 @@ namespace glz
       constexpr bit_array& flip() noexcept
       {
          for (auto& item : data) {
-            item = ~item;
+            item = Chunk(~item);
+         }
+         if constexpr (n_chunks > 0) {
+            data[n_chunks - 1] &= top_chunk_mask;
          }
          return *this;
       }
@@ -150,5 +133,8 @@ namespace glz
       }
 
       constexpr bool operator==(const bit_array& rhs) const noexcept { return data == rhs.data; }
+
+     private:
+      static constexpr Chunk mask_of(size_t pos) noexcept { return Chunk(Chunk{1} << (pos % n_chunk_bits)); }
    };
 }

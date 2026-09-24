@@ -1058,6 +1058,12 @@ namespace glz
                   resolved = best;
                }
             }
+            // Pass 2 dispatches `resolved` through glz::visit, whose jump table assumes an in-range
+            // index, so an index that names no alternative must be rejected here rather than visited.
+            if (resolved >= variant_size) [[unlikely]] {
+               ctx.error = error_code::no_matching_variant_type;
+               return;
+            }
 
             // Pass 2: parse the whole object (from the untouched `it`) as the resolved alternative.
             //
