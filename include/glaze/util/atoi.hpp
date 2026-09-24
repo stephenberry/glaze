@@ -3,9 +3,12 @@
 #include <array>
 #include <bit>
 #include <cmath>
+#include <concepts>
 #include <cstdint>
 #include <cstring>
 #include <iterator>
+#include <limits>
+#include <type_traits>
 
 #include "glaze/util/for_each.hpp"
 #include "glaze/util/inline.hpp"

@@ -6,8 +6,11 @@
 #include <algorithm>
 #include <array>
 #include <cstddef>
+#include <type_traits>
+#include <utility>
 #include <variant>
 
+#include "glaze/util/inline.hpp"
 #include "glaze/util/type_traits.hpp"
 
 namespace glz

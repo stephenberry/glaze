@@ -3,6 +3,9 @@
 
 #pragma once
 
+#include <cstddef>
+#include <cstdint>
+
 #include "glaze/simd/simd.hpp"
 #include "glaze/util/inline.hpp"
 
