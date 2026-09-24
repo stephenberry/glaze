@@ -492,7 +492,8 @@ namespace glz
          return {0, ec};
       }
 
-      return read<Opts>(value, buffer, ctx);
+      // The buffer was sized to the file, so the caller's is_padded promise does not cover it.
+      return read<is_padded_off<Opts>()>(value, buffer, ctx);
    }
 
    template <write_supported<NDJSON> T, class Buffer>

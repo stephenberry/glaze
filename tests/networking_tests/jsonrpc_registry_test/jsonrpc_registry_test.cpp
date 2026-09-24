@@ -676,6 +676,11 @@ struct scalar_api
    int value{};
 };
 
+struct string_api
+{
+   std::string value{};
+};
+
 suite unterminated_request_tests = [] {
    auto call_exact = [](auto& server, std::string_view request) {
       const std::vector<char> exact{request.begin(), request.end()};
@@ -717,6 +722,24 @@ suite unterminated_request_tests = [] {
 
       const auto response = call_exact(server, "7");
       expect(response.find(R"("code":-32600)") != std::string::npos) << response;
+   };
+
+   // Nor can the registry assume the caller's buffer has is_padded slack, whatever its options say.
+   "padded_options_ending_at_buffer_end"_test = [&] {
+      static constexpr auto padded = glz::is_padded_on<glz::opts{}>();
+      static_assert(!glz::check_is_padded(glz::registry<padded, glz::JSONRPC>::read_opts));
+
+      glz::registry<padded, glz::JSONRPC> server{};
+      string_api api{};
+      server.on(api);
+
+      // Lengths across a chunk width, so the string's last chunk ends past the buffer for some.
+      for (size_t n = 1; n <= 16; ++n) {
+         const auto request =
+            R"({"jsonrpc":"2.0","method":"/value","id":1,"params":")" + std::string(n, 'x') + R"("})";
+         const auto response = call_exact(server, request);
+         expect(api.value.size() == n) << response;
+      }
    };
 };
 

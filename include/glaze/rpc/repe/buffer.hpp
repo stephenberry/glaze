@@ -101,7 +101,8 @@ namespace glz::repe
       }
 
       // we don't const qualify `msg` for performance
-      auto ec = glz::read<Opts>(std::forward<T>(value), msg.body);
+      // The body is sized to the message, so the caller's is_padded promise does not cover it.
+      auto ec = glz::read<is_padded_off<Opts>()>(std::forward<T>(value), msg.body);
       if (ec) {
          return {glz::format_error(ec, msg.body)};
       }

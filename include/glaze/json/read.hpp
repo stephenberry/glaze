@@ -2631,16 +2631,20 @@ namespace glz
             return;
          }
 
-         const auto current_file = ctx.current_file;
-         ctx.current_file = string_file_path;
+         auto outer_file = std::exchange(ctx.current_file, string_file_path);
+         const bool outer_padded = ctx.padded_input;
 
          // We need to allocate a new buffer here because we could call another includer that uses the buffer
          std::string nested_buffer = buffer;
-         static constexpr auto NestedOpts = opt_true<Opts, &opts::null_terminated>;
+         // is_padded is the caller's promise about their own buffer; this one was sized to the file.
+         static constexpr auto NestedOpts = opt_true<is_padded_off<Opts>(), &opts::null_terminated>;
          // The included file fills in part of the object we belong to, so its keys count toward
          // that object's missing key check rather than being required all over again here.
          const include_key_scope include_keys{ctx, &include_key_tag<std::remove_cvref_t<decltype(value.value)>>};
          const auto ecode = glz::read<NestedOpts>(value.value, nested_buffer, ctx);
+         // The nested read set these for the included file; the parse resumes over the caller's.
+         ctx.current_file = std::move(outer_file);
+         ctx.padded_input = outer_padded;
          if (bool(ctx.error)) [[unlikely]] {
             ctx.error = error_code::includer_error;
             auto& error_msg = error_buffer();
@@ -2648,8 +2652,6 @@ namespace glz
             ctx.custom_error_message = error_msg;
             return;
          }
-
-         ctx.current_file = current_file;
       }
    };
 
@@ -5094,7 +5096,8 @@ namespace glz
          return {0, ec};
       }
 
-      return read<set_json<Opts>()>(value, buffer, ctx);
+      // The buffer was sized to the file, so the caller's is_padded promise does not cover it.
+      return read<is_padded_off<set_json<Opts>()>()>(value, buffer, ctx);
    }
 
    template <auto Opts = opts{}, read_supported<JSON> T, is_buffer Buffer>
@@ -5109,7 +5112,8 @@ namespace glz
          return {0, ec};
       }
 
-      constexpr auto Options = opt_true<set_json<Opts>(), &opts::comments>;
+      // The buffer was sized to the file, so the caller's is_padded promise does not cover it.
+      constexpr auto Options = opt_true<is_padded_off<set_json<Opts>()>(), &opts::comments>;
       return read<Options>(value, buffer, ctx);
    }
 }

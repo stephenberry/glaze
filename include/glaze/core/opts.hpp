@@ -1033,6 +1033,9 @@ namespace glz
    // only the last chunk of each buffer its unbounded loads, so reach for this only after
    // measuring, and only where you control the allocation.
    //
+   // The promise does not travel with the options: a read over a buffer the caller did not hand to
+   // glz::read itself (a file, a directory, an include, a registry request) turns it back off.
+   //
    // Says nothing about null termination; that is `null_terminated`.
    template <auto Opts>
    constexpr auto is_padded_on()

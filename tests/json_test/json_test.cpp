@@ -4954,6 +4954,115 @@ suite file_include_test_auto = [] {
       expect(obj.str == "Hello") << obj.str;
       expect(obj.i == 55) << obj.i;
    };
+
+   "file_include restores current_file when the included file fails to parse"_test = [] {
+      expect(glz::buffer_to_file(std::string{R"({"str": })"}, "./include_broken.json") == glz::error_code::none);
+
+      includer_struct obj{};
+      glz::context ctx{};
+      ctx.current_file = "./outer.json";
+      std::string s = R"({"include": "./include_broken.json"})";
+      expect(glz::read<glz::opts{}>(obj, s, ctx) == glz::error_code::includer_error);
+      expect(ctx.current_file == "./outer.json") << ctx.current_file;
+   };
+};
+
+// Records whether the reader was told its input carries is_padded slack, then reads a string.
+struct padded_input_probe
+{
+   bool padded{};
+   std::string str{};
+};
+
+template <>
+struct glz::from<glz::JSON, padded_input_probe>
+{
+   template <auto Opts>
+   static void op(padded_input_probe& value, is_context auto&& ctx, auto&& it, auto end)
+   {
+      value.padded = ctx.padded_input;
+      parse<JSON>::op<Opts>(value.str, ctx, it, end);
+   }
+};
+
+struct padded_includer
+{
+   glz::file_include include{};
+   padded_input_probe inner{};
+   padded_input_probe outer{};
+};
+
+// is_padded is a promise about the caller's buffer. A buffer the library fills itself carries no
+// slack, so the promise must not follow the options into a read over it, and the caller's buffer
+// must keep it once that read returns.
+suite padded_promise_scope_test = [] {
+   static constexpr auto padded = glz::is_padded_on<glz::opts{}>();
+   const std::string long_string = '"' + std::string(40, 'x') + '"';
+
+   "file_include reads the included file unpadded"_test = [&] {
+      expect(glz::buffer_to_file(R"({"inner":)" + long_string + "}", "./padded_include.json") ==
+             glz::error_code::none);
+
+      std::string buffer = R"({"include":"./padded_include.json","outer":"y"})";
+      const auto size = buffer.size();
+      buffer.resize(size + glz::padding_bytes);
+      buffer.resize(size);
+      const std::string_view document{buffer.data(), size};
+
+      padded_includer obj{};
+      const auto ec = glz::read<padded>(obj, document);
+      expect(!ec) << glz::format_error(ec, document);
+      expect(!obj.inner.padded);
+      expect(obj.inner.str.size() == 40);
+      expect(obj.outer.padded); // the parse resumes over the caller's padded buffer
+      expect(obj.outer.str == "y");
+
+      // A caller parsing directly hands the includer the options unnormalized.
+      obj = {};
+      glz::context ctx{};
+      auto it = document.data();
+      glz::parse<glz::JSON>::op<padded>(obj, ctx, it, document.data() + document.size());
+      // Without glz::read to settle it, a value that ends with the buffer leaves end_reached.
+      expect(ctx.error == glz::error_code::none || ctx.error == glz::error_code::end_reached);
+      expect(!obj.inner.padded);
+      expect(obj.inner.str.size() == 40);
+   };
+
+   "read_directory reads each file unpadded"_test = [] {
+      // Lengths across several chunk widths, so some document ends mid chunk wherever its
+      // allocation happens to end.
+      for (size_t n = 1; n <= 40; ++n) {
+         std::filesystem::remove_all("./padded_dir");
+         std::filesystem::create_directory("./padded_dir");
+         expect(glz::buffer_to_file('"' + std::string(n, 'x') + '"', "./padded_dir/a.json") == glz::error_code::none);
+
+         std::map<std::filesystem::path, padded_input_probe> files{};
+         expect(not glz::read_directory<padded>(files, "./padded_dir"));
+         expect(files.size() == 1);
+         for (const auto& [path, probe] : files) {
+            expect(!probe.padded);
+            expect(probe.str.size() == n);
+         }
+      }
+   };
+
+   "read_file_json reads the file unpadded"_test = [&] {
+      expect(glz::buffer_to_file(long_string, "./padded_file.json") == glz::error_code::none);
+
+      padded_input_probe probe{};
+      expect(!glz::read_file_json<padded>(probe, "./padded_file.json", std::string{}));
+      expect(!probe.padded);
+      expect(probe.str.size() == 40);
+   };
+
+   "reading from a generic value is unpadded"_test = [] {
+      const glz::generic source = std::string(40, 'x');
+
+      padded_input_probe probe{};
+      expect(!glz::read<padded>(probe, source));
+      expect(!probe.padded);
+      expect(probe.str.size() == 40);
+   };
 };
 
 struct missing_keys_sub
