@@ -4553,9 +4553,6 @@ other: *a5)";
       const auto ec_first = glz::read<glz::yaml::yaml_opts{}>(first, runaway, ctx);
       expect(ec_first == glz::error_code::exceeded_max_expansion) << glz::format_error(ec_first, runaway);
 
-      ctx.error = glz::error_code::none; // a reused context carries its error for every format
-      ctx.custom_error_message = {};
-
       const std::string valid = "? {a: 1}\n: 2\n";
       glz::generic second{};
       const auto ec_second = glz::read<glz::yaml::yaml_opts{}>(second, valid, ctx);
@@ -13049,6 +13046,43 @@ suite contiguous_buffer_without_empty = [] {
       std::map<std::string, int> value{};
       expect(not glz::read_yaml(value, buffer));
       expect(value == std::map<std::string, int>{{"a", 2}});
+   };
+};
+
+suite yaml_context_reuse = [] {
+   using map_t = std::map<std::string, std::map<std::string, std::vector<int>>>;
+
+   "a context reused after a failed read still reads"_test = [] {
+      const std::string bad = "a:\n  b: [1, 2\n";
+      const std::string good = "a:\n  b: [1, 2]\nc:\n  d: [3]\n";
+
+      glz::yaml::yaml_context ctx{};
+      map_t first{};
+      expect(bool(glz::read<glz::yaml::yaml_opts{}>(first, bad, ctx)));
+      expect(ctx.depth == 0u) << ctx.depth;
+
+      map_t second{};
+      const auto ec = glz::read<glz::yaml::yaml_opts{}>(second, good, ctx);
+      expect(ec == glz::error_code::none) << glz::format_error(ec, good);
+      expect(second == map_t{{"a", {{"b", {1, 2}}}}, {"c", {{"d", {3}}}}});
+   };
+
+   "anchors do not outlive the document that defines them"_test = [] {
+      // An anchor records a span of the buffer it was read from, so one carried into the next read
+      // resolves an alias the new document never defined, by replaying bytes of a buffer that may
+      // no longer exist.
+      // The first buffer is kept alive here so that a leak shows as a wrong answer, not as UB.
+      glz::yaml::yaml_context ctx{};
+      const std::string defines = "a: &k 5\n";
+      glz::generic first{};
+      expect(not glz::read<glz::yaml::yaml_opts{}>(first, defines, ctx));
+
+      const std::string refers = "b: *k\n";
+      glz::generic second{};
+      expect(bool(glz::read<glz::yaml::yaml_opts{}>(second, refers, ctx)));
+
+      glz::generic fresh{};
+      expect(bool(glz::read_yaml(fresh, refers)));
    };
 };
 

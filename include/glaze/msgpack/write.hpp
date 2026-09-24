@@ -606,11 +606,25 @@ namespace glz
    {
       static constexpr auto N = reflect<T>::size;
 
+      // A positional layout (structs_as_arrays) has no keys, so only a field's type can leave it out,
+      // matching msgpack::detail::should_skip_field on the read side. meta<T>::skip names keys and
+      // applies to the keyed layout.
+      template <auto Opts, size_t I>
+      static consteval bool should_skip_field()
+      {
+         if constexpr (check_structs_as_arrays(Opts)) {
+            return always_skipped<field_t<T, I>>;
+         }
+         else {
+            return skipped_on_write<Opts, T, I>;
+         }
+      }
+
       template <auto Opts>
       static consteval size_t count_members()
       {
          return []<size_t... I>(std::index_sequence<I...>) consteval {
-            return (size_t{} + ... + (always_skipped<field_t<T, I>> ? size_t{} : size_t{1}));
+            return (size_t{} + ... + (should_skip_field<Opts, I>() ? size_t{} : size_t{1}));
          }(std::make_index_sequence<N>{});
       }
 
@@ -642,7 +656,7 @@ namespace glz
             if (bool(ctx.error)) [[unlikely]] {
                return;
             }
-            if constexpr (!always_skipped<field_t<T, I>>) {
+            if constexpr (!should_skip_field<Opts, I>()) {
                static constexpr sv key = reflect<T>::keys[I];
                if (!msgpack::detail::write_str_header(ctx, key.size(), b, ix)) [[unlikely]] {
                   return;
@@ -683,7 +697,7 @@ namespace glz
                if (bool(ctx.error)) [[unlikely]] {
                   return;
                }
-               if constexpr (!always_skipped<field_t<T, I>>) {
+               if constexpr (!should_skip_field<Opts, I>()) {
                   if constexpr (reflectable<T>) {
                      serialize<MSGPACK>::op<Opts>(get_member(value, get<I>(t)), ctx, b, ix);
                   }

@@ -328,6 +328,25 @@ namespace glz::yaml
          memo_first_content = nullptr;
       }
 
+      // Drop everything a previous read left that describes its document rather than how to read
+      // one; the outermost parse calls this as it takes ownership of a new buffer. Anchors and the
+      // alias spans being replayed point into the previous read's buffer, so carried over they let
+      // a document resolve an alias it never defined, from bytes that may no longer exist. The rest
+      // is block-parsing state that a failed read can abandon mid-flight. Containers are cleared
+      // rather than replaced so a reused context keeps their storage.
+      void reset_read_state() noexcept
+      {
+         indent_stack.clear();
+         anchors.clear();
+         active_alias_spans.clear();
+         sequence_item_value_context = false;
+         forced_block_mapping_indent = -1;
+         sequence_dash_indent = -1;
+         explicit_mapping_key_context = false;
+         allow_indentless_sequence = false;
+         reset_line_memo();
+      }
+
       // Set when `%TAG !! ...` remaps the secondary handle away from the core schema.
       // In that case `!!foo` must not be treated as built-in core tags.
       bool secondary_tag_handle_overridden = false;

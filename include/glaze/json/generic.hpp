@@ -70,7 +70,8 @@ namespace glz
       auto buffer = source.dump();
       if (buffer) {
          context ctx{};
-         return read<Opts>(value, *buffer, ctx);
+         // is_padded is the caller's promise about their own buffer, not this one.
+         return read<is_padded_off<Opts>()>(value, *buffer, ctx);
       }
       else {
          return buffer.error();

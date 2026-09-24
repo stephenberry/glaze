@@ -1934,7 +1934,12 @@ namespace glz
                         static constexpr auto TargetKey = get<I>(reflect<T>::keys);
                         static constexpr auto Length = TargetKey.size();
                         if ((Length == key_len) && compare<Length>(TargetKey.data(), key.data())) [[likely]] {
-                           if constexpr (reflectable<T>) {
+                           // An `else` branch rather than an early return, so a skipped field's reader
+                           // is never instantiated -- see `skipped_by_meta`.
+                           if constexpr (skipped_by_meta<T, I, operation::parse>) {
+                              skip_value<CBOR>::op<Opts>(ctx, it, end);
+                           }
+                           else if constexpr (reflectable<T>) {
                               parse<CBOR>::op<Opts>(get_member(value, get<I>(to_tie(value))), ctx, it, end);
                            }
                            else {
@@ -2962,6 +2967,7 @@ namespace glz
          return error_ctx{file_error};
       }
 
-      return read<set_cbor<Opts>()>(value, buffer, ctx);
+      // The buffer was sized to the file, so the caller's is_padded promise does not cover it.
+      return read<is_padded_off<set_cbor<Opts>()>()>(value, buffer, ctx);
    }
 }

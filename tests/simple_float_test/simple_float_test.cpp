@@ -743,6 +743,215 @@ suite extreme_exponent_tests = [] {
    };
 };
 
+// Exact decimal digits of odd × 2^exp2, with trailing zeros removed: value = digits × 10^exp10
+struct exact_decimal
+{
+   std::string digits;
+   int exp10{};
+};
+
+inline exact_decimal to_exact_decimal(uint64_t odd, int exp2)
+{
+   // Little-endian base 10^9 limbs
+   std::vector<uint64_t> limbs;
+   for (uint64_t v = odd; v != 0; v /= 1000000000) {
+      limbs.push_back(v % 1000000000);
+   }
+   auto multiply = [&](uint64_t factor) {
+      uint64_t carry = 0;
+      for (auto& limb : limbs) {
+         const uint64_t product = limb * factor + carry;
+         limb = product % 1000000000;
+         carry = product / 1000000000;
+      }
+      for (; carry != 0; carry /= 1000000000) {
+         limbs.push_back(carry % 1000000000);
+      }
+   };
+   // odd × 2^-k = odd × 5^k × 10^-k
+   const uint64_t base = (exp2 >= 0) ? 2 : 5;
+   for (int n = (exp2 >= 0) ? exp2 : -exp2; n > 0; --n) {
+      multiply(base);
+   }
+
+   exact_decimal result{std::to_string(limbs.back()), (exp2 >= 0) ? 0 : exp2};
+   for (size_t i = limbs.size() - 1; i-- > 0;) {
+      const std::string limb = std::to_string(limbs[i]);
+      result.digits += std::string(9 - limb.size(), '0') + limb;
+   }
+   while (result.digits.size() > 1 && result.digits.back() == '0') {
+      result.digits.pop_back();
+      ++result.exp10;
+   }
+   return result;
+}
+
+// Scientific notation for digits × 10^exp10
+inline std::string to_scientific(const std::string& digits, int exp10)
+{
+   std::string s = digits.substr(0, 1);
+   if (digits.size() > 1) {
+      s += '.';
+      s += digits.substr(1);
+   }
+   return s + 'e' + std::to_string(exp10 + static_cast<int>(digits.size()) - 1);
+}
+
+// Parse through the public API under the size optimization level, which uses simple_float
+template <class T>
+T read_opts_size(const std::string& input)
+{
+   T value{};
+   const auto ec = glz::read<glz::opts_size{}>(value, input);
+   expect(!ec) << input;
+   return value;
+}
+
+template <class T>
+using float_bits_t = std::conditional_t<std::is_same_v<T, float>, uint32_t, uint64_t>;
+
+// Parse the decimal forms at and around the halfway point between `lower` and the next value up.
+// More than 19 significant digits exceed the 64-bit mantissa, so these reach the truncated-digit handling.
+template <class T>
+void check_halfway_neighbors(float_bits_t<T> lower_bits, int& failures)
+{
+   using bits_type = float_bits_t<T>;
+   constexpr int mantissa_bits = std::numeric_limits<T>::digits - 1;
+   constexpr int exponent_bias = std::numeric_limits<T>::max_exponent - 1;
+
+   const T lower = std::bit_cast<T>(lower_bits);
+   const T upper = std::bit_cast<T>(bits_type(lower_bits + 1));
+   const int biased_exp = static_cast<int>(lower_bits >> mantissa_bits);
+   uint64_t m = lower_bits & ((bits_type(1) << mantissa_bits) - 1);
+   int e = 1 - exponent_bias - mantissa_bits;
+   if (biased_exp != 0) {
+      m |= uint64_t(1) << mantissa_bits;
+      e = biased_exp - exponent_bias - mantissa_bits;
+   }
+   const auto halfway = to_exact_decimal(2 * m + 1, e - 1);
+   const T tie = (m & 1) ? upper : lower;
+
+   // The last halfway digit is nonzero, so any shorter prefix is below it
+   std::string below = halfway.digits;
+   int below_exp10 = halfway.exp10;
+   if (below.size() > 25) {
+      below_exp10 += static_cast<int>(below.size()) - 25;
+      below.resize(25);
+   }
+   else {
+      below.back() -= 1;
+      below += std::string(25, '9');
+      below_exp10 -= 25;
+   }
+
+   std::vector<std::pair<std::string, T>> cases = {
+      {to_scientific(halfway.digits + std::string(30, '0') + '1', halfway.exp10 - 31), upper},
+      {to_scientific(below, below_exp10), lower},
+   };
+   // Short ties never truncate; for float they take a separate fast path
+   if (std::is_same_v<T, double> || halfway.digits.size() > 19) {
+      cases.emplace_back(to_scientific(halfway.digits, halfway.exp10), tie);
+   }
+
+   for (const auto& [input, expected] : cases) {
+      for (const bool negative : {false, true}) {
+         const std::string signed_input = negative ? '-' + input : input;
+         const T expected_value = negative ? -expected : expected;
+         const T parsed = read_opts_size<T>(signed_input);
+         if (std::bit_cast<bits_type>(parsed) != std::bit_cast<bits_type>(expected_value)) {
+            if (failures == 0) {
+               std::cerr << "Halfway neighbor failure for input: " << signed_input.substr(0, 80) << std::endl;
+            }
+            ++failures;
+         }
+      }
+   }
+}
+
+// Numbers with more significant digits than the 64-bit mantissa holds must still be correctly rounded
+suite long_mantissa_tests = [] {
+   "long_mantissa_issue_2877"_test = [] {
+      const std::string input = "-50324614471707439988";
+      expect(read_opts_size<double>(input) == -5.0324614471707443e+19);
+      expect(read_opts_size<double>(input) == -50324614471707439988.0);
+   };
+
+   "long_mantissa_random_sweep"_test = [] {
+      // Random decimals of 18-40 significant digits, compared with the default (fast_float) configuration
+      std::mt19937_64 rng(2877);
+      int failures = 0;
+      for (int i = 0; i < 20000; ++i) {
+         const int digit_count = 18 + static_cast<int>(rng() % 23);
+         std::string input(1, char('1' + rng() % 9));
+         for (int k = 1; k < digit_count; ++k) {
+            input += char('0' + rng() % 10);
+         }
+         if (i % 2 == 1) {
+            // Scientific form spanning the normal and subnormal double range
+            input.insert(1, ".");
+            input += 'e' + std::to_string(static_cast<int>(rng() % 620) - 320);
+         }
+         if (rng() % 2) {
+            input.insert(0, "-");
+         }
+
+         double expected{};
+         expect(!glz::read<glz::opts{}>(expected, input));
+         if (std::bit_cast<uint64_t>(read_opts_size<double>(input)) != std::bit_cast<uint64_t>(expected)) {
+            if (failures == 0) {
+               std::cerr << "Long mantissa sweep failure for input: " << input << std::endl;
+            }
+            ++failures;
+         }
+      }
+      expect(failures == 0) << failures << " long mantissa inputs misrounded";
+   };
+
+   "long_mantissa_double_halfway_points"_test = [] {
+      std::mt19937_64 rng(2877);
+      std::vector<uint64_t> patterns = {
+         0x0000000000000000, // halfway to the smallest subnormal
+         0x000fffffffffffff, // largest subnormal
+         0x0010000000000000, // smallest normal
+         0x433fffffffffffff, // just below 2^53
+         0x4340000000000000, // 2^53
+         0x7fefffffffffffff, // largest finite: its halfway point ties to infinity
+      };
+      for (int i = 0; i < 2000; ++i) {
+         patterns.push_back(rng() % 0x7fefffffffffffff);
+      }
+
+      int failures = 0;
+      for (const uint64_t bits : patterns) {
+         check_halfway_neighbors<double>(bits, failures);
+      }
+      expect(failures == 0) << failures << " double halfway neighbors misrounded";
+   };
+
+   "long_mantissa_float_halfway_points"_test = [] {
+      std::mt19937_64 rng(2877);
+      std::vector<uint32_t> patterns = {0x00000000, 0x007fffff, 0x00800000, 0x4b7fffff, 0x4b800000, 0x7f7fffff};
+      for (int i = 0; i < 2000; ++i) {
+         patterns.push_back(static_cast<uint32_t>(rng() % 0x7f7fffff));
+      }
+
+      int failures = 0;
+      for (const uint32_t bits : patterns) {
+         check_halfway_neighbors<float>(bits, failures);
+      }
+      expect(failures == 0) << failures << " float halfway neighbors misrounded";
+   };
+
+   "long_mantissa_exponent_offsets"_test = [] {
+      // Digit counts beyond the exponent clamp must still combine exactly with the exponent part
+      const std::string zeros(500, '0');
+      expect(read_opts_size<double>("0." + zeros + "1e500") == 0.1);
+      expect(read_opts_size<double>("1" + zeros + "e-500") == 1.0);
+      expect(read_opts_size<double>("1" + zeros + "1e-501") == 1.0);
+      expect(read_opts_size<float>("0." + zeros + "1e500") == 0.1f);
+   };
+};
+
 // Edge case tests for specific problematic patterns
 suite edge_case_tests = [] {
    "powers_of_two_float"_test = [] {

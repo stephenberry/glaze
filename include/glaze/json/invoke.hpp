@@ -17,6 +17,7 @@ namespace glz
       requires(!std::is_member_function_pointer_v<T>)
    struct invoke_t<T> final
    {
+      static constexpr bool glaze_wrapper = true;
       T& val;
    };
 
@@ -24,6 +25,7 @@ namespace glz
       requires(std::is_member_function_pointer_v<T>)
    struct invoke_t<T> final
    {
+      static constexpr bool glaze_wrapper = true;
       using mem_fun = T;
       typename parent_of_fn<T>::type& val;
       mem_fun ptr;
@@ -92,13 +94,30 @@ namespace glz
       }
    };
 
-   // An invoke member is a call site rather than state, so there is nothing to serialize.
-   // Exclude it from output instead of inventing a value for it.
-   template <class T>
-   struct to<JSON, invoke_t<T>>
+   // Reading an invoke member calls it with arguments parsed as JSON, and no other format has a reader
+   // for it. Rejected here rather than left undefined, so that the error says what to do about it.
+   template <uint32_t Format, class T>
+      requires(Format != JSON && is_specialization_v<T, invoke_t>)
+   struct from<Format, T>
    {
       template <auto Opts>
-      static void op(auto&&, is_context auto&&, auto&&...)
+      static void op(auto&&...)
+      {
+         static_assert(false_v<T>,
+                       "glz::invoke members can only be read from JSON, where reading one calls it. To read this "
+                       "struct from another format, exclude the member with a meta<T>::skip(key, ctx) that returns "
+                       "true when ctx.op == glz::operation::parse (see docs/skip-keys.md).");
+      }
+   };
+
+   // An invoke member is a call site rather than state, so there is nothing to serialize in any format.
+   // Exclude it from output instead of inventing a value for it.
+   template <uint32_t Format, class T>
+      requires(is_specialization_v<T, invoke_t>)
+   struct to<Format, T>
+   {
+      template <auto Opts>
+      static void op(auto&&...)
       {
          static_assert(false_v<T>,
                        "glz::invoke members cannot be written: a function has no value to serialize. "

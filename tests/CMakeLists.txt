@@ -100,6 +100,7 @@ if(NOT glaze_ENABLE_REFLECTION26)
 endif()
 add_subdirectory(key_transformers_test)
 add_subdirectory(lib_test)
+add_subdirectory(meta_skip_test)
 add_subdirectory(mock_json_test)
 add_subdirectory(reflection)
 add_subdirectory(roundtrip)
@@ -116,6 +117,7 @@ add_subdirectory(msgpack_test)
 add_subdirectory(ostream_buffer_test)
 add_subdirectory(istream_buffer_test)
 add_subdirectory(streaming_view_rejection)
+add_subdirectory(wrapper_rejection)
 
 # simple_float_test runs exhaustive tests over all 2^32 float values
 # Disabled by default - run via dedicated CI workflow in Release mode

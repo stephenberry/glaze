@@ -2597,4 +2597,21 @@ y;4;5;6
    };
 };
 
+suite csv_context_reuse = [] {
+   "a context reused after a failed read still reads"_test = [] {
+      static constexpr glz::opts_csv options{.use_headers = false};
+      const std::string bad = "1,2,3\n4,x,6";
+      const std::string good = "1,2,3\n4,5,6";
+
+      glz::context ctx{};
+      std::vector<std::vector<int>> first{};
+      expect(bool(glz::read<options>(first, bad, ctx)));
+
+      std::vector<std::vector<int>> second{};
+      const auto ec = glz::read<options>(second, good, ctx);
+      expect(ec == glz::error_code::none) << glz::format_error(ec, good);
+      expect(second == std::vector<std::vector<int>>{{1, 2, 3}, {4, 5, 6}});
+   };
+};
+
 int main() { return 0; }

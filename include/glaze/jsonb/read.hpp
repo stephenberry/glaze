@@ -590,7 +590,12 @@ namespace glz
                      static constexpr auto Length = TargetKey.size();
                      if ((Length == key_len) && compare<Length>(TargetKey.data(), key_data)) [[likely]] {
                         matched = true;
-                        if constexpr (reflectable<DT>) {
+                        // An `else` branch rather than an early return, so a skipped field's reader is
+                        // never instantiated -- see `skipped_by_meta`.
+                        if constexpr (skipped_by_meta<DT, I, operation::parse>) {
+                           skip_value<JSONB>::op<Opts>(ctx, it, stop);
+                        }
+                        else if constexpr (reflectable<DT>) {
                            parse<JSONB>::op<Opts>(get_member(value, get<I>(to_tie(value))), ctx, it, stop);
                         }
                         else {
@@ -1479,7 +1484,8 @@ namespace glz
       if (bool(file_error)) [[unlikely]] {
          return error_ctx{0, file_error};
       }
-      auto ec = read<set_jsonb<Opts>()>(value, buffer, ctx);
+      // The buffer was sized to the file, so the caller's is_padded promise does not cover it.
+      auto ec = read<is_padded_off<set_jsonb<Opts>()>()>(value, buffer, ctx);
       return jsonb_detail::enforce_exact_fill(buffer, ec);
    }
 }

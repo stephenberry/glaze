@@ -1644,8 +1644,7 @@ namespace glz
             }
 
             using val_t = detail::iterator_second_type<T>; // the type of value in each [key, value] pair
-            constexpr bool write_function_pointers = check_write_function_pointers(Opts);
-            if constexpr (!always_skipped<val_t> && (write_function_pointers || !is_any_function_ptr<val_t>)) {
+            if constexpr (!never_written<Opts, val_t>) {
                if constexpr (null_t<val_t> && Opts.skip_null_members) {
                   auto write_first_entry = [&](auto&& it) {
                      auto&& [key, entry_val] = *it;
@@ -2361,9 +2360,7 @@ namespace glz
                return;
             }
 
-            // skip
-            constexpr bool write_function_pointers = check_write_function_pointers(Opts);
-            if constexpr (always_skipped<val_t> || (!write_function_pointers && is_any_function_ptr<val_t>)) {
+            if constexpr (never_written<Opts, val_t>) {
                return;
             }
             else {
@@ -2552,12 +2549,9 @@ namespace glz
                for_each<N>([&]<size_t I>() {
                   using val_t = field_t<T, I>;
 
-                  // `meta<T>::skip` joins the other compile-time exclusions here rather than returning
-                  // early, so that a skipped field's writer is never instantiated -- see
-                  // `skipped_by_meta`.
-                  constexpr bool write_function_pointers = check_write_function_pointers(Opts);
-                  if constexpr (skipped_by_meta<T, I, operation::serialize> || always_skipped<val_t> ||
-                                (!write_function_pointers && is_any_function_ptr<val_t>)) {
+                  // Compile-time exclusions gate the field here rather than returning early, so that a
+                  // skipped field's writer is never instantiated -- see `skipped_by_meta`.
+                  if constexpr (skipped_on_write<Opts, T, I>) {
                      return;
                   }
                   else {

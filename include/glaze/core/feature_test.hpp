@@ -53,6 +53,15 @@ namespace glz
 
 // Glaze Feature Test Macros for breaking changes
 
+// v8.5.0 honors meta<T>::skip in every format that writes keyed objects
+//
+// meta<T>::skip was only consulted by JSON and YAML. BEVE, CBOR, MessagePack, TOML, BSON and
+// JSONB wrote a key skipped on serialize and read a key skipped on parse. They now leave the
+// key out of their output and consume it without reading, as JSON does, and a skipped member
+// needs no reader or writer in these formats either. Positional layouts (structs_as_arrays)
+// have no keys and are unchanged.
+#define glaze_v8_5_0_meta_skip_all_formats
+
 // v8.5.0 removes glz::invoke_update and makes writing a glz::invoke member an error
 //
 // glz::invoke_update is gone. It detected change by comparing the raw JSON text of the
@@ -73,6 +82,16 @@ namespace glz
 //      return ctx.op == glz::operation::serialize && key == "add_one";
 //   }
 #define glaze_v8_5_0_invoke
+
+// v8.5.0 stops reflecting Glaze's own wrapper types
+//
+// A format with no specialization for a wrapper (glz::invoke, glz::quoted, glz::raw_string,
+// glz::escaped, glz::escape_bytes, ...) reflected the wrapper struct itself: it wrote the
+// wrapper's internals, usually an empty object, and read into them. That is now a compile
+// error. glz::invoke is rejected with a message in every format for writing, and in every
+// format but JSON for reading. Exclude such members from the other formats with a
+// meta<T>::skip (which applies to every format).
+#define glaze_v8_5_0_wrappers_not_reflected
 
 // v8.3.0 fixes GLZ_NO_UNIQUE_ADDRESS on the MSVC ABI
 //

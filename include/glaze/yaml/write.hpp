@@ -1265,10 +1265,10 @@ namespace glz
 
             using val_t = field_t<V, I>;
 
-            // meta::skip (compile-time) gates the field here rather than returning from inside the
-            // block, so that a skipped field's writer is never instantiated -- see `skipped_by_meta`.
-            // meta::skip_if is a runtime check and stays below.
-            if constexpr (!always_skipped<val_t> && !skipped_by_meta<V, I, operation::serialize>) {
+            // Compile-time exclusions (meta::skip among them) gate the field here rather than returning
+            // from inside the block, so that a skipped field's writer is never instantiated -- see
+            // `skipped_by_meta`. meta::skip_if is a runtime check and stays below.
+            if constexpr (!skipped_on_write<Opts, V, I>) {
                static constexpr sv key = get<I>(reflect<V>::keys);
 
                // Get member value (supports both glaze_object_t and reflectable)
@@ -1517,7 +1517,7 @@ namespace glz
 
             // A field excluded by meta::skip is excluded from flow style too, and gating it here keeps
             // its writer uninstantiated -- see `skipped_by_meta`.
-            if constexpr (!always_skipped<val_t> && !skipped_by_meta<V, I, operation::serialize>) {
+            if constexpr (!skipped_on_write<Opts, V, I>) {
                static constexpr sv key = get<I>(reflect<V>::keys);
 
                // Get member value (supports both glaze_object_t and reflectable)
