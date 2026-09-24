@@ -134,6 +134,16 @@ target_compile_options(generic_benchmark PRIVATE
   $<$<CXX_COMPILER_ID:MSVC>:/O2>
 )
 
+# Deeply nested BEVE variant read growth; exits nonzero if reads grow super-linearly with depth
+add_executable(beve_variant_depth_benchmark beve_variant_depth_benchmark.cpp)
+target_link_libraries(beve_variant_depth_benchmark PRIVATE
+  glaze
+)
+target_compile_options(beve_variant_depth_benchmark PRIVATE
+  $<$<CXX_COMPILER_ID:GNU,Clang,AppleClang>:-O3 -march=native>
+  $<$<CXX_COMPILER_ID:MSVC>:/O2>
+)
+
 # Ordered map memory comparison
 check_include_file_cxx("malloc/malloc.h" GLZ_HAS_MALLOC_MALLOC_H)
 if (GLZ_HAS_MALLOC_MALLOC_H)

@@ -87,3 +87,26 @@ jobs:
           echo "$output" >> "$GITHUB_STEP_SUMMARY"
           echo '```' >> "$GITHUB_STEP_SUMMARY"
         fi
+
+  beve_variant_depth_benchmark:
+    runs-on: ubuntu-24.04
+
+    env:
+      CC: gcc-14
+      CXX: g++-14
+
+    steps:
+    - uses: actions/checkout@v6
+
+    - name: Configure CMake
+      run: |
+        cmake -S "$GITHUB_WORKSPACE/benchmarks" -B "$GITHUB_WORKSPACE/build" \
+          -DCMAKE_BUILD_TYPE=Release \
+          -DCMAKE_C_COMPILER=${{env.CC}} \
+          -DCMAKE_CXX_COMPILER=${{env.CXX}}
+
+    - name: Build
+      run: cmake --build "$GITHUB_WORKSPACE/build" -j $(nproc) --target beve_variant_depth_benchmark
+
+    - name: Run benchmark
+      run: "$GITHUB_WORKSPACE/build/beve_variant_depth_benchmark"

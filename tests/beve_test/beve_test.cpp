@@ -6,7 +6,6 @@
 #include <bitset>
 #include <chrono>
 #include <complex>
-#include <ctime>
 #include <deque>
 #include <expected>
 #include <list>
@@ -4528,8 +4527,7 @@ namespace beve_v2_resolution_test
    };
    using custom_tagged_v = std::variant<custom_alt, plain_alt>;
 
-   // A variant nested deeply enough that an O(N^2) key scan is visible as a hang rather than a
-   // slowdown. Reading must stay linear in the buffer size.
+   // A variant nested up to and past max_recursive_depth_limit, one level per nested object.
    struct deep_leaf
    {
       int v{};
@@ -4888,28 +4886,9 @@ suite beve_v2_variant_resolution = [] {
       }
    };
 
-   "deeply nested variants read in linear time"_test = [] {
-      // The key scan must stop once a single candidate remains. Without that it skips every nested
-      // subtree, making the read quadratic in depth. Assert on the shape of the growth rather than
-      // absolute time, which varies far too much across CI machines.
-      //
-      // Depth is capped at 200 because the reader rejects anything past max_recursive_depth_limit
-      // (256), one level per nested object. Each buffer is read many times so the ratio does not
-      // rest on a single sub-millisecond sample.
-      //
-      // The clock is process CPU time rather than wall time, because ctest runs this binary
-      // alongside two others and a loaded machine deschedules the loops. Wall time counts that
-      // waiting and the ratio stops describing the code: a three-way run on a macOS CI runner read
-      // 12.0x on a commit that touched only write paths, which is indistinguishable from the ~13x
-      // of a genuinely quadratic reader. CPU time excludes the waiting, and holds 3.1-4.9x against
-      // the quadratic reader's 10.5-13.9x even when the machine is oversubscribed six to one.
-      //
-      // The growth is then the median of several rounds rather than one sample of each depth. Both
-      // depths are timed back-to-back within a round so that whatever interference remains lands on
-      // numerator and denominator together and largely divides out; the median then discards
-      // whichever rounds it skewed anyway. The median and not the minimum: noise inflates a
-      // denominator as readily as a numerator, and a low outlier is how a real regression would
-      // slip through. On wall time the quadratic reader's cheapest loaded round already read 8.0x.
+   "deeply nested variants read"_test = [] {
+      // That the read stays linear in depth is a timing property, so it is guarded by
+      // benchmarks/beve_variant_depth_benchmark.cpp rather than here.
       auto build = [](int depth) {
          deep_v v{deep_leaf{1}};
          for (int i = 0; i < depth; ++i) {
@@ -4920,35 +4899,11 @@ suite beve_v2_variant_resolution = [] {
          }
          return glz::write_beve(v).value();
       };
-      constexpr int reps = 200;
-      constexpr int rounds = 5; // odd, so the median is the middle element
-      auto bench_cpu_ms = [](const std::string& buf, int n) {
-         const auto c0 = std::clock();
-         for (int i = 0; i < n; ++i) {
-            deep_v out{};
-            (void)glz::read_beve(out, buf);
-         }
-         return 1000.0 * double(std::clock() - c0) / double(CLOCKS_PER_SEC);
-      };
-      const auto shallow = build(50);
-      const auto deep = build(200); // 4x the depth
       {
-         // Correctness of the read itself, separately from the timing.
+         // Depth 200 stays under max_recursive_depth_limit (256), one level per nested object.
          deep_v out{};
-         expect(not glz::read_beve(out, deep));
+         expect(not glz::read_beve(out, build(200)));
       }
-      bench_cpu_ms(shallow, reps / 4); // warm both paths before timing
-      bench_cpu_ms(deep, reps / 4);
-      std::array<double, rounds> growth{};
-      for (auto& g : growth) {
-         const auto t_shallow = bench_cpu_ms(shallow, reps);
-         const auto t_deep = bench_cpu_ms(deep, reps);
-         g = t_deep / t_shallow;
-      }
-      std::ranges::sort(growth);
-      const auto median_growth = growth[rounds / 2];
-      // Measured 3.9-4.1x linear against 12.5-12.8x quadratic, so 8x separates them with margin.
-      expect(median_growth < 8.0) << "read time grew " << median_growth << "x for 4x the depth";
 
       // Past the limit, every level fails identically. Each of the variant reader's recovery paths
       // -- the other object alternatives, the lenient conversion pass, the last-resort try_each --
