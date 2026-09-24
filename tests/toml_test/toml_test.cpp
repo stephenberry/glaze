@@ -1023,6 +1023,22 @@ arr = [4, 5, 6])";
       expect(value == 3.14159);
    };
 
+   "read_float_empty_exponent"_test = [] {
+      // An exponent marker needs at least one digit after it and its optional sign
+      for (const std::string_view num : {"1e", "1E", "1e+", "1e-", "1.0e", "1.5E-"}) {
+         double value{};
+         expect(glz::read_toml(value, std::string{num}) == glz::error_code::parse_number_failure) << num;
+         float f{};
+         expect(glz::read_toml(f, std::string{num}) == glz::error_code::parse_number_failure) << num;
+      }
+
+      double value{};
+      expect(not glz::read_toml(value, std::string{"1.0e-5"}));
+      expect(value == 1.0e-5);
+      expect(not glz::read_toml(value, std::string{"1E+5"}));
+      expect(value == 1e5);
+   };
+
    "read_string"_test = [] {
       std::string toml_input = R"("Hello TOML")";
       std::string value{};
