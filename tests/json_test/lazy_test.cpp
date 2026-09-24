@@ -358,6 +358,29 @@ suite lazy_json_tests = [] {
       expect(std::abs(float_result.value() - 2.5f) < 0.001f);
    };
 
+   // An exponent marker needs at least one digit after it and its optional sign
+   "lazy_json_empty_exponent"_test = [] {
+      for (const std::string_view num : {"1e", "1.0E", "1.0e-", "1e+"}) {
+         std::string scalar{num};
+         auto root = glz::lazy_json(scalar);
+         expect(root.has_value());
+         expect(!root->root().get<double>().has_value()) << num;
+         expect(!root->root().get<float>().has_value()) << num;
+         expect(!root->root().get<int64_t>().has_value()) << num;
+
+         std::string object = R"({"value":)" + scalar + "}";
+         auto doc = glz::lazy_json(object);
+         expect(doc.has_value());
+         expect(!(*doc)["value"].get<double>().has_value()) << num;
+         expect(!(*doc)["value"].get<float>().has_value()) << num;
+      }
+
+      std::string valid = R"({"value":1.5e+2})";
+      auto doc = glz::lazy_json(valid);
+      expect(doc.has_value());
+      expect((*doc)["value"].get<double>().value() == 150.0);
+   };
+
    "lazy_json_large_array"_test = [] {
       std::string buffer = R"([0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19])";
       auto result = glz::lazy_json(buffer);

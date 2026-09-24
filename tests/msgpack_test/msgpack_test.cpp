@@ -25,6 +25,7 @@
 
 #include "glaze/json/generic.hpp"
 #include "glaze/json/ptr.hpp"
+#include "speculation_guard.hpp"
 #include "ut/ut.hpp"
 
 using namespace ut;
@@ -988,22 +989,27 @@ suite msgpack_variant_tagging = [] {
    };
 
    // Untagged resolution is speculative, so an ambiguous nest re-parses each subtree per alternative
-   // at every level. The speculation budget bounds that; without it ~100 bytes cost minutes.
+   // at every level. The speculation budget caps that; see speculation_guard.hpp for what is timed.
    "an ambiguous nest is bounded rather than exponential"_test = [] {
-      std::string buffer;
-      for (int i = 0; i < 40; ++i) {
-         buffer.push_back(char(0x81)); // fixmap(1)
-         buffer.push_back(char(0xa1)); // fixstr(1)
-         buffer += "x";
-         buffer.push_back(char(0x91)); // fixarray(1): the next level down
-      }
-      buffer.push_back(char(0xa1));
-      buffer += "z"; // a string where a map is required: nothing matches, at any level
-      ambiguous::node decoded{};
-      const auto t0 = std::chrono::steady_clock::now();
-      expect(bool(glz::read_msgpack(decoded, buffer)));
-      const auto ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
-      expect(ms < 2000.0) << ms;
+      const auto build = [](size_t levels) {
+         std::string buffer;
+         for (size_t i = 0; i < levels; ++i) {
+            buffer.push_back(char(0x81)); // fixmap(1)
+            buffer.push_back(char(0xa1)); // fixstr(1)
+            buffer += "x";
+            buffer.push_back(char(0x91)); // fixarray(1): the next level down
+         }
+         buffer.push_back(char(0xa1));
+         buffer += "z"; // a string where a map is required: nothing matches, at any level
+         return buffer;
+      };
+      glz_test::expect_bounded_by_speculation_budget(
+         build,
+         [](const std::string& buffer, glz::context& ctx) {
+            ambiguous::node decoded{};
+            return glz::read<glz::opts{.format = glz::MSGPACK}>(decoded, buffer, ctx);
+         },
+         glz::error_code::no_matching_variant_type, 4, 24, 96);
    };
 
    // An over-nested or truncated buffer is a property of the input, not of the alternative set.
@@ -1320,6 +1326,26 @@ suite msgpack_recursion_depth_limit = [] {
    };
 };
 
+suite msgpack_context_reuse = [] {
+   "a context reused after a failed read still reads"_test = [] {
+      static constexpr glz::opts options{.format = glz::MSGPACK};
+      const std::map<std::string, std::vector<std::vector<int>>> value{{"a", {{1, 2}, {3, 4}}}, {"b", {{5}}}};
+      std::string good{};
+      expect(not glz::write_msgpack(value, good));
+      const std::string bad = good.substr(0, good.size() / 2);
+
+      glz::context ctx{};
+      std::map<std::string, std::vector<std::vector<int>>> first{};
+      expect(bool(glz::read<options>(first, bad, ctx)));
+      expect(ctx.depth == 0u) << ctx.depth;
+
+      std::map<std::string, std::vector<std::vector<int>>> second{};
+      const auto ec = glz::read<options>(second, good, ctx);
+      expect(ec == glz::error_code::none) << glz::format_error(ec, good);
+      expect(second == value);
+   };
+};
+
 namespace local_aggregates
 {
    struct event
@@ -1342,6 +1368,60 @@ namespace local_aggregates
       std::vector<int> data = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
    };
 }
+
+struct mp_sentinel_pair
+{
+   int a{};
+   int b{};
+};
+
+struct mp_sentinel_pair_full
+{
+   int a{};
+   int b{};
+   int junk{};
+};
+
+struct mp_sentinel_custom_holder
+{
+   mp_sentinel_pair p{};
+   bool called = false;
+
+   void set(const mp_sentinel_pair& v)
+   {
+      p = v;
+      called = true;
+   }
+   const mp_sentinel_pair& get() const { return p; }
+};
+
+template <>
+struct glz::meta<mp_sentinel_custom_holder>
+{
+   using T = mp_sentinel_custom_holder;
+   static constexpr auto value = object("p", custom<&T::set, &T::get>);
+};
+
+struct mp_sentinel_custom_source
+{
+   mp_sentinel_pair_full p{};
+};
+
+suite msgpack_partial_read_sentinel_tests = [] {
+   // partial_read_complete stops the parse without failing it, so the setter must see the value
+   "custom setter receives a value that completed a partial read"_test = [] {
+      std::string buffer{};
+      expect(not glz::write_msgpack(mp_sentinel_custom_source{{1, 2, 3}}, buffer));
+
+      mp_sentinel_custom_holder h{};
+      static constexpr glz::opts partial_opts{
+         .format = glz::MSGPACK, .error_on_unknown_keys = false, .partial_read = true};
+      auto ec = glz::read<partial_opts>(h, buffer);
+      expect(not ec) << glz::format_error(ec, buffer);
+      expect(h.called);
+      expect(h.p.a == 1 && h.p.b == 2);
+   };
+};
 
 int main()
 {

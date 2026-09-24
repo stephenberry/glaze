@@ -635,6 +635,23 @@ namespace glz
       }
    }();
 
+   // Whether a field of type V is never written under Opts, whatever struct holds it: its type opts out
+   // of serialization (`always_skipped`), or it is a function pointer and `write_function_pointers` is
+   // off. This is the test for positional layouts (`structs_as_arrays`), which have no keys to skip by.
+   template <auto Opts, class V>
+   inline constexpr bool never_written =
+      always_skipped<V> || (!check_write_function_pointers(Opts) && is_any_function_ptr<V>);
+
+   // Whether a keyed object writer leaves the field at index I of T out of its output, decided at
+   // compile time: `never_written`, or `meta<T>::skip` excludes it from serialization. Every format's
+   // object writer consults this one predicate, so a struct writes the same keys in each of them.
+   // Runtime exclusions (`skip_if`, `skip_null_members`, `skip_default_members`) are decided per value.
+   //
+   // Consume it like `skipped_by_meta`, as the condition that guards the field's writer.
+   template <auto Opts, class T, size_t I>
+   inline constexpr bool skipped_on_write =
+      never_written<Opts, field_t<T, I>> || skipped_by_meta<T, I, operation::serialize>;
+
    // Whether `meta<T>::skip` excludes any field at all from the given operation.
    //
    // `meta::skip` is answered at compile time, so a `skip()` that never fires for an operation costs

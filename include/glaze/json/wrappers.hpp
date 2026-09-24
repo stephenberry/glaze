@@ -21,7 +21,8 @@ namespace glz
       {
          ctx.scratch.clear();
          parse<JSON>::op<Opts>(ctx.scratch, ctx, args...);
-         auto pe = glz::read<Opts>(value.val, ctx.scratch);
+         // is_padded is the caller's promise about their own buffer, not the scratch one.
+         auto pe = glz::read<is_padded_off<Opts>()>(value.val, ctx.scratch);
          if (pe) [[unlikely]] {
             ctx.error = pe.ec;
          }

@@ -1091,6 +1091,9 @@ namespace glz
                               // foreign input. Silently consume the value.
                               skip_value<BSON>::template op<Opts>(tag, ctx, it, stop);
                            }
+                           else if constexpr (skipped_by_meta<DT, I, operation::parse>) {
+                              skip_value<BSON>::template op<Opts>(tag, ctx, it, stop);
+                           }
                            else if constexpr (reflectable<DT>) {
                               from<BSON, MemberT>::template op<Opts>(get_member(value, get<I>(to_tie(value))), tag, ctx,
                                                                      it, stop);
@@ -1326,7 +1329,8 @@ namespace glz
       if (bool(file_error)) [[unlikely]] {
          return error_ctx{0, file_error};
       }
-      auto ec = read<set_bson<Opts>()>(value, buffer, ctx);
+      // The buffer was sized to the file, so the caller's is_padded promise does not cover it.
+      auto ec = read<is_padded_off<set_bson<Opts>()>()>(value, buffer, ctx);
       return bson_detail::enforce_exact_fill(buffer, ec);
    }
 }

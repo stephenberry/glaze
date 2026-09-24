@@ -706,7 +706,8 @@ namespace glz
                bit_array<N> arr{};
                if constexpr (N > 0) {
                   for_each<N>([&]<size_t I>() {
-                     if constexpr (!msgpack::detail::should_skip_field<field_t<T, I>>()) {
+                     if constexpr (!msgpack::detail::should_skip_field<field_t<T, I>>() &&
+                                   !skipped_by_meta<T, I, operation::parse>) {
                         arr[I] = true;
                      }
                   });
@@ -760,7 +761,8 @@ namespace glz
 
                visit<N>(
                   [&]<size_t I>() {
-                     if constexpr (msgpack::detail::should_skip_field<field_t<T, I>>()) {
+                     if constexpr (msgpack::detail::should_skip_field<field_t<T, I>>() ||
+                                   skipped_by_meta<T, I, operation::parse>) {
                         skip_value<MSGPACK>::template op<Opts>(ctx, it, end);
                      }
                      else {
@@ -1639,6 +1641,7 @@ namespace glz
          return error_ctx{0, file_error};
       }
 
-      return read<set_msgpack<Opts>()>(value, buffer, ctx);
+      // The buffer was sized to the file, so the caller's is_padded promise does not cover it.
+      return read<is_padded_off<set_msgpack<Opts>()>()>(value, buffer, ctx);
    }
 }

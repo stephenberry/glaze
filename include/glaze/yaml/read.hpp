@@ -70,10 +70,10 @@ namespace glz
          if constexpr (requires { ctx.stream_begin; }) {
             if (!ctx.stream_begin && it != end) {
                ctx.stream_begin = &*it;
-               // The line memo holds pointers into whatever buffer filled it, so a reused
-               // context must not carry a previous read's into this one.
-               if constexpr (requires { ctx.reset_line_memo(); }) {
-                  ctx.reset_line_memo();
+               // Anchors and the line memo hold pointers into whatever buffer filled them, so a
+               // reused context must not carry a previous read's into this one.
+               if constexpr (requires { ctx.reset_read_state(); }) {
+                  ctx.reset_read_state();
                }
                // Seed the alias replay budget from the document this read was handed. Done here
                // rather than in glz::read so every YAML entry point is covered, and only on the
@@ -6720,7 +6720,8 @@ namespace glz
          return {0, ec};
       }
 
-      return read<set_yaml<Opts>()>(std::forward<T>(value), buffer, ctx);
+      // The buffer was sized to the file, so the caller's is_padded promise does not cover it.
+      return read<is_padded_off<set_yaml<Opts>()>()>(std::forward<T>(value), buffer, ctx);
    }
 
    template <auto Opts = yaml::yaml_opts{}, class T>

@@ -1058,6 +1058,12 @@ namespace glz
                   resolved = best;
                }
             }
+            // Pass 2 dispatches `resolved` through glz::visit, whose jump table assumes an in-range
+            // index, so an index that names no alternative must be rejected here rather than visited.
+            if (resolved >= variant_size) [[unlikely]] {
+               ctx.error = error_code::no_matching_variant_type;
+               return;
+            }
 
             // Pass 2: parse the whole object (from the untouched `it`) as the resolved alternative.
             //
@@ -2985,22 +2991,29 @@ namespace glz
                         static constexpr auto TargetKey = get<I>(reflect<T>::keys);
                         static constexpr auto Length = TargetKey.size();
                         if ((Length == n) && compare<Length>(TargetKey.data(), key.data())) [[likely]] {
-                           // Check for null value skipping on read
-                           if constexpr (check_skip_null_members_on_read(Opts)) {
-                              if (invalid_end(ctx, it, end)) {
-                                 return;
-                              }
-                              if (uint8_t(*it) == tag::null) {
-                                 ++it; // Skip the null tag
-                                 return;
-                              }
-                           }
-
-                           if constexpr (reflectable<T>) {
-                              parse<BEVE>::op<Opts>(get_member(value, get<I>(to_tie(value))), ctx, it, end);
+                           // An `else` branch rather than an early return, so a skipped field's reader is
+                           // never instantiated -- see `skipped_by_meta`.
+                           if constexpr (skipped_by_meta<T, I, operation::parse>) {
+                              skip_value<BEVE>::op<Opts>(ctx, it, end);
                            }
                            else {
-                              parse<BEVE>::op<Opts>(get_member(value, get<I>(reflect<T>::values)), ctx, it, end);
+                              // Check for null value skipping on read
+                              if constexpr (check_skip_null_members_on_read(Opts)) {
+                                 if (invalid_end(ctx, it, end)) {
+                                    return;
+                                 }
+                                 if (uint8_t(*it) == tag::null) {
+                                    ++it; // Skip the null tag
+                                    return;
+                                 }
+                              }
+
+                              if constexpr (reflectable<T>) {
+                                 parse<BEVE>::op<Opts>(get_member(value, get<I>(to_tie(value))), ctx, it, end);
+                              }
+                              else {
+                                 parse<BEVE>::op<Opts>(get_member(value, get<I>(reflect<T>::values)), ctx, it, end);
+                              }
                            }
                         }
                         else {
@@ -3216,7 +3229,8 @@ namespace glz
          return error_ctx{0, file_error};
       }
 
-      return read<set_beve<Opts>()>(value, buffer, ctx);
+      // The buffer was sized to the file, so the caller's is_padded promise does not cover it.
+      return read<is_padded_off<set_beve<Opts>()>()>(value, buffer, ctx);
    }
 
    template <read_supported<BEVE> T, class Buffer>

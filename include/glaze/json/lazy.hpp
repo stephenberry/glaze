@@ -431,7 +431,7 @@ namespace glz
          // short of the value's true end, so `it` is only the real extent when the parse
          // reported nothing at all.
          const bool consumed_whole_value = ctx.error == error_code::none;
-         finalize_read_context<Opts>(ctx);
+         finalize_read_context(ctx);
          if (bool(ctx.error)) {
             return error_ctx{static_cast<size_t>(it - data_), ctx.error};
          }

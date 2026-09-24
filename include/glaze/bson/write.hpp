@@ -236,16 +236,7 @@ namespace glz
       template <class T, auto Opts, size_t I>
       consteval bool should_skip_reflected_field()
       {
-         using V = field_t<T, I>;
-         if constexpr (always_skipped<V>) {
-            return true;
-         }
-         else if constexpr (is_any_function_ptr<V>) {
-            return !check_write_function_pointers(Opts);
-         }
-         else {
-            return false;
-         }
+         return skipped_on_write<Opts, T, I>;
       }
    } // namespace bson_detail
 
@@ -668,6 +659,13 @@ namespace glz
          }
          else if constexpr (is_variant<DT>) {
             std::visit([&](auto&& alt) { write_member_element<Opts>(key, alt, ctx, b, ix); }, std::forward<T>(value));
+         }
+         else if constexpr (!requires { to<BSON, DT>::type_code; }) {
+            // A value writer always has a type code, so this is a type BSON cannot write: either a
+            // rejection point such as glz::invoke's, or no to<BSON, DT> at all. Calling op directly makes
+            // the compiler report that (the rejection's static_assert, or the missing specialization)
+            // rather than the missing type_code, which some compilers diagnose first.
+            to<BSON, DT>::template op<Opts>(std::forward<T>(value), ctx, b, ix);
          }
          else {
             if (!write_element_prefix(ctx, to<BSON, DT>::type_code, key, b, ix)) [[unlikely]] {

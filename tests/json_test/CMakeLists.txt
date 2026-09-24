@@ -64,6 +64,14 @@ target_link_libraries(variant_ambiguous_test PRIVATE glz_test_common)
 
 add_test(NAME variant_ambiguous_test COMMAND variant_ambiguous_test)
 
+## Variants with more than 64 alternatives
+
+add_executable(json_wide_variant_test json_wide_variant_test.cpp)
+
+target_link_libraries(json_wide_variant_test PRIVATE glz_test_common)
+
+add_test(NAME json_wide_variant_test COMMAND json_wide_variant_test)
+
 ## Value-based skip test - test for issue #1994
 
 add_executable(value_based_skip_test value_based_skip_test.cpp)
