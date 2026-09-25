@@ -5324,6 +5324,65 @@ suite shrink_to_fit_tests = [] {
    };
 };
 
+// The string reader pads its destination for a chunked copy, but not when the padding alone would
+// make it allocate
+suite string_read_capacity_tests = [] {
+   "strings that fit the small string buffer stay there"_test = [] {
+      const auto sso = std::string{}.capacity();
+      for (size_t n = 0; n <= sso; ++n) {
+         const std::string text(n, 'a');
+
+         std::string s;
+         expect(not glz::read_json(s, "\"" + text + "\""));
+         expect(s == text);
+         expect(s.capacity() == sso) << "length " << n;
+
+         std::array<std::string, 2> arr{};
+         expect(not glz::read_json(arr, "[\"" + text + "\",\"" + text + "\"]"));
+         expect(arr[0] == text && arr[1] == text);
+         expect(arr[0].capacity() == sso && arr[1].capacity() == sso) << "length " << n;
+      }
+   };
+
+   "escaped string that fits the small string buffer stays there"_test = [] {
+      // What has to fit is the escaped input, which unescaping only shrinks
+      const auto sso = std::string{}.capacity();
+      if (sso < 10) {
+         return; // no small string buffer to fill, as with the pre-C++11 libstdc++ ABI
+      }
+      const std::string middle(sso - 10, 'a');
+      std::string s;
+      expect(not glz::read_json(s, R"("\u00e9)" + middle + R"(\n\"")"));
+      expect(s == "\xc3\xa9" + middle + "\n\"");
+      expect(s.capacity() == sso);
+   };
+
+   "reserved capacity is kept"_test = [] {
+      std::string s;
+      s.reserve(100);
+      const auto capacity = s.capacity();
+      for (const auto n : {capacity - 7, capacity}) {
+         const std::string text(n, 'b');
+         expect(not glz::read_json(s, "\"" + text + "\""));
+         expect(s == text);
+         expect(s.capacity() == capacity) << "length " << n;
+      }
+   };
+
+   "long escaped string"_test = [] {
+      std::string json = "\"";
+      std::string expected;
+      for (size_t i = 0; i < 40; ++i) {
+         json += R"(abc\t\u00e9\\)";
+         expected += "abc\t\xc3\xa9\\";
+      }
+      json += "\"";
+      std::string s;
+      expect(not glz::read_json(s, json));
+      expect(s == expected);
+   };
+};
+
 suite recorder_test = [] {
    "recorder_to_file"_test = [] {
       glz::recorder<double, float> rec;
