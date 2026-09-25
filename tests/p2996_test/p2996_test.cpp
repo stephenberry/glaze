@@ -135,8 +135,7 @@ suite p2996_enums = [] {
       expect(not glz::read<reflect_enums_opts{}>(d2, dir_json));
       expect(d2 == Direction::East);
 
-      expect(glz::write<reflect_enums_opts{}>(static_cast<Direction>(7), dir_json) ==
-             glz::error_code::unexpected_enum);
+      expect(glz::write<reflect_enums_opts{}>(static_cast<Direction>(7), dir_json) == glz::error_code::unexpected_enum);
    };
 
    // The reflective enum-by-name reader scans the quoted key directly (not via skip_ws), so on a
