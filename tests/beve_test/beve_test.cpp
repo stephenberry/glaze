@@ -3499,6 +3499,167 @@ suite volatile_tests = [] {
    };
 };
 
+// A register block made of identical sub-blocks: the array elements are class types, so they are
+// reached by index rather than by iterator (a volatile T* is not an iterator for a class type).
+struct volatile_channel
+{
+   uint32_t control{};
+   uint32_t status{};
+};
+
+struct volatile_channel_block
+{
+   uint32_t enable{};
+   glz::volatile_array<volatile_channel, 4> channels{};
+};
+
+// The non-volatile mirror of volatile_channel_block, used to pin the encoding.
+struct plain_channel_block
+{
+   uint32_t enable{};
+   std::array<volatile_channel, 4> channels{};
+};
+
+struct volatile_bank
+{
+   glz::volatile_array<uint16_t, 2> regs{};
+};
+
+struct volatile_two_level
+{
+   glz::volatile_array<volatile_bank, 2> banks{};
+};
+
+struct volatile_c_array_block
+{
+   volatile_channel channels[3]{};
+   uint32_t scalars[2]{};
+};
+
+template <>
+struct glz::meta<volatile_c_array_block>
+{
+   using T = volatile_c_array_block;
+   static constexpr auto value = object(&T::channels, &T::scalars);
+};
+
+suite volatile_class_element_array_tests = [] {
+   "volatile_array of class elements"_test = [] {
+      volatile volatile_channel_block obj{};
+      obj.enable = 1;
+      for (size_t i = 0; i < 4; ++i) {
+         obj.channels[i].control = uint32_t(i);
+         obj.channels[i].status = uint32_t(100 + i);
+      }
+
+      std::string s{};
+      expect(not glz::write_beve(obj, s));
+
+      volatile volatile_channel_block obj2{};
+      expect(!glz::read_beve(obj2, s));
+      expect(obj2.enable == 1u);
+      for (size_t i = 0; i < 4; ++i) {
+         expect(obj2.channels[i].control == uint32_t(i));
+         expect(obj2.channels[i].status == uint32_t(100 + i));
+      }
+   };
+
+   // Volatile storage must not change the wire format: the bytes have to match what the same
+   // layout produces through the ordinary iterator-based array path.
+   "volatile_array of class elements matches the std::array encoding"_test = [] {
+      volatile volatile_channel_block obj{};
+      plain_channel_block mirror{};
+      obj.enable = 1;
+      mirror.enable = 1;
+      for (size_t i = 0; i < 4; ++i) {
+         obj.channels[i].control = uint32_t(i);
+         obj.channels[i].status = uint32_t(100 + i);
+         mirror.channels[i] = {uint32_t(i), uint32_t(100 + i)};
+      }
+
+      std::string s{};
+      expect(not glz::write_beve(obj, s));
+      std::string expected{};
+      expect(not glz::write_beve(mirror, expected));
+      expect(s == expected);
+   };
+
+   // Scalar elements keep taking the iterator-based path, which encodes them as a typed array
+   // rather than a generic one. Pin that: indexing them instead would silently change the wire
+   // format.
+   "volatile_array of scalar elements still encodes as a typed array"_test = [] {
+      volatile glz::volatile_array<uint16_t, 4> obj{{1, 2, 3, 4}};
+      std::string s{};
+      expect(not glz::write_beve(obj, s));
+
+      std::array<uint16_t, 4> mirror{1, 2, 3, 4};
+      std::string expected{};
+      expect(not glz::write_beve(mirror, expected));
+      expect(s == expected);
+   };
+
+   // The failure was never volatile-specific: volatile_array::begin() is unconditionally
+   // volatile-qualified, so a non-volatile object of the same type could not serialize either.
+   "non-volatile object holding a volatile_array of class elements"_test = [] {
+      volatile_channel_block obj{};
+      obj.enable = 2;
+      obj.channels[1].status = 9;
+
+      std::string s{};
+      expect(not glz::write_beve(obj, s));
+
+      volatile_channel_block obj2{};
+      expect(!glz::read_beve(obj2, s));
+      expect(obj2.enable == 2u);
+      expect(obj2.channels[1].status == 9u);
+   };
+
+   "nested volatile_array of class elements"_test = [] {
+      volatile volatile_two_level obj{};
+      obj.banks[0].regs[0] = 1;
+      obj.banks[0].regs[1] = 2;
+      obj.banks[1].regs[0] = 3;
+      obj.banks[1].regs[1] = 4;
+
+      std::string s{};
+      expect(not glz::write_beve(obj, s));
+
+      volatile volatile_two_level obj2{};
+      expect(!glz::read_beve(obj2, s));
+      expect(obj2.banks[0].regs == glz::volatile_array<uint16_t, 2>{1, 2});
+      expect(obj2.banks[1].regs == glz::volatile_array<uint16_t, 2>{3, 4});
+   };
+
+   "C array of class elements in a volatile struct"_test = [] {
+      volatile volatile_c_array_block obj{};
+      for (size_t i = 0; i < 3; ++i) {
+         obj.channels[i].control = uint32_t(i);
+         obj.channels[i].status = uint32_t(i * 10);
+      }
+      obj.scalars[0] = 7;
+      obj.scalars[1] = 8;
+
+      std::string s{};
+      expect(not glz::write_beve(obj, s));
+
+      volatile volatile_c_array_block obj2{};
+      expect(!glz::read_beve(obj2, s));
+      for (size_t i = 0; i < 3; ++i) {
+         expect(obj2.channels[i].control == uint32_t(i));
+         expect(obj2.channels[i].status == uint32_t(i * 10));
+      }
+      expect(obj2.scalars[0] == 7u);
+      expect(obj2.scalars[1] == 8u);
+   };
+
+   "volatile_array of class elements rejects a non-array"_test = [] {
+      volatile volatile_channel_block obj{};
+      std::string s{};
+      expect(not glz::write_beve(uint32_t(5), s));
+      expect(glz::read_beve(obj.channels, s) == glz::error_code::syntax_error);
+   };
+};
+
 suite generic_tests = [] {
    "generic"_test = [] {
       glz::generic json("Hello World");
