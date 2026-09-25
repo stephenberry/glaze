@@ -37,12 +37,25 @@ function(glaze_setup_asio)
         return()
     endif()
 
+    # Created once, ahead of the backend branches: they choose where Asio comes from, and
+    # anything true of all three belongs here rather than three times below.
+    add_library(glaze_asio INTERFACE)
+    add_library(glaze::asio ALIAS glaze_asio)
+
+    # Asio's Windows backend calls Winsock itself -- WSAStartup/WSACleanup, and AcceptEx for
+    # every asynchronous accept -- and names the libraries only through a `#pragma comment(lib,
+    # ...)` that only MSVC honours (asio/detail/socket_types.hpp), so a MinGW link leaves those
+    # symbols undefined. Both are needed: AcceptEx and GetAcceptExSockaddrs live in mswsock.dll,
+    # not in ws2_32.dll. Naming them on the target that pulls Asio in keeps MinGW consumers
+    # linkable, including consumers of the installed package.
+    if(MINGW)
+        target_link_libraries(glaze_asio INTERFACE ws2_32 mswsock)
+    endif()
+
     # 1. Boost.Asio
     find_package(Boost QUIET CONFIG)
     if(Boost_FOUND)
         message(STATUS "glaze: using Boost.Asio")
-        add_library(glaze_asio INTERFACE)
-        add_library(glaze::asio ALIAS glaze_asio)
         # Pin glaze/ext/glaze_asio.hpp to the Boost backend it would not otherwise
         # select when standalone <asio.hpp> is also visible (issue #2599).
         target_compile_definitions(glaze_asio INTERFACE GLZ_USE_BOOST_ASIO)
@@ -61,8 +74,6 @@ function(glaze_setup_asio)
     find_package(Asio QUIET)
     if(Asio_FOUND)
         message(STATUS "glaze: using standalone Asio ${Asio_VERSION}")
-        add_library(glaze_asio INTERFACE)
-        add_library(glaze::asio ALIAS glaze_asio)
         target_link_libraries(glaze_asio INTERFACE Asio::Asio)
         return()
     endif()
@@ -77,8 +88,6 @@ function(glaze_setup_asio)
             GIT_SHALLOW TRUE
         )
         FetchContent_MakeAvailable(asio)
-        add_library(glaze_asio INTERFACE)
-        add_library(glaze::asio ALIAS glaze_asio)
         target_include_directories(glaze_asio INTERFACE ${asio_SOURCE_DIR}/asio/include)
         return()
     endif()

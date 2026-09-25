@@ -323,6 +323,13 @@ namespace glz
 // float128_t requires std::to_chars for floating-point, unavailable on older Apple platforms (iOS < 16.3)
 #if !defined(_LIBCPP_VERSION) || _LIBCPP_AVAILABILITY_HAS_TO_CHARS_FLOATING_POINT
             else if constexpr (is_float128<V>) {
+               static_assert(has_charconv_float_write<V>,
+                             "this toolchain's <charconv> has no std::to_chars overload for this 16-byte "
+                             "float, which is how Glaze writes it (MinGW's libstdc++ defines "
+                             "__STDCPP_FLOAT128_T__ without the _Float128 overloads). A "
+                             "float_max_write_precision{glz::float_precision::float64} member in your own "
+                             "options struct writes it as a double, as does a toolchain whose <charconv> "
+                             "handles the type.");
                const auto start = reinterpret_cast<char*>(&b[ix]);
                const auto [ptr, ec] = std::to_chars(start, &b[0] + b.size(), value, std::chars_format::general);
                if (ec != std::errc()) {

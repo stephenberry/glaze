@@ -18,6 +18,26 @@ check_source_compiles(CXX "
     extern \"C\" int LLVMFuzzerTestOneInput(const uint8_t* Data, size_t Size)
     { return 0;}
     " haslibfuzzer)
+# The probe above is the only thing that should see that flag: left set, it would be added to
+# every later check in this directory, and a check for anything else would then be asking about
+# libfuzzer too.
+unset(CMAKE_REQUIRED_LINK_OPTIONS)
+
+# ASan and UBSan are not part of every toolchain that parses the flags. MinGW's GCC accepts
+# -fsanitize=address and then fails at link with "cannot find -lasan", because libsanitizer is
+# not built for that target and MSYS2 ships no sanitizer runtime; the flags would turn every
+# fuzzer below into a link error. Ask the toolchain to link what it just compiled, the way
+# libfuzzer is asked above, so a toolchain without a sanitizer runtime builds an uninstrumented
+# fuzzer instead of not building one at all.
+set(CMAKE_REQUIRED_LINK_OPTIONS -fsanitize=address,undefined -fno-sanitize-recover=all)
+check_source_compiles(CXX "int main() { return 0; }" has_sanitizer_runtime)
+unset(CMAKE_REQUIRED_LINK_OPTIONS)
+# Reported only where the flags would have been applied: every other compiler reached the
+# fallback that links main() before this probe existed, and still does.
+if(NOT has_sanitizer_runtime AND CMAKE_CXX_COMPILER_ID MATCHES "Clang|AppleClang|GNU")
+    message(STATUS "glaze: this toolchain cannot link -fsanitize=address,undefined, "
+                   "so the fuzz targets build uninstrumented")
+endif()
 
 
 macro(create_fuzztest testname)
@@ -35,8 +55,13 @@ macro(create_fuzztest testname)
     if(MSVC)
         target_link_libraries(fuzz_${testname} PRIVATE main)
     elseif(CMAKE_CXX_COMPILER_ID MATCHES "Clang|AppleClang|GNU")
-        target_compile_options(fuzz_${testname} PUBLIC -fsanitize=address,undefined -fno-sanitize-recover=all)
-        target_link_options(fuzz_${testname} PUBLIC -fsanitize=address,undefined -fno-sanitize-recover=all)
+        # Nested rather than folded into the condition above: having a runtime is a property of
+        # the toolchain, not of the compiler family, and a family that lacks one must still take
+        # this branch instead of falling through to a second main() beside libFuzzer's own.
+        if(has_sanitizer_runtime)
+            target_compile_options(fuzz_${testname} PUBLIC -fsanitize=address,undefined -fno-sanitize-recover=all)
+            target_link_options(fuzz_${testname} PUBLIC -fsanitize=address,undefined -fno-sanitize-recover=all)
+        endif()
     else()
         target_link_libraries(fuzz_${testname} PRIVATE main)
     endif()
