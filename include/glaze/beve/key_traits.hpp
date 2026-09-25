@@ -87,9 +87,10 @@ namespace glz
       // them. So a key must be a string or a number (possibly through glz::meta), or a type that provides
       // a header-less encoding.
       static constexpr bool valid = numeric || str_t<underlying> || beve_headerless_writable<underlying>;
-      static_assert(valid, "BEVE map keys and std::pair first types must be strings or numbers. Map the key type to "
-                           "a string or number with glz::meta, or specialize glz::to/glz::from for the container. "
-                           "See docs/binary.md.");
+      static_assert(valid,
+                    "BEVE map keys and std::pair first types must be strings or numbers. Map the key type to "
+                    "a string or number with glz::meta, or specialize glz::to/glz::from for the container. "
+                    "See docs/binary.md.");
 
       static constexpr bool as_string = str_t<underlying> || !numeric;
       static constexpr bool as_number = !as_string;
