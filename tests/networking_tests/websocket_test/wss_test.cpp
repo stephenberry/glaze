@@ -24,12 +24,6 @@
 #include <openssl/x509.h>
 #include <openssl/x509v3.h>
 
-#if defined(_MSC_VER) && !defined(OPENSSL_NO_APPLINK)
-extern "C" {
-#include <openssl/applink.c>
-}
-#endif
-
 #ifdef DELETE
 #undef DELETE
 #endif
@@ -105,6 +99,18 @@ namespace
       return x509;
    }
 
+   // OpenSSL opens and writes the file itself. Handing it a FILE* from this program instead relies on
+   // applink to bridge the two C runtimes, which Windows ARM64 builds of OpenSSL do not provide.
+   template <class WritePem>
+   bool write_pem_file(const char* filename, WritePem&& write_pem)
+   {
+      BIO* bio = BIO_new_file(filename, "w");
+      if (!bio) return false;
+
+      const int result = write_pem(bio);
+      return BIO_free(bio) == 1 && result == 1;
+   }
+
    bool generate_test_certificates()
    {
       EVP_PKEY* pkey = generate_rsa_key();
@@ -116,33 +122,16 @@ namespace
          return false;
       }
 
-      // Write private key
-      FILE* key_file = nullptr;
-#ifdef _MSC_VER
-      fopen_s(&key_file, "wss_test_key.pem", "w");
-#else
-      key_file = fopen("wss_test_key.pem", "w");
-#endif
-      if (key_file) {
-         PEM_write_PrivateKey(key_file, pkey, nullptr, nullptr, 0, nullptr, nullptr);
-         fclose(key_file);
-      }
-
-      // Write certificate
-      FILE* cert_file = nullptr;
-#ifdef _MSC_VER
-      fopen_s(&cert_file, "wss_test_cert.pem", "w");
-#else
-      cert_file = fopen("wss_test_cert.pem", "w");
-#endif
-      if (cert_file) {
-         PEM_write_X509(cert_file, x509);
-         fclose(cert_file);
-      }
+      const bool written = write_pem_file("wss_test_key.pem",
+                                          [&](BIO* bio) {
+                                             return PEM_write_bio_PrivateKey(bio, pkey, nullptr, nullptr, 0, nullptr,
+                                                                             nullptr);
+                                          }) &&
+                           write_pem_file("wss_test_cert.pem", [&](BIO* bio) { return PEM_write_bio_X509(bio, x509); });
 
       X509_free(x509);
       EVP_PKEY_free(pkey);
-      return true;
+      return written;
    }
 
    bool certificates_exist()
