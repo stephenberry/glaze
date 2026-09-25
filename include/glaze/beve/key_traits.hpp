@@ -76,6 +76,10 @@ namespace glz
       using numeric_type = typename beve_numeric_type<underlying>::type;
 
       static constexpr bool numeric = std::is_arithmetic_v<numeric_type>;
+      // A BEVE object header encodes a single shared key type, which must be numeric or string-like.
+      // Native keys use the compact object/map encoding; keys that reduce to neither (e.g. multi-field
+      // structs) fall back to a generic array of [key, value] entries in the map/pair serializers.
+      static constexpr bool native = numeric || str_t<underlying>;
       static constexpr bool as_string = str_t<underlying> || !numeric;
       static constexpr bool as_number = !as_string;
 
