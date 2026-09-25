@@ -1874,6 +1874,16 @@ int main()
       expect_roundtrip_equal(device_mode::maintenance);
    };
 
+   "msgpack unnamed enum value write"_test = [] {
+      const auto unnamed = static_cast<device_mode>(7);
+      std::string buffer{};
+      expect(glz::write_msgpack(unnamed, buffer) == glz::error_code::unexpected_enum);
+
+      ext_record record{};
+      record.mode = unnamed;
+      expect(glz::write_msgpack(record, buffer) == glz::error_code::unexpected_enum);
+   };
+
    "msgpack cast adapter roundtrip"_test = [] {
       cast_device_id id{0x1122334455667788ULL};
       expect_roundtrip_equal(id);

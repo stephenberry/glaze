@@ -231,8 +231,8 @@ namespace glz
             }
          }
          else [[unlikely]] {
-            // Value doesn't have a mapped string, serialize as underlying number
-            serialize<TOML>::op<Opts>(static_cast<std::underlying_type_t<T>>(value), ctx, b, ix);
+            // Unnamed values are rejected on read, so writing one would produce unreadable output
+            ctx.error = error_code::unexpected_enum;
          }
       }
    };

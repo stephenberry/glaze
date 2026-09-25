@@ -261,6 +261,8 @@ auto json = glz::write<reflect_enums_opts{}>(p).value_or("error");
 // {"x":10,"y":20,"color":"Blue"}
 ```
 
+Writing a value that is not a named enumerator (e.g. `static_cast<Color>(7)`) with `reflect_enums` fails with `glz::error_code::unexpected_enum`, since it could not be read back.
+
 P2996 also provides `enum_to_string` and `string_to_enum` utility functions:
 
 ```cpp

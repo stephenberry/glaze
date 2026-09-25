@@ -333,6 +333,8 @@ struct glz::meta<Status> {
 // Now serializes as: "Active", "Inactive", "Pending"
 ```
 
+Reading a string enum rejects names that are not enumerated, so writing a value that has no enumerated name (e.g. `static_cast<Status>(7)`) fails with `glz::error_code::unexpected_enum` rather than producing output that cannot be read back.
+
 > [!TIP]
 >
 > For automatic enum-to-string serialization without writing metadata for each enum, see [Automatic Enum Strings](enum-reflection.md).

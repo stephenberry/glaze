@@ -1208,7 +1208,7 @@ namespace glz
       requires((glaze_enum_t<T> || (meta_keys<T> && std::is_enum_v<std::decay_t<T>>)) && not custom_write<T>)
    struct to<JSON, T>
    {
-      static constexpr bool can_error = false;
+      static constexpr bool can_error = true;
 
       template <auto Opts, class... Args>
       GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, Args&&... args)
@@ -1226,8 +1226,8 @@ namespace glz
             }
          }
          else [[unlikely]] {
-            // Value doesn't have a mapped string, serialize as underlying number
-            serialize<JSON>::op<Opts>(static_cast<std::underlying_type_t<T>>(value), ctx, std::forward<Args>(args)...);
+            // Unnamed values are rejected on read, so writing one would produce unreadable output
+            ctx.error = error_code::unexpected_enum;
          }
       }
    };
@@ -1238,7 +1238,8 @@ namespace glz
       requires(!meta_keys<T> && std::is_enum_v<std::decay_t<T>> && !glaze_enum_t<T> && !custom_write<T>)
    struct to<JSON, T>
    {
-      static constexpr bool can_error = false;
+      // Only the reflect_enums path can error, and it exists only with P2996
+      static constexpr bool can_error = GLZ_REFLECTION26;
 
       template <auto Opts, class... Args>
       GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, Args&&... args)
@@ -1257,8 +1258,8 @@ namespace glz
                }
             }
             else [[unlikely]] {
-               serialize<JSON>::op<Opts>(static_cast<std::underlying_type_t<std::decay_t<T>>>(value), ctx,
-                                         std::forward<Args>(args)...);
+               // Unnamed values are rejected on read, so writing one would produce unreadable output
+               ctx.error = error_code::unexpected_enum;
             }
          }
          else

@@ -543,9 +543,9 @@ namespace glz
                return;
             }
          }
-         else {
-            // fallback to numeric representation
-            serialize<MSGPACK>::op<Opts>(static_cast<std::underlying_type_t<T>>(value), ctx, b, ix);
+         else [[unlikely]] {
+            // Unnamed values are rejected on read, so writing one would produce unreadable output
+            ctx.error = error_code::unexpected_enum;
          }
       }
    };

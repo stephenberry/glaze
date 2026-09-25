@@ -1977,6 +1977,27 @@ suite enum_types = [] {
       expect(glz::read_json(color, "\"Silver\"") == glz::error_code::unexpected_enum);
       expect(color == Color::Red);
    };
+
+   "unnamed enum value write"_test = [] {
+      // Values without an enumerated name cannot be read back, so writing them is an error
+      const auto unnamed = static_cast<Color>(7);
+      std::string buffer{};
+      expect(glz::write_json(unnamed, buffer) == glz::error_code::unexpected_enum);
+
+      std::vector<Color> vec{Color::Red, unnamed};
+      expect(glz::write_json(vec, buffer) == glz::error_code::unexpected_enum);
+
+      std::map<Color, int> keys{{unnamed, 1}};
+      expect(glz::write_json(keys, buffer) == glz::error_code::unexpected_enum);
+
+      std::map<std::string, Color> values{{"a", unnamed}};
+      expect(glz::write_json(values, buffer) == glz::error_code::unexpected_enum);
+
+      Thing thing{};
+      thing.color = unnamed;
+      expect(glz::write_json(thing, buffer) == glz::error_code::unexpected_enum);
+      expect(glz::write<glz::opts{.prettify = true}>(thing, buffer) == glz::error_code::unexpected_enum);
+   };
 };
 
 suite user_types = [] {

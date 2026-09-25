@@ -1449,6 +1449,16 @@ b = "test string" # another eol comment
       expect(result.value() == R"("Green")");
    };
 
+   "write_unnamed_enum_value"_test = [] {
+      const auto unnamed = static_cast<Color>(7);
+      std::string buffer;
+      expect(glz::write_toml(unnamed, buffer) == glz::error_code::unexpected_enum);
+
+      config_with_enums config{};
+      config.color = unnamed;
+      expect(glz::write_toml(config, buffer) == glz::error_code::unexpected_enum);
+   };
+
    "read_enum_basic"_test = [] {
       Color c{};
       std::string input = R"("Blue")";
