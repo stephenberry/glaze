@@ -57,14 +57,9 @@ namespace glz
       };
    }
 
-   // custom_t (user-customization wrapper for serialization members/functions)
-   // is defined in glaze/forward.hpp — it's pulled in transitively via opts.hpp.
-
-   template <auto From, auto To>
-   constexpr auto custom_impl() noexcept
-   {
-      return [](auto&& v) { return custom_t{v, From, To}; };
-   }
+   // custom_t (the user-customization wrapper) along with custom_impl() and the
+   // glz::custom customization point are defined in glaze/forward.hpp — pulled in
+   // transitively via opts.hpp.
 
    // When reading into an array that is appendable, the new data will be appended rather than overwrite
    template <auto MemPtr>
@@ -99,10 +94,6 @@ namespace glz
    // Reads into only existing fields and elements and then exits without parsing the rest of the input
    template <auto MemPtr>
    constexpr auto partial_read = opts_wrapper<MemPtr, &opts::partial_read>();
-
-   // Customize reading and writing
-   template <auto From, auto To>
-   constexpr auto custom = custom_impl<From, To>();
 
    template <auto MemPtr>
    inline constexpr decltype(auto) escape_bytes_impl() noexcept
