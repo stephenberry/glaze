@@ -2803,6 +2803,85 @@ suite beve_custom_key_tests = [] {
    "vector pair CastModuleID"_test = [] { verify_vector_pair_roundtrip<CastModuleID>(); };
 };
 
+// A key that is neither a string nor a number cannot be a BEVE object key, so the container is
+// given its own to/from specializations (the pattern documented in docs/binary.md).
+struct CompositeKey
+{
+   int id{};
+   std::string name{};
+   bool operator==(const CompositeKey&) const = default;
+};
+
+template <>
+struct std::hash<CompositeKey>
+{
+   size_t operator()(const CompositeKey& k) const noexcept
+   {
+      return std::hash<int>{}(k.id) ^ (std::hash<std::string>{}(k.name) << 1);
+   }
+};
+
+using composite_key_map = std::unordered_map<CompositeKey, int>;
+
+struct CompositeKeyEntry
+{
+   CompositeKey key{};
+   int value{};
+};
+
+static_assert(!glz::beve_headerless_writable<CompositeKey>);
+
+template <>
+struct glz::to<glz::BEVE, composite_key_map>
+{
+   template <auto Opts>
+   static void op(const composite_key_map& value, is_context auto&& ctx, auto&& b, auto& ix)
+   {
+      std::vector<CompositeKeyEntry> entries{};
+      entries.reserve(value.size());
+      for (const auto& [k, v] : value) {
+         entries.push_back({k, v});
+      }
+      serialize<BEVE>::op<Opts>(entries, ctx, b, ix);
+   }
+};
+
+template <>
+struct glz::from<glz::BEVE, composite_key_map>
+{
+   template <auto Opts>
+   static void op(composite_key_map& value, is_context auto&& ctx, auto&& it, auto end)
+   {
+      std::vector<CompositeKeyEntry> entries{};
+      parse<BEVE>::op<Opts>(entries, ctx, it, end);
+      if (bool(ctx.error)) {
+         return;
+      }
+      value.clear();
+      for (auto& e : entries) {
+         value.emplace(std::move(e.key), e.value);
+      }
+   }
+};
+
+suite beve_composite_key_tests = [] {
+   "composite key map via container specialization"_test = [] {
+      const composite_key_map src{{{1, "one"}, 1}, {{2, "two"}, 2}};
+
+      std::string buffer{};
+      expect(not glz::write_beve(src, buffer));
+      composite_key_map dst{};
+      expect(!glz::read_beve(dst, buffer));
+      expect(dst == src);
+
+      buffer.clear();
+      expect(not glz::write_beve_untagged(src, buffer));
+      dst.clear();
+      expect(!glz::read_beve_untagged(dst, buffer));
+      expect(dst == src);
+   };
+};
+
 struct beve_escape_opts : glz::opts
 {
    bool escape_control_characters = true;

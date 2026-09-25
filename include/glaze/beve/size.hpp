@@ -459,6 +459,8 @@ namespace glz
          requires(map_like_array && check_concatenate(Opts) == true)
       [[nodiscard]] static size_t op(auto&& value, size_t offset = 0)
       {
+         static_assert(beve_key_traits<typename range_value_t<T>::first_type>::valid);
+
          size_t result = 1; // tag byte
          result += compressed_int_size(value.size()); // element count
 
@@ -477,6 +479,8 @@ namespace glz
       template <auto Opts>
       [[nodiscard]] GLZ_ALWAYS_INLINE static size_t op(auto&& value, size_t offset = 0)
       {
+         static_assert(beve_key_traits<typename T::first_type>::valid);
+
          size_t result = 1; // tag byte
          result += compressed_int_size<1>(); // count = 1
 
@@ -494,6 +498,8 @@ namespace glz
       template <auto Opts>
       [[nodiscard]] static size_t op(auto&& value, size_t offset = 0)
       {
+         static_assert(beve_key_traits<typename T::key_type>::valid);
+
          size_t result = 1; // tag byte
          result += compressed_int_size(value.size()); // element count
 

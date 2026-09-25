@@ -67,6 +67,12 @@ namespace glz
       using type = typename beve_member_resolver<member>::type;
    };
 
+   // A type with its own header-less BEVE encoding, which an object key requires.
+   template <class T>
+   concept beve_headerless_writable = requires(T& value, context& ctx, std::string& b, size_t& ix) {
+      to<BEVE, T>::template no_header<opts{.format = BEVE}>(value, ctx, b, ix);
+   };
+
    template <class Key>
    struct beve_key_traits
    {
@@ -76,6 +82,15 @@ namespace glz
       using numeric_type = typename beve_numeric_type<underlying>::type;
 
       static constexpr bool numeric = std::is_arithmetic_v<numeric_type>;
+
+      // BEVE object keys carry no header of their own; the object header declares the key type for all of
+      // them. So a key must be a string or a number (possibly through glz::meta), or a type that provides
+      // a header-less encoding.
+      static constexpr bool valid = numeric || str_t<underlying> || beve_headerless_writable<underlying>;
+      static_assert(valid, "BEVE map keys and std::pair first types must be strings or numbers. Map the key type to "
+                           "a string or number with glz::meta, or specialize glz::to/glz::from for the container. "
+                           "See docs/binary.md.");
+
       static constexpr bool as_string = str_t<underlying> || !numeric;
       static constexpr bool as_number = !as_string;
 

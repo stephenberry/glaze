@@ -559,6 +559,59 @@ struct glz::meta<ModuleID> {
 };
 ```
 
+### Keys That Are Not Strings or Numbers
+
+BEVE object keys must be strings or numbers, because the object header declares one key type for every key and the keys themselves carry no header. A key type that does not reduce to a string or number (for example a struct with several members) fails to compile with a `static_assert`. The same applies to the first type of a `std::pair` and to ranges of pairs.
+
+To serialize such a container, specialize `glz::to` and `glz::from` for it and choose the wire layout yourself. For example, write the map as an array of key/value structs:
+
+```c++
+struct Coord {
+   int x{};
+   int y{};
+   bool operator==(const Coord&) const = default;
+};
+
+template <>
+struct std::hash<Coord> { /* ... */ };
+
+using CoordMap = std::unordered_map<Coord, std::string>;
+
+struct CoordEntry {
+   Coord key{};
+   std::string value{};
+};
+
+template <>
+struct glz::to<glz::BEVE, CoordMap> {
+   template <auto Opts>
+   static void op(const CoordMap& value, is_context auto&& ctx, auto&& b, auto& ix) {
+      std::vector<CoordEntry> entries{};
+      entries.reserve(value.size());
+      for (const auto& [k, v] : value) {
+         entries.push_back({k, v});
+      }
+      serialize<BEVE>::op<Opts>(entries, ctx, b, ix);
+   }
+};
+
+template <>
+struct glz::from<glz::BEVE, CoordMap> {
+   template <auto Opts>
+   static void op(CoordMap& value, is_context auto&& ctx, auto&& it, auto end) {
+      std::vector<CoordEntry> entries{};
+      parse<BEVE>::op<Opts>(entries, ctx, it, end);
+      if (bool(ctx.error)) {
+         return;
+      }
+      value.clear();
+      for (auto& e : entries) {
+         value.emplace(std::move(e.key), std::move(e.value));
+      }
+   }
+};
+```
+
 ## Partial Objects
 
 It is sometimes desirable to write out only a portion of an object. This is permitted via an array of JSON pointers, which indicate which parts of the object should be written out.
