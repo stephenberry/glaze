@@ -1977,6 +1977,30 @@ suite enum_types = [] {
       expect(glz::read_json(color, "\"Silver\"") == glz::error_code::unexpected_enum);
       expect(color == Color::Red);
    };
+
+   "unenumerated enum value write"_test = [] {
+      const auto unenumerated = static_cast<Color>(7);
+      std::string buffer{};
+      expect(glz::write_json(unenumerated, buffer) == glz::error_code::unexpected_enum);
+
+      std::vector<Color> vec{Color::Red, unenumerated};
+      expect(glz::write_json(vec, buffer) == glz::error_code::unexpected_enum);
+
+      std::map<Color, int> keys{{unenumerated, 1}};
+      expect(glz::write_json(keys, buffer) == glz::error_code::unexpected_enum);
+
+      Thing thing{};
+      thing.color = unenumerated;
+      expect(glz::write_json(thing, buffer) == glz::error_code::unexpected_enum);
+
+      // meta_keys enum
+      expect(glz::write_json(static_cast<Vehicle>(7), buffer) == glz::error_code::unexpected_enum);
+   };
+
+   "enum name into bounded buffer"_test = [] {
+      std::array<char, 4> buffer{};
+      expect(glz::write_json(Color::Green, buffer) == glz::error_code::buffer_overflow);
+   };
 };
 
 suite user_types = [] {

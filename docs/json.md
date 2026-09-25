@@ -333,6 +333,8 @@ struct glz::meta<Status> {
 // Now serializes as: "Active", "Inactive", "Pending"
 ```
 
+Writing a value with no enumerated name (e.g. `static_cast<Status>(7)`) fails with `glz::error_code::unexpected_enum`, since readers accept only enumerated names. This applies to JSON, TOML, YAML, and MessagePack. BEVE, CBOR, JSONB, and BSON write enums as numbers.
+
 > [!TIP]
 >
 > For automatic enum-to-string serialization without writing metadata for each enum, see [Automatic Enum Strings](enum-reflection.md).

@@ -478,13 +478,12 @@ namespace glz
       static void op(auto&& value, is_context auto&& ctx, B&& b, auto& ix)
       {
          const sv str = get_enum_name(value);
-         if (!str.empty()) {
-            yaml::write_yaml_string<Opts>(str, ctx, b, ix);
+         if (str.empty()) [[unlikely]] {
+            // Not enumerated, so it could not be read back
+            ctx.error = error_code::unexpected_enum;
+            return;
          }
-         else [[unlikely]] {
-            // Value doesn't have a mapped string, serialize as underlying number
-            serialize<YAML>::op<Opts>(static_cast<std::underlying_type_t<T>>(value), ctx, b, ix);
-         }
+         yaml::write_yaml_string<Opts>(str, ctx, b, ix);
       }
    };
 
