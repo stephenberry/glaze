@@ -267,22 +267,13 @@ namespace glz
       template <auto Opts, class B>
       static void op(auto&& value, is_context auto&& ctx, B&& b, auto& ix) noexcept
       {
-         using Duration = typename std::remove_cvref_t<T>::duration;
-         using Period = typename Duration::period;
-
-         chrono_detail::wall_clock_time<Duration> wall{};
-         if (!chrono_detail::to_wall_clock(value, wall, ctx.error)) [[unlikely]] {
-            return;
-         }
-
-         // The unquoted ISO size: YYYY-MM-DDTHH:MM:SS.nnnnnnnnnZ is at most 30
-         constexpr size_t max_size = chrono_detail::iso_time_point_max_size<Period> - 2;
-         if (!ensure_space(ctx, b, ix + max_size + write_padding_bytes)) [[unlikely]] {
+         using Period = typename std::remove_cvref_t<T>::duration::period;
+         if (!ensure_space(ctx, b, ix + chrono_detail::iso_timestamp_size<Period> + write_padding_bytes)) [[unlikely]] {
             return;
          }
 
          // Always the full datetime: a bare date would read back as a TOML Local Date.
-         chrono_detail::write_iso_timestamp<false>(wall, ctx, b, ix);
+         chrono_detail::write_iso_timestamp<false>(value, ctx, b, ix);
       }
    };
 

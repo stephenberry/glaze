@@ -1299,12 +1299,7 @@ namespace glz
             return;
          }
 
-         // Summed in seconds and cast by from_wall_clock: a nanosecond intermediate wraps int64
-         // for years outside 1677-2262 even when the target can hold them.
-         const bool leap_second = sc == 60;
-         const auto tp = sys_seconds{sys_days{ymd}} + hours{hr} + minutes{mi} + seconds{leap_second ? 59 : sc} +
-                         seconds{tz_offset_seconds};
-         chrono_detail::from_wall_clock(value, tp.time_since_epoch(), nanoseconds{subsec_nanos}, leap_second,
+         chrono_detail::from_civil_time(value, ymd, hr, mi, sc, tz_offset_seconds, nanoseconds{subsec_nanos},
                                         ctx.error);
       }
    };

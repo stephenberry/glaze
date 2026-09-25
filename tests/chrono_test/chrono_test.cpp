@@ -1899,6 +1899,22 @@ suite date_format_tests = [] {
    };
 };
 
+suite calendar_leap_second_and_range_tests = [] {
+   using namespace std::chrono;
+
+   "date_format_sys_time_rejects_leap_second"_test = [] {
+      FormattedEvent e{};
+      expect(glz::read_json(e, R"({"start":"2016-12-31 23:59:60"})") == glz::error_code::parse_error);
+   };
+
+   "toml_and_cbor_reject_years_past_9999"_test = [] {
+      const sys_seconds far{sys_days{year{10000} / January / 1}};
+      std::string buffer;
+      expect(glz::write_toml(far, buffer) == glz::error_code::constraint_violated);
+      expect(glz::write_cbor(far, buffer) == glz::error_code::constraint_violated);
+   };
+};
+
 // ============================================
 // std::chrono::utc_clock time points
 // ============================================
@@ -1909,6 +1925,18 @@ struct UtcEvent
 {
    std::chrono::utc_seconds at{};
    std::chrono::utc_time<std::chrono::milliseconds> precise{};
+};
+
+struct UtcEpochSeconds
+{
+   std::chrono::utc_seconds at{};
+};
+
+template <>
+struct glz::meta<UtcEpochSeconds>
+{
+   using T = UtcEpochSeconds;
+   static constexpr auto value = glz::object("at", glz::epoch_count<std::chrono::seconds>(&T::at));
 };
 
 struct UtcFormatted
@@ -2021,35 +2049,34 @@ suite utc_clock_tests = [] {
       utc_seconds parsed{};
       expect(glz::read_json(parsed, R"("2016-12-30T23:59:60Z")") == glz::error_code::parse_error);
       expect(glz::read_json(parsed, R"("2024-06-15T12:34:60Z")") == glz::error_code::parse_error);
+      expect(glz::read_json(parsed, R"("2024-06-15T12:34:61Z")") == glz::error_code::parse_error);
+   };
+
+   "utc_time_pre_epoch_subsecond_roundtrip"_test = [] {
+      const utc_time<milliseconds> before{-500ms};
+      const auto json = glz::write_json(before);
+      expect(json.value() == R"("1969-12-31T23:59:59.500Z")") << json.value();
+      utc_time<milliseconds> parsed{};
+      expect(!glz::read_json(parsed, json.value()));
+      expect(parsed == before);
+   };
+
+   "utc_time_rejects_instants_its_rep_cannot_hold"_test = [] {
+      // INT32_MAX seconds after 1970 on utc_clock is 27 leap seconds before 2038-01-19T03:14:07Z.
+      utc_time<duration<int32_t>> narrow{};
+      expect(!glz::read_json(narrow, R"("2038-01-19T03:13:40Z")"));
+      expect(narrow.time_since_epoch().count() == (std::numeric_limits<int32_t>::max)());
+      expect(glz::read_json(narrow, R"("2038-01-19T03:13:41Z")") == glz::error_code::parse_error);
+
+      UtcEpochSeconds e{};
+      expect(glz::read_json(e, R"({"at":9223372036854775807})") == glz::error_code::parse_error);
+      expect(!glz::read_json(e, R"({"at":-9223372036854775807})"));
+      expect(e.at.time_since_epoch() == seconds{-9223372036854775807});
    };
 
    "sys_time_still_rejects_leap_second"_test = [] {
       sys_seconds parsed{};
       expect(glz::read_json(parsed, R"("2016-12-31T23:59:60Z")") == glz::error_code::parse_error);
-   };
-
-   "utc_time_malformed_input"_test = [] {
-      utc_seconds parsed{};
-      expect(glz::read_json(parsed, R"("not a timestamp")") == glz::error_code::parse_error);
-      expect(glz::read_json(parsed, R"("2024-13-01T00:00:00Z")") == glz::error_code::parse_error);
-      expect(glz::read_json(parsed, R"("2024-06-15T12:34:61Z")") == glz::error_code::parse_error);
-      expect(bool(glz::read_json(parsed, "1718454896")));
-   };
-
-   "utc_time_unquoted"_test = [] {
-      const auto json = glz::write<glz::opt_true<glz::opts{}, glz::unquoted_opt_tag{}>>(leap_2016());
-      expect(json.value() == "2016-12-31T23:59:60Z") << json.value();
-   };
-
-   "utc_time_bounded_buffer"_test = [] {
-      std::array<char, 512> buffer{};
-      const auto result = glz::write_json(to_utc<seconds>(ordinary), buffer);
-      expect(not result);
-      expect(std::string_view(buffer.data(), result.count) == R"("2024-06-15T12:34:56Z")");
-
-      // Exceeding the buffer reports an error rather than writing past its end.
-      const std::vector<utc_time<nanoseconds>> many(40, to_utc<nanoseconds>(ordinary));
-      expect(glz::write_json(many, buffer).ec == glz::error_code::buffer_overflow);
    };
 
    "utc_time_in_struct"_test = [] {

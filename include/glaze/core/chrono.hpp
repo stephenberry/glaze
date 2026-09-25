@@ -47,7 +47,7 @@ namespace glz
    template <class T>
    concept is_utc_time_point =
       is_time_point<T> && std::is_same_v<typename std::remove_cvref_t<T>::clock, std::chrono::utc_clock> &&
-      std::ratio_divide<std::ratio<1>, typename std::remove_cvref_t<T>::duration::period>::den == 1;
+      std::remove_cvref_t<T>::duration::period::num == 1;
 #else
    template <class T>
    concept is_utc_time_point = false;
@@ -361,10 +361,13 @@ namespace glz
       // "YYYY-MM-DD" plus both quotes.
       inline constexpr size_t iso_date_max_size = 12;
 
-      // "YYYY-MM-DDTHH:MM:SSZ" (20) plus both quotes, plus '.' and the fraction.
+      // "YYYY-MM-DDTHH:MM:SSZ" (20) plus '.' and the fraction, unquoted.
       template <class Period>
-      inline constexpr size_t iso_time_point_max_size =
-         22 + (iso_frac_digits<Period> > 0 ? 1 + iso_frac_digits<Period> : 0);
+      inline constexpr size_t iso_timestamp_size = 20 + (iso_frac_digits<Period> > 0 ? 1 + iso_frac_digits<Period> : 0);
+
+      // The ISO timestamp plus both quotes.
+      template <class Period>
+      inline constexpr size_t iso_time_point_max_size = iso_timestamp_size<Period> + 2;
 
       // Write "YYYY-MM-DD". RFC 3339 requires a 4-digit year, and the fixed-width parsers
       // on the read side cannot represent anything else, so a year outside [0000, 9999] is
@@ -513,6 +516,16 @@ namespace glz
          }
       }
 
+      // Write a calendar time point as a full ISO 8601 timestamp, whatever its period.
+      template <bool Quote, is_calendar_time_point TP, class B>
+      inline void write_iso_timestamp(const TP& value, is_context auto&& ctx, B&& b, auto& ix) noexcept
+      {
+         wall_clock_time<typename TP::duration> wall{};
+         if (to_wall_clock(value, wall, ctx.error)) [[likely]] {
+            write_iso_timestamp<Quote>(wall, ctx, b, ix);
+         }
+      }
+
       // Write a calendar time point as ISO 8601 in UTC.
       //
       // Time points whose period is exactly `days` (e.g. std::chrono::sys_days) are written
@@ -533,11 +546,7 @@ namespace glz
                                   static_cast<unsigned>(ymd.day()), ctx, b, ix);
          }
          else {
-            wall_clock_time<Duration> wall{};
-            if (!to_wall_clock(value, wall, ctx.error)) [[unlikely]] {
-               return;
-            }
-            write_iso_timestamp<Quote>(wall, ctx, b, ix);
+            write_iso_timestamp<Quote>(value, ctx, b, ix);
          }
       }
 
@@ -667,13 +676,16 @@ namespace glz
             return;
          }
 
-         // The leap seconds elapsed are constant across a whole second, so they are looked up
-         // at seconds precision, where the conversion cannot overflow.
+         // The leap seconds elapsed are constant across a whole second, and before 1972 and after
+         // the last table entry, so they are looked up at a whole second clamped to a span where
+         // utc_clock::from_sys cannot overflow. A :60 probed there finds no leap second.
+         constexpr seconds probe_max = sys_days{year{9999} / December / 31}.time_since_epoch();
+         const seconds probe = secs < seconds{0} ? seconds{0} : (secs > probe_max ? probe_max : secs);
          utc_seconds anchor{};
          bool inserted = true;
          if (!call_leap_second_lookup(
                 [&] {
-                   anchor = utc_clock::from_sys(sys_seconds{secs});
+                   anchor = utc_clock::from_sys(sys_seconds{probe});
                    if (leap_second) {
                       inserted = get_leap_second_info(anchor + seconds{1}).is_leap_second;
                    }
@@ -687,7 +699,7 @@ namespace glz
          }
 
          const Duration offset =
-            duration_cast<Duration>(anchor.time_since_epoch() - secs + seconds{leap_second ? 1 : 0});
+            duration_cast<Duration>(anchor.time_since_epoch() - probe + seconds{leap_second ? 1 : 0});
          if constexpr (!treat_as_floating_point_v<typename Duration::rep>) {
             const Duration since_epoch = sys.time_since_epoch();
             if ((offset > Duration::zero() && since_epoch > (Duration::max)() - offset) ||
@@ -699,6 +711,21 @@ namespace glz
          value = TP{sys.time_since_epoch() + offset};
       }
 #endif
+
+      // Assign a calendar time point from parsed UTC date and time fields, where tz_offset_seconds
+      // converts the local time to UTC and a seconds field of 60 is a leap second. The time of day
+      // is folded in at seconds precision: MSVC's hours and minutes use a 32-bit rep, and a
+      // nanosecond intermediate wraps for years outside 1677-2262 that a coarser target holds.
+      template <is_calendar_time_point TP>
+      inline void from_civil_time(TP& value, const std::chrono::year_month_day& ymd, int hr, int mi, int sc,
+                                  int tz_offset_seconds, std::chrono::nanoseconds subsec, error_code& ec) noexcept
+      {
+         using namespace std::chrono;
+         const bool leap_second = sc == 60;
+         const auto tp = sys_seconds{sys_days{ymd}} + hours{hr} + minutes{mi} + seconds{leap_second ? 59 : sc} +
+                         seconds{tz_offset_seconds};
+         from_wall_clock(value, tp.time_since_epoch(), subsec, leap_second, ec);
+      }
 
       // Parse an RFC 3339 / ISO 8601 date-time string into a calendar time_point.
       // A seconds field of 60 is a leap second, which only a utc_clock target accepts.
@@ -811,12 +838,7 @@ namespace glz
             return;
          }
 
-         // Anchored at seconds so the time-of-day is folded in with 64-bit arithmetic (MSVC's
-         // hours and minutes use a 32-bit rep).
-         const bool leap_second = sc == 60;
-         const auto tp = sys_seconds{sys_days{ymd}} + hours{hr} + minutes{mi} + seconds{leap_second ? 59 : sc} +
-                         seconds{tz_offset_seconds};
-         from_wall_clock(value, tp.time_since_epoch(), nanoseconds{subsec_nanos}, leap_second, ec);
+         from_civil_time(value, ymd, hr, mi, sc, tz_offset_seconds, nanoseconds{subsec_nanos}, ec);
       }
 
       // ============================================

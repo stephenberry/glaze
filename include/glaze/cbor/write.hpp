@@ -1176,21 +1176,14 @@ namespace glz
       template <auto Opts>
       static void op(auto&& value, is_context auto&& ctx, auto&& b, auto& ix)
       {
-         using Duration = typename std::remove_cvref_t<T>::duration;
-         using Period = typename Duration::period;
-
-         chrono_detail::wall_clock_time<Duration> wall{};
-         if (!chrono_detail::to_wall_clock(value, wall, ctx.error)) [[unlikely]] {
-            return;
-         }
+         using Period = typename std::remove_cvref_t<T>::duration::period;
 
          // Write tag 0 (RFC 3339 date/time string)
          if (!cbor_detail::encode_arg(ctx, cbor::major::tag, cbor::semantic_tag::datetime_string, b, ix)) [[unlikely]] {
             return;
          }
 
-         // "YYYY-MM-DDTHH:MM:SS[.fffffffff]Z": the unquoted ISO size, which is fixed per period
-         constexpr size_t str_len = chrono_detail::iso_time_point_max_size<Period> - 2;
+         constexpr size_t str_len = chrono_detail::iso_timestamp_size<Period>;
          if (!cbor_detail::encode_arg_cx<str_len>(ctx, cbor::major::tstr, b, ix)) [[unlikely]] {
             return;
          }
@@ -1199,7 +1192,7 @@ namespace glz
             return;
          }
 
-         chrono_detail::write_iso_timestamp<false>(wall, ctx, b, ix);
+         chrono_detail::write_iso_timestamp<false>(value, ctx, b, ix);
       }
    };
 
