@@ -114,8 +114,9 @@ namespace glz::detail::structural
    GLZ_ALWAYS_INLINE uint64_t to_bitmask(const uint8x16_t a, const uint8x16_t b, const uint8x16_t c,
                                          const uint8x16_t d) noexcept
    {
-      const uint8x16_t bits = {0x01, 0x02, 0x04, 0x08, 0x10, 0x20, 0x40, 0x80,
-                               0x01, 0x02, 0x04, 0x08, 0x10, 0x20, 0x40, 0x80};
+      static constexpr uint8_t bits_array[] = {0x01, 0x02, 0x04, 0x08, 0x10, 0x20, 0x40, 0x80,
+                                               0x01, 0x02, 0x04, 0x08, 0x10, 0x20, 0x40, 0x80};
+      const uint8x16_t bits = vld1q_u8(bits_array);
       uint8x16_t s0 = vpaddq_u8(vandq_u8(a, bits), vandq_u8(b, bits));
       const uint8x16_t s1 = vpaddq_u8(vandq_u8(c, bits), vandq_u8(d, bits));
       s0 = vpaddq_u8(s0, s1);
