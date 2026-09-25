@@ -984,7 +984,16 @@ namespace glz
                   }
 
                   auto n = size_t(it - start);
-                  resize_unfilled(value, n + string_padding_bytes);
+
+                  // The padding lets the chunked copy below run up to the closing quote. Skip it when it
+                  // would be the only reason to allocate, as for a string that fits the small string
+                  // buffer but not with eight bytes to spare.
+                  bool pad = true;
+                  if constexpr (requires { value.capacity(); }) {
+                     const auto capacity = size_t(value.capacity());
+                     pad = capacity >= n + string_padding_bytes || capacity < n;
+                  }
+                  resize_unfilled(value, pad ? n + string_padding_bytes : n);
 
                   auto* p = value.data();
 
@@ -993,13 +1002,17 @@ namespace glz
                   // did not fill.
                   auto* const written_begin = p;
 
+                  // Without the padding, copy a chunk only while eight bytes remain before the quote.
+                  // Unescaping never puts the output ahead of the input, so no store lands past the end.
+                  const auto* const copy_end = pad ? it : it - (std::min)(n, size_t(7));
+
                   // Copy eight bytes at a time for as long as eight bytes are there to read, then
                   // finish the span below. The chunked form reads past the character it is looking
                   // at, so on an unpadded buffer it has to stop short of the end; splitting it this
                   // way keeps it for the body of every string rather than giving it up whenever the
                   // string happens to finish near the end of the buffer -- which, for a document
                   // that is itself one string, is every string.
-                  while (start < it && start <= chunk_limit) {
+                  while (start < copy_end && start <= chunk_limit) {
                      std::memcpy(p, start, 8);
                      uint64_t swar;
                      std::memcpy(&swar, p, 8);
@@ -1305,7 +1318,16 @@ namespace glz
                   }
 
                   auto n = size_t(it - start);
-                  resize_unfilled(value, n + string_padding_bytes);
+
+                  // The padding lets the chunked copy below run up to the closing quote. Skip it when it
+                  // would be the only reason to allocate, as for a string that fits the small string
+                  // buffer but not with eight bytes to spare.
+                  bool pad = true;
+                  if constexpr (requires { value.capacity(); }) {
+                     const auto capacity = size_t(value.capacity());
+                     pad = capacity >= n + string_padding_bytes || capacity < n;
+                  }
+                  resize_unfilled(value, pad ? n + string_padding_bytes : n);
 
                   auto* p = reinterpret_cast<char*>(value.data());
 
@@ -1314,13 +1336,17 @@ namespace glz
                   // did not fill.
                   auto* const written_begin = p;
 
+                  // Without the padding, copy a chunk only while eight bytes remain before the quote.
+                  // Unescaping never puts the output ahead of the input, so no store lands past the end.
+                  const auto* const copy_end = pad ? it : it - (std::min)(n, size_t(7));
+
                   // Copy eight bytes at a time for as long as eight bytes are there to read, then
                   // finish the span below. The chunked form reads past the character it is looking
                   // at, so on an unpadded buffer it has to stop short of the end; splitting it this
                   // way keeps it for the body of every string rather than giving it up whenever the
                   // string happens to finish near the end of the buffer -- which, for a document
                   // that is itself one string, is every string.
-                  while (start < it && start <= chunk_limit) {
+                  while (start < copy_end && start <= chunk_limit) {
                      std::memcpy(p, start, 8);
                      uint64_t swar;
                      std::memcpy(&swar, p, 8);
