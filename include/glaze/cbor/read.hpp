@@ -2874,8 +2874,8 @@ namespace glz
                if constexpr (is_utc_time_point<T>) {
                   // Epoch seconds are POSIX time, which has no leap seconds.
                   const auto secs = std::chrono::floor<std::chrono::seconds>(tp);
-                  chrono_detail::from_wall_clock(value, secs.time_since_epoch(),
-                                                 std::chrono::nanoseconds{tp - secs}, false, ctx.error);
+                  chrono_detail::from_wall_clock(value, secs.time_since_epoch(), std::chrono::nanoseconds{tp - secs},
+                                                 false, ctx.error);
                }
                else {
                   value = std::chrono::time_point_cast<Duration>(tp);
