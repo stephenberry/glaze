@@ -4928,13 +4928,14 @@ namespace glz
    // Duration: parsed generically (from the bare rep count) by the
    // from<uint32_t Format, is_duration T> specialization in core/chrono.hpp.
 
-   // system_clock::time_point: parse from ISO 8601 string.
+   // system_clock / utc_clock time_point: parse from ISO 8601 string (utc_clock also accepts a
+   // leap second, :60).
    // Time points whose Duration period is exactly `days` (e.g. std::chrono::sys_days)
    // also accept the bare "YYYY-MM-DD" date form; full ISO 8601 datetimes are still
    // accepted in that case and floored to days precision. Coarser periods (weeks,
    // months, years) intentionally fall through to the full ISO 8601 parser so that
    // user-supplied dates are not silently snapped to a multi-day boundary.
-   template <is_system_time_point T>
+   template <is_calendar_time_point T>
       requires(not custom_read<T>)
    struct from<JSON, T>
    {

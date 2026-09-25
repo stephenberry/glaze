@@ -2022,12 +2022,12 @@ namespace glz
    // std::string rather than std::string_view is deliberate: YAML scalars can require
    // unescaping and line folding, so the reader materializes them into an owning buffer.
 
-   // system_clock::time_point: parse from ISO 8601.
+   // system_clock / utc_clock time_point: parse from ISO 8601 (utc_clock also accepts :60).
    // Time points whose period is exactly `days` (e.g. std::chrono::sys_days) also accept
    // the bare "YYYY-MM-DD" form; full datetimes remain accepted and are floored to days.
    // Coarser periods fall through to the full parser so dates are not silently snapped to
    // a multi-day boundary.
-   template <is_system_time_point T>
+   template <is_calendar_time_point T>
       requires(not custom_read<T>)
    struct from<YAML, T>
    {

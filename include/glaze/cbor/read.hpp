@@ -2818,14 +2818,14 @@ namespace glz
       }
    }
 
-   // system_clock::time_point - decoder accepts:
-   //   - tag 0 + tstr (RFC 8949 §3.4.1 canonical; what glaze writes)
+   // system_clock / utc_clock time_point - decoder accepts:
+   //   - tag 0 + tstr (RFC 8949 §3.4.1 canonical; what glaze writes; :60 only for utc_clock)
    //   - tag 1 + int/float seconds (RFC 8949 §3.4.2; converted from epoch)
    //   - bare tstr (no tag) - lenient for producers that omit tag 0
    // Bare numbers and any other shape are rejected: the unit would be ambiguous.
    // Note: this does NOT cross-read with epoch_time<Duration>, which writes tag 1
    // directly; decode into the type that matches the wire form you expect.
-   template <is_system_time_point T>
+   template <is_calendar_time_point T>
    struct from<CBOR, T>
    {
       template <auto Opts>
@@ -2871,7 +2871,15 @@ namespace glz
                cbor_detail::decode_tag1_payload<Opts, Duration>(ctx, it, end, tp);
                if (bool(ctx.error)) [[unlikely]]
                   return;
-               value = std::chrono::time_point_cast<Duration>(tp);
+               if constexpr (is_utc_time_point<T>) {
+                  // Epoch seconds are POSIX time, which has no leap seconds.
+                  const auto secs = std::chrono::floor<std::chrono::seconds>(tp);
+                  chrono_detail::from_wall_clock(value, secs.time_since_epoch(),
+                                                 std::chrono::nanoseconds{tp - secs}, false, ctx.error);
+               }
+               else {
+                  value = std::chrono::time_point_cast<Duration>(tp);
+               }
             }
             else [[unlikely]] {
                ctx.error = error_code::syntax_error;

@@ -34,9 +34,9 @@
 // float_format keeps its NTTP form because it leans on std::format's compile-time
 // format checking, which date_format's hand-rolled runtime walk does not need.)
 //
-// Scope (MVP): JSON only. date_format supports system_clock time_points and
-// year_month_day; epoch_count supports system_clock time_points. utc_time and
-// the binary backends are intentionally out of scope here.
+// Scope: JSON only. date_format supports system_clock and utc_clock time_points and
+// year_month_day; epoch_count supports system_clock and utc_clock time_points. The
+// binary backends are intentionally out of scope here.
 
 namespace glz
 {
@@ -70,8 +70,9 @@ namespace glz
       {
          using namespace std::chrono;
          using V = std::remove_cvref_t<T>;
-         static_assert(is_system_time_point<V> || is_year_month_day<V>,
-                       "glz::date_format requires a std::chrono::system_clock time_point or year_month_day member");
+         static_assert(is_calendar_time_point<V> || is_year_month_day<V>,
+                       "glz::date_format requires a std::chrono::system_clock or utc_clock time_point, or a "
+                       "year_month_day member");
 
          const std::string_view fmt = wrapper.fmt;
          chrono_detail::date_time_fields f{};
@@ -89,18 +90,21 @@ namespace glz
             f.day = static_cast<int>(static_cast<unsigned>(wrapper.val.day()));
          }
          else {
-            const auto tp = wrapper.val;
-            const auto dp = floor<days>(tp);
+            chrono_detail::wall_clock_time<typename V::duration> wall{};
+            if (!chrono_detail::to_wall_clock(wrapper.val, wall, ctx.error)) [[unlikely]] {
+               return;
+            }
+            const auto dp = floor<days>(wall.time);
             const year_month_day ymd{dp};
             f.year = static_cast<int>(ymd.year());
             f.month = static_cast<int>(static_cast<unsigned>(ymd.month()));
             f.day = static_cast<int>(static_cast<unsigned>(ymd.day()));
 
-            // hh_mm_ss at seconds precision: %S emits integer seconds only.
-            const hh_mm_ss tod{floor<seconds>(tp - dp)};
+            // hh_mm_ss at seconds precision: %S emits integer seconds only (60 in a leap second).
+            const hh_mm_ss tod{floor<seconds>(wall.time - dp)};
             f.hour = static_cast<int>(tod.hours().count());
             f.minute = static_cast<int>(tod.minutes().count());
-            f.second = static_cast<int>(tod.seconds().count());
+            f.second = static_cast<int>(tod.seconds().count()) + (wall.leap_second ? 1 : 0);
          }
 
          // Same RFC 3339 constraint as the ISO 8601 writers: a 4-digit year only.
@@ -138,8 +142,9 @@ namespace glz
       {
          using namespace std::chrono;
          using V = std::remove_cvref_t<T>;
-         static_assert(is_system_time_point<V> || is_year_month_day<V>,
-                       "glz::date_format requires a std::chrono::system_clock time_point or year_month_day member");
+         static_assert(is_calendar_time_point<V> || is_year_month_day<V>,
+                       "glz::date_format requires a std::chrono::system_clock or utc_clock time_point, or a "
+                       "year_month_day member");
 
          std::string_view str;
          parse_transient_string_view<Opts>(str, ctx, args...);
@@ -168,11 +173,12 @@ namespace glz
             // far-future years, e.g. ~4.2e9 at year 9999) and silently wraps to a bogus
             // instant. sys_seconds widens the arithmetic to 64 bits before the time-of-day
             // is folded in, so the reconstruction is exact on every supported standard library.
-            const auto tp = sys_seconds{sys_days{ymd}} + hours{f.hour} + minutes{f.minute} + seconds{f.second};
+            const bool leap_second = f.second == 60;
+            const auto tp =
+               sys_seconds{sys_days{ymd}} + hours{f.hour} + minutes{f.minute} + seconds{leap_second ? 59 : f.second};
             // A nanosecond target only spans 1677-2262; reject a date outside it rather than wrap.
-            if (!chrono_detail::make_sys_time(wrapper.val, tp.time_since_epoch(), nanoseconds{})) [[unlikely]] {
-               ctx.error = error_code::parse_error;
-            }
+            chrono_detail::from_wall_clock(wrapper.val, tp.time_since_epoch(), nanoseconds{}, leap_second,
+                                           ctx.error);
          }
       }
    };
@@ -204,8 +210,9 @@ namespace glz
       template <class Mem>
       consteval void validate_date_format(std::string_view fmt)
       {
-         static_assert(is_system_time_point<Mem> || is_year_month_day<Mem>,
-                       "glz::date_format requires a std::chrono::system_clock time_point or year_month_day member");
+         static_assert(is_calendar_time_point<Mem> || is_year_month_day<Mem>,
+                       "glz::date_format requires a std::chrono::system_clock or utc_clock time_point, or a "
+                       "year_month_day member");
          if (!date_format_tokens_valid(fmt)) {
             glaze_date_format_unsupported_token();
          }
@@ -250,9 +257,10 @@ namespace glz
    // glz::epoch_count — per-field Unix timestamp count
    // ============================================
 
-   // View serializing a system_clock time_point field as a numeric Unix timestamp in units
-   // of Duration, the per-field counterpart to the glz::epoch_time storage wrapper (so one
-   // field can be an epoch count while others stay ISO 8601).
+   // View serializing a system_clock or utc_clock time_point field as a numeric Unix timestamp
+   // in units of Duration, the per-field counterpart to the glz::epoch_time storage wrapper (so
+   // one field can be an epoch count while others stay ISO 8601). Unix time does not count leap
+   // seconds, so a utc_clock leap second is written as the :59 second it follows.
    template <class Duration, class T>
    struct epoch_count_t
    {
@@ -269,12 +277,16 @@ namespace glz
       static void op(auto&& wrapper, is_context auto&& ctx, B&& b, auto& ix) noexcept
       {
          using V = std::remove_cvref_t<T>;
-         static_assert(is_system_time_point<V>,
-                       "glz::epoch_count requires a std::chrono::system_clock time_point member");
+         static_assert(is_calendar_time_point<V>,
+                       "glz::epoch_count requires a std::chrono::system_clock or utc_clock time_point member");
          static_assert(is_duration<Duration>,
                        "glz::epoch_count requires a std::chrono::duration unit (e.g. std::chrono::milliseconds)");
          using Rep = typename Duration::rep;
-         const auto count = std::chrono::duration_cast<Duration>(wrapper.val.time_since_epoch()).count();
+         chrono_detail::wall_clock_time<typename V::duration> wall{};
+         if (!chrono_detail::to_wall_clock(wrapper.val, wall, ctx.error)) [[unlikely]] {
+            return;
+         }
+         const auto count = std::chrono::duration_cast<Duration>(wall.time.time_since_epoch()).count();
          to<JSON, Rep>::template op<Opts>(count, ctx, b, ix);
       }
    };
@@ -286,8 +298,8 @@ namespace glz
       static void op(auto&& wrapper, is_context auto&& ctx, auto&&... args) noexcept
       {
          using V = std::remove_cvref_t<T>;
-         static_assert(is_system_time_point<V>,
-                       "glz::epoch_count requires a std::chrono::system_clock time_point member");
+         static_assert(is_calendar_time_point<V>,
+                       "glz::epoch_count requires a std::chrono::system_clock or utc_clock time_point member");
          static_assert(is_duration<Duration>,
                        "glz::epoch_count requires a std::chrono::duration unit (e.g. std::chrono::milliseconds)");
          using Rep = typename Duration::rep;
@@ -295,8 +307,17 @@ namespace glz
          from<JSON, Rep>::template op<Opts>(count, ctx, args...);
          if (bool(ctx.error)) [[unlikely]]
             return;
-         using TPDuration = typename V::duration;
-         wrapper.val = V{std::chrono::duration_cast<TPDuration>(Duration{count})};
+         if constexpr (is_utc_time_point<V>) {
+            const Duration since_epoch{count};
+            const auto secs = std::chrono::floor<std::chrono::seconds>(since_epoch);
+            chrono_detail::from_wall_clock(wrapper.val, secs,
+                                           std::chrono::duration_cast<std::chrono::nanoseconds>(since_epoch - secs),
+                                           false, ctx.error);
+         }
+         else {
+            using TPDuration = typename V::duration;
+            wrapper.val = V{std::chrono::duration_cast<TPDuration>(Duration{count})};
+         }
       }
    };
 
@@ -317,8 +338,8 @@ namespace glz
    constexpr auto epoch_count(MemPtr ptr)
    {
       using Mem = std::remove_cvref_t<typename unwrap_pointer<MemPtr>::type>;
-      static_assert(is_system_time_point<Mem>,
-                    "glz::epoch_count requires a std::chrono::system_clock time_point member");
+      static_assert(is_calendar_time_point<Mem>,
+                    "glz::epoch_count requires a std::chrono::system_clock or utc_clock time_point member");
       static_assert(is_duration<Duration>,
                     "glz::epoch_count requires a std::chrono::duration unit (e.g. std::chrono::milliseconds)");
       return epoch_count_spec<Duration, MemPtr>{ptr};

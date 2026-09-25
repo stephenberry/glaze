@@ -2770,11 +2770,11 @@ namespace glz
    // Duration: serialized generically (as the bare rep count) by the
    // to<uint32_t Format, is_duration T> specialization in core/chrono.hpp.
 
-   // system_clock::time_point: serialize as ISO 8601 string.
-   // Zero-allocation implementation writing directly to buffer. The layout is shared with
+   // system_clock / utc_clock time_point: serialize as ISO 8601 string (a utc_clock leap second
+   // as :60). Zero-allocation implementation writing directly to buffer. The layout is shared with
    // every other text format via chrono_detail::write_iso_time_point; JSON supplies the
    // quoting (a JSON scalar is a quoted string unless the caller opted out via `unquoted`).
-   template <is_system_time_point T>
+   template <is_calendar_time_point T>
       requires(not custom_write<T>)
    struct to<JSON, T>
    {

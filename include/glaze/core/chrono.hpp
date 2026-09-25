@@ -10,6 +10,7 @@
 #include <utility>
 
 #include "glaze/core/context.hpp"
+#include "glaze/core/feature_test.hpp"
 #include "glaze/core/meta.hpp"
 #include "glaze/core/traits.hpp"
 
@@ -35,6 +36,27 @@ namespace glz
    template <class T>
    concept is_system_time_point =
       is_time_point<T> && std::is_same_v<typename std::remove_cvref_t<T>::clock, std::chrono::system_clock>;
+
+   // Concept for utc_clock time_points (serialize as ISO 8601 string, leap seconds as :60)
+   //
+   // utc_clock counts leap seconds, so utc_time and sys_time differ by a whole number of seconds
+   // that grows with each leap second. Only periods that divide one second are supported: the
+   // offset is then an exact number of ticks. A coarser utc_time (minutes, days) has tick
+   // boundaries that drift away from the civil ones, so it has no exact calendar representation.
+#if GLZ_HAS_UTC_CLOCK
+   template <class T>
+   concept is_utc_time_point =
+      is_time_point<T> && std::is_same_v<typename std::remove_cvref_t<T>::clock, std::chrono::utc_clock> &&
+      std::ratio_divide<std::ratio<1>, typename std::remove_cvref_t<T>::duration::period>::den == 1;
+#else
+   template <class T>
+   concept is_utc_time_point = false;
+#endif
+
+   // Concept for time_points that denote a UTC calendar instant, which the text formats write
+   // as an ISO 8601 / RFC 3339 timestamp.
+   template <class T>
+   concept is_calendar_time_point = is_system_time_point<T> || is_utc_time_point<T>;
 
    // Concept for steady_clock time_points (serialize as numeric count)
    template <class T>
@@ -284,13 +306,21 @@ namespace glz
          return val;
       }
 
+      // Write the character c to b at ix, advancing ix. Converts to the buffer's element type,
+      // so binary formats writing into a std::byte buffer share the text writers below.
+      template <class B>
+      inline void write_char(B& b, auto& ix, char c) noexcept
+      {
+         b[ix++] = static_cast<std::remove_cvref_t<decltype(b[ix])>>(c);
+      }
+
       // Write `val` as exactly N zero-padded decimal digits to b starting at ix, advancing ix.
       // Caller must ensure b has at least N bytes of capacity at ix.
       template <size_t N, class B>
       inline void write_digits(B& b, auto& ix, uint64_t val) noexcept
       {
          for (size_t i = N; i > 0; --i) {
-            b[ix + i - 1] = static_cast<char>('0' + val % 10);
+            b[ix + i - 1] = static_cast<std::remove_cvref_t<decltype(b[ix])>>('0' + val % 10);
             val /= 10;
          }
          ix += N;
@@ -348,87 +378,166 @@ namespace glz
          }
 
          if constexpr (Quote) {
-            b[ix++] = '"';
+            write_char(b, ix, '"');
          }
          write_digits<4>(b, ix, static_cast<uint64_t>(yr));
-         b[ix++] = '-';
+         write_char(b, ix, '-');
          write_digits<2>(b, ix, mo);
-         b[ix++] = '-';
+         write_char(b, ix, '-');
          write_digits<2>(b, ix, dy);
          if constexpr (Quote) {
-            b[ix++] = '"';
+            write_char(b, ix, '"');
          }
       }
 
-      // Write a system_clock time point as ISO 8601 in UTC.
+      // ============================================
+      // UTC wall-clock readings
+      // ============================================
+      //
+      // Every calendar time point is written as the UTC wall-clock reading of its instant. For
+      // system_clock that reading is the time point itself. utc_clock also counts leap seconds,
+      // and during a positive leap second the wall clock reads 23:59:60, which no sys_time can
+      // represent. The reading therefore carries a flag: `time` holds the preceding :59 second
+      // plus the elapsed fraction, and `leap_second` tells the writer to render the seconds
+      // field as 60.
+
+      template <class Duration>
+      struct wall_clock_time
+      {
+         std::chrono::sys_time<Duration> time{};
+         bool leap_second{};
+      };
+
+      template <is_system_time_point TP>
+      constexpr bool to_wall_clock(const TP& value, wall_clock_time<typename TP::duration>& out, error_code&) noexcept
+      {
+         out = {value, false};
+         return true;
+      }
+
+#if GLZ_HAS_UTC_CLOCK
+      // Leap-second lookups (get_leap_second_info, utc_clock::from_sys) read the time zone
+      // database, which libstdc++ and MSVC load on first use and report as unavailable by
+      // throwing. The serializers are noexcept, so the failure is mapped to an error code.
+      // Without exceptions the standard library terminates instead, which cannot be intercepted.
+      template <class F>
+      bool call_leap_second_lookup(F&& lookup, error_code& ec) noexcept
+      {
+#if __cpp_exceptions
+         try {
+            lookup();
+         }
+         catch (...) {
+            ec = error_code::feature_not_supported;
+            return false;
+         }
+#else
+         lookup();
+         (void)ec;
+#endif
+         return true;
+      }
+
+      template <is_utc_time_point TP>
+      bool to_wall_clock(const TP& value, wall_clock_time<typename TP::duration>& out, error_code& ec) noexcept
+      {
+         using Duration = typename TP::duration;
+         std::chrono::leap_second_info info{};
+         if (!call_leap_second_lookup([&] { info = std::chrono::get_leap_second_info(value); }, ec)) [[unlikely]] {
+            return false;
+         }
+         // `elapsed` includes the leap second `value` falls in, so subtracting it lands a leap
+         // second on the preceding :59 second. The period divides one second, so the cast is exact.
+         out.time = std::chrono::sys_time<Duration>{value.time_since_epoch() -
+                                                    std::chrono::duration_cast<Duration>(info.elapsed)};
+         out.leap_second = info.is_leap_second;
+         return true;
+      }
+#endif
+
+      // Write a UTC wall-clock reading as a full ISO 8601 timestamp, "YYYY-MM-DDTHH:MM:SS[.f]Z",
+      // with fractional digits implied by the period.
+      template <bool Quote, class Duration, class B>
+      inline void write_iso_timestamp(const wall_clock_time<Duration>& wall, is_context auto&& ctx, B&& b,
+                                      auto& ix) noexcept
+      {
+         using namespace std::chrono;
+         using Period = typename Duration::period;
+
+         const auto dp = floor<days>(wall.time);
+         const year_month_day ymd{dp};
+         const int yr = static_cast<int>(ymd.year());
+         if (yr < 0 || yr > 9999) [[unlikely]] {
+            ctx.error = error_code::constraint_violated;
+            return;
+         }
+
+         const hh_mm_ss tod{floor<Duration>(wall.time - dp)};
+         const auto hr = static_cast<unsigned>(tod.hours().count());
+         const auto mi = static_cast<unsigned>(tod.minutes().count());
+         const auto sc = static_cast<unsigned>(tod.seconds().count()) + (wall.leap_second ? 1u : 0u);
+
+         if constexpr (Quote) {
+            write_char(b, ix, '"');
+         }
+         write_digits<4>(b, ix, static_cast<uint64_t>(yr));
+         write_char(b, ix, '-');
+         write_digits<2>(b, ix, static_cast<unsigned>(ymd.month()));
+         write_char(b, ix, '-');
+         write_digits<2>(b, ix, static_cast<unsigned>(ymd.day()));
+         write_char(b, ix, 'T');
+         write_digits<2>(b, ix, hr);
+         write_char(b, ix, ':');
+         write_digits<2>(b, ix, mi);
+         write_char(b, ix, ':');
+         write_digits<2>(b, ix, sc);
+
+         constexpr size_t frac_digits = iso_frac_digits<Period>;
+         if constexpr (frac_digits > 0) {
+            write_char(b, ix, '.');
+            const auto subsec = tod.subseconds();
+            if constexpr (frac_digits == 3) {
+               write_digits<3>(b, ix, static_cast<uint64_t>(duration_cast<milliseconds>(subsec).count()));
+            }
+            else if constexpr (frac_digits == 6) {
+               write_digits<6>(b, ix, static_cast<uint64_t>(duration_cast<microseconds>(subsec).count()));
+            }
+            else {
+               write_digits<9>(b, ix, static_cast<uint64_t>(duration_cast<nanoseconds>(subsec).count()));
+            }
+         }
+
+         write_char(b, ix, 'Z');
+         if constexpr (Quote) {
+            write_char(b, ix, '"');
+         }
+      }
+
+      // Write a calendar time point as ISO 8601 in UTC.
       //
       // Time points whose period is exactly `days` (e.g. std::chrono::sys_days) are written
       // as a date-only "YYYY-MM-DD": the time of day is always zero at that precision and
       // the calendar date is the meaningful payload. Coarser periods (weeks, months, years)
       // fall through to the full timestamp path, which avoids silently truncating an
       // arbitrary date to a multi-day boundary on read.
-      template <bool Quote, class TP, class B>
+      template <bool Quote, is_calendar_time_point TP, class B>
       inline void write_iso_time_point(const TP& value, is_context auto&& ctx, B&& b, auto& ix) noexcept
       {
          using namespace std::chrono;
          using Duration = typename std::remove_cvref_t<TP>::duration;
-         using Period = typename Duration::period;
 
-         const auto dp = floor<days>(value);
-         const year_month_day ymd{dp};
-         const int yr = static_cast<int>(ymd.year());
-         const auto mo = static_cast<unsigned>(ymd.month());
-         const auto dy = static_cast<unsigned>(ymd.day());
-
-         if constexpr (std::ratio_equal_v<Period, std::ratio<86400>>) {
-            write_iso_date<Quote>(yr, mo, dy, ctx, b, ix);
-            return;
+         if constexpr (std::ratio_equal_v<typename Duration::period, std::ratio<86400>>) {
+            // Only system_clock: is_utc_time_point excludes periods coarser than one second.
+            const year_month_day ymd{floor<days>(value)};
+            write_iso_date<Quote>(static_cast<int>(ymd.year()), static_cast<unsigned>(ymd.month()),
+                                  static_cast<unsigned>(ymd.day()), ctx, b, ix);
          }
          else {
-            if (yr < 0 || yr > 9999) [[unlikely]] {
-               ctx.error = error_code::constraint_violated;
+            wall_clock_time<Duration> wall{};
+            if (!to_wall_clock(value, wall, ctx.error)) [[unlikely]] {
                return;
             }
-
-            const hh_mm_ss tod{floor<Duration>(value - dp)};
-            const auto hr = static_cast<unsigned>(tod.hours().count());
-            const auto mi = static_cast<unsigned>(tod.minutes().count());
-            const auto sc = static_cast<unsigned>(tod.seconds().count());
-
-            if constexpr (Quote) {
-               b[ix++] = '"';
-            }
-            write_digits<4>(b, ix, static_cast<uint64_t>(yr));
-            b[ix++] = '-';
-            write_digits<2>(b, ix, mo);
-            b[ix++] = '-';
-            write_digits<2>(b, ix, dy);
-            b[ix++] = 'T';
-            write_digits<2>(b, ix, hr);
-            b[ix++] = ':';
-            write_digits<2>(b, ix, mi);
-            b[ix++] = ':';
-            write_digits<2>(b, ix, sc);
-
-            constexpr size_t frac_digits = iso_frac_digits<Period>;
-            if constexpr (frac_digits > 0) {
-               b[ix++] = '.';
-               const auto subsec = tod.subseconds();
-               if constexpr (frac_digits == 3) {
-                  write_digits<3>(b, ix, static_cast<uint64_t>(duration_cast<milliseconds>(subsec).count()));
-               }
-               else if constexpr (frac_digits == 6) {
-                  write_digits<6>(b, ix, static_cast<uint64_t>(duration_cast<microseconds>(subsec).count()));
-               }
-               else {
-                  write_digits<9>(b, ix, static_cast<uint64_t>(duration_cast<nanoseconds>(subsec).count()));
-               }
-            }
-
-            b[ix++] = 'Z';
-            if constexpr (Quote) {
-               b[ix++] = '"';
-            }
+            write_iso_timestamp<Quote>(wall, ctx, b, ix);
          }
       }
 
@@ -528,9 +637,73 @@ namespace glz
          return true;
       }
 
-      // Parse an RFC 3339 / ISO 8601 date-time string into a system_clock time_point.
-      // On failure, sets ec to parse_error and leaves value unchanged.
+      // Assign a calendar time point from a UTC wall-clock reading: whole POSIX seconds `secs`
+      // (already corrected for any UTC offset) plus a sub-second part. `leap_second` marks a
+      // reading whose seconds field was 60, in which case `secs` holds the preceding :59 second.
+      // On failure, sets ec and leaves value unchanged.
+      //
+      // Only utc_clock can represent a leap second, so a system_clock target rejects one.
       template <is_system_time_point TP>
+      inline void from_wall_clock(TP& value, std::chrono::seconds secs, std::chrono::nanoseconds subsec,
+                                  bool leap_second, error_code& ec) noexcept
+      {
+         if (leap_second || !make_sys_time(value, secs, subsec)) [[unlikely]] {
+            ec = error_code::parse_error;
+         }
+      }
+
+#if GLZ_HAS_UTC_CLOCK
+      // A reading of :60 is accepted only where a leap second was actually inserted.
+      template <is_utc_time_point TP>
+      inline void from_wall_clock(TP& value, std::chrono::seconds secs, std::chrono::nanoseconds subsec,
+                                  bool leap_second, error_code& ec) noexcept
+      {
+         using namespace std::chrono;
+         using Duration = typename TP::duration;
+
+         sys_time<Duration> sys{};
+         if (!make_sys_time(sys, secs, subsec)) [[unlikely]] {
+            ec = error_code::parse_error;
+            return;
+         }
+
+         // The leap seconds elapsed are constant across a whole second, so they are looked up
+         // at seconds precision, where the conversion cannot overflow.
+         utc_seconds anchor{};
+         bool inserted = true;
+         if (!call_leap_second_lookup(
+                [&] {
+                   anchor = utc_clock::from_sys(sys_seconds{secs});
+                   if (leap_second) {
+                      inserted = get_leap_second_info(anchor + seconds{1}).is_leap_second;
+                   }
+                },
+                ec)) [[unlikely]] {
+            return;
+         }
+         if (!inserted) [[unlikely]] {
+            ec = error_code::parse_error;
+            return;
+         }
+
+         const Duration offset =
+            duration_cast<Duration>(anchor.time_since_epoch() - secs + seconds{leap_second ? 1 : 0});
+         if constexpr (!treat_as_floating_point_v<typename Duration::rep>) {
+            const Duration since_epoch = sys.time_since_epoch();
+            if ((offset > Duration::zero() && since_epoch > (Duration::max)() - offset) ||
+                (offset < Duration::zero() && since_epoch < (Duration::min)() - offset)) [[unlikely]] {
+               ec = error_code::parse_error;
+               return;
+            }
+         }
+         value = TP{sys.time_since_epoch() + offset};
+      }
+#endif
+
+      // Parse an RFC 3339 / ISO 8601 date-time string into a calendar time_point.
+      // A seconds field of 60 is a leap second, which only a utc_clock target accepts.
+      // On failure, sets ec (parse_error for malformed input) and leaves value unchanged.
+      template <is_calendar_time_point TP>
       inline void parse_iso8601(std::string_view str, TP& value, error_code& ec) noexcept
       {
          // Minimum: YYYY-MM-DDTHH:MM:SS = 19 chars (timezone optional, defaults to UTC)
@@ -555,7 +728,7 @@ namespace glz
             return;
          }
 
-         if (mo < 1 || mo > 12 || dy < 1 || dy > 31 || hr > 23 || mi > 59 || sc > 59) {
+         if (mo < 1 || mo > 12 || dy < 1 || dy > 31 || hr > 23 || mi > 59 || sc > 60) {
             ec = error_code::parse_error;
             return;
          }
@@ -640,11 +813,10 @@ namespace glz
 
          // Anchored at seconds so the time-of-day is folded in with 64-bit arithmetic (MSVC's
          // hours and minutes use a 32-bit rep).
-         const auto tp =
-            sys_seconds{sys_days{ymd}} + hours{hr} + minutes{mi} + seconds{sc} + seconds{tz_offset_seconds};
-         if (!make_sys_time(value, tp.time_since_epoch(), nanoseconds{subsec_nanos})) {
-            ec = error_code::parse_error;
-         }
+         const bool leap_second = sc == 60;
+         const auto tp = sys_seconds{sys_days{ymd}} + hours{hr} + minutes{mi} + seconds{leap_second ? 59 : sc} +
+                         seconds{tz_offset_seconds};
+         from_wall_clock(value, tp.time_since_epoch(), nanoseconds{subsec_nanos}, leap_second, ec);
       }
 
       // ============================================
@@ -827,10 +999,11 @@ namespace glz
 
          // Parse the seconds field (2 digits). Sub-second fractions are not part of
          // the %S contract; a trailing fraction is left for the format/literal to
-         // consume, and otherwise surfaces as unconsumed trailing input.
+         // consume, and otherwise surfaces as unconsumed trailing input. 60 is a leap
+         // second, which the caller accepts only for a utc_clock target.
          const auto parse_seconds = [&]() -> bool {
             const int sec = take(2);
-            if (sec < 0 || sec > 59) return false;
+            if (sec < 0 || sec > 60) return false;
             f.second = sec;
             return true;
          };

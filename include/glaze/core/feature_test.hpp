@@ -36,6 +36,17 @@
 #endif
 #endif
 
+// C++20 std::chrono::utc_clock, clock_cast and leap-second support (P0355). __cpp_lib_chrono
+// reaches 201907L only once the calendar and time zone library is complete; Apple libc++
+// reports a lower value and has no utc_clock.
+#ifndef GLZ_HAS_UTC_CLOCK
+#if defined(__cpp_lib_chrono) && __cpp_lib_chrono >= 201907L
+#define GLZ_HAS_UTC_CLOCK 1
+#else
+#define GLZ_HAS_UTC_CLOCK 0
+#endif
+#endif
+
 namespace glz
 {
    // Constexpr bool for use in if constexpr or other compile-time contexts
@@ -49,6 +60,10 @@ namespace glz
    // C++26 P2988 std::optional<T&> support
    // Use GLZ_HAS_OPTIONAL_REF macro for #if preprocessor guards
    inline constexpr bool has_optional_ref = GLZ_HAS_OPTIONAL_REF;
+
+   // C++20 std::chrono::utc_clock support
+   // Use GLZ_HAS_UTC_CLOCK macro for #if preprocessor guards
+   inline constexpr bool has_utc_clock = GLZ_HAS_UTC_CLOCK;
 }
 
 // Glaze Feature Test Macros for breaking changes

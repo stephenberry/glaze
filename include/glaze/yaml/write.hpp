@@ -436,8 +436,8 @@ namespace glz
    // handled generically in core/chrono.hpp; only the calendar types need a format-specific
    // representation.
 
-   // system_clock::time_point: plain ISO 8601 scalar (date-only for `days` precision)
-   template <is_system_time_point T>
+   // system_clock / utc_clock time_point: plain ISO 8601 scalar (date-only for `days` precision)
+   template <is_calendar_time_point T>
       requires(not custom_write<T>)
    struct to<YAML, T>
    {

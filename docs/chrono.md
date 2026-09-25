@@ -125,6 +125,30 @@ Unlike `sys_days`, `year_month_day` accepts only the bare date form on read; emb
 
 Years must lie within RFC 3339's four-digit range `[0000, 9999]` on write; values outside that range fail to serialize with `error_code::constraint_violated` rather than emit wrap-around digits.
 
+### UTC Clock Time Points
+
+`std::chrono::utc_clock` time points (`utc_time<Duration>`, `utc_seconds`) serialize as the same ISO 8601 string as a `system_clock` time point for the same instant, so the two clocks interchange on the wire:
+
+```cpp
+using namespace std::chrono;
+
+utc_seconds t = utc_clock::from_sys(sys_days{2024y / June / 15} + 12h + 34min + 56s);
+std::string json = glz::write_json(t).value();  // "2024-06-15T12:34:56Z"
+```
+
+Unlike `system_clock`, `utc_clock` counts leap seconds. A leap second is written and read as `23:59:60`, as RFC 3339 allows:
+
+```cpp
+utc_seconds leap = utc_clock::from_sys(sys_days{2016y / December / 31} + 86399s) + 1s;
+glz::write_json(leap).value();  // "2016-12-31T23:59:60Z"
+```
+
+- On read, `:60` is accepted only where a leap second was actually inserted; any other `:60` is a `parse_error`. `system_clock` targets still reject `:60`.
+- A consumer that does not handle leap seconds may reject `:60`. This affects only the 27 leap seconds inserted so far, none since 2016.
+- Supported where the standard library provides `utc_clock` (`GLZ_HAS_UTC_CLOCK`, i.e. `__cpp_lib_chrono >= 201907L`: libstdc++ and MSVC). Apple libc++ does not provide it.
+- Only durations that divide one second are supported (`seconds` and finer). A coarser `utc_time`, such as `utc_time<days>`, does not align with calendar boundaries and fails to compile. Use `sys_days` or `year_month_day` for dates.
+- Leap-second data comes from the standard library's time zone database. If it cannot be loaded, serialization fails with `error_code::feature_not_supported`. When exceptions are disabled, the standard library terminates instead.
+
 ### Steady Clock Time Points
 
 `std::chrono::steady_clock::time_point` serializes as a numeric count (time since epoch), since steady clock's epoch is implementation-defined and not meaningful as a calendar time:
@@ -215,7 +239,7 @@ The clock type alone decides the default representation (ISO 8601 for `system_cl
 
 ### `glz::date_format` — custom strftime-subset pattern
 
-`glz::date_format(&T::member, "pattern")` serializes a `system_clock` time point (or a `year_month_day`) using a `strftime`-style pattern instead of ISO 8601:
+`glz::date_format(&T::member, "pattern")` serializes a `system_clock` or `utc_clock` time point (or a `year_month_day`) using a `strftime`-style pattern instead of ISO 8601:
 
 ```cpp
 #include "glaze/chrono.hpp"
@@ -267,14 +291,14 @@ The pattern is validated at compile time:
 
 Notes and limitations (MVP scope):
 
-- **Times are treated as UTC wall-clock.** There is no timezone token; the decomposed fields are UTC, matching the ISO 8601 writer.
+- **Times are treated as UTC wall-clock.** There is no timezone token; the decomposed fields are UTC, matching the ISO 8601 writer. A `utc_clock` leap second writes and reads `%S` as `60`.
 - **The four-digit-year range still applies.** As with the ISO 8601 writers, a year outside `[0000, 9999]` (or a non-`ok()` `year_month_day`) fails to serialize with `error_code::constraint_violated` rather than emitting wrap-around digits.
 - **`%S` writes integer seconds only.** Sub-second precision is truncated on write (the format you typed has nowhere to put it), so round-tripping a finer-than-seconds value through a `%S` pattern is lossy by design. Use the default ISO 8601 representation when you need sub-second fidelity. Explicit-width fraction tokens (`%3S`/`%6S`/`%9S`) are a planned extension.
 - **Text/JSON-family backends only.** `date_format` is a textual wrapper that routes through the JSON serializer, so it also works for the JSON-family text outputs (NDJSON, stencil/mustache). Serializing a field that uses it to a backend with its own native encoding (BEVE, CBOR, MsgPack, BSON, or TOML) is a compile error (an undefined `glz::to<Format, …>`) rather than a silent miscoding.
 
 ### `glz::epoch_count` — per-field Unix timestamp
 
-`glz::epoch_count<Duration>(&T::member)` serializes a `system_clock` time point as a numeric Unix timestamp in units of `Duration`. It is the per-field counterpart to the `glz::epoch_time` storage wrapper, letting one field be an epoch count while others stay ISO 8601:
+`glz::epoch_count<Duration>(&T::member)` serializes a `system_clock` or `utc_clock` time point as a numeric Unix timestamp in units of `Duration`. It is the per-field counterpart to the `glz::epoch_time` storage wrapper, letting one field be an epoch count while others stay ISO 8601:
 
 ```cpp
 #include "glaze/chrono.hpp"
@@ -294,6 +318,8 @@ struct glz::meta<Reading> {
 ```
 
 Unlike `glz::epoch_time<Duration>` (a storage type you declare your member as), `glz::epoch_count` wraps an ordinary `system_clock` time-point member in place, so you can keep the field's native type. Like `date_format`, it routes through the JSON serializer (so it also works for NDJSON and stencil output) and is a compile error under the native-encoding backends (BEVE, CBOR, MsgPack, BSON, TOML).
+
+Unix time does not count leap seconds, so a `utc_clock` member is converted to Unix time and a leap second is written as the `:59` second before it. Use the default ISO 8601 form to preserve leap seconds.
 
 The count is read as a JSON integer: exponent form (`1e3` → `1000`) is accepted, while fractional values (`1.5`) and quoted numbers (`"1500"`) are rejected with `error_code::parse_error`.
 
@@ -357,6 +383,7 @@ Output:
 | `std::chrono::duration<Rep, Period>` | Numeric count | `12345` |
 | `std::chrono::system_clock::time_point` | ISO 8601 string | `"2024-12-13T15:30:45Z"` |
 | `std::chrono::sys_days` (`sys_time<days>`) | Date string | `"2024-12-13"` |
+| `std::chrono::utc_clock::time_point` | ISO 8601 string | `"2016-12-31T23:59:60Z"` |
 | `std::chrono::year_month_day` | Date string | `"2024-12-13"` |
 | `std::chrono::steady_clock::time_point` | Numeric count | `123456789012345` |
 | `glz::epoch_seconds` | Unix seconds | `1702481400` |
@@ -374,6 +401,7 @@ Durations and count-based time points use one representation shared by every for
 | `steady_clock::time_point` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 | `system_clock::time_point` | ✅ | — | ✅ | ✅ | ✅ | ✅ | ✅ | — | — |
 | `sys_days` (`sys_time<days>`) | ✅ | — | ✅ | — | — | ✅ | ✅ | — | — |
+| `utc_clock::time_point` | ✅ | — | ✅ | — | — | ✅ | ✅ | — | — |
 | `year_month_day` | ✅ | — | — | — | — | ✅ | ✅ | — | — |
 | `glz::epoch_time<D>` | ✅ | — | ✅ | — | — | — | — | — | — |
 
@@ -387,13 +415,14 @@ An unsupported combination is a compile-time error (`write_supported` / `read_su
 - **Precision**: Roundtrip serialization preserves full precision for all supported types
 - **Validation**: Invalid ISO 8601 strings return `glz::error_code::parse_error`
 - **Timezone Handling**: Time points are always converted to/from UTC; timezone offsets in input are properly applied
-- **Leap Seconds**: Not supported (`23:59:60` will return a parse error). `std::chrono::system_clock` uses Unix time which does not account for leap seconds
+- **Leap Seconds**: `std::chrono::system_clock` uses Unix time, which does not count leap seconds, so `23:59:60` is a parse error for it. `utc_clock` time points write and read leap seconds as `23:59:60`; see [UTC Clock Time Points](#utc-clock-time-points)
 
 ## TOML Datetime Support
 
 TOML has native datetime types (not quoted strings). When using `glz::write_toml` / `glz::read_toml`, chrono types use TOML's native datetime format:
 
 - `system_clock::time_point` → TOML Offset Date-Time (`2024-06-15T10:30:45Z`)
+- `utc_clock::time_point` → TOML Offset Date-Time, with a leap second as `23:59:60`
 - `year_month_day` → TOML Local Date (`2024-06-15`)
 - `hh_mm_ss<Duration>` → TOML Local Time (`10:30:45.123`)
 - Durations and other time points → Numeric values
@@ -407,6 +436,7 @@ See [TOML Documentation](./toml.md#datetime-support) for full details.
 CBOR has standard semantic tags for dates and times defined in RFC 8949. When using `glz::write_cbor` / `glz::read_cbor`, chrono types use these tags:
 
 - `system_clock::time_point` → tag 0 + RFC 3339 date/time text string (`2024-06-15T10:30:45Z`)
+- `utc_clock::time_point` → tag 0 + RFC 3339 text string, with a leap second as `23:59:60`; tag 1 input is read as Unix time
 - `epoch_seconds` → tag 1 + integer seconds since Unix epoch
 - `epoch_millis` / `epoch_micros` / `epoch_nanos` → tag 1 + float64 seconds since epoch
 - `std::chrono::duration` → bare integer count in the duration's native units
