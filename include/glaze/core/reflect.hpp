@@ -2785,8 +2785,26 @@ namespace glz
       }
    };
 
+   // The hash_type::invalid case has no specialisation, so the keyed readers refuse the type here
+   // rather than at a use of an incomplete type: a reader that reaches this point has a key list whose
+   // keys cannot be told apart, which is what two members of a hierarchy sharing a name produce.
    template <uint32_t Format, class T, auto HashInfo, hash_type Type>
-   struct decode_hash_with_size_impl;
+   struct decode_hash_with_size_impl
+   {
+      static_assert(Type != hash_type::invalid,
+                    "glaze cannot build a keyed lookup for this type: two of its keys are equal, or one "
+                    "of them is empty. Base members are part of the reflection, so two members of a "
+                    "hierarchy can answer to one name - a member that hides a member of a base class, "
+                    "or two bases that repeat a name - and no key can then be told from the other. "
+                    "Give the type a glz::meta whose value names the members apart, such as "
+                    "glz::object(\"base_x\", &Base::x, \"x\", &Derived::x). The array-shaped writes "
+                    "carry the members positionally and are not affected.");
+
+      GLZ_ALWAYS_INLINE static constexpr size_t op(auto&&, auto&&, const size_t) noexcept
+      {
+         return reflect<T>::size;
+      }
+   };
 
    // Single entry point for the in-place key-hash readers (BSON, MessagePack, CBOR, CSV, TOML, plus
    // the compile-time-key callers). Every reader below dereferences key bytes only at offsets that

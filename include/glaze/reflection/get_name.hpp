@@ -30,12 +30,35 @@
 namespace glz::detail
 {
    // Get member name using P2996 reflection
+   // Inherited members are named as well, in the same order as all_members_of lists them
    template <class T, size_t I>
    consteval std::string_view get_member_name_p2996()
    {
-      auto members = std::meta::nonstatic_data_members_of(^^T, reflection_access_ctx());
+      auto members = all_members_of(^^T);
       return std::meta::identifier_of(members[I]);
    }
+
+   // Whether a modify entry's pointer-to-member names the member a reflection holds. `&A1::id` is an
+   // `int A1::*`, so the pointer's own type carries the class its member belongs to, and that class is
+   // what separates two members of a hierarchy that share a name. The class arrives as the partial
+   // specialisation's own parameter rather than through a trait's nested typedef: on GCC 16 a spliced
+   // dependent member typedef does not compare equal to the class it names, while a spliced
+   // specialisation parameter does, and this check is that comparison. A type that is not a pointer to
+   // member answers false, and the caller keeps the name lookup it had.
+   template <class Mp>
+   struct member_pointer_target
+   {
+      static consteval bool matches(std::meta::info, std::string_view) { return false; }
+   };
+
+   template <class M, class C>
+   struct member_pointer_target<M C::*>
+   {
+      static consteval bool matches(std::meta::info member, std::string_view name)
+      {
+         return std::meta::identifier_of(member) == name and std::meta::parent_of(member) == ^^C;
+      }
+   };
 }
 
 namespace glz
