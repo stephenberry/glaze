@@ -122,12 +122,11 @@ namespace
          return false;
       }
 
-      const bool written = write_pem_file("wss_test_key.pem",
-                                          [&](BIO* bio) {
-                                             return PEM_write_bio_PrivateKey(bio, pkey, nullptr, nullptr, 0, nullptr,
-                                                                             nullptr);
-                                          }) &&
-                           write_pem_file("wss_test_cert.pem", [&](BIO* bio) { return PEM_write_bio_X509(bio, x509); });
+      const bool written =
+         write_pem_file(
+            "wss_test_key.pem",
+            [&](BIO* bio) { return PEM_write_bio_PrivateKey(bio, pkey, nullptr, nullptr, 0, nullptr, nullptr); }) &&
+         write_pem_file("wss_test_cert.pem", [&](BIO* bio) { return PEM_write_bio_X509(bio, x509); });
 
       X509_free(x509);
       EVP_PKEY_free(pkey);
