@@ -478,13 +478,12 @@ namespace glz
       static void op(auto&& value, is_context auto&& ctx, B&& b, auto& ix)
       {
          const sv str = get_enum_name(value);
-         if (!str.empty()) {
-            yaml::write_yaml_string<Opts>(str, ctx, b, ix);
-         }
-         else [[unlikely]] {
-            // Unnamed values are rejected on read, so writing one would produce unreadable output
+         if (str.empty()) [[unlikely]] {
+            // Not enumerated, so it could not be read back
             ctx.error = error_code::unexpected_enum;
+            return;
          }
+         yaml::write_yaml_string<Opts>(str, ctx, b, ix);
       }
    };
 

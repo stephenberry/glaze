@@ -217,22 +217,21 @@ namespace glz
       static void op(auto&& value, is_context auto&& ctx, B&& b, auto& ix)
       {
          const sv str = get_enum_name(value);
-         if (!str.empty()) {
-            // Write as quoted string for TOML
-            if (!ensure_space(ctx, b, ix + str.size() + 3 + write_padding_bytes)) [[unlikely]] {
-               return;
-            }
-            if constexpr (not check_unquoted(Opts)) {
-               dump('"', b, ix);
-            }
-            dump_maybe_empty(str, b, ix);
-            if constexpr (not check_unquoted(Opts)) {
-               dump('"', b, ix);
-            }
-         }
-         else [[unlikely]] {
-            // Unnamed values are rejected on read, so writing one would produce unreadable output
+         if (str.empty()) [[unlikely]] {
+            // Not enumerated, so it could not be read back
             ctx.error = error_code::unexpected_enum;
+            return;
+         }
+         // Write as quoted string for TOML
+         if (!ensure_space(ctx, b, ix + str.size() + 3 + write_padding_bytes)) [[unlikely]] {
+            return;
+         }
+         if constexpr (not check_unquoted(Opts)) {
+            dump<false>('"', b, ix);
+         }
+         dump<false>(str, b, ix);
+         if constexpr (not check_unquoted(Opts)) {
+            dump<false>('"', b, ix);
          }
       }
    };

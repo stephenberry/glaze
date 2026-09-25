@@ -516,7 +516,7 @@ namespace glz
    };
 
    template <class T>
-      requires(std::is_enum_v<T> && !glaze_enum_t<T> && !custom_write<T>)
+      requires(std::is_enum_v<T> && !glaze_enum_t<T> && !meta_keys<T> && !custom_write<T>)
    struct to<MSGPACK, T>
    {
       template <auto Opts, class Value, is_context Ctx, class B, class IX>
@@ -528,25 +528,22 @@ namespace glz
    };
 
    template <class T>
-      requires(is_named_enum<T>)
+      requires((glaze_enum_t<T> || (meta_keys<T> && std::is_enum_v<T>)) && !custom_write<T>)
    struct to<MSGPACK, T>
    {
       template <auto Opts, class Value, is_context Ctx, class B, class IX>
       GLZ_ALWAYS_INLINE static void op(Value&& value, Ctx&& ctx, B&& b, IX&& ix)
       {
          const sv str = get_enum_name(value);
-         if (!str.empty()) {
-            if (!msgpack::detail::write_str_header(ctx, str.size(), b, ix)) [[unlikely]] {
-               return;
-            }
-            if (!msgpack::detail::dump_raw_bytes(ctx, str.data(), str.size(), b, ix)) [[unlikely]] {
-               return;
-            }
-         }
-         else [[unlikely]] {
-            // Unnamed values are rejected on read, so writing one would produce unreadable output
+         if (str.empty()) [[unlikely]] {
+            // Not enumerated, so it could not be read back
             ctx.error = error_code::unexpected_enum;
+            return;
          }
+         if (!msgpack::detail::write_str_header(ctx, str.size(), b, ix)) [[unlikely]] {
+            return;
+         }
+         msgpack::detail::dump_raw_bytes(ctx, str.data(), str.size(), b, ix);
       }
    };
 

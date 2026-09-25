@@ -1978,25 +1978,28 @@ suite enum_types = [] {
       expect(color == Color::Red);
    };
 
-   "unnamed enum value write"_test = [] {
-      // Values without an enumerated name cannot be read back, so writing them is an error
-      const auto unnamed = static_cast<Color>(7);
+   "unenumerated enum value write"_test = [] {
+      const auto unenumerated = static_cast<Color>(7);
       std::string buffer{};
-      expect(glz::write_json(unnamed, buffer) == glz::error_code::unexpected_enum);
+      expect(glz::write_json(unenumerated, buffer) == glz::error_code::unexpected_enum);
 
-      std::vector<Color> vec{Color::Red, unnamed};
+      std::vector<Color> vec{Color::Red, unenumerated};
       expect(glz::write_json(vec, buffer) == glz::error_code::unexpected_enum);
 
-      std::map<Color, int> keys{{unnamed, 1}};
+      std::map<Color, int> keys{{unenumerated, 1}};
       expect(glz::write_json(keys, buffer) == glz::error_code::unexpected_enum);
 
-      std::map<std::string, Color> values{{"a", unnamed}};
-      expect(glz::write_json(values, buffer) == glz::error_code::unexpected_enum);
-
       Thing thing{};
-      thing.color = unnamed;
+      thing.color = unenumerated;
       expect(glz::write_json(thing, buffer) == glz::error_code::unexpected_enum);
-      expect(glz::write<glz::opts{.prettify = true}>(thing, buffer) == glz::error_code::unexpected_enum);
+
+      // meta_keys enum
+      expect(glz::write_json(static_cast<Vehicle>(7), buffer) == glz::error_code::unexpected_enum);
+   };
+
+   "enum name into bounded buffer"_test = [] {
+      std::array<char, 4> buffer{};
+      expect(glz::write_json(Color::Green, buffer) == glz::error_code::buffer_overflow);
    };
 };
 

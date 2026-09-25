@@ -401,7 +401,7 @@ namespace glz
    };
 
    template <class T>
-      requires(std::is_enum_v<T> && !glaze_enum_t<T> && !custom_read<T>)
+      requires(std::is_enum_v<T> && !glaze_enum_t<T> && !meta_keys<T> && !custom_read<T>)
    struct from<MSGPACK, T>
    {
       template <auto Opts, class Value, is_context Ctx, class It, class End>

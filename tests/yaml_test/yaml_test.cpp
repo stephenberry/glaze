@@ -410,12 +410,12 @@ suite yaml_write_tests = [] {
       expect(buffer.find("color: green") != std::string::npos);
    };
 
-   "write_unnamed_enum_value"_test = [] {
-      const auto unnamed = static_cast<Color>(7);
+   "write_unenumerated_enum_value"_test = [] {
+      const auto unenumerated = static_cast<Color>(7);
       std::string buffer;
-      expect(glz::write_yaml(unnamed, buffer) == glz::error_code::unexpected_enum);
+      expect(glz::write_yaml(unenumerated, buffer) == glz::error_code::unexpected_enum);
 
-      enum_struct obj{"item", unnamed};
+      enum_struct obj{"item", unenumerated};
       expect(glz::write_yaml(obj, buffer) == glz::error_code::unexpected_enum);
    };
 

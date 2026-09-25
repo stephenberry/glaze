@@ -175,6 +175,15 @@ struct glz::meta<simple_record>
                                              &T::scores, "tags", &T::tags, "active", &T::active);
 };
 
+enum class keyed_mode { off, on };
+
+template <>
+struct glz::meta<keyed_mode>
+{
+   static constexpr std::array keys{"off", "on"};
+   static constexpr std::array value{keyed_mode::off, keyed_mode::on};
+};
+
 template <>
 struct glz::meta<device_mode>
 {
@@ -1874,14 +1883,21 @@ int main()
       expect_roundtrip_equal(device_mode::maintenance);
    };
 
-   "msgpack unnamed enum value write"_test = [] {
-      const auto unnamed = static_cast<device_mode>(7);
+   "msgpack unenumerated enum value write"_test = [] {
+      const auto unenumerated = static_cast<device_mode>(7);
       std::string buffer{};
-      expect(glz::write_msgpack(unnamed, buffer) == glz::error_code::unexpected_enum);
+      expect(glz::write_msgpack(unenumerated, buffer) == glz::error_code::unexpected_enum);
 
       ext_record record{};
-      record.mode = unnamed;
+      record.mode = unenumerated;
       expect(glz::write_msgpack(record, buffer) == glz::error_code::unexpected_enum);
+   };
+
+   "msgpack meta_keys enum"_test = [] {
+      expect_roundtrip_equal(keyed_mode::on);
+
+      std::string buffer{};
+      expect(glz::write_msgpack(static_cast<keyed_mode>(7), buffer) == glz::error_code::unexpected_enum);
    };
 
    "msgpack cast adapter roundtrip"_test = [] {

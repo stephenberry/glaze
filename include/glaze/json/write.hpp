@@ -1204,31 +1204,41 @@ namespace glz
       }
    }
 
+   namespace detail
+   {
+      // An empty name means the value is not enumerated. Readers reject such values, so writing one is an error.
+      template <auto Opts, class B>
+      GLZ_ALWAYS_INLINE void write_enum_name(const sv name, is_context auto& ctx, B& b, auto& ix)
+      {
+         if (name.empty()) [[unlikely]] {
+            ctx.error = error_code::unexpected_enum;
+            return;
+         }
+         // TODO: Assumes people dont use strings with chars that need to be escaped for their enum names
+         // TODO: Could create a pre quoted map for better performance
+         if (!ensure_space(ctx, b, ix + name.size() + 2 + write_padding_bytes)) [[unlikely]] {
+            return;
+         }
+         if constexpr (not check_unquoted(Opts)) {
+            dump<false>('"', b, ix);
+         }
+         dump<false>(name, b, ix);
+         if constexpr (not check_unquoted(Opts)) {
+            dump<false>('"', b, ix);
+         }
+      }
+   }
+
    template <class T>
       requires((glaze_enum_t<T> || (meta_keys<T> && std::is_enum_v<std::decay_t<T>>)) && not custom_write<T>)
    struct to<JSON, T>
    {
       static constexpr bool can_error = true;
 
-      template <auto Opts, class... Args>
-      GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, Args&&... args)
+      template <auto Opts, class B>
+      GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, B&& b, auto& ix)
       {
-         const sv str = get_enum_name(value);
-         if (!str.empty()) {
-            // TODO: Assumes people dont use strings with chars that need to be escaped for their enum names
-            // TODO: Could create a pre quoted map for better performance
-            if constexpr (not check_unquoted(Opts)) {
-               dump('"', args...);
-            }
-            dump_maybe_empty(str, args...);
-            if constexpr (not check_unquoted(Opts)) {
-               dump('"', args...);
-            }
-         }
-         else [[unlikely]] {
-            // Unnamed values are rejected on read, so writing one would produce unreadable output
-            ctx.error = error_code::unexpected_enum;
-         }
+         detail::write_enum_name<Opts>(get_enum_name(value), ctx, b, ix);
       }
    };
 
@@ -1241,33 +1251,18 @@ namespace glz
       // Only the reflect_enums path can error, and it exists only with P2996
       static constexpr bool can_error = GLZ_REFLECTION26;
 
-      template <auto Opts, class... Args>
-      GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, Args&&... args)
+      template <auto Opts, class B>
+      GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, B&& b, auto& ix)
       {
 #if GLZ_REFLECTION26
          if constexpr (check_reflect_enums(Opts)) {
-            // P2996 reflection using reflect_constant_array and expansion statements
-            const sv name = enum_to_string(value);
-            if (!name.empty()) {
-               if constexpr (not check_unquoted(Opts)) {
-                  dump('"', args...);
-               }
-               dump_maybe_empty(name, args...);
-               if constexpr (not check_unquoted(Opts)) {
-                  dump('"', args...);
-               }
-            }
-            else [[unlikely]] {
-               // Unnamed values are rejected on read, so writing one would produce unreadable output
-               ctx.error = error_code::unexpected_enum;
-            }
+            detail::write_enum_name<Opts>(enum_to_string(value), ctx, b, ix);
          }
          else
 #endif
          {
             // Fallback: serialize as underlying number
-            serialize<JSON>::op<Opts>(static_cast<std::underlying_type_t<std::decay_t<T>>>(value), ctx,
-                                      std::forward<Args>(args)...);
+            serialize<JSON>::op<Opts>(static_cast<std::underlying_type_t<std::decay_t<T>>>(value), ctx, b, ix);
          }
       }
    };
