@@ -257,94 +257,23 @@ namespace glz
    // Duration: serialized generically (as the bare rep count) by the
    // to<uint32_t Format, is_duration T> specialization in core/chrono.hpp.
 
-   // system_clock::time_point: serialize as TOML native datetime (RFC 3339)
+   // system_clock / utc_clock time_point: serialize as TOML native datetime (RFC 3339)
    // TOML datetimes are NOT quoted - they're native values
-   // Output format: YYYY-MM-DDTHH:MM:SS[.fraction]Z
-   template <is_system_time_point T>
+   // Output format: YYYY-MM-DDTHH:MM:SS[.fraction]Z, with a utc_clock leap second as :60
+   template <is_calendar_time_point T>
       requires(not custom_write<T>)
    struct to<TOML, T>
    {
       template <auto Opts, class B>
       static void op(auto&& value, is_context auto&& ctx, B&& b, auto& ix) noexcept
       {
-         using namespace std::chrono;
-         using TP = std::remove_cvref_t<T>;
-         using Duration = typename TP::duration;
-
-         // Split into date and time-of-day
-         const auto dp = floor<days>(value);
-         const year_month_day ymd{dp};
-         const hh_mm_ss tod{floor<Duration>(value - dp)};
-
-         // Extract components
-         const int yr = static_cast<int>(ymd.year());
-         const unsigned mo = static_cast<unsigned>(ymd.month());
-         const unsigned dy = static_cast<unsigned>(ymd.day());
-         const auto hr = static_cast<unsigned>(tod.hours().count());
-         const auto mi = static_cast<unsigned>(tod.minutes().count());
-         const auto sc = static_cast<unsigned>(tod.seconds().count());
-
-         // Calculate fractional digits based on duration precision
-         constexpr size_t frac_digits = []() constexpr {
-            using Period = typename Duration::period;
-            if constexpr (std::ratio_greater_equal_v<Period, std::ratio<1>>) {
-               return 0; // seconds or coarser
-            }
-            else if constexpr (std::ratio_greater_equal_v<Period, std::milli>) {
-               return 3; // milliseconds
-            }
-            else if constexpr (std::ratio_greater_equal_v<Period, std::micro>) {
-               return 6; // microseconds
-            }
-            else {
-               return 9; // nanoseconds or finer
-            }
-         }();
-
-         // Max size: YYYY-MM-DDTHH:MM:SS.nnnnnnnnnZ = 30 (no quotes for TOML)
-         constexpr size_t max_size = 21 + (frac_digits > 0 ? 1 + frac_digits : 0);
-         if (!ensure_space(ctx, b, ix + max_size + write_padding_bytes)) [[unlikely]] {
+         using Period = typename std::remove_cvref_t<T>::duration::period;
+         if (!ensure_space(ctx, b, ix + chrono_detail::iso_timestamp_size<Period> + write_padding_bytes)) [[unlikely]] {
             return;
          }
 
-         // Helper to write N-digit zero-padded number
-         auto write_digits = [&]<size_t N>(uint64_t val) {
-            for (size_t i = N; i > 0; --i) {
-               b[ix + i - 1] = static_cast<char>('0' + val % 10);
-               val /= 10;
-            }
-            ix += N;
-         };
-
-         // Write datetime without quotes (TOML native format)
-         write_digits.template operator()<4>(static_cast<uint64_t>(yr));
-         b[ix++] = '-';
-         write_digits.template operator()<2>(mo);
-         b[ix++] = '-';
-         write_digits.template operator()<2>(dy);
-         b[ix++] = 'T';
-         write_digits.template operator()<2>(hr);
-         b[ix++] = ':';
-         write_digits.template operator()<2>(mi);
-         b[ix++] = ':';
-         write_digits.template operator()<2>(sc);
-
-         // Write fractional seconds if duration is finer than seconds
-         if constexpr (frac_digits > 0) {
-            b[ix++] = '.';
-            const auto subsec = tod.subseconds();
-            if constexpr (frac_digits == 3) {
-               write_digits.template operator()<3>(static_cast<uint64_t>(duration_cast<milliseconds>(subsec).count()));
-            }
-            else if constexpr (frac_digits == 6) {
-               write_digits.template operator()<6>(static_cast<uint64_t>(duration_cast<microseconds>(subsec).count()));
-            }
-            else {
-               write_digits.template operator()<9>(static_cast<uint64_t>(duration_cast<nanoseconds>(subsec).count()));
-            }
-         }
-
-         b[ix++] = 'Z'; // UTC timezone marker
+         // Always the full datetime: a bare date would read back as a TOML Local Date.
+         chrono_detail::write_iso_timestamp<false>(value, ctx, b, ix);
       }
    };
 

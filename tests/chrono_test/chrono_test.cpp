@@ -1899,4 +1899,268 @@ suite date_format_tests = [] {
    };
 };
 
+suite calendar_leap_second_and_range_tests = [] {
+   using namespace std::chrono;
+
+   "date_format_sys_time_rejects_leap_second"_test = [] {
+      FormattedEvent e{};
+      expect(glz::read_json(e, R"({"start":"2016-12-31 23:59:60"})") == glz::error_code::parse_error);
+   };
+
+   "toml_and_cbor_reject_years_past_9999"_test = [] {
+      const sys_seconds far{sys_days{year{10000} / January / 1}};
+      std::string buffer;
+      expect(glz::write_toml(far, buffer) == glz::error_code::constraint_violated);
+      expect(glz::write_cbor(far, buffer) == glz::error_code::constraint_violated);
+   };
+};
+
+// ============================================
+// std::chrono::utc_clock time points
+// ============================================
+
+#if GLZ_HAS_UTC_CLOCK
+
+struct UtcEvent
+{
+   std::chrono::utc_seconds at{};
+   std::chrono::utc_time<std::chrono::milliseconds> precise{};
+};
+
+struct UtcEpochSeconds
+{
+   std::chrono::utc_seconds at{};
+};
+
+template <>
+struct glz::meta<UtcEpochSeconds>
+{
+   using T = UtcEpochSeconds;
+   static constexpr auto value = glz::object("at", glz::epoch_count<std::chrono::seconds>(&T::at));
+};
+
+struct UtcFormatted
+{
+   std::chrono::utc_seconds start{};
+   std::chrono::utc_time<std::chrono::milliseconds> logged{};
+};
+
+template <>
+struct glz::meta<UtcFormatted>
+{
+   using T = UtcFormatted;
+   static constexpr auto value = glz::object( //
+      "start", glz::date_format(&T::start, "%Y-%m-%d %H:%M:%S"), //
+      "logged", glz::epoch_count<std::chrono::seconds>(&T::logged));
+};
+
+// Only periods that divide one second have an exact calendar representation.
+static_assert(glz::write_supported<std::chrono::utc_seconds, glz::JSON>);
+static_assert(glz::read_supported<std::chrono::utc_time<std::chrono::nanoseconds>, glz::JSON>);
+static_assert(!glz::write_supported<std::chrono::utc_time<std::chrono::minutes>, glz::JSON>);
+static_assert(!glz::read_supported<std::chrono::utc_time<std::chrono::days>, glz::JSON>);
+
+namespace utc_test
+{
+   using namespace std::chrono;
+
+   // 2016-12-31T23:59:60Z, the most recent positive leap second.
+   inline utc_seconds leap_2016() { return utc_clock::from_sys(sys_days{2016y / December / 31} + 86399s) + 1s; }
+
+   // An ordinary instant, 2024-06-15T12:34:56.123456789Z, after 27 leap seconds.
+   constexpr sys_time<nanoseconds> ordinary = sys_days{2024y / June / 15} + 12h + 34min + 56s + 123456789ns;
+
+   template <class Duration>
+   utc_time<Duration> to_utc(sys_time<nanoseconds> tp)
+   {
+      return utc_clock::from_sys(time_point_cast<Duration>(tp));
+   }
+
+   template <class Duration>
+   void expect_same_wire_form_as_sys(const std::string_view expected)
+   {
+      const auto sys = time_point_cast<Duration>(ordinary);
+      const auto utc = to_utc<Duration>(ordinary);
+
+      const auto sys_json = glz::write_json(sys);
+      const auto utc_json = glz::write_json(utc);
+      expect(sys_json.has_value() && utc_json.has_value());
+      expect(utc_json.value() == expected) << utc_json.value();
+      expect(utc_json.value() == sys_json.value());
+
+      utc_time<Duration> parsed{};
+      expect(!glz::read_json(parsed, utc_json.value()));
+      expect(parsed == utc);
+   }
+}
+
+suite utc_clock_tests = [] {
+   using namespace std::chrono;
+   using namespace utc_test;
+
+   "utc_time_matches_sys_time_wire_form"_test = [] {
+      expect_same_wire_form_as_sys<seconds>(R"("2024-06-15T12:34:56Z")");
+      expect_same_wire_form_as_sys<milliseconds>(R"("2024-06-15T12:34:56.123Z")");
+      expect_same_wire_form_as_sys<microseconds>(R"("2024-06-15T12:34:56.123456Z")");
+      expect_same_wire_form_as_sys<nanoseconds>(R"("2024-06-15T12:34:56.123456789Z")");
+   };
+
+   "utc_time_is_offset_from_sys_time_by_leap_seconds"_test = [] {
+      // A symmetric round trip cannot catch a wrong offset, so pin the utc_clock count.
+      utc_seconds parsed{};
+      expect(!glz::read_json(parsed, R"("2024-06-15T12:34:56Z")"));
+      const auto unix_seconds = time_point_cast<seconds>(ordinary).time_since_epoch();
+      expect(parsed.time_since_epoch() == unix_seconds + 27s);
+   };
+
+   "utc_time_pre_1972_has_no_leap_offset"_test = [] {
+      utc_seconds parsed{};
+      expect(!glz::read_json(parsed, R"("1970-01-01T00:00:00Z")"));
+      expect(parsed.time_since_epoch() == 0s);
+      expect(glz::write_json(parsed).value() == R"("1970-01-01T00:00:00Z")");
+   };
+
+   "utc_time_leap_second_written_as_60"_test = [] {
+      const auto leap = leap_2016();
+      expect(glz::write_json(leap - 1s).value() == R"("2016-12-31T23:59:59Z")");
+      expect(glz::write_json(leap).value() == R"("2016-12-31T23:59:60Z")");
+      expect(glz::write_json(leap + 1s).value() == R"("2017-01-01T00:00:00Z")");
+
+      const utc_time<milliseconds> leap_ms = leap + 500ms;
+      expect(glz::write_json(leap_ms).value() == R"("2016-12-31T23:59:60.500Z")");
+   };
+
+   "utc_time_leap_second_roundtrip"_test = [] {
+      const auto leap = leap_2016();
+      utc_seconds parsed{};
+      expect(!glz::read_json(parsed, R"("2016-12-31T23:59:60Z")"));
+      expect(parsed == leap);
+
+      utc_time<milliseconds> parsed_ms{};
+      expect(!glz::read_json(parsed_ms, R"("2016-12-31T23:59:60.500Z")"));
+      expect(parsed_ms == leap + 500ms);
+
+      // RFC 3339 writes a leap second in local time when an offset is given.
+      expect(!glz::read_json(parsed, R"("2016-12-31T15:59:60-08:00")"));
+      expect(parsed == leap);
+   };
+
+   "utc_time_rejects_60_where_no_leap_second_was_inserted"_test = [] {
+      utc_seconds parsed{};
+      expect(glz::read_json(parsed, R"("2016-12-30T23:59:60Z")") == glz::error_code::parse_error);
+      expect(glz::read_json(parsed, R"("2024-06-15T12:34:60Z")") == glz::error_code::parse_error);
+      expect(glz::read_json(parsed, R"("2024-06-15T12:34:61Z")") == glz::error_code::parse_error);
+   };
+
+   "utc_time_pre_epoch_subsecond_roundtrip"_test = [] {
+      const utc_time<milliseconds> before{-500ms};
+      const auto json = glz::write_json(before);
+      expect(json.value() == R"("1969-12-31T23:59:59.500Z")") << json.value();
+      utc_time<milliseconds> parsed{};
+      expect(!glz::read_json(parsed, json.value()));
+      expect(parsed == before);
+   };
+
+   "utc_time_rejects_instants_its_rep_cannot_hold"_test = [] {
+      // INT32_MAX seconds after 1970 on utc_clock is 27 leap seconds before 2038-01-19T03:14:07Z.
+      utc_time<duration<int32_t>> narrow{};
+      expect(!glz::read_json(narrow, R"("2038-01-19T03:13:40Z")"));
+      expect(narrow.time_since_epoch().count() == (std::numeric_limits<int32_t>::max)());
+      expect(glz::read_json(narrow, R"("2038-01-19T03:13:41Z")") == glz::error_code::parse_error);
+
+      UtcEpochSeconds e{};
+      expect(glz::read_json(e, R"({"at":9223372036854775807})") == glz::error_code::parse_error);
+      expect(!glz::read_json(e, R"({"at":-9223372036854775807})"));
+      expect(e.at.time_since_epoch() == seconds{-9223372036854775807});
+   };
+
+   "sys_time_still_rejects_leap_second"_test = [] {
+      sys_seconds parsed{};
+      expect(glz::read_json(parsed, R"("2016-12-31T23:59:60Z")") == glz::error_code::parse_error);
+   };
+
+   "utc_time_in_struct"_test = [] {
+      UtcEvent e{leap_2016(), to_utc<milliseconds>(ordinary)};
+      std::string json;
+      expect(!glz::write_json(e, json));
+      expect(json == R"({"at":"2016-12-31T23:59:60Z","precise":"2024-06-15T12:34:56.123Z"})") << json;
+
+      UtcEvent r{};
+      expect(!glz::read_json(r, json));
+      expect(r.at == e.at);
+      expect(r.precise == e.precise);
+   };
+
+   "utc_time_date_format_and_epoch_count"_test = [] {
+      UtcFormatted e{leap_2016(), leap_2016() + 250ms};
+      std::string json;
+      expect(!glz::write_json(e, json));
+      // Unix time has no leap seconds, so the epoch count lands on the preceding :59 second.
+      expect(json == R"({"start":"2016-12-31 23:59:60","logged":1483228799})") << json;
+
+      UtcFormatted r{};
+      expect(!glz::read_json(r, json));
+      expect(r.start == e.start);
+      expect(r.logged == leap_2016() - 1s);
+
+      expect(glz::read_json(r, R"({"start":"2016-12-30 23:59:60","logged":0})") == glz::error_code::parse_error);
+   };
+
+   "utc_time_other_text_formats"_test = [] {
+      const auto leap = leap_2016();
+      const auto precise = to_utc<nanoseconds>(ordinary);
+
+      std::string toml;
+      expect(!glz::write_toml(leap, toml));
+      expect(toml == "2016-12-31T23:59:60Z") << toml;
+      utc_seconds from_toml{};
+      expect(!glz::read_toml(from_toml, toml));
+      expect(from_toml == leap);
+      sys_seconds sys_from_toml{};
+      expect(glz::read_toml(sys_from_toml, toml) == glz::error_code::parse_error);
+
+      std::string yaml;
+      expect(!glz::write_yaml(precise, yaml));
+      utc_time<nanoseconds> from_yaml{};
+      expect(!glz::read_yaml(from_yaml, yaml));
+      expect(from_yaml == precise);
+      expect(!glz::write_yaml(leap, yaml));
+      utc_seconds leap_from_yaml{};
+      expect(!glz::read_yaml(leap_from_yaml, yaml));
+      expect(leap_from_yaml == leap);
+   };
+
+   "utc_time_cbor"_test = [] {
+      const auto leap = leap_2016();
+      const auto precise = to_utc<microseconds>(ordinary);
+
+      std::string cbor;
+      expect(!glz::write_cbor(leap, cbor));
+      // tag 0, then a 20-byte text string
+      expect(cbor == std::string{"\xC0\x74"} + "2016-12-31T23:59:60Z");
+      utc_seconds leap_from_cbor{};
+      expect(!glz::read_cbor(leap_from_cbor, cbor));
+      expect(leap_from_cbor == leap);
+
+      expect(!glz::write_cbor(precise, cbor));
+      utc_time<microseconds> from_cbor{};
+      expect(!glz::read_cbor(from_cbor, cbor));
+      expect(from_cbor == precise);
+
+      std::vector<std::byte> bytes{};
+      expect(!glz::write_cbor(precise, bytes));
+      utc_time<microseconds> from_bytes{};
+      expect(!glz::read_cbor(from_bytes, bytes));
+      expect(from_bytes == precise);
+
+      // Tag 1 (epoch seconds) is Unix time.
+      expect(!glz::write_cbor(glz::epoch_seconds{sys_seconds{1483228800s}}, cbor));
+      utc_seconds from_epoch{};
+      expect(!glz::read_cbor(from_epoch, cbor));
+      expect(from_epoch == leap + 1s);
+   };
+};
+
+#endif
+
 int main() { return 0; }
