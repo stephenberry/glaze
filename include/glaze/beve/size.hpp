@@ -443,6 +443,20 @@ namespace glz
             // extension tag + complex header + count + data
             using X = typename V::value_type;
             result += 1; // complex_header byte
+            if constexpr (check_aligned_arrays(Opts) && sizeof(X) > 1) {
+               // An aligned complex array has no element count of its own: it nests an aligned typed array
+               // whose SIZE counts two components per element
+               result -= compressed_int_size(value.size());
+               result += 1; // aligned header byte
+               result += 1; // numeric header byte
+               result += compressed_int_size(2 * value.size());
+               result += 1; // padding length byte
+               // Compute exact padding from absolute offset
+               constexpr size_t alignment = sizeof(X);
+               const size_t abs_offset = offset + result;
+               const size_t padding = (alignment - (abs_offset % alignment)) % alignment;
+               result += padding;
+            }
             result += value.size() * 2 * sizeof(X);
          }
          else {

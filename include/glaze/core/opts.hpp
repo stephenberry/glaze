@@ -308,7 +308,8 @@ namespace glz
    // ---
    // bool aligned_arrays = false;
    // When true, BEVE typed arrays for numeric types use alignment padding so that the data payload
-   // begins at a memory offset that is a multiple of the element size. This enables zero-copy
+   // begins at a memory offset that is a multiple of the element size. Complex arrays are written as
+   // aligned complex arrays, padded to their component size. This enables zero-copy
    // access via std::span<T> directly into the message buffer, eliminating copy and allocation overhead.
    // Only applies to BEVE format. The alignment padding is deterministic and does not need to be stored.
 
