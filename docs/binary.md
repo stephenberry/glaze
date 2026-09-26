@@ -339,6 +339,8 @@ glz::write<opts>(data, buffer);
 
 Single-byte types (`int8_t`, `uint8_t`) use the standard typed array format since alignment provides no benefit.
 
+Arrays of `std::complex<T>` are written as aligned complex arrays (complex sub-type 2), whose interleaved `re, im` components form a nested aligned typed array. Complex arrays with single-byte components keep the standard complex array format.
+
 ### Zero-Copy Reading with `std::span<const T>`
 
 Read directly into a `std::span<const T>` to get a zero-copy view into the buffer:
@@ -352,6 +354,17 @@ glz::read<glz::opts{.format = glz::BEVE}>(span, buffer);
 ```
 
 The span specialization requires an aligned typed array in the buffer. Reading a standard (non-aligned) typed array into `std::span<const T>` produces an error, since alignment cannot be guaranteed.
+
+`std::span<const std::complex<T>>` works the same way, reading an aligned complex array in place:
+
+```c++
+std::vector<std::complex<double>> iq = {{1.0, 2.0}, {3.0, 4.0}};
+std::string buffer;
+glz::write<opts>(iq, buffer);
+
+std::span<const std::complex<double>> view;
+glz::read<glz::opts{.format = glz::BEVE}>(view, buffer);
+```
 
 > [!IMPORTANT]
 > The buffer must outlive the span. The span points into the buffer's memory.

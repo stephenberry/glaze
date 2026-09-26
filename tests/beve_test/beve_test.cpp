@@ -9524,10 +9524,27 @@ namespace beve_complex_subtypes
       f.template operator()<uint64_t>();
    }
 
+   // A leading string of adjustable length moves the complex array to any offset in the message
+   template <class X>
+   struct prefixed_complex
+   {
+      std::string prefix{};
+      std::vector<std::complex<X>> values{};
+
+      bool operator==(const prefixed_complex&) const = default;
+   };
+
    struct complex_span_view
    {
       int id{};
       std::span<const std::complex<double>> values{};
+      std::string name{};
+   };
+
+   struct complex_float_span_view
+   {
+      int id{};
+      std::span<const std::complex<float>> values{};
       std::string name{};
    };
 }
@@ -9813,6 +9830,117 @@ suite beve_complex_subtype_tests = [] {
       expect(std::ranges::equal(view, values));
       expect(reinterpret_cast<const char*>(view.data()) == aligned.data() + 6);
    };
+
+   "aligned writing reproduces the golden file"_test = [] {
+      std::string buffer{};
+      expect(not glz::write<aligned_beve_opts>(golden_values, buffer));
+      expect(buffer == golden_aligned_complex);
+      expect(glz::beve_size<aligned_beve_opts>(golden_values) == golden_aligned_complex.size());
+   };
+
+   "aligned complex arrays round trip at every padding length"_test = [] {
+      for_each_component_type([]<class X>() {
+         if constexpr (sizeof(X) > 1) {
+            const auto sample = sample_values<X>();
+            // 40 elements are 80 components, which need a two-byte SIZE where the element count needs one
+            for (const size_t n : {size_t(0), size_t(3), size_t(40)}) {
+               std::vector<std::complex<X>> values{};
+               for (size_t i = 0; i < n; ++i) {
+                  values.push_back(sample[i % sample.size()]);
+               }
+
+               std::set<size_t> paddings{};
+               for (size_t prefix_length = 0; prefix_length < 2 * sizeof(X); ++prefix_length) {
+                  const prefixed_complex<X> src{std::string(prefix_length, 'p'), values};
+                  std::string buffer{};
+                  expect(not glz::write<aligned_beve_opts>(src, buffer));
+                  expect(glz::beve_size<aligned_beve_opts>(src) == buffer.size());
+
+                  const size_t header = complex_header_offset(buffer);
+                  expect(uint8_t(buffer[header]) == (numeric_bits<X> | glz::extension::complex_aligned_array));
+                  const size_t padding_index = header + 3 + (2 * n < 64 ? 1 : 2);
+                  const size_t padding = uint8_t(buffer[padding_index]);
+                  paddings.insert(padding);
+                  // DATA is aligned relative to the start of the message
+                  expect((padding_index + 1 + padding) % sizeof(X) == 0u);
+
+                  prefixed_complex<X> dst{};
+                  expect(not glz::read_beve(dst, buffer));
+                  expect(dst == src);
+
+                  // Alignment is a storage property: the JSON matches the unaligned encoding
+                  std::string unaligned{};
+                  expect(not glz::write_beve(src, unaligned));
+                  std::string json{};
+                  std::string expected_json{};
+                  expect(not glz::beve_to_json(buffer, json));
+                  expect(not glz::beve_to_json(unaligned, expected_json));
+                  expect(json == expected_json) << json;
+
+                  SkipSimple skipped{};
+                  expect(not glz::read<skip_unknown>(skipped, buffer));
+               }
+               expect(paddings.size() == sizeof(X)) << "every padding length is exercised";
+            }
+         }
+      });
+   };
+
+   "aligned mode writes single-byte complex components as a complex array"_test = [] {
+      auto check = []<class X>() {
+         const auto values = sample_values<X>();
+         std::string aligned{};
+         expect(not glz::write<aligned_beve_opts>(values, aligned));
+         std::string unaligned{};
+         expect(not glz::write_beve(values, unaligned));
+         expect(aligned == unaligned);
+         expect(uint8_t(aligned[1]) == (numeric_bits<X> | glz::extension::complex_array));
+         expect(glz::beve_size<aligned_beve_opts>(values) == aligned.size());
+      };
+      check.template operator()<int8_t>();
+      check.template operator()<uint8_t>();
+   };
+
+   "non-aligned mode writes complex arrays unchanged"_test = [] {
+      std::string buffer{};
+      expect(not glz::write_beve(golden_values, buffer));
+      expect(uint8_t(buffer[1]) == (numeric_bits<double> | glz::extension::complex_array));
+      expect(buffer.size() == 2u + 1u + 32u);
+      expect(glz::beve_size(golden_values) == buffer.size());
+   };
+
+   "aligned writing of fixed-size and non-contiguous complex containers"_test = [] {
+      const std::array<std::complex<float>, 3> fixed{{{1.f, 2.f}, {3.f, 4.f}, {5.f, 6.f}}};
+      std::string buffer{};
+      expect(not glz::write<aligned_beve_opts>(fixed, buffer));
+      expect(uint8_t(buffer[1]) == (numeric_bits<float> | glz::extension::complex_aligned_array));
+      expect(glz::beve_size<aligned_beve_opts>(fixed) == buffer.size());
+      std::array<std::complex<float>, 3> fixed_read{};
+      expect(not glz::read_beve(fixed_read, buffer));
+      expect(fixed_read == fixed);
+
+      const std::deque<std::complex<double>> deque(golden_values.begin(), golden_values.end());
+      expect(not glz::write<aligned_beve_opts>(deque, buffer));
+      expect(buffer == golden_aligned_complex);
+      expect(glz::beve_size<aligned_beve_opts>(deque) == buffer.size());
+   };
+
+   if constexpr (std::endian::native == std::endian::little) {
+      "zero-copy complex span from the aligned writer"_test = [] {
+         const std::vector<std::complex<float>> values(10, std::complex<float>{0.5f, -1.5f});
+         std::string buffer{};
+         expect(not glz::write<aligned_beve_opts>(WithComplexFloatArray{.id = 9, .values = values, .name = "f"},
+                                                  buffer));
+
+         complex_float_span_view dst{};
+         expect(not glz::read_beve(dst, buffer));
+         expect(dst.id == 9 && dst.name == "f");
+         expect(std::ranges::equal(dst.values, values));
+         const auto* bytes = reinterpret_cast<const char*>(dst.values.data());
+         expect(bytes > buffer.data() && bytes < buffer.data() + buffer.size());
+         expect(reinterpret_cast<uintptr_t>(dst.values.data()) % alignof(std::complex<float>) == 0u);
+      };
+   }
 
    "beve_to_json keeps the numerical type of integer complex values"_test = [] {
       std::string json{};
