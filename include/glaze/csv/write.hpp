@@ -470,6 +470,15 @@ namespace glz
       {
          static constexpr auto N = reflect<T>::size;
 
+         // Both layouts derive their header row from reflect<T>::keys, so a repeated key puts one
+         // name on two columns and leaves the reader unable to consume the document the writer just
+         // produced. The guard sits behind check_use_headers because without headers no key is
+         // written at all: the output is positional and a repeated name is not in it to collide.
+         // Enums and maps go through their own `to<CSV, T>` and never reach this one.
+         if constexpr (check_use_headers(Opts)) {
+            static_assert(keys_are_unique<T>(), GLZ_DUPLICATE_KEYS_MESSAGE);
+         }
+
          [[maybe_unused]] decltype(auto) t = [&] {
             if constexpr (reflectable<T>) {
                return to_tie(value);
@@ -696,6 +705,10 @@ namespace glz
 
          // Write headers (field names) if enabled
          if constexpr (check_use_headers(Opts)) {
+            // This is the second place a header row is built from the keys, for a range of objects;
+            // a repeated key would name two columns alike and the reader could not consume the rows.
+            // Tied to the header branch because a headerless write carries no keys at all.
+            static_assert(keys_are_unique<U>(), GLZ_DUPLICATE_KEYS_MESSAGE);
             for_each<N>([&]<auto I>() {
                if (bool(ctx.error)) [[unlikely]] {
                   return;
