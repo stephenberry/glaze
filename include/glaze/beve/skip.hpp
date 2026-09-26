@@ -189,6 +189,10 @@ namespace glz
                ctx.error = error_code::unexpected_end;
                return;
             }
+            if (num_bytes && !packed_bool_padding_is_zero(uint8_t(*(it + (num_bytes - 1))), n)) [[unlikely]] {
+               ctx.error = error_code::syntax_error;
+               return;
+            }
             it += num_bytes;
          }
          else {
@@ -275,8 +279,17 @@ namespace glz
          const auto complex_header = uint8_t(*it);
          ++it;
          const uint8_t elem_byte_count = byte_count_lookup[complex_header >> 5];
-         const bool is_array = (complex_header & 1) != 0;
-         if (is_array) {
+         switch (complex_header & extension::complex_subtype_mask) {
+         case extension::complex_number: {
+            const uint64_t total = uint64_t(elem_byte_count) * 2;
+            if (uint64_t(end - it) < total) [[unlikely]] {
+               ctx.error = error_code::unexpected_end;
+               return;
+            }
+            it += total;
+            break;
+         }
+         case extension::complex_array: {
             const auto n = int_from_compressed(ctx, it, end);
             if (bool(ctx.error)) [[unlikely]] {
                return;
@@ -287,14 +300,19 @@ namespace glz
                return;
             }
             it += total;
+            break;
          }
-         else {
-            const uint64_t total = uint64_t(elem_byte_count) * 2;
-            if (uint64_t(end - it) < total) [[unlikely]] {
-               ctx.error = error_code::unexpected_end;
+         case extension::complex_aligned_array: {
+            const size_t n = read_aligned_complex_header(ctx, it, end, complex_header);
+            if (bool(ctx.error)) [[unlikely]] {
                return;
             }
-            it += total;
+            it += 2 * elem_byte_count * n; // bounds checked by read_aligned_complex_header
+            break;
+         }
+         default:
+            // An undefined sub-type has no known layout, so its end cannot be found
+            ctx.error = error_code::syntax_error;
          }
          break;
       }
