@@ -46,9 +46,12 @@ function(glz_add_rejection_case case_name guard_prose)
     endif()
     target_compile_definitions(${target} PRIVATE GLZ_P2996_REJECT_${case_name})
 
+    # CMAKE_BINARY_DIR and not PROJECT_BINARY_DIR: the project() call at the top of this file makes
+    # the latter this source directory's build tree, which is a subdirectory with no build.ninja, so
+    # `cmake --build` would fail there and every rejection case with it.
     add_test(
         NAME ${target}
-        COMMAND "${CMAKE_COMMAND}" --build "${PROJECT_BINARY_DIR}" --target ${target} --config $<CONFIG>
+        COMMAND "${CMAKE_COMMAND}" --build "${CMAKE_BINARY_DIR}" --target ${target} --config $<CONFIG>
     )
     set_tests_properties(${target} PROPERTIES
         PASS_REGULAR_EXPRESSION "${guard_prose}"
@@ -58,3 +61,6 @@ endfunction()
 
 glz_add_rejection_case(REPEATED_BASE "glz::meta is needed for this type")
 glz_add_rejection_case(KEYED_LOOKUP "glz::meta whose value names the members apart")
+# the same guard reached through a second keyed format, so it is not pinned by JSON alone
+glz_add_rejection_case(KEYED_LOOKUP_BEVE "glz::meta whose value names the members apart")
+glz_add_rejection_case(MODIFY_NAME "a glz::modify entry with a key and no member pointer")
