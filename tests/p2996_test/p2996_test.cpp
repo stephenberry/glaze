@@ -860,26 +860,34 @@ suite p2996_inherited_members = [] {
       expect(names[0] == "pv");
       expect(names[1] == "pd");
 
+      // the values differ from the defaults, so a read that did nothing would not pass this
       PolyDerived obj{};
+      obj.pv = 15;
+      obj.pd = 16;
       std::string s{};
       expect(not glz::write_json(obj, s));
-      expect(s == R"({"pv":5,"pd":6})") << s;
+      expect(s == R"({"pv":15,"pd":16})") << s;
 
       PolyDerived back{};
       expect(not glz::read_json(back, s));
-      expect(back.pv == 5);
-      expect(back.pd == 6);
+      expect(back.pv == 15);
+      expect(back.pd == 16);
    };
 
    "a glz::meta gives a hidden member its own key"_test = [] {
+      // the two members are given values the defaults do not have, so a read that did nothing could
+      // not pass, and each key is checked against the member it belongs to
+      ShadowedDerived obj{};
+      obj.ShadowedBase::x = 11;
+      obj.x = 12;
       std::string s{};
-      expect(not glz::write_json(ShadowedDerived{}, s));
-      expect(s == R"({"base_x":1,"x":2})") << s;
+      expect(not glz::write_json(obj, s));
+      expect(s == R"({"base_x":11,"x":12})") << s;
 
       ShadowedDerived back{};
       expect(not glz::read_json(back, s));
-      expect(back.ShadowedBase::x == 1);
-      expect(back.x == 2);
+      expect(back.ShadowedBase::x == 11);
+      expect(back.x == 12);
    };
 
    "an empty base contributes no members"_test = [] {
@@ -1027,11 +1035,52 @@ suite p2996_inherited_members = [] {
       expect(not glz::read<as_arrays>(reflected_back, beve));
       expect(reflected_back.first == 12);
       expect(reflected_back.second == 13);
+
+      // the element count is part of the payload, not just an outcome of the round-trip: the header
+      // says two, and the payload is one byte of tag, one of count, and one tagged int per element.
+      // The count is a BEVE compressed int, whose low two bits name the size class.
+      expect(uint8_t(beve[0]) == glz::tag::generic_array);
+      expect((uint8_t(beve[1]) >> 2) == 2);
+      expect(beve.size() == 12);
+
+      // a payload written for the shape the reflection had before the base member was part of it --
+      // the derived member alone -- is rejected rather than read into the wrong element
+      struct LegacyArrayShape
+      {
+         int second{};
+      };
+      LegacyArrayShape legacy{13};
+      std::string stale{};
+      expect(not glz::write<as_arrays>(legacy, stale));
+      ArrayDerived stale_back{};
+      expect(glz::read<as_arrays>(stale_back, stale) == glz::error_code::syntax_error)
+         << "an array payload with fewer elements than the hierarchy has is refused";
+
+      // the same holds for a type that is reflected automatically, where the stale payload is the one
+      // element the derived type had before
+      struct LegacyOwnMember
+      {
+         double factor{};
+      };
+      LegacyOwnMember legacy_auto{2.5};
+      std::string stale_auto{};
+      expect(not glz::write<as_arrays>(legacy_auto, stale_auto));
+      InheritSecond stale_auto_back{};
+      stale_auto_back.name = "kept";
+      stale_auto_back.id = 9;
+      expect(glz::read<as_arrays>(stale_auto_back, stale_auto) == glz::error_code::syntax_error)
+         << "the automatically reflected type refuses the shorter payload as well";
+      expect(stale_auto_back.name == "kept");
+      expect(stale_auto_back.id == 9);
    };
 
    "an empty base repeated non-virtually reflects nothing twice"_test = [] {
       constexpr auto names = glz::member_names<TaggedMixed>;
       static_assert(names.size() == 3);
+      // the counter and the name list have to agree, or an index exists in one and not the other
+      static_assert(glz::detail::count_members<TaggedMixed> == glz::member_names<TaggedMixed>.size());
+      static_assert(glz::detail::count_members<VirtualDiamond> == glz::member_names<VirtualDiamond>.size());
+      static_assert(glz::detail::count_members<SharedDiamond> == glz::member_names<SharedDiamond>.size());
       expect(names[0] == "left");
       expect(names[1] == "right");
       expect(names[2] == "bottom");
@@ -1100,6 +1149,64 @@ suite p2996_inherited_members = [] {
       expect(back.left == 12);
       expect(back.right == 13);
       expect(back.bottom == 14);
+   };
+};
+
+// A rename_key renames the key a member answers to, while a modify entry carries the member's raw
+// name through its pointer. Such an entry is an alias rather than a rename of the already-renamed
+// key: the effective key stays where it is and the alias is appended beside it. Resolving the pointer
+// by its raw name would eat the effective key and drop the alias, which is the regression this pins.
+struct RenameKeyWithModify
+{
+   int first{};
+   int second{};
+};
+
+template <>
+struct glz::meta<RenameKeyWithModify>
+{
+   static constexpr std::string_view rename_key(const std::string_view key)
+   {
+      if (key == "first") {
+         return "firstRenamed";
+      }
+      else if (key == "second") {
+         return "secondRenamed";
+      }
+      return key;
+   }
+
+   static constexpr auto modify = glz::object("first_alias", &RenameKeyWithModify::first);
+};
+
+suite p2996_regressions = [] {
+   "rename_key and a pointer modify entry keep the effective key and add the alias"_test = [] {
+      RenameKeyWithModify obj{.first = 7, .second = 8};
+      std::string s{};
+      expect(not glz::write_json(obj, s));
+      expect(s == R"({"firstRenamed":7,"secondRenamed":8,"first_alias":7})") << s;
+
+      RenameKeyWithModify back{};
+      expect(not glz::read_json(back, R"({"first_alias":11,"secondRenamed":12})"));
+      expect(back.first == 11);
+      expect(back.second == 12);
+   };
+
+   "an older keyed payload keeps the inherited members it omits"_test = [] {
+      // before the base members were part of the reflection this payload was the whole document; now
+      // the keys it omits are simply absent from it, and those members keep the values they held
+      InheritSecond obj{};
+      obj.name = "kept";
+      obj.id = 3;
+      obj.extra = "old";
+      obj.factor = 1.5;
+
+      const auto ec = glz::read_json(obj, R"({"extra":"new","factor":2.5})");
+      expect(ec == glz::error_code::none);
+      expect(obj.name == "kept");
+      expect(obj.id == 3);
+      expect(obj.extra == "new");
+      expect(obj.factor == 2.5);
    };
 };
 

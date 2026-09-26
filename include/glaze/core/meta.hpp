@@ -253,6 +253,15 @@ namespace glz
       template <class T, class Mp = void>
       consteval size_t find_member_index_of(std::string_view name)
       {
+         // The effective name decides first, and the pointer may only choose among members that
+         // answer to it. A name no reflected key has is not a rename but an alias, and resolving the
+         // pointer by its raw name would turn one into the other: a rename_key renames the key a
+         // member answers to, so `&T::first` carries "first" while member_names<T> holds
+         // "firstRenamed", and the entry has to stay the alias it was before pointers were resolved.
+         const size_t by_name = find_member_index<T>(name);
+         if (by_name == modify_npos) {
+            return modify_npos;
+         }
 #if GLZ_REFLECTION26
          if constexpr (not std::is_void_v<Mp>) {
             auto members = all_members_of(^^T); // one walk answers the whole lookup
@@ -263,7 +272,7 @@ namespace glz
             }
          }
 #endif
-         return find_member_index<T>(name);
+         return by_name;
       }
 
       template <class T>
