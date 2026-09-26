@@ -2509,6 +2509,35 @@ void cbor_to_json_tests()
       expect(json == "{\"-1\":7}");
    };
 
+   // A negative head encodes -1 - n with a full 64-bit n, so the wire reaches down to -2^64 while
+   // int64_t stops at -2^63. Nothing in that range has an int64_t form, but each is an ordinary
+   // JSON number, and the converter used to write it through a ~n cast that lands in the positive
+   // range instead.
+   "cbor_to_json_negative_below_int64_min"_test = [] {
+      std::string json;
+      expect(not glz::cbor_to_json(std::string{"\x3b\x80\x00\x00\x00\x00\x00\x00\x00", 9}, json)); // -1 - 2^63
+      expect(json == "-9223372036854775809") << json;
+
+      json.clear();
+      expect(not glz::cbor_to_json(std::string{"\x3b\xff\xff\xff\xff\xff\xff\xff\xff", 9}, json)); // -1 - (2^64 - 1)
+      expect(json == "-18446744073709551616") << json;
+
+      // int64_t's most negative value is the last one the cast covers
+      json.clear();
+      expect(not glz::cbor_to_json(std::string{"\x3b\x7f\xff\xff\xff\xff\xff\xff\xff", 9}, json));
+      expect(json == "-9223372036854775808") << json;
+   };
+
+   "cbor_to_json_negative_key_below_int64_min"_test = [] {
+      std::string json;
+      expect(not glz::cbor_to_json(std::string{"\xa1\x3b\x80\x00\x00\x00\x00\x00\x00\x00\x01", 11}, json));
+      expect(json == "{\"-9223372036854775809\":1}") << json;
+
+      json.clear();
+      expect(not glz::cbor_to_json(std::string{"\xa1\x3b\xff\xff\xff\xff\xff\xff\xff\xff\x01", 11}, json));
+      expect(json == "{\"-18446744073709551616\":1}") << json;
+   };
+
    "cbor_to_json_non_string_key_rejected"_test = [] {
       // map(1){ [1]: 2 } -- an array key has no JSON string form.
       const std::array<uint8_t, 4> cbor_buffer{0xa1, 0x81, 0x01, 0x02};

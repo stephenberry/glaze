@@ -111,6 +111,7 @@ CBOR says more than JSON can, so a few types are mapped rather than translated:
 | Byte string | String of hex digit pairs | Two lowercase hex digits per byte. Applies to byte-string keys too. |
 | `undefined` | `null` | JSON has one empty value where CBOR has two, so `undefined` and `null` become the same thing. |
 | Integer key | Quoted decimal string | A JSON object key must be a string. RFC 8949 section 6.1 allows a converter to pick a string form. |
+| Negative integer below `int64_t` | Its decimal | Major type 1 reaches down to -2^64 and JSON numbers have no range limit, so the value is written as is. `glz::read_cbor` into an `int64_t` rejects the same item. |
 | Tag | The tagged value | The tag number is dropped, except for typed arrays (RFC 8746), which become JSON arrays. |
 | Simple value | Its number | Values other than `false`, `true`, `null`, and `undefined` have no JSON form. |
 
