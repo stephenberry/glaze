@@ -32,20 +32,37 @@ namespace glz
       // Helper to get access context for reflection
       inline consteval auto reflection_access_ctx() { return std::meta::access_context::unchecked(); }
 
+      // The inherited-member walk needs std::meta::is_virtual to tell a shared virtual base from a
+      // repeated non-virtual one, and a guess would reflect one subobject as if it were the whole.
+      // The requirement is checked here, in a template, and called from every entry point that
+      // reflects a concrete type: a `static_assert` in a non-template body would be evaluated when
+      // this header is parsed, so it would refuse to compile a translation unit that only includes
+      // glaze and never reflects anything. A template is only instantiated when it is used, which is
+      // where the query matters.
+      template <class>
+      inline consteval void require_is_virtual_query()
+      {
+         static_assert(requires(std::meta::info relationship) { std::meta::is_virtual(relationship); },
+                       "glaze's C++26 reflection path requires std::meta::is_virtual: without it a base "
+                       "reached through more than one path cannot be told from a repeated subobject, so "
+                       "reflecting a hierarchy would silently drop members. Use a P2996 implementation "
+                       "that provides the query, or write a glz::meta for the type.");
+      }
+
       // Whether the base on this edge is virtual, which is what makes it one shared subobject however
       // many paths reach it. The answer belongs to the edge and not to the pair of types: a base that
       // another path reaches virtually still has a second subobject when it is also inherited through
-      // a non-virtual edge. A backend without the query refuses the hierarchy loudly rather than
-      // assuming an answer: assuming a virtual edge would silently drop the refusal a second
-      // non-virtual subobject deserves, and a quiet wrong shape is worse than a build that says why.
+      // a non-virtual edge. A backend without the query is answered with a virtual edge here; the
+      // loud requirement lives in require_is_virtual_query, called at the entry points, so that this
+      // walk cannot be the thing that refuses an unrelated translation unit.
       inline consteval bool is_virtual_edge(std::meta::info relationship)
       {
-         static_assert(requires { std::meta::is_virtual(relationship); },
-                       "the P2996 backend must provide std::meta::is_virtual: the inherited-member walk "
-                       "uses it to tell a shared virtual base from a repeated non-virtual one, and a "
-                       "guess would turn the refusal of a type with two subobjects into a type that "
-                       "reflects one of them as if it were the whole");
-         return std::meta::is_virtual(relationship);
+         if constexpr (requires { std::meta::is_virtual(relationship); }) {
+            return std::meta::is_virtual(relationship);
+         }
+         else {
+            return true;
+         }
       }
 
       // Whether a second subobject of `type` would duplicate data members. Its own members count, and
@@ -163,6 +180,7 @@ namespace glz
       template <class T>
          requires(std::is_class_v<std::remove_cvref_t<T>>)
       inline constexpr size_t count_members = [] {
+         require_is_virtual_query<T>();
          static_assert(members_are_namable(^^std::remove_cvref_t<T>),
                        "glz::meta is needed for this type: a base class that holds members is inherited "
                        "twice without being virtual, so it has two subobjects, and the compiler refuses "
@@ -180,6 +198,7 @@ namespace glz
       {
          static consteval auto info()
          {
+            require_is_virtual_query<T>();
             auto members = all_members_of(^^T);
             return members[I];
          }

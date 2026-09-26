@@ -258,6 +258,9 @@ namespace glz
          // pointer by its raw name would turn one into the other: a rename_key renames the key a
          // member answers to, so `&T::first` carries "first" while member_names<T> holds
          // "firstRenamed", and the entry has to stay the alias it was before pointers were resolved.
+#if GLZ_REFLECTION26
+         require_is_virtual_query<T>();
+#endif
          const size_t by_name = find_member_index<T>(name);
          if (by_name == modify_npos) {
             return modify_npos;

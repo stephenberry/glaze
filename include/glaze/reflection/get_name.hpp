@@ -43,6 +43,7 @@ namespace glz::detail
    template <class T, size_t I>
    consteval std::string_view get_member_name_p2996()
    {
+      require_is_virtual_query<T>();
       auto members = all_members_of(^^T);
       return std::meta::identifier_of(members[I]);
    }
