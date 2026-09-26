@@ -222,7 +222,7 @@ constexpr auto count = glz::detail::count_members<Derived>;
 // count == 3 (2 from Base + 1 from Derived)
 ```
 
-> **Note:** Two shapes need a `glz::meta`. The first is a base whose second subobject is reachable
+> **Note:** Three shapes need a `glz::meta`. The first is a base whose second subobject is reachable
 > through a non-virtual edge — a base inherited twice *non*-virtually that holds members, or one that
 > another path reaches virtually and this one does not. It has two subobjects, whose members the
 > compiler refuses to name through the derived type, while a base reached virtually on every path is
@@ -233,6 +233,9 @@ constexpr auto count = glz::detail::count_members<Derived>;
 > reflectable. A `glz::meta` written for the refused shape has to reach the members through lambdas —
 > `&B::a` is an `int A::*` when `a` is declared in `A`, so applying it to the derived type is
 > ambiguous, while `[](auto& self) -> auto& { return self.C::a; }` names one of the two subobjects.
+> Write that as `static constexpr auto value = glz::object(...)`: a `modify` entry does not serve as
+> the escape, because `modify` layers on top of the reflection and the count that refuses the type is
+> taken before it.
 >
 > The second is two members with one name: a member that hides a member of a base class is a member of
 > its own, and two bases can repeat a name as well, so no key can be told from the other. The writer
@@ -241,22 +244,32 @@ constexpr auto count = glz::detail::count_members<Derived>;
 > `glz::object("base_x", &Base::x, "x", &Derived::x)`. The array-shaped writes carry the members
 > positionally and still round-trip, so it is only the keyed formats that need the `glz::meta`.
 >
+> A `modify` entry with a key but no member pointer belongs to that second shape and is refused as
+> well: with no pointer to say which member it means, the entry can only name its member by name, and
+> a name that more than one member answers to leaves the choice to the declaration order. The refusal
+> names the entry and asks for the pointer, so `glz::object("x", &Derived::x)` resolves it, or a full
+> `value` specialization that names the members apart. The guard is a `static_assert`, so the type
+> does not build rather than silently renaming whichever member comes first.
+>
 > A `glz::meta` written for a base class is not consulted for a derived type that is reflected
 > automatically, because the reflection reads the base's data members: the same base serializes as
 > `{"renamed":1}` on its own and as `{"raw":1,"extra":2}` inside such a derived type.
 >
-> Inheriting now means reflecting what the base holds, so a base whose members glaze cannot serialize
-> — a `std::mutex`, say — breaks its derived types at compile time. The escape is the same: a
-> `glz::meta` for the derived type that names the members to keep.
+> Inheriting now means reflecting what the base holds, so the third shape is a base whose members
+> glaze cannot serialize — a `std::mutex`, say — which breaks its derived types at compile time. The
+> escape is the same: a `glz::meta` for the derived type that names the members to keep.
 >
-> Two consequences of the base members being part of the reflection are worth knowing when upgrading.
-> `glz::meta<T>::modify` layers on top of the inherited members as well, so a derived type that used
-> `modify` writes its base members where it did not before. Both that and the array-shaped writes
-> (`structs_as_arrays`, `glz::reflect_array`, which gain one element per inherited member) change what
-> is stored for a derived type. A payload an earlier version wrote for the array-shaped writes is
-> rejected when read, because the element count no longer matches. A keyed payload still reads without
-> an error, but the members that used to be left out are simply absent from it, so they keep the value
-> they were already holding.
+> **Breaking Change:** two consequences of the base members being part of the reflection are worth
+> knowing when upgrading, and one of them is a type that stops compiling. `glz::meta<T>::modify`
+> layers on top of the inherited members as well, so a derived type that used `modify` writes its
+> base members where it did not before. Both that and the array-shaped writes (`structs_as_arrays`,
+> `glz::reflect_array`, which gain one element per inherited member) change what is stored for a
+> derived type. A payload an earlier version wrote for the array-shaped writes is rejected when read,
+> because the element count no longer matches. A keyed payload still reads without an error, but the
+> members that used to be left out are simply absent from it, so they keep the value they were
+> already holding. And a type whose hierarchy repeats a name used to serialize under the keyed
+> formats — the base member was not part of the reflection — while it now needs the `glz::meta` above
+> before the keyed reader or writer will build for it.
 
 ### Automatic Enum String Serialization
 
@@ -389,13 +402,12 @@ The P2996 implementation uses these key primitives:
 // Reflect on a type to get meta-info
 constexpr auto type_info = ^^Person;
 
-// Get all non-static data members, the inherited ones included
-// (glz::detail::all_members_of walks std::meta::bases_of depth-first before asking for the members
-// the type declares itself, and skips a base it has already reached)
-constexpr auto members = std::meta::nonstatic_data_members_of(
-    ^^Person,
-    std::meta::access_context::unchecked()
-);
+// Get all non-static data members, the inherited ones included. glz::detail::all_members_of walks
+// std::meta::bases_of depth-first, base members before the members the type declares itself, and
+// reaches a base inherited more than once only as often as it has subobjects. Inside, it asks for
+// the members with std::meta::access_context::unchecked() -- the same context Glaze uses everywhere
+// -- so private members are reflected too:
+constexpr auto members = glz::detail::all_members_of(^^Person);
 
 // Get member name
 constexpr auto name = std::meta::identifier_of(members[0]);

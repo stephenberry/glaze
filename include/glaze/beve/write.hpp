@@ -1629,6 +1629,11 @@ namespace glz
          requires(check_structs_as_arrays(Options) == false)
       static void op(auto&& value, is_context auto&& ctx, B&& b, auto& ix)
       {
+         // The keyed variant writes each key once per member, so a key list whose keys repeat would
+         // write one of them twice and lose the other; the array-shaped overload above is untouched,
+         // because it carries the members positionally and has no keys to collide.
+         static_assert(keys_are_unique<T>(), GLZ_DUPLICATE_KEYS_MESSAGE);
+
          constexpr auto Opts = opening_handled_off<Options>();
 
          [[maybe_unused]] decltype(auto) t = [&]() -> decltype(auto) {

@@ -2453,6 +2453,12 @@ namespace glz
       requires((glaze_object_t<T> || reflectable<T>) && not custom_write<T>)
    struct to<JSON, T>
    {
+      // A keyed write emits one key per member, so a key list whose keys repeat would put a key in the
+      // document twice and hand the reader a member it cannot pick. The keyed readers already refuse
+      // that shape, and refusing it here as well keeps the two sides in agreement; the array-shaped
+      // writes never reach this writer, so `glz::reflect_array` still round-trips.
+      static_assert(keys_are_unique<T>(), GLZ_DUPLICATE_KEYS_MESSAGE);
+
       static constexpr bool can_error = [] {
          constexpr auto N = reflect<T>::size;
          if constexpr (N == 0) {

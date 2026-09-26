@@ -443,10 +443,12 @@ namespace glz
          }(std::make_index_sequence<N>{});
       }
       else {
-         // Hash-based lookup
+         // Hash-based lookup. A key list whose keys collide leaves `type` invalid; the shared guard in
+         // decode_hash_with_size_impl refuses that type, and this assertion carries the same wording
+         // so that whichever of the two fires first says the same thing.
          constexpr auto& HashInfo = hash_info<T>;
          constexpr auto type = HashInfo.type;
-         static_assert(bool(type), "invalid hash algorithm");
+         static_assert(bool(type), GLZ_DUPLICATE_KEYS_MESSAGE);
 
          const auto index = decode_hash<JSON, T, HashInfo, HashInfo.type>::op(it, end);
 
@@ -3089,16 +3091,7 @@ namespace glz
                   }
                }
                else if constexpr (reflection_type) {
-                  static_assert(bool(hash_info<T>.type),
-                                "glaze cannot build a keyed lookup for this type: two of its keys are "
-                                "equal, or one of them is empty. Base members are part of the "
-                                "reflection, so two members of a hierarchy can answer to one name - a "
-                                "member that hides a member of a base class, or two bases that repeat "
-                                "a name - and no key can then be told from the other. Give the type a "
-                                "glz::meta whose value names the members apart, such as "
-                                "glz::object(\"base_x\", &Base::x, \"x\", &Derived::x). The "
-                                "array-shaped writes carry the members positionally and are not "
-                                "affected.");
+                  static_assert(bool(hash_info<T>.type), GLZ_DUPLICATE_KEYS_MESSAGE);
 
                   if (*it != '"') [[unlikely]] {
                      ctx.error = error_code::expected_quote;

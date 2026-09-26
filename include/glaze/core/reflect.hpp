@@ -18,6 +18,17 @@
 #include <meta>
 #endif
 
+// One wording for every refusal a type whose keys cannot be told apart produces, shared by the keyed
+// readers and the keyed writers so the two cannot drift. A string literal rather than a constant,
+// because a static_assert message must be a literal before C++26, which this header also builds under.
+#define GLZ_DUPLICATE_KEYS_MESSAGE                                                             \
+   "glaze cannot build a keyed lookup for this type: two of its keys are equal, or one of them " \
+   "is empty. Base members are part of the reflection, so two members of a hierarchy can answer " \
+   "to one name - a member that hides a member of a base class, or two bases that repeat a name " \
+   "- and no key can then be told from the other. Give the type a glz::meta whose value names "  \
+   "the members apart, such as glz::object(\"base_x\", &Base::x, \"x\", &Derived::x). The "       \
+   "array-shaped writes carry the members positionally and are not affected."
+
 #if defined(_MSC_VER) && !defined(__clang__)
 // Turn off MSVC warning for unreferenced formal parameter, which is referenced in a constexpr branch
 #pragma warning(push)
@@ -2491,6 +2502,27 @@ namespace glz
       }
    }();
 
+   // Whether every key of `T` can be told from every other, which is what a keyed lookup needs and
+   // what a keyed write must be sure of before it emits a key twice. A reflected key is never empty,
+   // so a repeat is the shape that fails; the writers refuse it through the same message as the
+   // readers so a type is either readable and writable in the keyed formats or neither.
+   template <class T>
+   consteval bool keys_are_unique()
+   {
+      constexpr auto& keys = reflect<std::remove_cvref_t<T>>::keys;
+      for (size_t i = 0; i < keys.size(); ++i) {
+         if (keys[i].empty()) {
+            return false;
+         }
+         for (size_t j = i + 1; j < keys.size(); ++j) {
+            if (keys[i] == keys[j]) {
+               return false;
+            }
+         }
+      }
+      return true;
+   }
+
    // Finds the closing quote of an object key, or nullptr when there is none where one could be.
    //
    // Bounded by the longest reflected key rather than by `end`: a key longer than that matches
@@ -2791,17 +2823,16 @@ namespace glz
    template <uint32_t Format, class T, auto HashInfo, hash_type Type>
    struct decode_hash_with_size_impl
    {
-      static_assert(Type != hash_type::invalid,
-                    "glaze cannot build a keyed lookup for this type: two of its keys are equal, or one "
-                    "of them is empty. Base members are part of the reflection, so two members of a "
-                    "hierarchy can answer to one name - a member that hides a member of a base class, "
-                    "or two bases that repeat a name - and no key can then be told from the other. "
-                    "Give the type a glz::meta whose value names the members apart, such as "
-                    "glz::object(\"base_x\", &Base::x, \"x\", &Derived::x). The array-shaped writes "
-                    "carry the members positionally and are not affected.");
+      static_assert(Type != hash_type::invalid, GLZ_DUPLICATE_KEYS_MESSAGE);
 
       GLZ_ALWAYS_INLINE static constexpr size_t op(auto&&, auto&&, const size_t) noexcept
       {
+         // The assertion above only fires for `invalid`; a hash_type added later without a
+         // specialisation of its own would pass it and be read as every key unknown, which this
+         // catches instead of leaving a silent wrong read.
+         static_assert(Type == hash_type::invalid,
+                       "glaze has no keyed lookup for this hash_type: a specialisation of "
+                       "decode_hash_with_size_impl is missing for it");
          return reflect<T>::size;
       }
    };
