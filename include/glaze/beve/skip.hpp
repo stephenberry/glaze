@@ -189,6 +189,10 @@ namespace glz
                ctx.error = error_code::unexpected_end;
                return;
             }
+            if (num_bytes && !packed_bool_padding_is_zero(uint8_t(*(it + (num_bytes - 1))), n)) [[unlikely]] {
+               ctx.error = error_code::syntax_error;
+               return;
+            }
             it += num_bytes;
          }
          else {

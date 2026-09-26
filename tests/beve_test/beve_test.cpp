@@ -9960,6 +9960,111 @@ suite beve_complex_subtype_tests = [] {
    };
 };
 
+namespace beve_packed_bools
+{
+   struct bits8_then_int
+   {
+      std::bitset<8> bits{};
+      int after{};
+   };
+
+   struct bits16_then_int
+   {
+      std::bitset<16> bits{};
+      int after{};
+   };
+
+   struct bits5_then_int
+   {
+      std::bitset<5> bits{};
+      int after{};
+   };
+}
+
+suite beve_packed_bool_tests = [] {
+   using namespace beve_packed_bools;
+
+   "writers zero the padding bits of packed booleans"_test = [] {
+      for (size_t n = 1; n <= 17; ++n) {
+         std::string buffer{};
+         expect(not glz::write_beve(std::vector<bool>(n, true), buffer));
+         const auto last = uint8_t(buffer.back());
+         expect(glz::packed_bool_padding_is_zero(last, n)) << n;
+         expect(last == (n % 8 == 0 ? 0xFF : (1u << (n % 8)) - 1)) << n;
+      }
+
+      std::string buffer{};
+      expect(not glz::write_beve(std::bitset<13>{}.set(), buffer));
+      expect(uint8_t(buffer.back()) == 0b0001'1111);
+      expect(not glz::write_beve(std::array<bool, 13>{true, true, true, true, true, true, true, true, true, true,
+                                                      true, true, true},
+                                 buffer));
+      expect(uint8_t(buffer.back()) == 0b0001'1111);
+   };
+
+   "packed boolean padding bits must be zero"_test = [] {
+      // [true, false, true] packs to 0b101; bit 7 is padding
+      std::string buffer{};
+      expect(not glz::write_beve(std::vector<bool>{true, false, true}, buffer));
+      expect(uint8_t(buffer.back()) == 0b101);
+      buffer.back() = char(0b1000'0101);
+
+      std::vector<bool> vec{};
+      expect(glz::read_beve(vec, buffer).ec == glz::error_code::syntax_error);
+      std::array<bool, 3> arr{};
+      expect(glz::read_beve(arr, buffer).ec == glz::error_code::syntax_error);
+      std::set<bool> set{};
+      expect(glz::read_beve(set, buffer).ec == glz::error_code::syntax_error);
+      std::bitset<3> bits{};
+      expect(glz::read_beve(bits, buffer).ec == glz::error_code::syntax_error);
+
+      // Skipping validates the padding too
+      std::string struct_buffer{};
+      const skip_typed_array_tests::WithBoolArray with_flags{42, {true, false, true}, "name"};
+      expect(not glz::write_beve(with_flags, struct_buffer));
+      const auto pos = struct_buffer.find(std::string_view{"\x1C\x0C\x05", 3});
+      expect(pos != std::string::npos);
+      if (pos != std::string::npos) {
+         struct_buffer[pos + 2] = char(0b1000'0101);
+         skip_typed_array_tests::WithoutBoolArray dst{};
+         constexpr glz::opts opts{.format = glz::BEVE, .error_on_unknown_keys = false};
+         expect(glz::read<opts>(dst, struct_buffer).ec == glz::error_code::syntax_error);
+      }
+
+      // With a multiple of 8 elements, every bit is data
+      expect(not glz::write_beve(std::vector<bool>(8, false), buffer));
+      buffer.back() = char(0xFF);
+      expect(not glz::read_beve(vec, buffer));
+      expect(vec == std::vector<bool>(8, true));
+   };
+
+   "bitset reads consume exactly the wire count"_test = [] {
+      // A shorter array sets the leading bits and leaves the rest unchanged, as for other fixed-size containers
+      std::string buffer{};
+      expect(not glz::write_beve(bits8_then_int{0b1010'0101, 42}, buffer));
+      bits16_then_int wide{std::bitset<16>{0xFF00}, 0};
+      expect(not glz::read_beve(wide, buffer));
+      expect(wide.bits == std::bitset<16>{0xFFA5});
+      expect(wide.after == 42);
+
+      // A longer array than the bitset holds is rejected
+      expect(not glz::write_beve(bits16_then_int{0xFFFF, 7}, buffer));
+      bits8_then_int narrow{};
+      expect(glz::read_beve(narrow, buffer).ec == glz::error_code::syntax_error);
+
+      // ... even when the extra elements share the bitset's last byte
+      expect(not glz::write_beve(bits8_then_int{0xFF, 7}, buffer));
+      bits5_then_int five{};
+      expect(glz::read_beve(five, buffer).ec == glz::error_code::syntax_error);
+
+      // A declared count the buffer cannot hold
+      expect(not glz::write_beve(std::bitset<16>{0xFFFF}, buffer));
+      buffer.pop_back();
+      std::bitset<16> truncated{};
+      expect(glz::read_beve(truncated, buffer).ec == glz::error_code::unexpected_end);
+   };
+};
+
 int main()
 {
    trace.begin("binary_test");

@@ -146,11 +146,24 @@ namespace glz
             return;
          }
 
-         const auto num_bytes = (value.size() + 7) / 8;
+         // Like other fixed-size containers, a bitset cannot take more elements than it holds, and a shorter
+         // array sets its leading bits and leaves the rest unchanged. The wire count, not the bitset's size,
+         // determines how many bytes the array occupies.
+         if (n > value.size()) [[unlikely]] {
+            ctx.error = error_code::syntax_error;
+            return;
+         }
+         const auto num_bytes = (n + 7) / 8;
+         if (uint64_t(end - it) < num_bytes) [[unlikely]] {
+            ctx.error = error_code::unexpected_end;
+            return;
+         }
+         if (num_bytes && !packed_bool_padding_is_zero(uint8_t(*(it + (num_bytes - 1))), n)) [[unlikely]] {
+            ctx.error = error_code::syntax_error;
+            return;
+         }
+
          for (size_t byte_i{}, i{}; byte_i < num_bytes; ++byte_i, ++it) {
-            if (invalid_end(ctx, it, end)) {
-               return;
-            }
             uint8_t byte;
             std::memcpy(&byte, it, 1);
             for (size_t bit_i = 0; bit_i < 8 && i < n; ++bit_i, ++i) {
@@ -1574,13 +1587,19 @@ namespace glz
                return;
             }
 
+            const auto num_bytes = (n + 7) / 8;
+            if (uint64_t(end - it) < num_bytes) [[unlikely]] {
+               ctx.error = error_code::unexpected_end;
+               return;
+            }
+            if (num_bytes && !packed_bool_padding_is_zero(uint8_t(*(it + (num_bytes - 1))), n)) [[unlikely]] {
+               ctx.error = error_code::syntax_error;
+               return;
+            }
+
             value.clear();
 
-            const auto num_bytes = (n + 7) / 8;
             for (size_t byte_i{}, i{}; byte_i < num_bytes; ++byte_i, ++it) {
-               if (invalid_end(ctx, it, end)) {
-                  return;
-               }
                uint8_t byte;
                std::memcpy(&byte, it, 1);
                for (size_t bit_i = 0; bit_i < 8 && i < n; ++bit_i, ++i) {
@@ -1915,6 +1934,13 @@ namespace glz
             if (uint64_t(end - it) < num_bytes) [[unlikely]] {
                ctx.error = error_code::invalid_length;
                return;
+            }
+            // A partial read takes a prefix of the array, so the bits after it are data, not padding
+            if constexpr (not Opts.partial_read) {
+               if (num_bytes && !packed_bool_padding_is_zero(uint8_t(*(it + (num_bytes - 1))), n)) [[unlikely]] {
+                  ctx.error = error_code::syntax_error;
+                  return;
+               }
             }
             if constexpr (check_max_array_size(Opts) > 0) {
                if (n > check_max_array_size(Opts)) [[unlikely]] {

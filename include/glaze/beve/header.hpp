@@ -356,6 +356,15 @@ namespace glz
       }
    }
 
+   // A packed boolean array stores its SIZE bits LSB-first in ceil(SIZE / 8) bytes. When SIZE is not a multiple
+   // of 8, the unused high bits of the final byte are padding and must be zero.
+   [[nodiscard]] GLZ_ALWAYS_INLINE constexpr bool packed_bool_padding_is_zero(const uint8_t last_byte,
+                                                                              const size_t count) noexcept
+   {
+      const size_t used_bits = count % 8;
+      return used_bits == 0 || (last_byte >> used_bits) == 0;
+   }
+
    // Reads the nested VALUE of an aligned complex array (complex sub-type 2) up to its DATA:
    //
    //    HEADER | COMPLEX HEADER | ALIGNED_HEADER | NUMERIC_HEADER | SIZE | PADDING_LENGTH | PADDING | DATA
