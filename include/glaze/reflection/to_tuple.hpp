@@ -8,7 +8,6 @@
 #include <tuple>
 #include <type_traits>
 #include <utility>
-#include <vector>
 
 #include "glaze/core/feature_test.hpp"
 #include "glaze/core/tuple.hpp"
@@ -17,6 +16,8 @@
 
 #if GLZ_REFLECTION26
 #include <meta>
+// The inherited-member walk collects reflections into vectors; nothing outside it needs the container
+#include <vector>
 #endif
 
 namespace glz
@@ -34,17 +35,17 @@ namespace glz
       // Whether the base on this edge is virtual, which is what makes it one shared subobject however
       // many paths reach it. The answer belongs to the edge and not to the pair of types: a base that
       // another path reaches virtually still has a second subobject when it is also inherited through
-      // a non-virtual edge. An implementation without the query is assumed to have reached a virtual
-      // base, which keeps this walk from rejecting a type that is in fact reflectable, and the test
-      // suite pins the verdict so a compiler that lacks the query does not pass unnoticed.
+      // a non-virtual edge. A backend without the query refuses the hierarchy loudly rather than
+      // assuming an answer: assuming a virtual edge would silently drop the refusal a second
+      // non-virtual subobject deserves, and a quiet wrong shape is worse than a build that says why.
       inline consteval bool is_virtual_edge(std::meta::info relationship)
       {
-         if constexpr (requires { std::meta::is_virtual(relationship); }) {
-            return std::meta::is_virtual(relationship);
-         }
-         else {
-            return true;
-         }
+         static_assert(requires { std::meta::is_virtual(relationship); },
+                       "the P2996 backend must provide std::meta::is_virtual: the inherited-member walk "
+                       "uses it to tell a shared virtual base from a repeated non-virtual one, and a "
+                       "guess would turn the refusal of a type with two subobjects into a type that "
+                       "reflects one of them as if it were the whole");
+         return std::meta::is_virtual(relationship);
       }
 
       // Whether a second subobject of `type` would duplicate data members. Its own members count, and
@@ -165,9 +166,11 @@ namespace glz
          static_assert(members_are_namable(^^std::remove_cvref_t<T>),
                        "glz::meta is needed for this type: a base class that holds members is inherited "
                        "twice without being virtual, so it has two subobjects, and the compiler refuses "
-                       "to name the members of either through the derived type. Reach each subobject "
-                       "explicitly, such as "
-                       "glz::object(\"root\", [](auto& self) -> auto& { return self.Left::root; }, ...)");
+                       "to name the members of either through the derived type. Give the type a "
+                       "static constexpr auto value = glz::object(\"root\", [](auto& self) -> auto& { "
+                       "return self.Left::root; }, ...) that reaches each subobject explicitly. A "
+                       "glz::modify entry does not help here: modify layers on top of this count, so "
+                       "the count is still taken and still refuses.");
          return all_members_of(^^std::remove_cvref_t<T>).size();
       }();
 

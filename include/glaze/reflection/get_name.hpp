@@ -30,7 +30,16 @@
 namespace glz::detail
 {
    // Get member name using P2996 reflection
-   // Inherited members are named as well, in the same order as all_members_of lists them
+   // Inherited members are named as well, in the same order as all_members_of lists them.
+   //
+   // Every name walks the hierarchy again, so member_names<T> walks once per member and a type with
+   // many members pays for the walk that many times (count_members walks it once more). The walk is
+   // deliberately left that way: hoisting it into one list shared by every index would mean keeping
+   // the reflections in a static/constexpr container, and the two <meta> implementations differ on
+   // that point -- GCC's define_static_array yields a span that can be indexed directly, while
+   // Bloomberg clang's reflect_constant_array yields an info that has to be spliced, and one helper
+   // cannot hold both. The walk is consteval, so the cost is compile time only and small next to the
+   // rest of reflection.
    template <class T, size_t I>
    consteval std::string_view get_member_name_p2996()
    {
