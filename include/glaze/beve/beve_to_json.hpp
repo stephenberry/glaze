@@ -674,47 +674,50 @@ namespace glz
                const auto complex_header = uint8_t(*it);
                ++it;
 
-               const auto complex_type = complex_header & 0b0000000'1;
-               if (complex_type) {
-                  // complex array
-                  const auto number_tag = complex_header & 0b111'00000;
+               // The COMPLEX HEADER carries the component's numerical type (bits 3-4) and BYTE COUNT
+               // (bits 5-7) in the same positions as a number tag.
+               const uint8_t number_tag = tag::number | (complex_header & 0b111'11'000);
+
+               // Writes one complex value as [re,im]
+               auto write_complex = [&]() -> bool {
+                  if (!emit_char(ctx, '[', out, ix)) return false;
+                  beve_to_json_number<Opts>(number_tag, ctx, it, end, out, ix);
+                  if (bool(ctx.error)) [[unlikely]] {
+                     return false;
+                  }
+                  if (!emit_char(ctx, ',', out, ix)) return false;
+                  beve_to_json_number<Opts>(number_tag, ctx, it, end, out, ix);
+                  if (bool(ctx.error)) [[unlikely]] {
+                     return false;
+                  }
+                  return emit_char(ctx, ']', out, ix);
+               };
+
+               switch (complex_header & glz::extension::complex_subtype_mask) {
+               case glz::extension::complex_number: {
+                  if (!write_complex()) return;
+                  break;
+               }
+               case glz::extension::complex_array: {
                   const auto n = int_from_compressed(ctx, it, end);
                   if (bool(ctx.error)) [[unlikely]] {
                      return;
                   }
                   if (!emit_char(ctx, '[', out, ix)) return;
                   for (size_t i = 0; i < n; ++i) {
-                     if (!emit_char(ctx, '[', out, ix)) return;
-                     beve_to_json_number<Opts>(number_tag, ctx, it, end, out, ix);
-                     if (bool(ctx.error)) [[unlikely]] {
-                        return;
-                     }
-                     if (!emit_char(ctx, ',', out, ix)) return;
-                     beve_to_json_number<Opts>(number_tag, ctx, it, end, out, ix);
-                     if (bool(ctx.error)) [[unlikely]] {
-                        return;
-                     }
-                     if (!emit_char(ctx, ']', out, ix)) return;
+                     if (!write_complex()) return;
                      if (i != n - 1) {
                         if (!emit_char(ctx, ',', out, ix)) return;
                      }
                   }
                   if (!emit_char(ctx, ']', out, ix)) return;
+                  break;
                }
-               else {
-                  // complex number
-                  const auto number_tag = complex_header & 0b111'00000;
-                  if (!emit_char(ctx, '[', out, ix)) return;
-                  beve_to_json_number<Opts>(number_tag, ctx, it, end, out, ix);
-                  if (bool(ctx.error)) [[unlikely]] {
-                     return;
-                  }
-                  if (!emit_char(ctx, ',', out, ix)) return;
-                  beve_to_json_number<Opts>(number_tag, ctx, it, end, out, ix);
-                  if (bool(ctx.error)) [[unlikely]] {
-                     return;
-                  }
-                  if (!emit_char(ctx, ']', out, ix)) return;
+               default: {
+                  // Undefined complex sub-type
+                  ctx.error = error_code::syntax_error;
+                  return;
+               }
                }
 
                break;

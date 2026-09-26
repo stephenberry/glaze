@@ -9,18 +9,8 @@
 
 namespace glz
 {
-   // Extension subtypes for beve_header
-   namespace extension
-   {
-      constexpr uint8_t delimiter = 0; // Data delimiter (tag = 0x06)
-      // Variant type (tag = 0x0E), count = variant index. BEVE Version 2 writes variants as ordinary
-      // self-describing values, so this subtype only appears in Version 1 data, which remains
-      // readable but is no longer written.
-      constexpr uint8_t variant = 1;
-      constexpr uint8_t complex = 3; // Complex number/array (tag = 0x1E)
-      constexpr uint8_t complex_number = 0; // Single complex (count = 2)
-      constexpr uint8_t complex_array = 1; // Array of complex (count = element count)
-   }
+   // The extension subtypes reported in beve_header::ext_type (glz::extension) are defined in
+   // glaze/beve/header.hpp, shared with the readers.
 
    // Information extracted from a BEVE header without full deserialization
    struct beve_header
@@ -233,9 +223,15 @@ namespace glz
                return unexpected(error_ctx{1, error_code::unexpected_end});
             }
             const uint8_t complex_header = data[1];
-            const bool is_array = (complex_header & 1) == extension::complex_array;
 
-            if (is_array) {
+            switch (complex_header & extension::complex_subtype_mask) {
+            case extension::complex_number: {
+               // Single complex number: tag + complex_header + real + imag
+               info.count = 2; // real + imag parts
+               info.header_size = 2;
+               break;
+            }
+            case extension::complex_array: {
                // Complex array: tag + complex_header + compressed_int(count) + data
                if (size < 3) [[unlikely]] {
                   return unexpected(error_ctx{2, error_code::unexpected_end});
@@ -246,11 +242,12 @@ namespace glz
                }
                info.count = detail::peek_compressed_int_value(data + 2, size - 2);
                info.header_size = 2 + int_size;
+               break;
             }
-            else {
-               // Single complex number: tag + complex_header + real + imag
-               info.count = 2; // real + imag parts
-               info.header_size = 2;
+            default: {
+               // Undefined complex sub-type
+               return unexpected(error_ctx{1, error_code::syntax_error});
+            }
             }
          }
          else {

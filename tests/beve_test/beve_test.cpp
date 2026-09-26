@@ -9394,6 +9394,81 @@ suite contiguous_buffer_without_empty = [] {
    };
 };
 
+namespace beve_complex_subtypes
+{
+   // Offset of the COMPLEX HEADER: the byte after the first complex extension tag (0x1E)
+   inline size_t complex_header_offset(const std::string& buffer)
+   {
+      const auto pos = buffer.find(char(glz::tag::extensions | 0b00011'000));
+      expect(pos != std::string::npos && pos + 1 < buffer.size()) << "no complex value in buffer";
+      return pos == std::string::npos ? 0 : pos + 1;
+   }
+
+   // Rewrites the sub-type bits (0-2) of the first COMPLEX HEADER in the buffer
+   inline void set_complex_subtype(std::string& buffer, uint8_t subtype)
+   {
+      auto& header = buffer[complex_header_offset(buffer)];
+      header = char((uint8_t(header) & ~glz::extension::complex_subtype_mask) | subtype);
+   }
+
+   constexpr glz::opts skip_unknown{.format = glz::BEVE, .error_on_unknown_keys = false};
+}
+
+suite beve_complex_subtype_tests = [] {
+   using namespace beve_complex_subtypes;
+
+   "undefined complex sub-types are rejected by every reader"_test = [] {
+      for (uint8_t subtype = 3; subtype <= 7; ++subtype) {
+         std::string array_buffer{};
+         expect(not glz::write_beve(std::vector<std::complex<double>>{{1.0, 2.0}, {3.0, 4.0}}, array_buffer));
+         set_complex_subtype(array_buffer, subtype);
+
+         std::vector<std::complex<double>> values{};
+         expect(glz::read_beve(values, array_buffer).ec == glz::error_code::syntax_error) << int(subtype);
+
+         std::string json{};
+         expect(glz::beve_to_json(array_buffer, json).ec == glz::error_code::syntax_error) << int(subtype);
+
+         const auto header = glz::beve_peek_header(array_buffer);
+         expect(not header.has_value()) << int(subtype);
+         if (not header) {
+            expect(header.error().ec == glz::error_code::syntax_error);
+            expect(header.error().count == 1u);
+         }
+
+         std::string number_buffer{};
+         expect(not glz::write_beve(std::complex<double>{1.0, 2.0}, number_buffer));
+         set_complex_subtype(number_buffer, subtype);
+         std::complex<double> number{};
+         expect(glz::read_beve(number, number_buffer).ec == glz::error_code::syntax_error) << int(subtype);
+
+         // Skipping an unknown member cannot find the end of a value whose layout is undefined
+         std::string struct_buffer{};
+         expect(not glz::write_beve(WithComplexArray{.id = 7, .values = {{1.0, 2.0}}, .name = "after"}, struct_buffer));
+         set_complex_subtype(struct_buffer, subtype);
+         SkipSimple dst{};
+         expect(glz::read<skip_unknown>(dst, struct_buffer).ec == glz::error_code::syntax_error) << int(subtype);
+      }
+   };
+
+   "beve_to_json keeps the numerical type of integer complex values"_test = [] {
+      std::string json{};
+
+      std::string buffer{};
+      expect(not glz::write_beve(std::complex<int32_t>{-1, 2}, buffer));
+      expect(not glz::beve_to_json(buffer, json));
+      expect(json == "[-1,2]") << json;
+
+      expect(not glz::write_beve(std::vector<std::complex<uint16_t>>{{1, 2}, {65535, 4}}, buffer));
+      expect(not glz::beve_to_json(buffer, json));
+      expect(json == "[[1,2],[65535,4]]") << json;
+
+      expect(not glz::write_beve(std::vector<std::complex<int8_t>>{{-128, 127}}, buffer));
+      expect(not glz::beve_to_json(buffer, json));
+      expect(json == "[[-128,127]]") << json;
+   };
+};
+
 int main()
 {
    trace.begin("binary_test");

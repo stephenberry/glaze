@@ -136,6 +136,26 @@ namespace glz::tag
 
 namespace glz
 {
+   // Extension subtypes, stored in bits 3-4 of an extensions tag
+   namespace extension
+   {
+      constexpr uint8_t delimiter = 0; // Data delimiter (tag = 0x06)
+      // Variant type (tag = 0x0E), count = variant index. BEVE Version 2 writes variants as ordinary
+      // self-describing values, so this subtype only appears in Version 1 data, which remains
+      // readable but is no longer written.
+      constexpr uint8_t variant = 1;
+      constexpr uint8_t complex = 3; // Complex number/array (tag = 0x1E)
+
+      // Complex sub-types, stored in bits 0-2 of the COMPLEX HEADER that follows the complex tag.
+      // Values 2-7 are undefined and must be rejected.
+      constexpr uint8_t complex_subtype_mask = 0b00000'111;
+      constexpr uint8_t complex_number = 0; // Single complex (count = 2)
+      constexpr uint8_t complex_array = 1; // Array of complex (count = element count)
+   }
+}
+
+namespace glz
+{
    template <class T>
    constexpr uint8_t byte_count = uint8_t(std::bit_width(sizeof(T)) - 1);
 
