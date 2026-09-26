@@ -147,10 +147,13 @@ namespace glz
       constexpr uint8_t complex = 3; // Complex number/array (tag = 0x1E)
 
       // Complex sub-types, stored in bits 0-2 of the COMPLEX HEADER that follows the complex tag.
-      // Values 2-7 are undefined and must be rejected.
+      // Values 3-7 are undefined and must be rejected.
       constexpr uint8_t complex_subtype_mask = 0b00000'111;
       constexpr uint8_t complex_number = 0; // Single complex (count = 2)
       constexpr uint8_t complex_array = 1; // Array of complex (count = element count)
+      // Array of complex whose VALUE is a nested aligned typed array of the interleaved components
+      // (count = element count, half the nested SIZE)
+      constexpr uint8_t complex_aligned_array = 2;
    }
 }
 
@@ -351,5 +354,68 @@ namespace glz
       default:
          return;
       }
+   }
+
+   // Reads the nested VALUE of an aligned complex array (complex sub-type 2) up to its DATA:
+   //
+   //    HEADER | COMPLEX HEADER | ALIGNED_HEADER | NUMERIC_HEADER | SIZE | PADDING_LENGTH | PADDING | DATA
+   //
+   // `it` points just past the COMPLEX HEADER, whose value is `complex_header`. The nested value must be an
+   // aligned typed array (an unaligned one is rejected), its NUMERIC_HEADER must encode the same numerical type
+   // and BYTE COUNT as the COMPLEX HEADER, and its SIZE counts interleaved components, so it must be even.
+   // The NUMERIC_HEADER is compared before SIZE is decoded, so a mismatched message is rejected before any
+   // caller allocates for it. Padding contents are ignored.
+   //
+   // On success `it` points at the first component, the whole payload is known to be in bounds, and the
+   // number of complex elements (SIZE / 2) is returned.
+   [[nodiscard]] GLZ_ALWAYS_INLINE size_t read_aligned_complex_header(is_context auto&& ctx, auto&& it, auto end,
+                                                                      const uint8_t complex_header) noexcept
+   {
+      if (invalid_end(ctx, it, end)) {
+         return 0;
+      }
+      if (uint8_t(*it) != tag::aligned_typed_array) [[unlikely]] {
+         ctx.error = error_code::syntax_error;
+         return 0;
+      }
+      ++it;
+
+      if (invalid_end(ctx, it, end)) {
+         return 0;
+      }
+      // The COMPLEX HEADER holds the numerical type (bits 3-4) and BYTE COUNT (bits 5-7) where a numeric
+      // typed array header does, so the two agree exactly when those bits match. Category 3 is not numeric.
+      constexpr uint8_t numeric_bits = 0b111'11'000;
+      const uint8_t expected_numeric_header = tag::typed_array | (complex_header & numeric_bits);
+      if (uint8_t(*it) != expected_numeric_header || ((complex_header >> 3) & 0b11) == 3) [[unlikely]] {
+         ctx.error = error_code::syntax_error;
+         return 0;
+      }
+      ++it;
+
+      const size_t components = int_from_compressed(ctx, it, end);
+      if (bool(ctx.error)) [[unlikely]] {
+         return 0;
+      }
+      if (components % 2 != 0) [[unlikely]] {
+         ctx.error = error_code::syntax_error;
+         return 0;
+      }
+
+      if (invalid_end(ctx, it, end)) {
+         return 0;
+      }
+      const uint8_t padding = uint8_t(*it);
+      ++it;
+      const size_t component_size = byte_count_lookup[complex_header >> 5];
+      if (padding >= component_size) [[unlikely]] {
+         ctx.error = error_code::syntax_error;
+         return 0;
+      }
+      if (typed_array_out_of_bounds(ctx, it, end, components, component_size, padding)) {
+         return 0;
+      }
+      it += padding;
+      return components / 2;
    }
 }

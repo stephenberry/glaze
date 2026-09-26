@@ -9412,6 +9412,124 @@ namespace beve_complex_subtypes
    }
 
    constexpr glz::opts skip_unknown{.format = glz::BEVE, .error_on_unknown_keys = false};
+
+   // examples/aligned_complex_float64_array.beve from the BEVE specification repository:
+   // [1.0 + 2.0i, 3.0 + 4.0i] as an aligned complex array (complex sub-type 2) at the start of a message
+   inline const std::string golden_aligned_complex{"\x1E\x62\x5C\x64\x10\x02\x00\x00"
+                                                   "\x00\x00\x00\x00\x00\x00\xF0\x3F"
+                                                   "\x00\x00\x00\x00\x00\x00\x00\x40"
+                                                   "\x00\x00\x00\x00\x00\x00\x08\x40"
+                                                   "\x00\x00\x00\x00\x00\x00\x10\x40",
+                                                   40};
+
+   inline const std::vector<std::complex<double>> golden_values{{1.0, 2.0}, {3.0, 4.0}};
+
+   // Numerical type (bits 3-4) and BYTE COUNT (bits 5-7) shared by the COMPLEX HEADER and numeric headers
+   template <class X>
+   constexpr uint8_t numeric_bits =
+      uint8_t((std::floating_point<X> ? 0 : (std::is_signed_v<X> ? 0b000'01'000 : 0b000'10'000)) |
+              (glz::byte_count<X> << 5));
+
+   inline void append_compressed(std::string& out, size_t n)
+   {
+      expect(n < 16384);
+      if (n < 64) {
+         out.push_back(char(n << 2));
+      }
+      else {
+         const auto v = uint16_t((n << 2) | 1);
+         out.push_back(char(v & 0xFF));
+         out.push_back(char(v >> 8));
+      }
+   }
+
+   template <class X>
+   void append_le(std::string& out, X x)
+   {
+      if constexpr (std::endian::native == std::endian::big) {
+         glz::byteswap_le(x);
+      }
+      char bytes[sizeof(X)];
+      std::memcpy(bytes, &x, sizeof(X));
+      out.append(bytes, sizeof(X));
+   }
+
+   // Hand-encodes an aligned complex array (complex sub-type 2) as a writer placing it `offset` bytes into a
+   // message would. Padding bytes default to 0xAA, since decoders must ignore their contents.
+   template <class X>
+   std::string encode_aligned_complex(const std::vector<std::complex<X>>& values, size_t offset = 0,
+                                      char padding_byte = char(0xAA))
+   {
+      std::string out{};
+      out.push_back(char(glz::tag::extensions | 0b00011'000));
+      out.push_back(char(numeric_bits<X> | glz::extension::complex_aligned_array));
+      out.push_back(char(glz::tag::aligned_typed_array));
+      out.push_back(char(numeric_bits<X> | glz::tag::typed_array));
+      append_compressed(out, 2 * values.size());
+      const size_t padding = (sizeof(X) - (offset + out.size() + 1) % sizeof(X)) % sizeof(X);
+      out.push_back(char(padding));
+      out.append(padding, padding_byte);
+      for (const auto& c : values) {
+         append_le(out, c.real());
+         append_le(out, c.imag());
+      }
+      return out;
+   }
+
+   // Replaces the first complex value in `buffer`, a complex array of `n` elements with components of type X
+   // written as sub-type 1, with `replacement`
+   template <class X>
+   void replace_complex_array(std::string& buffer, size_t n, const std::string& replacement)
+   {
+      const size_t start = complex_header_offset(buffer) - 1;
+      const size_t old_length = 2 + (n < 64 ? 1 : 2) + n * 2 * sizeof(X);
+      buffer.replace(start, old_length, replacement);
+   }
+
+   // A struct with a complex array member, encoded with `member` (the bytes of a complex value) in its place
+   inline std::string struct_with_complex_member(const std::string& member)
+   {
+      std::string buffer{};
+      expect(not glz::write_beve(WithComplexArray{.id = 7, .values = {{1.0, 2.0}}, .name = "after"}, buffer));
+      replace_complex_array<double>(buffer, 1, member);
+      return buffer;
+   }
+
+   template <class X>
+   std::vector<std::complex<X>> sample_values()
+   {
+      if constexpr (std::floating_point<X>) {
+         return {{X(1.5), X(-2.25)}, {X(3), X(4)}, {X(-0.5), X(1000)}};
+      }
+      else if constexpr (std::is_signed_v<X>) {
+         return {{X(-1), X(2)}, {std::numeric_limits<X>::min(), std::numeric_limits<X>::max()}, {X(0), X(-7)}};
+      }
+      else {
+         return {{X(1), X(2)}, {X(0), std::numeric_limits<X>::max()}, {X(9), X(0)}};
+      }
+   }
+
+   // Calls f.template operator()<X>() for every component type BEVE writes complex values with
+   void for_each_component_type(auto&& f)
+   {
+      f.template operator()<float>();
+      f.template operator()<double>();
+      f.template operator()<int8_t>();
+      f.template operator()<int16_t>();
+      f.template operator()<int32_t>();
+      f.template operator()<int64_t>();
+      f.template operator()<uint8_t>();
+      f.template operator()<uint16_t>();
+      f.template operator()<uint32_t>();
+      f.template operator()<uint64_t>();
+   }
+
+   struct complex_span_view
+   {
+      int id{};
+      std::span<const std::complex<double>> values{};
+      std::string name{};
+   };
 }
 
 suite beve_complex_subtype_tests = [] {
@@ -9449,6 +9567,251 @@ suite beve_complex_subtype_tests = [] {
          SkipSimple dst{};
          expect(glz::read<skip_unknown>(dst, struct_buffer).ec == glz::error_code::syntax_error) << int(subtype);
       }
+   };
+
+   "the hand encoder reproduces the golden file"_test = [] {
+      expect(encode_aligned_complex(golden_values, 0, '\0') == golden_aligned_complex);
+   };
+
+   "the golden aligned complex array decodes"_test = [] {
+      std::vector<std::complex<double>> values{};
+      expect(not glz::read_beve(values, golden_aligned_complex));
+      expect(values == golden_values);
+
+      std::array<std::complex<double>, 2> fixed{};
+      expect(not glz::read_beve(fixed, golden_aligned_complex));
+      expect(fixed[0] == golden_values[0] && fixed[1] == golden_values[1]);
+
+      std::deque<std::complex<double>> deque{};
+      expect(not glz::read_beve(deque, golden_aligned_complex));
+      expect(std::ranges::equal(deque, golden_values));
+
+      std::string json{};
+      expect(not glz::beve_to_json(golden_aligned_complex, json));
+      expect(json == "[[1,2],[3,4]]") << json;
+
+      const auto header = glz::beve_peek_header(golden_aligned_complex);
+      expect(header.has_value());
+      if (header) {
+         expect(header->type == glz::tag::extensions);
+         expect(header->ext_type == glz::extension::complex);
+         expect(header->count == 2u); // complex elements, not the 4 components
+         expect(header->header_size == 6u); // tag, complex, aligned and numeric headers, SIZE, PADDING_LENGTH
+      }
+   };
+
+   "aligned complex arrays read at every padding length"_test = [] {
+      for_each_component_type([]<class X>() {
+         const auto values = sample_values<X>();
+         std::string unaligned{};
+         expect(not glz::write_beve(values, unaligned));
+         std::string expected_json{};
+         expect(not glz::beve_to_json(unaligned, expected_json));
+
+         // Each offset gives a distinct padding length, from 0 to sizeof(X) - 1
+         for (size_t offset = 0; offset < sizeof(X); ++offset) {
+            const auto buffer = encode_aligned_complex(values, offset);
+            expect(uint8_t(buffer[5]) == (sizeof(X) - (offset + 6) % sizeof(X)) % sizeof(X));
+
+            std::vector<std::complex<X>> decoded{};
+            expect(not glz::read_beve(decoded, buffer)) << sizeof(X) << offset;
+            expect(decoded == values);
+
+            std::array<std::complex<X>, 3> fixed{};
+            expect(not glz::read_beve(fixed, buffer));
+            expect(std::ranges::equal(fixed, values));
+
+            std::string json{};
+            expect(not glz::beve_to_json(buffer, json));
+            expect(json == expected_json) << json;
+
+            const auto header = glz::beve_peek_header(buffer);
+            expect(header.has_value() && header->count == 3u && header->header_size == 6u);
+         }
+
+         const auto empty = encode_aligned_complex(std::vector<std::complex<X>>{});
+         std::vector<std::complex<X>> decoded{{X(1), X(1)}};
+         expect(not glz::read_beve(decoded, empty));
+         expect(decoded.empty());
+         std::string json{};
+         expect(not glz::beve_to_json(empty, json));
+         expect(json == "[]") << json;
+         const auto header = glz::beve_peek_header(empty);
+         expect(header.has_value() && header->count == 0u);
+      });
+   };
+
+   "skipping an aligned complex member resumes exactly after it"_test = [] {
+      // Before complex sub-types were fully decoded, skip treated sub-type 2 as a single complex number and
+      // resumed parsing in the middle of the payload.
+      for (const auto& values : {golden_values, std::vector<std::complex<double>>{},
+                                 std::vector<std::complex<double>>(70, std::complex<double>{-1.0, 0.5})}) {
+         std::string buffer{};
+         expect(not glz::write_beve(WithComplexArray{.id = 7, .values = values, .name = "after"}, buffer));
+         const size_t start = complex_header_offset(buffer) - 1;
+         replace_complex_array<double>(buffer, values.size(), encode_aligned_complex(values, start));
+
+         WithComplexArray full{};
+         expect(not glz::read_beve(full, buffer));
+         expect(full.id == 7 && full.values == values && full.name == "after");
+
+         SkipSimple skipped{};
+         const auto ec = glz::read<skip_unknown>(skipped, buffer);
+         expect(not ec) << glz::format_error(ec, buffer);
+         expect(skipped.id == 7 && skipped.name == "after");
+
+         std::string json{};
+         expect(not glz::beve_to_json(buffer, json));
+         std::string expected_json{};
+         expect(not glz::write_json(full, expected_json));
+         expect(json == expected_json) << json;
+
+         auto doc = glz::lazy_beve(buffer);
+         expect(doc.has_value());
+         if (doc) {
+            expect((*doc)["name"].get<std::string>().value_or("") == "after");
+         }
+      }
+   };
+
+   "aligned complex arrays reject malformed nested values"_test = [] {
+      auto patched = [](size_t index, char byte) {
+         auto buffer = golden_aligned_complex;
+         buffer[index] = byte;
+         return buffer;
+      };
+
+      auto expect_rejected = [](const std::string& buffer, glz::error_code expected, const char* what) {
+         std::vector<std::complex<double>> values{};
+         expect(glz::read_beve(values, buffer).ec == expected) << what;
+
+         std::string json{};
+         expect(glz::beve_to_json(buffer, json).ec == expected) << what;
+
+         // As an unknown struct member, which is skipped
+         SkipSimple skipped{};
+         expect(glz::read<skip_unknown>(skipped, struct_with_complex_member(buffer)).ec == expected) << what;
+      };
+
+      // The nested value must be an aligned typed array: here it is a plain float64 typed array of 4 components
+      const std::string unaligned = std::string{"\x1E\x62\x64\x10", 4} + golden_aligned_complex.substr(8);
+      expect_rejected(unaligned, glz::error_code::syntax_error, "unaligned nested typed array");
+
+      // The nested numeric header must match the complex header's numerical type and byte count
+      expect_rejected(patched(3, '\x44'), glz::error_code::syntax_error, "float32 nested in float64 complex");
+      expect_rejected(patched(3, '\x6C'), glz::error_code::syntax_error, "int64 nested in float64 complex");
+      expect_rejected(patched(3, '\x7C'), glz::error_code::syntax_error, "non-numeric nested header");
+
+      // The component count must be even
+      expect_rejected(patched(4, '\x0C'), glz::error_code::syntax_error, "odd component count");
+
+      // Padding is at most alignment - 1 bytes
+      expect_rejected(patched(5, '\x08'), glz::error_code::syntax_error, "oversized padding length");
+
+      // A mismatched numeric header is rejected before its declared size is trusted
+      std::string oversized{"\x1E\x62\x5C\x44", 4};
+      append_le(oversized, uint64_t((uint64_t(1) << 40) << 2 | 3));
+      oversized.push_back('\x00');
+      expect_rejected(oversized, glz::error_code::syntax_error, "mismatched header with huge size");
+
+      // With matching headers, a declared size larger than the buffer is reported before allocating
+      oversized[3] = '\x64';
+      expect_rejected(oversized, glz::error_code::unexpected_end, "huge size");
+
+      // Truncated anywhere after the complex header. A struct member cut short is followed by the rest of the
+      // struct, so for skipping the struct buffer itself ends inside the member.
+      const auto struct_buffer = struct_with_complex_member(golden_aligned_complex);
+      const size_t member_start = complex_header_offset(struct_buffer) - 1;
+      for (size_t length = 2; length < golden_aligned_complex.size(); ++length) {
+         const auto truncated = golden_aligned_complex.substr(0, length);
+         std::vector<std::complex<double>> values{};
+         expect(glz::read_beve(values, truncated).ec == glz::error_code::unexpected_end) << length;
+         std::string json{};
+         expect(glz::beve_to_json(truncated, json).ec == glz::error_code::unexpected_end) << length;
+         SkipSimple skipped{};
+         expect(glz::read<skip_unknown>(skipped, struct_buffer.substr(0, member_start + length)).ec ==
+                glz::error_code::unexpected_end)
+            << length;
+      }
+
+      auto peek_error = [](const std::string& buffer) {
+         const auto header = glz::beve_peek_header(buffer);
+         return header ? glz::error_ctx{} : header.error();
+      };
+      expect(peek_error(unaligned).ec == glz::error_code::syntax_error && peek_error(unaligned).count == 2u);
+      expect(peek_error(patched(3, '\x44')).ec == glz::error_code::syntax_error);
+      expect(peek_error(patched(3, '\x44')).count == 3u);
+      expect(peek_error(patched(4, '\x0C')).ec == glz::error_code::syntax_error);
+      expect(peek_error(patched(4, '\x0C')).count == 4u);
+      for (size_t length = 2; length < 6; ++length) {
+         expect(peek_error(golden_aligned_complex.substr(0, length)).ec == glz::error_code::unexpected_end);
+      }
+
+      // A single complex value cannot be read from an array
+      std::complex<double> number{};
+      expect(glz::read_beve(number, golden_aligned_complex).ec == glz::error_code::syntax_error);
+   };
+
+   if constexpr (std::endian::native == std::endian::little) {
+      "zero-copy span<const std::complex<double>> from an aligned complex array"_test = [] {
+         alignas(8) std::array<char, 40> storage{};
+         std::memcpy(storage.data(), golden_aligned_complex.data(), storage.size());
+         const std::string_view buffer{storage.data(), storage.size()};
+
+         std::span<const std::complex<double>> view{};
+         expect(not glz::read_beve(view, buffer));
+         expect(view.size() == 2u);
+         expect(std::ranges::equal(view, golden_values));
+         expect(reinterpret_cast<const char*>(view.data()) == storage.data() + 8);
+
+         // A span with a static extent has no empty state, so it starts out viewing placeholder storage
+         const std::array<std::complex<double>, 3> placeholder{};
+         std::span<const std::complex<double>, 2> fixed_view{placeholder.data(), 2};
+         expect(not glz::read_beve(fixed_view, buffer));
+         expect(fixed_view.data() == view.data());
+
+         std::span<const std::complex<double>, 3> wrong_extent{placeholder};
+         expect(glz::read_beve(wrong_extent, buffer).ec == glz::error_code::syntax_error);
+
+         std::span<const std::complex<float>> wrong_type{};
+         expect(glz::read_beve(wrong_type, buffer).ec == glz::error_code::syntax_error);
+
+         // An unaligned complex array gives no alignment guarantee, so it cannot back a multi-byte span
+         std::string unaligned{};
+         expect(not glz::write_beve(golden_values, unaligned));
+         expect(glz::read_beve(view, unaligned).ec == glz::error_code::syntax_error);
+      };
+
+      "zero-copy complex span as a struct member"_test = [] {
+         std::string buffer{};
+         const std::vector<std::complex<double>> values(8, std::complex<double>{0.25, -4.0});
+         expect(not glz::write_beve(WithComplexArray{.id = 3, .values = values, .name = "view"}, buffer));
+         const size_t start = complex_header_offset(buffer) - 1;
+         replace_complex_array<double>(buffer, values.size(), encode_aligned_complex(values, start));
+
+         complex_span_view view{};
+         expect(not glz::read_beve(view, buffer));
+         expect(view.id == 3 && view.name == "view");
+         expect(std::ranges::equal(view.values, values));
+         const auto* bytes = reinterpret_cast<const char*>(view.values.data());
+         expect(bytes > buffer.data() && bytes < buffer.data() + buffer.size());
+         expect(reinterpret_cast<uintptr_t>(view.values.data()) % alignof(std::complex<double>) == 0u);
+      };
+   }
+
+   "zero-copy single-byte complex spans accept either array sub-type"_test = [] {
+      const std::vector<std::complex<int8_t>> values{{-1, 2}, {3, -4}};
+
+      std::string unaligned{};
+      expect(not glz::write_beve(values, unaligned));
+      std::span<const std::complex<int8_t>> view{};
+      expect(not glz::read_beve(view, unaligned));
+      expect(std::ranges::equal(view, values));
+
+      const auto aligned = encode_aligned_complex(values);
+      expect(not glz::read_beve(view, aligned));
+      expect(std::ranges::equal(view, values));
+      expect(reinterpret_cast<const char*>(view.data()) == aligned.data() + 6);
    };
 
    "beve_to_json keeps the numerical type of integer complex values"_test = [] {

@@ -693,6 +693,18 @@ namespace glz
                   return emit_char(ctx, ']', out, ix);
                };
 
+               // Writes n complex values as [[re,im],...]
+               auto write_complex_array = [&](const size_t n) -> bool {
+                  if (!emit_char(ctx, '[', out, ix)) return false;
+                  for (size_t i = 0; i < n; ++i) {
+                     if (!write_complex()) return false;
+                     if (i != n - 1) {
+                        if (!emit_char(ctx, ',', out, ix)) return false;
+                     }
+                  }
+                  return emit_char(ctx, ']', out, ix);
+               };
+
                switch (complex_header & glz::extension::complex_subtype_mask) {
                case glz::extension::complex_number: {
                   if (!write_complex()) return;
@@ -703,14 +715,16 @@ namespace glz
                   if (bool(ctx.error)) [[unlikely]] {
                      return;
                   }
-                  if (!emit_char(ctx, '[', out, ix)) return;
-                  for (size_t i = 0; i < n; ++i) {
-                     if (!write_complex()) return;
-                     if (i != n - 1) {
-                        if (!emit_char(ctx, ',', out, ix)) return;
-                     }
+                  if (!write_complex_array(n)) return;
+                  break;
+               }
+               case glz::extension::complex_aligned_array: {
+                  // Alignment is a storage property: the JSON matches an unaligned complex array
+                  const auto n = read_aligned_complex_header(ctx, it, end, complex_header);
+                  if (bool(ctx.error)) [[unlikely]] {
+                     return;
                   }
-                  if (!emit_char(ctx, ']', out, ix)) return;
+                  if (!write_complex_array(n)) return;
                   break;
                }
                default: {

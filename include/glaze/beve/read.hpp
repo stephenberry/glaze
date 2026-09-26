@@ -496,6 +496,46 @@ namespace glz
       }
    };
 
+   namespace detail
+   {
+      // Reads the COMPLEX HEADER of a complex array with components of type X, and the element count that
+      // follows it, accepting both array encodings:
+      //
+      //    sub-type 1: HEADER | COMPLEX HEADER | SIZE | DATA
+      //    sub-type 2: HEADER | COMPLEX HEADER | VALUE (an aligned typed array of the interleaved components)
+      //
+      // `it` points at the COMPLEX HEADER. On success `it` points at the first component and the number of
+      // complex elements is returned. Both encodings lay out DATA identically: re[0], im[0], re[1], im[1], ...
+      // A sub-type 2 payload has been bounds checked; a sub-type 1 payload is left to the caller.
+      template <class X>
+      [[nodiscard]] GLZ_ALWAYS_INLINE size_t read_beve_complex_array_header(is_context auto&& ctx, auto&& it,
+                                                                            auto end) noexcept
+      {
+         if (invalid_end(ctx, it, end)) {
+            return 0;
+         }
+         constexpr uint8_t type = std::floating_point<X> ? 0 : (std::is_signed_v<X> ? 0b000'01'000 : 0b000'10'000);
+         constexpr uint8_t numeric_bits = type | (byte_count<X> << 5);
+         const auto complex_header = uint8_t(*it);
+         if ((complex_header & ~extension::complex_subtype_mask) != numeric_bits) [[unlikely]] {
+            ctx.error = error_code::syntax_error;
+            return 0;
+         }
+         ++it;
+
+         switch (complex_header & extension::complex_subtype_mask) {
+         case extension::complex_array:
+            return int_from_compressed(ctx, it, end);
+         case extension::complex_aligned_array:
+            return read_aligned_complex_header(ctx, it, end, complex_header);
+         default:
+            // A single complex number, or an undefined sub-type
+            ctx.error = error_code::syntax_error;
+            return 0;
+         }
+      }
+   }
+
    template <boolean_like T>
    struct from<BEVE, T>
    {
@@ -1778,6 +1818,67 @@ namespace glz
       }
    };
 
+   // Zero-copy specialization for std::span<const std::complex<X>>: the span points directly at the interleaved
+   // components in the BEVE buffer, which must outlive it.
+   // For multi-byte components: requires an aligned complex array (sub-type 2) and a little-endian host.
+   // For single-byte components: no alignment is needed, so either complex array sub-type is accepted.
+   template <class T, size_t Extent>
+      requires(std::is_const_v<T> && complex_t<std::remove_const_t<T>>)
+   struct from<BEVE, std::span<T, Extent>> final
+   {
+      using V = std::remove_const_t<T>;
+      using X = typename V::value_type;
+      static_assert(sizeof(V) == 2 * sizeof(X), "zero-copy complex spans require {re, im} with no padding");
+
+      template <auto Opts>
+      static void op(std::span<T, Extent>& value, is_context auto&& ctx, auto&& it, auto end)
+      {
+         GLZ_ASSERT_OWNS_ITS_BYTES(decltype(ctx));
+
+         if constexpr (sizeof(X) > 1 && std::endian::native != std::endian::little) {
+            ctx.error = error_code::feature_not_supported;
+            return;
+         }
+
+         if (invalid_end(ctx, it, end)) {
+            return;
+         }
+         constexpr uint8_t header = tag::extensions | 0b00011'000;
+         if (uint8_t(*it) != header) [[unlikely]] {
+            ctx.error = error_code::syntax_error;
+            return;
+         }
+         ++it;
+
+         if constexpr (sizeof(X) > 1) {
+            // Only the aligned sub-type guarantees the payload is aligned for X
+            if (invalid_end(ctx, it, end)) {
+               return;
+            }
+            if ((uint8_t(*it) & extension::complex_subtype_mask) != extension::complex_aligned_array) [[unlikely]] {
+               ctx.error = error_code::syntax_error;
+               return;
+            }
+         }
+
+         const size_t n = detail::read_beve_complex_array_header<X>(ctx, it, end);
+         if (bool(ctx.error)) [[unlikely]] {
+            return;
+         }
+
+         if constexpr (Extent != std::dynamic_extent) {
+            if (n != Extent) [[unlikely]] {
+               ctx.error = error_code::syntax_error;
+               return;
+            }
+         }
+
+         if (typed_array_out_of_bounds(ctx, it, end, n, sizeof(V))) return;
+         value = std::span<T, Extent>{reinterpret_cast<const V*>(&(*it)), n};
+         it += n * sizeof(V);
+      }
+   };
+
    template <readable_array_t T>
    struct from<BEVE, T> final
    {
@@ -2195,21 +2296,12 @@ namespace glz
                return;
             }
             ++it;
-            if (invalid_end(ctx, it, end)) {
-               return;
-            }
 
             using X = typename V::value_type;
-            constexpr uint8_t complex_array = 1;
-            constexpr uint8_t type = std::floating_point<X> ? 0 : (std::is_signed_v<X> ? 0b000'01'000 : 0b000'10'000);
-            constexpr uint8_t complex_header = complex_array | type | (byte_count<X> << 5);
-            const auto complex_tag = uint8_t(*it);
-            if (complex_tag != complex_header) [[unlikely]] {
-               ctx.error = error_code::syntax_error;
-               return;
-            }
-            ++it;
-            std::conditional_t<Opts.partial_read, size_t, const size_t> n = int_from_compressed(ctx, it, end);
+            // Accepts complex arrays (sub-type 1) and aligned complex arrays (sub-type 2), whose DATA is laid out
+            // identically once the header has been read
+            std::conditional_t<Opts.partial_read, size_t, const size_t> n =
+               detail::read_beve_complex_array_header<X>(ctx, it, end);
             if (bool(ctx.error)) [[unlikely]] {
                return;
             }

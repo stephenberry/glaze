@@ -167,8 +167,9 @@ struct beve_header {
 | `glz::extension::variant` (1) | Variant (Version 1 only) | Variant index | 1 + compressed_int size |
 | `glz::extension::complex` (3) | Complex number | 2 (real + imag) | 2 |
 | `glz::extension::complex` (3) | Complex array | Element count | 2 + compressed_int size |
+| `glz::extension::complex` (3) | Aligned complex array | Element count (half the nested component count) | 4 + compressed_int size + 1 (padding length byte) |
 
-For complex types, distinguish single complex vs array by checking if `count == 2` and `header_size == 2` (single) or `header_size > 2` (array).
+For complex types, the sub-type is in the low three bits of the complex header, `data[1] & glz::extension::complex_subtype_mask`: `glz::extension::complex_number` (0), `glz::extension::complex_array` (1), or `glz::extension::complex_aligned_array` (2). Other sub-types are rejected with `error_code::syntax_error`.
 
 **Pre-allocation Example**
 

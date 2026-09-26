@@ -298,6 +298,14 @@ namespace glz
             it += total;
             break;
          }
+         case extension::complex_aligned_array: {
+            const size_t n = read_aligned_complex_header(ctx, it, end, complex_header);
+            if (bool(ctx.error)) [[unlikely]] {
+               return;
+            }
+            it += 2 * elem_byte_count * n; // bounds checked by read_aligned_complex_header
+            break;
+         }
          default:
             // An undefined sub-type has no known layout, so its end cannot be found
             ctx.error = error_code::syntax_error;

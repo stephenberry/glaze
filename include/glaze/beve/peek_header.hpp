@@ -20,7 +20,8 @@ namespace glz
                       // extensions(6)
       uint8_t ext_type{}; // For extensions: subtype (extension::variant, extension::complex, etc.)
       size_t count{}; // Element/member count for containers, string length for strings, 1 for scalars
-                      // For variants: the variant index; for complex_number: 2; for complex_array: element count
+                      // For variants: the variant index; for complex_number: 2; for complex_array and
+                      // complex_aligned_array: complex element count
       size_t header_size{}; // Total bytes consumed by tag + count encoding (for seeking past header)
    };
 
@@ -242,6 +243,35 @@ namespace glz
                }
                info.count = detail::peek_compressed_int_value(data + 2, size - 2);
                info.header_size = 2 + int_size;
+               break;
+            }
+            case extension::complex_aligned_array: {
+               // Aligned complex array: tag + complex_header + aligned_header + numeric_header
+               //                        + compressed_int(component count) + padding_length + padding + data
+               if (size < 3) [[unlikely]] {
+                  return unexpected(error_ctx{2, error_code::unexpected_end});
+               }
+               if (data[2] != tag::aligned_typed_array) [[unlikely]] {
+                  return unexpected(error_ctx{2, error_code::syntax_error});
+               }
+               if (size < 4) [[unlikely]] {
+                  return unexpected(error_ctx{3, error_code::unexpected_end});
+               }
+               // The nested numeric header must encode the complex header's numerical type and byte count
+               const uint8_t expected_numeric_header = tag::typed_array | (complex_header & 0b111'11'000);
+               if (data[3] != expected_numeric_header || ((complex_header >> 3) & 0b11) == 3) [[unlikely]] {
+                  return unexpected(error_ctx{3, error_code::syntax_error});
+               }
+               const size_t int_size = detail::peek_compressed_int_size(data + 4, size - 4);
+               if (int_size == 0 || size < 4 + int_size + 1) [[unlikely]] {
+                  return unexpected(error_ctx{4, error_code::unexpected_end});
+               }
+               const size_t components = detail::peek_compressed_int_value(data + 4, size - 4);
+               if (components % 2 != 0) [[unlikely]] {
+                  return unexpected(error_ctx{4, error_code::syntax_error});
+               }
+               info.count = components / 2; // complex elements, not components
+               info.header_size = 4 + int_size + 1; // +1 for padding_length byte, as for aligned typed arrays
                break;
             }
             default: {
