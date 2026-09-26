@@ -9739,9 +9739,19 @@ suite beve_complex_subtype_tests = [] {
       oversized.push_back('\x00');
       expect_rejected(oversized, glz::error_code::syntax_error, "mismatched header with huge size");
 
-      // With matching headers, a declared size larger than the buffer is reported before allocating
+      // With matching headers, a declared size larger than the buffer is reported before allocating. A 4-byte
+      // SIZE, which every platform decodes
+      std::string huge{"\x1E\x62\x5C\x64", 4};
+      append_le(huge, uint32_t((uint32_t(1) << 28) << 2 | 2));
+      huge.push_back('\x00');
+      expect_rejected(huge, glz::error_code::unexpected_end, "huge size");
+
+      // An 8-byte SIZE is out of bounds on 64-bit, and not supported on 32-bit, which cannot address it
       oversized[3] = '\x64';
-      expect_rejected(oversized, glz::error_code::unexpected_end, "huge size");
+      expect_rejected(oversized,
+                      sizeof(size_t) > sizeof(uint32_t) ? glz::error_code::unexpected_end
+                                                        : glz::error_code::invalid_length,
+                      "huge 8-byte size");
 
       // Truncated anywhere after the complex header. A struct member cut short is followed by the rest of the
       // struct, so for skipping the struct buffer itself ends inside the member.
