@@ -9419,21 +9419,21 @@ namespace beve_complex_subtypes
    // initialized inline variable is guaranteed to be constructed (MSVC ABI)
    inline std::string golden_aligned_complex()
    {
-      return std::string{"\x1E\x62\x5C\x64\x10\x02\x00\x00"
-                         "\x00\x00\x00\x00\x00\x00\xF0\x3F"
-                         "\x00\x00\x00\x00\x00\x00\x00\x40"
-                         "\x00\x00\x00\x00\x00\x00\x08\x40"
-                         "\x00\x00\x00\x00\x00\x00\x10\x40",
-                         40};
+      return std::string{
+         "\x1E\x62\x5C\x64\x10\x02\x00\x00"
+         "\x00\x00\x00\x00\x00\x00\xF0\x3F"
+         "\x00\x00\x00\x00\x00\x00\x00\x40"
+         "\x00\x00\x00\x00\x00\x00\x08\x40"
+         "\x00\x00\x00\x00\x00\x00\x10\x40",
+         40};
    }
 
    inline std::vector<std::complex<double>> golden_values() { return {{1.0, 2.0}, {3.0, 4.0}}; }
 
    // Numerical type (bits 3-4) and BYTE COUNT (bits 5-7) shared by the COMPLEX HEADER and numeric headers
    template <class X>
-   constexpr uint8_t numeric_bits =
-      uint8_t((std::floating_point<X> ? 0 : (std::is_signed_v<X> ? 0b000'01'000 : 0b000'10'000)) |
-              (glz::byte_count<X> << 5));
+   constexpr uint8_t numeric_bits = uint8_t(
+      (std::floating_point<X> ? 0 : (std::is_signed_v<X> ? 0b000'01'000 : 0b000'10'000)) | (glz::byte_count<X> << 5));
 
    inline void append_compressed(std::string& out, size_t n)
    {
@@ -9748,10 +9748,10 @@ suite beve_complex_subtype_tests = [] {
 
       // An 8-byte SIZE is out of bounds on 64-bit, and not supported on 32-bit, which cannot address it
       oversized[3] = '\x64';
-      expect_rejected(oversized,
-                      sizeof(size_t) > sizeof(uint32_t) ? glz::error_code::unexpected_end
-                                                        : glz::error_code::invalid_length,
-                      "huge 8-byte size");
+      expect_rejected(
+         oversized,
+         sizeof(size_t) > sizeof(uint32_t) ? glz::error_code::unexpected_end : glz::error_code::invalid_length,
+         "huge 8-byte size");
 
       // Truncated anywhere after the complex header. A struct member cut short is followed by the rest of the
       // struct, so for skipping the struct buffer itself ends inside the member.
@@ -9948,8 +9948,8 @@ suite beve_complex_subtype_tests = [] {
       "zero-copy complex span from the aligned writer"_test = [] {
          const std::vector<std::complex<float>> values(10, std::complex<float>{0.5f, -1.5f});
          std::string buffer{};
-         expect(not glz::write<aligned_beve_opts>(WithComplexFloatArray{.id = 9, .values = values, .name = "f"},
-                                                  buffer));
+         expect(
+            not glz::write<aligned_beve_opts>(WithComplexFloatArray{.id = 9, .values = values, .name = "f"}, buffer));
 
          complex_float_span_view dst{};
          expect(not glz::read_beve(dst, buffer));
@@ -10015,9 +10015,8 @@ suite beve_packed_bool_tests = [] {
       std::string buffer{};
       expect(not glz::write_beve(std::bitset<13>{}.set(), buffer));
       expect(uint8_t(buffer.back()) == 0b0001'1111);
-      expect(not glz::write_beve(std::array<bool, 13>{true, true, true, true, true, true, true, true, true, true,
-                                                      true, true, true},
-                                 buffer));
+      expect(not glz::write_beve(
+         std::array<bool, 13>{true, true, true, true, true, true, true, true, true, true, true, true, true}, buffer));
       expect(uint8_t(buffer.back()) == 0b0001'1111);
    };
 
