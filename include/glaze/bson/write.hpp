@@ -726,6 +726,11 @@ namespace glz
       requires((glaze_object_t<T> || reflectable<T>) && !custom_write<T>)
    struct to<BSON, T>
    {
+      // A keyed write emits one key per member; a repeated key would name one member twice and lose
+      // the other, so the writer refuses the shape the keyed reader already refuses. Array-shaped
+      // writes go through the glaze_array_t writer, which has no keys.
+      static_assert(keys_are_unique<T>(), GLZ_DUPLICATE_KEYS_MESSAGE);
+
       static constexpr uint8_t type_code = bson::type::document;
       static constexpr auto N = reflect<T>::size;
 
