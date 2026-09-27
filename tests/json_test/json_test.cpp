@@ -21,7 +21,6 @@
 #include <set>
 #include <span>
 #if defined(__STDCPP_FLOAT128_T__)
-#include <charconv>
 #include <stdfloat>
 #endif
 #include <tuple>
@@ -10192,16 +10191,12 @@ suite bitset = [] {
 };
 
 #if defined(__STDCPP_FLOAT128_T__) && !defined(__APPLE__)
-// The capability question is the library's: glz::has_charconv_float_write/read ask <charconv> whether
-// it has the overloads, and the library's float128 paths assert on the same answer. __STDCPP_FLOAT128_T__
-// only reports that the type exists -- MinGW's libstdc++ defines it with no _Float128 overloads -- so
-// where the answer is no this suite registers with nothing in it. The suite lambda is generic because
-// that makes the discarded statement non-dependent, so the branch that cannot compile is never
-// instantiated.
-suite float128_test = []<class = void> {
-   if constexpr (glz::has_charconv_float_write<std::float128_t> && glz::has_charconv_float_read<std::float128_t>) {
+// __STDCPP_FLOAT128_T__ does not guarantee the <charconv> overloads (MinGW lacks them). Float keeps the
+// discarded branch dependent, so it is never instantiated where they are missing.
+suite float128_test = []<class Float = std::float128_t> {
+   if constexpr (glz::has_charconv_float_write<Float> && glz::has_charconv_float_read<Float>) {
       "float128"_test = [] {
-         std::float128_t x = 3.14;
+         Float x = 3.14;
 
          std::string s{};
          expect(not glz::write_json(x, s));

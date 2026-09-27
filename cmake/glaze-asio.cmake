@@ -37,17 +37,11 @@ function(glaze_setup_asio)
         return()
     endif()
 
-    # Created once, ahead of the backend branches: they choose where Asio comes from, and
-    # anything true of all three belongs here rather than three times below.
     add_library(glaze_asio INTERFACE)
     add_library(glaze::asio ALIAS glaze_asio)
 
-    # Asio's Windows backend calls Winsock itself -- WSAStartup/WSACleanup, and AcceptEx for
-    # every asynchronous accept -- and names the libraries only through a `#pragma comment(lib,
-    # ...)` that only MSVC honours (asio/detail/socket_types.hpp), so a MinGW link leaves those
-    # symbols undefined. Both are needed: AcceptEx and GetAcceptExSockaddrs live in mswsock.dll,
-    # not in ws2_32.dll. Naming them on the target that pulls Asio in keeps MinGW consumers
-    # linkable, including consumers of the installed package.
+    # Asio requests Winsock via `#pragma comment(lib, ...)`, which only MSVC honors.
+    # mswsock provides AcceptEx and GetAcceptExSockaddrs.
     if(MINGW)
         target_link_libraries(glaze_asio INTERFACE ws2_32 mswsock)
     endif()

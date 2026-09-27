@@ -122,11 +122,8 @@ namespace glz
       requires std::floating_point<T>;
    };
 
-   // 16-byte floats are written and read through <charconv>, and <charconv> does not always have the
-   // overloads even where __STDCPP_FLOAT128_T__ says the type exists: MinGW's libstdc++ defines the
-   // macro while its to_chars/from_chars have no _Float128 overloads, because its long double is not
-   // binary128 and it has no quadmath. These ask <charconv> itself, so a toolchain without the overloads
-   // answers false instead of failing inside the call.
+   // 16-byte floats are written and read through <charconv>, which may lack the overloads even when
+   // __STDCPP_FLOAT128_T__ is defined (e.g. MinGW's libstdc++).
    template <class T>
    concept has_charconv_float_write = requires(T value, char* first, char* last) {
       std::to_chars(first, last, value, std::chars_format::general);

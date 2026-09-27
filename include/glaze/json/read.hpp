@@ -798,10 +798,8 @@ namespace glz
 #if !defined(_LIBCPP_VERSION) || defined(_LIBCPP_AVAILABILITY_HAS_TO_CHARS_FLOATING_POINT)
             if constexpr (is_float128<V>) {
                static_assert(has_charconv_float_read<V>,
-                             "this toolchain's <charconv> has no std::from_chars overload for this 16-byte "
-                             "float, which is how Glaze parses it (MinGW's libstdc++ defines "
-                             "__STDCPP_FLOAT128_T__ without the _Float128 overloads). Read the value into "
-                             "a double instead, or use a toolchain whose <charconv> handles the type.");
+                             "std::from_chars has no overload for this 16-byte float on this toolchain (e.g. "
+                             "MinGW). Read the value into a double instead.");
                auto [ptr, ec] = std::from_chars(it, end, value);
                if (ec != std::errc()) {
                   ctx.error = error_code::parse_number_failure;
