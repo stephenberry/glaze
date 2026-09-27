@@ -1,20 +1,3 @@
-include(FetchContent)
-
-FetchContent_Declare(
-  ut
-  GIT_REPOSITORY https://github.com/openalgz/ut
-  GIT_TAG v1.2.1
-  GIT_SHALLOW TRUE
-)
-
-message(STATUS "Fetching dependencies...")
-set_directory_properties(PROPERTIES EXCLUDE_FROM_ALL TRUE)
-set(CMAKE_SKIP_INSTALL_RULES ON CACHE BOOL "" FORCE)
-FetchContent_MakeAvailable(ut)
-set(CMAKE_SKIP_INSTALL_RULES OFF CACHE BOOL "" FORCE)
-set_directory_properties(PROPERTIES EXCLUDE_FROM_ALL FALSE)
-message(STATUS "...finished fetching dependencies.")
-
 # Setup the Asio backend (Boost / standalone / bundled) used by networking tests.
 # Selection plus the GLZ_USE_BOOST_ASIO bridge live in cmake/glaze-asio.cmake, the
 # single source of truth shared with the benchmarks, so glaze/ext/glaze_asio.hpp and
@@ -33,8 +16,9 @@ option(glaze_ENABLE_SANITIZERS "Enable AddressSanitizer and UndefinedBehaviorSan
 
 add_library(glz_test_common INTERFACE)
 target_compile_features(glz_test_common INTERFACE cxx_std_23)
-target_link_libraries(glz_test_common INTERFACE ut::ut glaze::glaze glaze::asio)
-# scratch_directory.hpp, included by the suites that write files to isolate themselves
+target_link_libraries(glz_test_common INTERFACE glaze::glaze glaze::asio)
+# Provides ut/ut.hpp (the vendored test framework, see ut/LICENSE) and the shared test
+# headers such as scratch_directory.hpp
 target_include_directories(glz_test_common INTERFACE ${CMAKE_CURRENT_SOURCE_DIR})
 
 if(MSVC)
@@ -59,7 +43,7 @@ endif()
 
 add_library(glz_test_exceptions INTERFACE)
 target_compile_features(glz_test_exceptions INTERFACE cxx_std_23)
-target_link_libraries(glz_test_exceptions INTERFACE ut::ut glaze::glaze glaze::asio)
+target_link_libraries(glz_test_exceptions INTERFACE glaze::glaze glaze::asio)
 target_include_directories(glz_test_exceptions INTERFACE ${CMAKE_CURRENT_SOURCE_DIR})
 if(MSVC)
     target_compile_options(glz_test_exceptions INTERFACE /GR- /bigobj)
