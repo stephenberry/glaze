@@ -109,6 +109,10 @@ The request object provides:
 - `req.params` - Path parameters from route (e.g., `:id`) - **URL-decoded**
 - `req.query` - Parsed query parameters - **URL-decoded**
 
+Decoded `:param` and `*wildcard` captures with a `..` component, a leading
+`/` or `\`, or a Windows drive prefix such as `C:` do not match. Encoded
+separators elsewhere in a capture remain valid.
+
 See [URL Utilities](url.md) for more details on query string parsing and URL decoding.
 
 ### Parameter Constraints

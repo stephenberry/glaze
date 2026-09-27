@@ -406,6 +406,26 @@ namespace glz
       }
 
       /**
+       * @brief Detect a decoded capture that starts at a root.
+       *
+       * The target is split on literal '/' before percent-decoding, so a leading
+       * "%2f" only becomes a "/" here. Joined onto a base directory, a rooted
+       * capture replaces the base rather than extending it
+       * (std::filesystem::path{"/srv/www"} / "/etc/passwd" is "/etc/passwd"), so it
+       * escapes as surely as a ".." segment. A leading '\\' also roots a path
+       * on Windows. Drive-qualified paths such as "C:\\file" or "C:file" can
+       * replace the base there, so reject their prefix on every platform.
+       */
+      static bool is_rooted_path(std::string_view path) noexcept
+      {
+         if (path.empty()) return false;
+         if (path.front() == '/' || path.front() == '\\') return true;
+         const char first = path.front();
+         return path.size() >= 2 && path[1] == ':' &&
+                ((first >= 'A' && first <= 'Z') || (first >= 'a' && first <= 'z'));
+      }
+
+      /**
        * @brief Register a route in the table.
        *
        * @param method The HTTP method (GET, POST, etc.)
@@ -600,9 +620,9 @@ namespace glz
             std::string decoded = url_decode(segment);
 
             // A ":param" captures a single segment; refuse a decoded ".."
-            // component so the value cannot escape a base directory when a
-            // handler treats it as a path.
-            if (!has_dot_dot_segment(decoded)) {
+            // component or a leading separator so the value cannot escape a base
+            // directory when a handler treats it as a path.
+            if (!has_dot_dot_segment(decoded) && !is_rooted_path(decoded)) {
                std::string param_name = node->parameter_child->parameter_name;
                params[param_name] = std::move(decoded);
 
@@ -622,9 +642,10 @@ namespace glz
             }
 
             // The capture is joined from decoded segments, so a "%2e%2e%2f" in
-            // the request only resolves to a ".." here; refuse it so a mount
-            // like "/files/*path" cannot be walked outside its base directory.
-            if (has_dot_dot_segment(full_capture)) {
+            // the request only resolves to a ".." here, and a leading "%2f" to a
+            // rooted path; refuse both so a mount like "/files/*path" cannot be
+            // walked outside its base directory.
+            if (has_dot_dot_segment(full_capture) || is_rooted_path(full_capture)) {
                return false;
             }
 
