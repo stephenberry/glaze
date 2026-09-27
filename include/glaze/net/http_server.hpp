@@ -18,6 +18,7 @@
 #include <functional>
 #include <glaze/glaze.hpp>
 #include <iostream>
+#include <limits>
 #include <mutex>
 #include <optional>
 #include <source_location>
@@ -1411,8 +1412,10 @@ namespace glz
       /**
        * @brief Timeout for idle connections in seconds
        *
-       * After sending a response, if no new request arrives within this timeout,
-       * the connection is closed. Set to 0 to disable timeout (not recommended).
+       * After accepting a connection or sending a response, if the next request's
+       * headers do not arrive within this timeout, the connection is closed. This
+       * bounds the first request too, whether or not keep-alive is enabled.
+       * Set to 0 to disable timeout (not recommended).
        * Default: 60 seconds
        */
       uint32_t keep_alive_timeout = 60;
@@ -1437,6 +1440,18 @@ namespace glz
        * Default: 100 MB
        */
       size_t max_request_body_size = http_default_max_body_size;
+
+      /**
+       * @brief Maximum allowed size of a request's line and headers in bytes
+       *
+       * A request whose header section does not end within this many bytes is
+       * rejected with HTTP 431 (Request Header Fields Too Large) and the
+       * connection is closed, so a peer that never ends its headers cannot grow
+       * the read buffer without bound.
+       * Set to 0 for no limit.
+       * Default: 64 KB
+       */
+      size_t max_request_header_size = 64 * 1024;
    };
 
    // Server implementation using non-blocking asio with WebSocket support
@@ -2390,6 +2405,17 @@ namespace glz
 
       size_t max_request_body_size() const { return conn_config_.max_request_body_size; }
 
+      // Set maximum request header size in bytes (0 = unlimited).
+      // Requests exceeding this are rejected with HTTP 431.
+      // Must be configured before starting the server; not safe to change while serving.
+      inline http_server& max_request_header_size(size_t max_size)
+      {
+         conn_config_.max_request_header_size = max_size;
+         return *this;
+      }
+
+      size_t max_request_header_size() const { return conn_config_.max_request_header_size; }
+
       /**
        * @brief Wait for a shutdown signal
        *
@@ -2533,7 +2559,7 @@ namespace glz
       // Start handling a new connection
       inline void start_connection(std::shared_ptr<connection_state> conn) { read_request(conn); }
 
-      // Start or reset the idle timer for keep-alive connections
+      // Start or reset the idle timer that bounds the wait for a request's headers
       inline void start_idle_timer(std::shared_ptr<connection_state> conn)
       {
          if (conn_config_.keep_alive_timeout == 0) {
@@ -2543,9 +2569,11 @@ namespace glz
          conn->idle_timer.expires_after(std::chrono::seconds(conn_config_.keep_alive_timeout));
          conn->idle_timer.async_wait([conn](asio::error_code ec) {
             if (!ec) {
-               // Timer expired - send FIN; socket closed via RAII when conn is destroyed
+               // Timer expired - send FIN and cancel the pending read, so conn is released even
+               // if the peer never closes its side; socket closed via RAII when conn is destroyed
                asio::error_code close_ec;
                conn->socket.lowest_layer().shutdown(asio::ip::tcp::socket::shutdown_send, close_ec);
+               conn->socket.lowest_layer().cancel(close_ec);
             }
             // If ec is operation_aborted, the timer was cancelled (new request arrived)
          });
@@ -2566,10 +2594,9 @@ namespace glz
       // Read the next HTTP request from the connection
       inline void read_request(std::shared_ptr<connection_state> conn)
       {
-         // Start idle timer for keep-alive connections (except for first request)
-         if (conn->request_count > 0 && conn_config_.keep_alive) {
-            start_idle_timer(conn);
-         }
+         // Start the idle timer for every request, the first included, so a peer that
+         // never completes its headers cannot hold the connection open
+         start_idle_timer(conn);
 
          // Check for pipelined data already in buffer
          if (conn->buf_len > 0) {
@@ -2595,9 +2622,20 @@ namespace glz
          // Trim read_buf to buf_len so dynamic_buffer starts from the right position
          conn->read_buf.resize(conn->buf_len);
 
-         asio::async_read_until(conn->socket, asio::dynamic_buffer(conn->read_buf), "\r\n\r\n",
+         // Cap the buffer so a header section that never ends cannot grow it without bound.
+         // async_read_until fails with not_found once the cap is reached without a \r\n\r\n.
+         const size_t max_header_size = conn_config_.max_request_header_size > 0
+                                           ? conn_config_.max_request_header_size
+                                           : (std::numeric_limits<std::size_t>::max)();
+
+         asio::async_read_until(conn->socket, asio::dynamic_buffer(conn->read_buf, max_header_size), "\r\n\r\n",
                                 [this, conn](asio::error_code ec, std::size_t /*bytes_transferred*/) {
                                    cancel_idle_timer(conn);
+
+                                   if (ec == asio::error::not_found) {
+                                      send_error_response_with_close(conn, 431, "Request Header Fields Too Large");
+                                      return;
+                                   }
 
                                    if (ec) {
                                       if (ec != asio::error::eof && ec != asio::error::operation_aborted) {
