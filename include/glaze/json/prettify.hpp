@@ -70,7 +70,7 @@ namespace glz
          // A break that fails is reported rather than swallowed: on a bounded destination that ran
          // out, carrying on would leave `line_comment_open` set and put this write *inside* the
          // comment, which is not a truncated document but a wrong one.
-         const auto emit = [&](const auto& x) {
+         const auto put = [&](const auto& x) {
             if constexpr (Opts.comments) {
                if (line_comment_open) [[unlikely]] {
                   if (not new_line()) [[unlikely]] {
@@ -89,13 +89,13 @@ namespace glz
                   return;
                }
                // non-empty: the scanner reports an empty view as an error
-               if (not emit(value)) [[unlikely]] {
+               if (not put(value)) [[unlikely]] {
                   return;
                }
                break;
             }
             case Comma: {
-               if (not emit(',')) [[unlikely]] {
+               if (not put(',')) [[unlikely]] {
                   return;
                }
                ++it;
@@ -110,7 +110,7 @@ namespace glz
                         return;
                      }
                   }
-                  else if (not emit(use_tabs ? '\t' : ' ')) [[unlikely]] {
+                  else if (not put(use_tabs ? '\t' : ' ')) [[unlikely]] {
                      return;
                   }
                }
@@ -119,21 +119,21 @@ namespace glz
             case Number: {
                const auto value = read_json_number<Opts.null_terminated>(it, end);
                // non-empty: a Number match is one valid character
-               if (not emit(value)) [[unlikely]] {
+               if (not put(value)) [[unlikely]] {
                   return;
                }
                break;
             }
             case Colon: {
                static constexpr sv colon = use_tabs ? sv{":\t"} : sv{": "};
-               if (not emit(colon)) [[unlikely]] {
+               if (not put(colon)) [[unlikely]] {
                   return;
                }
                ++it;
                break;
             }
             case Array_Start: {
-               if (not emit('[')) [[unlikely]] {
+               if (not put('[')) [[unlikely]] {
                   return;
                }
                ++it;
@@ -165,7 +165,7 @@ namespace glz
                   return;
                }
                // This break is the one the bracket wanted anyway, and it closes an open line
-               // comment on its way, leaving the emit below nothing to close.
+               // comment on its way, leaving the put below nothing to close.
                if constexpr (check_new_lines_in_arrays(Opts)) {
                   if (it[-1] != '[') {
                      if (not new_line()) [[unlikely]] {
@@ -173,7 +173,7 @@ namespace glz
                      }
                   }
                }
-               if (not emit(']')) [[unlikely]] {
+               if (not put(']')) [[unlikely]] {
                   return;
                }
                ++it;
@@ -185,7 +185,7 @@ namespace glz
                if (not match_literal<"null">(ctx, it, end)) [[unlikely]] {
                   return;
                }
-               if (not emit("null")) [[unlikely]] {
+               if (not put("null")) [[unlikely]] {
                   return;
                }
                break;
@@ -195,7 +195,7 @@ namespace glz
                   if (not match_literal<"true">(ctx, it, end)) [[unlikely]] {
                      return;
                   }
-                  if (not emit("true")) [[unlikely]] {
+                  if (not put("true")) [[unlikely]] {
                      return;
                   }
                   break;
@@ -204,14 +204,14 @@ namespace glz
                   if (not match_literal<"false">(ctx, it, end)) [[unlikely]] {
                      return;
                   }
-                  if (not emit("false")) [[unlikely]] {
+                  if (not put("false")) [[unlikely]] {
                      return;
                   }
                   break;
                }
             }
             case Object_Start: {
-               if (not emit('{')) [[unlikely]] {
+               if (not put('{')) [[unlikely]] {
                   return;
                }
                ++it;
@@ -246,7 +246,7 @@ namespace glz
                      return;
                   }
                }
-               if (not emit('}')) [[unlikely]] {
+               if (not put('}')) [[unlikely]] {
                   return;
                }
                ++it;
@@ -259,7 +259,7 @@ namespace glz
                      return;
                   }
                   // non-empty: an empty view comes with an error
-                  if (not emit(comment.text)) [[unlikely]] {
+                  if (not put(comment.text)) [[unlikely]] {
                      return;
                   }
                   line_comment_open = comment.line;

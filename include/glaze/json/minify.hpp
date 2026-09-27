@@ -28,7 +28,7 @@ namespace glz
          // asks for exactly what it stores instead; see emit_bytes for where that count comes from.
          // None of it survives for a resizable destination, which keeps the unchecked dumps and
          // nothing more.
-         const auto emit = [&](const auto& x) { return emit_bytes<false>(ctx, b, ix, x); };
+         const auto put = [&](const auto& x) { return emit_bytes<false>(ctx, b, ix, x); };
 
          auto ws_start = it;
          uint64_t ws_size{};
@@ -83,14 +83,14 @@ namespace glz
                   return;
                }
                // non-empty: the scanner reports an empty view as an error
-               if (not emit(value)) [[unlikely]] {
+               if (not put(value)) [[unlikely]] {
                   return;
                }
                skip_whitespace();
                break;
             }
             case Comma: {
-               if (not emit(',')) [[unlikely]] {
+               if (not put(',')) [[unlikely]] {
                   return;
                }
                ++it;
@@ -100,14 +100,14 @@ namespace glz
             case Number: {
                const auto value = read_json_number<Opts.null_terminated>(it, end);
                // non-empty: a Number match is one valid character
-               if (not emit(value)) [[unlikely]] {
+               if (not put(value)) [[unlikely]] {
                   return;
                }
                skip_whitespace();
                break;
             }
             case Colon: {
-               if (not emit(':')) [[unlikely]] {
+               if (not put(':')) [[unlikely]] {
                   return;
                }
                ++it;
@@ -115,7 +115,7 @@ namespace glz
                break;
             }
             case Array_Start: {
-               if (not emit('[')) [[unlikely]] {
+               if (not put('[')) [[unlikely]] {
                   return;
                }
                ++it;
@@ -123,7 +123,7 @@ namespace glz
                break;
             }
             case Array_End: {
-               if (not emit(']')) [[unlikely]] {
+               if (not put(']')) [[unlikely]] {
                   return;
                }
                ++it;
@@ -138,7 +138,7 @@ namespace glz
                if (not match_literal<"null">(ctx, it, end)) [[unlikely]] {
                   return;
                }
-               if (not emit("null")) [[unlikely]] {
+               if (not put("null")) [[unlikely]] {
                   return;
                }
                skip_whitespace();
@@ -149,7 +149,7 @@ namespace glz
                   if (not match_literal<"true">(ctx, it, end)) [[unlikely]] {
                      return;
                   }
-                  if (not emit("true")) [[unlikely]] {
+                  if (not put("true")) [[unlikely]] {
                      return;
                   }
                   skip_whitespace();
@@ -159,7 +159,7 @@ namespace glz
                   if (not match_literal<"false">(ctx, it, end)) [[unlikely]] {
                      return;
                   }
-                  if (not emit("false")) [[unlikely]] {
+                  if (not put("false")) [[unlikely]] {
                      return;
                   }
                   skip_whitespace();
@@ -167,7 +167,7 @@ namespace glz
                }
             }
             case Object_Start: {
-               if (not emit('{')) [[unlikely]] {
+               if (not put('{')) [[unlikely]] {
                   return;
                }
                ++it;
@@ -175,7 +175,7 @@ namespace glz
                break;
             }
             case Object_End: {
-               if (not emit('}')) [[unlikely]] {
+               if (not put('}')) [[unlikely]] {
                   return;
                }
                ++it;
@@ -193,7 +193,7 @@ namespace glz
                   // comments out the whole rest of the output.
                   if (not comment.line) {
                      // non-empty: an empty view comes with an error
-                     if (not emit(comment.text)) [[unlikely]] {
+                     if (not put(comment.text)) [[unlikely]] {
                         return;
                      }
                   }
