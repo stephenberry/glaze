@@ -1,19 +1,29 @@
 include(FetchContent)
 
+# An installed ut (e.g. a distro package, for builds without network access) is
+# preferred; it is downloaded only when find_package(ut) finds no compatible
+# version. The version requirement also rejects boost-ext/ut (2.x), which installs
+# a CMake package under the same name. Set
+# -DFETCHCONTENT_TRY_FIND_PACKAGE_MODE=NEVER to always download.
+set(glaze_UT_VERSION 1.2.1)
 FetchContent_Declare(
   ut
   GIT_REPOSITORY https://github.com/openalgz/ut
-  GIT_TAG v1.2.1
+  GIT_TAG v${glaze_UT_VERSION}
   GIT_SHALLOW TRUE
+  FIND_PACKAGE_ARGS ${glaze_UT_VERSION} CONFIG
 )
 
-message(STATUS "Fetching dependencies...")
 set_directory_properties(PROPERTIES EXCLUDE_FROM_ALL TRUE)
 set(CMAKE_SKIP_INSTALL_RULES ON CACHE BOOL "" FORCE)
 FetchContent_MakeAvailable(ut)
 set(CMAKE_SKIP_INSTALL_RULES OFF CACHE BOOL "" FORCE)
 set_directory_properties(PROPERTIES EXCLUDE_FROM_ALL FALSE)
-message(STATUS "...finished fetching dependencies.")
+if(ut_FOUND)
+  message(STATUS "glaze: using installed ut ${ut_VERSION} (${ut_DIR})")
+else()
+  message(STATUS "glaze: using ut ${glaze_UT_VERSION} via FetchContent")
+endif()
 
 # Setup the Asio backend (Boost / standalone / bundled) used by networking tests.
 # Selection plus the GLZ_USE_BOOST_ASIO bridge live in cmake/glaze-asio.cmake, the
