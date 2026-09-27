@@ -4,6 +4,7 @@ add_executable(${PROJECT_NAME} ${PROJECT_NAME}.cpp)
 
 find_package (Eigen3 3.4 QUIET)
 if(NOT Eigen3_FOUND)
+  include(FetchContent)
   FetchContent_Declare(
     Eigen3
     GIT_REPOSITORY https://gitlab.com/libeigen/eigen.git
