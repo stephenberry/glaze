@@ -572,6 +572,29 @@ suite path_traversal_tests = [] {
       expect(handler != nullptr);
       expect(params["file"] == "a/b");
    };
+
+   "param_allows_colon_outside_drive_prefix"_test = [] {
+      glz::http_router router;
+      router.get("/keys/:key", [](const glz::request&, glz::response&) {});
+
+      // Only a single letter followed by ':' at the start is a drive prefix.
+      auto [handler, params] = router.match(glz::http_method::GET, "/keys/ab:c");
+      expect(handler != nullptr);
+      expect(params["key"] == "ab:c");
+
+      auto [handler2, params2] = router.match(glz::http_method::GET, "/keys/1:2");
+      expect(handler2 != nullptr);
+      expect(params2["key"] == "1:2");
+   };
+
+   "wildcard_allows_drive_like_segment_after_first"_test = [] {
+      glz::http_router router;
+      router.get("/files/*path", [](const glz::request&, glz::response&) {});
+
+      auto [handler, params] = router.match(glz::http_method::GET, "/files/notes/C:x");
+      expect(handler != nullptr);
+      expect(params["path"] == "notes/C:x");
+   };
 };
 
 // Service composition test types (GitHub issue #2401)
