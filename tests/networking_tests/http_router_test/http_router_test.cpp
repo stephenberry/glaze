@@ -433,10 +433,11 @@ suite path_param_decoding_tests = [] {
    };
 };
 
-// Route captures must not resolve to a ".." traversal component. The target is
-// split on literal '/' before percent-decoding, so a "%2e%2e%2f" reaches the
-// capture as "../" only here; leaving it in place lets a handler that resolves
-// the capture as a path escape its base directory.
+// Route captures must not resolve to a ".." traversal component or start at a
+// root. The target is split on literal '/' before percent-decoding, so a
+// "%2e%2e%2f" reaches the capture as "../", and a leading "%2f" as "/", only
+// here; leaving either in place lets a handler that resolves the capture as a
+// path escape its base directory.
 suite path_traversal_tests = [] {
    "wildcard_rejects_encoded_traversal"_test = [] {
       glz::http_router router;
@@ -499,6 +500,100 @@ suite path_traversal_tests = [] {
       auto [handler, params] = router.match(glz::http_method::GET, "/files/a..b%5creport.pdf");
       expect(handler != nullptr);
       expect(params["path"] == "a..b\\report.pdf");
+   };
+
+   "wildcard_rejects_encoded_rooted_path"_test = [] {
+      glz::http_router router;
+      router.get("/files/*path", [](const glz::request&, glz::response&) {});
+
+      // A leading "%2f" decodes to "/etc/passwd", which replaces the base
+      // directory it is joined onto instead of extending it.
+      auto [handler, params] = router.match(glz::http_method::GET, "/files/%2Fetc/passwd");
+      expect(handler == nullptr);
+   };
+
+   "param_rejects_encoded_rooted_path"_test = [] {
+      glz::http_router router;
+      router.get("/download/:file", [](const glz::request&, glz::response&) {});
+
+      auto [handler, params] = router.match(glz::http_method::GET, "/download/%2fetc%2fpasswd");
+      expect(handler == nullptr);
+   };
+
+   "wildcard_rejects_encoded_backslash_rooted_path"_test = [] {
+      glz::http_router router;
+      router.get("/files/*path", [](const glz::request&, glz::response&) {});
+
+      // A leading '\' roots the path on Windows the same way.
+      auto [handler, params] = router.match(glz::http_method::GET, "/files/%5Cwindows%5Cwin.ini");
+      expect(handler == nullptr);
+   };
+
+   "param_rejects_encoded_backslash_rooted_path"_test = [] {
+      glz::http_router router;
+      router.get("/download/:file", [](const glz::request&, glz::response&) {});
+
+      auto [handler, params] = router.match(glz::http_method::GET, "/download/%5csecret");
+      expect(handler == nullptr);
+   };
+
+   "wildcard_rejects_encoded_windows_drive_path"_test = [] {
+      glz::http_router router;
+      router.get("/files/*path", [](const glz::request&, glz::response&) {});
+
+      auto [handler, params] = router.match(glz::http_method::GET, "/files/C%3A%5CWindows%5Cwin.ini");
+      expect(handler == nullptr);
+   };
+
+   "param_rejects_encoded_windows_drive_relative_path"_test = [] {
+      glz::http_router router;
+      router.get("/download/:file", [](const glz::request&, glz::response&) {});
+
+      auto [handler, params] = router.match(glz::http_method::GET, "/download/D%3Asecret.txt");
+      expect(handler == nullptr);
+   };
+
+   "wildcard_allows_encoded_slash_after_first_segment"_test = [] {
+      glz::http_router router;
+      router.get("/files/*path", [](const glz::request&, glz::response&) {});
+
+      // Only the start of the capture can root it; a "%2f" past the first
+      // segment stays under the base directory.
+      auto [handler, params] = router.match(glz::http_method::GET, "/files/docs/%2Freport.pdf");
+      expect(handler != nullptr);
+      expect(params["path"] == "docs//report.pdf");
+   };
+
+   "param_allows_encoded_slash_within_value"_test = [] {
+      glz::http_router router;
+      router.get("/download/:file", [](const glz::request&, glz::response&) {});
+
+      auto [handler, params] = router.match(glz::http_method::GET, "/download/a%2Fb");
+      expect(handler != nullptr);
+      expect(params["file"] == "a/b");
+   };
+
+   "param_allows_colon_outside_drive_prefix"_test = [] {
+      glz::http_router router;
+      router.get("/keys/:key", [](const glz::request&, glz::response&) {});
+
+      // Only a single letter followed by ':' at the start is a drive prefix.
+      auto [handler, params] = router.match(glz::http_method::GET, "/keys/ab:c");
+      expect(handler != nullptr);
+      expect(params["key"] == "ab:c");
+
+      auto [handler2, params2] = router.match(glz::http_method::GET, "/keys/1:2");
+      expect(handler2 != nullptr);
+      expect(params2["key"] == "1:2");
+   };
+
+   "wildcard_allows_drive_like_segment_after_first"_test = [] {
+      glz::http_router router;
+      router.get("/files/*path", [](const glz::request&, glz::response&) {});
+
+      auto [handler, params] = router.match(glz::http_method::GET, "/files/notes/C:x");
+      expect(handler != nullptr);
+      expect(params["path"] == "notes/C:x");
    };
 };
 
