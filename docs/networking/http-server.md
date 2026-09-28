@@ -772,7 +772,8 @@ When keep-alive is disabled, the server sends `Connection: close` with every res
 - **HTTP/1.1 clients**: Keep-alive is enabled by default (per HTTP/1.1 spec)
 - **HTTP/1.0 clients**: Keep-alive is disabled unless client sends `Connection: keep-alive`
 - **Client requests close**: If client sends `Connection: close`, server respects it
-- **Idle timeout**: Connections are closed after the configured timeout of inactivity
+- **Idle timeout**: Connections are closed when a request's headers do not arrive within the configured timeout, whether it is the first request on the connection or the next one on a keep-alive connection
+- **Header size**: Requests whose line and headers exceed `max_request_header_size` (default: 64 KB) are rejected with `431` and the connection is closed
 - **Max requests**: Connections are closed after reaching the request limit (if configured)
 
 The server always sends the appropriate `Connection` header (`keep-alive` or `close`) and a `Keep-Alive` header with timeout information when keep-alive is active.
