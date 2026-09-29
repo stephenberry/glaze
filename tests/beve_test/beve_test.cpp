@@ -3008,8 +3008,9 @@ suite beve_to_json_tests = [] {
    };
 
    "beve_to_json std::vector<bool>"_test = [] {
-      for (const std::vector<bool>& v : {std::vector<bool>{}, std::vector<bool>{true, false, true},
-                                         std::vector<bool>{true, false, false, true, false, false, true, false, true}}) {
+      for (const std::vector<bool>& v :
+           {std::vector<bool>{}, std::vector<bool>{true, false, true},
+            std::vector<bool>{true, false, false, true, false, false, true, false, true}}) {
          std::string buffer{};
          expect(not glz::write_beve(v, buffer));
 
