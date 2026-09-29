@@ -41,14 +41,13 @@
 //
 // All multi-byte integers and floats on the wire are little-endian.
 //
-// Caveat on cstring fields (BSON spec prohibits embedded 0x00):
+// cstring fields (BSON spec prohibits embedded 0x00):
 //   - std::map<std::string, T> keys
 //   - bson::regex::pattern and bson::regex::options
-// Strings passed in these fields must not contain an embedded NUL; otherwise
-// the resulting wire bytes are malformed and a downstream read will terminate
-// the cstring at the first NUL and fail with a syntax_error when the trailing
-// bytes no longer parse as a valid element stream. Struct field names are
-// safe by construction — they come from reflected identifiers.
+// A NUL in one of these ends the field early on the wire, so a reader truncates the value there and
+// reparses the trailing bytes as further elements. The write now rejects an embedded NUL in these
+// fields with invalid_control_character rather than emit a document that reads back as a different
+// structure. Struct field names are safe by construction — they come from reflected identifiers.
 //
 // Caveat on nested optionals: std::optional<std::optional<T>> loses the
 // outer/inner distinction on the wire. Both `nullopt` and `optional{nullopt}`
@@ -111,6 +110,16 @@ namespace glz
          }
       }
 
+      // A BSON e_name (element key) and the regex pattern/options fields are cstrings: on the wire
+      // they run to the next 0x00 byte. An embedded 0x00 ends the field early, so a reader truncates
+      // the value there and reparses the trailing bytes as further elements. A single map entry whose
+      // key holds a NUL can therefore read back as a different structure (a value with an extra forged
+      // field), which the reader accepts because the document length still lands on its terminator.
+      [[nodiscard]] GLZ_ALWAYS_INLINE bool cstring_has_embedded_null(std::string_view s) noexcept
+      {
+         return s.find('\0') != std::string_view::npos;
+      }
+
       // --- Document lifecycle --------------------------------------------------
 
       // Reserve 4 bytes for the int32 length field and record the starting ix.
@@ -148,6 +157,10 @@ namespace glz
       GLZ_ALWAYS_INLINE bool write_element_prefix(is_context auto& ctx, uint8_t type_byte, std::string_view key, B& b,
                                                   size_t& ix) noexcept
       {
+         if (cstring_has_embedded_null(key)) [[unlikely]] {
+            ctx.error = error_code::invalid_control_character;
+            return false;
+         }
          if (!ensure_space(ctx, b, ix + 2 + key.size() + write_padding_bytes)) [[unlikely]] {
             return false;
          }
@@ -479,6 +492,11 @@ namespace glz
       template <auto Opts>
       static void op(const bson::regex& value, is_context auto&& ctx, auto&& b, auto& ix) noexcept
       {
+         if (bson_detail::cstring_has_embedded_null(value.pattern) ||
+             bson_detail::cstring_has_embedded_null(value.options)) [[unlikely]] {
+            ctx.error = error_code::invalid_control_character;
+            return;
+         }
          if (!ensure_space(ctx, b, ix + value.pattern.size() + value.options.size() + 2 + write_padding_bytes))
             [[unlikely]] {
             return;

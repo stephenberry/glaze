@@ -2005,4 +2005,62 @@ suite bson_char_array_tests = [] {
    };
 };
 
+suite bson_cstring_embedded_null_tests = [] {
+   // A BSON e_name (map key) and the regex pattern/options fields are cstrings: a 0x00 ends the field
+   // on the wire, so a reader truncates the value there and reparses the trailing bytes as further
+   // elements. Without the write-side guard a single crafted map key read back as a document with an
+   // extra forged field while the write returned success.
+   "map key with an embedded null that injects a second field is rejected"_test = [] {
+      // Key "a" 0x00 <int32 1> 0x10 'z' : on the wire it reads back as {"a": 1, "z": 1}.
+      std::map<std::string, int32_t> m;
+      m[std::string("a\x00\x01\x00\x00\x00\x10z", 8)] = 1;
+      std::string buffer{};
+      auto ec = glz::write_bson(m, buffer);
+      expect(bool(ec));
+      expect(ec.ec == glz::error_code::invalid_control_character);
+   };
+
+   "map key with a trailing null is rejected"_test = [] {
+      std::map<std::string, int32_t> m;
+      m[std::string("k\x00", 2)] = 1;
+      std::string buffer{};
+      auto ec = glz::write_bson(m, buffer);
+      expect(bool(ec));
+      expect(ec.ec == glz::error_code::invalid_control_character);
+   };
+
+   "regex pattern with an embedded null is rejected"_test = [] {
+      regex_only_s v{};
+      v.r.pattern = std::string(
+         "ab\x00"
+         "cd",
+         5);
+      v.r.options = "i";
+      std::string buffer{};
+      auto ec = glz::write_bson(v, buffer);
+      expect(bool(ec));
+      expect(ec.ec == glz::error_code::invalid_control_character);
+   };
+
+   "regex options with an embedded null is rejected"_test = [] {
+      regex_only_s v{};
+      v.r.pattern = "ab";
+      v.r.options = std::string("i\x00", 2);
+      std::string buffer{};
+      auto ec = glz::write_bson(v, buffer);
+      expect(bool(ec));
+      expect(ec.ec == glz::error_code::invalid_control_character);
+   };
+
+   "null-free map keys still round trip unchanged"_test = [] {
+      std::map<std::string, int32_t> m{{"alpha", 1}, {"beta.b", 2}, {"has space", 3}};
+      auto w = glz::write_bson(m);
+      expect(w.has_value());
+      std::map<std::string, int32_t> r{};
+      auto ec = glz::read_bson(r, std::string_view{w.value()});
+      expect(not ec);
+      expect(r == m);
+   };
+};
+
 int main() { return 0; }
