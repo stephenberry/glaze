@@ -51,24 +51,37 @@ namespace glz
    {
       auto hex_it = it;
       ++hex_it; // first hex digit after 'u'
-      if (hex_it == end) {
+
+      if ((end - hex_it) < 4) {
          return false;
       }
 
-      const auto* const hex_begin = &(*hex_it);
-      const auto* const hex_end = hex_begin + (end - hex_it);
-      const auto* cursor = hex_begin;
+      // TOML \uXXXX names a single Unicode scalar value, so decode exactly four hex digits and
+      // reject the surrogate range, matching the \U path below and the YAML reader. The JSON
+      // handler this used to call instead combines a high surrogate escape with a following low
+      // surrogate escape into a UTF-16 pair, which accepted two non-scalar halves (U+D834 and
+      // U+DD1E) as one character; that code point is U+1D11E, spelled \U0001D11E in TOML.
+      uint32_t code_point{};
+      for (size_t i = 0; i < 4; ++i) {
+         const int digit = toml_hex_to_int(*(hex_it + i));
+         if (digit < 0) {
+            return false;
+         }
+         code_point = (code_point << 4) | static_cast<uint32_t>(digit);
+      }
+
+      if (code_point >= 0xD800 && code_point <= 0xDFFF) {
+         return false;
+      }
+
       char utf8[4]{};
-      char* dst = utf8;
-
-      if (handle_unicode_code_point(cursor, dst, hex_end).written == 0) {
+      const auto offset = code_point_to_utf8(code_point, utf8);
+      if (!offset) {
          return false;
       }
 
-      out.append(utf8, static_cast<size_t>(dst - utf8));
-      hex_it += (cursor - hex_begin);
-      --hex_it; // leave iterator on the last consumed character
-      it = hex_it;
+      out.append(utf8, static_cast<size_t>(offset));
+      it = hex_it + 3; // leave iterator on the last consumed character
       return true;
    }
 
