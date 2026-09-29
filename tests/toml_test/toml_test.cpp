@@ -4873,6 +4873,62 @@ b = 222)";
       expect(value == expected);
    };
 
+   "toml_1_1_basic_string_unicode_escape_u_decodes_bmp"_test = [] {
+      // Non-raw literal so the parser actually sees the "\u00e9" escape sequence.
+      const std::string input = "\"\\u00e9\"";
+      std::string value{};
+      const auto error = glz::read_toml(value, input);
+      expect(not error) << glz::format_error(error, input);
+      expect(value == "\xC3\xA9");
+   };
+
+   "toml_1_1_basic_string_unicode_escape_u_rejects_surrogate_pair"_test = [] {
+      // TOML \uXXXX is a single scalar value; a UTF-16 surrogate pair is not valid TOML and must
+      // not be combined the way JSON does. U+1D11E is written \U0001D11E, never \uD834\uDD1E.
+      const std::string input = "\"\\uD834\\uDD1E\"";
+      std::string value{};
+      const auto error = glz::read_toml(value, input);
+      expect(error);
+   };
+
+   "toml_1_1_basic_string_unicode_escape_u_rejects_lone_surrogate"_test = [] {
+      {
+         const std::string input = "\"\\uD834\"";
+         std::string value{};
+         const auto error = glz::read_toml(value, input);
+         expect(error);
+      }
+      {
+         const std::string input = "\"\\uDD1E\"";
+         std::string value{};
+         const auto error = glz::read_toml(value, input);
+         expect(error);
+      }
+   };
+
+   "toml_1_1_multiline_basic_string_unicode_escape_u_rejects_surrogate_pair"_test = [] {
+      const std::string input = "\"\"\"\\uD834\\uDD1E\"\"\"";
+      std::string value{};
+      const auto error = glz::read_toml(value, input);
+      expect(error);
+   };
+
+   "toml_1_1_quoted_key_unicode_escape_u_rejects_surrogate_pair"_test = [] {
+      const std::string input = "\"\\uD834\\uDD1E\" = 1";
+      std::map<std::string, int> value{};
+      const auto error = glz::read_toml(value, input);
+      expect(error);
+   };
+
+   "toml_1_1_basic_string_unicode_escape_U_astral_scalar"_test = [] {
+      // The correct spelling of the same character decodes to its UTF-8 form.
+      const std::string input = "\"\\U0001D11E\"";
+      std::string value{};
+      const auto error = glz::read_toml(value, input);
+      expect(not error) << glz::format_error(error, input);
+      expect(value == "\xF0\x9D\x84\x9E");
+   };
+
    "toml_1_1_single_quoted_key_basic"_test = [] {
       const std::string input = R"('first name' = "Nick")";
       std::map<std::string, std::string> value{};
