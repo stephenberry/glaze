@@ -41,14 +41,12 @@
 //
 // All multi-byte integers and floats on the wire are little-endian.
 //
-// Caveat on cstring fields (BSON spec prohibits embedded 0x00):
+// cstring fields (BSON spec prohibits embedded 0x00):
 //   - std::map<std::string, T> keys
 //   - bson::regex::pattern and bson::regex::options
-// Strings passed in these fields must not contain an embedded NUL; otherwise
-// the resulting wire bytes are malformed and a downstream read will terminate
-// the cstring at the first NUL and fail with a syntax_error when the trailing
-// bytes no longer parse as a valid element stream. Struct field names are
-// safe by construction — they come from reflected identifiers.
+// A NUL in one of these would end the field early, so a reader would truncate the value there and
+// reparse the trailing bytes as further elements. Writing one fails with invalid_control_character.
+// Struct field names and array index keys cannot contain a NUL, so they are not checked.
 //
 // Caveat on nested optionals: std::optional<std::optional<T>> loses the
 // outer/inner distinction on the wire. Both `nullopt` and `optional{nullopt}`
@@ -109,6 +107,13 @@ namespace glz
             std::memcpy(&b[ix], src, n);
             ix += n;
          }
+      }
+
+      // A cstring runs to the next 0x00, so an embedded NUL would splice the trailing bytes into the
+      // element stream (see the cstring note at the top of this file).
+      [[nodiscard]] GLZ_ALWAYS_INLINE bool cstring_has_embedded_null(std::string_view s) noexcept
+      {
+         return s.find('\0') != std::string_view::npos;
       }
 
       // --- Document lifecycle --------------------------------------------------
@@ -479,6 +484,11 @@ namespace glz
       template <auto Opts>
       static void op(const bson::regex& value, is_context auto&& ctx, auto&& b, auto& ix) noexcept
       {
+         if (bson_detail::cstring_has_embedded_null(value.pattern) ||
+             bson_detail::cstring_has_embedded_null(value.options)) [[unlikely]] {
+            ctx.error = error_code::invalid_control_character;
+            return;
+         }
          if (!ensure_space(ctx, b, ix + value.pattern.size() + value.options.size() + 2 + write_padding_bytes))
             [[unlikely]] {
             return;
@@ -807,6 +817,10 @@ namespace glz
                if (skip_member<Opts>(v)) continue;
             }
             const std::string_view key_sv = str_view<std::remove_cvref_t<decltype(k)>>(k);
+            if (bson_detail::cstring_has_embedded_null(key_sv)) [[unlikely]] {
+               ctx.error = error_code::invalid_control_character;
+               return;
+            }
             bson_detail::write_member_element<Opts>(key_sv, v, ctx, b, ix);
          }
 
