@@ -2741,6 +2741,9 @@ namespace glz
 
             // Options is required here, because it must be the top level
             if constexpr (not check_closing_handled(Options)) {
+               if (bool(ctx.error)) [[unlikely]] {
+                  return;
+               }
                if constexpr (Options.prettify) {
                   ctx.depth -= check_indentation_width(Options);
                   if constexpr (not check_write_unchecked(Options)) {
@@ -2756,6 +2759,11 @@ namespace glz
                   ++ix;
                }
                else {
+                  if constexpr (has_bounded_capacity<B> && not check_write_unchecked(Options)) {
+                     if (!ensure_space(ctx, b, ix + 1)) [[unlikely]] {
+                        return;
+                     }
+                  }
                   dump<not(fixed_padding<T> || check_write_unchecked(Options))>('}', b, ix);
                }
             }
@@ -2895,14 +2903,20 @@ namespace glz
       requires((glaze_object_t<T> || reflectable<T>) && range<Keys>)
    [[nodiscard]] error_ctx write_json_partial(T&& value, const Keys& keys, Buffer&& buffer)
    {
-      context ctx{};
-      size_t ix = 0;
-      to_runtime_partial<std::remove_cvref_t<T>>::template op<set_json<Opts>()>(keys, std::forward<T>(value), ctx,
-                                                                                buffer, ix);
-      if (bool(ctx.error)) [[unlikely]] {
-         return {ix, ctx.error, ctx.custom_error_message};
+      if constexpr (std::is_bounded_array_v<std::remove_reference_t<Buffer>>) {
+         auto bounded = std::span{buffer};
+         return write_json_partial<Opts>(std::forward<T>(value), keys, bounded);
       }
-      return {ix, error_code::none, ctx.custom_error_message};
+      else {
+         context ctx{};
+         size_t ix = 0;
+         to_runtime_partial<std::remove_cvref_t<T>>::template op<set_json<Opts>()>(keys, std::forward<T>(value), ctx,
+                                                                                   buffer, ix);
+         if (bool(ctx.error)) [[unlikely]] {
+            return {ix, ctx.error, ctx.custom_error_message};
+         }
+         return {ix, error_code::none, ctx.custom_error_message};
+      }
    }
 
    template <auto Opts = opts{}, class T, class Keys>
@@ -2956,14 +2970,20 @@ namespace glz
       requires((glaze_object_t<T> || reflectable<T>) && range<Keys>)
    [[nodiscard]] error_ctx write_json_exclude(T&& value, const Keys& exclude_keys, Buffer&& buffer)
    {
-      context ctx{};
-      size_t ix = 0;
-      to_runtime_exclude<std::remove_cvref_t<T>>::template op<set_json<Opts>()>(exclude_keys, std::forward<T>(value),
-                                                                                ctx, buffer, ix);
-      if (bool(ctx.error)) [[unlikely]] {
-         return {ix, ctx.error, ctx.custom_error_message};
+      if constexpr (std::is_bounded_array_v<std::remove_reference_t<Buffer>>) {
+         auto bounded = std::span{buffer};
+         return write_json_exclude<Opts>(std::forward<T>(value), exclude_keys, bounded);
       }
-      return {ix, error_code::none, ctx.custom_error_message};
+      else {
+         context ctx{};
+         size_t ix = 0;
+         to_runtime_exclude<std::remove_cvref_t<T>>::template op<set_json<Opts>()>(exclude_keys, std::forward<T>(value),
+                                                                                   ctx, buffer, ix);
+         if (bool(ctx.error)) [[unlikely]] {
+            return {ix, ctx.error, ctx.custom_error_message};
+         }
+         return {ix, error_code::none, ctx.custom_error_message};
+      }
    }
 
    template <auto Opts = opts{}, class T, class Keys>
