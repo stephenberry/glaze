@@ -44,10 +44,9 @@
 // cstring fields (BSON spec prohibits embedded 0x00):
 //   - std::map<std::string, T> keys
 //   - bson::regex::pattern and bson::regex::options
-// A NUL in one of these ends the field early on the wire, so a reader truncates the value there and
-// reparses the trailing bytes as further elements. The write now rejects an embedded NUL in these
-// fields with invalid_control_character rather than emit a document that reads back as a different
-// structure. Struct field names are safe by construction — they come from reflected identifiers.
+// A NUL in one of these would end the field early, so a reader would truncate the value there and
+// reparse the trailing bytes as further elements. Writing one fails with invalid_control_character.
+// Struct field names and array index keys cannot contain a NUL, so they are not checked.
 //
 // Caveat on nested optionals: std::optional<std::optional<T>> loses the
 // outer/inner distinction on the wire. Both `nullopt` and `optional{nullopt}`
@@ -110,11 +109,8 @@ namespace glz
          }
       }
 
-      // A BSON e_name (element key) and the regex pattern/options fields are cstrings: on the wire
-      // they run to the next 0x00 byte. An embedded 0x00 ends the field early, so a reader truncates
-      // the value there and reparses the trailing bytes as further elements. A single map entry whose
-      // key holds a NUL can therefore read back as a different structure (a value with an extra forged
-      // field), which the reader accepts because the document length still lands on its terminator.
+      // A cstring runs to the next 0x00, so an embedded NUL would splice the trailing bytes into the
+      // element stream (see the cstring note at the top of this file).
       [[nodiscard]] GLZ_ALWAYS_INLINE bool cstring_has_embedded_null(std::string_view s) noexcept
       {
          return s.find('\0') != std::string_view::npos;
@@ -157,10 +153,6 @@ namespace glz
       GLZ_ALWAYS_INLINE bool write_element_prefix(is_context auto& ctx, uint8_t type_byte, std::string_view key, B& b,
                                                   size_t& ix) noexcept
       {
-         if (cstring_has_embedded_null(key)) [[unlikely]] {
-            ctx.error = error_code::invalid_control_character;
-            return false;
-         }
          if (!ensure_space(ctx, b, ix + 2 + key.size() + write_padding_bytes)) [[unlikely]] {
             return false;
          }
@@ -825,6 +817,10 @@ namespace glz
                if (skip_member<Opts>(v)) continue;
             }
             const std::string_view key_sv = str_view<std::remove_cvref_t<decltype(k)>>(k);
+            if (bson_detail::cstring_has_embedded_null(key_sv)) [[unlikely]] {
+               ctx.error = error_code::invalid_control_character;
+               return;
+            }
             bson_detail::write_member_element<Opts>(key_sv, v, ctx, b, ix);
          }
 
