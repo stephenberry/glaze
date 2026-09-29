@@ -3007,6 +3007,24 @@ suite beve_to_json_tests = [] {
       expect(json == R"([1,2,3,4,5])") << json;
    };
 
+   "beve_to_json std::vector<bool>"_test = [] {
+      for (const std::vector<bool>& v : {std::vector<bool>{}, std::vector<bool>{true, false, true},
+                                         std::vector<bool>{true, false, false, true, false, false, true, false, true}}) {
+         std::string buffer{};
+         expect(not glz::write_beve(v, buffer));
+
+         std::string json{};
+         expect(!glz::beve_to_json(buffer, json));
+         expect(json == glz::write_json(v).value()) << json;
+      }
+
+      std::string json{};
+      // three bools with a set padding bit
+      expect(glz::beve_to_json(std::string{"\x1c\x0c\x0d"}, json).ec == glz::error_code::syntax_error);
+      // nine bools need two bytes
+      expect(glz::beve_to_json(std::string{"\x1c\x24\xff"}, json).ec == glz::error_code::unexpected_end);
+   };
+
    "beve_to_json std::vector<std::string>"_test = [] {
       std::vector<std::string> v = {"one", "two", "three"};
       std::string buffer{};
