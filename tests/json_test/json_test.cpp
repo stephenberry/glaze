@@ -10715,7 +10715,8 @@ suite bitset = [] {
    };
 };
 
-#if defined(__STDCPP_FLOAT128_T__) && !defined(__APPLE__)
+// MinGW defines __STDCPP_FLOAT128_T__ but its <charconv> has no std::float128_t overloads
+#if defined(__STDCPP_FLOAT128_T__) && !defined(__APPLE__) && !defined(__MINGW32__)
 suite float128_test = [] {
    "float128"_test = [] {
       std::float128_t x = 3.14;

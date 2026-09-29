@@ -37,12 +37,19 @@ function(glaze_setup_asio)
         return()
     endif()
 
+    add_library(glaze_asio INTERFACE)
+    add_library(glaze::asio ALIAS glaze_asio)
+
+    # Asio requests Winsock via `#pragma comment(lib, ...)`, which only MSVC honors.
+    # mswsock provides AcceptEx and GetAcceptExSockaddrs.
+    if(MINGW)
+        target_link_libraries(glaze_asio INTERFACE ws2_32 mswsock)
+    endif()
+
     # 1. Boost.Asio
     find_package(Boost QUIET CONFIG)
     if(Boost_FOUND)
         message(STATUS "glaze: using Boost.Asio")
-        add_library(glaze_asio INTERFACE)
-        add_library(glaze::asio ALIAS glaze_asio)
         # Pin glaze/ext/glaze_asio.hpp to the Boost backend it would not otherwise
         # select when standalone <asio.hpp> is also visible (issue #2599).
         target_compile_definitions(glaze_asio INTERFACE GLZ_USE_BOOST_ASIO)
@@ -61,8 +68,6 @@ function(glaze_setup_asio)
     find_package(Asio QUIET)
     if(Asio_FOUND)
         message(STATUS "glaze: using standalone Asio ${Asio_VERSION}")
-        add_library(glaze_asio INTERFACE)
-        add_library(glaze::asio ALIAS glaze_asio)
         target_link_libraries(glaze_asio INTERFACE Asio::Asio)
         return()
     endif()
@@ -77,8 +82,6 @@ function(glaze_setup_asio)
             GIT_SHALLOW TRUE
         )
         FetchContent_MakeAvailable(asio)
-        add_library(glaze_asio INTERFACE)
-        add_library(glaze::asio ALIAS glaze_asio)
         target_include_directories(glaze_asio INTERFACE ${asio_SOURCE_DIR}/asio/include)
         return()
     endif()
