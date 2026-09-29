@@ -4913,6 +4913,13 @@ b = 222)";
       expect(error);
    };
 
+   "toml_1_1_quoted_key_unicode_escape_u_rejects_surrogate_pair"_test = [] {
+      const std::string input = "\"\\uD834\\uDD1E\" = 1";
+      std::map<std::string, int> value{};
+      const auto error = glz::read_toml(value, input);
+      expect(error);
+   };
+
    "toml_1_1_basic_string_unicode_escape_U_astral_scalar"_test = [] {
       // The correct spelling of the same character decodes to its UTF-8 form.
       const std::string input = "\"\\U0001D11E\"";

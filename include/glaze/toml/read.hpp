@@ -46,57 +46,21 @@ namespace glz
       return -1;
    }
 
-   template <class It, class End>
-   inline bool append_toml_unicode_escape_u(std::string& out, It& it, End end) noexcept
+   // Decodes the Digits hex digits of a \uXXXX (Digits = 4) or \UXXXXXXXX (Digits = 8) escape, with `it` on the
+   // 'u' or 'U'. TOML requires each escape to be a Unicode scalar value, so surrogates are rejected rather than
+   // combined into UTF-16 pairs as JSON does.
+   template <size_t Digits, class It, class End>
+   inline bool append_toml_unicode_escape(std::string& out, It& it, End end) noexcept
    {
       auto hex_it = it;
-      ++hex_it; // first hex digit after 'u'
+      ++hex_it; // first hex digit
 
-      if ((end - hex_it) < 4) {
-         return false;
-      }
-
-      // TOML \uXXXX names a single Unicode scalar value, so decode exactly four hex digits and
-      // reject the surrogate range, matching the \U path below and the YAML reader. The JSON
-      // handler this used to call instead combines a high surrogate escape with a following low
-      // surrogate escape into a UTF-16 pair, which accepted two non-scalar halves (U+D834 and
-      // U+DD1E) as one character; that code point is U+1D11E, spelled \U0001D11E in TOML.
-      uint32_t code_point{};
-      for (size_t i = 0; i < 4; ++i) {
-         const int digit = toml_hex_to_int(*(hex_it + i));
-         if (digit < 0) {
-            return false;
-         }
-         code_point = (code_point << 4) | static_cast<uint32_t>(digit);
-      }
-
-      if (code_point >= 0xD800 && code_point <= 0xDFFF) {
-         return false;
-      }
-
-      char utf8[4]{};
-      const auto offset = code_point_to_utf8(code_point, utf8);
-      if (!offset) {
-         return false;
-      }
-
-      out.append(utf8, static_cast<size_t>(offset));
-      it = hex_it + 3; // leave iterator on the last consumed character
-      return true;
-   }
-
-   template <class It, class End>
-   inline bool append_toml_unicode_escape_U(std::string& out, It& it, End end) noexcept
-   {
-      auto hex_it = it;
-      ++hex_it; // first hex digit after 'U'
-
-      if ((end - hex_it) < 8) {
+      if ((end - hex_it) < static_cast<std::ptrdiff_t>(Digits)) {
          return false;
       }
 
       uint32_t code_point{};
-      for (size_t i = 0; i < 8; ++i) {
+      for (size_t i = 0; i < Digits; ++i) {
          const int digit = toml_hex_to_int(*(hex_it + i));
          if (digit < 0) {
             return false;
@@ -110,12 +74,8 @@ namespace glz
 
       char utf8[4]{};
       const auto offset = code_point_to_utf8(code_point, utf8);
-      if (!offset) {
-         return false;
-      }
-
       out.append(utf8, static_cast<size_t>(offset));
-      it = hex_it + 7; // leave iterator on the last consumed character
+      it = hex_it + (Digits - 1); // leave iterator on the last consumed character
       return true;
    }
 
@@ -161,9 +121,9 @@ namespace glz
          return true;
       }
       case 'u':
-         return append_toml_unicode_escape_u(out, it, end);
+         return append_toml_unicode_escape<4>(out, it, end);
       case 'U':
-         return append_toml_unicode_escape_U(out, it, end);
+         return append_toml_unicode_escape<8>(out, it, end);
       default:
          return false;
       }
