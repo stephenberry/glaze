@@ -31,7 +31,7 @@ Glaze now supports [P2996 "Reflection for C++26"](https://wg21.link/P2996). When
 
 <details><summary>P2996 reflection capabilities and examples:</summary>
 
-- **Non-aggregate types** — classes with constructors, virtual functions, and inheritance just work
+- **Non-aggregate types** — classes with constructors and virtual functions reflect without a `glz::meta`, and a derived type reflects its base members too (base members first); a hierarchy that repeats a name, or a base whose second subobject cannot be named, needs a `glz::meta` to say which member is meant
 - **Automatic enum serialization** — no `glz::meta` needed, enums serialize to strings automatically
 - **Unlimited struct members** — no 128-member cap
 - **Private member access** — reflect on all members regardless of access specifiers
