@@ -8,6 +8,7 @@
 #include "glaze/api/std/functional.hpp"
 #include "glaze/api/std/list.hpp"
 #include "glaze/api/std/map.hpp"
+#include "glaze/api/std/unordered_map.hpp"
 #include "glaze/api/std/optional.hpp"
 #include "glaze/api/std/shared_ptr.hpp"
 #include "glaze/api/std/string.hpp"
