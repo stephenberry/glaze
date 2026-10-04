@@ -428,6 +428,18 @@ namespace glz
       }
 
       /**
+       * @brief Detect a decoded capture that carries a NUL byte.
+       *
+       * The request target cannot hold a raw NUL, so one only reaches a capture
+       * as "%00" through url_decode. A capture joined onto a base directory
+       * reaches open() as a C string, which ends at the first NUL, so
+       * "report.txt%00.pdf" opens "report.txt" while every check a handler runs
+       * on the std::string first, such as an extension allowlist, still sees
+       * ".pdf".
+       */
+      static bool has_embedded_nul(std::string_view path) noexcept { return path.find('\0') != std::string_view::npos; }
+
+      /**
        * @brief Register a route in the table.
        *
        * @param method The HTTP method (GET, POST, etc.)
@@ -622,9 +634,10 @@ namespace glz
             std::string decoded = url_decode(segment);
 
             // A ":param" captures a single segment; refuse a decoded ".."
-            // component, a leading separator, or a drive prefix so the value
-            // cannot escape a base directory when a handler treats it as a path.
-            if (!has_dot_dot_segment(decoded) && !has_root_prefix(decoded)) {
+            // component, a leading separator, a drive prefix, or a NUL byte so
+            // the value cannot escape a base directory or name a different file
+            // when a handler treats it as a path.
+            if (!has_dot_dot_segment(decoded) && !has_root_prefix(decoded) && !has_embedded_nul(decoded)) {
                std::string param_name = node->parameter_child->parameter_name;
                params[param_name] = std::move(decoded);
 
@@ -644,10 +657,11 @@ namespace glz
             }
 
             // The capture is joined from decoded segments, so a "%2e%2e%2f" in
-            // the request only resolves to a ".." here, and a leading "%2f" to a
-            // rooted path; refuse both, and a drive prefix, so a mount like
-            // "/files/*path" cannot be walked outside its base directory.
-            if (has_dot_dot_segment(full_capture) || has_root_prefix(full_capture)) {
+            // the request only resolves to a ".." here, a leading "%2f" to a
+            // rooted path, and a "%00" to a NUL; refuse all of them, and a drive
+            // prefix, so a mount like "/files/*path" cannot be walked outside its
+            // base directory or truncated onto another file.
+            if (has_dot_dot_segment(full_capture) || has_root_prefix(full_capture) || has_embedded_nul(full_capture)) {
                return false;
             }
 
