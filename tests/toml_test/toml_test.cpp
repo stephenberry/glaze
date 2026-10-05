@@ -4808,6 +4808,27 @@ sname = "Second String")";
       expect(value.values[2] < 0.0);
    };
 
+   // https://github.com/stephenberry/glaze/issues/2963
+   "toml_write_non_finite_float_round_trip"_test = [] {
+      const float_special_struct value{
+         std::numeric_limits<double>::infinity(),
+         {-std::numeric_limits<double>::infinity(), std::numeric_limits<double>::quiet_NaN(), 1.5}};
+      std::string buffer{};
+      expect(not glz::write_toml(value, buffer));
+      expect(buffer == "value = inf\nvalues = [-inf, nan, 1.5]") << buffer;
+
+      float_special_struct read{};
+      const auto error = glz::read_toml(read, buffer);
+      expect(not error) << glz::format_error(error, buffer);
+      expect(std::isinf(read.value));
+      expect(read.value > 0.0);
+      expect(read.values.size() == 3);
+      expect(std::isinf(read.values[0]));
+      expect(read.values[0] < 0.0);
+      expect(std::isnan(read.values[1]));
+      expect(read.values[2] == 1.5);
+   };
+
    "toml_struct_array_trailing_comma_parses"_test = [] {
       const std::string input = "values = [1, 2,]";
       int_array_struct value{};

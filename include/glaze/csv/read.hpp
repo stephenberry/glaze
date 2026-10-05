@@ -70,6 +70,35 @@ namespace glz
       }
    };
 
+   // Reads inf, +inf, -inf or nan, the CSV writer's spelling of a non-finite float, when the
+   // token fills the field. Returns false and leaves `it` unchanged otherwise.
+   template <auto Opts, std::floating_point V>
+   GLZ_ALWAYS_INLINE bool csv_read_non_finite(V& value, auto& it, auto end) noexcept
+   {
+      auto p = it;
+      const bool negative = *p == '-';
+      if (negative || *p == '+') {
+         ++p;
+      }
+      if (end - p < 3) {
+         return false;
+      }
+      const bool inf = p[0] == 'i' && p[1] == 'n' && p[2] == 'f';
+      if (not inf && not(p[0] == 'n' && p[1] == 'a' && p[2] == 'n')) {
+         return false;
+      }
+      p += 3;
+      if (p != end && *p != csv_delimiter<Opts>() && *p != '\n' && *p != '\r') {
+         return false;
+      }
+      value = inf ? std::numeric_limits<V>::infinity() : std::numeric_limits<V>::quiet_NaN();
+      if (negative) {
+         value = -value;
+      }
+      it = p;
+      return true;
+   }
+
    template <num_t T>
    struct from<CSV, T>
    {
@@ -113,6 +142,11 @@ namespace glz
             }
          }
          else {
+            if constexpr (std::floating_point<V>) {
+               if (csv_read_non_finite<Opts>(value, it, end)) {
+                  return;
+               }
+            }
             auto [ptr, ec] = glz::from_chars<false>(it, end, value); // Always treat as non-null-terminated
             if (ec != std::errc()) [[unlikely]] {
                ctx.error = error_code::parse_number_failure;

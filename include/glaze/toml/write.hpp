@@ -198,13 +198,31 @@ namespace glz
          if constexpr (check_quoted_num(Opts)) {
             std::memcpy(&b[ix], "\"", 1);
             ++ix;
-            write_chars::op<Opts>(value, ctx, b, ix);
+            write_number<Opts>(value, ctx, b, ix);
             std::memcpy(&b[ix], "\"", 1);
             ++ix;
          }
          else {
-            write_chars::op<Opts>(value, ctx, b, ix);
+            write_number<Opts>(value, ctx, b, ix);
          }
+      }
+
+      // write_chars writes JSON's null for a non-finite float, which TOML cannot read back.
+      // TOML spells these values inf, -inf and nan.
+      template <auto Opts, class B>
+      static void write_number(auto&& value, is_context auto&& ctx, B&& b, auto& ix)
+      {
+         if constexpr (std::floating_point<std::remove_cvref_t<T>>) {
+            if (std::isnan(value)) {
+               dump("nan", b, ix);
+               return;
+            }
+            else if (std::isinf(value)) {
+               dump(value < 0 ? "-inf" : "inf", b, ix);
+               return;
+            }
+         }
+         write_chars::op<Opts>(value, ctx, b, ix);
       }
    };
 
