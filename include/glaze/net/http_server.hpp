@@ -1118,6 +1118,20 @@ namespace glz
       void send_event(std::string_view event_type, std::string_view data, std::string_view id = {},
                       data_sent_handler handler = {}) override
       {
+         // An event stream is line based: CR, LF and CRLF each end a field, and an empty
+         // line dispatches the event (WHATWG HTML, "Parsing an event stream"). An id or
+         // event type is a single line, so one holding a line break cannot be sent as
+         // written: the rest of it would be read as further fields or as a second event.
+         // The event is refused rather than sent under another id or type.
+         constexpr std::string_view line_breaks = "\r\n";
+         if (id.find_first_of(line_breaks) != std::string_view::npos ||
+             event_type.find_first_of(line_breaks) != std::string_view::npos) [[unlikely]] {
+            if (handler) {
+               asio::post(get_executor(), [handler] { handler(std::make_error_code(std::errc::invalid_argument)); });
+            }
+            return;
+         }
+
          std::string sse_data;
          sse_data.reserve(data.size() + 50);
 
@@ -1133,9 +1147,20 @@ namespace glz
             sse_data.append("\n");
          }
 
-         sse_data.append("data: ");
-         sse_data.append(data);
-         sse_data.append("\n\n");
+         // Data spanning several lines is one "data:" field per line, which the recipient
+         // joins back together with LF. Written as a single field, every line after the
+         // first would be read as a field of its own.
+         for (size_t line_start = 0;;) {
+            const size_t line_end = data.find_first_of(line_breaks, line_start);
+            sse_data.append("data: ");
+            sse_data.append(data.substr(line_start, line_end - line_start));
+            sse_data.append("\n");
+            if (line_end == std::string_view::npos) break;
+            // CRLF is one line break, not two
+            const bool is_crlf = data[line_end] == '\r' && line_end + 1 < data.size() && data[line_end + 1] == '\n';
+            line_start = line_end + (is_crlf ? 2 : 1);
+         }
+         sse_data.append("\n");
 
          send_chunk(sse_data, handler);
       }

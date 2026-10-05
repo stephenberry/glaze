@@ -287,6 +287,24 @@ Streaming handlers take over the connection (no keep-alive loop) and write chunk
 
 > **Behavior change.** Before streaming and WebSocket routes shared the matcher, `streaming_handlers_` was an exact-path lookup, so registering `/items/:id` as a streaming route was effectively dead and a request to `/items/42` fell through to the normal router. After the unification, streaming routes are matched first (see [Route Priority](#route-priority)), so a streaming `/items/:id` will intercept requests that a static normal `/items/42` would otherwise handle. Code that registered both kinds on the same path needs to be aware of the new ordering.
 
+### Server-Sent Events
+
+`as_event_stream()` starts a `text/event-stream` response and `send_event(event_type, data, id)` writes one event to it:
+
+```cpp
+router.stream_get("/rooms/:room/events",
+    [](glz::request& req, glz::streaming_response& res) {
+        res.as_event_stream();
+        res.send_event("chat", "first line\nsecond line", "42");
+        res.close();
+    });
+```
+
+An event stream is framed by line breaks: each one ends a field and an empty line dispatches the event. `send_event` keeps a line break in its arguments from being read as framing, so text taken from a request can be relayed as it is:
+
+- `data` is written as one `data:` field per line. The recipient gets the lines joined with `\n`, so a `\r\n` or a lone `\r` arrives as `\n`.
+- An `event_type` or `id` holds a single line. An event whose `event_type` or `id` contains `\r` or `\n` is not written, and a send callback passed to `res.stream->send_event` receives `std::errc::invalid_argument`.
+
 ## WebSocket Routes
 
 WebSocket handlers can also be registered on the router and use `:param` paths. The HTTP server detects the upgrade handshake and dispatches to the matching `websocket_server`, populating `request.params` from the path.
