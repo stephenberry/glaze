@@ -1,17 +1,24 @@
 name: msys2-mingw
 
+# MinGW is supported on a best-effort basis. The full build is slow on Windows runners,
+# so it runs weekly and on demand rather than on every push. Pull requests that change
+# this workflow still run it, so edits to it are checked before they merge.
 on:
-  push:
+  schedule:
+    - cron: '0 6 * * 1'
+  pull_request:
     branches:
       - main
-      - feature/*
-    paths-ignore:
-      - '**/*.md'
-      - 'docs/**'
+    paths:
+      - '.github/workflows/msys2.yml'
   workflow_dispatch:
 
 permissions:
   contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 env:
   BUILD_TYPE: Release
@@ -31,12 +38,18 @@ jobs:
         msystem: MINGW64
         install: mingw-w64-x86_64-cmake mingw-w64-x86_64-ninja mingw-w64-x86_64-gcc
 
+    # Fuzzers and performance tests add build time without covering anything
+    # MinGW-specific; the Windows/libstdc++ surface is in the unit and networking tests.
     - name: Configure CMake
-      run: mkdir build && cd build && cmake -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}} ..
+      run: >
+        cmake -B build
+        -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}}
+        -Dglaze_ENABLE_FUZZING=OFF
+        -Dglaze_BUILD_PERFORMANCE_TESTS=OFF
 
     - name: Build
-      run: cmake --build build --config ${{env.BUILD_TYPE}} -j 2
+      run: cmake --build build --config ${{env.BUILD_TYPE}} -j $(nproc)
 
     - name: Test
       working-directory: build
-      run: ctest -C ${{env.BUILD_TYPE}} -j 2 --output-on-failure
+      run: ctest -C ${{env.BUILD_TYPE}} -j $(nproc) --output-on-failure
