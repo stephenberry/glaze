@@ -12,6 +12,7 @@
 #include "glaze/csv/skip.hpp"
 #include "glaze/file/file_ops.hpp"
 #include "glaze/util/glaze_fast_float.hpp"
+#include "glaze/util/non_finite.hpp"
 #include "glaze/util/parse.hpp"
 
 namespace glz
@@ -115,6 +116,14 @@ namespace glz
          else {
             auto [ptr, ec] = glz::from_chars<false>(it, end, value); // Always treat as non-null-terminated
             if (ec != std::errc()) [[unlikely]] {
+               // from_chars requires a digit after an optional '-', so it rejects inf and nan without
+               // consuming input. Checking for them here keeps finite numbers on the fast path.
+               const auto ends_field = [](const char c) {
+                  return c == csv_delimiter<Opts>() || c == '\n' || c == '\r';
+               };
+               if (detail::parse_non_finite_float(value, it, end, ends_field)) {
+                  return;
+               }
                ctx.error = error_code::parse_number_failure;
                return;
             }

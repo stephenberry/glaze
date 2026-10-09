@@ -16,6 +16,7 @@
 #include "glaze/util/dump.hpp"
 #include "glaze/util/for_each.hpp"
 #include "glaze/util/itoa.hpp"
+#include "glaze/util/non_finite.hpp"
 #include "glaze/util/parse.hpp"
 #include "glaze/util/variant.hpp"
 
@@ -198,13 +199,26 @@ namespace glz
          if constexpr (check_quoted_num(Opts)) {
             std::memcpy(&b[ix], "\"", 1);
             ++ix;
-            write_chars::op<Opts>(value, ctx, b, ix);
+            write_number<Opts>(value, ctx, b, ix);
             std::memcpy(&b[ix], "\"", 1);
             ++ix;
          }
          else {
-            write_chars::op<Opts>(value, ctx, b, ix);
+            write_number<Opts>(value, ctx, b, ix);
          }
+      }
+
+      // write_chars writes JSON's null for a non-finite float, which TOML cannot read back.
+      // TOML spells these values inf, -inf and nan.
+      template <auto Opts, class B>
+      static void write_number(auto&& value, is_context auto&& ctx, B&& b, auto& ix)
+      {
+         if constexpr (std::floating_point<std::remove_cvref_t<T>>) {
+            if (detail::write_non_finite_float(value, "nan", "inf", "-inf", b, ix)) {
+               return;
+            }
+         }
+         write_chars::op<Opts>(value, ctx, b, ix);
       }
    };
 
