@@ -1126,13 +1126,12 @@ suite lazy_beve_tests = [] {
    };
 
    "lazy_beve_key_count_past_end"_test = [] {
-      // String-keyed object whose compressed count is an 8-byte header (0x43 low bits 0b11),
-      // declaring ~1.2e18 keys in 11 bytes. At the end of the buffer there is no key to read and
-      // the key scan cannot advance, so without the bound the lookup spins out the declared
-      // count; this test completes only because it stops at the end instead.
-      const std::vector<std::byte> buffer{std::byte{0x43}, std::byte{0x43}, std::byte{0x43}, std::byte{0x43},
-                                          std::byte{0x43}, std::byte{0x43}, std::byte{0x43}, std::byte{0x43},
-                                          std::byte{0x43}, std::byte{0x7B}, std::byte{0x3B}};
+      // String-keyed object (0x03) whose 4-byte compressed count (low bits 0b10) declares
+      // 2^30 - 1 keys and no key bytes. At the end of the buffer there is no key to read and the
+      // key scan cannot advance, so without the bound the lookup spins out the declared count.
+      // A 4-byte header keeps the count nonzero on 32-bit size_t, where 8-byte counts read as 0.
+      const std::vector<std::byte> buffer{std::byte{0x03}, std::byte{0xFE}, std::byte{0xFF}, std::byte{0xFF},
+                                          std::byte{0xFF}};
 
       auto result = glz::lazy_beve(buffer);
       expect(result.has_value());
@@ -1173,6 +1172,33 @@ suite lazy_beve_tests = [] {
          expect(result->root().index().size() == 1);
          expect(result->root()["k"].get<int>().value() == 7);
       }
+   };
+
+   "lazy_beve_typed_array_element_values"_test = [] {
+      // Typed array elements are read straight from the little-endian wire bytes, so every
+      // width must decode to the written value on big-endian hosts too.
+      const auto check = []<class T>(const std::vector<T>& values) {
+         std::vector<std::byte> buffer;
+         expect(not glz::write_beve(values, buffer));
+         auto result = glz::lazy_beve(buffer);
+         expect(result.has_value());
+         if (not result) return;
+         for (size_t i = 0; i < values.size(); ++i) {
+            const auto element = result->root()[i].template get<T>();
+            expect(element.has_value());
+            if (element) expect(*element == values[i]);
+         }
+      };
+      check(std::vector<int8_t>{-2, 3});
+      check(std::vector<int16_t>{-300, 0x1234});
+      check(std::vector<int32_t>{-70000, 0x12345678});
+      check(std::vector<int64_t>{-5000000000, 0x123456789ABCDEF0});
+      check(std::vector<uint8_t>{1, 0xFE});
+      check(std::vector<uint16_t>{0x1234, 0xFFFE});
+      check(std::vector<uint32_t>{0x12345678, 0xFFFFFFFE});
+      check(std::vector<uint64_t>{0x123456789ABCDEF0, 0xFFFFFFFFFFFFFFFE});
+      check(std::vector<float>{1.5f, -0.15625f});
+      check(std::vector<double>{3.141592653589793, -1e300});
    };
 
    // ============================================================================

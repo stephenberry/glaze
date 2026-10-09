@@ -1272,80 +1272,54 @@ namespace glz
       const uint8_t type = (tag & 0b000'11'000) >> 3; // 0=float, 1=signed, 2=unsigned
       const size_t byte_count = byte_count_lookup[tag >> 5];
 
-      if (value_ptr + byte_count > end) {
+      if (static_cast<size_t>(end - value_ptr) < byte_count) {
          return unexpected(error_ctx{0, error_code::unexpected_end});
       }
+
+      // Typed array elements are little-endian on the wire
+      const auto load = [value_ptr]<class V>() {
+         V v;
+         std::memcpy(&v, value_ptr, sizeof(V));
+         if constexpr (std::endian::native == std::endian::big) {
+            byteswap_le(v);
+         }
+         return v;
+      };
 
       if (type == 0) {
          // Floating point
          if (byte_count == 4) {
-            float f;
-            std::memcpy(&f, value_ptr, 4);
-            return static_cast<T>(f);
+            return static_cast<T>(load.template operator()<float>());
          }
          else if (byte_count == 8) {
-            double d;
-            std::memcpy(&d, value_ptr, 8);
-            return static_cast<T>(d);
+            return static_cast<T>(load.template operator()<double>());
          }
       }
       else if (type == 1) {
          // Signed integer
-         int64_t val = 0;
          switch (byte_count) {
-         case 1: {
-            int8_t v;
-            std::memcpy(&v, value_ptr, 1);
-            val = v;
-            break;
+         case 1:
+            return static_cast<T>(load.template operator()<int8_t>());
+         case 2:
+            return static_cast<T>(load.template operator()<int16_t>());
+         case 4:
+            return static_cast<T>(load.template operator()<int32_t>());
+         case 8:
+            return static_cast<T>(load.template operator()<int64_t>());
          }
-         case 2: {
-            int16_t v;
-            std::memcpy(&v, value_ptr, 2);
-            val = v;
-            break;
-         }
-         case 4: {
-            int32_t v;
-            std::memcpy(&v, value_ptr, 4);
-            val = v;
-            break;
-         }
-         case 8: {
-            std::memcpy(&val, value_ptr, 8);
-            break;
-         }
-         }
-         return static_cast<T>(val);
       }
       else if (type == 2) {
          // Unsigned integer
-         uint64_t val = 0;
          switch (byte_count) {
-         case 1: {
-            uint8_t v;
-            std::memcpy(&v, value_ptr, 1);
-            val = v;
-            break;
+         case 1:
+            return static_cast<T>(load.template operator()<uint8_t>());
+         case 2:
+            return static_cast<T>(load.template operator()<uint16_t>());
+         case 4:
+            return static_cast<T>(load.template operator()<uint32_t>());
+         case 8:
+            return static_cast<T>(load.template operator()<uint64_t>());
          }
-         case 2: {
-            uint16_t v;
-            std::memcpy(&v, value_ptr, 2);
-            val = v;
-            break;
-         }
-         case 4: {
-            uint32_t v;
-            std::memcpy(&v, value_ptr, 4);
-            val = v;
-            break;
-         }
-         case 8: {
-            std::memcpy(&val, value_ptr, 8);
-            break;
-         }
-         }
-         return static_cast<T>(val);
       }
 
       return unexpected(error_ctx{0, error_code::get_wrong_type});
