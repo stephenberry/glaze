@@ -11,13 +11,19 @@
 // and the GET /cl case proves the set-time guard in response::header() keeps a
 // dropped Content-Length from suppressing the auto-generated one (which would
 // otherwise leave the response unframed).
+//
+// The Server-Sent Events cases cover the same break one layer down. An event stream
+// is framed by line breaks in the body, so streaming_connection::send_event has to
+// keep a CR or LF in its data, event type or id from ending a field or an event.
 #include <atomic>
+#include <charconv>
 #include <chrono>
 #include <future>
 #include <string>
 #include <string_view>
 #include <thread>
 #include <ut/ut.hpp>
+#include <vector>
 
 #include "glaze/net/http.hpp"
 #include "glaze/net/http_client.hpp"
@@ -99,6 +105,102 @@ namespace
       url.port = 80;
       url.path = "/";
       return url;
+   }
+
+   // The content of a chunked response, with the transfer coding removed.
+   std::string chunked_content(std::string_view response)
+   {
+      std::string content;
+      const size_t header_end = response.find("\r\n\r\n");
+      if (header_end == std::string_view::npos) return content;
+      response.remove_prefix(header_end + 4);
+
+      for (;;) {
+         const size_t size_end = response.find("\r\n");
+         if (size_end == std::string_view::npos) break;
+         size_t size = 0;
+         if (std::from_chars(response.data(), response.data() + size_end, size, 16).ec != std::errc{}) break;
+         if (size == 0 || response.size() < size_end + 2 + size + 2) break;
+         content.append(response.substr(size_end + 2, size));
+         response.remove_prefix(size_end + 2 + size + 2);
+      }
+      return content;
+   }
+
+   struct sse_event
+   {
+      std::string type;
+      std::string data;
+   };
+
+   // What a recipient makes of an event stream.
+   struct sse_stream
+   {
+      std::vector<sse_event> events;
+      std::string last_event_id;
+      std::string retry;
+   };
+
+   // Interprets an event stream the way an EventSource does (WHATWG HTML, "Interpreting
+   // an event stream"), so the tests below assert on the events a recipient dispatches
+   // rather than on wire text alone.
+   sse_stream interpret_event_stream(std::string_view stream)
+   {
+      sse_stream result;
+      std::string type;
+      std::string data;
+      bool has_data = false;
+
+      while (!stream.empty()) {
+         // CRLF, a lone CR and a lone LF each end a line.
+         const size_t line_end = stream.find_first_of("\r\n");
+         const std::string_view line = stream.substr(0, line_end);
+         if (line_end == std::string_view::npos) {
+            stream = {};
+         }
+         else {
+            const bool is_crlf =
+               stream[line_end] == '\r' && line_end + 1 < stream.size() && stream[line_end + 1] == '\n';
+            stream.remove_prefix(line_end + (is_crlf ? 2 : 1));
+         }
+
+         if (line.empty()) {
+            // An empty line dispatches the event, unless it carried no data.
+            if (has_data) {
+               data.pop_back(); // the LF the last data field appended
+               result.events.push_back({type.empty() ? std::string{"message"} : type, data});
+            }
+            type.clear();
+            data.clear();
+            has_data = false;
+            continue;
+         }
+         if (line.front() == ':') continue; // comment
+
+         std::string_view name = line;
+         std::string_view value;
+         if (const size_t colon = line.find(':'); colon != std::string_view::npos) {
+            name = line.substr(0, colon);
+            value = line.substr(colon + 1);
+            if (value.starts_with(' ')) value.remove_prefix(1);
+         }
+
+         if (name == "event") {
+            type = value;
+         }
+         else if (name == "data") {
+            data.append(value);
+            data.push_back('\n');
+            has_data = true;
+         }
+         else if (name == "id") {
+            result.last_event_id = value;
+         }
+         else if (name == "retry") {
+            result.retry = value;
+         }
+      }
+      return result;
    }
 
 } // namespace
@@ -426,6 +528,33 @@ suite http_response_splitting_suite = [] {
       res.close();
    });
 
+   // Server-Sent Events are framed by line breaks in the body rather than in the header
+   // block. Relays url-decoded query parameters into each send_event argument, the shape
+   // of a handler that pushes text one user wrote to the others subscribed to a topic.
+   // The trailing "done" event shows the stream is still intact after the relayed one.
+   server.stream_get("/events", [&](glz::request& req, glz::streaming_response& res) {
+      const auto param = [&](const char* key) {
+         auto it = req.query.find(key);
+         return it != req.query.end() ? it->second : std::string{};
+      };
+      res.as_event_stream();
+      res.send_event(param("type"), param("msg"), param("id"));
+      res.send_event("done", "end");
+      res.close();
+   });
+
+   // The connection-level send_event takes a callback, which is how a refused event is
+   // reported. The stream is closed from the callback, so the response ends only once it
+   // has run.
+   std::atomic<int> refused_event_error{0};
+   server.stream_get("/events-refused", [&](glz::request&, glz::streaming_response& res) {
+      res.as_event_stream();
+      res.stream->send_event("chat\nevent: admin", "x", {}, [&, stream = res.stream](std::error_code ec) {
+         refused_event_error = ec.value();
+         stream->close();
+      });
+   });
+
    server.bind(test_host, 0);
    const uint16_t port = server.port();
    server.start(0);
@@ -506,6 +635,106 @@ suite http_response_splitting_suite = [] {
       expect(response.find("Injected-Header") == std::string::npos) << "Reflected CRLF must not inject a header";
       expect(response.find("Transfer-Encoding: chunked") != std::string::npos)
          << "Auto chunked framing must survive the dropped transfer-encoding override";
+   };
+
+   const auto get_events = [&](const std::string& query) {
+      const std::string payload = "GET /events?" + query +
+                                  " HTTP/1.1\r\n"
+                                  "Host: localhost\r\n"
+                                  "Connection: close\r\n"
+                                  "\r\n";
+      return chunked_content(send_raw_timed(port, payload));
+   };
+
+   "a single-line SSE event is written as before"_test = [&] {
+      const std::string content = get_events("type=chat&msg=hello&id=7");
+      expect(content == "id: 7\nevent: chat\ndata: hello\n\nevent: done\ndata: end\n\n") << content;
+   };
+
+   "multi-line SSE data reaches the recipient whole"_test = [&] {
+      // Written as one data field, "line2" was read as a field of its own and dropped,
+      // so the recipient saw only "line1".
+      const std::string content = get_events("type=chat&msg=line1%0Aline2");
+      expect(content == "event: chat\ndata: line1\ndata: line2\n\nevent: done\ndata: end\n\n") << content;
+
+      const sse_stream stream = interpret_event_stream(content);
+      expect(stream.events.size() == 2) << content;
+      if (stream.events.size() == 2) {
+         expect(stream.events[0].type == "chat");
+         expect(stream.events[0].data == "line1\nline2") << stream.events[0].data;
+         expect(stream.events[1].type == "done");
+      }
+   };
+
+   "a line break in SSE data cannot start another event"_test = [&] {
+      // An empty line dispatches the event, so the text after it used to arrive as a
+      // second event whose type and data the sender of the message chose.
+      const std::string content = get_events("type=chat&msg=hi%0A%0Aevent:%20admin%0Adata:%20forged");
+
+      const sse_stream stream = interpret_event_stream(content);
+      expect(stream.events.size() == 2) << content;
+      if (stream.events.size() == 2) {
+         expect(stream.events[0].type == "chat");
+         expect(stream.events[0].data == "hi\n\nevent: admin\ndata: forged") << stream.events[0].data;
+         expect(stream.events[1].type == "done");
+      }
+   };
+
+   "CR and CRLF in SSE data are line breaks too"_test = [&] {
+      // A recipient ends a line at a lone CR as well, so splitting on LF alone would
+      // leave the same hole open. Either form arrives as LF.
+      const std::string content = get_events("type=chat&msg=a%0D%0Ab%0D%0Devent:%20admin%0Ddata:%20forged%0D%0A");
+      expect(content.find('\r') == std::string::npos) << "No CR may reach the event stream";
+
+      const sse_stream stream = interpret_event_stream(content);
+      expect(stream.events.size() == 2) << content;
+      if (stream.events.size() == 2) {
+         expect(stream.events[0].type == "chat");
+         expect(stream.events[0].data == "a\nb\n\nevent: admin\ndata: forged\n") << stream.events[0].data;
+         expect(stream.events[1].type == "done");
+      }
+   };
+
+   "SSE data cannot set the last event id or the reconnection time"_test = [&] {
+      const std::string content = get_events("type=chat&msg=hi%0Aid:%20999%0Aretry:%2086400000");
+
+      const sse_stream stream = interpret_event_stream(content);
+      expect(stream.last_event_id.empty()) << stream.last_event_id;
+      expect(stream.retry.empty()) << stream.retry;
+      expect(stream.events.size() == 2) << content;
+      if (stream.events.size() == 2) {
+         expect(stream.events[0].data == "hi\nid: 999\nretry: 86400000") << stream.events[0].data;
+      }
+   };
+
+   "an SSE event type holding a line break is refused"_test = [&] {
+      // The event field is a single line, so there is no way to carry the break. The
+      // event is not written at all, and the one after it still arrives.
+      for (const auto* type :
+           {"chat%0Adata:%20forged%0A%0Aevent:%20admin", "chat%0Ddata:%20forged%0D%0Devent:%20admin"}) {
+         const std::string content = get_events(std::string{"type="} + type + "&msg=real");
+         expect(content == "event: done\ndata: end\n\n") << content;
+      }
+   };
+
+   "an SSE id holding a line break is refused"_test = [&] {
+      for (const auto* id : {"7%0Aevent:%20admin%0Adata:%20forged%0A", "7%0D%0Aretry:%2086400000"}) {
+         const std::string content = get_events(std::string{"type=chat&msg=real&id="} + id);
+         expect(content == "event: done\ndata: end\n\n") << content;
+      }
+   };
+
+   "a refused SSE event reports invalid_argument to its callback"_test = [&] {
+      const std::string payload =
+         "GET /events-refused HTTP/1.1\r\n"
+         "Host: localhost\r\n"
+         "Connection: close\r\n"
+         "\r\n";
+
+      const std::string response = send_raw_timed(port, payload);
+      expect(response.find("200") != std::string::npos) << "Stream should be served";
+      expect(chunked_content(response).empty()) << "A refused event must not reach the event stream";
+      expect(refused_event_error.load() == static_cast<int>(std::errc::invalid_argument));
    };
 
    server.stop();
