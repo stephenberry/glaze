@@ -142,13 +142,13 @@ namespace glz
             }
          }
          else {
-            if constexpr (std::floating_point<V>) {
+            auto [ptr, ec] = glz::from_chars<false>(it, end, value); // Always treat as non-null-terminated
+            if (ec != std::errc()) [[unlikely]] {
+               // from_chars requires a digit after an optional '-', so it rejects inf and nan without
+               // consuming input. Checking for them here keeps finite numbers on the fast path.
                if (csv_read_non_finite<Opts>(value, it, end)) {
                   return;
                }
-            }
-            auto [ptr, ec] = glz::from_chars<false>(it, end, value); // Always treat as non-null-terminated
-            if (ec != std::errc()) [[unlikely]] {
                ctx.error = error_code::parse_number_failure;
                return;
             }
