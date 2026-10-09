@@ -528,6 +528,36 @@ y,1,2,3,4,5,6,7,8,9,10
       expect(m["y"] == std::vector<uint64_t>{1, 2, 3, 4, 5, 6, 7, 8, 9, 10});
    };
 
+   // A colwise row with more cells than there are columns was accepted: the extra cell was
+   // misassigned to a later row of the first column (string columns) or spun the reader (numeric
+   // columns). The sibling colwise struct reader already rejects the same shape.
+   "std::map column wise rejects extra cells"_test = [] {
+      {
+         std::map<std::string, std::vector<std::string>> m;
+         auto ec = glz::read<glz::opts_csv{.layout = glz::colwise}>(m, std::string("a,b\n1,2,3\n"));
+         expect(bool(ec));
+         expect(ec == glz::error_code::syntax_error);
+      }
+      {
+         std::map<std::string, std::vector<double>> m;
+         auto ec = glz::read<glz::opts_csv{.layout = glz::colwise}>(m, std::string("a,b\n1,2,3\n"));
+         expect(bool(ec));
+      }
+      {
+         // A field reader that stops on a stray byte must end the read, not loop.
+         std::map<std::string, std::vector<double>> m;
+         auto ec = glz::read<glz::opts_csv{.layout = glz::colwise}>(m, std::string("a\n1x\n"));
+         expect(bool(ec));
+      }
+      {
+         // A well-formed document, including a final row without a trailing newline, still reads.
+         std::map<std::string, std::vector<double>> m;
+         expect(!glz::read<glz::opts_csv{.layout = glz::colwise}>(m, std::string("a,b\n1,2")));
+         expect(m["a"] == std::vector<double>{1});
+         expect(m["b"] == std::vector<double>{2});
+      }
+   };
+
    "std::unordered_map row wise"_test = [] {
       std::unordered_map<std::string, std::vector<uint64_t>> m;
       auto& x = m["x"];

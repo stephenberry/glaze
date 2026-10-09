@@ -1042,6 +1042,10 @@ namespace glz
                      parse<CSV>::op<Opts>(member, ctx, it, end);
                   }
 
+                  if (bool(ctx.error)) [[unlikely]] {
+                     return;
+                  }
+
                   if (it != end && *it == csv_delimiter<Opts>()) {
                      ++it;
                   }
@@ -1063,6 +1067,14 @@ namespace glz
                else if (*it == '\n') {
                   ++it;
                   ++row;
+               }
+               else [[unlikely]] {
+                  // A row with more cells than there are columns, or trailing bytes a field
+                  // reader left behind, is not a well-formed record. The sibling struct colwise
+                  // reader rejects the same shape; without this the extra cells are misassigned
+                  // to later rows (data corruption) or, for numeric columns, spin the loop.
+                  ctx.error = error_code::syntax_error;
+                  return;
                }
             }
          }
