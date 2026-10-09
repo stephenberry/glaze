@@ -54,8 +54,8 @@ namespace glz::detail
    // nothing, for a finite value. A NaN is written without its sign.
    template <class B>
    GLZ_ALWAYS_INLINE bool write_non_finite_float(const std::floating_point auto value, const std::string_view nan,
-                                                 const std::string_view inf, const std::string_view negative_inf,
-                                                 B& b, size_t& ix)
+                                                 const std::string_view inf, const std::string_view negative_inf, B& b,
+                                                 size_t& ix)
    {
       if (std::isfinite(value)) [[likely]] {
          return false;
