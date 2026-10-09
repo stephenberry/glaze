@@ -156,10 +156,16 @@ namespace glz
       [[nodiscard]] bool has_error() const noexcept { return error_ != error_code::none; }
       [[nodiscard]] error_code error() const noexcept { return error_; }
 
+      // Whether this view's cursor still addresses a byte of the message. The scanners derive it
+      // from element counts and widths read off the wire, so a container that declares more than
+      // the buffer holds leaves a cursor at or past the end; the accessors below all read a byte
+      // through data_, so they share this bound with the null check they already perform.
+      [[nodiscard]] bool in_bounds() const noexcept;
+
       // Type checking - direct from BEVE tag byte
       [[nodiscard]] bool is_null() const noexcept
       {
-         if (has_error() || !data_) return true;
+         if (has_error() || !in_bounds()) return true;
          const uint8_t t = uint8_t(*data_);
          // null tag is 0, but boolean also uses low bits differently
          // null: tag == 0
@@ -168,7 +174,7 @@ namespace glz
 
       [[nodiscard]] bool is_boolean() const noexcept
       {
-         if (has_error() || !data_) return false;
+         if (has_error() || !in_bounds()) return false;
          const uint8_t t = uint8_t(*data_);
          // boolean: (tag & 0b0000'1111) == tag::boolean (which is 0b00001'000)
          return (t & 0b0000'1111) == tag::boolean;
@@ -176,42 +182,42 @@ namespace glz
 
       [[nodiscard]] bool is_number() const noexcept
       {
-         if (has_error() || !data_) return false;
+         if (has_error() || !in_bounds()) return false;
          const uint8_t t = uint8_t(*data_) & 0b00000'111;
          return t == tag::number;
       }
 
       [[nodiscard]] bool is_string() const noexcept
       {
-         if (has_error() || !data_) return false;
+         if (has_error() || !in_bounds()) return false;
          const uint8_t t = uint8_t(*data_) & 0b00000'111;
          return t == tag::string;
       }
 
       [[nodiscard]] bool is_object() const noexcept
       {
-         if (has_error() || !data_) return false;
+         if (has_error() || !in_bounds()) return false;
          const uint8_t t = uint8_t(*data_) & 0b00000'111;
          return t == tag::object;
       }
 
       [[nodiscard]] bool is_array() const noexcept
       {
-         if (has_error() || !data_) return false;
+         if (has_error() || !in_bounds()) return false;
          const uint8_t t = uint8_t(*data_) & 0b00000'111;
          return t == tag::typed_array || t == tag::generic_array;
       }
 
       [[nodiscard]] bool is_typed_array() const noexcept
       {
-         if (has_error() || !data_) return false;
+         if (has_error() || !in_bounds()) return false;
          const uint8_t t = uint8_t(*data_) & 0b00000'111;
          return t == tag::typed_array;
       }
 
       [[nodiscard]] bool is_generic_array() const noexcept
       {
-         if (has_error() || !data_) return false;
+         if (has_error() || !in_bounds()) return false;
          const uint8_t t = uint8_t(*data_) & 0b00000'111;
          return t == tag::generic_array;
       }
@@ -224,7 +230,7 @@ namespace glz
       /// @brief Get the raw BEVE bytes for this value
       [[nodiscard]] std::string_view raw_beve() const noexcept
       {
-         if (has_error() || !data_) return {};
+         if (has_error() || !in_bounds()) return {};
          const char* end_ptr = detail::skip_value_beve_lazy<Opts>(data_, beve_end());
          return {data_, static_cast<size_t>(end_ptr - data_)};
       }
@@ -236,7 +242,7 @@ namespace glz
          if (has_error()) {
             return error_ctx{0, error_};
          }
-         if (!data_) {
+         if (!in_bounds()) {
             return error_ctx{0, error_code::unexpected_end};
          }
          context ctx{};
@@ -660,6 +666,13 @@ namespace glz
    }
 
    template <auto Opts>
+   inline bool lazy_beve_view<Opts>::in_bounds() const noexcept
+   {
+      const char* const end = beve_end();
+      return data_ && end && data_ < end;
+   }
+
+   template <auto Opts>
    inline lazy_beve_view<Opts> lazy_beve_view<Opts>::operator[](size_t index) const
    {
       if (has_error()) return *this;
@@ -679,7 +692,14 @@ namespace glz
       if (type_bits == tag::generic_array) {
          // Generic array - each element has its own tag
          for (size_t i = 0; i < index; ++i) {
+            if (p >= end) [[unlikely]] {
+               return make_error(error_code::unexpected_end);
+            }
             p = detail::skip_value_beve_lazy<Opts>(p, end);
+         }
+         if (p >= end) [[unlikely]] {
+            // The count promised this element but the buffer ended before it.
+            return make_error(error_code::unexpected_end);
          }
          return {doc_, p};
       }
@@ -693,8 +713,17 @@ namespace glz
             if (is_string) {
                // String array - variable length elements
                for (size_t i = 0; i < index; ++i) {
+                  if (p >= end) [[unlikely]] {
+                     return make_error(error_code::unexpected_end);
+                  }
                   const auto len = detail::read_compressed_int(p, end);
+                  if (static_cast<size_t>(end - p) < len) [[unlikely]] {
+                     return make_error(error_code::unexpected_end);
+                  }
                   p += len;
+               }
+               if (p >= end) [[unlikely]] {
+                  return make_error(error_code::unexpected_end);
                }
                // Return view with synthetic string tag
                return {doc_, p, {}, tag::string};
@@ -708,6 +737,12 @@ namespace glz
          else {
             // Numeric typed array - fixed size elements
             const size_t elem_size = byte_count_lookup[t >> 5];
+            // The stride comes off the wire, so index * elem_size can reach past the buffer.
+            // Divide the bytes remaining instead of multiplying the offset: the product overflows
+            // a 32-bit size_t and would wrap the cursor back inside the buffer.
+            if (static_cast<size_t>(end - p) / elem_size <= index) [[unlikely]] {
+               return make_error(error_code::unexpected_end);
+            }
             p += index * elem_size;
             // Return view with synthetic numeric tag
             const uint8_t synthetic_tag = tag::number | (t & 0b11111000);
@@ -762,6 +797,12 @@ namespace glz
       // Forward pass: search from current position
       const char* iter = search_start;
       for (size_t i = start_index; i < n_keys; ++i) {
+         if (iter >= end) [[unlikely]] {
+            // The key count is wire data and outruns the buffer; at the end there is no key to
+            // read and the scan cannot advance, so it has to stop here rather than spin out the
+            // declared count.
+            return make_error(error_code::unexpected_end);
+         }
          const auto key_len = detail::read_compressed_int(iter, end);
          if (static_cast<size_t>(end - iter) < key_len) [[unlikely]] {
             return make_error(error_code::unexpected_end);
@@ -770,6 +811,11 @@ namespace glz
          iter += key_len;
 
          if (current_key == key) {
+            if (iter >= end) [[unlikely]] {
+               // The key ran to the end of the buffer, so its value is not in the message.
+               // Report before storing parse_pos_ so a truncated match leaves no scan state.
+               return make_error(error_code::unexpected_end);
+            }
             parse_pos_ = iter;
             return {doc_, iter};
          }
@@ -781,6 +827,9 @@ namespace glz
       if (start_index > 0) {
          iter = p;
          for (size_t i = 0; i < start_index; ++i) {
+            if (iter >= end) [[unlikely]] {
+               return make_error(error_code::unexpected_end);
+            }
             const auto key_len = detail::read_compressed_int(iter, end);
             if (static_cast<size_t>(end - iter) < key_len) [[unlikely]] {
                return make_error(error_code::unexpected_end);
@@ -789,6 +838,9 @@ namespace glz
             iter += key_len;
 
             if (current_key == key) {
+               if (iter >= end) [[unlikely]] {
+                  return make_error(error_code::unexpected_end);
+               }
                parse_pos_ = iter;
                return {doc_, iter};
             }
@@ -810,7 +862,7 @@ namespace glz
    template <auto Opts>
    inline size_t lazy_beve_view<Opts>::size() const
    {
-      if (has_error() || !data_) return 0;
+      if (has_error() || !in_bounds()) return 0;
 
       // Handle synthetic tags (typed array elements)
       if (synthetic_tag_ != 0) {
@@ -842,7 +894,7 @@ namespace glz
    template <auto Opts>
    inline bool lazy_beve_view<Opts>::empty() const noexcept
    {
-      if (has_error() || !data_) return true;
+      if (has_error() || !in_bounds()) return true;
       if (is_null()) return true;
       if (!is_array() && !is_object()) return false;
 
@@ -917,8 +969,21 @@ namespace glz
          }
          else {
             // Number key: just raw bytes (no key view for number keys)
+            if (static_cast<size_t>(beve_end_ - current_pos_) < key_byte_count_) [[unlikely]] {
+               at_end_ = true;
+               current_view_ = lazy_beve_view<Opts>::make_error(error_code::unexpected_end);
+               return;
+            }
             current_pos_ += key_byte_count_;
          }
+      }
+
+      if (current_pos_ >= beve_end_) [[unlikely]] {
+         // The count promised another element but the buffer ended first; stop rather than
+         // handing back a view whose first byte is not in the message.
+         at_end_ = true;
+         current_view_ = lazy_beve_view<Opts>::make_error(error_code::unexpected_end);
+         return;
       }
 
       current_view_ = lazy_beve_view<Opts>{doc_, current_pos_, key};
@@ -937,6 +1002,11 @@ namespace glz
 
       // Skip current value
       if (is_typed_array_ && element_size_ > 0) {
+         if (static_cast<size_t>(beve_end_ - current_pos_) < element_size_) [[unlikely]] {
+            at_end_ = true;
+            current_view_ = lazy_beve_view<Opts>::make_error(error_code::unexpected_end);
+            return *this;
+         }
          current_pos_ += element_size_;
       }
       else {
@@ -950,7 +1020,7 @@ namespace glz
    template <auto Opts>
    inline lazy_beve_iterator<Opts> lazy_beve_view<Opts>::begin() const
    {
-      if (has_error() || !data_) return end();
+      if (has_error() || !in_bounds()) return end();
       if (!is_array() && !is_object()) return end();
 
       const uint8_t t = uint8_t(*data_) & 0b00000'111;
@@ -983,7 +1053,7 @@ namespace glz
    template <auto Opts>
    inline indexed_lazy_beve_view<Opts> lazy_beve_view<Opts>::index() const
    {
-      if (has_error() || !data_ || (!is_array() && !is_object())) {
+      if (has_error() || !in_bounds() || (!is_array() && !is_object())) {
          return indexed_lazy_beve_view<Opts>{};
       }
 
@@ -998,7 +1068,9 @@ namespace glz
       const auto count = detail::read_compressed_int(p, end);
       if (count == 0) return result;
 
-      result.reserve(count);
+      // Every element occupies at least one byte, so the bytes remaining cap how many there can
+      // be. The count is unvalidated wire data and would otherwise reserve for billions.
+      result.reserve(count < static_cast<size_t>(end - p) ? count : static_cast<size_t>(end - p));
 
       if (type_bits == tag::object) {
          // Check key type from bits 3-4 of tag
@@ -1017,6 +1089,10 @@ namespace glz
                std::string_view key{p, key_len};
                p += key_len;
 
+               if (p >= end) [[unlikely]] {
+                  // The key ran to the end of the buffer, so its value is not there.
+                  break;
+               }
                result.add_element(p, key);
                p = detail::skip_value_beve_lazy<Opts>(p, end);
             }
@@ -1025,6 +1101,10 @@ namespace glz
             // Object with number keys
             const size_t key_size = byte_count_lookup[t >> 5];
             for (size_t i = 0; i < count; ++i) {
+               if (static_cast<size_t>(end - p) <= key_size) [[unlikely]] {
+                  // Not enough bytes for this key and the value that follows it.
+                  break;
+               }
                p += key_size; // Skip the number key
                result.add_element(p); // No key stored for number keys
                p = detail::skip_value_beve_lazy<Opts>(p, end);
@@ -1034,6 +1114,9 @@ namespace glz
       else if (type_bits == tag::generic_array) {
          // Generic array
          for (size_t i = 0; i < count; ++i) {
+            if (p >= end) [[unlikely]] {
+               break;
+            }
             result.add_element(p);
             p = detail::skip_value_beve_lazy<Opts>(p, end);
          }
@@ -1049,6 +1132,9 @@ namespace glz
             result.element_tag_ = tag::number | (t & 0b11111000);
             const size_t elem_size = byte_count_lookup[t >> 5];
             for (size_t i = 0; i < count; ++i) {
+               if (static_cast<size_t>(end - p) < elem_size) [[unlikely]] {
+                  break;
+               }
                result.add_element(p);
                p += elem_size;
             }
@@ -1060,8 +1146,14 @@ namespace glz
                // String array - elements are length-prefixed strings without tag
                result.element_tag_ = tag::string;
                for (size_t i = 0; i < count; ++i) {
+                  if (p >= end) [[unlikely]] {
+                     break;
+                  }
                   result.add_element(p);
                   const auto len = detail::read_compressed_int(p, end);
+                  if (static_cast<size_t>(end - p) < len) [[unlikely]] {
+                     break;
+                  }
                   p += len;
                }
             }
@@ -1086,6 +1178,11 @@ namespace glz
    {
       if (has_error()) {
          return unexpected(error_ctx{0, error_});
+      }
+      if (!in_bounds()) {
+         // Both forms below start at data_: the tag byte of a normal value, the first byte of a
+         // typed array element. Neither exists unless the cursor is inside the message.
+         return unexpected(error_ctx{0, error_code::unexpected_end});
       }
 
       const char* end = beve_end();
@@ -1175,80 +1272,54 @@ namespace glz
       const uint8_t type = (tag & 0b000'11'000) >> 3; // 0=float, 1=signed, 2=unsigned
       const size_t byte_count = byte_count_lookup[tag >> 5];
 
-      if (value_ptr + byte_count > end) {
+      if (static_cast<size_t>(end - value_ptr) < byte_count) {
          return unexpected(error_ctx{0, error_code::unexpected_end});
       }
+
+      // Typed array elements are little-endian on the wire
+      const auto load = [value_ptr]<class V>() {
+         V v;
+         std::memcpy(&v, value_ptr, sizeof(V));
+         if constexpr (std::endian::native == std::endian::big) {
+            byteswap_le(v);
+         }
+         return v;
+      };
 
       if (type == 0) {
          // Floating point
          if (byte_count == 4) {
-            float f;
-            std::memcpy(&f, value_ptr, 4);
-            return static_cast<T>(f);
+            return static_cast<T>(load.template operator()<float>());
          }
          else if (byte_count == 8) {
-            double d;
-            std::memcpy(&d, value_ptr, 8);
-            return static_cast<T>(d);
+            return static_cast<T>(load.template operator()<double>());
          }
       }
       else if (type == 1) {
          // Signed integer
-         int64_t val = 0;
          switch (byte_count) {
-         case 1: {
-            int8_t v;
-            std::memcpy(&v, value_ptr, 1);
-            val = v;
-            break;
+         case 1:
+            return static_cast<T>(load.template operator()<int8_t>());
+         case 2:
+            return static_cast<T>(load.template operator()<int16_t>());
+         case 4:
+            return static_cast<T>(load.template operator()<int32_t>());
+         case 8:
+            return static_cast<T>(load.template operator()<int64_t>());
          }
-         case 2: {
-            int16_t v;
-            std::memcpy(&v, value_ptr, 2);
-            val = v;
-            break;
-         }
-         case 4: {
-            int32_t v;
-            std::memcpy(&v, value_ptr, 4);
-            val = v;
-            break;
-         }
-         case 8: {
-            std::memcpy(&val, value_ptr, 8);
-            break;
-         }
-         }
-         return static_cast<T>(val);
       }
       else if (type == 2) {
          // Unsigned integer
-         uint64_t val = 0;
          switch (byte_count) {
-         case 1: {
-            uint8_t v;
-            std::memcpy(&v, value_ptr, 1);
-            val = v;
-            break;
+         case 1:
+            return static_cast<T>(load.template operator()<uint8_t>());
+         case 2:
+            return static_cast<T>(load.template operator()<uint16_t>());
+         case 4:
+            return static_cast<T>(load.template operator()<uint32_t>());
+         case 8:
+            return static_cast<T>(load.template operator()<uint64_t>());
          }
-         case 2: {
-            uint16_t v;
-            std::memcpy(&v, value_ptr, 2);
-            val = v;
-            break;
-         }
-         case 4: {
-            uint32_t v;
-            std::memcpy(&v, value_ptr, 4);
-            val = v;
-            break;
-         }
-         case 8: {
-            std::memcpy(&val, value_ptr, 8);
-            break;
-         }
-         }
-         return static_cast<T>(val);
       }
 
       return unexpected(error_ctx{0, error_code::get_wrong_type});

@@ -1061,6 +1061,146 @@ suite lazy_beve_tests = [] {
       expect(looked_up.has_error());
    };
 
+   "lazy_beve_element_cursor_past_end"_test = [] {
+      // Generic array (0x05) declaring one element (compressed count 0x04) and no element
+      // bytes. The element the count promises begins exactly at the end of the buffer, so no
+      // tag byte of it is in the message; reading one is an out-of-bounds read.
+      const std::vector<std::byte> buffer{std::byte{0x05}, std::byte{0x04}};
+
+      auto result = glz::lazy_beve(buffer);
+      expect(result.has_value());
+      if (not result) return;
+      auto& doc = result.value();
+
+      expect(doc.root().index().size() == 0);
+
+      auto by_position = doc.root()[size_t(0)];
+      expect(by_position.has_error());
+      expect(by_position.error() == glz::error_code::unexpected_end);
+      expect(!by_position.get<std::string_view>().has_value());
+
+      for ([[maybe_unused]] auto v : doc.root()) {
+         expect(false) << "iteration must not yield an element outside the buffer";
+      }
+   };
+
+   "lazy_beve_typed_array_count_past_end"_test = [] {
+      // uint64 typed array (0b011'10'100, what write_beve emits for std::vector<uint64_t>)
+      // declaring 2^30 - 1 elements with no data. The element stride comes off the wire, so
+      // index * stride must not be added to the cursor before it is bounded: the product
+      // overflows a 32-bit size_t and wraps back into the buffer.
+      const std::vector<std::byte> buffer{std::byte{0b011'10'100}, std::byte{0xFE}, std::byte{0xFF}, std::byte{0xFF},
+                                          std::byte{0xFF}};
+
+      auto result = glz::lazy_beve(buffer);
+      expect(result.has_value());
+      if (not result) return;
+      auto& doc = result.value();
+
+      expect(doc.root().index().size() == 0);
+
+      auto element = doc.root()[size_t(3)];
+      expect(element.has_error());
+      expect(!element.get<uint64_t>().has_value());
+   };
+
+   "lazy_beve_object_value_past_end"_test = [] {
+      // String-keyed object (0x03) with one key (count 0x04) whose one-byte key (length 0x04)
+      // ends the buffer: the value that follows it is not in the message.
+      const std::vector<std::byte> buffer{std::byte{0x03}, std::byte{0x04}, std::byte{0x04}, std::byte{'k'}};
+
+      auto result = glz::lazy_beve(buffer);
+      expect(result.has_value());
+      if (not result) return;
+      auto& doc = result.value();
+
+      expect(doc.root().index().size() == 0);
+
+      auto looked_up = doc.root()["k"];
+      expect(looked_up.has_error());
+      expect(looked_up.error() == glz::error_code::unexpected_end);
+
+      for ([[maybe_unused]] auto v : doc.root()) {
+         expect(false) << "iteration must not yield a value outside the buffer";
+      }
+   };
+
+   "lazy_beve_key_count_past_end"_test = [] {
+      // String-keyed object (0x03) whose 4-byte compressed count (low bits 0b10) declares
+      // 2^30 - 1 keys and no key bytes. At the end of the buffer there is no key to read and the
+      // key scan cannot advance, so without the bound the lookup spins out the declared count.
+      // A 4-byte header keeps the count nonzero on 32-bit size_t, where 8-byte counts read as 0.
+      const std::vector<std::byte> buffer{std::byte{0x03}, std::byte{0xFE}, std::byte{0xFF}, std::byte{0xFF},
+                                          std::byte{0xFF}};
+
+      auto result = glz::lazy_beve(buffer);
+      expect(result.has_value());
+      if (not result) return;
+
+      auto looked_up = result->root()["hello"];
+      expect(looked_up.has_error());
+      expect(looked_up.error() == glz::error_code::unexpected_end);
+   };
+
+   "lazy_beve_valid_documents_unchanged"_test = [] {
+      // The bounds above must not cost a well formed document any of its elements.
+      {
+         std::vector<std::byte> buffer;
+         expect(not glz::write_beve(std::vector<std::string>{"a", "bb", "ccc"}, buffer));
+         auto result = glz::lazy_beve(buffer);
+         expect(result.has_value());
+         if (not result) return;
+         auto index = result->root().index();
+         expect(index.size() == 3);
+         expect(index[2].get<std::string_view>().value() == "ccc");
+      }
+      {
+         std::vector<std::byte> buffer;
+         expect(not glz::write_beve(std::vector<uint64_t>{1, 2, 3, 4}, buffer));
+         auto result = glz::lazy_beve(buffer);
+         expect(result.has_value());
+         if (not result) return;
+         expect(result->root().index().size() == 4);
+         expect(result->root()[size_t(3)].get<uint64_t>().value() == 4);
+      }
+      {
+         std::vector<std::byte> buffer;
+         expect(not glz::write_beve(std::map<std::string, int>{{"k", 7}}, buffer));
+         auto result = glz::lazy_beve(buffer);
+         expect(result.has_value());
+         if (not result) return;
+         expect(result->root().index().size() == 1);
+         expect(result->root()["k"].get<int>().value() == 7);
+      }
+   };
+
+   "lazy_beve_typed_array_element_values"_test = [] {
+      // Typed array elements are read straight from the little-endian wire bytes, so every
+      // width must decode to the written value on big-endian hosts too.
+      const auto check = []<class T>(const std::vector<T>& values) {
+         std::vector<std::byte> buffer;
+         expect(not glz::write_beve(values, buffer));
+         auto result = glz::lazy_beve(buffer);
+         expect(result.has_value());
+         if (not result) return;
+         for (size_t i = 0; i < values.size(); ++i) {
+            const auto element = result->root()[i].template get<T>();
+            expect(element.has_value());
+            if (element) expect(*element == values[i]);
+         }
+      };
+      check(std::vector<int8_t>{-2, 3});
+      check(std::vector<int16_t>{-300, 0x1234});
+      check(std::vector<int32_t>{-70000, 0x12345678});
+      check(std::vector<int64_t>{-5000000000, 0x123456789ABCDEF0});
+      check(std::vector<uint8_t>{1, 0xFE});
+      check(std::vector<uint16_t>{0x1234, 0xFFFE});
+      check(std::vector<uint32_t>{0x12345678, 0xFFFFFFFE});
+      check(std::vector<uint64_t>{0x123456789ABCDEF0, 0xFFFFFFFFFFFFFFFE});
+      check(std::vector<float>{1.5f, -0.15625f});
+      check(std::vector<double>{3.141592653589793, -1e300});
+   };
+
    // ============================================================================
    // Unsigned integer array tests
    // ============================================================================
