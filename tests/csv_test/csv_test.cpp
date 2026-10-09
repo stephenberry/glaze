@@ -309,11 +309,27 @@ suite csv_tests = [] {
       expect(!glz::read<glz::opts_csv{.delimiter = ';'}>(read, out));
       check(read);
 
-      // A token that only starts like inf or nan is still a parse error
-      std::string bad = "d,f\ninfinity,1\n";
+      // Signed spellings, CRLF line endings, and a last field with no line break
+      std::string signed_tokens = "d,f\r\n+inf,-nan\r\n-nan,+nan\r\n1.5,-inf";
       read = {};
-      const auto ec = glz::read<glz::opts_csv{.layout = glz::colwise}>(read, bad);
-      expect(ec.ec == glz::error_code::parse_number_failure);
+      expect(!glz::read<glz::opts_csv{.layout = glz::colwise}>(read, signed_tokens));
+      expect(read.d.size() == 3 && read.f.size() == 3);
+      if (read.d.size() == 3 && read.f.size() == 3) {
+         expect(std::isinf(read.d[0]) && read.d[0] > 0.0);
+         expect(std::isnan(read.f[0]));
+         expect(std::isnan(read.d[1]));
+         expect(std::isnan(read.f[1]));
+         expect(read.d[2] == 1.5);
+         expect(std::isinf(read.f[2]) && read.f[2] < 0.f);
+      }
+
+      // Only the lowercase tokens are accepted, and only when they fill the field
+      for (const std::string_view field : {"infinity", "Inf", "NaN", "INF", "nan ", "-"}) {
+         std::string bad = "d,f\n" + std::string(field) + ",1\n";
+         read = {};
+         const auto ec = glz::read<glz::opts_csv{.layout = glz::colwise}>(read, bad);
+         expect(ec.ec == glz::error_code::parse_number_failure) << field;
+      }
    };
 
    "rowwise char round trip"_test = [] {

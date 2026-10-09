@@ -180,7 +180,7 @@ glz::write<glz::opts_csv{.delimiter = '.'}>(obj, out);
 - Quoted fields preserve delimiters, quotes, and newlines (handles both `\n` and `\r\n`).
 - Empty fields are parsed as default values (e.g., `0` for numbers, empty string for strings, `false` for booleans).
 - Booleans accept `true`/`false` (case-insensitive) and `0`/`1`; empty boolean fields default to `false`.
-- Non-finite floating-point values are written as `inf`, `-inf` and `nan`, and read back from those tokens (`+inf` is also accepted).
+- Non-finite floating-point values are written as `inf`, `-inf` and `nan`, and read back from those tokens (`+inf`, `+nan` and `-nan` are also accepted). The tokens are case-sensitive.
 
 Examples:
 

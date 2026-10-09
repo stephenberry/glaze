@@ -15,6 +15,7 @@
 #include "glaze/core/write_wrappers.hpp"
 #include "glaze/util/dump.hpp"
 #include "glaze/util/for_each.hpp"
+#include "glaze/util/non_finite.hpp"
 #include "glaze/util/parse.hpp"
 #include "glaze/util/variant.hpp"
 #include "glaze/yaml/common.hpp"
@@ -124,17 +125,7 @@ namespace glz
          }
          // YAML supports .inf, -.inf, and .nan for special float values
          if constexpr (std::floating_point<std::remove_cvref_t<T>>) {
-            if (std::isnan(value)) {
-               dump(".nan", b, ix);
-               return;
-            }
-            else if (std::isinf(value)) {
-               if (value < 0) {
-                  dump("-.inf", b, ix);
-               }
-               else {
-                  dump(".inf", b, ix);
-               }
+            if (detail::write_non_finite_float(value, ".nan", ".inf", "-.inf", b, ix)) {
                return;
             }
          }

@@ -11,6 +11,7 @@
 #include "glaze/core/write_chars.hpp"
 #include "glaze/util/dump.hpp"
 #include "glaze/util/for_each.hpp"
+#include "glaze/util/non_finite.hpp"
 
 namespace glz
 {
@@ -78,12 +79,7 @@ namespace glz
          // write_chars writes JSON's null for a non-finite float, which is not a CSV number.
          // Write inf, -inf and nan, which the CSV reader accepts.
          if constexpr (std::floating_point<std::remove_cvref_t<T>>) {
-            if (std::isnan(value)) {
-               dump("nan", b, ix);
-               return;
-            }
-            else if (std::isinf(value)) {
-               dump(value < 0 ? "-inf" : "inf", b, ix);
+            if (detail::write_non_finite_float(value, "nan", "inf", "-inf", b, ix)) {
                return;
             }
          }

@@ -16,6 +16,7 @@
 #include "glaze/util/dump.hpp"
 #include "glaze/util/for_each.hpp"
 #include "glaze/util/itoa.hpp"
+#include "glaze/util/non_finite.hpp"
 #include "glaze/util/parse.hpp"
 #include "glaze/util/variant.hpp"
 
@@ -213,12 +214,7 @@ namespace glz
       static void write_number(auto&& value, is_context auto&& ctx, B&& b, auto& ix)
       {
          if constexpr (std::floating_point<std::remove_cvref_t<T>>) {
-            if (std::isnan(value)) {
-               dump("nan", b, ix);
-               return;
-            }
-            else if (std::isinf(value)) {
-               dump(value < 0 ? "-inf" : "inf", b, ix);
+            if (detail::write_non_finite_float(value, "nan", "inf", "-inf", b, ix)) {
                return;
             }
          }
