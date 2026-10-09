@@ -4795,6 +4795,42 @@ sname = "Second String")";
       }
    };
 
+   "toml_struct_float_value_plus_sign"_test = [] {
+      {
+         const std::string input = "value = +3.5";
+         float_special_struct value{};
+         const auto error = glz::read_toml(value, input);
+         expect(not error) << glz::format_error(error, input);
+         expect(value.value == 3.5);
+      }
+
+      {
+         const std::string input = "value = +1e3";
+         float_special_struct value{};
+         const auto error = glz::read_toml(value, input);
+         expect(not error) << glz::format_error(error, input);
+         expect(value.value == 1000.0);
+      }
+
+      {
+         const std::string input = "values = [+0.0, +2.5, -2.5]";
+         float_special_struct value{};
+         const auto error = glz::read_toml(value, input);
+         expect(not error) << glz::format_error(error, input);
+         expect(value.values.size() == 3);
+         if (value.values.size() == 3) {
+            expect(value.values[0] == 0.0);
+            expect(value.values[1] == 2.5);
+            expect(value.values[2] == -2.5);
+         }
+      }
+
+      for (const std::string input : {"value = +-1.0", "value = ++1.0", "value = +"}) {
+         float_special_struct value{};
+         expect(bool(glz::read_toml(value, input))) << input;
+      }
+   };
+
    "toml_1_1_struct_float_array_inf_nan"_test = [] {
       const std::string input = "values = [inf, nan, -inf]";
       float_special_struct value{};
