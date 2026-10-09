@@ -631,6 +631,11 @@ namespace glz
       template <auto Opts, size_t Extra = 0, class Value, is_context Ctx, class B, class IX>
       GLZ_ALWAYS_INLINE static void write_members(Value&& value, Ctx&& ctx, B&& b, IX&& ix, auto&& prefix)
       {
+         // The keyed map is the branch that emits keys; the array branch above carries the members
+         // positionally. A repeated key would name one member twice and lose the other, so it is
+         // refused here, matching the keyed reader.
+         static_assert(keys_are_unique<T>(), GLZ_DUPLICATE_KEYS_MESSAGE);
+
          [[maybe_unused]] decltype(auto) t = [&]() -> decltype(auto) {
             if constexpr (reflectable<T>) {
                return to_tie(value);
