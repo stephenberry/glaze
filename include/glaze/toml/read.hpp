@@ -755,22 +755,19 @@ namespace glz
                      ctx.error = error_code::unexpected_end;
                      return;
                   }
-                  // Escaped newline continuation in multiline basic strings
-                  if (*it == '\n') {
-                     // Trim all whitespace after escaped newline until non-whitespace or actual newline
-                     while (it + 1 < end &&
-                            (*(it + 1) == ' ' || *(it + 1) == '\t' || *(it + 1) == '\r' || *(it + 1) == '\n')) {
-                        ++it;
-                        if (*it == '\n') break; // Stop if we hit an actual newline
-                     }
+                  // Line ending backslash: optional spaces or tabs, then a newline. The
+                  // backslash and all whitespace, newlines included, up to the next
+                  // non-whitespace character are trimmed.
+                  auto ws = it;
+                  while (ws < end && (*ws == ' ' || *ws == '\t')) {
+                     ++ws;
                   }
-                  else if (*it == '\r') { // part of CRLF, handle similar to \n
-                     if (it + 1 < end && *(it + 1) == '\n') ++it;
-                     while (it + 1 < end &&
-                            (*(it + 1) == ' ' || *(it + 1) == '\t' || *(it + 1) == '\r' || *(it + 1) == '\n')) {
-                        ++it;
-                        if (*it == '\n') break;
+                  if (ws < end && (*ws == '\n' || (*ws == '\r' && ws + 1 < end && *(ws + 1) == '\n'))) {
+                     while (ws + 1 < end && (*(ws + 1) == ' ' || *(ws + 1) == '\t' || *(ws + 1) == '\n' ||
+                                             (*(ws + 1) == '\r' && ws + 2 < end && *(ws + 2) == '\n'))) {
+                        ++ws;
                      }
+                     it = ws; // the ++it below steps past the trimmed whitespace
                   }
                   else if (!append_toml_basic_escape(value, it, end)) {
                      ctx.error = error_code::syntax_error;

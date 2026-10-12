@@ -6318,4 +6318,39 @@ suite toml_context_reuse = [] {
    };
 };
 
+suite toml_line_ending_backslash = [] {
+   auto read = [](const std::string& input, std::string& value) { return glz::read_toml(value, input); };
+
+   "line_ending_backslash_with_trailing_whitespace"_test = [&] {
+      // TOML 1.0: whitespace may follow the backslash before the newline
+      const std::string input = "\"\"\"a\\  \n  b\"\"\"";
+      std::string value{};
+      const auto error = read(input, value);
+      expect(not error) << glz::format_error(error, input);
+      expect(value == "ab") << value;
+   };
+
+   "line_ending_backslash_trims_blank_lines"_test = [&] {
+      const std::string input = "\"\"\"a\\\n\n  \n  b\"\"\"";
+      std::string value{};
+      const auto error = read(input, value);
+      expect(not error) << glz::format_error(error, input);
+      expect(value == "ab") << value;
+   };
+
+   "line_ending_backslash_crlf_with_trailing_whitespace"_test = [&] {
+      const std::string input = "\"\"\"a\\ \t\r\n\r\n  b\"\"\"";
+      std::string value{};
+      const auto error = read(input, value);
+      expect(not error) << glz::format_error(error, input);
+      expect(value == "ab") << value;
+   };
+
+   "backslash_space_not_before_newline_is_invalid"_test = [&] {
+      const std::string input = "\"\"\"a\\ b\"\"\"";
+      std::string value{};
+      expect(bool(read(input, value)));
+   };
+};
+
 int main() { return 0; }
