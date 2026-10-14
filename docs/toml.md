@@ -821,7 +821,7 @@ auto ec = glz::read_toml(config, toml);
 
 ### Limitations
 
-- **Null values**: TOML has no native null type. When writing `std::nullptr_t` or a variant holding null, an empty string `""` is written.
+- **Null values**: TOML has no native null type. A struct field or map entry holding null (an empty `std::optional`, a null pointer, or a variant or `glz::generic` holding null) is omitted along with its key. In an array or tuple, the null alternative of a variant (such as a `glz::generic` null) is written as an empty string `""`, while an empty typed nullable such as `std::optional<int>` fails the write with `glz::error_code::feature_not_supported`. The reader never produces a null: a missing value (`a =`, `{u = }`, `[1, , 2]`) is a `syntax_error`.
 - **Type coercion**: The parser does not coerce types. If the variant has no matching alternative for the detected type, an error is returned.
 - **Array of tables in maps**: The `[[array_of_tables]]` syntax is not fully supported when reading into map types. Use struct-based types for this pattern.
 
