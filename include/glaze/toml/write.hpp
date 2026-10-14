@@ -699,6 +699,27 @@ namespace glz
    template <auto Opts, class V, class B>
    void write_inline_map(V&& value, is_context auto&& ctx, B&& b, auto& ix);
 
+   // Whether a map entry's value is null: an always-null type or an empty nullable. TOML has no
+   // null, so the map writers drop such entries the way the struct writers drop null fields;
+   // writing the key would leave `key = ` with nothing after the equals, which no TOML parser
+   // (including this library's reader) accepts.
+   template <class V>
+   GLZ_ALWAYS_INLINE constexpr bool toml_value_is_null(const V& val) noexcept
+   {
+      if constexpr (always_null_t<V>) {
+         return true;
+      }
+      else if constexpr (nullable_like<V>) {
+         return !bool(val);
+      }
+      else if constexpr (nullable_value_t<V>) {
+         return !val.has_value();
+      }
+      else {
+         return false;
+      }
+   }
+
    // Dispatches a value to the appropriate writer for use inside an inline context
    // (the value of a key in an inline table, or an element of an inline array).
    // Inside such a context the value must be inline TOML: no multi-line `key = value`
@@ -878,6 +899,11 @@ namespace glz
             return;
          }
 
+         // Dropped like a null struct field; see toml_value_is_null.
+         if (toml_value_is_null(val)) {
+            continue;
+         }
+
          if (!first) {
             if (!ensure_space(ctx, b, ix + 2 + write_padding_bytes)) [[unlikely]] {
                return;
@@ -910,13 +936,22 @@ namespace glz
    void write_inline_value(V&& val, is_context auto&& ctx, B&& b, auto& ix)
    {
       using val_t = std::remove_cvref_t<V>;
+      // A null in inline position (an array or tuple element, a variant alternative) is written
+      // as the "" placeholder the std::nullptr_t writer documents. Emitting nothing here, as this
+      // used to, corrupts the structure around the value: [1, , 3] parses nowhere, and [1, ]
+      // parses everywhere as the one-element [1], silently dropping the element. A struct field
+      // or map entry holding an empty nullable never reaches these branches; its writer drops
+      // the entry whole, key and all.
       if constexpr (always_null_t<val_t>) {
-         // No inner value to recurse into; emit nothing.
+         to<TOML, std::nullptr_t>::template op<Options>(nullptr, ctx, b, ix);
       }
       else if constexpr (nullable_like<val_t>) {
          // bool / dereferencing access (raw pointers, smart pointers, std::optional, ...).
          if (val) {
             write_inline_value<Options>(*val, ctx, b, ix);
+         }
+         else {
+            to<TOML, std::nullptr_t>::template op<Options>(nullptr, ctx, b, ix);
          }
       }
       else if constexpr (nullable_value_t<val_t>) {
@@ -925,6 +960,9 @@ namespace glz
          // coverage used at the struct field level.
          if (val.has_value()) {
             write_inline_value<Options>(val.value(), ctx, b, ix);
+         }
+         else {
+            to<TOML, std::nullptr_t>::template op<Options>(nullptr, ctx, b, ix);
          }
       }
       else if constexpr (is_variant<val_t>) {
@@ -1424,6 +1462,10 @@ namespace glz
          for (auto&& [key, val] : value) {
             if (bool(ctx.error)) [[unlikely]] {
                return;
+            }
+            // Dropped like a null struct field; see toml_value_is_null.
+            if (toml_value_is_null(val)) {
+               continue;
             }
             if (!first) {
                write_object_entry_separator<Opts>(ctx, b, ix);

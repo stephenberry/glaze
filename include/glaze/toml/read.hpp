@@ -2884,9 +2884,6 @@ namespace glz
       template <class T>
       concept toml_variant_object_type = (glz::glaze_object_t<T> || glz::reflectable<T> || glz::writable_map_t<T>);
 
-      template <class T>
-      concept toml_variant_null_type = glz::null_t<T>;
-
       // Type trait wrappers for template use
       template <class T>
       struct is_toml_variant_bool : std::bool_constant<toml_variant_bool_type<T>>
@@ -2911,9 +2908,6 @@ namespace glz
       {};
       template <class T>
       struct is_toml_variant_object : std::bool_constant<toml_variant_object_type<T>>
-      {};
-      template <class T>
-      struct is_toml_variant_null : std::bool_constant<toml_variant_null_type<T>>
       {};
 
       // Count types in variant matching a trait
@@ -3358,10 +3352,10 @@ namespace glz
          else {
             // Identifiers (a-z, A-Z, _) at document root indicate key-value pairs
             // Check if the variant has a map alternative we can use
-            const bool is_identifier = (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c == '_';
             constexpr auto map_idx = detail::find_map_alternative_index<Variant>();
 
             if constexpr (map_idx != std::variant_npos) {
+               const bool is_identifier = (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c == '_';
                if (is_identifier) {
                   // Parse as a TOML document with key-value pairs into the map alternative
                   using V = std::variant_alternative_t<map_idx, Variant>;
@@ -3373,18 +3367,12 @@ namespace glz
                }
             }
 
-            // Unknown type - could be null or invalid
-            constexpr auto null_count = detail::toml_variant_count_v<Variant, detail::is_toml_variant_null>;
-            if constexpr (null_count > 0) {
-               // Try to parse as null (for std::nullptr_t or similar)
-               constexpr auto idx = detail::toml_variant_first_index_v<Variant, detail::is_toml_variant_null>;
-               value.template emplace<idx>();
-               // Note: TOML doesn't have a native null, so this may fail unless
-               // custom handling is provided
-            }
-            else {
-               ctx.error = error_code::syntax_error;
-            }
+            // TOML has no null, so a byte that starts no TOML value is a syntax error even when
+            // the variant has a null alternative. Emplacing null here without consuming anything
+            // accepted documents every conforming parser rejects -- a key with nothing after its
+            // equals (`a =` ending the line, `a = # comment`), an inline-table member with no
+            // value ({u = }), and an empty array element ([1, , 2]) -- all reported as success.
+            ctx.error = error_code::syntax_error;
          }
       }
    };

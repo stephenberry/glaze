@@ -6300,6 +6300,85 @@ suite toml_control_character_writer_tests = [] {
    };
 };
 
+// TOML has no null. A null value must not corrupt the structure written around it: a map
+// entry holding an empty nullable is dropped the way a null struct field is, and a null in
+// an array, tuple, or variant slot is written as the "" placeholder the std::nullptr_t
+// writer documents, never as nothing. The reader in turn must not invent a null from a
+// value that is not there (`a =` ending the line, `{u = }`, `[1, , 2]`), which every
+// conforming parser rejects.
+suite toml_null_value_tests = [] {
+   "map entry with empty optional is dropped"_test = [] {
+      std::map<std::string, std::optional<int>> m{{"x", std::nullopt}, {"y", 2}};
+      std::string buffer{};
+      expect(not glz::write_toml(m, buffer));
+      expect(buffer == "y = 2") << buffer;
+   };
+
+   "inline table entry with empty optional is dropped"_test = [] {
+      std::map<std::string, std::map<std::string, std::optional<int>>> m{{"t", {{"u", std::nullopt}, {"v", 1}}}};
+      std::string buffer{};
+      expect(not glz::write_toml(m, buffer));
+      expect(buffer == "t = {v = 1}") << buffer;
+   };
+
+   "map with only null entries writes an empty document"_test = [] {
+      std::map<std::string, std::optional<int>> m{{"x", std::nullopt}};
+      std::string buffer = "overwritten";
+      expect(not glz::write_toml(m, buffer));
+      expect(buffer.empty()) << buffer;
+   };
+
+   "array element with empty optional keeps its slot"_test = [] {
+      std::vector<std::optional<int>> v{1, std::nullopt, 3};
+      std::string buffer{};
+      expect(not glz::write_toml(v, buffer));
+      expect(buffer == "[1, \"\", 3]") << buffer;
+   };
+
+   "trailing empty optional is not silently dropped"_test = [] {
+      // Writing nothing here produced [1, ], which every parser reads as the
+      // one-element [1]: an element lost without an error on either side.
+      std::vector<std::optional<int>> v{1, std::nullopt};
+      std::string buffer{};
+      expect(not glz::write_toml(v, buffer));
+      expect(buffer == "[1, \"\"]") << buffer;
+   };
+
+   "generic null map entries and array elements stay valid TOML"_test = [] {
+      glz::generic g{};
+      expect(not glz::read_json(g, R"({"b":1,"t":{"u":null},"arr":[null,2]})"));
+      std::string buffer{};
+      expect(not glz::write_toml(g, buffer));
+      expect(buffer == "b = 1\nt = {u = \"\"}\narr = [\"\", 2]") << buffer;
+      glz::generic back{};
+      expect(not glz::read_toml(back, buffer)) << buffer;
+   };
+
+   "reader rejects a key with no value before the line ends"_test = [] {
+      glz::generic g{};
+      std::string in = "a = \nb = 1";
+      expect(glz::read_toml(g, in) == glz::error_code::syntax_error);
+      in = "a = # only a comment\n";
+      expect(glz::read_toml(g, in) == glz::error_code::syntax_error);
+   };
+
+   "reader rejects an inline table member with no value"_test = [] {
+      glz::generic g{};
+      std::string in = "t = {u = }";
+      expect(glz::read_toml(g, in) == glz::error_code::syntax_error);
+      in = "t = {u = , v = 1}";
+      expect(glz::read_toml(g, in) == glz::error_code::syntax_error);
+   };
+
+   "reader rejects an empty array element"_test = [] {
+      glz::generic g{};
+      std::string in = "arr = [1, , 2]";
+      expect(glz::read_toml(g, in) == glz::error_code::syntax_error);
+      in = "arr = [,]";
+      expect(glz::read_toml(g, in) == glz::error_code::syntax_error);
+   };
+};
+
 suite toml_context_reuse = [] {
    "a context reused after a failed read still reads"_test = [] {
       static constexpr glz::opts options{.format = glz::TOML};
