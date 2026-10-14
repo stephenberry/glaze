@@ -148,6 +148,9 @@ suite generic_json_tests = [] {
       expect(json[i].get<double>() == 3.0);
       expect(json[ci].get<double>() == 4.0);
       expect(json[s].get<double>() == 5.0);
+      // lvalue-indexed access matches rvalue (literal) indexing
+      expect(json[i].get<double>() == json[2].get<double>());
+      expect(json[s].get<double>() == json[4u].get<double>());
       json[i] = 10.0;
       expect(json[2].get<double>() == 10.0);
 
