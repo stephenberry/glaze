@@ -13,6 +13,22 @@
 
 namespace glz
 {
+   namespace detail
+   {
+      // A function rather than an immediately invoked lambda in trait's static member
+      // initializer; see comma_separated_names_v for the MSVC issue this avoids.
+      template <class T>
+      consteval std::string_view trait_member_names()
+      {
+         if constexpr (glaze_object_t<T> || reflectable<T>) {
+            return name_v<member_tuple_t<T>>;
+         }
+         else {
+            return "";
+         }
+      }
+   }
+
    template <class T>
    struct trait
    {
@@ -65,14 +81,7 @@ namespace glz
 
       static constexpr sv blank = ""; // to end possible macros
 
-      static constexpr sv members = [] {
-         if constexpr (glaze_object_t<T> || reflectable<T>) {
-            return glz::name_v<detail::member_tuple_t<T>>;
-         }
-         else {
-            return "";
-         }
-      }();
+      static constexpr sv members = detail::trait_member_names<T>();
 
       static constexpr sv to_hash =
          join_v<type_name_hash,
