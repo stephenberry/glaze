@@ -204,9 +204,9 @@ namespace glz
          return std::holds_alternative<T>(data);
       }
 
-      generic_json& operator[](std::integral auto&& index) { return std::get<array_t>(data)[index]; }
+      generic_json& operator[](std::integral auto index) { return std::get<array_t>(data)[index]; }
 
-      const generic_json& operator[](std::integral auto&& index) const { return std::get<array_t>(data)[index]; }
+      const generic_json& operator[](std::integral auto index) const { return std::get<array_t>(data)[index]; }
 
       generic_json& operator[](std::convertible_to<std::string_view> auto&& key)
       {

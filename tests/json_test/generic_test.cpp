@@ -137,6 +137,29 @@ suite generic_json_tests = [] {
       expect(json[3].holds<glz::generic::null_t>());
    };
 
+   "generic_json_index_lvalue"_test = [] {
+      // https://github.com/stephenberry/glaze/issues/2993
+      glz::generic json{};
+      std::string buffer = R"([1,2,3,4,5])";
+      expect(glz::read_json(json, buffer) == glz::error_code::none);
+      int i = 2;
+      const int ci = 3;
+      size_t s = 4;
+      expect(json[i].get<double>() == 3.0);
+      expect(json[ci].get<double>() == 4.0);
+      expect(json[s].get<double>() == 5.0);
+      // lvalue-indexed access matches rvalue (literal) indexing
+      expect(json[i].get<double>() == json[2].get<double>());
+      expect(json[s].get<double>() == json[4u].get<double>());
+      json[i] = 10.0;
+      expect(json[2].get<double>() == 10.0);
+
+      const glz::generic& cjson = json;
+      expect(cjson[i].get<double>() == 10.0);
+      expect(cjson[ci].get<double>() == 4.0);
+      expect(cjson[s].get<double>() == 5.0);
+   };
+
    "generic_json_roundtrip"_test = [] {
       glz::generic json{};
       std::string buffer = R"([5,"Hello World",{"pi":3.14},null])";
