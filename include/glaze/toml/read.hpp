@@ -1751,6 +1751,9 @@ namespace glz
 
             if (*it == '\n' || *it == '\r') {
                skip_to_next_line(ctx, it, end);
+               if (bool(ctx.error)) [[unlikely]] {
+                  return;
+               }
                continue;
             }
 
@@ -2451,6 +2454,9 @@ namespace glz
 
             if (*it == '\n' || *it == '\r') {
                skip_to_next_line(ctx, it, end);
+               if (bool(ctx.error)) [[unlikely]] {
+                  return;
+               }
                continue;
             }
 
@@ -2538,6 +2544,9 @@ namespace glz
             }
             if (*it == '\n' || *it == '\r') {
                skip_to_next_line(ctx, it, end);
+               if (bool(ctx.error)) [[unlikely]] {
+                  return;
+               }
                continue;
             }
 
@@ -2652,6 +2661,9 @@ namespace glz
             }
             if (*it == '\n' || *it == '\r') {
                skip_to_next_line(ctx, it, end);
+               if (bool(ctx.error)) [[unlikely]] {
+                  return;
+               }
                continue;
             }
 

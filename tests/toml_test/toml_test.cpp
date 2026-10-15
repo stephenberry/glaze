@@ -6277,6 +6277,62 @@ suite toml_skipped_string_line_endings = [] {
    };
 };
 
+struct line_ending_pair_t
+{
+   int a{};
+   int b{};
+};
+
+struct line_ending_doc_t
+{
+   line_ending_pair_t t{};
+   std::vector<int> v{};
+};
+
+// A TOML newline is LF or CRLF. A carriage return without a line feed after it is not a
+// line ending anywhere in a document.
+suite toml_document_line_endings = [] {
+   "CRLF line endings are accepted throughout a document"_test = [] {
+      line_ending_doc_t doc{};
+      const std::string input = "# c\r\nv = [\r\n1, # d\r\n2\r\n]\r\n[t]\r\na = 1 # e\r\nb = 2\r\n";
+      const auto error = glz::read_toml(doc, input);
+      expect(not error) << glz::format_error(error, input);
+      expect(doc.v == std::vector<int>{1, 2});
+      expect(doc.t.a == 1);
+      expect(doc.t.b == 2);
+   };
+
+   "bare carriage return is not a line ending"_test = [] {
+      line_ending_pair_t pair{};
+      expect(glz::read_toml(pair, "a = 1\rb = 2") == glz::error_code::syntax_error);
+      expect(glz::read_toml(pair, "a = 1 # c\rb = 2") == glz::error_code::syntax_error);
+      expect(glz::read_toml(pair, "\ra = 1\nb = 2") == glz::error_code::syntax_error);
+      expect(glz::read_toml(pair, "a = 1\r") == glz::error_code::syntax_error);
+
+      line_ending_doc_t doc{};
+      expect(glz::read_toml(doc, "[t]\ra = 1") == glz::error_code::syntax_error);
+      expect(bool(glz::read_toml(doc, "v = [1,\r2]")));
+      expect(bool(glz::read_toml(doc, "v = [1, # c\r2]")));
+
+      std::map<std::string, int> map{};
+      expect(glz::read_toml(map, "a = 1\rb = 2") == glz::error_code::syntax_error);
+
+      glz::generic generic{};
+      expect(glz::read_toml(generic, "a = 1\rb = 2") == glz::error_code::syntax_error);
+      expect(glz::read_toml(generic, "[t]\ra = 1") == glz::error_code::syntax_error);
+   };
+
+   "skipped values reject a bare carriage return"_test = [] {
+      static constexpr glz::opts skip_unknown{.format = glz::TOML, .error_on_unknown_keys = false};
+      control_value_t obj{};
+      expect(not glz::read<skip_unknown>(obj, "u = [1,\r\n2]\r\nw = 3\r\nv = \"x\"\r\n[u2]\r\nk = 1\r\n"));
+      expect(obj.v == "x");
+      expect(glz::read<skip_unknown>(obj, "u = [1,\r2]\nv = \"x\"") == glz::error_code::syntax_error);
+      expect(glz::read<skip_unknown>(obj, "u = 1\rv = \"x\"") == glz::error_code::syntax_error);
+      expect(glz::read<skip_unknown>(obj, "[u]\rk = 1") == glz::error_code::syntax_error);
+   };
+};
+
 suite toml_control_character_writer_tests = [] {
    // Escaping costs a check on every string, so like JSON it is opt-in and the
    // default output is unchanged.

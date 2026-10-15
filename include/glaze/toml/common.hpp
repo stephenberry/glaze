@@ -121,12 +121,14 @@ namespace glz
       }
    }
 
-   // Skip whitespace, newlines and comments
+   // Skip whitespace, newlines and comments. A newline is LF or CRLF; a carriage return
+   // without a line feed after it is left in place for the caller to reject, the same
+   // way a forbidden byte in a comment is.
    template <class It, class End>
    inline void skip_ws_newlines_and_comments(It&& it, End end) noexcept
    {
       while (it != end) {
-         if (*it == ' ' || *it == '\t' || *it == '\n' || *it == '\r') {
+         if (*it == ' ' || *it == '\t' || *it == '\n' || (*it == '\r' && !toml::is_bare_carriage_return(it, end))) {
             ++it;
          }
          else if (*it == '#') {
@@ -143,9 +145,10 @@ namespace glz
       }
    }
 
-   // Skip to next line
+   // Skip to next line. A line ends in LF or CRLF; a carriage return without a line feed
+   // after it is a syntax error. Returns false at the end of input or on that error.
    template <class Ctx, class It, class End>
-   inline bool skip_to_next_line(Ctx&, It&& it, End end) noexcept
+   inline bool skip_to_next_line(Ctx& ctx, It&& it, End end) noexcept
    {
       while (it != end && *it != '\n' && *it != '\r') {
          ++it;
@@ -155,16 +158,12 @@ namespace glz
          return false;
       }
 
-      if (*it == '\r') {
-         ++it;
-         if (it != end && *it == '\n') {
-            ++it;
-         }
-      }
-      else if (*it == '\n') {
-         ++it;
+      if (toml::is_bare_carriage_return(it, end)) [[unlikely]] {
+         ctx.error = error_code::syntax_error;
+         return false;
       }
 
+      it += (*it == '\r') ? 2 : 1;
       return true;
    }
 } // namespace glz

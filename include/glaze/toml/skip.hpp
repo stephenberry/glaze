@@ -195,6 +195,11 @@ namespace glz::toml
             continue;
          }
 
+         if (is_bare_carriage_return(it, end)) [[unlikely]] {
+            ctx.error = error_code::syntax_error;
+            return;
+         }
+
          if (c == closers[depth - 1]) {
             --depth;
             ++it;
