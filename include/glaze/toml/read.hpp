@@ -679,6 +679,54 @@ namespace glz
       {
          return c == ',' || c == ']' || c == '}' || c == '\n' || c == '\r' || c == '#' || c == ' ' || c == '\t';
       }
+
+      // TOML permits an underscore between two digits of a float (1_000.5, 6.626e-3_4), which
+      // from_chars does not accept. Parses the float token starting at `first` with its underscores
+      // removed. Returns one past the end of the token, or nullptr if the token is invalid.
+      template <class T>
+      const char* parse_toml_float_with_underscores(T& value, const char* first, const char* end) noexcept
+      {
+         constexpr auto is_decimal_digit = [](const char c) { return c >= '0' && c <= '9'; };
+         constexpr auto is_float_char = [](const char c) {
+            return (c >= '0' && c <= '9') || c == '_' || c == '.' || c == 'e' || c == 'E' || c == '+' || c == '-';
+         };
+
+         auto last = first;
+         while (last != end && is_float_char(*last)) {
+            if (*last == '_') {
+               const bool digit_before = last != first && is_decimal_digit(*(last - 1));
+               const bool digit_after = last + 1 != end && is_decimal_digit(*(last + 1));
+               if (not digit_before || not digit_after) [[unlikely]] {
+                  return nullptr;
+               }
+            }
+            ++last;
+         }
+
+         // The digits are copied to a stack buffer, falling back to the heap for unusually long tokens
+         constexpr size_t stack_capacity = 128;
+         char stack_buffer[stack_capacity];
+         std::string heap_buffer;
+         const auto token_length = size_t(last - first);
+         char* buffer = stack_buffer;
+         if (token_length > stack_capacity) [[unlikely]] {
+            heap_buffer.resize(token_length);
+            buffer = heap_buffer.data();
+         }
+
+         char* buffer_end = buffer;
+         for (auto p = first; p != last; ++p) {
+            if (*p != '_') {
+               *buffer_end++ = *p;
+            }
+         }
+
+         auto [ptr, ec] = glz::from_chars<false>(static_cast<const char*>(buffer), buffer_end, value);
+         if (ec != std::errc() || ptr != buffer_end) [[unlikely]] {
+            return nullptr;
+         }
+         return last;
+      }
    }
 
    template <num_t T>
@@ -714,6 +762,15 @@ namespace glz
             if (ec != std::errc()) [[unlikely]] {
                ctx.error = error_code::parse_number_failure;
                return;
+            }
+
+            // from_chars stops at an underscore, so a valid underscore always follows a parsed prefix
+            if (ptr != end && *ptr == '_') [[unlikely]] {
+               ptr = detail::parse_toml_float_with_underscores(value, it, end);
+               if (ptr == nullptr) [[unlikely]] {
+                  ctx.error = error_code::parse_number_failure;
+                  return;
+               }
             }
             it = ptr;
          }

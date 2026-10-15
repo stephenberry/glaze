@@ -1039,6 +1039,52 @@ arr = [4, 5, 6])";
       expect(value == 1e5);
    };
 
+   "read_float_with_underscores"_test = [] {
+      const std::pair<std::string_view, double> cases[] = {
+         {"1_000.5", 1000.5},   {"-1_000.5", -1000.5}, {"3.141_592", 3.141592}, {"1_0e1_0", 10e10},
+         {"6.6e-3_4", 6.6e-34}, {"1.5E+1_0", 1.5e10},  {"1_000", 1000.0},      {"9_9.9_9e1_2", 99.99e12},
+      };
+      for (const auto& [num, expected] : cases) {
+         double value{};
+         const std::string input{num};
+         const auto ec = glz::read_toml(value, input);
+         expect(not ec) << glz::format_error(ec, input);
+         expect(value == expected) << num;
+         float f{};
+         expect(not glz::read_toml(f, input)) << num;
+         expect(f == float(expected)) << num;
+      }
+
+      // A token longer than the parser's stack buffer
+      std::string long_input = "0.";
+      std::string expected_digits = "0.";
+      for (int i = 0; i < 100; ++i) {
+         long_input += "1_2";
+         expected_digits += "12";
+      }
+      double value{};
+      expect(not glz::read_toml(value, long_input));
+      expect(value == std::stod(expected_digits));
+   };
+
+   "read_float_with_misplaced_underscores"_test = [] {
+      // An underscore must sit between two digits
+      for (const std::string_view num : {"1__0.5", "1_.5", "1._5", "1.5_", "1.5_e3", "1.5e_3", "1.5e+_3", "1.5e3_",
+                                         "-_1.5", "0_1.5", "1_0.5_"}) {
+         double value{};
+         expect(glz::read_toml(value, std::string{num}) == glz::error_code::parse_number_failure) << num;
+      }
+   };
+
+   "read_struct_float_with_underscores"_test = [] {
+      const std::string input = "value = 1_000.25\nvalues = [1_0.5, 2e1_0, -3_3.0]";
+      float_special_struct s{};
+      const auto ec = glz::read_toml(s, input);
+      expect(not ec) << glz::format_error(ec, input);
+      expect(s.value == 1000.25);
+      expect(s.values == std::vector<double>{10.5, 2e10, -33.0});
+   };
+
    "read_string"_test = [] {
       std::string toml_input = R"("Hello TOML")";
       std::string value{};
@@ -3944,6 +3990,15 @@ suite variant_toml_corner_cases = [] {
       expect(std::get<int64_t>(v) == 0b11010110);
    };
 
+   "variant_read_underscore_float"_test = [] {
+      std::variant<int64_t, double, std::string> v;
+      std::string toml = "1_000.5e1_0";
+      auto ec = glz::read_toml(v, toml);
+      expect(not ec) << glz::format_error(ec, toml);
+      expect(std::holds_alternative<double>(v));
+      expect(std::get<double>(v) == 1000.5e10);
+   };
+
    "variant_read_underscore_number"_test = [] {
       std::variant<int64_t, double, std::string> v;
       std::string toml = "1_000_000";
@@ -4082,6 +4137,15 @@ suite generic_toml_corner_cases = [] {
       expect(not ec) << glz::format_error(ec, toml);
       expect(g.holds<int64_t>());
       expect(g.get<int64_t>() == 0b10101010);
+   };
+
+   "generic_i64_read_underscore_float"_test = [] {
+      glz::generic_i64 g;
+      std::string toml = "1_234.5";
+      auto ec = glz::read_toml(g, toml);
+      expect(not ec) << glz::format_error(ec, toml);
+      expect(g.holds<double>());
+      expect(g.get<double>() == 1234.5);
    };
 
    "generic_i64_read_underscore_number"_test = [] {
