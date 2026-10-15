@@ -8,9 +8,14 @@ namespace glz::toml
 {
    // TOML v1.0.0 excludes raw control characters from strings, keys and comments. A
    // single-line basic or literal string and a comment admit tab and nothing else in
-   // that range; the multi-line forms additionally admit line feed and carriage
-   // return. DEL (0x7F) is excluded from all of them. Anything else in the C0 range
-   // has to arrive as an escape (\u00XX) or not at all.
+   // that range; the multi-line forms additionally admit line feed, and carriage
+   // return as the start of a CRLF line ending. DEL (0x7F) is excluded from all of
+   // them. Anything else in the C0 range has to arrive as an escape (\u00XX) or not
+   // at all.
+   //
+   // A carriage return is only legal when a line feed follows it, which a per-byte
+   // test cannot see, so it is not in the multi-line forbidden set. The multi-line
+   // scans stop on it instead (see the dispatch tables) and check the next byte.
    inline constexpr bool is_toml_forbidden_control(char c) noexcept
    {
       const auto u = uint8_t(c);
@@ -71,14 +76,25 @@ namespace glz::toml
       auto t = forbidden_control_multiline_table;
       t[uint8_t('"')] = true;
       t[uint8_t('\\')] = true;
+      t[uint8_t('\r')] = true;
       return t;
    }();
 
    inline constexpr std::array<bool, 256> multiline_literal_dispatch_table = [] {
       auto t = forbidden_control_multiline_table;
       t[uint8_t('\'')] = true;
+      t[uint8_t('\r')] = true;
       return t;
    }();
+
+   // In a multi-line string a carriage return must open a CRLF line ending. `it` points
+   // at a byte inside the string, so a carriage return there is bare when it is the
+   // last byte or the next byte is not a line feed.
+   template <class It, class End>
+   inline constexpr bool is_bare_carriage_return(It it, End end) noexcept
+   {
+      return *it == '\r' && (it + 1 == end || *(it + 1) != '\n');
+   }
 } // namespace glz::toml
 
 namespace glz
