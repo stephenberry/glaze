@@ -785,17 +785,23 @@ namespace glz
                   if (it + 2 >= end) {
                      break; // unterminated; reported by the check after the loop
                   }
-                  if (toml::forbidden_control_multiline_table[uint8_t(*it)]) [[unlikely]] {
+                  if (toml::forbidden_control_multiline_table[uint8_t(*it)] ||
+                      toml::is_bare_carriage_return(it, end)) [[unlikely]] {
                      ctx.error = error_code::invalid_control_character;
                      return;
                   }
                   if (*it == '\\') {
                      continue; // hand the escape back to the branch above
                   }
-                  if (*(it + 1) == '"' && *(it + 2) == '"') {
+                  if (*it == '\r') {
+                     value.push_back('\r'); // a CRLF line ending; the line feed joins the next run
+                  }
+                  else if (*(it + 1) == '"' && *(it + 2) == '"') {
                      break; // closing delimiter
                   }
-                  value.push_back('"'); // a lone quote inside the string
+                  else {
+                     value.push_back('"'); // a lone quote inside the string
+                  }
                }
                ++it;
             }
@@ -868,14 +874,15 @@ namespace glz
                if (it + 2 >= end) {
                   break;
                }
-               if (toml::forbidden_control_multiline_table[uint8_t(*it)]) [[unlikely]] {
+               if (toml::forbidden_control_multiline_table[uint8_t(*it)] ||
+                   toml::is_bare_carriage_return(it, end)) [[unlikely]] {
                   ctx.error = error_code::invalid_control_character;
                   return;
                }
-               if (*(it + 1) == '\'' && *(it + 2) == '\'') {
+               if (*it == '\'' && *(it + 1) == '\'' && *(it + 2) == '\'') {
                   break; // closing delimiter
                }
-               value.push_back(*it); // a lone quote inside the string
+               value.push_back(*it); // a lone quote, or the carriage return of a CRLF line ending
                ++it;
             }
 
@@ -1744,6 +1751,9 @@ namespace glz
 
             if (*it == '\n' || *it == '\r') {
                skip_to_next_line(ctx, it, end);
+               if (bool(ctx.error)) [[unlikely]] {
+                  return;
+               }
                continue;
             }
 
@@ -2444,6 +2454,9 @@ namespace glz
 
             if (*it == '\n' || *it == '\r') {
                skip_to_next_line(ctx, it, end);
+               if (bool(ctx.error)) [[unlikely]] {
+                  return;
+               }
                continue;
             }
 
@@ -2531,6 +2544,9 @@ namespace glz
             }
             if (*it == '\n' || *it == '\r') {
                skip_to_next_line(ctx, it, end);
+               if (bool(ctx.error)) [[unlikely]] {
+                  return;
+               }
                continue;
             }
 
@@ -2645,6 +2661,9 @@ namespace glz
             }
             if (*it == '\n' || *it == '\r') {
                skip_to_next_line(ctx, it, end);
+               if (bool(ctx.error)) [[unlikely]] {
+                  return;
+               }
                continue;
             }
 

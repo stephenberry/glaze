@@ -6192,6 +6192,35 @@ suite toml_control_character_reader_tests = [] {
       expect(obj.v == "a\nb");
    };
 
+   // A carriage return is legal in a multiline string only as the start of CRLF.
+   "multiline strings keep CRLF line endings"_test = [] {
+      control_value_t obj{};
+      expect(not glz::read_toml(obj, "v = \"\"\"a\r\nb\r\n\"\"\""));
+      expect(obj.v == "a\r\nb\r\n");
+      expect(not glz::read_toml(obj, "v = '''a\r\nb\r\n'''"));
+      expect(obj.v == "a\r\nb\r\n");
+   };
+
+   "multiline basic string rejects bare carriage return"_test = [] {
+      control_value_t obj{};
+      expect(glz::read_toml(obj, "v = \"\"\"a\rb\"\"\"") == glz::error_code::invalid_control_character);
+      expect(glz::read_toml(obj, "v = \"\"\"a\r\"\"\"") == glz::error_code::invalid_control_character);
+      expect(glz::read_toml(obj, "v = \"\"\"a\r\r\nb\"\"\"") == glz::error_code::invalid_control_character);
+   };
+
+   "multiline literal string rejects bare carriage return"_test = [] {
+      control_value_t obj{};
+      expect(glz::read_toml(obj, "v = '''a\rb'''") == glz::error_code::invalid_control_character);
+      expect(glz::read_toml(obj, "v = '''a\r'''") == glz::error_code::invalid_control_character);
+      expect(glz::read_toml(obj, "v = '''a\r\r\nb'''") == glz::error_code::invalid_control_character);
+   };
+
+   "line ending backslash does not admit a bare carriage return"_test = [] {
+      control_value_t obj{};
+      expect(bool(glz::read_toml(obj, "v = \"\"\"a\\\rb\"\"\"")));
+      expect(glz::read_toml(obj, "v = \"\"\"a\\\n\r b\"\"\"") == glz::error_code::invalid_control_character);
+   };
+
    // The scans now run as bulk runs broken by a dispatch table, so the cases that
    // make a run stop without ending the string need to keep working.
    "quotes inside multiline strings survive the scan"_test = [] {
@@ -6206,6 +6235,101 @@ suite toml_control_character_reader_tests = [] {
       expect(obj.v == "ab");
       expect(not glz::read_toml(obj, "v = \"a\\tb\\u0041\""));
       expect(obj.v == "a\tbA");
+   };
+};
+
+suite toml_skipped_string_line_endings = [] {
+   static constexpr glz::opts skip_unknown{.format = glz::TOML, .error_on_unknown_keys = false};
+
+   "skipped multiline strings keep CRLF line endings"_test = [] {
+      control_value_t obj{};
+      expect(not glz::read<skip_unknown>(obj, "u = \"\"\"a\r\nb\\\r\n  c\"\"\"\nv = \"x\""));
+      expect(obj.v == "x");
+      expect(not glz::read<skip_unknown>(obj, "u = '''a\r\nb'''\nv = \"y\""));
+      expect(obj.v == "y");
+   };
+
+   "skipped multiline strings reject bare carriage return"_test = [] {
+      control_value_t obj{};
+      expect(glz::read<skip_unknown>(obj, "u = \"\"\"a\rb\"\"\"\nv = \"x\"") ==
+             glz::error_code::invalid_control_character);
+      expect(glz::read<skip_unknown>(obj, "u = '''a\rb'''\nv = \"x\"") == glz::error_code::invalid_control_character);
+      expect(glz::read<skip_unknown>(obj, "u = \"\"\"a\\\rb\"\"\"\nv = \"x\"") ==
+             glz::error_code::invalid_control_character);
+   };
+
+   "skipped single-line string rejects an escaped line break"_test = [] {
+      control_value_t obj{};
+      expect(bool(glz::read<skip_unknown>(obj, "u = \"a\\\nb\"\nv = \"x\"")));
+      expect(bool(glz::read<skip_unknown>(obj, "u = \"a\\\rb\"\nv = \"x\"")));
+   };
+
+   "skipped strings step over escaped quotes and backslashes"_test = [] {
+      control_value_t obj{};
+      expect(not glz::read<skip_unknown>(obj, "u = \"a\\\"b\"\nv = \"x\""));
+      expect(obj.v == "x");
+      expect(not glz::read<skip_unknown>(obj, "u = \"a\\\\\"\nv = \"y\""));
+      expect(obj.v == "y");
+      expect(not glz::read<skip_unknown>(obj, "u = \"\"\"a\\\"\"\" b\"\"\"\nv = \"z\""));
+      expect(obj.v == "z");
+      expect(not glz::read<skip_unknown>(obj, "u = \"\"\"a\\\\\"\"\"\nv = \"w\""));
+      expect(obj.v == "w");
+   };
+};
+
+struct line_ending_pair_t
+{
+   int a{};
+   int b{};
+};
+
+struct line_ending_doc_t
+{
+   line_ending_pair_t t{};
+   std::vector<int> v{};
+};
+
+// A TOML newline is LF or CRLF. A carriage return without a line feed after it is not a
+// line ending anywhere in a document.
+suite toml_document_line_endings = [] {
+   "CRLF line endings are accepted throughout a document"_test = [] {
+      line_ending_doc_t doc{};
+      const std::string input = "# c\r\nv = [\r\n1, # d\r\n2\r\n]\r\n[t]\r\na = 1 # e\r\nb = 2\r\n";
+      const auto error = glz::read_toml(doc, input);
+      expect(not error) << glz::format_error(error, input);
+      expect(doc.v == std::vector<int>{1, 2});
+      expect(doc.t.a == 1);
+      expect(doc.t.b == 2);
+   };
+
+   "bare carriage return is not a line ending"_test = [] {
+      line_ending_pair_t pair{};
+      expect(glz::read_toml(pair, "a = 1\rb = 2") == glz::error_code::syntax_error);
+      expect(glz::read_toml(pair, "a = 1 # c\rb = 2") == glz::error_code::syntax_error);
+      expect(glz::read_toml(pair, "\ra = 1\nb = 2") == glz::error_code::syntax_error);
+      expect(glz::read_toml(pair, "a = 1\r") == glz::error_code::syntax_error);
+
+      line_ending_doc_t doc{};
+      expect(glz::read_toml(doc, "[t]\ra = 1") == glz::error_code::syntax_error);
+      expect(bool(glz::read_toml(doc, "v = [1,\r2]")));
+      expect(bool(glz::read_toml(doc, "v = [1, # c\r2]")));
+
+      std::map<std::string, int> map{};
+      expect(glz::read_toml(map, "a = 1\rb = 2") == glz::error_code::syntax_error);
+
+      glz::generic generic{};
+      expect(glz::read_toml(generic, "a = 1\rb = 2") == glz::error_code::syntax_error);
+      expect(glz::read_toml(generic, "[t]\ra = 1") == glz::error_code::syntax_error);
+   };
+
+   "skipped values reject a bare carriage return"_test = [] {
+      static constexpr glz::opts skip_unknown{.format = glz::TOML, .error_on_unknown_keys = false};
+      control_value_t obj{};
+      expect(not glz::read<skip_unknown>(obj, "u = [1,\r\n2]\r\nw = 3\r\nv = \"x\"\r\n[u2]\r\nk = 1\r\n"));
+      expect(obj.v == "x");
+      expect(glz::read<skip_unknown>(obj, "u = [1,\r2]\nv = \"x\"") == glz::error_code::syntax_error);
+      expect(glz::read<skip_unknown>(obj, "u = 1\rv = \"x\"") == glz::error_code::syntax_error);
+      expect(glz::read<skip_unknown>(obj, "[u]\rk = 1") == glz::error_code::syntax_error);
    };
 };
 
