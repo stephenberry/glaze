@@ -595,6 +595,37 @@ suite path_traversal_tests = [] {
       expect(handler != nullptr);
       expect(params["path"] == "notes/C:x");
    };
+
+   // A "%00" decodes to a NUL byte. A capture opened as a path reaches the
+   // filesystem as a C string that ends at the NUL, so "report.txt%00.pdf"
+   // opens "report.txt" after an extension check on the std::string saw ".pdf".
+   "param_rejects_encoded_nul"_test = [] {
+      glz::http_router router;
+      router.get("/download/:file", [](const glz::request&, glz::response&) {});
+
+      auto [handler, params] = router.match(glz::http_method::GET, "/download/report.txt%00.pdf");
+      expect(handler == nullptr);
+   };
+
+   "wildcard_rejects_encoded_nul"_test = [] {
+      glz::http_router router;
+      router.get("/files/*path", [](const glz::request&, glz::response&) {});
+
+      auto [handler, params] = router.match(glz::http_method::GET, "/files/docs/report.txt%00.pdf");
+      expect(handler == nullptr);
+
+      auto [handler2, params2] = router.match(glz::http_method::GET, "/files/%00");
+      expect(handler2 == nullptr);
+   };
+
+   "param_allows_other_encoded_bytes"_test = [] {
+      glz::http_router router;
+      router.get("/download/:file", [](const glz::request&, glz::response&) {});
+
+      auto [handler, params] = router.match(glz::http_method::GET, "/download/my%20report%2B1.pdf");
+      expect(handler != nullptr);
+      expect(params["file"] == "my report+1.pdf");
+   };
 };
 
 // Service composition test types (GitHub issue #2401)
