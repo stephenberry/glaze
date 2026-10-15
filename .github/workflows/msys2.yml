@@ -1,16 +1,14 @@
 name: msys2-mingw
 
 # MinGW is supported on a best-effort basis. The full build is slow on Windows runners,
-# so it runs weekly and on demand rather than on every push. Pull requests that change
-# this workflow still run it, so edits to it are checked before they merge.
+# so it runs only on merges to main (and on demand), not on pull requests or feature branches.
 on:
-  schedule:
-    - cron: '0 6 * * 1'
-  pull_request:
+  push:
     branches:
       - main
-    paths:
-      - '.github/workflows/msys2.yml'
+    paths-ignore:
+      - '**/*.md'
+      - 'docs/**'
   workflow_dispatch:
 
 permissions:
