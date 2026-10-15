@@ -1053,29 +1053,11 @@ namespace glz
 
                if (it == end) break;
 
-               if (*it == '\r') {
-                  ++it;
-                  if (it != end && *it == '\n') {
-                     ++it;
-                     ++row;
-                  }
-                  else [[unlikely]] {
-                     ctx.error = error_code::syntax_error;
-                     return;
-                  }
-               }
-               else if (*it == '\n') {
-                  ++it;
-                  ++row;
-               }
-               else [[unlikely]] {
-                  // A row with more cells than there are columns, or trailing bytes a field
-                  // reader left behind, is not a well-formed record. The sibling struct colwise
-                  // reader rejects the same shape; without this the extra cells are misassigned
-                  // to later rows (data corruption) or, for numeric columns, spin the loop.
-                  ctx.error = error_code::syntax_error;
+               // Rejects rows with more cells than columns or trailing bytes after a field
+               if (csv_new_line(ctx, it, end)) {
                   return;
                }
+               ++row;
             }
          }
       }
