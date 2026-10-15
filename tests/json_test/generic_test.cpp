@@ -160,6 +160,21 @@ suite generic_json_tests = [] {
       expect(cjson[s].get<double>() == 5.0);
    };
 
+   "generic_json_at_does_not_insert"_test = [] {
+      glz::generic json = {{"present", 1}};
+      expect(json.at("present").get<double>() == 1.0);
+
+      bool missing_key_threw = false;
+      try {
+         (void)json.at("missing");
+      }
+      catch (...) {
+         missing_key_threw = true;
+      }
+      expect(missing_key_threw);
+      expect(!json.contains("missing"));
+   };
+
    "generic_json_roundtrip"_test = [] {
       glz::generic json{};
       std::string buffer = R"([5,"Hello World",{"pi":3.14},null])";
