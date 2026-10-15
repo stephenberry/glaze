@@ -1080,6 +1080,10 @@ namespace glz
                      parse<CSV>::op<Opts>(member, ctx, it, end);
                   }
 
+                  if (bool(ctx.error)) [[unlikely]] {
+                     return;
+                  }
+
                   if (it != end && *it == csv_delimiter<Opts>()) {
                      ++it;
                   }
@@ -1087,21 +1091,11 @@ namespace glz
 
                if (it == end) break;
 
-               if (*it == '\r') {
-                  ++it;
-                  if (it != end && *it == '\n') {
-                     ++it;
-                     ++row;
-                  }
-                  else [[unlikely]] {
-                     ctx.error = error_code::syntax_error;
-                     return;
-                  }
+               // Rejects rows with more cells than columns or trailing bytes after a field
+               if (csv_new_line(ctx, it, end)) {
+                  return;
                }
-               else if (*it == '\n') {
-                  ++it;
-                  ++row;
-               }
+               ++row;
             }
          }
       }
