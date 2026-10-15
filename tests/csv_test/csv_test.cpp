@@ -556,6 +556,57 @@ y,1,2,3,4,5,6,7,8,9,10
       expect(m["y"] == std::vector<uint64_t>{1, 2, 3, 4, 5, 6, 7, 8, 9, 10});
    };
 
+   "map key with delimiter is quoted row wise"_test = [] {
+      std::map<std::string, std::vector<int>> m;
+      m["temp,1000000\ninjected"] = {1, 2, 3};
+
+      std::string out{};
+      expect(not glz::write<glz::opts_csv{}>(m, out));
+      expect(out == "\"temp,1000000\ninjected\",1,2,3\n") << out;
+
+      std::map<std::string, std::vector<int>> in{};
+      expect(not glz::read<glz::opts_csv{}>(in, out));
+      expect(in == m);
+   };
+
+   "map key with quotes is quoted row wise"_test = [] {
+      std::map<std::string, std::vector<int>> m;
+      m["temp \"C\""] = {1, 2};
+      m["plain"] = {3, 4};
+
+      std::string out{};
+      expect(not glz::write<glz::opts_csv{}>(m, out));
+      expect(out == "plain,3,4\n\"temp \"\"C\"\"\",1,2\n") << out;
+
+      std::map<std::string, std::vector<int>> in{};
+      expect(not glz::read<glz::opts_csv{}>(in, out));
+      expect(in == m);
+   };
+
+   "map key with delimiter is quoted column wise"_test = [] {
+      std::map<std::string, std::vector<int>> m;
+      m["a,b"] = {1, 2};
+      m["x"] = {3, 4};
+
+      std::string out{};
+      expect(not glz::write<glz::opts_csv{.layout = glz::colwise}>(m, out));
+      expect(out == "\"a,b\",x\n1,3\n2,4\n") << out;
+
+      std::map<std::string, std::vector<int>> in{};
+      expect(not glz::read<glz::opts_csv{.layout = glz::colwise}>(in, out));
+      expect(in == m);
+   };
+
+   "quoted header names column wise"_test = [] {
+      std::string buffer = "\"num1\",\"num2\",maybe,v3s[0],v3s[1],v3s[2]\n11,22,1,1,2,3\n";
+      my_struct obj{};
+      expect(not glz::read<glz::opts_csv{.layout = glz::colwise}>(obj, buffer));
+      expect(obj.num1 == std::vector<int>{11});
+      expect(obj.num2 == std::deque<float>{22.f});
+      expect(obj.maybe == std::vector<bool>{true});
+      expect(obj.v3s == std::vector<std::array<int, 3>>{{1, 2, 3}});
+   };
+
    "recorder rowwise"_test = [] {
       uint64_t t{};
       uint64_t x{1};

@@ -823,10 +823,11 @@ namespace glz
       }
    }
 
-   template <char delim = ','>
+   template <auto Opts>
    inline auto read_column_wise_keys(auto&& ctx, auto&& it, auto end)
    {
-      std::vector<std::pair<sv, size_t>> keys;
+      constexpr auto delim = csv_delimiter<Opts>();
+      std::vector<std::pair<std::string, size_t>> keys;
 
       auto read_key = [&](auto&& start, auto&& it) {
          sv key{start, size_t(it - start)};
@@ -845,11 +846,32 @@ namespace glz
             }
          }
 
-         keys.emplace_back(std::pair{key, csv_index});
+         keys.emplace_back(std::pair{std::string{key}, csv_index});
       };
 
       auto start = it;
       while (it != end) {
+         if (it == start && *it == '"') {
+            // Quoted key (RFC 4180): parse with the string field reader, which
+            // collapses doubled quotes and validates the closing quote. The
+            // quoted form is what the writer emits for keys holding a
+            // delimiter, quote, or line break.
+            std::string key{};
+            parse<CSV>::op<Opts>(key, ctx, it, end);
+            if (bool(ctx.error)) [[unlikely]] {
+               return keys;
+            }
+            keys.emplace_back(std::move(key), size_t{});
+            if (it == end) {
+               break;
+            }
+            if (*it == delim) {
+               ++it;
+               start = it;
+               continue;
+            }
+            break; // '\r' or '\n' ends the header row
+         }
          if (*it == delim) {
             read_key(start, it);
             ++it;
@@ -889,21 +911,37 @@ namespace glz
       {
          if constexpr (check_layout(Opts) == rowwise) {
             while (it != end) {
-               auto start = it;
-               goto_delim<csv_delimiter<Opts>()>(it, end);
-               sv key{start, static_cast<size_t>(it - start)};
+               std::string quoted_key{};
+               sv key{};
 
                size_t csv_index{};
 
-               const auto brace_pos = key.find('[');
-               if (brace_pos != sv::npos) {
-                  const auto close_brace = key.find(']');
-                  const auto index = key.substr(brace_pos + 1, close_brace - (brace_pos + 1));
-                  key = key.substr(0, brace_pos);
-                  const auto [ptr, ec] = std::from_chars(index.data(), index.data() + index.size(), csv_index);
-                  if (ec != std::errc()) {
-                     ctx.error = error_code::syntax_error;
+               if (*it == '"') {
+                  // Quoted key (RFC 4180): parse with the string field reader, which
+                  // collapses doubled quotes and validates the closing quote. The
+                  // quoted form is what the writer emits for keys holding a
+                  // delimiter, quote, or line break.
+                  parse<CSV>::op<Opts>(quoted_key, ctx, it, end);
+                  if (bool(ctx.error)) [[unlikely]] {
                      return;
+                  }
+                  key = quoted_key;
+               }
+               else {
+                  auto start = it;
+                  goto_delim<csv_delimiter<Opts>()>(it, end);
+                  key = sv{start, static_cast<size_t>(it - start)};
+
+                  const auto brace_pos = key.find('[');
+                  if (brace_pos != sv::npos) {
+                     const auto close_brace = key.find(']');
+                     const auto index = key.substr(brace_pos + 1, close_brace - (brace_pos + 1));
+                     key = key.substr(0, brace_pos);
+                     const auto [ptr, ec] = std::from_chars(index.data(), index.data() + index.size(), csv_index);
+                     if (ec != std::errc()) {
+                        ctx.error = error_code::syntax_error;
+                        return;
+                     }
                   }
                }
 
@@ -996,7 +1034,7 @@ namespace glz
          }
          else // column wise
          {
-            const auto keys = read_column_wise_keys<csv_delimiter<Opts>()>(ctx, it, end);
+            const auto keys = read_column_wise_keys<Opts>(ctx, it, end);
 
             if (bool(ctx.error)) {
                return;
@@ -1092,7 +1130,7 @@ namespace glz
             std::vector<size_t> member_indices;
 
             if constexpr (check_use_headers(Opts)) {
-               auto headers = read_column_wise_keys<csv_delimiter<Opts>()>(ctx, it, end);
+               auto headers = read_column_wise_keys<Opts>(ctx, it, end);
 
                if (bool(ctx.error)) [[unlikely]] {
                   return;
@@ -1451,7 +1489,7 @@ namespace glz
          }
          else // column wise
          {
-            const auto keys = read_column_wise_keys<csv_delimiter<Opts>()>(ctx, it, end);
+            const auto keys = read_column_wise_keys<Opts>(ctx, it, end);
 
             if (bool(ctx.error)) [[unlikely]] {
                return;
@@ -1469,7 +1507,7 @@ namespace glz
             if (!at_end) {
                while (true) {
                   for (size_t i = 0; i < n_keys; ++i) {
-                     const auto key = keys[i].first;
+                     const auto& key = keys[i].first;
                      const auto index = decode_hash_with_size<CSV, T, HashInfo, HashInfo.type>::op(
                         key.data(), key.data() + key.size(), key.size());
 

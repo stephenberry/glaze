@@ -367,10 +367,13 @@ namespace glz
          if constexpr (check_layout(Opts) == rowwise) {
             for (auto& [name, data] : value) {
                if constexpr (check_use_headers(Opts)) {
-                  if (!ensure_space(ctx, b, ix + name.size() + 2 + write_padding_bytes)) [[unlikely]] {
+                  dump_csv_string<csv_delimiter<Opts>()>(ctx, name, b, ix);
+                  if (bool(ctx.error)) [[unlikely]] {
                      return;
                   }
-                  dump_maybe_empty(name, b, ix);
+                  if (!ensure_space(ctx, b, ix + 1 + write_padding_bytes)) [[unlikely]] {
+                     return;
+                  }
                   dump(csv_delimiter<Opts>(), b, ix);
                }
                const auto n = data.size();
@@ -404,12 +407,15 @@ namespace glz
             if constexpr (check_use_headers(Opts)) {
                size_t i = 0;
                for (auto& [name, data] : value) {
-                  if (!ensure_space(ctx, b, ix + name.size() + 2 + write_padding_bytes)) [[unlikely]] {
+                  dump_csv_string<csv_delimiter<Opts>()>(ctx, name, b, ix);
+                  if (bool(ctx.error)) [[unlikely]] {
                      return;
                   }
-                  dump_maybe_empty(name, b, ix);
                   ++i;
                   if (i < n) {
+                     if (!ensure_space(ctx, b, ix + 1 + write_padding_bytes)) [[unlikely]] {
+                        return;
+                     }
                      dump(csv_delimiter<Opts>(), b, ix);
                      if constexpr (is_output_streaming<B>) {
                         flush_buffer(b, ix);
