@@ -12,7 +12,8 @@ namespace glz
    template <class... T>
    struct meta<std::variant<T...>>
    {
-      static constexpr std::string_view name = join_v<chars<"std::variant<">, comma_separated_names_v<T...>, chars<">">>;
+      static constexpr std::string_view name =
+         join_v<chars<"std::variant<">, comma_separated_names_v<T...>, chars<">">>;
    };
 
    template <>
