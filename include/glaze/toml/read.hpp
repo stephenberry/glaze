@@ -686,38 +686,29 @@ namespace glz
       template <class T>
       const char* parse_toml_float_with_underscores(T& value, const char* first, const char* end) noexcept
       {
-         constexpr auto is_decimal_digit = [](const char c) { return c >= '0' && c <= '9'; };
-         constexpr auto is_float_char = [](const char c) {
-            return (c >= '0' && c <= '9') || c == '_' || c == '.' || c == 'e' || c == 'E' || c == '+' || c == '-';
-         };
-
          auto last = first;
-         while (last != end && is_float_char(*last)) {
-            if (*last == '_') {
-               const bool digit_before = last != first && is_decimal_digit(*(last - 1));
-               const bool digit_after = last + 1 != end && is_decimal_digit(*(last + 1));
-               if (not digit_before || not digit_after) [[unlikely]] {
-                  return nullptr;
-               }
-            }
+         while (last != end && (is_digit(*last) || *last == '_' || *last == '.' || *last == 'e' || *last == 'E' ||
+                                *last == '+' || *last == '-')) {
             ++last;
          }
 
-         // The digits are copied to a stack buffer, falling back to the heap for unusually long tokens
-         constexpr size_t stack_capacity = 128;
-         char stack_buffer[stack_capacity];
+         // The token is copied to a stack buffer, falling back to the heap for unusually long tokens
+         char stack_buffer[128];
          std::string heap_buffer;
-         const auto token_length = size_t(last - first);
          char* buffer = stack_buffer;
-         if (token_length > stack_capacity) [[unlikely]] {
-            heap_buffer.resize(token_length);
+         if (size_t(last - first) > sizeof(stack_buffer)) [[unlikely]] {
+            heap_buffer.resize(size_t(last - first));
             buffer = heap_buffer.data();
          }
 
+         // Each underscore must sit between two digits
          char* buffer_end = buffer;
          for (auto p = first; p != last; ++p) {
             if (*p != '_') {
                *buffer_end++ = *p;
+            }
+            else if (p == first || not is_digit(p[-1]) || p + 1 == last || not is_digit(p[1])) [[unlikely]] {
+               return nullptr;
             }
          }
 

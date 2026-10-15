@@ -1043,6 +1043,7 @@ arr = [4, 5, 6])";
       const std::pair<std::string_view, double> cases[] = {
          {"1_000.5", 1000.5},   {"-1_000.5", -1000.5}, {"3.141_592", 3.141592}, {"1_0e1_0", 10e10},
          {"6.6e-3_4", 6.6e-34}, {"1.5E+1_0", 1.5e10},  {"1_000", 1000.0},      {"9_9.9_9e1_2", 99.99e12},
+         {"0.0_1", 0.01},       {"0e0_1", 0.0},
       };
       for (const auto& [num, expected] : cases) {
          double value{};
@@ -1070,7 +1071,7 @@ arr = [4, 5, 6])";
    "read_float_with_misplaced_underscores"_test = [] {
       // An underscore must sit between two digits
       for (const std::string_view num : {"1__0.5", "1_.5", "1._5", "1.5_", "1.5_e3", "1.5e_3", "1.5e+_3", "1.5e3_",
-                                         "-_1.5", "0_1.5", "1_0.5_"}) {
+                                         "-_1.5", "0_1.5", "-0_0.5", "1_0.5_"}) {
          double value{};
          expect(glz::read_toml(value, std::string{num}) == glz::error_code::parse_number_failure) << num;
       }
