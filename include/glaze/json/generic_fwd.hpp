@@ -55,6 +55,7 @@ namespace glz
 #include "glaze/core/context.hpp"
 #include "glaze/forward.hpp"
 #include "glaze/util/expected.hpp"
+#include "glaze/util/inline.hpp"
 #include "glaze/util/type_traits.hpp"
 
 #if defined(_MSC_VER) && !defined(__clang__)
@@ -628,7 +629,7 @@ namespace glz
       }
 
       template <class Expected>
-      [[noreturn]] void type_mismatch(std::string_view operation) const
+      [[noreturn]] GLZ_NO_INLINE void type_mismatch(std::string_view operation) const
       {
          std::string msg{"glz::generic "};
          msg.append(operation).append(": expected ").append(alternative_name<Expected>());
@@ -636,14 +637,14 @@ namespace glz
          GLZ_THROW_OR_ABORT(bad_generic_access(msg));
       }
 
-      [[noreturn]] void key_type_mismatch(std::string_view key) const
+      [[noreturn]] GLZ_NO_INLINE void key_type_mismatch(std::string_view key) const
       {
          std::string msg{"glz::generic key \""};
          msg.append(key).append("\": expected object, but holds ").append(held_type_name());
          GLZ_THROW_OR_ABORT(bad_generic_access(msg));
       }
 
-      [[noreturn]] static void key_not_found(std::string_view key)
+      [[noreturn]] GLZ_NO_INLINE static void key_not_found(std::string_view key)
       {
          std::string msg{"glz::generic key not found: \""};
          msg.append(key).push_back('"');

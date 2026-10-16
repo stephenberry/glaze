@@ -50,6 +50,8 @@
 #if defined(__clang__) || defined(__GNUC__)
 #define GLZ_NO_INLINE __attribute__((noinline))
 #elif defined(_MSC_VER)
-#define GLZ_NO_INLINE __declspec((noinline))
+#define GLZ_NO_INLINE __declspec(noinline)
+#else
+#define GLZ_NO_INLINE
 #endif
 #endif
