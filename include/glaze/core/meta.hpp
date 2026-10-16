@@ -229,6 +229,55 @@ namespace glz
          return modify_npos;
       }
 
+      // How many members answer to one name. More than one is possible once base members are part of
+      // the list: a member that hides a base member, or two bases that repeat a name.
+      template <class T>
+      consteval size_t count_member_name_matches(std::string_view name)
+      {
+         constexpr auto names = member_names<T>;
+         size_t count = 0;
+         for (size_t i = 0; i < names.size(); ++i) {
+            if (names[i] == name) {
+               ++count;
+            }
+         }
+         return count;
+      }
+
+      // The index of the member a modify entry names. A member pointer is resolved by the member it
+      // points at and not by the first name that matches: base members come first, so `&A2::id` would
+      // otherwise bind to `A1::id`'s slot, rename the wrong subobject, and leave the member it names
+      // to be written a second time under its own key. A pointer whose member cannot be identified
+      // this way falls back to the name lookup, which is the whole answer for a type without bases,
+      // where the name of a member cannot repeat.
+      template <class T, class Mp = void>
+      consteval size_t find_member_index_of(std::string_view name)
+      {
+         // The effective name decides first, and the pointer may only choose among members that
+         // answer to it. A name no reflected key has is not a rename but an alias, and resolving the
+         // pointer by its raw name would turn one into the other: a rename_key renames the key a
+         // member answers to, so `&T::first` carries "first" while member_names<T> holds
+         // "firstRenamed", and the entry has to stay the alias it was before pointers were resolved.
+#if GLZ_REFLECTION26
+         require_is_virtual_query<T>();
+#endif
+         const size_t by_name = find_member_index<T>(name);
+         if (by_name == modify_npos) {
+            return modify_npos;
+         }
+#if GLZ_REFLECTION26
+         if constexpr (not std::is_void_v<Mp>) {
+            auto members = all_members_of(^^T); // one walk answers the whole lookup
+            for (size_t i = 0; i < members.size(); ++i) {
+               if (member_pointer_target<Mp>::matches(members[i], name)) {
+                  return i;
+               }
+            }
+         }
+#endif
+         return by_name;
+      }
+
       template <class T>
       consteval auto get_modify_object()
       {
@@ -306,9 +355,19 @@ namespace glz
          {
             using elem_t = element_type<EntryPos>;
             if constexpr (std::is_member_pointer_v<elem_t>) {
-               return find_member_index<value_type>(pointer_name<EntryPos>());
+               return find_member_index_of<value_type, elem_t>(pointer_name<EntryPos>());
             }
             else if constexpr (has_key<EntryPos>()) {
+               // A key without a member pointer names the member it renames by name alone, which is
+               // not enough once a name can occur twice in the hierarchy. Refuse rather than rename
+               // whichever member happens to come first.
+               static_assert(count_member_name_matches<value_type>(key<EntryPos>()) <= 1,
+                             "a glz::modify entry with a key and no member pointer names its member by "
+                             "name, and more than one member of this hierarchy answers to that name: a "
+                             "member that hides a base member, or two bases that repeat a name. Write "
+                             "the entry with a member pointer so it says which member it means, such as "
+                             "glz::object(\"key\", &D::member), or give the type a glz::meta whose "
+                             "value names the members apart.");
                return find_member_index<value_type>(key<EntryPos>());
             }
             else {

@@ -1727,6 +1727,11 @@ namespace glz
       requires((glaze_object_t<T> || reflectable<T>) && !custom_write<T>)
    struct to<YAML, T>
    {
+      // A keyed write emits one key per member; a repeated key would name one member twice and lose
+      // the other, so the writer refuses the shape the keyed reader already refuses. Array-shaped
+      // writes go through the tuple writer, which has no keys.
+      static_assert(keys_are_unique<T>(), GLZ_DUPLICATE_KEYS_MESSAGE);
+
       template <auto Opts, class B>
       static void op(auto&& value, is_context auto&& ctx, B&& b, auto& ix)
       {
