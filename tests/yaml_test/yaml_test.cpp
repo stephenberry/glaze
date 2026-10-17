@@ -2451,6 +2451,133 @@ suite yaml_overwrite_semantics_tests = [] {
 };
 
 // ============================================================
+// Growable containers without resize() (GitHub issue #2991)
+// A fixed-capacity vector grows through emplace_back but has no resize(), so it
+// is emplace_backable but not resizable. Block sequences must append to it like
+// flow sequences do, instead of treating it as a fixed-size std::array.
+// ============================================================
+
+template <class T, size_t N>
+class emplace_only_vector
+{
+  public:
+   using value_type = T;
+   using reference = T&;
+   using const_reference = const T&;
+   using size_type = size_t;
+   using iterator = T*;
+   using const_iterator = const T*;
+
+   T* begin() { return items.data(); }
+   T* end() { return items.data() + count; }
+   const T* begin() const { return items.data(); }
+   const T* end() const { return items.data() + count; }
+   size_t size() const { return count; }
+   bool empty() const { return count == 0; }
+   void clear() { count = 0; }
+
+   template <class... Args>
+   T& emplace_back(Args&&... args)
+   {
+      items[count] = T(std::forward<Args>(args)...);
+      return items[count++];
+   }
+
+  private:
+   std::array<T, N> items{};
+   size_t count{};
+};
+
+template <class T, size_t N>
+std::vector<T> to_vector(const emplace_only_vector<T, N>& c)
+{
+   return {c.begin(), c.end()};
+}
+
+struct emplace_only_holder
+{
+   emplace_only_vector<std::string, 4> sources{};
+};
+
+struct emplace_only_entry
+{
+   uint64_t id{};
+   std::string name{};
+   emplace_only_vector<std::string, 4> sources{};
+};
+
+struct emplace_only_document
+{
+   int version{};
+   std::vector<emplace_only_entry> objects{};
+};
+
+suite yaml_emplace_only_container_tests = [] {
+   using strings = std::vector<std::string>;
+
+   "emplace_only_container_top_level_block_sequence"_test = [] {
+      emplace_only_vector<std::string, 4> c{};
+      const std::string yaml = "- ax\n- az\n";
+      auto ec = glz::read_yaml(c, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(to_vector(c) == strings{"ax", "az"});
+   };
+
+   "emplace_only_container_block_sequence_member"_test = [] {
+      emplace_only_holder h{};
+      const std::string yaml = "sources:\n  - ax\n  - az\n";
+      auto ec = glz::read_yaml(h, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(to_vector(h.sources) == strings{"ax", "az"});
+   };
+
+   "emplace_only_container_flow_sequence_member"_test = [] {
+      emplace_only_holder h{};
+      const std::string yaml = "sources: [ax, az]\n";
+      auto ec = glz::read_yaml(h, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(to_vector(h.sources) == strings{"ax", "az"});
+   };
+
+   "emplace_only_container_block_sequence_overwrites"_test = [] {
+      emplace_only_vector<std::string, 4> c{};
+      c.emplace_back("old");
+      const std::string yaml = "- ax\n- az\n";
+      auto ec = glz::read_yaml(c, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(to_vector(c) == strings{"ax", "az"});
+   };
+
+   // Layout from issue #2991: the container is a member of a struct inside a block sequence.
+   "emplace_only_container_in_sequence_of_structs"_test = [] {
+      emplace_only_document doc{};
+      const std::string yaml = R"(version: 1
+objects:
+  -
+    id: 1
+    name: "one"
+    sources:
+      - "ax"
+      - "az"
+  - id: 2
+    name: "two"
+    sources: ["bx"]
+)";
+      auto ec = glz::read_yaml(doc, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(doc.version == 1);
+      expect(doc.objects.size() == 2u);
+      if (doc.objects.size() == 2u) {
+         expect(doc.objects[0].id == 1u);
+         expect(doc.objects[0].name == "one");
+         expect(to_vector(doc.objects[0].sources) == strings{"ax", "az"});
+         expect(doc.objects[1].id == 2u);
+         expect(to_vector(doc.objects[1].sources) == strings{"bx"});
+      }
+   };
+};
+
+// ============================================================
 // Map with Various Key Types
 // ============================================================
 

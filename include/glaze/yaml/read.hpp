@@ -3203,8 +3203,9 @@ namespace glz
 
          while (it != end) {
             // For fixed-size arrays (e.g. std::array), stop when we've filled all elements.
-            // Exclude emplaceable types (e.g. std::set) which are not resizable but grow dynamically.
-            if constexpr (!resizable<V> && !emplaceable<V>) {
+            // Exclude types that grow dynamically without being resizable: emplace_backable
+            // ones (e.g. a fixed-capacity vector without resize()) and emplaceable ones (e.g. std::set).
+            if constexpr (!resizable<V> && !emplace_backable<V> && !emplaceable<V>) {
                if (adapter.fixed_capacity_reached(value)) {
                   return;
                }
