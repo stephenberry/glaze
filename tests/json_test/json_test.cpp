@@ -2960,6 +2960,30 @@ suite non_null_terminated_scanner_bounds = [] {
       expect(value_of(R"("\\")") == '\\');
       expect(value_of(R"("")") == '\0');
    };
+
+   "get_view_json derives bounds from a resizable buffer"_test = [] {
+      // glz::read reads a std::vector<char> with bounds whatever null_terminated says, because the
+      // vector keeps no terminator of its own. The JSON pointer seeks derive the same options from
+      // the buffer, so with the default options a truncated document must fail without scanning
+      // past the end of the vector.
+      const std::vector<char> truncated{'{', '"', 'a', '"', ':'};
+      expect(not glz::get_view_json<"/a">(truncated).has_value());
+      expect(not glz::get_view_json("/a", truncated).has_value());
+      expect(not glz::get_as_json<int, "/a">(truncated).has_value());
+
+      // A complete document in a vector still resolves.
+      const std::string_view complete = R"({"a":12,"b":3})";
+      const std::vector<char> buf{complete.begin(), complete.end()};
+      const auto view = glz::get_view_json<"/b">(buf);
+      expect(view.has_value());
+      expect(std::string_view{view->data(), view->size()} == "3");
+      const auto runtime_view = glz::get_view_json("/a", buf);
+      expect(runtime_view.has_value());
+      expect(std::string_view{runtime_view->data(), runtime_view->size()} == "12");
+      const auto value = glz::get_as_json<int, "/a">(buf);
+      expect(value.has_value());
+      expect(*value == 12);
+   };
 };
 
 suite minified_custom_object = [] {
