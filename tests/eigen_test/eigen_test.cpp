@@ -662,6 +662,88 @@ int main()
       expect(e == (Eigen::Matrix<double, 2, 2>::Zero()));
    };
 
+   // A partially fixed matrix or vector must reject a header whose fixed dimension disagrees with
+   // the type, or the data read would run past what resize() allocated.
+   "cbor partially fixed matrix mismatched dims"_test = [] {
+      // A 3x8 payload with its header rewritten to 1x8: the data still holds 24 doubles, while a
+      // Matrix3Xd resized to 1x8 allocates 8.
+      Eigen::MatrixXd src(3, 8);
+      src.setOnes();
+      std::string b;
+      expect(not glz::write_cbor(src, b));
+      const auto dims = b.find(std::string{"\x82\x03\x08", 3});
+      expect[dims != std::string::npos];
+      b[dims + 1] = '\x01';
+
+      Eigen::Matrix3Xd m;
+      expect(glz::read_cbor(m, b).ec == glz::error_code::syntax_error);
+
+      // A VectorXd has one column. A 4x0 header would allocate nothing while size() reports 4.
+      Eigen::VectorXd v(4);
+      v.setOnes();
+      expect(not glz::write_cbor(v, b));
+      const auto vdims = b.find(std::string{"\x82\x04\x01", 3});
+      expect[vdims != std::string::npos];
+      b[vdims + 2] = '\x00';
+
+      Eigen::VectorXd e;
+      expect(glz::read_cbor(e, b).ec == glz::error_code::syntax_error);
+
+      // Dimensions that match the fixed extent still read normally.
+      Eigen::Matrix3Xd fits(3, 2);
+      fits << 1, 2, 3, 4, 5, 6;
+      expect(not glz::write_cbor(fits, b));
+      Eigen::Matrix3Xd ok;
+      expect(not glz::read_cbor(ok, b));
+      expect(ok == fits);
+   };
+
+   // A [rows, cols] header no matrix could take is rejected before resize(): an extent beyond
+   // Eigen::Index (converted, it would turn negative), more elements than the bytes left could
+   // hold, or an extent that is not an unsigned integer.
+   "cbor dynamic matrix header out of range"_test = [] {
+      Eigen::MatrixXd src(1, 1);
+      src(0, 0) = 1;
+      std::string one;
+      expect(not glz::write_cbor(src, one));
+      const auto dims = one.find(std::string{"\x82\x01\x01", 3});
+      expect[dims != std::string::npos];
+
+      const auto with_extents = [&](const std::string& extents) {
+         auto b = one;
+         b.replace(dims + 1, 2, extents);
+         return b;
+      };
+
+      Eigen::MatrixXd e;
+      expect(glz::read_cbor(e, with_extents(std::string{"\x1b\xff\xff\xff\xff\xff\xff\xff\xff\x01", 10})).ec ==
+             glz::error_code::syntax_error);
+      expect(e.size() == 0);
+
+      expect(glz::read_cbor(e, with_extents(std::string{"\x19\xff\xff\x19\xff\xff", 6})).ec ==
+             glz::error_code::unexpected_end);
+      expect(e.size() == 0);
+
+      expect(glz::read_cbor(e, with_extents(std::string{"\x20\x01", 2})).ec == glz::error_code::syntax_error);
+      expect(e.size() == 0);
+   };
+
+   // A matrix read from CBOR that is cut short anywhere must error without reading past the
+   // buffer. The [rows, cols] head bytes were read with no end check, so a buffer ending right
+   // after the dimensions header read one byte past its end.
+   "cbor matrix truncated at every byte"_test = [] {
+      Eigen::MatrixXd src(2, 3);
+      src.setOnes();
+      std::string b;
+      expect(not glz::write_cbor(src, b));
+
+      for (size_t n = 0; n < b.size(); ++n) {
+         std::vector<char> storage(b.begin(), b.begin() + n);
+         Eigen::MatrixXd e;
+         expect(bool(glz::read_cbor(e, std::string_view{storage.data(), storage.size()})));
+      }
+   };
+
    // A dynamic matrix read from JSON that ends right after the [rows,cols] header
    // used to read one byte past a non-null-terminated buffer while probing for the
    // ',' that introduces the data. Over an exact-size view it must error, not read
@@ -729,6 +811,12 @@ int main()
       bounded_t from_beve;
       expect(glz::read_beve(from_beve, b).ec == glz::error_code::exceeded_static_array_size);
 
+      // And over CBOR.
+      std::string c;
+      expect(not glz::write_cbor(oversized, c));
+      bounded_t from_cbor;
+      expect(glz::read_cbor(from_cbor, c).ec == glz::error_code::exceeded_static_array_size);
+
       // Dimensions within the maximum still read normally.
       bounded_t ok;
       expect(not glz::read_json(ok, R"([[2,2],[1,2,3,4]])"));
@@ -743,6 +831,12 @@ int main()
       bounded_t ok_beve;
       expect(not glz::read_beve(ok_beve, fits_beve));
       expect(ok_beve == fits);
+
+      std::string fits_cbor;
+      expect(not glz::write_cbor(fits, fits_cbor));
+      bounded_t ok_cbor;
+      expect(not glz::read_cbor(ok_cbor, fits_cbor));
+      expect(ok_cbor == fits);
    };
 
    // Two negative extents multiply back to a positive size(), so a negative header would
