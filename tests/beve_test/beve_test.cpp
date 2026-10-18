@@ -8396,6 +8396,35 @@ suite beve_fully_custom_variant_tests = [] {
    };
 };
 
+struct beve_fixed_args_cmd
+{
+   std::array<std::string, 2> args{};
+   std::string role = "user";
+};
+
+struct beve_dynamic_args_cmd
+{
+   std::vector<std::string> args{};
+   std::string role{};
+};
+
+struct beve_fixed_point
+{
+   int x{};
+};
+
+struct beve_fixed_wide_cmd
+{
+   std::array<int32_t, 2> values{};
+   int16_t tail{};
+};
+
+struct beve_dynamic_narrow_cmd
+{
+   std::vector<int16_t> values{};
+   int16_t tail{};
+};
+
 suite beve_fixed_array_bounds_tests = [] {
    "beve fixed array rejects oversized complex typed array"_test = [] {
       std::vector<std::complex<double>> src(8, std::complex<double>{1.0, 2.0});
@@ -8439,6 +8468,68 @@ suite beve_fixed_array_bounds_tests = [] {
          std::array<bool, 5> dst{};
          expect(not glz::read_beve(dst, buffer));
          expect(src == dst);
+      }
+   };
+
+   "beve fixed array rejects oversized string typed array"_test = [] {
+      std::vector<std::string> src{"a", "b", "c"};
+      std::string buffer{};
+      expect(not glz::write_beve(src, buffer));
+      std::array<std::string, 2> dst{};
+      expect(glz::read_beve(dst, buffer).ec == glz::error_code::syntax_error);
+   };
+
+   "beve fixed array rejects oversized generic array"_test = [] {
+      std::vector<beve_fixed_point> src{{1}, {2}};
+      std::string buffer{};
+      expect(not glz::write_beve(src, buffer));
+      std::array<beve_fixed_point, 1> dst{};
+      expect(glz::read_beve(dst, buffer).ec == glz::error_code::syntax_error);
+   };
+
+   "beve fixed string array does not read a surplus element as the next key"_test = [] {
+      // args declares three strings and the third one spells the next key, so the bytes after it
+      // read as a value for "role" if the reader stops after two elements
+      beve_dynamic_args_cmd src{{"x", "y", "role"}, "admin"};
+      std::string buffer{};
+      expect(not glz::write_beve(src, buffer));
+      const auto pos = buffer.rfind(std::string("\x10role", 5));
+      expect(pos != std::string::npos);
+      buffer.erase(pos, 5);
+
+      beve_fixed_args_cmd dst{};
+      expect(glz::read<glz::opts{.format = glz::BEVE, .null_terminated = false}>(dst, std::string_view{buffer}));
+      expect(dst.role == "user");
+   };
+
+   "beve fixed arrays read only the elements on the wire"_test = [] {
+      {
+         beve_dynamic_args_cmd src{{"guest"}, "user"};
+         std::string buffer{};
+         expect(not glz::write_beve(src, buffer));
+         beve_fixed_args_cmd dst{};
+         expect(not glz::read_beve(dst, buffer));
+         expect(dst.args[0] == "guest");
+         expect(dst.args[1].empty());
+         expect(dst.role == "user");
+      }
+      {
+         beve_dynamic_narrow_cmd src{{7}, 9};
+         std::string buffer{};
+         expect(not glz::write_beve(src, buffer));
+         beve_fixed_wide_cmd dst{};
+         expect(not glz::read_beve(dst, buffer));
+         expect(dst.values == std::array<int32_t, 2>{7, 0});
+         expect(dst.tail == 9);
+      }
+      {
+         std::vector<beve_fixed_point> src{{5}};
+         std::string buffer{};
+         expect(not glz::write_beve(src, buffer));
+         std::array<beve_fixed_point, 2> dst{};
+         expect(not glz::read_beve(dst, buffer));
+         expect(dst[0].x == 5);
+         expect(dst[1].x == 0);
       }
    };
 };
