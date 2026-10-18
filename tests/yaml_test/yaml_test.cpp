@@ -11384,6 +11384,12 @@ suite recursion_depth_tests = [] {
          expect(!ec) << glz::format_error(ec, yaml);
       }
       {
+         const std::string yaml = std::string(limit, '[') + "1" + std::string(limit, ']');
+         glz::generic value{};
+         auto ec = glz::read_yaml(value, yaml);
+         expect(!ec) << glz::format_error(ec, yaml);
+      }
+      {
          const std::string yaml = std::string(limit + 1, '[') + std::string(limit + 1, ']');
          glz::generic value{};
          auto ec = glz::read_yaml(value, yaml);

@@ -5735,7 +5735,7 @@ namespace glz
          // Every nested generic/variant value routes back through this reader, so bounding
          // depth here caps flow-collection and flow-embedded mapping recursion that the
          // indent stack does not cover.
-         depth_guard guard{ctx, yaml::max_yaml_recursive_depth};
+         depth_guard guard{ctx, yaml::max_yaml_recursive_depth + 1};
          if (!guard) [[unlikely]]
             return;
 
