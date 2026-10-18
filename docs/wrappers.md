@@ -876,6 +876,9 @@ This holds for every format. Reading an invoke member is JSON only, since the ar
 
 Writes out numbers with a maximum precision of `float32_t`.
 
+> [!WARNING]
+> When `write_float32` narrows a `double`, values outside the finite `float` range (approximately `-3.4028235e+38` to `3.4028235e+38`) become infinity. Glaze serializes non-finite floating-point values as `null`, so finite `double` values outside this range are written as `null` and cannot be round-tripped into non-nullable `float` or `double` fields.
+
 ```c++
 struct write_precision_t
 {

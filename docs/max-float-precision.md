@@ -4,6 +4,9 @@ Glaze provides a compile time option (`float_max_write_precision`) to limit the 
 
 The wrappers `glz::write_float32` and `glz::write_float64` set this compile time option on individual numbers, arrays, or objects. The wrapper `glz::write_float_full` turns off higher level float precision wrapper options.
 
+> [!WARNING]
+> When `write_float32` narrows a `double`, values outside the finite `float` range (approximately `-3.4028235e+38` to `3.4028235e+38`) become infinity. Glaze serializes non-finite floating-point values as `null`, so finite `double` values outside this range are written as `null` and cannot be round-tripped into non-nullable `float` or `double` fields.
+
 > [!TIP]
 > For more control over float formatting (decimal places, scientific notation, etc.), see the [`float_format` option](options.md#float_format) and [`glz::float_format` wrapper](wrappers.md#float_format) which use `std::format` syntax.
 
@@ -47,4 +50,3 @@ suite max_write_precision_tests = [] {
    };
 };
 ```
-
