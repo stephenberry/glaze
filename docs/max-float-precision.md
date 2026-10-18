@@ -10,6 +10,11 @@ The wrappers `glz::write_float32` and `glz::write_float64` set this compile time
 Example unit tests:
 
 ```c++
+struct float_opts : glz::opts
+{
+   glz::float_precision float_max_write_precision{};
+};
+
 struct write_precision_t
 {
    double pi = std::numbers::pi_v<double>;
@@ -24,27 +29,26 @@ struct write_precision_t
 suite max_write_precision_tests = [] {
    "max_write_precision"_test = [] {
       double pi = std::numbers::pi_v<double>;
-      std::string json_double = glz::write_json(pi);
+      std::string json_double = glz::write_json(pi).value();
       
-      constexpr glz::opts options{.float_max_write_precision = glz::float_precision::float32};
-      std::string json_float = glz::write<options>(pi);
+      constexpr float_opts options{{}, glz::float_precision::float32};
+      std::string json_float = glz::write<options>(pi).value();
       expect(json_double != json_float);
-      expect(json_float == glz::write_json(std::numbers::pi_v<float>));
+      expect(json_float == glz::write_json(std::numbers::pi_v<float>).value());
       expect(!glz::read_json(pi, json_float));
       
       std::vector<double> double_array{ pi, 2 * pi };
-      json_double = glz::write_json(double_array);
-      json_float = glz::write<options>(double_array);
+      json_double = glz::write_json(double_array).value();
+      json_float = glz::write<options>(double_array).value();
       expect(json_double != json_float);
-      expect(json_float == glz::write_json(std::array{std::numbers::pi_v<float>, 2 * std::numbers::pi_v<float>}));
+      expect(json_float == glz::write_json(std::array{std::numbers::pi_v<float>, 2 * std::numbers::pi_v<float>}).value());
       expect(!glz::read_json(double_array, json_float));
    };
    
    "write_precision_t"_test = [] {
       write_precision_t obj{};
-      std::string json_float = glz::write_json(obj);
+      std::string json_float = glz::write_json(obj).value();
       expect(json_float == R"({"pi":3.1415927})") << json_float;
    };
 };
 ```
-
