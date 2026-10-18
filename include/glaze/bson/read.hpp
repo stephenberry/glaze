@@ -159,6 +159,11 @@ namespace glz
       }
    } // namespace bson_detail
 
+   template <class T>
+   concept bson_top_level_read_t = glaze_object_t<std::remove_cvref_t<T>> || reflectable<std::remove_cvref_t<T>> ||
+                                   writable_map_t<std::remove_cvref_t<T>> || writable_array_t<std::remove_cvref_t<T>> ||
+                                   glaze_array_t<std::remove_cvref_t<T>>;
+
    // Top-level dispatcher. BSON's top-level is always a document, so the
    // implicit tag is bson::type::document. Per-element dispatch inside a
    // document is handled by the struct/array reader calling `from<BSON,
@@ -167,6 +172,7 @@ namespace glz
    struct parse<BSON>
    {
       template <auto Opts, class T, is_context Ctx, class It, class End>
+         requires bson_top_level_read_t<T>
       GLZ_ALWAYS_INLINE static void op(T&& value, Ctx&& ctx, It& it, const End& end) noexcept
       {
          if constexpr (const_value_v<T>) {
@@ -1277,11 +1283,6 @@ namespace glz
    // ==========================================================================
    // Public entry points
    // ==========================================================================
-
-   template <class T>
-   concept bson_top_level_read_t = glaze_object_t<std::remove_cvref_t<T>> || reflectable<std::remove_cvref_t<T>> ||
-                                   writable_map_t<std::remove_cvref_t<T>> || writable_array_t<std::remove_cvref_t<T>> ||
-                                   glaze_array_t<std::remove_cvref_t<T>>;
 
    // BSON documents are length-prefixed (int32 header = total bytes). The core
    // reader consumes exactly that many bytes, but would otherwise silently

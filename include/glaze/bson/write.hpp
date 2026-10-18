@@ -245,11 +245,17 @@ namespace glz
       }
    } // namespace bson_detail
 
+   template <class T>
+   concept bson_top_level_t = glaze_object_t<std::remove_cvref_t<T>> || reflectable<std::remove_cvref_t<T>> ||
+                              writable_map_t<std::remove_cvref_t<T>> || writable_array_t<std::remove_cvref_t<T>> ||
+                              glaze_array_t<std::remove_cvref_t<T>>;
+
    // Dispatcher — routes top-level writes through to<BSON, T>::op.
    template <>
    struct serialize<BSON>
    {
       template <auto Opts, class T, is_context Ctx, class B, class IX>
+         requires bson_top_level_t<T>
       GLZ_ALWAYS_INLINE static void op(T&& value, Ctx&& ctx, B&& b, IX&& ix)
       {
          to<BSON, std::remove_cvref_t<T>>::template op<Opts>(std::forward<T>(value), std::forward<Ctx>(ctx),
@@ -320,7 +326,7 @@ namespace glz
             }
             if constexpr (std::same_as<T, uint64_t>) {
                if (value > static_cast<uint64_t>((std::numeric_limits<int64_t>::max)())) [[unlikely]] {
-                  ctx.error = error_code::invalid_length;
+                  ctx.error = error_code::parse_number_failure;
                   return;
                }
             }
@@ -902,11 +908,6 @@ namespace glz
    // as integer-keyed documents), and glaze_array_t. Primitives are rejected
    // at the call site — they have no valid BSON document encoding on their
    // own.
-   template <class T>
-   concept bson_top_level_t = glaze_object_t<std::remove_cvref_t<T>> || reflectable<std::remove_cvref_t<T>> ||
-                              writable_map_t<std::remove_cvref_t<T>> || writable_array_t<std::remove_cvref_t<T>> ||
-                              glaze_array_t<std::remove_cvref_t<T>>;
-
    template <auto Opts = opts{}, bson_top_level_t T, class Buffer>
    [[nodiscard]] error_ctx write_bson(T&& value, Buffer&& buffer)
    {
