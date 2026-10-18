@@ -631,7 +631,7 @@ namespace glz
          }
 
          if (node->parameter_child) {
-            std::string decoded = url_decode(segment);
+            std::string decoded = url_decode(segment, false);
 
             // A ":param" captures a single segment; refuse a decoded ".."
             // component, a leading separator, a drive prefix, or a NUL byte so
@@ -653,7 +653,7 @@ namespace glz
             std::string full_capture;
             for (size_t i = index; i < segments.size(); i++) {
                if (i > index) full_capture += "/";
-               full_capture += url_decode(segments[i]);
+               full_capture += url_decode(segments[i], false);
             }
 
             // The capture is joined from decoded segments, so a "%2e%2e%2f" in

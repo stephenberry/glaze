@@ -34,8 +34,9 @@ namespace glz
     *
     * @param input The URL-encoded string
     * @param output The buffer to write the decoded string to (cleared before writing)
+    * @param plus_is_space Whether to decode '+' as a space
     */
-   inline void url_decode(std::string_view input, std::string& output)
+   inline void url_decode(std::string_view input, std::string& output, bool plus_is_space = true)
    {
       output.clear();
       output.reserve(input.size());
@@ -50,7 +51,7 @@ namespace glz
                continue;
             }
          }
-         else if (input[i] == '+') {
+         else if (input[i] == '+' && plus_is_space) {
             output += ' ';
             continue;
          }
@@ -64,12 +65,13 @@ namespace glz
     * Convenience overload that allocates and returns a new string.
     *
     * @param input The URL-encoded string
+    * @param plus_is_space Whether to decode '+' as a space
     * @return The decoded string
     */
-   [[nodiscard]] inline std::string url_decode(std::string_view input)
+   [[nodiscard]] inline std::string url_decode(std::string_view input, bool plus_is_space = true)
    {
       std::string result;
-      url_decode(input, result);
+      url_decode(input, result, plus_is_space);
       return result;
    }
 

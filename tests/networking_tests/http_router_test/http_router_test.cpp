@@ -431,6 +431,24 @@ suite path_param_decoding_tests = [] {
       expect(handler != nullptr);
       expect(params["path"] == "my docs/file name.txt");
    };
+
+   "param_preserves_literal_plus"_test = [] {
+      glz::http_router router;
+      router.get("/users/:name", [](const glz::request&, glz::response&) {});
+
+      auto [handler, params] = router.match(glz::http_method::GET, "/users/A+B");
+      expect(handler != nullptr);
+      expect(params["name"] == "A+B");
+   };
+
+   "wildcard_preserves_literal_plus"_test = [] {
+      glz::http_router router;
+      router.get("/files/*path", [](const glz::request&, glz::response&) {});
+
+      auto [handler, params] = router.match(glz::http_method::GET, "/files/A+B/report+1.txt");
+      expect(handler != nullptr);
+      expect(params["path"] == "A+B/report+1.txt");
+   };
 };
 
 // Route captures must not resolve to a ".." traversal component or start at a
