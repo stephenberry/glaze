@@ -3,6 +3,7 @@
 
 #pragma once
 
+#include <concepts>
 #include <optional>
 #include <string_view>
 #include <tuple>
@@ -92,19 +93,30 @@ namespace glz
          [[maybe_unused]] constexpr operator std::string_view() const { return {}; }
       };
 
+      inline constexpr size_t max_pure_reflection_count = 128;
+
       template <class T, class... Args>
          requires(std::is_aggregate_v<std::remove_cvref_t<T>>)
       inline constexpr auto count_members = [] {
          using V = std::remove_cvref_t<T>;
-         if constexpr (requires { V{Args{}..., any_t{}}; }) {
+         if constexpr (!std::default_initializable<V>) {
+            if constexpr (sizeof...(Args) >= max_pure_reflection_count) {
+               return max_pure_reflection_count;
+            }
+            else if constexpr (requires { V{Args{}..., any_t{}}; }) {
+               return sizeof...(Args) + 1;
+            }
+            else {
+               return count_members<V, Args..., any_t>;
+            }
+         }
+         else if constexpr (requires { V{Args{}..., any_t{}}; }) {
             return count_members<V, Args..., any_t>;
          }
          else {
             return sizeof...(Args);
          }
       }();
-
-      inline constexpr size_t max_pure_reflection_count = 128;
 #endif
    }
 
