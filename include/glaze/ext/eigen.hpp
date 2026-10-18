@@ -26,18 +26,23 @@ namespace glz
 {
    namespace eigen_detail
    {
-      // Validates the [rows, cols] header of a dynamic matrix against what the matrix can
-      // actually store, before it is handed to resize().
+      // Validates a [rows, cols] header against what the matrix can actually store, before it is
+      // handed to resize() or used to size the data that follows.
       //
       // A negative extent is not a dimension, and Eigen's resize() has no defined behavior for
       // one. Worse, two negatives multiply back to a positive size(), so a header like [-2, -3]
       // would otherwise produce a 6-element data span over a matrix that holds nothing.
       //
-      // A dynamic matrix with a fixed maximum (Matrix<T, -1, -1, 0, MaxRows, MaxCols>) carries
+      // A dimension fixed at compile time must match the header exactly. A partially fixed type
+      // (Matrix3Xd, MatrixX3d, VectorXd) stores only its dynamic extent: resize() allocates the
+      // header's product, but size() is the fixed dimension times the dynamic one, so a header
+      // that disagrees with the fixed dimension would size the data read past the allocation.
+      //
+      // A dynamic dimension with a fixed maximum (Matrix<T, -1, -1, 0, MaxRows, MaxCols>) carries
       // MaxRows * MaxCols scalars of inline storage, and its resize() only records the new
       // extents in that fixed buffer -- it cannot grow. size() therefore reports the wire
       // product rather than the capacity, so nothing downstream would catch a header that
-      // exceeds the buffer. Reject it here, mirroring the fixed-extent check in from<CBOR, T>.
+      // exceeds the buffer.
       template <class T>
       [[nodiscard]] GLZ_ALWAYS_INLINE bool invalid_extents(const std::array<Eigen::Index, 2>& extents,
                                                            is_context auto& ctx) noexcept
@@ -46,13 +51,25 @@ namespace glz
             ctx.error = error_code::syntax_error;
             return true;
          }
-         if constexpr (T::MaxRowsAtCompileTime >= 0) {
+         if constexpr (T::RowsAtCompileTime >= 0) {
+            if (extents[0] != T::RowsAtCompileTime) [[unlikely]] {
+               ctx.error = error_code::syntax_error;
+               return true;
+            }
+         }
+         else if constexpr (T::MaxRowsAtCompileTime >= 0) {
             if (extents[0] > T::MaxRowsAtCompileTime) [[unlikely]] {
                ctx.error = error_code::exceeded_static_array_size;
                return true;
             }
          }
-         if constexpr (T::MaxColsAtCompileTime >= 0) {
+         if constexpr (T::ColsAtCompileTime >= 0) {
+            if (extents[1] != T::ColsAtCompileTime) [[unlikely]] {
+               ctx.error = error_code::syntax_error;
+               return true;
+            }
+         }
+         else if constexpr (T::MaxColsAtCompileTime >= 0) {
             if (extents[1] > T::MaxColsAtCompileTime) [[unlikely]] {
                ctx.error = error_code::exceeded_static_array_size;
                return true;
@@ -277,33 +294,42 @@ namespace glz
             return;
          }
 
-         // Read rows
-         std::memcpy(&initial, it, 1);
-         ++it;
-         const auto rows = cbor_detail::decode_arg(ctx, it, end, cbor::get_additional_info(initial));
-         if (bool(ctx.error)) [[unlikely]]
-            return;
-
-         // Read cols
-         std::memcpy(&initial, it, 1);
-         ++it;
-         const auto cols = cbor_detail::decode_arg(ctx, it, end, cbor::get_additional_info(initial));
-         if (bool(ctx.error)) [[unlikely]]
-            return;
-
-         // Resize dynamic matrices to the wire dimensions. A fixed-size matrix has exactly
-         // RowsAtCompileTime * ColsAtCompileTime scalars of storage, so a larger wire dimension
-         // would make the typed-array read below write past that fixed buffer; require the wire
-         // dimensions to match the compile-time extents.
-         if constexpr (EigenType::RowsAtCompileTime < 0 || EigenType::ColsAtCompileTime < 0) {
-            value.resize(static_cast<Eigen::Index>(rows), static_cast<Eigen::Index>(cols));
-         }
-         else {
-            if (static_cast<Eigen::Index>(rows) != value.rows() || static_cast<Eigen::Index>(cols) != value.cols())
-               [[unlikely]] {
+         // Read rows, then cols: each an unsigned integer that fits an Eigen::Index
+         std::array<Eigen::Index, 2> extents{};
+         for (auto& extent : extents) {
+            if (it >= end) [[unlikely]] {
+               ctx.error = error_code::unexpected_end;
+               return;
+            }
+            std::memcpy(&initial, it, 1);
+            if (cbor::get_major_type(initial) != cbor::major::uint) [[unlikely]] {
                ctx.error = error_code::syntax_error;
                return;
             }
+            ++it;
+            const auto n = cbor_detail::decode_arg(ctx, it, end, cbor::get_additional_info(initial));
+            if (bool(ctx.error)) [[unlikely]]
+               return;
+            if (n > static_cast<uint64_t>((std::numeric_limits<Eigen::Index>::max)())) [[unlikely]] {
+               ctx.error = error_code::syntax_error;
+               return;
+            }
+            extent = static_cast<Eigen::Index>(n);
+         }
+
+         // The data read below is sized from size(), which follows the extents the matrix was
+         // resized to, so they must be ones its storage can hold.
+         if (eigen_detail::invalid_extents<EigenType>(extents, ctx)) [[unlikely]] {
+            return;
+         }
+         // Every element takes at least one byte, so a header claiming more elements than there
+         // are bytes left cannot be followed by its data. Reject it before it sizes an allocation.
+         if (extents[1] != 0 && extents[0] > (end - it) / extents[1]) [[unlikely]] {
+            ctx.error = error_code::unexpected_end;
+            return;
+         }
+         if constexpr (EigenType::RowsAtCompileTime < 0 || EigenType::ColsAtCompileTime < 0) {
+            value.resize(extents[0], extents[1]);
          }
 
          // Read data as typed array, bounded by the matrix's own storage
