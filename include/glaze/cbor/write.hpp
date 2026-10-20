@@ -1262,12 +1262,15 @@ namespace glz
    }
 
    template <auto Opts = opts{}, write_supported<CBOR> T>
-   [[nodiscard]] inline error_code write_file_cbor(T&& value, const sv file_name, auto&& buffer)
+   [[nodiscard]] inline error_ctx write_file_cbor(T&& value, const sv file_name, auto&& buffer)
    {
       const auto ec = write<set_cbor<Opts>()>(std::forward<T>(value), buffer);
       if (bool(ec)) [[unlikely]] {
-         return ec.ec;
+         return ec;
       }
-      return buffer_to_file(buffer, file_name);
+      if (auto file_ec = buffer_to_file(buffer, file_name); bool(file_ec)) {
+         return {0, file_ec};
+      }
+      return {};
    }
 }
