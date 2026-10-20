@@ -1378,7 +1378,7 @@ namespace
          person_s out_person{"Ada", 36};
          std::string write_buf;
          const auto wec = glz::write_file_bson(out_person, path, write_buf);
-         expect(wec.ec == glz::error_code::none);
+         expect(wec == glz::error_code::none);
 
          person_s in_person{};
          std::string read_buf;
