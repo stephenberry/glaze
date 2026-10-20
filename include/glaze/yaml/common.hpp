@@ -58,6 +58,10 @@ namespace glz::yaml
    // reported the limit, but only after the stack was already gone. This cap keeps the deepest
    // accepted YAML document inside roughly the same stack that the shared cap buys JSON, and it
    // stays far above what real documents nest.
+   //
+   // As in JSON, every sequence and mapping is a level and a scalar is not, so a document of exactly
+   // this many nested collections parses whatever sits at the bottom. An anchor or tag that the
+   // variant reader has to re-dispatch past, and each alias replay, costs a level as well.
    inline constexpr size_t max_yaml_recursive_depth = 64;
 
    // How far ahead a probe may look while deciding whether the text at a position is an implicit
