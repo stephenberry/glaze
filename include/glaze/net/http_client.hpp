@@ -352,6 +352,15 @@ namespace glz
          return head_request || status_code / 100 == 1 || status_code == 204 || status_code == 304;
       }
 
+      // RFC 9110 15.2: a client must accept any number of interim (1xx) responses ahead of
+      // the final one, even ones it did not ask for such as 103 Early Hints, and discard
+      // them. 101 Switching Protocols is the exception: it is final, and what follows it on
+      // the connection is no longer HTTP, so the connection is never reused.
+      [[nodiscard]] constexpr bool is_interim_status(int status_code) noexcept
+      {
+         return status_code / 100 == 1 && status_code != 101;
+      }
+
       [[nodiscard]] inline parsed_content_length read_content_length(const glz::http_headers& headers)
       {
          // RFC 9112 6.3: Transfer-Encoding overrides Content-Length, so a chunked
@@ -2102,6 +2111,14 @@ namespace glz
                         return;
                      }
 
+                     if (detail::is_interim_status(parsed_status->status_code)) {
+                        // Discard the interim response and read the next head.
+                        connection->buffer->consume(bytes_transferred);
+                        read_stream_response(connection, std::move(on_data), std::move(on_error),
+                                             std::move(on_connect), std::move(on_disconnect));
+                        return;
+                     }
+
                      response response_headers;
                      response_headers.status_code = parsed_status->status_code;
 
@@ -2137,11 +2154,13 @@ namespace glz
                      // RFC 9112 9.3: before HTTP/1.1 the connection closed after each
                      // response unless the reply opted back in, so the absence of a signal
                      // means opposite things either side of that line.
+                     // After 101 the connection no longer speaks HTTP, so it is never reused.
                      const bool keep_alive_is_default = parsed_status->version != "1.0";
                      connection->peer_will_close.store(
-                        keep_alive_is_default
-                           ? response_headers.response_headers.contains_token("connection", "close")
-                           : !response_headers.response_headers.contains_token("connection", "keep-alive"),
+                        parsed_status->status_code == 101 ||
+                           (keep_alive_is_default
+                               ? response_headers.response_headers.contains_token("connection", "close")
+                               : !response_headers.response_headers.contains_token("connection", "keep-alive")),
                         std::memory_order_relaxed);
 
                      if (on_connect) {
@@ -2547,39 +2566,50 @@ namespace glz
             // Send pre-built request bytes synchronously
             std::visit([&](auto& sock) { asio::write(*sock, asio::buffer(request_str)); }, socket_var);
 
-            // Read response headers synchronously
+            // Read response headers synchronously, discarding interim (1xx) responses
             asio::streambuf response_buffer;
             asio::error_code ec;
-            size_t header_bytes = std::visit(
-               [&](auto& sock) { return asio::read_until(*sock, response_buffer, "\r\n\r\n", ec); }, socket_var);
-            if (ec) {
-               detail::close_socket(socket_var, connection_pool->graceful_ssl_shutdown());
-               r.outcome = std::unexpected(ec);
-               return r;
-            }
+            size_t header_bytes{};
+            std::string_view header_data;
+            size_t line_end{};
+            std::expected<HttpStatusLine, std::error_code> parsed_status;
+            while (true) {
+               header_bytes = std::visit(
+                  [&](auto& sock) { return asio::read_until(*sock, response_buffer, "\r\n\r\n", ec); }, socket_var);
+               if (ec) {
+                  detail::close_socket(socket_var, connection_pool->graceful_ssl_shutdown());
+                  r.outcome = std::unexpected(ec);
+                  return r;
+               }
 
-            // Headers received: from this point on, the server has begun responding and
-            // a retry of this exact request would re-execute server-side work that has
-            // already happened. Mark response_started so perform_sync_request will not
-            // retry on subsequent failures.
-            r.response_started = true;
+               // Headers received: from this point on, the server has begun responding and
+               // a retry of this exact request would re-execute server-side work that has
+               // already happened. Mark response_started so perform_sync_request will not
+               // retry on subsequent failures.
+               r.response_started = true;
 
-            // Create a zero-copy view of the header data
-            std::string_view header_data{static_cast<const char*>(response_buffer.data().data()), header_bytes};
+               // Create a zero-copy view of the header data
+               header_data = {static_cast<const char*>(response_buffer.data().data()), header_bytes};
 
-            // Parse status line from the view
-            auto line_end = header_data.find("\r\n");
-            if (line_end == std::string_view::npos) {
-               r.outcome = std::unexpected(std::make_error_code(std::errc::protocol_error));
-               return r;
-            }
-            std::string_view status_line = header_data.substr(0, line_end);
-            header_data.remove_prefix(line_end + 2); // Advance past status line
+               // Parse status line from the view
+               line_end = header_data.find("\r\n");
+               if (line_end == std::string_view::npos) {
+                  r.outcome = std::unexpected(std::make_error_code(std::errc::protocol_error));
+                  return r;
+               }
+               std::string_view status_line = header_data.substr(0, line_end);
+               header_data.remove_prefix(line_end + 2); // Advance past status line
 
-            auto parsed_status = parse_http_status_line(status_line);
-            if (!parsed_status) {
-               r.outcome = std::unexpected(parsed_status.error());
-               return r;
+               parsed_status = parse_http_status_line(status_line);
+               if (!parsed_status) {
+                  r.outcome = std::unexpected(parsed_status.error());
+                  return r;
+               }
+
+               if (!detail::is_interim_status(parsed_status->status_code)) {
+                  break;
+               }
+               response_buffer.consume(header_bytes);
             }
 
             // Parse headers from the view
@@ -2623,7 +2653,8 @@ namespace glz
                carries_no_body || content_length_field.state == detail::content_length_state::present;
             const bool is_chunked =
                !carries_no_body && response_headers.contains_token("Transfer-Encoding", "chunked");
-            bool connection_close = response_headers.contains_token("Connection", "close");
+            bool connection_close =
+               parsed_status->status_code == 101 || response_headers.contains_token("Connection", "close");
 
             // Consume header data, leaving only the over-read body part.
             response_buffer.consume(header_bytes);
@@ -3301,6 +3332,29 @@ namespace glz
             return;
          }
 
+         if (detail::is_interim_status(parsed_status->status_code)) {
+            // Discard the interim response and read the next head from the same buffer.
+            buffer->consume(header_size);
+            std::visit(
+               [&, this](auto& sock) {
+                  asio::async_read_until(
+                     *sock, *buffer, "\r\n\r\n",
+                     [this, socket_var, buffer, url, use_https, head_request,
+                      handler = std::forward<CompletionHandler>(handler)](asio::error_code ec,
+                                                                           std::size_t bytes_transferred) mutable {
+                        if (ec) {
+                           detail::close_socket(*socket_var, connection_pool->graceful_ssl_shutdown());
+                           handler(std::unexpected(ec));
+                           return;
+                        }
+                        parse_and_read_body(socket_var, buffer, bytes_transferred, url, use_https, head_request,
+                                            std::move(handler));
+                     });
+               },
+               *socket_var);
+            return;
+         }
+
          // Parse all header fields from the view.
          glz::http_headers response_headers;
          // The header section ends with an empty line ("\r\n"), which means our view will start with it.
@@ -3400,10 +3454,10 @@ namespace glz
                         resp.response_headers = std::move(response_headers);
                         resp.response_body = std::move(body);
 
-                        // Pool the connection unless the server asked to close it. A truncated or
-                        // peer-closed connection already returned above, so anything reaching here
-                        // is a complete response on a still-open socket.
-                        if (resp.response_headers.contains_token("connection", "close")) {
+                        // Pool the connection unless the server asked to close it or switched
+                        // protocols. A truncated or peer-closed connection already returned above,
+                        // so anything reaching here is a complete response on a still-open socket.
+                        if (status_code == 101 || resp.response_headers.contains_token("connection", "close")) {
                            detail::close_socket(*socket_var, connection_pool->graceful_ssl_shutdown());
                         }
                         else {
