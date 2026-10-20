@@ -13,6 +13,7 @@
 #include <limits>
 #include <string_view>
 
+#include "glaze/bson/common.hpp"
 #include "glaze/bson/header.hpp"
 #include "glaze/core/buffer_traits.hpp"
 #include "glaze/core/chrono.hpp"
@@ -252,6 +253,8 @@ namespace glz
       template <auto Opts, class T, is_context Ctx, class B, class IX>
       GLZ_ALWAYS_INLINE static void op(T&& value, Ctx&& ctx, B&& b, IX&& ix)
       {
+         static_assert(bson_top_level_t<T>,
+                       "BSON can only encode a document (struct, map, or array) without an enclosing element.");
          to<BSON, std::remove_cvref_t<T>>::template op<Opts>(std::forward<T>(value), std::forward<Ctx>(ctx),
                                                              std::forward<B>(b), std::forward<IX>(ix));
       }
@@ -320,7 +323,7 @@ namespace glz
             }
             if constexpr (std::same_as<T, uint64_t>) {
                if (value > static_cast<uint64_t>((std::numeric_limits<int64_t>::max)())) [[unlikely]] {
-                  ctx.error = error_code::invalid_length;
+                  ctx.error = error_code::parse_number_failure;
                   return;
                }
             }
@@ -897,16 +900,7 @@ namespace glz
    // Public entry points
    // ==========================================================================
 
-   // BSON's wire format requires the top-level value to be a document. Allow
-   // reflected structs, maps with string keys, sequence containers (encoded
-   // as integer-keyed documents), and glaze_array_t. Primitives are rejected
-   // at the call site — they have no valid BSON document encoding on their
-   // own.
-   template <class T>
-   concept bson_top_level_t = glaze_object_t<std::remove_cvref_t<T>> || reflectable<std::remove_cvref_t<T>> ||
-                              writable_map_t<std::remove_cvref_t<T>> || writable_array_t<std::remove_cvref_t<T>> ||
-                              glaze_array_t<std::remove_cvref_t<T>>;
-
+   // Primitives are rejected at the call site (see bson_top_level_t).
    template <auto Opts = opts{}, bson_top_level_t T, class Buffer>
    [[nodiscard]] error_ctx write_bson(T&& value, Buffer&& buffer)
    {

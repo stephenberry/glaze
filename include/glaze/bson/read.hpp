@@ -12,6 +12,7 @@
 #include <limits>
 #include <string_view>
 
+#include "glaze/bson/common.hpp"
 #include "glaze/bson/header.hpp"
 #include "glaze/bson/skip.hpp"
 #include "glaze/core/chrono.hpp"
@@ -169,6 +170,8 @@ namespace glz
       template <auto Opts, class T, is_context Ctx, class It, class End>
       GLZ_ALWAYS_INLINE static void op(T&& value, Ctx&& ctx, It& it, const End& end) noexcept
       {
+         static_assert(bson_top_level_t<T>,
+                       "BSON can only encode a document (struct, map, or array) without an enclosing element.");
          if constexpr (const_value_v<T>) {
             if constexpr (check_error_on_const_read(Opts)) {
                ctx.error = error_code::attempt_const_read;
@@ -1280,11 +1283,6 @@ namespace glz
    // Public entry points
    // ==========================================================================
 
-   template <class T>
-   concept bson_top_level_read_t = glaze_object_t<std::remove_cvref_t<T>> || reflectable<std::remove_cvref_t<T>> ||
-                                   writable_map_t<std::remove_cvref_t<T>> || writable_array_t<std::remove_cvref_t<T>> ||
-                                   glaze_array_t<std::remove_cvref_t<T>>;
-
    // BSON documents are length-prefixed (int32 header = total bytes). The core
    // reader consumes exactly that many bytes, but would otherwise silently
    // ignore anything trailing the top-level document. Enforce exact-fill at the
@@ -1302,7 +1300,7 @@ namespace glz
       }
    }
 
-   template <auto Opts = opts{}, bson_top_level_read_t T, class Buffer>
+   template <auto Opts = opts{}, bson_top_level_t T, class Buffer>
    [[nodiscard]] inline error_ctx read_bson(T&& value, Buffer&& buffer)
    {
       auto ec = read<set_bson<Opts>()>(std::forward<T>(value), buffer);
@@ -1310,7 +1308,7 @@ namespace glz
    }
 
    template <class T, auto Opts = opts{}, class Buffer>
-      requires bson_top_level_read_t<T>
+      requires bson_top_level_t<T>
    [[nodiscard]] inline expected<T, error_ctx> read_bson(Buffer&& buffer)
    {
       T value{};
@@ -1322,7 +1320,7 @@ namespace glz
       return value;
    }
 
-   template <auto Opts = opts{}, bson_top_level_read_t T>
+   template <auto Opts = opts{}, bson_top_level_t T>
    [[nodiscard]] inline error_ctx read_file_bson(T& value, const sv file_name, auto&& buffer)
    {
       context ctx{};

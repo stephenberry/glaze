@@ -1588,10 +1588,12 @@ namespace glz
    // Note: specified and is_specified are defined in glaze/core/traits.hpp.
 
    template <class T, uint32_t Format>
-   concept write_supported = requires { to<Format, std::remove_cvref_t<T>>{}; };
+   concept write_supported =
+      requires { to<Format, std::remove_cvref_t<T>>{}; } && top_level_supported<Format, std::remove_cvref_t<T>>;
 
    template <class T, uint32_t Format>
-   concept read_supported = requires { from<Format, std::remove_cvref_t<T>>{}; };
+   concept read_supported =
+      requires { from<Format, std::remove_cvref_t<T>>{}; } && top_level_supported<Format, std::remove_cvref_t<T>>;
 
    // Default context type for a format.
    // Formats that need a richer context (e.g. YAML) specialize this.

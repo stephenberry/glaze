@@ -1013,11 +1013,11 @@ namespace
       "uint64-write-above-int64-max-rejected"_test = [] {
          // BSON's int64 wire type is signed; uint64_t values above INT64_MAX
          // cannot be represented and must fail the write path with
-         // invalid_length (see write.hpp uint64_t range check).
+         // parse_number_failure, matching the read path (see write.hpp uint64_t range check).
          u64_s src{static_cast<uint64_t>((std::numeric_limits<int64_t>::max)()) + 1};
          auto w = glz::write_bson(src);
          expect(not w.has_value());
-         expect(w.error().ec == glz::error_code::invalid_length);
+         expect(w.error().ec == glz::error_code::parse_number_failure);
       };
 
       "uint64-write-at-int64-max-ok"_test = [] {
@@ -1134,7 +1134,30 @@ namespace
       };
    };
 
+   template <class T>
+   concept bson_generic_writable = requires(T& value, std::string& buffer) {
+      glz::write<glz::opts{.format = glz::BSON}>(value, buffer);
+   };
+
+   template <class T>
+   concept bson_generic_readable = requires(T& value, std::string& buffer) {
+      glz::read<glz::opts{.format = glz::BSON}>(value, buffer);
+   };
+
    suite bson_write_api_tests = [] {
+      "generic-api-rejects-top-level-primitives"_test = [] {
+         // BSON's top level is always a document, so a bare primitive has no valid encoding.
+         static_assert(not bson_generic_writable<int>);
+         static_assert(not bson_generic_writable<std::string>);
+         static_assert(not bson_generic_readable<int>);
+         static_assert(not bson_generic_readable<std::string>);
+         static_assert(bson_generic_writable<hello_t>);
+         static_assert(bson_generic_writable<std::map<std::string, int>>);
+         static_assert(bson_generic_writable<std::vector<int>>);
+         static_assert(bson_generic_readable<hello_t>);
+         static_assert(bson_generic_readable<std::vector<int>>);
+      };
+
       "fixed-buffer-write"_test = [] {
          // Bounded buffers require at least 512 bytes to account for the write
          // padding reservation (see glaze/core/buffer_traits.hpp).
