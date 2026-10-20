@@ -3958,6 +3958,124 @@ suite generic_f64_toml_tests = [] {
    };
 };
 
+// glz::cast reads its member through parse<TOML>, so the member is in value position below the root
+struct generic_cast_member
+{
+   glz::generic g{};
+   int b{};
+};
+
+template <>
+struct glz::meta<generic_cast_member>
+{
+   using T = generic_cast_member;
+   static constexpr auto value = object("g", glz::cast<&T::g, glz::generic>, "b", &T::b);
+};
+
+suite generic_toml_document_root_tests = [] {
+   // A document whose first key is quoted or starts like a value must not read as that one scalar
+   "generic_read_toml_quoted_first_key"_test = [] {
+      glz::generic g;
+      std::string toml = "\"a b\" = 1\nrole = \"user\"";
+      auto ec = glz::read_toml(g, toml);
+      expect(not ec) << glz::format_error(ec, toml);
+      expect(g.is_object());
+      expect(g["a b"].get<double>() == 1.0);
+      expect(g["role"].get<std::string>() == "user");
+
+      glz::generic literal;
+      toml = "'k' = 1\nx = 2";
+      ec = glz::read_toml(literal, toml);
+      expect(not ec) << glz::format_error(ec, toml);
+      expect(literal.is_object());
+      expect(literal["k"].get<double>() == 1.0);
+      expect(literal["x"].get<double>() == 2.0);
+
+      glz::generic dotted;
+      toml = "\"a b\".c = 1";
+      ec = glz::read_toml(dotted, toml);
+      expect(not ec) << glz::format_error(ec, toml);
+      expect(dotted["a b"]["c"].get<double>() == 1.0);
+   };
+
+   "generic_read_toml_value_like_first_key"_test = [] {
+      for (const std::string key : {"true", "false", "1234", "inf", "nan", "1979-05-27", "-x"}) {
+         glz::generic g;
+         const std::string toml = key + " = 1\nnext = 2";
+         auto ec = glz::read_toml(g, toml);
+         expect(not ec) << glz::format_error(ec, toml);
+         expect(g.is_object()) << toml;
+         expect(g[key].get<double>() == 1.0) << toml;
+         expect(g["next"].get<double>() == 2.0) << toml;
+      }
+
+      glz::generic g;
+      std::string toml = "1.5 = 2";
+      auto ec = glz::read_toml(g, toml);
+      expect(not ec) << glz::format_error(ec, toml);
+      expect(g["1"]["5"].get<double>() == 2.0);
+   };
+
+   "generic_read_toml_leading_blank_line_and_comment"_test = [] {
+      glz::generic g;
+      std::string toml = "\nname = \"config\"\nport = 8080\n";
+      auto ec = glz::read_toml(g, toml);
+      expect(not ec) << glz::format_error(ec, toml);
+      expect(g["name"].get<std::string>() == "config");
+      expect(g["port"].get<double>() == 8080.0);
+
+      glz::generic commented;
+      toml = "# header\n\"k\" = 1\n";
+      ec = glz::read_toml(commented, toml);
+      expect(not ec) << glz::format_error(ec, toml);
+      expect(commented["k"].get<double>() == 1.0);
+   };
+
+   "generic_read_toml_key_in_value_position"_test = [] {
+      // `a = x = 1` is not TOML; it must not read `x = 1` and the lines after it as a table under a
+      glz::generic identifier;
+      expect(glz::read_toml(identifier, "a = x = 1\nb = 2") == glz::error_code::syntax_error);
+      glz::generic quoted;
+      expect(glz::read_toml(quoted, "a = \"x\" = 1") == glz::error_code::syntax_error);
+
+      std::map<std::string, glz::generic> m;
+      expect(glz::read_toml(m, "a = x = 1\nb = 2") == glz::error_code::syntax_error);
+
+      // A wrapper that reads its value through parse<TOML> is still in value position
+      generic_cast_member cast_identifier{};
+      expect(glz::read_toml(cast_identifier, "g = x = 1\nb = 2") == glz::error_code::syntax_error);
+      generic_cast_member cast_quoted{};
+      expect(glz::read_toml(cast_quoted, "g = \"k\" = 1\nb = 2") == glz::error_code::syntax_error);
+
+      generic_cast_member cast_value{};
+      const std::string toml = "g = 5\nb = 2";
+      const auto ec = glz::read_toml(cast_value, toml);
+      expect(not ec) << glz::format_error(ec, toml);
+      expect(cast_value.g.get<double>() == 5.0);
+      expect(cast_value.b == 2);
+   };
+
+   "variant_read_toml_quoted_first_key"_test = [] {
+      std::variant<std::string, std::map<std::string, int64_t>> v;
+      std::string toml = "\"k\" = 1\nx = 2";
+      auto ec = glz::read_toml(v, toml);
+      expect(not ec) << glz::format_error(ec, toml);
+      expect(std::holds_alternative<std::map<std::string, int64_t>>(v));
+      auto& m = std::get<std::map<std::string, int64_t>>(v);
+      expect(m.size() == 2);
+      expect(m["k"] == 1);
+      expect(m["x"] == 2);
+
+      // A bare value at the root is still read as a value
+      std::variant<std::string, std::map<std::string, int64_t>> bare;
+      toml = "\"k\"";
+      ec = glz::read_toml(bare, toml);
+      expect(not ec) << glz::format_error(ec, toml);
+      expect(std::holds_alternative<std::string>(bare));
+      expect(std::get<std::string>(bare) == "k");
+   };
+};
+
 // ============================================
 // Corner cases and nested structure tests
 // ============================================

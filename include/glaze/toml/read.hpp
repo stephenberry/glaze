@@ -28,6 +28,13 @@
 
 namespace glz
 {
+   namespace detail
+   {
+      // Defined after the variant reader. Returns false when the input is not read as a document.
+      template <auto Opts, class T, class Ctx, class It, class End>
+      bool read_toml_document_root(T& value, Ctx& ctx, It& it, End end);
+   }
+
    template <>
    struct parse<TOML>
    {
@@ -35,6 +42,11 @@ namespace glz
       static void op(T&& value, Ctx&& ctx, It0&& it, It1 end)
       {
          using V = std::remove_cvref_t<T>;
+         // Only the document root can hold key/value lines, so that decision is made here rather
+         // than in the value readers, which also run for every nested value.
+         if (detail::read_toml_document_root<Opts>(value, ctx, it, end)) {
+            return;
+         }
          from<TOML, V>::template op<Opts>(std::forward<T>(value), std::forward<Ctx>(ctx), std::forward<It0>(it), end);
       }
    };
@@ -3222,6 +3234,48 @@ namespace glz
          }
          return false;
       }
+
+      // True when [it, end) starts with a key, possibly dotted, followed by '=' on the same line.
+      // A value is never followed by '=', so this tells a key/value line apart from a value whose
+      // first byte looks like a key ("a b" = 1, 1234 = 5, true = 1) without consuming anything.
+      template <class It, class End>
+      inline bool is_toml_keyval(It it, End end) noexcept
+      {
+         while (true) {
+            if (it == end) return false;
+            if (*it == '"' || *it == '\'') {
+               const char quote = *it;
+               ++it;
+               while (it != end && *it != quote) {
+                  if (*it == '\n' || *it == '\r') return false;
+                  if (quote == '"' && *it == '\\') {
+                     ++it;
+                     if (it == end) return false;
+                  }
+                  ++it;
+               }
+               if (it == end) return false;
+               ++it;
+            }
+            else {
+               const auto key_start = it;
+               while (it != end && (std::isalnum(static_cast<unsigned char>(*it)) || *it == '_' || *it == '-')) {
+                  ++it;
+               }
+               if (it == key_start) return false;
+            }
+            while (it != end && (*it == ' ' || *it == '\t')) {
+               ++it;
+            }
+            if (it == end) return false;
+            if (*it == '=') return true;
+            if (*it != '.') return false;
+            ++it;
+            while (it != end && (*it == ' ' || *it == '\t')) {
+               ++it;
+            }
+         }
+      }
    } // namespace detail
 
    template <class T>
@@ -3424,23 +3478,9 @@ namespace glz
             }
          }
          else {
-            // Identifiers (a-z, A-Z, _) at document root indicate key-value pairs
-            // Check if the variant has a map alternative we can use
-            constexpr auto map_idx = detail::find_map_alternative_index<Variant>();
-
-            if constexpr (map_idx != std::variant_npos) {
-               const bool is_identifier = (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c == '_';
-               if (is_identifier) {
-                  // Parse as a TOML document with key-value pairs into the map alternative
-                  using V = std::variant_alternative_t<map_idx, Variant>;
-                  if (!std::holds_alternative<V>(value)) {
-                     value.template emplace<map_idx>();
-                  }
-                  from<TOML, V>::template op<Opts>(std::get<V>(value), ctx, it, end);
-                  return;
-               }
-            }
-
+            // A document root is read by detail::read_toml_document_root, so an identifier here is
+            // in value position (`a = b = 1`), where no TOML value starts with a key.
+            //
             // TOML has no null, so a byte that starts no TOML value is a syntax error even when
             // the variant has a null alternative. Emplacing null here without consuming anything
             // accepted documents every conforming parser rejects -- a key with nothing after its
@@ -3450,6 +3490,47 @@ namespace glz
          }
       }
    };
+
+   namespace detail
+   {
+      // A schema-less target (glz::generic, or a variant with a map alternative) read at the root
+      // takes either a document or a single bare value. The variant reader picks by the first byte
+      // of a value, so a document whose first key is quoted or starts like a value ("a b" = 1,
+      // 1234 = 5, true = 1) read as that one scalar and the rest of the document was dropped, and a
+      // leading blank line or comment failed. Lines of key/value pairs make it a document.
+      template <auto Opts, class T, class Ctx, class It, class End>
+      bool read_toml_document_root(T& value, Ctx& ctx, It& it, End end)
+      {
+         using V = std::remove_cvref_t<T>;
+         if constexpr (!std::is_const_v<T> && has_variant_data_member<V> && glaze_value_t<V>) {
+            return read_toml_document_root<Opts>(value.data, ctx, it, end);
+         }
+         else if constexpr (!toml::check_is_internal(Opts) && !std::is_const_v<T> && is_variant<V>) {
+            // Wrappers such as glz::cast also enter through parse<TOML> for a nested value, which the
+            // internal flag marks; a key there is in value position and must stay a syntax error.
+            constexpr auto map_idx = find_map_alternative_index<V>();
+            if constexpr (map_idx != std::variant_npos) {
+               auto start = it;
+               skip_ws_newlines_and_comments(start, end);
+               if (is_toml_keyval(start, end)) {
+                  depth_guard guard{ctx};
+                  if (!guard) [[unlikely]] {
+                     return true;
+                  }
+
+                  using M = std::variant_alternative_t<map_idx, V>;
+                  if (!std::holds_alternative<M>(value)) {
+                     value.template emplace<map_idx>();
+                  }
+                  from<TOML, M>::template op<Opts>(std::get<M>(value), ctx, it, end);
+                  return true;
+               }
+            }
+         }
+         (void)value, (void)ctx, (void)it, (void)end;
+         return false;
+      }
+   }
 
    // Nullable types: std::optional, std::unique_ptr, std::shared_ptr, raw pointers
    template <nullable_like T>
