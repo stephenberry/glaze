@@ -1135,14 +1135,12 @@ namespace
    };
 
    template <class T>
-   concept bson_generic_writable = requires(T& value, std::string& buffer) {
-      glz::write<glz::opts{.format = glz::BSON}>(value, buffer);
-   };
+   concept bson_generic_writable =
+      requires(T& value, std::string& buffer) { glz::write<glz::opts{.format = glz::BSON}>(value, buffer); };
 
    template <class T>
-   concept bson_generic_readable = requires(T& value, std::string& buffer) {
-      glz::read<glz::opts{.format = glz::BSON}>(value, buffer);
-   };
+   concept bson_generic_readable =
+      requires(T& value, std::string& buffer) { glz::read<glz::opts{.format = glz::BSON}>(value, buffer); };
 
    suite bson_write_api_tests = [] {
       "generic-api-rejects-top-level-primitives"_test = [] {
