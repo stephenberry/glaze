@@ -2096,9 +2096,10 @@ namespace glz
                         return;
                      }
 
-                     for (auto&& x : value) {
+                     auto x_it = value.begin();
+                     for (size_t i = 0; i < count; ++i, ++x_it) {
                         const uint8_t number_tag = tag::number | (numeric_tag & 0b11111000);
-                        parse<BEVE>::op<no_header_on<Opts>()>(x, number_tag, ctx, it, end);
+                        parse<BEVE>::op<no_header_on<Opts>()>(*x_it, number_tag, ctx, it, end);
                      }
                      return;
                   }
@@ -2146,14 +2147,15 @@ namespace glz
                         }
 
                         const uint8_t byte_count = byte_count_lookup[tag >> 5];
-                        prepare(byte_count);
+                        const size_t count = prepare(byte_count);
                         if (bool(ctx.error)) [[unlikely]] {
                            return;
                         }
 
-                        for (auto&& x : value) {
+                        auto x_it = value.begin();
+                        for (size_t i = 0; i < count; ++i, ++x_it) {
                            const uint8_t number_tag = tag::number | (tag & 0b11111000);
-                           parse<BEVE>::op<no_header_on<Opts>()>(x, number_tag, ctx, it, end);
+                           parse<BEVE>::op<no_header_on<Opts>()>(*x_it, number_tag, ctx, it, end);
                         }
                         return;
                      }
@@ -2218,7 +2220,9 @@ namespace glz
                }
             }
             else {
-               for (auto&& x : value) {
+               auto x_it = value.begin();
+               for (size_t i = 0; i < n; ++i, ++x_it) {
+                  auto&& x = *x_it;
                   if (size_t(end - it) < sizeof(V)) [[unlikely]] {
                      ctx.error = error_code::unexpected_end;
                      return;
@@ -2282,8 +2286,16 @@ namespace glz
                   value.shrink_to_fit();
                }
             }
+            else {
+               if (n > value.size()) {
+                  ctx.error = error_code::syntax_error;
+                  return;
+               }
+            }
 
-            for (auto&& x : value) {
+            auto x_it = value.begin();
+            for (size_t i = 0; i < n; ++i, ++x_it) {
+               auto&& x = *x_it;
                const auto length = int_from_compressed(ctx, it, end);
                if (bool(ctx.error)) [[unlikely]] {
                   return;
@@ -2389,7 +2401,9 @@ namespace glz
                }
             }
             else {
-               for (auto&& x : value) {
+               auto x_it = value.begin();
+               for (size_t i = 0; i < n; ++i, ++x_it) {
+                  auto&& x = *x_it;
                   std::memcpy(&x, it, sizeof(V));
                   if constexpr (std::endian::native == std::endian::big && sizeof(X) > 1) {
                      X real_part = x.real();
@@ -2451,9 +2465,16 @@ namespace glz
                   value.shrink_to_fit();
                }
             }
+            else {
+               if (n > value.size()) {
+                  ctx.error = error_code::syntax_error;
+                  return;
+               }
+            }
 
-            for (auto&& item : value) {
-               parse<BEVE>::op<Opts>(item, ctx, it, end);
+            auto item_it = value.begin();
+            for (size_t i = 0; i < n; ++i, ++item_it) {
+               parse<BEVE>::op<Opts>(*item_it, ctx, it, end);
             }
          }
       }
