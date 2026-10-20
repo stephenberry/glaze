@@ -102,6 +102,11 @@ struct float_special_struct
    std::vector<double> values{};
 };
 
+struct float32_write_opts : glz::opts
+{
+   glz::float_precision float_max_write_precision{glz::float_precision::float32};
+};
+
 struct int_array_struct
 {
    std::vector<int> values{};
@@ -5045,6 +5050,23 @@ sname = "Second String")";
       expect(std::isinf(read.values[0]));
       expect(read.values[0] < 0.0);
       expect(std::isnan(read.values[1]));
+      expect(read.values[2] == 1.5);
+   };
+
+   // Narrowing a finite double beyond float's range must not produce an infinity, which TOML would write as inf
+   "toml_write_float32_narrowing_beyond_float_range"_test = [] {
+      const float_special_struct value{1e100, {-1e39, std::numeric_limits<double>::infinity(), 1.5}};
+      std::string buffer{};
+      expect(not glz::write<glz::set_toml<float32_write_opts{}>()>(value, buffer));
+      expect(buffer == "value = 1E100\nvalues = [-1E39, inf, 1.5]") << buffer;
+
+      float_special_struct read{};
+      const auto error = glz::read_toml(read, buffer);
+      expect(not error) << glz::format_error(error, buffer);
+      expect(read.value == 1e100);
+      expect(read.values.size() == 3);
+      expect(read.values[0] == -1e39);
+      expect(std::isinf(read.values[1]));
       expect(read.values[2] == 1.5);
    };
 
