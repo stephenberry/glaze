@@ -13024,6 +13024,35 @@ suite max_write_precision_tests = [] {
       std::string json_float = glz::write<float_opts{}>(obj).value_or("error");
       expect(json_float == R"({"pi":3.1415927})") << json_float;
    };
+
+   "float32 narrowing of finite values beyond float's range"_test = [] {
+      constexpr float_opts options{{}, glz::float_precision::float32};
+      constexpr auto dbl_max = std::numeric_limits<double>::max();
+      for (const double v : {3.4028235999999999e+38, 1e39, -1e39, 1e100, dbl_max, -dbl_max}) {
+         const auto json = glz::write<options>(v).value_or("error");
+         expect(json == glz::write_json(v).value_or("error")) << json;
+         double back{};
+         expect(!glz::read_json(back, json)) << json;
+         expect(back == v) << json;
+      }
+
+      // Values that narrow to a finite float are still written at float precision
+      constexpr auto flt_max = double(std::numeric_limits<float>::max());
+      expect(glz::write<options>(flt_max).value_or("error") == "3.4028235E38");
+      expect(glz::write<options>(-flt_max).value_or("error") == "-3.4028235E38");
+
+      // Non-finite values are still written as null
+      expect(glz::write<options>(std::numeric_limits<double>::infinity()).value_or("error") == "null");
+      expect(glz::write<options>(-std::numeric_limits<double>::infinity()).value_or("error") == "null");
+      expect(glz::write<options>(std::numeric_limits<double>::quiet_NaN()).value_or("error") == "null");
+
+      write_precision_t obj{1e100};
+      const auto json = glz::write<float_opts{}>(obj).value_or("error");
+      expect(json == R"({"pi":1E100})") << json;
+      write_precision_t back{};
+      expect(!glz::read_json(back, json));
+      expect(back.pi == 1e100);
+   };
 };
 
 // float_format option structs for testing various format specifiers

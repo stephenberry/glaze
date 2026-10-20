@@ -7860,6 +7860,23 @@ suite infinity_nan_tests = [] {
       expect(!rec) << glz::format_error(rec, yaml);
       expect(std::isnan(parsed["val"]));
    };
+
+   // Narrowing a finite double beyond float's range must not produce an infinity, which would be written as null
+   "write_float32_narrowing_beyond_float_range"_test = [] {
+      struct float32_opts : glz::opts
+      {
+         glz::float_precision float_max_write_precision{glz::float_precision::float32};
+      };
+      std::map<std::string, double> original{{"big", 1e100}, {"small", -1e39}};
+      std::string yaml;
+      expect(!glz::write<glz::set_yaml<float32_opts{}>()>(original, yaml));
+      expect(yaml == "big: 1E100\nsmall: -1E39\n") << yaml;
+
+      std::map<std::string, double> parsed;
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+      expect(parsed == original);
+   };
 };
 
 suite yaml_tag_variant_tests = [] {
