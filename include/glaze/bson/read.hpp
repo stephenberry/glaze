@@ -1116,7 +1116,9 @@ namespace glz
                   ctx.custom_error_message = key;
                   return;
                }
-               skip_value<BSON>::template op<Opts>(tag, ctx, it, stop);
+               else {
+                  skip_value<BSON>::template op<Opts>(tag, ctx, it, stop);
+               }
             }
          });
 
