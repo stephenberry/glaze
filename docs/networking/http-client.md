@@ -174,6 +174,17 @@ std::expected<response, std::error_code> patch(
 );
 ```
 
+### HEAD Request
+
+```cpp
+std::expected<response, std::error_code> head(
+    std::string_view url,
+    const glz::http_headers& headers = {}
+);
+```
+
+The response has the headers the equivalent GET would return (including its `Content-Length`) and an empty body.
+
 ### DELETE Request
 
 ```cpp

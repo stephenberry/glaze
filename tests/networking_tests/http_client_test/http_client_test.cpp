@@ -218,6 +218,14 @@ class working_test_server
          res.status(200).content_type("text/plain").body(response_body);
       });
 
+      // The server frames a HEAD reply and a 304 with the Content-Length of the body built
+      // here but sends no body, which the client must not wait for.
+      server_.route(http_method::HEAD, "/head", [](const request&, response& res) {
+         res.status(200).content_type("text/plain").body("hello");
+      });
+
+      server_.get("/not-modified", [](const request&, response& res) { res.status(304).body("cached body"); });
+
       server_.get("/slow", [](const request&, response& res) {
          std::this_thread::sleep_for(std::chrono::milliseconds(50));
          res.status(200).body("Slow response");
@@ -1072,6 +1080,74 @@ suite glz_http_client_tests = [] {
          expect(result->response_body == "PATCH:payload:header-value")
             << "Response body should echo payload and header";
       }
+
+      server.stop();
+   };
+
+   "synchronous_head_request"_test = [] {
+      working_test_server server;
+      expect(server.start());
+
+      glz::http_client client;
+
+      auto result = client.head(server.base_url() + "/head");
+
+      expect(result.has_value()) << "HEAD request should succeed";
+      if (result.has_value()) {
+         expect(result->status_code == 200) << "HEAD status should be 200";
+         expect(result->response_body.empty()) << "HEAD response should have no body";
+         const auto content_length = result->response_headers.first_value("content-length");
+         expect(content_length.has_value() && *content_length == "5") << "HEAD should report the GET body length";
+      }
+
+      // The pooled connection must be clean for the next request.
+      auto follow_up = client.get(server.base_url() + "/hello");
+      expect(follow_up.has_value() && follow_up->response_body == "Hello, World!") << "Follow-up GET should succeed";
+
+      server.stop();
+   };
+
+   "synchronous_304_with_content_length"_test = [] {
+      working_test_server server;
+      expect(server.start());
+
+      glz::http_client client;
+
+      auto result = client.get(server.base_url() + "/not-modified");
+
+      expect(result.has_value()) << "304 request should succeed";
+      if (result.has_value()) {
+         expect(result->status_code == 304) << "Status should be 304";
+         expect(result->response_body.empty()) << "304 response should have no body";
+      }
+
+      auto follow_up = client.get(server.base_url() + "/hello");
+      expect(follow_up.has_value() && follow_up->response_body == "Hello, World!") << "Follow-up GET should succeed";
+
+      server.stop();
+   };
+
+   "async_304_with_content_length"_test = [] {
+      working_test_server server;
+      expect(server.start());
+
+      glz::http_client client;
+
+      auto future = client.get_async(server.base_url() + "/not-modified");
+      expect(future.wait_for(std::chrono::seconds(5)) == std::future_status::ready)
+         << "Async 304 should complete without waiting for a body";
+      if (future.valid() && future.wait_for(std::chrono::seconds(0)) == std::future_status::ready) {
+         auto result = future.get();
+         expect(result.has_value()) << "Async 304 request should succeed";
+         if (result.has_value()) {
+            expect(result->status_code == 304) << "Status should be 304";
+            expect(result->response_body.empty()) << "304 response should have no body";
+         }
+      }
+
+      auto follow_up = client.get_async(server.base_url() + "/hello");
+      expect(follow_up.wait_for(std::chrono::seconds(5)) == std::future_status::ready)
+         << "Follow-up async GET should complete";
 
       server.stop();
    };

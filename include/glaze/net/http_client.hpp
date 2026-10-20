@@ -343,6 +343,15 @@ namespace glz
       // A value that is not a bare decimal is rejected for the same reason: it
       // resolves to no length at all, and defaulting it to zero would leave a real
       // body sitting in the socket to be read as the next response.
+      // RFC 9110 6.4.1: a reply to HEAD, and any 1xx, 204 or 304, never carries a body,
+      // whatever it frames. A Content-Length on a HEAD reply or a 304 states the length the
+      // equivalent GET would have had, so framing the body by it would wait for bytes that
+      // are never coming.
+      [[nodiscard]] constexpr bool response_carries_no_body(bool head_request, int status_code) noexcept
+      {
+         return head_request || status_code / 100 == 1 || status_code == 204 || status_code == 304;
+      }
+
       [[nodiscard]] inline parsed_content_length read_content_length(const glz::http_headers& headers)
       {
          // RFC 9112 6.3: Transfer-Encoding overrides Content-Length, so a chunked
@@ -793,6 +802,7 @@ namespace glz
    struct async_attempt_state
    {
       std::atomic<bool> response_started{false};
+      bool head_request = false; // A HEAD reply is framed as if it had a body, but carries none
    };
 
    // Synchronous variant of async_attempt_state's signal. Returned alongside the
@@ -1489,6 +1499,18 @@ namespace glz
          return perform_sync_request("PATCH", *url_result, body, headers);
       }
 
+      // Synchronous HEAD request - truly synchronous, no promises/futures.
+      // The response carries the headers the equivalent GET would, with an empty body.
+      std::expected<response, std::error_code> head(std::string_view url, const glz::http_headers& headers = {})
+      {
+         auto url_result = parse_url(url);
+         if (!url_result) {
+            return std::unexpected(url_result.error());
+         }
+
+         return perform_sync_request("HEAD", *url_result, "", headers);
+      }
+
       // Synchronous DELETE request - truly synchronous, no promises/futures
       std::expected<response, std::error_code> del(std::string_view url, const glz::http_headers& headers = {})
       {
@@ -2151,13 +2173,8 @@ namespace glz
                         return;
                      }
 
-                     // RFC 9110 6.4.1: these replies never carry a body, whatever they frame.
-                     // A Content-Length on a HEAD reply or a 304 states the length the
-                     // equivalent GET would have had, so framing the body by it would wait for
-                     // bytes that are never coming and then report the wait as a truncation.
-                     const int status_code = parsed_status->status_code;
                      const bool carries_no_body =
-                        connection->head_request || status_code / 100 == 1 || status_code == 204 || status_code == 304;
+                        detail::response_carries_no_body(connection->head_request, parsed_status->status_code);
 
                      connection->content_length = carries_no_body ? std::optional<size_t>{0}
                                                   : content_length_field.state == detail::content_length_state::present
@@ -2461,7 +2478,9 @@ namespace glz
          // the fresh socket: no rebuild, no extra body copy.
          const std::string request_str = detail::build_http_request_bytes(method, url, use_https, body, headers);
 
-         auto attempt = perform_sync_request_attempt(url, request_str, use_https, std::move(acquired.socket));
+         const bool head_request = method == "HEAD";
+         auto attempt =
+            perform_sync_request_attempt(url, request_str, use_https, head_request, std::move(acquired.socket));
 
          // Retry once if and only if: idempotent method, server has not yet started
          // sending a response (so the request bytes were not processed), and the error
@@ -2472,14 +2491,14 @@ namespace glz
          if (idempotent && !attempt.outcome && !attempt.response_started &&
              is_retriable_pool_error(attempt.outcome.error())) {
             auto fresh = connection_pool->create_fresh_connection(use_https);
-            attempt = perform_sync_request_attempt(url, request_str, use_https, std::move(fresh));
+            attempt = perform_sync_request_attempt(url, request_str, use_https, head_request, std::move(fresh));
          }
 
          return std::move(attempt.outcome);
       }
 
       sync_attempt_outcome perform_sync_request_attempt(const url_parts& url, const std::string& request_str,
-                                                        bool use_https, socket_variant socket_var)
+                                                        bool use_https, bool head_request, socket_variant socket_var)
       {
          sync_attempt_outcome r{};
 
@@ -2597,9 +2616,13 @@ namespace glz
                r.outcome = std::unexpected(make_error_code(http_client_error::unframed_response));
                return r;
             }
-            const size_t content_length = content_length_field.value;
-            const bool has_content_length = content_length_field.state == detail::content_length_state::present;
-            const bool is_chunked = response_headers.contains_token("Transfer-Encoding", "chunked");
+            // A bodyless reply is read as an empty Content-Length body, whatever it frames.
+            const bool carries_no_body = detail::response_carries_no_body(head_request, parsed_status->status_code);
+            const size_t content_length = carries_no_body ? 0 : content_length_field.value;
+            const bool has_content_length =
+               carries_no_body || content_length_field.state == detail::content_length_state::present;
+            const bool is_chunked =
+               !carries_no_body && response_headers.contains_token("Transfer-Encoding", "chunked");
             bool connection_close = response_headers.contains_token("Connection", "close");
 
             // Consume header data, leaving only the over-read body part.
@@ -2855,8 +2878,15 @@ namespace glz
          // Non-idempotent methods (POST, PATCH) are never retried because the client
          // cannot tell whether a write+read failure means the server already processed
          // the request. Forward directly without wrapping; no per-attempt state needed.
-         if (!is_idempotent_method(method)) {
+         const bool head_request = method == "HEAD";
+         auto make_state = [head_request] {
             auto state = std::make_shared<async_attempt_state>();
+            state->head_request = head_request;
+            return state;
+         };
+
+         if (!is_idempotent_method(method)) {
+            auto state = make_state();
             do_perform_request_async_attempt(socket_var, request_bytes, url, use_https, state,
                                              std::forward<CompletionHandler>(handler));
             return;
@@ -2867,18 +2897,18 @@ namespace glz
          // catches both stale pooled connections AND fresh connections that fail before
          // the server can read (listener overload, immediate close after accept,
          // mid-write RST, etc.).
-         auto state = std::make_shared<async_attempt_state>();
+         auto state = make_state();
 
          using handler_t = std::decay_t<CompletionHandler>;
          auto user_handler_ptr = std::make_shared<handler_t>(std::forward<CompletionHandler>(handler));
 
-         auto retry_handler = [this, request_bytes, url, use_https, user_handler_ptr,
-                               state](std::expected<response, std::error_code> result) mutable {
+         auto retry_handler = [this, request_bytes, url, use_https, user_handler_ptr, state,
+                               make_state](std::expected<response, std::error_code> result) mutable {
             if (!result && !state->response_started.load() && is_retriable_pool_error(result.error())) {
                auto fresh = std::make_shared<socket_variant>(connection_pool->create_fresh_connection(use_https));
                // Fresh attempt gets its own state so the retry's response_started signal
                // is tracked independently of the failed first attempt.
-               auto new_state = std::make_shared<async_attempt_state>();
+               auto new_state = make_state();
                do_perform_request_async_attempt(fresh, request_bytes, url, use_https, new_state,
                                                 [user_handler_ptr](std::expected<response, std::error_code> r) {
                                                    (*user_handler_ptr)(std::move(r));
@@ -3030,7 +3060,8 @@ namespace glz
                      // checks state->response_started before deciding to retry.
                      state->response_started.store(true);
                      // Pass the known header size to the parsing function
-                     parse_and_read_body(socket_var, buffer, bytes_transferred, url, use_https, std::move(handler));
+                     parse_and_read_body(socket_var, buffer, bytes_transferred, url, use_https, state->head_request,
+                                         std::move(handler));
                   });
             },
             *socket_var);
@@ -3250,7 +3281,8 @@ namespace glz
 
       template <typename CompletionHandler>
       void parse_and_read_body(std::shared_ptr<socket_variant> socket_var, std::shared_ptr<asio::streambuf> buffer,
-                               size_t header_size, const url_parts& url, bool use_https, CompletionHandler&& handler)
+                               size_t header_size, const url_parts& url, bool use_https, bool head_request,
+                               CompletionHandler&& handler)
       {
          std::string_view header_section{static_cast<const char*>(buffer->data().data()), header_size};
 
@@ -3303,9 +3335,12 @@ namespace glz
             handler(std::unexpected(make_error_code(http_client_error::unframed_response)));
             return;
          }
-         const size_t content_length = content_length_field.value;
-         const bool has_content_length = content_length_field.state == detail::content_length_state::present;
-         const bool is_chunked = response_headers.contains_token("Transfer-Encoding", "chunked");
+         // A bodyless reply is read as an empty Content-Length body, whatever it frames.
+         const bool carries_no_body = detail::response_carries_no_body(head_request, parsed_status->status_code);
+         const size_t content_length = carries_no_body ? 0 : content_length_field.value;
+         const bool has_content_length =
+            carries_no_body || content_length_field.state == detail::content_length_state::present;
+         const bool is_chunked = !carries_no_body && response_headers.contains_token("Transfer-Encoding", "chunked");
          const bool connection_close = response_headers.contains_token("Connection", "close");
 
          // Consume the entire header block from the streambuf.
