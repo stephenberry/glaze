@@ -924,8 +924,11 @@ namespace glz
    {
       const auto ec = write<set_bson<Opts>()>(std::forward<T>(value), buffer);
       if (bool(ec)) [[unlikely]] {
-         return ec.ec;
+         return ec;
       }
-      return buffer_to_file(buffer, file_name);
+      if (auto file_ec = buffer_to_file(buffer, file_name); bool(file_ec)) {
+         return {0, file_ec};
+      }
+      return {};
    }
 }
