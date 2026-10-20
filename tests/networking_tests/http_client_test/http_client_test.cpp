@@ -208,6 +208,16 @@ class working_test_server
          res.status(200).content_type("text/plain").body(response_body);
       });
 
+      server_.del("/items/:id", [](const request& req, response& res) {
+         std::string response_body = "DELETE:";
+         response_body.append(req.params.at("id"));
+         if (auto it = req.headers.find("x-test-header"); it != req.headers.end()) {
+            response_body.append(":");
+            response_body.append(it->value);
+         }
+         res.status(200).content_type("text/plain").body(response_body);
+      });
+
       server_.get("/slow", [](const request&, response& res) {
          std::this_thread::sleep_for(std::chrono::milliseconds(50));
          res.status(200).body("Slow response");
@@ -776,6 +786,42 @@ suite working_http_tests = [] {
       std::this_thread::sleep_for(std::chrono::milliseconds(50));
    };
 
+   // RFC 9110 15.5.6: a known path requested with a method it has no route for answers
+   // 405 with an Allow header listing the methods it does have; an unknown path stays 404.
+   "wrong_method_returns_405_with_allow"_test = [] {
+      working_test_server server;
+      expect(server.start()) << "Server should start\n";
+
+      simple_test_client client;
+
+      auto expect_405 = [](const auto& result, std::string_view expected_allow) {
+         expect(result.has_value()) << "Request should yield a response\n";
+         if (result.has_value()) {
+            expect(result->status_code == 405) << "Expected 405, got " << result->status_code << "\n";
+            auto allow_it = result->response_headers.find("allow");
+            expect(allow_it != result->response_headers.end()) << "Allow header should be present\n";
+            if (allow_it != result->response_headers.end()) {
+               expect(allow_it->value == expected_allow) << "Allow was: " << allow_it->value << "\n";
+            }
+         }
+      };
+
+      expect_405(client.post(server.base_url() + "/hello", "body"), "GET, OPTIONS");
+      expect_405(client.get(server.base_url() + "/update?x=1"), "PUT, OPTIONS");
+      expect_405(client.post(server.base_url() + "/files/a/b.txt", "body"), "GET, OPTIONS");
+
+      auto missing = client.get(server.base_url() + "/no-such-path");
+      expect(missing.has_value()) << "Request should yield a response\n";
+      if (missing.has_value()) {
+         expect(missing->status_code == 404) << "Unknown path should stay 404\n";
+         expect(missing->response_headers.find("allow") == missing->response_headers.end())
+            << "404 should not carry an Allow header\n";
+      }
+
+      server.stop();
+      std::this_thread::sleep_for(std::chrono::milliseconds(50));
+   };
+
    "cors_full_config_combination"_test = [] {
       // Non-wildcard origin list + credentials + custom max_age + restricted methods.
       // Existing tests cover these settings individually; this one exercises them together
@@ -1026,6 +1072,47 @@ suite glz_http_client_tests = [] {
          expect(result->response_body == "PATCH:payload:header-value")
             << "Response body should echo payload and header";
       }
+
+      server.stop();
+   };
+
+   "synchronous_delete_request"_test = [] {
+      working_test_server server;
+      expect(server.start());
+
+      glz::http_client client;
+
+      glz::http_headers headers{{"x-test-header", "header-value"}};
+      auto result = client.del(server.base_url() + "/items/7", headers);
+
+      expect(result.has_value()) << "DELETE request should succeed";
+      if (result.has_value()) {
+         expect(result->status_code == 200) << "DELETE status should be 200";
+         expect(result->response_body == "DELETE:7:header-value") << "Response body should echo id and header";
+      }
+
+      server.stop();
+   };
+
+   "synchronous_options_request"_test = [] {
+      working_test_server server;
+      expect(server.start());
+
+      glz::http_client client;
+
+      auto result = client.options(server.base_url() + "/items/7",
+                                   {{"Origin", "http://app.local"}, {"Access-Control-Request-Method", "DELETE"}});
+
+      expect(result.has_value()) << "OPTIONS request should succeed";
+      if (result.has_value()) {
+         expect(result->status_code == 204) << "Preflight status should be 204";
+         const auto allow = result->response_headers.first_value("allow");
+         expect(allow.has_value() && *allow == "DELETE, OPTIONS") << "Allow should list DELETE and OPTIONS";
+      }
+
+      // The bodyless 204 must leave the pooled connection clean for the next request.
+      auto follow_up = client.del(server.base_url() + "/items/8");
+      expect(follow_up.has_value() && follow_up->response_body == "DELETE:8") << "Follow-up DELETE should succeed";
 
       server.stop();
    };

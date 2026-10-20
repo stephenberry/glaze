@@ -1,6 +1,6 @@
 # URL Utilities
 
-Glaze provides URL encoding/decoding utilities for parsing query strings and form data. These utilities follow the [WHATWG URL Standard](https://url.spec.whatwg.org/) for `application/x-www-form-urlencoded` parsing.
+Glaze provides URL encoding/decoding utilities for parsing query strings, form data, and URL path segments. These utilities follow the [WHATWG URL Standard](https://url.spec.whatwg.org/) for `application/x-www-form-urlencoded` parsing.
 
 ## Header
 
@@ -23,6 +23,16 @@ std::string path = glz::url_decode("path%2Fto%2Ffile");  // "path/to/file"
 std::string query = glz::url_decode("search+term");  // "search term"
 ```
 
+### Path Segments
+
+`+` means a space only in query strings and form bodies. In a URL path it is a literal plus (RFC 3986), so decode path segments with `url_decode_path`, which handles `%XX` escapes and leaves `+` alone. The HTTP router uses it for `:param` and `*wildcard` captures.
+
+```cpp
+std::string segment = glz::url_decode_path("a+b%20c");  // "a+b c"
+```
+
+`url_encode` writes a space as `+`, so when building a path segment, write spaces as `%20` instead.
+
 ### Supported Encodings
 
 | Encoded | Decoded |
@@ -33,7 +43,7 @@ std::string query = glz::url_decode("search+term");  // "search term"
 | `%26` | `&` |
 | `%3F` | `?` |
 | `%23` | `#` |
-| `+` | space |
+| `+` | space (`url_decode` only; `url_decode_path` keeps it) |
 
 ### Buffer Reuse (Zero-Allocation)
 

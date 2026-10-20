@@ -2985,124 +2985,108 @@ namespace glz
          }
 
          if (!handle) {
-            if (conn->request_.method == http_method::OPTIONS) {
-               std::vector<http_method> allowed_methods;
-               std::unordered_map<std::string, std::string> preflight_params;
+            auto allowed_methods = root_router.allowed_methods(request.path);
+            if (allowed_methods.empty()) {
+               // No matching route found
+               send_error_response_with_conn(conn, 404, "Not Found");
+               return;
+            }
+            // The server answers OPTIONS itself for any routed target
+            allowed_methods.push_back(http_method::OPTIONS);
 
-               auto capture_first_params = [&](std::unordered_map<std::string, std::string>&& candidate_params) {
-                  if (preflight_params.empty()) {
-                     preflight_params = std::move(candidate_params);
+            // RFC 9110 15.5.6: a target that has routes for other methods answers 405 with
+            // an Allow header, so clients can tell a wrong method from a wrong URL.
+            if (conn->request_.method != http_method::OPTIONS) {
+               response.clear();
+               response.status(405)
+                  .header("Allow", format_allow_header(allowed_methods))
+                  .content_type("text/plain")
+                  .body("Method Not Allowed");
+               send_response_with_conn(conn, response);
+               return;
+            }
+
+            // Preflight: give middleware the captures of the first route the target matches
+            const http_method first_method = allowed_methods.front();
+            if (auto [first_handle, first_params] = root_router.match(first_method, request.path); first_handle) {
+               request.params = std::move(first_params);
+            }
+            else {
+               request.params = std::move(root_router.match_streaming(first_method, request.path).second);
+            }
+
+            bool has_request_method_header = false;
+            bool requested_method_known = false;
+            http_method requested_method{};
+
+            if (auto request_method_it = request.headers.find("access-control-request-method");
+                request_method_it != request.headers.end()) {
+               has_request_method_header = true;
+               std::string method_token{request_method_it->value};
+               auto trim_pos = method_token.find_last_not_of(" \t\r\n");
+               if (trim_pos != std::string::npos) {
+                  method_token.erase(trim_pos + 1);
+               }
+               else {
+                  method_token.clear();
+               }
+
+               if (!method_token.empty()) {
+                  std::transform(method_token.begin(), method_token.end(), method_token.begin(),
+                                 [](unsigned char c) { return static_cast<char>(std::toupper(c)); });
+
+                  if (auto parsed = from_string(method_token)) {
+                     requested_method = *parsed;
+                     requested_method_known = true;
                   }
-               };
-
-               auto try_method = [&](http_method m) {
-                  if (m == http_method::OPTIONS) return;
-                  auto [candidate_handle, candidate_params] = root_router.match(m, conn->request_.target);
-                  if (candidate_handle) {
-                     allowed_methods.push_back(m);
-                     capture_first_params(std::move(candidate_params));
-                  }
-               };
-
-               try_method(http_method::GET);
-               try_method(http_method::POST);
-               try_method(http_method::PUT);
-               try_method(http_method::DELETE);
-               try_method(http_method::PATCH);
-               try_method(http_method::HEAD);
-
-               if (!allowed_methods.empty()) {
-                  request.params = std::move(preflight_params);
-
-                  bool has_request_method_header = false;
-                  bool requested_method_known = false;
-                  http_method requested_method{};
-
-                  if (auto request_method_it = request.headers.find("access-control-request-method");
-                      request_method_it != request.headers.end()) {
-                     has_request_method_header = true;
-                     std::string method_token{request_method_it->value};
-                     auto trim_pos = method_token.find_last_not_of(" \t\r\n");
-                     if (trim_pos != std::string::npos) {
-                        method_token.erase(trim_pos + 1);
-                     }
-                     else {
-                        method_token.clear();
-                     }
-
-                     if (!method_token.empty()) {
-                        std::transform(method_token.begin(), method_token.end(), method_token.begin(),
-                                       [](unsigned char c) { return static_cast<char>(std::toupper(c)); });
-
-                        if (auto parsed = from_string(method_token)) {
-                           requested_method = *parsed;
-                           requested_method_known = true;
-                        }
-                     }
-                  }
-
-                  if (std::none_of(allowed_methods.begin(), allowed_methods.end(),
-                                   [](http_method m) { return m == http_method::OPTIONS; })) {
-                     allowed_methods.push_back(http_method::OPTIONS);
-                  }
-
-                  std::string allow_header;
-                  allow_header.reserve(allowed_methods.size() * 8);
-                  for (size_t i = 0; i < allowed_methods.size(); ++i) {
-                     if (i > 0) allow_header.append(", ");
-                     allow_header.append(std::string{to_string(allowed_methods[i])});
-                  }
-                  response.header("Allow", allow_header);
-
-                  bool requested_method_allowed = true;
-                  if (has_request_method_header) {
-                     requested_method_allowed =
-                        requested_method_known && std::find(allowed_methods.begin(), allowed_methods.end(),
-                                                            requested_method) != allowed_methods.end();
-                  }
-
-                  try {
-                     for (const auto& middleware : root_router.middlewares) {
-                        middleware(request, response);
-                     }
-                  }
-                  catch (const std::exception&) {
-                     error_handler(std::make_error_code(std::errc::invalid_argument), std::source_location::current());
-                     send_error_response_with_close(conn, 500, "Internal Server Error");
-                     return;
-                  }
-
-                  if (!requested_method_allowed) {
-                     response.status(405);
-                     for (const auto& hook : response_hooks_) {
-                        try {
-                           hook(request, response);
-                        }
-                        catch (const std::exception&) {
-                           error_handler(std::make_error_code(std::errc::invalid_argument),
-                                         std::source_location::current());
-                        }
-                     }
-                     send_response_with_conn(conn, response);
-                     return;
-                  }
-
-                  for (const auto& hook : response_hooks_) {
-                     try {
-                        hook(request, response);
-                     }
-                     catch (const std::exception&) {
-                        error_handler(std::make_error_code(std::errc::invalid_argument),
-                                      std::source_location::current());
-                     }
-                  }
-                  send_response_with_conn(conn, response);
-                  return;
                }
             }
 
-            // No matching route found
-            send_error_response_with_conn(conn, 404, "Not Found");
+            response.header("Allow", format_allow_header(allowed_methods));
+
+            bool requested_method_allowed = true;
+            if (has_request_method_header) {
+               requested_method_allowed =
+                  requested_method_known && std::find(allowed_methods.begin(), allowed_methods.end(),
+                                                      requested_method) != allowed_methods.end();
+            }
+
+            try {
+               for (const auto& middleware : root_router.middlewares) {
+                  middleware(request, response);
+               }
+            }
+            catch (const std::exception&) {
+               error_handler(std::make_error_code(std::errc::invalid_argument), std::source_location::current());
+               send_error_response_with_close(conn, 500, "Internal Server Error");
+               return;
+            }
+
+            if (!requested_method_allowed) {
+               response.status(405);
+               for (const auto& hook : response_hooks_) {
+                  try {
+                     hook(request, response);
+                  }
+                  catch (const std::exception&) {
+                     error_handler(std::make_error_code(std::errc::invalid_argument),
+                                   std::source_location::current());
+                  }
+               }
+               send_response_with_conn(conn, response);
+               return;
+            }
+
+            for (const auto& hook : response_hooks_) {
+               try {
+                  hook(request, response);
+               }
+               catch (const std::exception&) {
+                  error_handler(std::make_error_code(std::errc::invalid_argument),
+                                std::source_location::current());
+               }
+            }
+            send_response_with_conn(conn, response);
             return;
          }
 
@@ -3135,6 +3119,18 @@ namespace glz
             error_handler(std::make_error_code(std::errc::invalid_argument), std::source_location::current());
             send_error_response_with_close(conn, 500, "Internal Server Error");
          }
+      }
+
+      // Comma-separated method list for an Allow header
+      static std::string format_allow_header(const std::vector<http_method>& methods)
+      {
+         std::string allow_header;
+         allow_header.reserve(methods.size() * 8);
+         for (size_t i = 0; i < methods.size(); ++i) {
+            if (i > 0) allow_header.append(", ");
+            allow_header.append(to_string(methods[i]));
+         }
+         return allow_header;
       }
 
       // Pre-cached status lines for common HTTP status codes

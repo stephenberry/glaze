@@ -1489,6 +1489,28 @@ namespace glz
          return perform_sync_request("PATCH", *url_result, body, headers);
       }
 
+      // Synchronous DELETE request - truly synchronous, no promises/futures
+      std::expected<response, std::error_code> del(std::string_view url, const glz::http_headers& headers = {})
+      {
+         auto url_result = parse_url(url);
+         if (!url_result) {
+            return std::unexpected(url_result.error());
+         }
+
+         return perform_sync_request("DELETE", *url_result, "", headers);
+      }
+
+      // Synchronous OPTIONS request - truly synchronous, no promises/futures
+      std::expected<response, std::error_code> options(std::string_view url, const glz::http_headers& headers = {})
+      {
+         auto url_result = parse_url(url);
+         if (!url_result) {
+            return std::unexpected(url_result.error());
+         }
+
+         return perform_sync_request("OPTIONS", *url_result, "", headers);
+      }
+
       // Synchronous JSON POST request
       template <class T>
       std::expected<response, std::error_code> post_json(std::string_view url, const T& data,

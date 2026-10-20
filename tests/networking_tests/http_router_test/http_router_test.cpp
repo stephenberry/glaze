@@ -324,6 +324,29 @@ suite http_router_functionality_tests = [] {
 using fn_ptr_handler = void (*)(const glz::request&, glz::response&);
 using custom_std_function = std::function<void(const glz::request&, glz::response&)>;
 
+suite allowed_methods_tests = [] {
+   "lists_normal_and_streaming_methods"_test = [] {
+      glz::http_router router;
+      router.put("/items/:id", [](const glz::request&, glz::response&) {});
+      router.get("/items/:id", [](const glz::request&, glz::response&) {});
+      router.stream_post("/items/:id", [](glz::request&, glz::streaming_response&) {});
+
+      const auto methods = router.allowed_methods("/items/7?full=1");
+      expect(methods == std::vector{glz::http_method::GET, glz::http_method::POST, glz::http_method::PUT});
+   };
+
+   "empty_for_unknown_path_or_failed_constraint"_test = [] {
+      glz::http_router router;
+      glz::route_spec spec;
+      spec.constraints["id"] = {.validation = [](std::string_view v) { return !v.empty() && v[0] >= '0' && v[0] <= '9'; }};
+      router.get("/items/:id", [](const glz::request&, glz::response&) {}, spec);
+
+      expect(router.allowed_methods("/nothing").empty());
+      expect(router.allowed_methods("/items/abc").empty());
+      expect(router.allowed_methods("/items/1").size() == 1u);
+   };
+};
+
 suite templated_router_tests = [] {
    "is_async_enabled_default_router"_test = [] {
       // Default http_router should have async enabled
@@ -430,6 +453,25 @@ suite path_param_decoding_tests = [] {
       auto [handler, params] = router.match(glz::http_method::GET, "/files/my%20docs/file%20name.txt");
       expect(handler != nullptr);
       expect(params["path"] == "my docs/file name.txt");
+   };
+
+   // RFC 3986: a '+' in a path is a literal plus, unlike in a query string.
+   "param_preserves_literal_plus"_test = [] {
+      glz::http_router router;
+      router.get("/users/:name", [](const glz::request&, glz::response&) {});
+
+      auto [handler, params] = router.match(glz::http_method::GET, "/users/a+b%2Bc%20d?q=x+y");
+      expect(handler != nullptr);
+      expect(params["name"] == "a+b+c d");
+   };
+
+   "wildcard_preserves_literal_plus"_test = [] {
+      glz::http_router router;
+      router.get("/files/*path", [](const glz::request&, glz::response&) {});
+
+      auto [handler, params] = router.match(glz::http_method::GET, "/files/a+b/report+1.txt");
+      expect(handler != nullptr);
+      expect(params["path"] == "a+b/report+1.txt");
    };
 };
 

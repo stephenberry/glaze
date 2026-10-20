@@ -174,6 +174,26 @@ std::expected<response, std::error_code> patch(
 );
 ```
 
+### DELETE Request
+
+```cpp
+std::expected<response, std::error_code> del(
+    std::string_view url,
+    const glz::http_headers& headers = {}
+);
+```
+
+### OPTIONS Request
+
+```cpp
+std::expected<response, std::error_code> options(
+    std::string_view url,
+    const glz::http_headers& headers = {}
+);
+```
+
+Pass `Origin` and `Access-Control-Request-Method` in `headers` to send a CORS preflight.
+
 ### JSON POST Request
 ```cpp
 template<class T>

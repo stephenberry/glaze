@@ -17,6 +17,16 @@ suite url_decode_tests = [] {
       expect(glz::url_decode("hello+world") == "hello world");
    };
 
+   "path_keeps_plus"_test = [] {
+      expect(glz::url_decode_path("a+b") == "a+b");
+      expect(glz::url_decode_path("a%2Bb%20c") == "a+b c");
+      expect(glz::url_decode_path("100%") == "100%");
+
+      std::string buffer;
+      glz::url_decode_path("x+y", buffer);
+      expect(buffer == "x+y");
+   };
+
    "percent_encoding"_test = [] {
       expect(glz::url_decode("%2F") == "/");
       expect(glz::url_decode("%2f") == "/"); // lowercase

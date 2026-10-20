@@ -196,6 +196,12 @@ server.get("/files/*path", [](const glz::request& req, glz::response& res) {
 });
 ```
 
+Captured parameters are percent-decoded. A `+` stays a literal plus, since `+` only means a space in query strings and form bodies.
+
+### Unmatched Requests
+
+A request whose path has no route answers `404 Not Found`. A request whose path has routes, but none for its method, answers `405 Method Not Allowed` with an `Allow` header listing the routed methods (normal and streaming) plus `OPTIONS`, which the server answers itself for any routed path. See [CORS preflight handling](advanced-networking.md#automatic-preflight-handling) for `OPTIONS`.
+
 ### Query Parameters
 
 Query parameters are automatically parsed and available in `req.query`:
@@ -258,7 +264,7 @@ glz::param_constraint email_constraint{
 
 Constraints are passed through the route `spec` (`.constraints = ...`).
 
-If a constraint returns `false`, the route is treated as a non-match. In `glz::http_server`, this means the default response is `404 Not Found`. If you want a custom error body/status (for example `400` with validation details), perform the validation in your handler and set the response explicitly.
+If a constraint returns `false`, the route is treated as a non-match. In `glz::http_server`, this means the default response is `404 Not Found` (or `405` when a route for another method matches). If you want a custom error body/status (for example `400` with validation details), perform the validation in your handler and set the response explicitly.
 
 ## Response Handling
 

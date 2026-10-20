@@ -431,7 +431,7 @@ namespace glz
        * @brief Detect a decoded capture that carries a NUL byte.
        *
        * The request target cannot hold a raw NUL, so one only reaches a capture
-       * as "%00" through url_decode. A capture joined onto a base directory
+       * as "%00" through url_decode_path. A capture joined onto a base directory
        * reaches open() as a C string, which ends at the first NUL, so
        * "report.txt%00.pdf" opens "report.txt" while every check a handler runs
        * on the std::string first, such as an extension allowlist, still sees
@@ -631,7 +631,7 @@ namespace glz
          }
 
          if (node->parameter_child) {
-            std::string decoded = url_decode(segment);
+            std::string decoded = url_decode_path(segment);
 
             // A ":param" captures a single segment; refuse a decoded ".."
             // component, a leading separator, a drive prefix, or a NUL byte so
@@ -653,7 +653,7 @@ namespace glz
             std::string full_capture;
             for (size_t i = index; i < segments.size(); i++) {
                if (i > index) full_capture += "/";
-               full_capture += url_decode(segments[i]);
+               full_capture += url_decode_path(segments[i]);
             }
 
             // The capture is joined from decoded segments, so a "%2e%2e%2f" in
@@ -1163,6 +1163,28 @@ namespace glz
          std::string_view target) const
       {
          return websocket_routes.match(http_method::GET, target);
+      }
+
+      /**
+       * @brief The methods, other than OPTIONS, that have a normal or streaming route for a target.
+       *
+       * Lets a server answer a request whose method has no route with 405 Method Not
+       * Allowed and an Allow header (RFC 9110 15.5.6) rather than 404. Methods are
+       * listed in http_method order.
+       *
+       * @param target The request target (may include a query string)
+       */
+      std::vector<http_method> allowed_methods(std::string_view target) const
+      {
+         using enum http_method;
+         std::vector<http_method> methods;
+         for (const http_method m : {GET, POST, PUT, DELETE, PATCH, HEAD}) {
+            if (normal_routes.match(m, target).first ||
+                (!streaming_routes.routes.empty() && streaming_routes.match(m, target).first)) {
+               methods.push_back(m);
+            }
+         }
+         return methods;
       }
 
       /**

@@ -25,6 +25,35 @@ namespace glz
       return -1;
    }
 
+   namespace detail
+   {
+      template <bool PlusIsSpace>
+      inline void url_decode_impl(std::string_view input, std::string& output)
+      {
+         output.clear();
+         output.reserve(input.size());
+
+         for (size_t i = 0; i < input.size(); ++i) {
+            if (input[i] == '%' && i + 2 < input.size()) {
+               const int high = hex_char_to_int(input[i + 1]);
+               const int low = hex_char_to_int(input[i + 2]);
+               if (high >= 0 && low >= 0) {
+                  output += static_cast<char>((high << 4) | low);
+                  i += 2;
+                  continue;
+               }
+            }
+            else if constexpr (PlusIsSpace) {
+               if (input[i] == '+') {
+                  output += ' ';
+                  continue;
+               }
+            }
+            output += input[i];
+         }
+      }
+   }
+
    /**
     * @brief Decode a URL-encoded (percent-encoded) string into a provided buffer
     *
@@ -32,31 +61,12 @@ namespace glz
     * - %XX hex escapes (e.g., %20 -> space, %2F -> /)
     * - + as space (per application/x-www-form-urlencoded)
     *
+    * Use for query strings and form bodies. For path segments, use url_decode_path.
+    *
     * @param input The URL-encoded string
     * @param output The buffer to write the decoded string to (cleared before writing)
     */
-   inline void url_decode(std::string_view input, std::string& output)
-   {
-      output.clear();
-      output.reserve(input.size());
-
-      for (size_t i = 0; i < input.size(); ++i) {
-         if (input[i] == '%' && i + 2 < input.size()) {
-            const int high = hex_char_to_int(input[i + 1]);
-            const int low = hex_char_to_int(input[i + 2]);
-            if (high >= 0 && low >= 0) {
-               output += static_cast<char>((high << 4) | low);
-               i += 2;
-               continue;
-            }
-         }
-         else if (input[i] == '+') {
-            output += ' ';
-            continue;
-         }
-         output += input[i];
-      }
-   }
+   inline void url_decode(std::string_view input, std::string& output) { detail::url_decode_impl<true>(input, output); }
 
    /**
     * @brief Decode a URL-encoded (percent-encoded) string
@@ -70,6 +80,35 @@ namespace glz
    {
       std::string result;
       url_decode(input, result);
+      return result;
+   }
+
+   /**
+    * @brief Decode a percent-encoded URL path segment into a provided buffer
+    *
+    * Handles %XX hex escapes only. Per RFC 3986 a '+' in a path is a literal plus,
+    * not a space, so it is left as is.
+    *
+    * @param input The percent-encoded path segment
+    * @param output The buffer to write the decoded string to (cleared before writing)
+    */
+   inline void url_decode_path(std::string_view input, std::string& output)
+   {
+      detail::url_decode_impl<false>(input, output);
+   }
+
+   /**
+    * @brief Decode a percent-encoded URL path segment
+    *
+    * Convenience overload that allocates and returns a new string.
+    *
+    * @param input The percent-encoded path segment
+    * @return The decoded string
+    */
+   [[nodiscard]] inline std::string url_decode_path(std::string_view input)
+   {
+      std::string result;
+      url_decode_path(input, result);
       return result;
    }
 
