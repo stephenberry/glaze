@@ -3958,6 +3958,20 @@ suite generic_f64_toml_tests = [] {
    };
 };
 
+// glz::cast reads its member through parse<TOML>, so the member is in value position below the root
+struct generic_cast_member
+{
+   glz::generic g{};
+   int b{};
+};
+
+template <>
+struct glz::meta<generic_cast_member>
+{
+   using T = generic_cast_member;
+   static constexpr auto value = object("g", glz::cast<&T::g, glz::generic>, "b", &T::b);
+};
+
 suite generic_toml_document_root_tests = [] {
    // A document whose first key is quoted or starts like a value must not read as that one scalar
    "generic_read_toml_quoted_first_key"_test = [] {
@@ -4026,6 +4040,19 @@ suite generic_toml_document_root_tests = [] {
 
       std::map<std::string, glz::generic> m;
       expect(glz::read_toml(m, "a = x = 1\nb = 2") == glz::error_code::syntax_error);
+
+      // A wrapper that reads its value through parse<TOML> is still in value position
+      generic_cast_member cast_identifier{};
+      expect(glz::read_toml(cast_identifier, "g = x = 1\nb = 2") == glz::error_code::syntax_error);
+      generic_cast_member cast_quoted{};
+      expect(glz::read_toml(cast_quoted, "g = \"k\" = 1\nb = 2") == glz::error_code::syntax_error);
+
+      generic_cast_member cast_value{};
+      const std::string toml = "g = 5\nb = 2";
+      const auto ec = glz::read_toml(cast_value, toml);
+      expect(not ec) << glz::format_error(ec, toml);
+      expect(cast_value.g.get<double>() == 5.0);
+      expect(cast_value.b == 2);
    };
 
    "variant_read_toml_quoted_first_key"_test = [] {

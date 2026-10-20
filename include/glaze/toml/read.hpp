@@ -3505,7 +3505,9 @@ namespace glz
          if constexpr (!std::is_const_v<T> && has_variant_data_member<V> && glaze_value_t<V>) {
             return read_toml_document_root<Opts>(value.data, ctx, it, end);
          }
-         else if constexpr (!std::is_const_v<T> && is_variant<V>) {
+         else if constexpr (!toml::check_is_internal(Opts) && !std::is_const_v<T> && is_variant<V>) {
+            // Wrappers such as glz::cast also enter through parse<TOML> for a nested value, which the
+            // internal flag marks; a key there is in value position and must stay a syntax error.
             constexpr auto map_idx = find_map_alternative_index<V>();
             if constexpr (map_idx != std::variant_npos) {
                auto start = it;
