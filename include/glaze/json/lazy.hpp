@@ -546,7 +546,7 @@ namespace glz
 
       // Factory method for lazy_json
       template <auto O, class Buffer>
-      friend expected<lazy_document<O>, error_ctx> lazy_json(Buffer&&);
+      friend expected<lazy_document<parse_opts_for<O, Buffer>()>, error_ctx> lazy_json(Buffer&&);
 
       // Helper to initialize root_view_ with correct doc_ pointer
       void init_root_view() noexcept { root_view_ = lazy_json_view<Opts>{this, root_data_}; }
@@ -1596,9 +1596,15 @@ namespace glz
     * @param buffer The JSON text buffer (must remain valid for document lifetime)
     * @return lazy_document on success, error_ctx on failure
     */
-   template <auto Opts = opts{}, class Buffer>
-   [[nodiscard]] inline expected<lazy_document<Opts>, error_ctx> lazy_json(Buffer&& buffer)
+   template <auto Options = opts{}, class Buffer>
+   [[nodiscard]] inline expected<lazy_document<parse_opts_for<Options, Buffer>()>, error_ctx> lazy_json(Buffer&& buffer)
    {
+      // The buffer decides whether the terminator `null_terminated` asserts can be relied on, the
+      // same way it does for glz::read (see parse_opts_for): a std::vector<char> keeps none, so the
+      // document and every view into it run with bounds over one rather than scanning for a
+      // sentinel past its end.
+      static constexpr auto Opts = parse_opts_for<Options, Buffer>();
+
       lazy_document<Opts> doc;
       doc.json_ = buffer.data();
       doc.len_ = buffer.size();

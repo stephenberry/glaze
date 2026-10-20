@@ -154,7 +154,7 @@ Selects the serialization format. Built-in formats include:
 #### `null_terminated`
 When `true` (default), Glaze relies on the byte just past the end of the input, `data()[size()]`, being `'\0'`, and drops end checks it would otherwise make. A terminator further along does not count: a `std::string_view` over part of a larger string is read past the end of the view into the bytes that follow, and can return wrong values without an error. Set it to `false` for any buffer that does not end in a terminator, at some cost in speed.
 
-`glz::read` derives this for you from the buffer type: a resizable buffer that does not keep a terminator of its own (a `std::vector<char>`, or a container shaped like `QByteArray`) is read with bounds regardless of what you asked for. A non-resizable buffer such as a `std::string_view` is taken at your word, so a view over memory with no terminator needs `null_terminated = false`. See also `is_padded`, a separate promise about readable slack past the end.
+`glz::read`, the `get_view_json` JSON pointer seeks and `glz::lazy_json` derive this for you from the buffer type: a resizable buffer that does not keep a terminator of its own (a `std::vector<char>`, or a container shaped like `QByteArray`) is read with bounds regardless of what you asked for. A non-resizable buffer such as a `std::string_view` is taken at your word, so a view over memory with no terminator needs `null_terminated = false`. See also `is_padded`, a separate promise about readable slack past the end.
 
 #### `comments`
 Enable JSONC-style comment parsing (`//` and `/* */`).
