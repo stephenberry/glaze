@@ -866,7 +866,7 @@ This is useful for:
 
 # Input Buffer (Null) Termination
 
-A `std::string` is recommended for input buffers, because it carries the null terminator the default `null_terminated` option expects. Glaze reads the buffer you give it and does not modify it, so a `const std::string&` or a `std::string_view` over one is equally fast. A buffer that keeps no terminator of its own -- a `std::vector<char>`, or a container shaped like `QByteArray` -- is read with bounds instead, at a small cost.
+A `std::string` is recommended for input buffers, because it carries the null terminator the default `null_terminated` option expects. Glaze reads the buffer you give it and does not modify it, so a `const std::string&` or a `std::string_view` covering a whole one is equally fast. A view of only part of a string is not terminated where it ends, so it needs `null_terminated = false`. A buffer that keeps no terminator of its own -- a `std::vector<char>`, or a container shaped like `QByteArray` -- is read with bounds instead, at a small cost.
 
 ## JSON
 
