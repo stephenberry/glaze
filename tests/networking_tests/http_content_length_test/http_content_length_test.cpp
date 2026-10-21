@@ -14,8 +14,9 @@
 //      end, terminal chunk and trailer section included.
 //   4. Interim (1xx) responses ahead of the final one are read and discarded on every
 //      path (RFC 9110 15.2), so the final response is the one returned and the pooled
-//      connection is left at the start of the next response. 101 Switching Protocols is
-//      final, and its connection is never pooled.
+//      connection is left at the start of the next response, up to a cap past which the
+//      reply is refused. 101 Switching Protocols is final, and its connection is never
+//      pooled, nor is an HTTP/1.0 one that did not opt into keep-alive.
 
 #include <atomic>
 #include <chrono>
@@ -808,7 +809,113 @@ static std::vector<std::vector<std::string>> switching_protocols_script()
            {"HTTP/1.1 200 OK\r\nContent-Length: 5\r\n\r\nafter"}};
 }
 
+// More interim responses than the client accepts ahead of a final one.
+static std::vector<std::vector<std::string>> endless_interim_script()
+{
+   std::string interim;
+   for (size_t i = 0; i <= glz::detail::max_interim_responses; ++i) {
+      interim += "HTTP/1.1 100 Continue\r\n\r\n";
+   }
+   return {{interim + "HTTP/1.1 200 OK\r\nContent-Length: 5\r\n\r\nfinal"}};
+}
+
+// RFC 9112 9.3: an HTTP/1.0 response closes its connection unless it opts into keep-alive,
+// so the follow-up request must open a new one.
+static std::vector<std::vector<std::string>> http10_script()
+{
+   return {{"HTTP/1.0 200 OK\r\nContent-Length: 5\r\n\r\nfirst"},
+           {"HTTP/1.1 200 OK\r\nContent-Length: 6\r\n\r\nsecond"}};
+}
+
 suite interim_responses = [] {
+   "sync_refuses_endless_interim_responses"_test = [] {
+      uint16_t port{};
+      auto accept_count = std::make_shared<std::atomic<int>>(0);
+      auto server = start_script_server(port, endless_interim_script(), accept_count);
+
+      glz::http_client client;
+      auto result = client.get("http://127.0.0.1:" + std::to_string(port) + "/");
+      server.join();
+
+      expect(!result.has_value() && result.error() == std::make_error_code(std::errc::protocol_error))
+         << "too many interim responses should fail the request";
+   };
+
+   "async_refuses_endless_interim_responses"_test = [] {
+      uint16_t port{};
+      auto accept_count = std::make_shared<std::atomic<int>>(0);
+      auto server = start_script_server(port, endless_interim_script(), accept_count);
+
+      glz::http_client client;
+      auto future = client.get_async("http://127.0.0.1:" + std::to_string(port) + "/");
+      auto result = await_result(future);
+      server.join();
+
+      expect(!result.has_value() && result.error() == std::make_error_code(std::errc::protocol_error))
+         << "too many interim responses should fail the request";
+   };
+
+   "stream_refuses_endless_interim_responses"_test = [] {
+      uint16_t port{};
+      auto accept_count = std::make_shared<std::atomic<int>>(0);
+      auto server = start_script_server(port, endless_interim_script(), accept_count);
+
+      glz::http_client client;
+      std::error_code stream_error{};
+      bool connected = false;
+      std::promise<void> stream_done;
+      auto stream_finished = stream_done.get_future();
+      auto conn = client.stream_request_v2({.url = "http://127.0.0.1:" + std::to_string(port) + "/",
+                                            .on_data = [](std::string_view) {},
+                                            .on_error = [&](std::error_code ec) { stream_error = ec; },
+                                            .on_connect = [&](const glz::response&) { connected = true; },
+                                            .on_disconnect = [&] { stream_done.set_value(); }});
+      expect(conn != nullptr) << "stream request should start";
+      expect(stream_finished.wait_for(std::chrono::seconds(10)) == std::future_status::ready)
+         << "stream should end";
+      server.join();
+
+      expect(!connected) << "no final response should be reported";
+      expect(stream_error == std::make_error_code(std::errc::protocol_error))
+         << "too many interim responses should fail the stream, got: " << stream_error.message();
+   };
+
+   "sync_http10_response_not_pooled"_test = [] {
+      uint16_t port{};
+      auto accept_count = std::make_shared<std::atomic<int>>(0);
+      auto server = start_script_server(port, http10_script(), accept_count);
+      const std::string base = "http://127.0.0.1:" + std::to_string(port) + "/";
+
+      glz::http_client client;
+      auto first = client.get(base);
+      auto second = client.get(base);
+      server.join();
+
+      expect(first.has_value() && first->response_body == "first");
+      expect(second.has_value() && second->response_body == "second") << "follow-up request should succeed";
+      expect(accept_count->load() == 2) << "an HTTP/1.0 connection without keep-alive must not be reused, got "
+                                        << accept_count->load() << " connections";
+   };
+
+   "async_http10_response_not_pooled"_test = [] {
+      uint16_t port{};
+      auto accept_count = std::make_shared<std::atomic<int>>(0);
+      auto server = start_script_server(port, http10_script(), accept_count);
+      const std::string base = "http://127.0.0.1:" + std::to_string(port) + "/";
+
+      glz::http_client client;
+      auto first_future = client.get_async(base);
+      auto first = await_result(first_future);
+      auto second_future = client.get_async(base);
+      auto second = await_result(second_future);
+      server.join();
+
+      expect(first.has_value() && first->response_body == "first");
+      expect(second.has_value() && second->response_body == "second") << "follow-up request should succeed";
+      expect(accept_count->load() == 2) << "an HTTP/1.0 connection without keep-alive must not be reused, got "
+                                        << accept_count->load() << " connections";
+   };
+
    "sync_skips_interim_responses"_test = [] {
       uint16_t port{};
       auto accept_count = std::make_shared<std::atomic<int>>(0);

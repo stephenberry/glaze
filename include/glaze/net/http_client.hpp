@@ -317,6 +317,43 @@ namespace glz
          return request_str;
       }
 
+      // RFC 9110 6.4.1: a reply to HEAD, and any 1xx, 204 or 304, never carries a body,
+      // whatever it frames. A Content-Length on a HEAD reply or a 304 states the length the
+      // equivalent GET would have had, so framing the body by it would wait for bytes that
+      // are never coming.
+      [[nodiscard]] constexpr bool response_carries_no_body(bool head_request, int status_code) noexcept
+      {
+         return head_request || status_code / 100 == 1 || status_code == 204 || status_code == 304;
+      }
+
+      // RFC 9110 15.2: a client must accept any number of interim (1xx) responses ahead of
+      // the final one, even ones it did not ask for such as 103 Early Hints, and discard
+      // them. 101 Switching Protocols is the exception: it is final, and what follows it on
+      // the connection is no longer HTTP, so the connection is never reused.
+      [[nodiscard]] constexpr bool is_interim_status(int status_code) noexcept
+      {
+         return status_code / 100 == 1 && status_code != 101;
+      }
+
+      // A server that never stops sending interim responses would hold the request open
+      // forever, so every read path refuses the reply as a protocol error after this many.
+      // Real servers send one or two (100 Continue, 103 Early Hints).
+      inline constexpr size_t max_interim_responses = 16;
+
+      // Whether the server ends the connection after this response, so the socket must not
+      // go back to the pool. RFC 9112 9.3: before HTTP/1.1 the connection closed after each
+      // response unless the reply opted back in, so the absence of a signal means opposite
+      // things either side of that line. After 101 the connection no longer speaks HTTP.
+      [[nodiscard]] inline bool response_ends_connection(const HttpStatusLine& status,
+                                                         const glz::http_headers& headers)
+      {
+         if (status.status_code == 101) {
+            return true;
+         }
+         return status.version == "1.0" ? !headers.contains_token("connection", "keep-alive")
+                                        : headers.contains_token("connection", "close");
+      }
+
       // Outcome of reading the Content-Length of a response. `absent` and
       // `unframed` are distinct because they lead to different reads: no
       // Content-Length at all is a legitimate response whose body runs to the end
@@ -343,24 +380,6 @@ namespace glz
       // A value that is not a bare decimal is rejected for the same reason: it
       // resolves to no length at all, and defaulting it to zero would leave a real
       // body sitting in the socket to be read as the next response.
-      // RFC 9110 6.4.1: a reply to HEAD, and any 1xx, 204 or 304, never carries a body,
-      // whatever it frames. A Content-Length on a HEAD reply or a 304 states the length the
-      // equivalent GET would have had, so framing the body by it would wait for bytes that
-      // are never coming.
-      [[nodiscard]] constexpr bool response_carries_no_body(bool head_request, int status_code) noexcept
-      {
-         return head_request || status_code / 100 == 1 || status_code == 204 || status_code == 304;
-      }
-
-      // RFC 9110 15.2: a client must accept any number of interim (1xx) responses ahead of
-      // the final one, even ones it did not ask for such as 103 Early Hints, and discard
-      // them. 101 Switching Protocols is the exception: it is final, and what follows it on
-      // the connection is no longer HTTP, so the connection is never reused.
-      [[nodiscard]] constexpr bool is_interim_status(int status_code) noexcept
-      {
-         return status_code / 100 == 1 && status_code != 101;
-      }
-
       [[nodiscard]] inline parsed_content_length read_content_length(const glz::http_headers& headers)
       {
          // RFC 9112 6.3: Transfer-Encoding overrides Content-Length, so a chunked
@@ -812,6 +831,7 @@ namespace glz
    {
       std::atomic<bool> response_started{false};
       bool head_request = false; // A HEAD reply is framed as if it had a body, but carries none
+      size_t interim_responses = 0; // Interim (1xx) responses discarded ahead of the final one
    };
 
    // Synchronous variant of async_attempt_state's signal. Returned alongside the
@@ -1200,6 +1220,7 @@ namespace glz
       http_progress_handler on_progress{}; // Reports body bytes delivered; returning false cancels
       bool is_https{false}; // Track if this is an HTTPS connection
       bool head_request{false}; // A HEAD reply is framed as if it had a body, but carries none
+      size_t interim_responses{}; // Interim (1xx) responses discarded ahead of the final one
 
       // The body size the response framed itself with, fixed once the headers are parsed,
       // and how much of it has been delivered. Empty when nothing frames the body in
@@ -1640,6 +1661,36 @@ namespace glz
                    [promise = std::move(promise)](std::expected<response, std::error_code> result) mutable {
                       promise.set_value(std::move(result));
                    });
+
+         return future;
+      }
+
+      // Asynchronous HEAD request.
+      // The response carries the headers the equivalent GET would, with an empty body.
+      template <typename CompletionHandler>
+      void head_async(std::string_view url, const glz::http_headers& headers, CompletionHandler&& handler)
+      {
+         auto url_result = parse_url(url);
+         if (!url_result) {
+            asio::post(io_executor, [handler = std::forward<CompletionHandler>(handler),
+                                     error = url_result.error()] mutable { handler(std::unexpected(error)); });
+            return;
+         }
+
+         perform_request_async("HEAD", *url_result, "", headers, std::forward<CompletionHandler>(handler));
+      }
+
+      // Overload for head_async without completion handler (returns future)
+      std::future<std::expected<response, std::error_code>> head_async(std::string_view url,
+                                                                       const glz::http_headers& headers = {})
+      {
+         std::promise<std::expected<response, std::error_code>> promise;
+         auto future = promise.get_future();
+
+         head_async(url, headers,
+                    [promise = std::move(promise)](std::expected<response, std::error_code> result) mutable {
+                       promise.set_value(std::move(result));
+                    });
 
          return future;
       }
@@ -2112,6 +2163,11 @@ namespace glz
                      }
 
                      if (detail::is_interim_status(parsed_status->status_code)) {
+                        if (++connection->interim_responses > detail::max_interim_responses) {
+                           if (on_error) on_error(std::make_error_code(std::errc::protocol_error));
+                           if (on_disconnect) on_disconnect();
+                           return;
+                        }
                         // Discard the interim response and read the next head.
                         connection->buffer->consume(bytes_transferred);
                         read_stream_response(connection, std::move(on_data), std::move(on_error),
@@ -2151,16 +2207,8 @@ namespace glz
                      connection->is_connected = true;
                      connection->timer->cancel();
 
-                     // RFC 9112 9.3: before HTTP/1.1 the connection closed after each
-                     // response unless the reply opted back in, so the absence of a signal
-                     // means opposite things either side of that line.
-                     // After 101 the connection no longer speaks HTTP, so it is never reused.
-                     const bool keep_alive_is_default = parsed_status->version != "1.0";
                      connection->peer_will_close.store(
-                        parsed_status->status_code == 101 ||
-                           (keep_alive_is_default
-                               ? response_headers.response_headers.contains_token("connection", "close")
-                               : !response_headers.response_headers.contains_token("connection", "keep-alive")),
+                        detail::response_ends_connection(*parsed_status, response_headers.response_headers),
                         std::memory_order_relaxed);
 
                      if (on_connect) {
@@ -2573,6 +2621,7 @@ namespace glz
             std::string_view header_data;
             size_t line_end{};
             std::expected<HttpStatusLine, std::error_code> parsed_status;
+            size_t interim_responses = 0;
             while (true) {
                header_bytes = std::visit(
                   [&](auto& sock) { return asio::read_until(*sock, response_buffer, "\r\n\r\n", ec); }, socket_var);
@@ -2608,6 +2657,11 @@ namespace glz
 
                if (!detail::is_interim_status(parsed_status->status_code)) {
                   break;
+               }
+               if (++interim_responses > detail::max_interim_responses) {
+                  detail::close_socket(socket_var, connection_pool->graceful_ssl_shutdown());
+                  r.outcome = std::unexpected(std::make_error_code(std::errc::protocol_error));
+                  return r;
                }
                response_buffer.consume(header_bytes);
             }
@@ -2653,8 +2707,7 @@ namespace glz
                carries_no_body || content_length_field.state == detail::content_length_state::present;
             const bool is_chunked =
                !carries_no_body && response_headers.contains_token("Transfer-Encoding", "chunked");
-            bool connection_close =
-               parsed_status->status_code == 101 || response_headers.contains_token("Connection", "close");
+            bool connection_close = detail::response_ends_connection(*parsed_status, response_headers);
 
             // Consume header data, leaving only the over-read body part.
             response_buffer.consume(header_bytes);
@@ -3091,7 +3144,7 @@ namespace glz
                      // checks state->response_started before deciding to retry.
                      state->response_started.store(true);
                      // Pass the known header size to the parsing function
-                     parse_and_read_body(socket_var, buffer, bytes_transferred, url, use_https, state->head_request,
+                     parse_and_read_body(socket_var, buffer, bytes_transferred, url, use_https, std::move(state),
                                          std::move(handler));
                   });
             },
@@ -3103,13 +3156,14 @@ namespace glz
       template <typename CompletionHandler>
       void async_consume_trailers(std::shared_ptr<socket_variant> socket_var, std::shared_ptr<asio::streambuf> buffer,
                                   std::shared_ptr<std::string> body, const url_parts& url, bool use_https,
-                                  int status_code, glz::http_headers response_headers, CompletionHandler&& handler)
+                                  int status_code, glz::http_headers response_headers, bool connection_close,
+                                  CompletionHandler&& handler)
       {
          std::visit(
             [&, this](auto& sock) {
                asio::async_read_until(
                   *sock, *buffer, "\r\n",
-                  [this, socket_var, buffer, body = std::move(body), url, use_https, status_code,
+                  [this, socket_var, buffer, body = std::move(body), url, use_https, status_code, connection_close,
                    response_headers = std::move(response_headers), handler = std::forward<CompletionHandler>(handler)](
                      asio::error_code ec, std::size_t bytes_transferred) mutable {
                      if (ec) {
@@ -3132,7 +3186,7 @@ namespace glz
                         resp.response_headers = std::move(response_headers);
                         resp.response_body = std::move(*body);
 
-                        if (!resp.response_headers.contains_token("connection", "close")) {
+                        if (!connection_close) {
                            connection_pool->return_connection(url.host, url.port, use_https, std::move(*socket_var));
                         }
 
@@ -3141,7 +3195,7 @@ namespace glz
                      else {
                         // Trailer line — skip it and read the next line
                         async_consume_trailers(socket_var, buffer, std::move(body), url, use_https, status_code,
-                                               std::move(response_headers), std::move(handler));
+                                               std::move(response_headers), connection_close, std::move(handler));
                      }
                   });
             },
@@ -3152,14 +3206,15 @@ namespace glz
       template <typename CompletionHandler>
       void async_read_chunked_body(std::shared_ptr<socket_variant> socket_var, std::shared_ptr<asio::streambuf> buffer,
                                    std::shared_ptr<std::string> body, const url_parts& url, bool use_https,
-                                   int status_code, glz::http_headers response_headers, CompletionHandler&& handler)
+                                   int status_code, glz::http_headers response_headers, bool connection_close,
+                                   CompletionHandler&& handler)
       {
          // Read until we have the chunk size line
          std::visit(
             [&, this](auto& sock) {
                asio::async_read_until(
                   *sock, *buffer, "\r\n",
-                  [this, socket_var, buffer, body, url, use_https, status_code,
+                  [this, socket_var, buffer, body, url, use_https, status_code, connection_close,
                    response_headers = std::move(response_headers), handler = std::forward<CompletionHandler>(handler)](
                      asio::error_code ec, std::size_t bytes_transferred) mutable {
                      if (ec) {
@@ -3192,13 +3247,13 @@ namespace glz
                         // Terminal chunk — skip optional trailers and final CRLF (RFC 7230 §4.1),
                         // then build the response.
                         async_consume_trailers(socket_var, buffer, std::move(body), url, use_https, status_code,
-                                               std::move(response_headers), std::move(handler));
+                                               std::move(response_headers), connection_close, std::move(handler));
                         return;
                      }
 
                      // Read chunk data + trailing CRLF
                      async_read_chunk_data(socket_var, buffer, body, chunk_size, url, use_https, status_code,
-                                           std::move(response_headers), std::move(handler));
+                                           std::move(response_headers), connection_close, std::move(handler));
                   });
             },
             *socket_var);
@@ -3208,7 +3263,7 @@ namespace glz
       void async_read_chunk_data(std::shared_ptr<socket_variant> socket_var, std::shared_ptr<asio::streambuf> buffer,
                                  std::shared_ptr<std::string> body, size_t chunk_size, const url_parts& url,
                                  bool use_https, int status_code, glz::http_headers response_headers,
-                                 CompletionHandler&& handler)
+                                 bool connection_close, CompletionHandler&& handler)
       {
          // Check accumulated body size against limit before reading chunk data
          if (max_response_body_size_ > 0 && body->size() + chunk_size > max_response_body_size_) {
@@ -3235,7 +3290,7 @@ namespace glz
 
             // Continue reading next chunk
             async_read_chunked_body(socket_var, buffer, body, url, use_https, status_code, std::move(response_headers),
-                                    std::forward<CompletionHandler>(handler));
+                                    connection_close, std::forward<CompletionHandler>(handler));
             return;
          }
 
@@ -3245,7 +3300,7 @@ namespace glz
                asio::async_read(
                   *sock, *buffer, asio::transfer_exactly(to_read),
                   [this, socket_var, buffer, body, chunk_size, total_needed, url, use_https, status_code,
-                   response_headers = std::move(response_headers),
+                   connection_close, response_headers = std::move(response_headers),
                    handler = std::forward<CompletionHandler>(handler)](asio::error_code ec, std::size_t) mutable {
                      if (ec) {
                         handler(std::unexpected(ec));
@@ -3258,7 +3313,7 @@ namespace glz
 
                      // Continue reading next chunk
                      async_read_chunked_body(socket_var, buffer, body, url, use_https, status_code,
-                                             std::move(response_headers), std::move(handler));
+                                             std::move(response_headers), connection_close, std::move(handler));
                   });
             },
             *socket_var);
@@ -3312,8 +3367,8 @@ namespace glz
 
       template <typename CompletionHandler>
       void parse_and_read_body(std::shared_ptr<socket_variant> socket_var, std::shared_ptr<asio::streambuf> buffer,
-                               size_t header_size, const url_parts& url, bool use_https, bool head_request,
-                               CompletionHandler&& handler)
+                               size_t header_size, const url_parts& url, bool use_https,
+                               std::shared_ptr<async_attempt_state> state, CompletionHandler&& handler)
       {
          std::string_view header_section{static_cast<const char*>(buffer->data().data()), header_size};
 
@@ -3333,13 +3388,18 @@ namespace glz
          }
 
          if (detail::is_interim_status(parsed_status->status_code)) {
+            if (++state->interim_responses > detail::max_interim_responses) {
+               detail::close_socket(*socket_var, connection_pool->graceful_ssl_shutdown());
+               handler(std::unexpected(std::make_error_code(std::errc::protocol_error)));
+               return;
+            }
             // Discard the interim response and read the next head from the same buffer.
             buffer->consume(header_size);
             std::visit(
                [&, this](auto& sock) {
                   asio::async_read_until(
                      *sock, *buffer, "\r\n\r\n",
-                     [this, socket_var, buffer, url, use_https, head_request,
+                     [this, socket_var, buffer, url, use_https, state,
                       handler = std::forward<CompletionHandler>(handler)](asio::error_code ec,
                                                                            std::size_t bytes_transferred) mutable {
                         if (ec) {
@@ -3347,7 +3407,7 @@ namespace glz
                            handler(std::unexpected(ec));
                            return;
                         }
-                        parse_and_read_body(socket_var, buffer, bytes_transferred, url, use_https, head_request,
+                        parse_and_read_body(socket_var, buffer, bytes_transferred, url, use_https, std::move(state),
                                             std::move(handler));
                      });
                },
@@ -3390,12 +3450,13 @@ namespace glz
             return;
          }
          // A bodyless reply is read as an empty Content-Length body, whatever it frames.
-         const bool carries_no_body = detail::response_carries_no_body(head_request, parsed_status->status_code);
+         const bool carries_no_body =
+            detail::response_carries_no_body(state->head_request, parsed_status->status_code);
          const size_t content_length = carries_no_body ? 0 : content_length_field.value;
          const bool has_content_length =
             carries_no_body || content_length_field.state == detail::content_length_state::present;
          const bool is_chunked = !carries_no_body && response_headers.contains_token("Transfer-Encoding", "chunked");
-         const bool connection_close = response_headers.contains_token("Connection", "close");
+         const bool connection_close = detail::response_ends_connection(*parsed_status, response_headers);
 
          // Consume the entire header block from the streambuf.
          // This efficiently discards the header data we've just parsed, leaving only body data.
@@ -3411,7 +3472,8 @@ namespace glz
          if (is_chunked) {
             auto body = std::make_shared<std::string>();
             async_read_chunked_body(socket_var, buffer, body, url, use_https, parsed_status->status_code,
-                                    std::move(response_headers), std::forward<CompletionHandler>(handler));
+                                    std::move(response_headers), connection_close,
+                                    std::forward<CompletionHandler>(handler));
          }
          else if (!has_content_length && connection_close) {
             // No Content-Length and not chunked: read until connection close (RFC 7230 §3.3.3)
@@ -3428,7 +3490,7 @@ namespace glz
                [&, this](auto& sock) {
                   asio::async_read(
                      *sock, *buffer, asio::transfer_exactly(remaining_to_read),
-                     [this, socket_var, buffer, url, use_https, content_length,
+                     [this, socket_var, buffer, url, use_https, content_length, connection_close,
                       status_code = parsed_status->status_code, response_headers = std::move(response_headers),
                       handler = std::forward<CompletionHandler>(handler)](asio::error_code ec, std::size_t) mutable {
                         // transfer_exactly only completes without error once the full
@@ -3454,10 +3516,10 @@ namespace glz
                         resp.response_headers = std::move(response_headers);
                         resp.response_body = std::move(body);
 
-                        // Pool the connection unless the server asked to close it or switched
-                        // protocols. A truncated or peer-closed connection already returned above,
-                        // so anything reaching here is a complete response on a still-open socket.
-                        if (status_code == 101 || resp.response_headers.contains_token("connection", "close")) {
+                        // Pool the connection unless the server ends it after this response. A
+                        // truncated or peer-closed connection already returned above, so anything
+                        // reaching here is a complete response on a still-open socket.
+                        if (connection_close) {
                            detail::close_socket(*socket_var, connection_pool->graceful_ssl_shutdown());
                         }
                         else {
