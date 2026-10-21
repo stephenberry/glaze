@@ -87,6 +87,26 @@ suite url_encode_tests = [] {
       glz::url_encode("a/b", buffer);
       expect(buffer == "a%2Fb");
    };
+
+   // '+' in a path is a literal plus, so a path segment writes a space as %20.
+   "path_segment"_test = [] {
+      expect(glz::url_encode_path_segment("") == "");
+      expect(glz::url_encode_path_segment("my file.txt") == "my%20file.txt");
+      expect(glz::url_encode_path_segment("a+b") == "a%2Bb");
+      expect(glz::url_encode_path_segment("a/b") == "a%2Fb") << "a slash stays inside the segment";
+      expect(glz::url_encode_path_segment("50%?#") == "50%25%3F%23");
+      expect(glz::url_encode_path_segment("-._~Az09") == "-._~Az09");
+      expect(glz::url_encode_path_segment("\xC3\xA9") == "%C3%A9");
+
+      std::string buffer;
+      glz::url_encode_path_segment("x y", buffer);
+      expect(buffer == "x%20y");
+   };
+
+   "path_segment_roundtrip"_test = [] {
+      const std::string original = "report 1+2/draft?.txt";
+      expect(glz::url_decode_path(glz::url_encode_path_segment(original)) == original);
+   };
 };
 
 suite parse_urlencoded_tests = [] {

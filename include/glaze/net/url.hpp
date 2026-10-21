@@ -3,6 +3,7 @@
 
 #pragma once
 
+#include <cstdint>
 #include <string>
 #include <string_view>
 #include <unordered_map>
@@ -112,6 +113,37 @@ namespace glz
       return result;
    }
 
+   namespace detail
+   {
+      template <bool SpaceAsPlus>
+      inline void url_encode_impl(std::string_view input, std::string& output)
+      {
+         output.clear();
+         output.reserve(input.size() * 3); // worst case: every char encoded
+
+         constexpr char hex_chars[] = "0123456789ABCDEF";
+
+         for (const char ch : input) {
+            const auto c = static_cast<uint8_t>(ch);
+            if ((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '-' || c == '.' ||
+                c == '_' || c == '~') {
+               // Unreserved characters pass through
+               output += ch;
+            }
+            else if (SpaceAsPlus && c == ' ') {
+               // Space encoded as + for form encoding
+               output += '+';
+            }
+            else {
+               // Everything else percent-encoded
+               output += '%';
+               output += hex_chars[c >> 4];
+               output += hex_chars[c & 0x0F];
+            }
+         }
+      }
+   }
+
    /**
     * @brief URL-encode (percent-encode) a string into a provided buffer
     *
@@ -120,34 +152,13 @@ namespace glz
     * - Space is encoded as + (per application/x-www-form-urlencoded)
     * - All other characters are percent-encoded (%XX)
     *
+    * Use for query string and form body keys and values. For path segments, use
+    * url_encode_path_segment.
+    *
     * @param input The string to encode
     * @param output The buffer to write the encoded string to (cleared before writing)
     */
-   inline void url_encode(std::string_view input, std::string& output)
-   {
-      output.clear();
-      output.reserve(input.size() * 3); // worst case: every char encoded
-
-      constexpr char hex_chars[] = "0123456789ABCDEF";
-
-      for (unsigned char c : input) {
-         if ((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '-' || c == '.' ||
-             c == '_' || c == '~') {
-            // Unreserved characters pass through
-            output += static_cast<char>(c);
-         }
-         else if (c == ' ') {
-            // Space encoded as + for form encoding
-            output += '+';
-         }
-         else {
-            // Everything else percent-encoded
-            output += '%';
-            output += hex_chars[c >> 4];
-            output += hex_chars[c & 0x0F];
-         }
-      }
-   }
+   inline void url_encode(std::string_view input, std::string& output) { detail::url_encode_impl<true>(input, output); }
 
    /**
     * @brief URL-encode (percent-encode) a string
@@ -161,6 +172,37 @@ namespace glz
    {
       std::string result;
       url_encode(input, result);
+      return result;
+   }
+
+   /**
+    * @brief Percent-encode a string as one URL path segment into a provided buffer
+    *
+    * Unreserved characters (A-Z, a-z, 0-9, -, ., _, ~) pass through and every other byte is
+    * percent-encoded (%XX). A space becomes %20, since '+' in a path is a literal plus
+    * (RFC 3986), and '/' becomes %2F, so the value stays a single segment. Encode each
+    * segment separately and join them with '/'. url_decode_path reverses it.
+    *
+    * @param input The segment to encode
+    * @param output The buffer to write the encoded segment to (cleared before writing)
+    */
+   inline void url_encode_path_segment(std::string_view input, std::string& output)
+   {
+      detail::url_encode_impl<false>(input, output);
+   }
+
+   /**
+    * @brief Percent-encode a string as one URL path segment
+    *
+    * Convenience overload that allocates and returns a new string.
+    *
+    * @param input The segment to encode
+    * @return The encoded segment
+    */
+   [[nodiscard]] inline std::string url_encode_path_segment(std::string_view input)
+   {
+      std::string result;
+      url_encode_path_segment(input, result);
       return result;
    }
 
