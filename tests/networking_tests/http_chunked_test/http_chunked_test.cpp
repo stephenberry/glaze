@@ -917,7 +917,7 @@ suite chunked_sync_tests = [] {
    };
 
    // Wrong method on a streaming-only path with a query string should not match a different
-   // streaming method by accident; it answers 405 with the streaming route's method in Allow.
+   // streaming method by accident; it answers 405 with the streaming route's methods in Allow.
    "sync_stream_wrong_method_with_query_returns_405"_test = [] {
       chunked_test_server server;
       expect(server.start()) << "Server should start";
@@ -931,7 +931,7 @@ suite chunked_sync_tests = [] {
          expect(result->status_code == 405)
             << "POST to a GET-only streaming route should be 405, got: " << result->status_code;
          const auto allow = result->response_headers.first_value("allow");
-         expect(allow.has_value() && *allow == "GET, OPTIONS") << "Allow should list GET and OPTIONS";
+         expect(allow.has_value() && *allow == "GET, HEAD, OPTIONS") << "Allow should list GET, HEAD and OPTIONS";
       }
 
       // OPTIONS on the streaming-only path is answered with the same Allow list, not 404.
@@ -940,7 +940,8 @@ suite chunked_sync_tests = [] {
       if (options) {
          expect(options->status_code != 404) << "OPTIONS on a streaming route should not 404";
          const auto options_allow = options->response_headers.first_value("allow");
-         expect(options_allow.has_value() && *options_allow == "GET, OPTIONS") << "Allow should list GET and OPTIONS";
+         expect(options_allow.has_value() && *options_allow == "GET, HEAD, OPTIONS")
+            << "Allow should list GET, HEAD and OPTIONS";
       }
 
       server.stop();

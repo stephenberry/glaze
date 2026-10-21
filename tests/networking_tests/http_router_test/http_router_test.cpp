@@ -325,14 +325,18 @@ using fn_ptr_handler = void (*)(const glz::request&, glz::response&);
 using custom_std_function = std::function<void(const glz::request&, glz::response&)>;
 
 suite allowed_methods_tests = [] {
+   using enum glz::http_method;
+
    "lists_normal_and_streaming_methods"_test = [] {
       glz::http_router router;
       router.put("/items/:id", [](const glz::request&, glz::response&) {});
       router.get("/items/:id", [](const glz::request&, glz::response&) {});
       router.stream_post("/items/:id", [](glz::request&, glz::streaming_response&) {});
 
-      const auto methods = router.allowed_methods("/items/7?full=1");
-      expect(methods == std::vector{glz::http_method::GET, glz::http_method::POST, glz::http_method::PUT});
+      const auto found = router.allowed_methods("/items/7?full=1");
+      expect(found.methods == glz::http_method_set{GET, POST, PUT});
+      expect(found.methods.to_string() == "GET, POST, PUT");
+      expect(found.params.at("id") == "7");
    };
 
    "empty_for_unknown_path_or_failed_constraint"_test = [] {
@@ -341,9 +345,55 @@ suite allowed_methods_tests = [] {
       spec.constraints["id"] = {.validation = [](std::string_view v) { return !v.empty() && v[0] >= '0' && v[0] <= '9'; }};
       router.get("/items/:id", [](const glz::request&, glz::response&) {}, spec);
 
-      expect(router.allowed_methods("/nothing").empty());
-      expect(router.allowed_methods("/items/abc").empty());
-      expect(router.allowed_methods("/items/1").size() == 1u);
+      expect(router.allowed_methods("/nothing").methods.empty());
+      expect(router.allowed_methods("/items/abc").methods.empty());
+      expect(router.allowed_methods("/items/1").methods == glz::http_method_set{GET});
+   };
+
+   // Constraints are per method, so one path can match some of its methods' routes only.
+   "respects_per_method_constraints"_test = [] {
+      glz::http_router router;
+      glz::route_spec numeric;
+      numeric.constraints["id"] = {.validation = [](std::string_view v) { return !v.empty() && v[0] >= '0' && v[0] <= '9'; }};
+      router.get("/items/:id", [](const glz::request&, glz::response&) {});
+      router.del("/items/:id", [](const glz::request&, glz::response&) {}, numeric);
+
+      expect(router.allowed_methods("/items/abc").methods == glz::http_method_set{GET});
+      expect(router.allowed_methods("/items/12").methods == glz::http_method_set{GET, DELETE});
+   };
+
+   // Each method takes the first branch that answers it, so the set unites direct,
+   // static, parameter, and wildcard routes that all match the path.
+   "unites_every_matching_branch"_test = [] {
+      glz::http_router router;
+      router.get("/files/readme", [](const glz::request&, glz::response&) {});
+      router.put("/files/:name", [](const glz::request&, glz::response&) {});
+      router.post("/files/*rest", [](const glz::request&, glz::response&) {});
+      router.patch("/files/readme/extra", [](const glz::request&, glz::response&) {});
+
+      const auto found = router.allowed_methods("/files/readme");
+      expect(found.methods == glz::http_method_set{GET, POST, PUT});
+      expect(found.params.empty()) << "the direct route is found first and captures nothing";
+
+      expect(router.allowed_methods("/files/other").methods == glz::http_method_set{POST, PUT});
+      expect(router.allowed_methods("/files/a/b").methods == glz::http_method_set{POST});
+      expect(router.allowed_methods("/files/a/b").params.at("rest") == "a/b");
+   };
+
+   // A path served only by an explicit OPTIONS route still has routes.
+   "includes_options_routes"_test = [] {
+      glz::http_router router;
+      router.route(OPTIONS, "/probe", [](const glz::request&, glz::response&) {});
+
+      expect(router.allowed_methods("/probe").methods == glz::http_method_set{OPTIONS});
+   };
+
+   // Traversal captures are refused here exactly as match() refuses them.
+   "refuses_unsafe_captures"_test = [] {
+      glz::http_router router;
+      router.get("/files/*path", [](const glz::request&, glz::response&) {});
+      expect(router.allowed_methods("/files/a/%2e%2e/b").methods.empty());
+      expect(router.allowed_methods("/files/a/b").methods == glz::http_method_set{GET});
    };
 };
 

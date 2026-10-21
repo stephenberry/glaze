@@ -2948,25 +2948,29 @@ namespace glz
          request.path = std::string(path_view);
          request.query = parse_urlencoded(query_string);
 
+         const http_method method = request.method;
+
          // Check for a streaming handler first. Streaming routes share the same
          // radix-tree matcher as normal routes, so they support ":param" paths.
-         //
-         // Fast path: if no streaming routes are registered (the common case),
-         // skip the match entirely. match_streaming() would otherwise allocate
-         // a params map, split the path into a vector of segment strings, and
-         // run an empty-tree walk on every request. The empty-check is O(1).
-         if (!root_router.streaming_routes.routes.empty()) {
-            auto [stream_handle, stream_params] = root_router.match_streaming(conn->request_.method, request.path);
-            if (stream_handle) {
-               request.params = std::move(stream_params);
-               // Streaming handlers take over the connection (no keep-alive loop)
-               handle_streaming_request_with_conn(std::move(conn), stream_handle);
-               return;
-            }
+         if (dispatch_streaming_route_with_conn(conn, method)) {
+            return;
          }
 
          // Find a matching route
-         auto [handle, params] = root_router.match(conn->request_.method, request.path);
+         auto [handle, params] = root_router.match(method, request.path);
+
+         // RFC 9110 9.3.2: HEAD is GET without the content, and a server that answers GET
+         // answers HEAD too. A HEAD with no route of its own runs the GET route, normal or
+         // streaming; both writers send a HEAD reply's header section alone, framed as the
+         // GET would have been (send_response_with_conn and streaming_connection::send_headers).
+         if (!handle && method == http_method::HEAD) {
+            if (dispatch_streaming_route_with_conn(conn, http_method::GET)) {
+               return;
+            }
+            auto get_match = root_router.match(http_method::GET, request.path);
+            handle = std::move(get_match.first);
+            params = std::move(get_match.second);
+         }
 
          // Reuse the connection-persistent response object (preserves capacity).
          // Cleared in the keep-alive reset path after the response is written.
@@ -2985,108 +2989,7 @@ namespace glz
          }
 
          if (!handle) {
-            auto allowed_methods = root_router.allowed_methods(request.path);
-            if (allowed_methods.empty()) {
-               // No matching route found
-               send_error_response_with_conn(conn, 404, "Not Found");
-               return;
-            }
-            // The server answers OPTIONS itself for any routed target
-            allowed_methods.push_back(http_method::OPTIONS);
-
-            // RFC 9110 15.5.6: a target that has routes for other methods answers 405 with
-            // an Allow header, so clients can tell a wrong method from a wrong URL.
-            if (conn->request_.method != http_method::OPTIONS) {
-               response.clear();
-               response.status(405)
-                  .header("Allow", format_allow_header(allowed_methods))
-                  .content_type("text/plain")
-                  .body("Method Not Allowed");
-               send_response_with_conn(conn, response);
-               return;
-            }
-
-            // Preflight: give middleware the captures of the first route the target matches
-            const http_method first_method = allowed_methods.front();
-            if (auto [first_handle, first_params] = root_router.match(first_method, request.path); first_handle) {
-               request.params = std::move(first_params);
-            }
-            else {
-               request.params = std::move(root_router.match_streaming(first_method, request.path).second);
-            }
-
-            bool has_request_method_header = false;
-            bool requested_method_known = false;
-            http_method requested_method{};
-
-            if (auto request_method_it = request.headers.find("access-control-request-method");
-                request_method_it != request.headers.end()) {
-               has_request_method_header = true;
-               std::string method_token{request_method_it->value};
-               auto trim_pos = method_token.find_last_not_of(" \t\r\n");
-               if (trim_pos != std::string::npos) {
-                  method_token.erase(trim_pos + 1);
-               }
-               else {
-                  method_token.clear();
-               }
-
-               if (!method_token.empty()) {
-                  std::transform(method_token.begin(), method_token.end(), method_token.begin(),
-                                 [](unsigned char c) { return static_cast<char>(std::toupper(c)); });
-
-                  if (auto parsed = from_string(method_token)) {
-                     requested_method = *parsed;
-                     requested_method_known = true;
-                  }
-               }
-            }
-
-            response.header("Allow", format_allow_header(allowed_methods));
-
-            bool requested_method_allowed = true;
-            if (has_request_method_header) {
-               requested_method_allowed =
-                  requested_method_known && std::find(allowed_methods.begin(), allowed_methods.end(),
-                                                      requested_method) != allowed_methods.end();
-            }
-
-            try {
-               for (const auto& middleware : root_router.middlewares) {
-                  middleware(request, response);
-               }
-            }
-            catch (const std::exception&) {
-               error_handler(std::make_error_code(std::errc::invalid_argument), std::source_location::current());
-               send_error_response_with_close(conn, 500, "Internal Server Error");
-               return;
-            }
-
-            if (!requested_method_allowed) {
-               response.status(405);
-               for (const auto& hook : response_hooks_) {
-                  try {
-                     hook(request, response);
-                  }
-                  catch (const std::exception&) {
-                     error_handler(std::make_error_code(std::errc::invalid_argument),
-                                   std::source_location::current());
-                  }
-               }
-               send_response_with_conn(conn, response);
-               return;
-            }
-
-            for (const auto& hook : response_hooks_) {
-               try {
-                  hook(request, response);
-               }
-               catch (const std::exception&) {
-                  error_handler(std::make_error_code(std::errc::invalid_argument),
-                                std::source_location::current());
-               }
-            }
-            send_response_with_conn(conn, response);
+            respond_unrouted_with_conn(conn);
             return;
          }
 
@@ -3104,15 +3007,7 @@ namespace glz
                execute_middleware_chain(0, request, response, handle);
             }
 
-            for (const auto& hook : response_hooks_) {
-               try {
-                  hook(request, response);
-               }
-               catch (const std::exception&) {
-                  error_handler(std::make_error_code(std::errc::invalid_argument), std::source_location::current());
-               }
-            }
-
+            run_response_hooks(request, response);
             send_response_with_conn(conn, response);
          }
          catch (const std::exception&) {
@@ -3121,16 +3016,129 @@ namespace glz
          }
       }
 
-      // Comma-separated method list for an Allow header
-      static std::string format_allow_header(const std::vector<http_method>& methods)
+      // Hands the connection to the streaming route for `method` on the request's path, if
+      // there is one. Fast path: if no streaming routes are registered (the common case),
+      // skip the match entirely. match_streaming() would otherwise allocate a params map,
+      // split the path into a vector of segment strings, and run an empty-tree walk on
+      // every request. The empty-check is O(1).
+      inline bool dispatch_streaming_route_with_conn(const std::shared_ptr<connection_state>& conn,
+                                                     http_method method)
       {
-         std::string allow_header;
-         allow_header.reserve(methods.size() * 8);
-         for (size_t i = 0; i < methods.size(); ++i) {
-            if (i > 0) allow_header.append(", ");
-            allow_header.append(to_string(methods[i]));
+         if (root_router.streaming_routes.routes.empty()) {
+            return false;
          }
-         return allow_header;
+         auto [stream_handle, stream_params] = root_router.match_streaming(method, conn->request_.path);
+         if (!stream_handle) {
+            return false;
+         }
+         conn->request_.params = std::move(stream_params);
+         // Streaming handlers take over the connection (no keep-alive loop)
+         handle_streaming_request_with_conn(conn, stream_handle);
+         return true;
+      }
+
+      // Answers a request that no route handles: 404 for a path with no routes, 405 for a
+      // method the path has no route for, the automatic CORS preflight for OPTIONS, and 426
+      // for a plain GET to a WebSocket route. The server builds its response where a route's
+      // handler would run, after middleware and before response hooks, so headers they add
+      // (CORS, request IDs) reach these responses too, as do any set by request hooks, and
+      // hooks see every response. Wrapping middleware wraps route handlers only, so it does
+      // not run here.
+      inline void respond_unrouted_with_conn(const std::shared_ptr<connection_state>& conn)
+      {
+         request& request = conn->request_;
+         response& response = conn->response_;
+         const http_method method = request.method;
+
+         auto [allowed, first_params] = root_router.allowed_methods(request.path);
+         if (!allowed.empty()) {
+            // A HEAD runs the GET route (see process_full_request_with_conn), and the
+            // server answers OPTIONS itself for any routed path.
+            if (allowed.contains(http_method::GET)) {
+               allowed.insert(http_method::HEAD);
+            }
+            allowed.insert(http_method::OPTIONS);
+         }
+
+         // Preflight: give middleware the captures of the first route the path matches
+         if (method == http_method::OPTIONS && !allowed.empty()) {
+            request.params = std::move(first_params);
+         }
+
+         try {
+            for (const auto& middleware : root_router.middlewares) {
+               middleware(request, response);
+            }
+
+            if (allowed.empty()) {
+               set_error_response(response, 404, "Not Found");
+            }
+            else if (method == http_method::OPTIONS) {
+               // The preflight keeps the status middleware chose (CORS answers 204) unless
+               // the method it asks about has no route.
+               response.header("Allow", allowed.to_string());
+               if (!preflight_method_allowed(request, allowed)) {
+                  set_error_response(response, 405, "Method Not Allowed");
+               }
+            }
+            else if (allowed.contains(method)) {
+               // Normal and streaming GET routes were tried before this point, for a HEAD as
+               // well, so a GET or HEAD the path allows comes from a WebSocket route, which
+               // only answers an upgrade. RFC 9110 15.5.22: a 426 names the protocol to use.
+               set_error_response(response, 426, "Upgrade Required").header("Upgrade", "websocket");
+            }
+            else {
+               // RFC 9110 15.5.6: a path with routes for other methods answers 405 with an
+               // Allow header, so a client can tell a wrong method from a wrong URL.
+               set_error_response(response, 405, "Method Not Allowed").header("Allow", allowed.to_string());
+            }
+         }
+         catch (const std::exception&) {
+            error_handler(std::make_error_code(std::errc::invalid_argument), std::source_location::current());
+            send_error_response_with_close(conn, 500, "Internal Server Error");
+            return;
+         }
+
+         run_response_hooks(request, response);
+         send_response_with_conn(conn, response);
+      }
+
+      // Whether a CORS preflight's Access-Control-Request-Method, if it sent one, names a
+      // method the path has a route for.
+      static bool preflight_method_allowed(const request& request, http_method_set allowed)
+      {
+         auto request_method_it = request.headers.find("access-control-request-method");
+         if (request_method_it == request.headers.end()) {
+            return true;
+         }
+
+         // Trim trailing whitespace; npos + 1 wraps to 0, clearing an all-whitespace token.
+         std::string method_token{request_method_it->value};
+         method_token.erase(method_token.find_last_not_of(" \t\r\n") + 1);
+         std::transform(method_token.begin(), method_token.end(), method_token.begin(),
+                        [](unsigned char c) { return static_cast<char>(std::toupper(c)); });
+         const auto requested = from_string(method_token);
+         return requested && allowed.contains(*requested);
+      }
+
+      // Response hooks run on every response the request pipeline sends. A hook that throws
+      // is reported and skipped, so the response still goes out.
+      inline void run_response_hooks(const request& request, response& response)
+      {
+         for (const auto& hook : response_hooks_) {
+            try {
+               hook(request, response);
+            }
+            catch (const std::exception&) {
+               error_handler(std::make_error_code(std::errc::invalid_argument), std::source_location::current());
+            }
+         }
+      }
+
+      // The server's own plain-text error response. Headers already on the response are kept.
+      static response& set_error_response(response& response, int status_code, std::string_view message)
+      {
+         return response.status(status_code).content_type("text/plain").body(message);
       }
 
       // Pre-cached status lines for common HTTP status codes
@@ -3248,13 +3256,15 @@ namespace glz
             h.append("Server: Glaze/1.0\r\n");
          }
 
-         // Add Connection header based on keep-alive decision
+         // Add Connection header based on keep-alive decision. RFC 9110 7.8: a sender of
+         // Upgrade (such as a 426) also lists it in Connection, so intermediaries drop it.
          if (!(response.user_headers_set & response::has_connection)) {
+            h.append((response.user_headers_set & response::has_upgrade) ? "Connection: Upgrade, " : "Connection: ");
             if (conn->should_close) {
-               h.append("Connection: close\r\n");
+               h.append("close\r\n");
             }
             else {
-               h.append("Connection: keep-alive\r\n");
+               h.append("keep-alive\r\n");
                // Add Keep-Alive header with timeout info
                if (conn_config_.keep_alive_timeout > 0) {
                   h.append("Keep-Alive: timeout=");
@@ -3321,12 +3331,14 @@ namespace glz
                            });
       }
 
-      // Send error response with keep-alive support (for normal errors)
+      // Send error response with keep-alive support. The response is cleared first: this
+      // answers a request the pipeline could not finish (a protocol error, or a handler or
+      // hook that threw), so nothing half-built on it is sent.
       inline void send_error_response_with_conn(std::shared_ptr<connection_state> conn, int status_code,
                                                 std::string_view message)
       {
          conn->response_.clear();
-         conn->response_.status(status_code).content_type("text/plain").body(message);
+         set_error_response(conn->response_, status_code, message);
          send_response_with_conn(conn, conn->response_);
       }
 

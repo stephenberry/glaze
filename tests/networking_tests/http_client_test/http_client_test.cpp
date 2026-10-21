@@ -814,9 +814,10 @@ suite working_http_tests = [] {
          }
       };
 
-      expect_405(client.post(server.base_url() + "/hello", "body"), "GET, OPTIONS");
+      // A path with a GET route answers HEAD too (RFC 9110 9.3.2), so Allow lists both.
+      expect_405(client.post(server.base_url() + "/hello", "body"), "GET, HEAD, OPTIONS");
       expect_405(client.get(server.base_url() + "/update?x=1"), "PUT, OPTIONS");
-      expect_405(client.post(server.base_url() + "/files/a/b.txt", "body"), "GET, OPTIONS");
+      expect_405(client.post(server.base_url() + "/files/a/b.txt", "body"), "GET, HEAD, OPTIONS");
 
       auto missing = client.get(server.base_url() + "/no-such-path");
       expect(missing.has_value()) << "Request should yield a response\n";
@@ -1103,6 +1104,66 @@ suite glz_http_client_tests = [] {
       // The pooled connection must be clean for the next request.
       auto follow_up = client.get(server.base_url() + "/hello");
       expect(follow_up.has_value() && follow_up->response_body == "Hello, World!") << "Follow-up GET should succeed";
+
+      server.stop();
+   };
+
+   // RFC 9110 9.3.2: a server that answers GET answers HEAD, so a HEAD on a GET-only route
+   // runs the GET route and reports its Content-Length without the body.
+   "synchronous_head_on_get_route"_test = [] {
+      working_test_server server;
+      expect(server.start());
+
+      glz::http_client client;
+
+      auto result = client.head(server.base_url() + "/hello");
+
+      expect(result.has_value()) << "HEAD request should succeed";
+      if (result.has_value()) {
+         expect(result->status_code == 200) << "HEAD on a GET route should be 200, got " << result->status_code;
+         expect(result->response_body.empty()) << "HEAD response should have no body";
+         const auto content_length = result->response_headers.first_value("content-length");
+         expect(content_length.has_value() && *content_length == "13") << "HEAD should report the GET body length";
+      }
+
+      auto follow_up = client.get(server.base_url() + "/hello");
+      expect(follow_up.has_value() && follow_up->response_body == "Hello, World!") << "Follow-up GET should succeed";
+
+      server.stop();
+   };
+
+   "async_head_request"_test = [] {
+      working_test_server server;
+      expect(server.start());
+
+      glz::http_client client;
+
+      // Both an explicit HEAD route and a GET route the HEAD falls back to.
+      for (const std::string_view path : {"/head", "/hello"}) {
+         auto future = client.head_async(server.base_url() + std::string(path));
+         expect(future.wait_for(std::chrono::seconds(5)) == std::future_status::ready)
+            << "Async HEAD should complete without waiting for a body";
+         if (future.wait_for(std::chrono::seconds(0)) != std::future_status::ready) {
+            continue;
+         }
+         auto result = future.get();
+         expect(result.has_value()) << "Async HEAD request should succeed";
+         if (result.has_value()) {
+            expect(result->status_code == 200) << "HEAD status should be 200";
+            expect(result->response_body.empty()) << "HEAD response should have no body";
+            expect(result->response_headers.first_value("content-length").has_value())
+               << "HEAD should report the GET body length";
+         }
+      }
+
+      // The pooled connection must be clean for the next request.
+      auto follow_up = client.get_async(server.base_url() + "/hello");
+      expect(follow_up.wait_for(std::chrono::seconds(5)) == std::future_status::ready)
+         << "Follow-up async GET should complete";
+      if (follow_up.wait_for(std::chrono::seconds(0)) == std::future_status::ready) {
+         auto result = follow_up.get();
+         expect(result.has_value() && result->response_body == "Hello, World!") << "Follow-up GET should succeed";
+      }
 
       server.stop();
    };
@@ -1877,6 +1938,155 @@ suite with_json_content_type_tests = [] {
 
       expect(!original.contains("Content-Type")) << "The caller's container is taken by value";
       expect(headers.contains("Content-Type"));
+   };
+};
+
+// The server's own answers to requests no route handles (404, 405, 426 and the automatic
+// preflight) go through the same middleware and hooks as a route's response.
+suite unrouted_request_tests = [] {
+   struct unrouted_server
+   {
+      std::shared_ptr<asio::io_context> io_ctx = std::make_shared<asio::io_context>();
+      glz::http_server<> server{io_ctx};
+      std::thread thread;
+      std::atomic<int> hooked_responses{0};
+      std::atomic<int> last_hooked_status{0};
+
+      unrouted_server()
+      {
+         // Headers set by a request hook belong to the response whatever answers it.
+         server.on_request([](const request&, response& res) { res.header("X-Request-Id", "req-1"); });
+         server.use([](const request&, response& res) { res.header("X-Middleware", "ran"); });
+         server.on_response([this](const request&, const response& res) {
+            hooked_responses.fetch_add(1);
+            last_hooked_status.store(res.status_code);
+         });
+         server.enable_cors();
+
+         server.get("/thing", [](const request&, response& res) { res.body("thing"); });
+         server.route(http_method::OPTIONS, "/probe", [](const request&, response& res) { res.status(204); });
+         server.websocket("/ws/:room", std::make_shared<glz::websocket_server>());
+
+         server.bind("127.0.0.1", 0);
+         server.start(0);
+         thread = std::thread([this] { io_ctx->run(); });
+      }
+
+      ~unrouted_server()
+      {
+         server.stop();
+         io_ctx->stop();
+         if (thread.joinable()) thread.join();
+      }
+
+      std::string url(std::string_view path) const
+      {
+         return "http://127.0.0.1:" + std::to_string(server.port()) + std::string(path);
+      }
+   };
+
+   const auto header_value = [](const auto& result, std::string_view name) {
+      return result->response_headers.first_value(name).value_or("");
+   };
+
+   "not_found_runs_middleware_and_hooks"_test = [&] {
+      unrouted_server s;
+      glz::http_client client;
+
+      auto result = client.get(s.url("/missing"), {{"Origin", "http://app.local"}});
+      expect(result.has_value()) << "Request should yield a response";
+      if (result) {
+         expect(result->status_code == 404);
+         expect(result->response_body == "Not Found");
+         expect(header_value(result, "x-request-id") == "req-1") << "request hook headers are kept";
+         expect(header_value(result, "x-middleware") == "ran") << "middleware runs on a 404";
+         expect(header_value(result, "access-control-allow-origin") == "*") << "CORS headers reach a 404";
+         expect(!result->response_headers.first_value("allow").has_value());
+      }
+      expect(s.hooked_responses.load() == 1) << "response hooks see the 404";
+      expect(s.last_hooked_status.load() == 404);
+   };
+
+   "method_not_allowed_runs_middleware_and_hooks"_test = [&] {
+      unrouted_server s;
+      glz::http_client client;
+
+      auto result = client.del(s.url("/thing"), {{"Origin", "http://app.local"}});
+      expect(result.has_value()) << "Request should yield a response";
+      if (result) {
+         expect(result->status_code == 405);
+         expect(result->response_body == "Method Not Allowed");
+         expect(header_value(result, "allow") == "GET, HEAD, OPTIONS");
+         expect(header_value(result, "x-request-id") == "req-1") << "request hook headers are kept";
+         expect(header_value(result, "x-middleware") == "ran") << "middleware runs on a 405";
+         expect(header_value(result, "access-control-allow-origin") == "*") << "CORS headers reach a 405";
+      }
+      expect(s.hooked_responses.load() == 1) << "response hooks see the 405";
+      expect(s.last_hooked_status.load() == 405);
+   };
+
+   "preflight_with_unrouted_method_answers_405"_test = [&] {
+      unrouted_server s;
+      glz::http_client client;
+
+      auto result =
+         client.options(s.url("/thing"), {{"Origin", "http://app.local"}, {"Access-Control-Request-Method", "PUT"}});
+      expect(result.has_value()) << "Request should yield a response";
+      if (result) {
+         expect(result->status_code == 405);
+         expect(header_value(result, "allow") == "GET, HEAD, OPTIONS");
+         expect(header_value(result, "x-request-id") == "req-1") << "request hook headers are kept";
+      }
+      expect(s.last_hooked_status.load() == 405);
+   };
+
+   // A path served only by an explicit OPTIONS route has a route, so other methods get 405.
+   "options_only_path_answers_405"_test = [&] {
+      unrouted_server s;
+      glz::http_client client;
+
+      auto result = client.get(s.url("/probe"));
+      expect(result.has_value()) << "Request should yield a response";
+      if (result) {
+         expect(result->status_code == 405) << "got " << result->status_code;
+         expect(header_value(result, "allow") == "OPTIONS");
+      }
+
+      auto options = client.options(s.url("/probe"));
+      expect(options.has_value() && options->status_code == 204) << "the explicit OPTIONS route still answers";
+   };
+
+   // A WebSocket route only answers the upgrade: other methods get 405, and a GET that does
+   // not ask to upgrade gets 426 naming the protocol (RFC 9110 15.5.22).
+   "websocket_path_answers_405_or_426"_test = [&] {
+      unrouted_server s;
+      glz::http_client client;
+
+      auto post = client.post(s.url("/ws/lobby"), "body");
+      expect(post.has_value()) << "Request should yield a response";
+      if (post) {
+         expect(post->status_code == 405) << "got " << post->status_code;
+         expect(header_value(post, "allow") == "GET, HEAD, OPTIONS");
+      }
+
+      auto get = client.get(s.url("/ws/lobby"));
+      expect(get.has_value()) << "Request should yield a response";
+      if (get) {
+         expect(get->status_code == 426) << "got " << get->status_code;
+         expect(header_value(get, "upgrade") == "websocket");
+         expect(get->response_headers.contains_token("connection", "upgrade"))
+            << "RFC 9110 7.8: Upgrade is listed in Connection";
+         expect(get->response_headers.contains_token("connection", "keep-alive"))
+            << "the keep-alive decision is still announced";
+         expect(header_value(get, "x-middleware") == "ran");
+      }
+
+      // The 426 left the connection usable.
+      auto thing = client.get(s.url("/thing"));
+      expect(thing.has_value() && thing->response_body == "thing");
+
+      auto other = client.get(s.url("/ws"));
+      expect(other.has_value() && other->status_code == 404) << "the parameter is required";
    };
 };
 
