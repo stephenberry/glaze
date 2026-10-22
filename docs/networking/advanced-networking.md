@@ -50,6 +50,8 @@ config.options_success_status = 200; // Use legacy-friendly 200 instead of 204
 server.enable_cors(config);
 ```
 
+The CORS headers depend on the request's `Origin`, so every response the middleware handles carries `Vary: Origin`, and a preflight that echoes `Access-Control-Request-Headers` (an empty `allowed_headers`) also carries `Vary: Access-Control-Request-Headers`. A shared cache then keeps one answer per origin instead of serving one origin's headers to another. A handler that sets its own `Vary` with `res.header()` replaces these; use `res.add_header("Vary", ...)` to keep them.
+
 ### Custom CORS Middleware
 
 ```cpp
