@@ -1612,21 +1612,17 @@ class stalling_server
          if (ec) return;
          asio::async_write(*socket, asio::buffer(reply_), [this, socket](asio::error_code ec, std::size_t) {
             if (ec) return;
-            stall(socket);
+            // The client's close or the end of the stall, whichever comes first, closes the socket.
+            auto timer = std::make_shared<asio::steady_timer>(io_, stall_);
+            timer->async_wait([socket, timer](asio::error_code) {
+               asio::error_code ignored;
+               socket->close(ignored);
+            });
+            auto sink = std::make_shared<std::array<char, 64>>();
+            socket->async_read_some(asio::buffer(*sink),
+                                    [timer, sink](asio::error_code, std::size_t) { timer->cancel(); });
          });
       });
-   }
-
-   // The client's close or the end of the stall, whichever comes first, closes the socket.
-   void stall(std::shared_ptr<asio::ip::tcp::socket> socket)
-   {
-      auto timer = std::make_shared<asio::steady_timer>(io_, stall_);
-      timer->async_wait([socket, timer](asio::error_code) {
-         asio::error_code ignored;
-         socket->close(ignored);
-      });
-      auto sink = std::make_shared<std::array<char, 64>>();
-      socket->async_read_some(asio::buffer(*sink), [timer, sink](asio::error_code, std::size_t) { timer->cancel(); });
    }
 
    std::string reply_;
@@ -1784,12 +1780,12 @@ suite stream_disconnect_tests = [] {
    // A stream that fails before its head arrives ends there, and its timeout must not report it
    // a second time once the timer runs out.
    "refused_connect_is_not_reported_again_by_the_timeout"_test = [] {
-      uint16_t closed_port{};
-      {
-         asio::io_context io;
-         asio::ip::tcp::acceptor acceptor{io, asio::ip::tcp::endpoint(asio::ip::make_address("127.0.0.1"), 0)};
-         closed_port = acceptor.local_endpoint().port();
-      }
+      // A bound socket that never listens refuses connections and keeps the port from being reused.
+      asio::io_context io;
+      asio::ip::tcp::socket closed{io};
+      closed.open(asio::ip::tcp::v4());
+      closed.bind(asio::ip::tcp::endpoint(asio::ip::make_address("127.0.0.1"), 0));
+      const uint16_t closed_port = closed.local_endpoint().port();
 
       stream_end_log log; // outlives the client, whose workers run its handlers
       glz::http_client client;

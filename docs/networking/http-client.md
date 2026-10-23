@@ -317,7 +317,7 @@ struct stream_request_params_v2 {
 -   `on_error`: A callback that's called when an error occurs.
 -   `on_progress`: An optional callback reporting download progress; returning `false` cancels the transfer. See [Progress and Cancellation](#progress-and-cancellation).
 -   `on_connect`: A callback that's called when the connection is established and the headers are received.
--   `on_disconnect`: A callback that's called once, when the stream ends for any reason.
+-   `on_disconnect`: A callback that's called once when a started stream ends, for any reason. It is not called when the request returns `nullptr`.
 -   `status_is_error`: Optional predicate to decide whether a status code should trigger `on_error` (defaults to checking for codes ≥ 400).
 
 To override the default behaviour you can supply a predicate:

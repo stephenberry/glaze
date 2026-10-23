@@ -1169,7 +1169,7 @@ namespace glz
       // Set by the timeout just before it stops the stream, so the stream's end reports timed_out
       // rather than the cancel the stop caused.
       std::atomic<bool> timed_out{false};
-      // Held while the host name is being resolved. Nothing is pending on the socket then, so a
+      // Set while the host name is being resolved. Nothing is pending on the socket then, so a
       // stop has nothing to cancel, and whichever of the resolve and the timeout clears this
       // first decides how the stream goes on.
       std::atomic<bool> resolve_pending{false};
@@ -1818,6 +1818,9 @@ namespace glz
                   detail::close_socket(*connection->socket, connection_pool->graceful_ssl_shutdown());
                }
             }
+            // An ended stream counts as stopped, so a timeout already running when the timer was
+            // cancelled, or a later disconnect(), finds nothing left to do.
+            connection->should_stop = true;
             lock.unlock();
             // A stream the timeout stopped says so here, at its one end, so the caller sees
             // timed_out once and before on_disconnect, whichever operation the stop cut short.
@@ -1835,17 +1838,21 @@ namespace glz
          const bool needs_connect = !detail::socket_is_open(*connection->socket);
          connection->resolve_pending = needs_connect;
 
-         // The timeout bounds the wait for the response head. It only stops the stream: the
-         // pending operation ends with operation_aborted and the stream ends through its usual
-         // stopped path, which reports timed_out and runs on_disconnect once. Ending the stream
-         // here as well would run both callbacks twice and close the socket under an operation
-         // still in flight.
+         // The timeout bounds the wait for the response head. It stops the stream; the operation
+         // the stop cancels then ends it, and internal_on_disconnect reports timed_out once. The
+         // mutex orders the decision with the head's arrival and with the stream's end.
          connection->timer->expires_after(timeout);
          connection->timer->async_wait([connection, internal_on_disconnect](asio::error_code ec) {
-            if (ec || connection->is_connected || connection->should_stop) {
+            if (ec) {
                return;
             }
-            connection->timed_out = true;
+            {
+               std::lock_guard lock(connection->mutex);
+               if (connection->is_connected || connection->should_stop) {
+                  return;
+               }
+               connection->timed_out = true;
+            }
             connection->disconnect();
             // A resolve has no socket operation for the stop to cancel, and asio cannot cut it
             // short, so the stream ends here instead; the resolve's handler then does nothing.
@@ -2174,8 +2181,14 @@ namespace glz
                      // Consume all processed header data from the streambuf
                      connection->buffer->consume(bytes_transferred);
 
+                     // The timeout and the head race for the mutex; the loser stands down.
+                     std::unique_lock timer_lock(connection->mutex);
+                     if (connection->timed_out) {
+                        timer_lock.unlock();
+                        if (on_disconnect) on_disconnect();
+                        return;
+                     }
                      connection->is_connected = true;
-                     std::unique_lock timer_lock(connection->mutex); // disconnect() cancels the timer too
                      connection->timer->cancel();
                      timer_lock.unlock();
 
