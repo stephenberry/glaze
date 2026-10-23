@@ -1,6 +1,6 @@
 # URL Utilities
 
-Glaze provides URL encoding/decoding utilities for parsing query strings and form data. These utilities follow the [WHATWG URL Standard](https://url.spec.whatwg.org/) for `application/x-www-form-urlencoded` parsing.
+Glaze provides URL encoding/decoding utilities for parsing query strings, form data, and URL path segments. These utilities follow the [WHATWG URL Standard](https://url.spec.whatwg.org/) for `application/x-www-form-urlencoded` parsing.
 
 ## Header
 
@@ -23,6 +23,16 @@ std::string path = glz::url_decode("path%2Fto%2Ffile");  // "path/to/file"
 std::string query = glz::url_decode("search+term");  // "search term"
 ```
 
+### Path Segments
+
+`+` means a space only in query strings and form bodies. In a URL path it is a literal plus (RFC 3986), so decode path segments with `url_decode_path`, which handles `%XX` escapes and leaves `+` alone. The HTTP router uses it for `:param` and `*wildcard` captures.
+
+```cpp
+std::string segment = glz::url_decode_path("a+b%20c");  // "a+b c"
+```
+
+To build a path segment, encode it with `url_encode_path_segment` (see [URL Encoding](#url-encoding)) rather than `url_encode`, which writes a space as `+`.
+
 ### Supported Encodings
 
 | Encoded | Decoded |
@@ -33,7 +43,7 @@ std::string query = glz::url_decode("search+term");  // "search term"
 | `%26` | `&` |
 | `%3F` | `?` |
 | `%23` | `#` |
-| `+` | space |
+| `+` | space (`url_decode` only; `url_decode_path` keeps it) |
 
 ### Buffer Reuse (Zero-Allocation)
 
@@ -67,6 +77,15 @@ std::string special = glz::url_encode("a=b&c=d");         // "a%3Db%26c%3Dd"
 - **Unreserved characters** pass through unchanged: `A-Z`, `a-z`, `0-9`, `-`, `.`, `_`, `~`
 - **Space** is encoded as `+` (per `application/x-www-form-urlencoded`)
 - **All other characters** are percent-encoded (`%XX`)
+
+### Path Segments
+
+`url_encode` is for query strings and form bodies. For a URL path segment use `url_encode_path_segment`, which writes a space as `%20` (a `+` in a path is a literal plus) and percent-encodes everything except unreserved characters, `/` and `+` included, so the value stays one segment. Encode each segment separately and join them with `/`. `url_decode_path` reverses it.
+
+```cpp
+std::string url = "http://localhost:8080/files/" + glz::url_encode_path_segment("Q3 report+notes.txt");
+// "http://localhost:8080/files/Q3%20report%2Bnotes.txt"; a "/files/:name" route captures "Q3 report+notes.txt"
+```
 
 ### Building Query Strings
 
@@ -276,6 +295,14 @@ server.post("/login", [](const glz::request& req, glz::response& res) {
 void url_decode(std::string_view input, std::string& output);
 ```
 
+### `url_decode_path`
+
+```cpp
+// Like url_decode, but keeps '+' as a literal plus (for path segments)
+[[nodiscard]] std::string url_decode_path(std::string_view input);
+void url_decode_path(std::string_view input, std::string& output);
+```
+
 ### `url_encode`
 
 ```cpp
@@ -284,6 +311,14 @@ void url_decode(std::string_view input, std::string& output);
 
 // Writes to buffer (can avoid allocation if buffer has capacity)
 void url_encode(std::string_view input, std::string& output);
+```
+
+### `url_encode_path_segment`
+
+```cpp
+// Percent-encodes one path segment: space as %20, '/' as %2F
+[[nodiscard]] std::string url_encode_path_segment(std::string_view input);
+void url_encode_path_segment(std::string_view input, std::string& output);
 ```
 
 ### `parse_urlencoded`

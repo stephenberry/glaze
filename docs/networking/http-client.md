@@ -174,6 +174,37 @@ std::expected<response, std::error_code> patch(
 );
 ```
 
+### HEAD Request
+
+```cpp
+std::expected<response, std::error_code> head(
+    std::string_view url,
+    const glz::http_headers& headers = {}
+);
+```
+
+The response has the headers the equivalent GET would return (including its `Content-Length`) and an empty body.
+
+### DELETE Request
+
+```cpp
+std::expected<response, std::error_code> del(
+    std::string_view url,
+    const glz::http_headers& headers = {}
+);
+```
+
+### OPTIONS Request
+
+```cpp
+std::expected<response, std::error_code> options(
+    std::string_view url,
+    const glz::http_headers& headers = {}
+);
+```
+
+Pass `Origin` and `Access-Control-Request-Method` in `headers` to send a CORS preflight.
+
 ### JSON POST Request
 ```cpp
 template<class T>
@@ -232,6 +263,28 @@ void get_async(
     CompletionHandler&& handler
 );
 ```
+
+### Async HEAD Request
+
+**Future-based:**
+```cpp
+std::future<std::expected<response, std::error_code>> head_async(
+    std::string_view url,
+    const glz::http_headers& headers = {}
+);
+```
+
+**Callback-based:**
+```cpp
+template<typename CompletionHandler>
+void head_async(
+    std::string_view url,
+    const glz::http_headers& headers,
+    CompletionHandler&& handler
+);
+```
+
+As with `head`, the response has the headers the equivalent GET would return and an empty body.
 
 ### Async POST Request
 
@@ -650,6 +703,8 @@ For streaming requests (`stream_request_v2`), chunked data is delivered incremen
 
 1. **Idle timeout.** Entries returned to the pool more than `pool_idle_timeout` ago are evicted before reuse. The default is 4 seconds, chosen to be just under uvicorn's default 5s `--timeout-keep-alive`. Tune to slightly less than your server's keep-alive idle timeout if it differs.
 2. **Active liveness check.** For plain TCP sockets, a non-blocking `MSG_PEEK` checks whether the peer has already sent FIN or RST. SSL sockets skip the active peek (it would only see ciphertext) and rely on timestamp eviction plus the transparent-retry path.
+
+A connection goes back to the pool only after a complete response that leaves it open, so never after `Connection: close`, an HTTP/1.0 response without `Connection: keep-alive` (RFC 9112 9.3), or `101 Switching Protocols`. Interim (`1xx`) responses ahead of the final one are discarded on every path (RFC 9110 15.2); a reply that sends more than 16 fails with `std::errc::protocol_error`.
 
 ```cpp
 glz::http_client client;

@@ -73,6 +73,7 @@ namespace glz
          has_date = 2,
          has_server = 4,
          has_connection = 8,
+         has_upgrade = 16,
       };
 
       int status_code = 200;
@@ -207,6 +208,8 @@ namespace glz
             user_headers_set |= has_server;
          else if (glz::striequal(name, "connection"))
             user_headers_set |= has_connection;
+         else if (glz::striequal(name, "upgrade"))
+            user_headers_set |= has_upgrade;
       }
    };
 
@@ -267,6 +270,15 @@ namespace glz
       std::optional<std::string> response_schema{};
       std::optional<std::string> request_body_type_name{};
       std::optional<std::string> response_type_name{};
+   };
+
+   /**
+    * @brief The methods that have a route for a target, and the captures of the first such route.
+    */
+   struct target_methods
+   {
+      http_method_set methods{};
+      std::unordered_map<std::string, std::string> params{};
    };
 
    /**
@@ -431,13 +443,22 @@ namespace glz
        * @brief Detect a decoded capture that carries a NUL byte.
        *
        * The request target cannot hold a raw NUL, so one only reaches a capture
-       * as "%00" through url_decode. A capture joined onto a base directory
+       * as "%00" through url_decode_path. A capture joined onto a base directory
        * reaches open() as a C string, which ends at the first NUL, so
        * "report.txt%00.pdf" opens "report.txt" while every check a handler runs
        * on the std::string first, such as an extension allowlist, still sees
        * ".pdf".
        */
       static bool has_embedded_nul(std::string_view path) noexcept { return path.find('\0') != std::string_view::npos; }
+
+      /**
+       * @brief Whether a decoded capture may bind to a parameter: no ".." component, root or
+       * drive prefix, or NUL byte (see the three checks above).
+       */
+      static bool is_safe_capture(std::string_view capture) noexcept
+      {
+         return !has_dot_dot_segment(capture) && !has_root_prefix(capture) && !has_embedded_nul(capture);
+      }
 
       /**
        * @brief Register a route in the table.
@@ -498,6 +519,35 @@ namespace glz
          match_node(&root, segments, 0, method, params, result);
 
          return {result, params};
+      }
+
+      /**
+       * @brief Find every method with a route for a path, in one walk of the table.
+       *
+       * A method is reported exactly when match() would find a route for it, so per-method
+       * constraints apply. The captures returned are those of the first route found, in
+       * match()'s order: direct routes, then static, parameter, and wildcard segments.
+       *
+       * @param path The request path, without a query string.
+       * @param segments The path split by split_path, so a caller searching several tables
+       *        splits it once.
+       */
+      target_methods methods_for(std::string_view path, const std::vector<std::string>& segments) const
+      {
+         target_methods result;
+         if (routes.empty()) {
+            return result;
+         }
+
+         if (auto direct_it = direct_routes.find(std::string(path)); direct_it != direct_routes.end()) {
+            for (const auto& [method, _] : direct_it->second) {
+               result.methods.insert(method);
+            }
+         }
+
+         std::unordered_map<std::string, std::string> params;
+         collect_methods(&root, segments, 0, params, result);
+         return result;
       }
 
       /**
@@ -589,36 +639,54 @@ namespace glz
          }
       }
 
-      bool match_node(radix_node* node, const std::vector<std::string>& segments, size_t index, http_method method,
-                      std::unordered_map<std::string, std::string>& params, H& result) const
+      // Whether the captures so far satisfy the constraints a route registered for `method`
+      // at this endpoint. A constraint on a parameter the path did not capture is skipped.
+      static bool constraints_pass(const radix_node& node, http_method method,
+                                   const std::unordered_map<std::string, std::string>& params)
+      {
+         auto constraints_it = node.constraints.find(method);
+         if (constraints_it == node.constraints.end()) {
+            return true;
+         }
+         for (const auto& [param_name, constraint] : constraints_it->second) {
+            auto param_it = params.find(param_name);
+            if (param_it != params.end() && !constraint.validation(param_it->second)) {
+               return false;
+            }
+         }
+         return true;
+      }
+
+      // A "*name" capture: the remaining segments, each decoded, joined by '/'.
+      static std::string wildcard_capture(const std::vector<std::string>& segments, size_t index)
+      {
+         std::string full_capture;
+         for (size_t i = index; i < segments.size(); i++) {
+            if (i > index) full_capture += "/";
+            full_capture += url_decode_path(segments[i]);
+         }
+         return full_capture;
+      }
+
+      bool match_endpoint(const radix_node& node, http_method method,
+                          const std::unordered_map<std::string, std::string>& params, H& result) const
+      {
+         if (!node.is_endpoint) {
+            return false;
+         }
+         auto it = node.handlers.find(method);
+         if (it == node.handlers.end() || !constraints_pass(node, method, params)) {
+            return false;
+         }
+         result = it->second;
+         return true;
+      }
+
+      bool match_node(const radix_node* node, const std::vector<std::string>& segments, size_t index,
+                      http_method method, std::unordered_map<std::string, std::string>& params, H& result) const
       {
          if (index == segments.size()) {
-            if (node->is_endpoint) {
-               auto it = node->handlers.find(method);
-               if (it != node->handlers.end()) {
-                  bool constraints_passed = true;
-                  auto constraints_it = node->constraints.find(method);
-                  if (constraints_it != node->constraints.end()) {
-                     for (const auto& [param_name, constraint] : constraints_it->second) {
-                        auto param_it = params.find(param_name);
-                        if (param_it != params.end()) {
-                           const std::string& value = param_it->second;
-                           if (!constraint.validation(value)) {
-                              constraints_passed = false;
-                              break;
-                           }
-                        }
-                     }
-                  }
-
-                  if (constraints_passed) {
-                     result = it->second;
-                     return true;
-                  }
-                  return false;
-               }
-            }
-            return false;
+            return match_endpoint(*node, method, params, result);
          }
 
          const std::string& segment = segments[index];
@@ -631,13 +699,13 @@ namespace glz
          }
 
          if (node->parameter_child) {
-            std::string decoded = url_decode(segment);
+            std::string decoded = url_decode_path(segment);
 
             // A ":param" captures a single segment; refuse a decoded ".."
             // component, a leading separator, a drive prefix, or a NUL byte so
             // the value cannot escape a base directory or name a different file
             // when a handler treats it as a path.
-            if (!has_dot_dot_segment(decoded) && !has_root_prefix(decoded) && !has_embedded_nul(decoded)) {
+            if (is_safe_capture(decoded)) {
                std::string param_name = node->parameter_child->parameter_name;
                params[param_name] = std::move(decoded);
 
@@ -650,47 +718,22 @@ namespace glz
          }
 
          if (node->wildcard_child) {
-            std::string full_capture;
-            for (size_t i = index; i < segments.size(); i++) {
-               if (i > index) full_capture += "/";
-               full_capture += url_decode(segments[i]);
-            }
+            std::string full_capture = wildcard_capture(segments, index);
 
             // The capture is joined from decoded segments, so a "%2e%2e%2f" in
             // the request only resolves to a ".." here, a leading "%2f" to a
             // rooted path, and a "%00" to a NUL; refuse all of them, and a drive
             // prefix, so a mount like "/files/*path" cannot be walked outside its
             // base directory or truncated onto another file.
-            if (has_dot_dot_segment(full_capture) || has_root_prefix(full_capture) || has_embedded_nul(full_capture)) {
+            if (!is_safe_capture(full_capture)) {
                return false;
             }
 
             const auto& wildcard_name = node->wildcard_child->parameter_name;
-            params[wildcard_name] = full_capture;
+            params[wildcard_name] = std::move(full_capture);
 
-            if (node->wildcard_child->is_endpoint) {
-               auto it = node->wildcard_child->handlers.find(method);
-               if (it != node->wildcard_child->handlers.end()) {
-                  bool constraints_passed = true;
-                  auto constraints_it = node->wildcard_child->constraints.find(method);
-                  if (constraints_it != node->wildcard_child->constraints.end()) {
-                     for (const auto& [param_name, constraint] : constraints_it->second) {
-                        auto param_it = params.find(param_name);
-                        if (param_it != params.end()) {
-                           const std::string& value = param_it->second;
-                           if (!constraint.validation(value)) {
-                              constraints_passed = false;
-                              break;
-                           }
-                        }
-                     }
-                  }
-
-                  if (constraints_passed) {
-                     result = it->second;
-                     return true;
-                  }
-               }
+            if (match_endpoint(*node->wildcard_child, method, params, result)) {
+               return true;
             }
 
             // Wildcard match failed (not an endpoint, wrong method, or
@@ -701,6 +744,62 @@ namespace glz
          }
 
          return false;
+      }
+
+      // Adds the methods this endpoint answers under the current captures. The first
+      // endpoint to add any keeps its captures, as the route match() would try first.
+      static void collect_endpoint(const radix_node& node, const std::unordered_map<std::string, std::string>& params,
+                                   target_methods& result)
+      {
+         if (!node.is_endpoint) {
+            return;
+         }
+         const bool first_route = result.methods.empty();
+         for (const auto& [method, _] : node.handlers) {
+            if (!result.methods.contains(method) && constraints_pass(node, method, params)) {
+               result.methods.insert(method);
+            }
+         }
+         if (first_route && !result.methods.empty()) {
+            result.params = params;
+         }
+      }
+
+      // match_node for every method at once: the same walk and capture rules, but every
+      // branch is visited, since each method takes the first branch that answers it.
+      void collect_methods(const radix_node* node, const std::vector<std::string>& segments, size_t index,
+                           std::unordered_map<std::string, std::string>& params, target_methods& result) const
+      {
+         if (index == segments.size()) {
+            collect_endpoint(*node, params, result);
+            return;
+         }
+
+         const std::string& segment = segments[index];
+
+         if (auto static_it = node->static_children.find(segment); static_it != node->static_children.end()) {
+            collect_methods(static_it->second.get(), segments, index + 1, params, result);
+         }
+
+         if (node->parameter_child) {
+            std::string decoded = url_decode_path(segment);
+            if (is_safe_capture(decoded)) {
+               const std::string& param_name = node->parameter_child->parameter_name;
+               params[param_name] = std::move(decoded);
+               collect_methods(node->parameter_child.get(), segments, index + 1, params, result);
+               params.erase(param_name);
+            }
+         }
+
+         if (node->wildcard_child) {
+            std::string full_capture = wildcard_capture(segments, index);
+            if (is_safe_capture(full_capture)) {
+               const std::string& wildcard_name = node->wildcard_child->parameter_name;
+               params[wildcard_name] = std::move(full_capture);
+               collect_endpoint(*node->wildcard_child, params, result);
+               params.erase(wildcard_name);
+            }
+         }
       }
 
       void print_node(const radix_node* node, int depth) const
@@ -1163,6 +1262,34 @@ namespace glz
          std::string_view target) const
       {
          return websocket_routes.match(http_method::GET, target);
+      }
+
+      /**
+       * @brief Every method with a route for a target, and the captures of the first such route.
+       *
+       * Covers normal, streaming, and WebSocket routes (a WebSocket route counts as GET, the
+       * method of its upgrade request), respecting each route's constraints. Lets a server
+       * tell a target with no route at all (404 Not Found) from one requested with a method
+       * it has no route for (405 Method Not Allowed, whose Allow header lists these, RFC 9110
+       * 15.5.6). The path is split once and each table with routes is walked once.
+       *
+       * @param target The request target (may include a query string)
+       */
+      target_methods allowed_methods(std::string_view target) const
+      {
+         const auto path = split_target(target).path;
+         const auto segments = normal_route_table::split_path(path);
+
+         target_methods result = normal_routes.methods_for(path, segments);
+         const auto merge = [&](target_methods&& more) {
+            if (result.methods.empty()) {
+               result.params = std::move(more.params);
+            }
+            result.methods |= more.methods;
+         };
+         merge(streaming_routes.methods_for(path, segments));
+         merge(websocket_routes.methods_for(path, segments));
+         return result;
       }
 
       /**

@@ -415,11 +415,39 @@ suite http_smuggling_suite = [] {
    // No handler is involved here: the 404 body is the server's own.
    "An error reply to HEAD carries no content"_test = [&] {
       const auto reply = pipeline_before_marker(
-         "HEAD /marker HTTP/1.1\r\n"
+         "HEAD /no-such-route HTTP/1.1\r\n"
          "Host: localhost\r\n"
          "\r\n");
 
       expect(reply.head.starts_with("HTTP/1.1 404")) << "got: " << reply.head;
+      expect(reply.rest.starts_with("HTTP/1.1 200"))
+         << "Content after a HEAD reply is read as the next response, got: " << reply.rest;
+   };
+
+   // RFC 9110 9.3.2: /marker is GET only, so HEAD runs the GET route and gets its framing.
+   "HEAD on a GET route keeps the GET Content-Length and carries no content"_test = [&] {
+      const auto reply = pipeline_before_marker(
+         "HEAD /marker HTTP/1.1\r\n"
+         "Host: localhost\r\n"
+         "\r\n");
+
+      expect(reply.head.starts_with("HTTP/1.1 200")) << "got: " << reply.head;
+      expect(reply.head.find("Content-Length: 6\r\n") != std::string::npos)
+         << "A HEAD reply states the length GET would return, got: " << reply.head;
+      expect(reply.rest.starts_with("HTTP/1.1 200"))
+         << "Content after a HEAD reply is read as the next response, got: " << reply.rest;
+      expect(reply.rest.ends_with("marker")) << "The pipelined request must still be answered";
+   };
+
+   // /front is POST only, so HEAD gets the server's own 405.
+   "A 405 reply to HEAD carries no content"_test = [&] {
+      const auto reply = pipeline_before_marker(
+         "HEAD /front HTTP/1.1\r\n"
+         "Host: localhost\r\n"
+         "\r\n");
+
+      expect(reply.head.starts_with("HTTP/1.1 405")) << "got: " << reply.head;
+      expect(reply.head.find("Allow: POST, OPTIONS\r\n") != std::string::npos) << "got: " << reply.head;
       expect(reply.rest.starts_with("HTTP/1.1 200"))
          << "Content after a HEAD reply is read as the next response, got: " << reply.rest;
    };
@@ -519,6 +547,19 @@ suite http_smuggling_suite = [] {
    "A streamed reply to HEAD keeps the GET framing and carries no content"_test = [&] {
       const auto response = stream_reply(
          "HEAD /stream-head HTTP/1.1\r\n"
+         "Host: localhost\r\n"
+         "\r\n");
+
+      expect(response.starts_with("HTTP/1.1 200")) << "got: " << response;
+      expect(response.find("Transfer-Encoding: chunked\r\n") != std::string::npos)
+         << "A HEAD reply states the framing GET would use, got: " << response;
+      expect(ends_at_header_section(response)) << "got: " << response;
+   };
+
+   // A HEAD with no streaming route of its own runs the streaming GET route.
+   "HEAD on a streaming GET route keeps the GET framing and carries no content"_test = [&] {
+      const auto response = stream_reply(
+         "HEAD /stream-empty-send HTTP/1.1\r\n"
          "Host: localhost\r\n"
          "\r\n");
 

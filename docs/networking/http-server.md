@@ -196,6 +196,14 @@ server.get("/files/*path", [](const glz::request& req, glz::response& res) {
 });
 ```
 
+Captured parameters are percent-decoded. A `+` stays a literal plus, since `+` only means a space in query strings and form bodies.
+
+### Unmatched Requests
+
+A request whose path has no route answers `404 Not Found`. A request whose path has routes, but none for its method, answers `405 Method Not Allowed` with an `Allow` header listing the routed methods (normal, streaming, and WebSocket, which counts as `GET`), plus `HEAD` wherever `GET` is listed and `OPTIONS`, which the server answers itself for any routed path. See [CORS preflight handling](advanced-networking.md#automatic-preflight-handling) for `OPTIONS`. A `GET` to a WebSocket route that does not ask to upgrade answers `426 Upgrade Required` with `Upgrade: websocket`.
+
+These responses are built where a route's handler would run: after request hooks and middleware (such as CORS), and before response hooks, so headers those add are kept and hooks see every response. Wrapping middleware only wraps route handlers.
+
 ### Query Parameters
 
 Query parameters are automatically parsed and available in `req.query`:
@@ -258,7 +266,7 @@ glz::param_constraint email_constraint{
 
 Constraints are passed through the route `spec` (`.constraints = ...`).
 
-If a constraint returns `false`, the route is treated as a non-match. In `glz::http_server`, this means the default response is `404 Not Found`. If you want a custom error body/status (for example `400` with validation details), perform the validation in your handler and set the response explicitly.
+If a constraint returns `false`, the route is treated as a non-match. In `glz::http_server`, this means the default response is `404 Not Found` (or `405` when a route for another method matches). If you want a custom error body/status (for example `400` with validation details), perform the validation in your handler and set the response explicitly.
 
 ## Response Handling
 
@@ -329,17 +337,17 @@ server.get("/users/:id", [](const glz::request& req, glz::response& res) {
 
 A reply to a `HEAD` request and any `1xx`, `204` or `304` response ends at the empty line after its headers (RFC 9112 6.3), so the server sends no body for them even when the handler set one. A recipient never reads a body from these, and bytes sent there would be read as the start of the next response on a keep-alive connection.
 
-- `HEAD`: `Content-Length` is still generated from the body the handler built, which is the length `GET` would return. A `HEAD` route can therefore share its handler with the `GET` route.
+- `HEAD`: `Content-Length` is still generated from the body the handler built, which is the length `GET` would return. A `HEAD` with no route of its own runs the `GET` route (RFC 9110 9.3.2), with `req.method` set to `HEAD`, so a `GET` route answers `HEAD` without registering anything.
 - `1xx`, `204`: no `Content-Length` is sent, one the handler set included (RFC 9110 8.6).
 - `304`: no `Content-Length` is generated; one the handler set is kept, since the handler may know the length of the `200` the `304` stands in for.
 
 ```cpp
-auto get_report = [](const glz::request&, glz::response& res) { res.json(build_report()); };
-server.get("/report", get_report);
-server.route(glz::http_method::HEAD, "/report", get_report); // headers only, same Content-Length
+server.get("/report", [](const glz::request&, glz::response& res) { res.json(build_report()); });
+// HEAD /report runs the same handler and sends the headers only, with the same Content-Length.
+// Register a HEAD route to answer it differently, for example without building the body.
 ```
 
-Streaming routes follow the same rule. After `start_stream` with a `1xx`, `204` or `304` status, or on a `HEAD` streaming route, `send` writes nothing and `close` ends the response without a terminating chunk. A send callback on the stream connection receives `std::errc::operation_not_permitted`, so sender loops such as `streaming_utils::send_periodic_data` close the stream right away. `Transfer-Encoding: chunked` is generated only for `HEAD`, where it states the framing `GET` would use. A `1xx` or `204` drops a `Content-Length` or `Transfer-Encoding` the handler passed to `start_stream`.
+Streaming routes follow the same rule, and a `HEAD` with no streaming route of its own runs the streaming `GET` route. After `start_stream` with a `1xx`, `204` or `304` status, or on a `HEAD` request, `send` writes nothing and `close` ends the response without a terminating chunk. A send callback on the stream connection receives `std::errc::operation_not_permitted`, so sender loops such as `streaming_utils::send_periodic_data` close the stream right away. `Transfer-Encoding: chunked` is generated only for `HEAD`, where it states the framing `GET` would use. A `1xx` or `204` drops a `Content-Length` or `Transfer-Encoding` the handler passed to `start_stream`.
 
 ## Middleware
 
