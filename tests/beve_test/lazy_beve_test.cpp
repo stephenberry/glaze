@@ -1203,10 +1203,8 @@ suite lazy_beve_tests = [] {
 
    "lazy_beve_typed_float_array_integral_get"_test = [] {
       // A typed float array element carries no tag byte, so get<T>() decodes it in
-      // read_numeric_from_tag instead of the numeric reader, which refuses float to integral
-      // conversions. The element getter cast the double instead: undefined behavior for a value
-      // outside the integer's range (UBSan: 1e+300 is outside the range of representable values
-      // of type 'long long') and a truncated number returned as a success otherwise.
+      // read_numeric_from_tag rather than the numeric reader. An integral get<T>() must still
+      // fail like read_beve does, instead of casting (UB when out of range, truncation otherwise).
       const std::vector<double> doubles{1e300, -1e300, 3.7};
       std::vector<std::byte> buffer;
       expect(not glz::write_beve(doubles, buffer));

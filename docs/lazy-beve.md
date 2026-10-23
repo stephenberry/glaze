@@ -324,7 +324,7 @@ if (value) {
 | `std::string_view` | String view (zero-copy) |
 | `std::nullptr_t` | Null values |
 
-Numeric conversions follow `glz::read_beve`: an integer value can be read as a wider integer or as a floating point type, but a floating point value is not converted to an integer type. `get<int64_t>()` on a `double`, whether it is a scalar or an element of a typed array, reports an error rather than a truncated value.
+Numeric conversions follow `glz::read_beve`: an integer value can be read as any integer or floating point type, but a floating point value is not converted to an integer type. `get<int64_t>()` on a `double`, whether it is a scalar or an element of a typed array, reports an error rather than a truncated value.
 
 ## Error Handling
 
