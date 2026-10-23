@@ -1689,11 +1689,12 @@ suite stream_disconnect_tests = [] {
    // crashes under AddressSanitizer when the two are not ordered.
    "disconnect_from_another_thread_ends_a_stalled_chunked_stream"_test = [] {
       constexpr auto stall = std::chrono::milliseconds(1000);
-      stalling_server server{"HTTP/1.1 200 OK\r\n"
-                             "Transfer-Encoding: chunked\r\n"
-                             "\r\n"
-                             "5\r\nhello\r\n",
-                             stall};
+      stalling_server server{
+         "HTTP/1.1 200 OK\r\n"
+         "Transfer-Encoding: chunked\r\n"
+         "\r\n"
+         "5\r\nhello\r\n",
+         stall};
       expect(server.start()) << "Stalling server should start";
 
       glz::http_client client;
@@ -1800,7 +1801,8 @@ suite stream_disconnect_tests = [] {
       std::this_thread::sleep_for(std::chrono::milliseconds(1500)); // past the timeout
       // Windows retries a refused loopback connect for about two seconds, so there the timeout
       // may end the stream first. Either way it ends once.
-      log.expect_one_end({make_error_code(asio::error::connection_refused), std::make_error_code(std::errc::timed_out)});
+      log.expect_one_end(
+         {make_error_code(asio::error::connection_refused), std::make_error_code(std::errc::timed_out)});
    };
 };
 

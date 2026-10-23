@@ -1788,8 +1788,8 @@ namespace glz
          connection->head_request = (method == "HEAD");
 
          // Wrap the disconnect handler to return the socket to the pool
-         auto internal_on_disconnect = [this, user_on_disconnect = std::move(on_disconnect), on_error, connection,
-                                        url, use_https]() {
+         auto internal_on_disconnect = [this, user_on_disconnect = std::move(on_disconnect), on_error, connection, url,
+                                        use_https]() {
             connection->is_connected = false;
             // Settle the socket before telling the caller the stream ended, matching the
             // non-streaming paths, which return the connection and only then run the
