@@ -227,9 +227,8 @@ class working_test_server
 
       // The server frames a HEAD reply and a 304 with the Content-Length of the body built
       // here but sends no body, which the client must not wait for.
-      server_.route(http_method::HEAD, "/head", [](const request&, response& res) {
-         res.status(200).content_type("text/plain").body("hello");
-      });
+      server_.route(http_method::HEAD, "/head",
+                    [](const request&, response& res) { res.status(200).content_type("text/plain").body("hello"); });
 
       server_.get("/not-modified", [](const request&, response& res) { res.status(304).body("cached body"); });
 

@@ -3021,8 +3021,7 @@ namespace glz
       // skip the match entirely. match_streaming() would otherwise allocate a params map,
       // split the path into a vector of segment strings, and run an empty-tree walk on
       // every request. The empty-check is O(1).
-      inline bool dispatch_streaming_route_with_conn(const std::shared_ptr<connection_state>& conn,
-                                                     http_method method)
+      inline bool dispatch_streaming_route_with_conn(const std::shared_ptr<connection_state>& conn, http_method method)
       {
          if (root_router.streaming_routes.routes.empty()) {
             return false;

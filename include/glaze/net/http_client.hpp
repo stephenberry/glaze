@@ -344,8 +344,7 @@ namespace glz
       // go back to the pool. RFC 9112 9.3: before HTTP/1.1 the connection closed after each
       // response unless the reply opted back in, so the absence of a signal means opposite
       // things either side of that line. After 101 the connection no longer speaks HTTP.
-      [[nodiscard]] inline bool response_ends_connection(const HttpStatusLine& status,
-                                                         const glz::http_headers& headers)
+      [[nodiscard]] inline bool response_ends_connection(const HttpStatusLine& status, const glz::http_headers& headers)
       {
          if (status.status_code == 101) {
             return true;
@@ -2264,8 +2263,8 @@ namespace glz
                         }
                         // Discard the interim response and read the next head.
                         connection->buffer->consume(bytes_transferred);
-                        read_stream_response(connection, std::move(on_data), std::move(on_error),
-                                             std::move(on_connect), std::move(on_disconnect));
+                        read_stream_response(connection, std::move(on_data), std::move(on_error), std::move(on_connect),
+                                             std::move(on_disconnect));
                         return;
                      }
 
@@ -2833,8 +2832,7 @@ namespace glz
             const size_t content_length = carries_no_body ? 0 : content_length_field.value;
             const bool has_content_length =
                carries_no_body || content_length_field.state == detail::content_length_state::present;
-            const bool is_chunked =
-               !carries_no_body && response_headers.contains_token("Transfer-Encoding", "chunked");
+            const bool is_chunked = !carries_no_body && response_headers.contains_token("Transfer-Encoding", "chunked");
             bool connection_close = detail::response_ends_connection(*parsed_status, response_headers);
 
             // Consume header data, leaving only the over-read body part.
@@ -3525,19 +3523,19 @@ namespace glz
             buffer->consume(header_size);
             std::visit(
                [&, this](auto& sock) {
-                  asio::async_read_until(
-                     *sock, *buffer, "\r\n\r\n",
-                     [this, socket_var, buffer, url, use_https, state,
-                      handler = std::forward<CompletionHandler>(handler)](asio::error_code ec,
-                                                                           std::size_t bytes_transferred) mutable {
-                        if (ec) {
-                           detail::close_socket(*socket_var, connection_pool->graceful_ssl_shutdown());
-                           handler(std::unexpected(ec));
-                           return;
-                        }
-                        parse_and_read_body(socket_var, buffer, bytes_transferred, url, use_https, std::move(state),
-                                            std::move(handler));
-                     });
+                  asio::async_read_until(*sock, *buffer, "\r\n\r\n",
+                                         [this, socket_var, buffer, url, use_https, state,
+                                          handler = std::forward<CompletionHandler>(handler)](
+                                            asio::error_code ec, std::size_t bytes_transferred) mutable {
+                                            if (ec) {
+                                               detail::close_socket(*socket_var,
+                                                                    connection_pool->graceful_ssl_shutdown());
+                                               handler(std::unexpected(ec));
+                                               return;
+                                            }
+                                            parse_and_read_body(socket_var, buffer, bytes_transferred, url, use_https,
+                                                                std::move(state), std::move(handler));
+                                         });
                },
                *socket_var);
             return;
@@ -3578,8 +3576,7 @@ namespace glz
             return;
          }
          // A bodyless reply is read as an empty Content-Length body, whatever it frames.
-         const bool carries_no_body =
-            detail::response_carries_no_body(state->head_request, parsed_status->status_code);
+         const bool carries_no_body = detail::response_carries_no_body(state->head_request, parsed_status->status_code);
          const size_t content_length = carries_no_body ? 0 : content_length_field.value;
          const bool has_content_length =
             carries_no_body || content_length_field.state == detail::content_length_state::present;

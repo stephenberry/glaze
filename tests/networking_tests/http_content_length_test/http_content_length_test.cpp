@@ -871,8 +871,7 @@ suite interim_responses = [] {
                                             .on_connect = [&](const glz::response&) { connected = true; },
                                             .on_disconnect = [&] { stream_done.set_value(); }});
       expect(conn != nullptr) << "stream request should start";
-      expect(stream_finished.wait_for(std::chrono::seconds(10)) == std::future_status::ready)
-         << "stream should end";
+      expect(stream_finished.wait_for(std::chrono::seconds(10)) == std::future_status::ready) << "stream should end";
       server.join();
 
       expect(!connected) << "no final response should be reported";

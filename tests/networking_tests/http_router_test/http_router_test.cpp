@@ -342,7 +342,8 @@ suite allowed_methods_tests = [] {
    "empty_for_unknown_path_or_failed_constraint"_test = [] {
       glz::http_router router;
       glz::route_spec spec;
-      spec.constraints["id"] = {.validation = [](std::string_view v) { return !v.empty() && v[0] >= '0' && v[0] <= '9'; }};
+      spec.constraints["id"] = {
+         .validation = [](std::string_view v) { return !v.empty() && v[0] >= '0' && v[0] <= '9'; }};
       router.get("/items/:id", [](const glz::request&, glz::response&) {}, spec);
 
       expect(router.allowed_methods("/nothing").methods.empty());
@@ -354,7 +355,8 @@ suite allowed_methods_tests = [] {
    "respects_per_method_constraints"_test = [] {
       glz::http_router router;
       glz::route_spec numeric;
-      numeric.constraints["id"] = {.validation = [](std::string_view v) { return !v.empty() && v[0] >= '0' && v[0] <= '9'; }};
+      numeric.constraints["id"] = {
+         .validation = [](std::string_view v) { return !v.empty() && v[0] >= '0' && v[0] <= '9'; }};
       router.get("/items/:id", [](const glz::request&, glz::response&) {});
       router.del("/items/:id", [](const glz::request&, glz::response&) {}, numeric);
 
