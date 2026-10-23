@@ -10117,6 +10117,13 @@ suite constraint_tests = [] {
       ec = glz::read<opts>(obj, invalid_data);
       expect(ec == glz::error_code::constraint_violated);
    };
+
+   "read_constraint writes a const object"_test = [] {
+      const constrained_object obj{.age = 1, .name = "test"};
+      std::string buffer{};
+      expect(not glz::write_json(obj, buffer));
+      expect(buffer == R"({"age":1,"name":"test"})") << buffer;
+   };
 };
 
 struct cross_constrained_object
