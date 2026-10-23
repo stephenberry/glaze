@@ -1,11 +1,14 @@
 #include "glaze/net/http_client.hpp"
 
 #include <algorithm>
+#include <array>
 #include <atomic>
 #include <cctype>
 #include <chrono>
 #include <future>
+#include <memory>
 #include <optional>
+#include <random>
 #include <string_view>
 #include <thread>
 #include <unordered_map>
@@ -1555,6 +1558,151 @@ class host_header_server
    std::thread server_thread_;
    uint16_t port_{0};
    std::string host_header_;
+};
+
+// Answers every connection with a chunked response head and one chunk, then sends nothing,
+// holding the connection open until the client closes it or `stall` passes.
+class stalling_chunked_server
+{
+  public:
+   explicit stalling_chunked_server(std::chrono::milliseconds stall) : stall_(stall) {}
+   ~stalling_chunked_server() { stop(); }
+
+   bool start()
+   {
+      try {
+         acceptor_ = std::make_unique<asio::ip::tcp::acceptor>(
+            io_, asio::ip::tcp::endpoint(asio::ip::make_address("127.0.0.1"), 0));
+         port_ = acceptor_->local_endpoint().port();
+         accept();
+         server_thread_ = std::thread([this]() { io_.run(); });
+         return true;
+      }
+      catch (...) {
+         return false;
+      }
+   }
+
+   void stop()
+   {
+      io_.stop();
+      if (server_thread_.joinable()) server_thread_.join();
+   }
+
+   std::string base_url() const { return "http://127.0.0.1:" + std::to_string(port_); }
+
+  private:
+   void accept()
+   {
+      acceptor_->async_accept([this](asio::error_code ec, asio::ip::tcp::socket socket) {
+         if (ec) return;
+         serve(std::make_shared<asio::ip::tcp::socket>(std::move(socket)));
+         accept();
+      });
+   }
+
+   void serve(std::shared_ptr<asio::ip::tcp::socket> socket)
+   {
+      auto request = std::make_shared<asio::streambuf>();
+      asio::async_read_until(*socket, *request, "\r\n\r\n", [this, socket, request](asio::error_code ec, std::size_t) {
+         if (ec) return;
+         static constexpr std::string_view reply =
+            "HTTP/1.1 200 OK\r\n"
+            "Transfer-Encoding: chunked\r\n"
+            "\r\n"
+            "5\r\nhello\r\n";
+         asio::async_write(*socket, asio::buffer(reply), [this, socket](asio::error_code ec, std::size_t) {
+            if (ec) return;
+            // The client's close or the end of the stall, whichever comes first, closes the socket.
+            auto timer = std::make_shared<asio::steady_timer>(io_, stall_);
+            timer->async_wait([socket, timer](asio::error_code) {
+               asio::error_code ignored;
+               socket->close(ignored);
+            });
+            auto sink = std::make_shared<std::array<char, 64>>();
+            socket->async_read_some(asio::buffer(*sink),
+                                    [timer, sink](asio::error_code, std::size_t) { timer->cancel(); });
+         });
+      });
+   }
+
+   std::chrono::milliseconds stall_;
+   asio::io_context io_;
+   std::unique_ptr<asio::ip::tcp::acceptor> acceptor_;
+   std::thread server_thread_;
+   uint16_t port_{0};
+};
+
+suite stream_disconnect_tests = [] {
+   // disconnect() called from a thread other than the client's workers, a few microseconds after
+   // the first chunk is delivered, while a worker moves on to the next read. The server then
+   // stalls, so a stop the client loses holds the stream until the server gives up, while one it
+   // honours ends the stream at once. A stop that races the client's own close of the socket
+   // crashes under AddressSanitizer when the two are not ordered.
+   "disconnect_from_another_thread_ends_a_stalled_chunked_stream"_test = [] {
+      constexpr auto stall = std::chrono::milliseconds(1000);
+      stalling_chunked_server server{stall};
+      expect(server.start()) << "Stalling server should start";
+
+      glz::http_client client;
+      std::mt19937 random{3021};
+      std::uniform_int_distribution<int> spin_us{0, 20};
+      const auto spin_for = [](std::chrono::steady_clock::duration span, const std::atomic<bool>* until_set) {
+         const auto deadline = std::chrono::steady_clock::now() + span;
+         while (std::chrono::steady_clock::now() < deadline) {
+            if (until_set && until_set->load()) return true;
+         }
+         return until_set == nullptr;
+      };
+
+      // Each lost stop costs a stall, so a failing run stops counting at a handful.
+      constexpr int rounds = 200;
+      constexpr int enough_lost = 5;
+      int ran = 0;
+      int lost = 0;
+      for (; ran < rounds && lost < enough_lost; ++ran) {
+         std::atomic<bool> delivered = false;
+         std::atomic<bool> released = false;
+         std::promise<void> disconnect_promise;
+         auto disconnect_future = disconnect_promise.get_future();
+
+         auto conn = client.stream_request_v2({.url = server.base_url() + "/stall",
+                                               .body = {},
+                                               .headers = {},
+                                               .on_data =
+                                                  [&](std::string_view) {
+                                                     // Hold the worker until the test thread is running, so
+                                                     // the stop below lands as the worker takes its next step.
+                                                     delivered = true;
+                                                     spin_for(std::chrono::seconds(5), &released);
+                                                  },
+                                               .on_error = [](std::error_code) {},
+                                               .on_progress = {},
+                                               .on_connect = {},
+                                               .on_disconnect = [&] { disconnect_promise.set_value(); }});
+         expect(conn != nullptr);
+         if (!conn || !spin_for(std::chrono::seconds(5), &delivered)) {
+            expect(false) << "The first chunk did not arrive";
+            break;
+         }
+
+         released = true;
+         spin_for(std::chrono::microseconds(spin_us(random)), nullptr);
+         conn->disconnect();
+
+         if (disconnect_future.wait_for(stall / 2) != std::future_status::ready) {
+            ++lost;
+         }
+         // A lost stop still ends when the server closes, so the next round starts on a clean slate.
+         if (disconnect_future.wait_for(std::chrono::seconds(5)) != std::future_status::ready) {
+            expect(false) << "The stream never ended";
+            break;
+         }
+      }
+
+      expect(ran == rounds && lost == 0) << lost << " stops were lost in " << ran << " rounds";
+      server.stop();
+   };
 };
 
 suite eof_delimited_tests = [] {
