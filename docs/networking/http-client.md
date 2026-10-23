@@ -331,7 +331,7 @@ auto conn = client.stream_request_v2({
 });
 ```
 
-The `http_stream_connection` object contains a `disconnect()` method that can be used to close the connection.
+The `http_stream_connection` object contains a `disconnect()` method that can be used to close the connection. It may be called from any thread, including from inside `on_data` or `on_progress`. It cancels the stream's pending operation and shuts its socket down under a lock the client also takes to start each operation and to close the socket, so the stream ends with `on_disconnect` even when the server has stopped sending, and its socket is closed rather than returned to the pool.
 
 ### Progress and Cancellation
 

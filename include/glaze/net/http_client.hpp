@@ -1176,6 +1176,12 @@ namespace glz
       // The response asked for the connection to be closed once it is delivered, so
       // the socket is single-use no matter how cleanly the body ends.
       std::atomic<bool> peer_will_close{false};
+      // Orders a stop with the stream's own use of its socket. disconnect() holds it while it cancels
+      // and shuts the socket down; the client holds it while it tests should_stop and starts the next
+      // operation, and while it closes or pools the socket. A disconnect() from any thread so lands
+      // either before an operation starts, which then does not, or after, and ends it; and never
+      // while the socket is being closed.
+      std::mutex mutex;
       stream_read_strategy strategy{stream_read_strategy::bulk_transfer}; // Default strategy
       std::function<bool(int)> status_is_error{}; // Evaluated before treating status as failure
       http_progress_handler on_progress{}; // Reports body bytes delivered; returning false cancels
@@ -1198,23 +1204,28 @@ namespace glz
          : buffer(std::make_shared<asio::streambuf>(max_buffer_size)), strategy(read_strategy)
       {}
 
-      // User-facing disconnect. Signals the internal loops to stop.
+      // User-facing disconnect, callable from any thread. Signals the internal loops to stop.
       // The actual socket closing/pooling is handled by the internal disconnect handler.
       void disconnect()
       {
          bool expected = false;
          if (should_stop.compare_exchange_strong(expected, true)) {
+            std::lock_guard lock(mutex);
             if (socket && detail::socket_is_open(*socket)) {
                asio::error_code ec;
-               // This cancels pending async operations on the socket, triggering their handlers
-               // with asio::error::operation_aborted.
+               // The cancel aborts the pending operation, whose handler sees operation_aborted.
+               // The shutdown ends one that asio starts after it: a composed read between two of
+               // its steps starts its next read itself, outside this lock, and that read finds the
+               // socket shut down rather than waiting on a peer that may have stalled.
                std::visit(
                   [&](auto& sock) {
                      if constexpr (requires { sock->next_layer(); }) {
                         sock->next_layer().cancel(ec);
+                        sock->next_layer().shutdown(asio::ip::tcp::socket::shutdown_both, ec);
                      }
                      else {
                         sock->cancel(ec);
+                        sock->shutdown(asio::ip::tcp::socket::shutdown_both, ec);
                      }
                   },
                   *socket);
@@ -1778,6 +1789,7 @@ namespace glz
             // still in hand, so a caller that starts its next request from on_disconnect
             // finds an empty pool and dials a second connection - never reusing the very
             // socket the code below is about to make reusable.
+            std::unique_lock lock(connection->mutex);
             if (connection->socket) {
                // Only a socket sitting at the end of a fully-read response can serve
                // the next request. Pooling one that timed out, errored, or was
@@ -1786,14 +1798,16 @@ namespace glz
                // request reads as its own status line - the same desync a conflicting
                // Content-Length produces, reached through the pool instead. A body
                // framed by connection close leaves the socket at EOF, which is dead
-               // rather than dangerous, but equally unusable.
-               if (connection->response_complete.load(std::memory_order_relaxed)) {
+               // rather than dangerous, but equally unusable. A stop shuts the socket
+               // down, so a response completed after one is not pooled either.
+               if (connection->response_complete.load(std::memory_order_relaxed) && !connection->should_stop) {
                   connection_pool->return_connection(url.host, url.port, use_https, std::move(*connection->socket));
                }
                else {
                   detail::close_socket(*connection->socket, connection_pool->graceful_ssl_shutdown());
                }
             }
+            lock.unlock();
             // Returning the socket leaves a null shared_ptr in the variant; every accessor
             // guards on it, so the disconnect() that http_stream_connection runs from its
             // destructor is a no-op rather than a dereference of a moved-from socket.
@@ -1835,6 +1849,12 @@ namespace glz
                   if (ec || connection->should_stop) {
                      if (on_error) on_error(ec);
                      internal_on_disconnect(); // Ensure cleanup on resolve error
+                     return;
+                  }
+
+                  auto lock = lock_unless_stopped(connection);
+                  if (!lock) {
+                     internal_on_disconnect();
                      return;
                   }
 
@@ -1903,6 +1923,12 @@ namespace glz
             return;
          }
 
+         auto lock = lock_unless_stopped(connection);
+         if (!lock) {
+            on_disconnect();
+            return;
+         }
+
          ssl_sock->async_handshake(
             asio::ssl::stream_base::client, [this, url, method, body, headers, connection, on_data = std::move(on_data),
                                              on_error = std::move(on_error), on_connect = std::move(on_connect),
@@ -1930,6 +1956,12 @@ namespace glz
          auto request_buffer =
             std::make_shared<std::string>(detail::build_http_request_bytes(method, url, use_https, body, headers));
 
+         auto lock = lock_unless_stopped(connection);
+         if (!lock) {
+            if (on_disconnect) on_disconnect();
+            return;
+         }
+
          std::visit(
             [&, this](auto& sock) {
                asio::async_write(*sock, asio::buffer(*request_buffer),
@@ -1947,6 +1979,19 @@ namespace glz
                                  });
             },
             *connection->socket);
+      }
+
+      // Taken before the stream starts its next operation on its socket, and held until it has.
+      // Returns a lock that owns nothing when a stop has been asked for: the caller then starts
+      // nothing and ends the stream. A stop asked for while no operation was pending - from
+      // on_data, on_progress or another thread - cancelled nothing, and is honoured here.
+      static std::unique_lock<std::mutex> lock_unless_stopped(const std::shared_ptr<http_stream_connection>& connection)
+      {
+         std::unique_lock lock(connection->mutex);
+         if (connection->should_stop) {
+            lock.unlock();
+         }
+         return lock;
       }
 
       // Returns false once the caller has cancelled from on_progress, which stops the
@@ -2023,6 +2068,12 @@ namespace glz
                                 http_error_handler on_error, http_connect_handler on_connect,
                                 http_disconnect_handler on_disconnect)
       {
+         auto lock = lock_unless_stopped(connection);
+         if (!lock) {
+            if (on_disconnect) on_disconnect();
+            return;
+         }
+
          // Use the connection's unified buffer
          std::visit(
             [&, this](auto& sock) {
@@ -2088,7 +2139,9 @@ namespace glz
                      connection->buffer->consume(bytes_transferred);
 
                      connection->is_connected = true;
+                     std::unique_lock timer_lock(connection->mutex); // disconnect() cancels the timer too
                      connection->timer->cancel();
+                     timer_lock.unlock();
 
                      // RFC 9112 9.3: before HTTP/1.1 the connection closed after each
                      // response unless the reply opted back in, so the absence of a signal
@@ -2175,6 +2228,14 @@ namespace glz
       void read_chunk_size(std::shared_ptr<http_stream_connection> connection, http_data_handler on_data,
                            http_error_handler on_error, http_disconnect_handler on_disconnect)
       {
+         // Every way into the next chunk passes here: the first after the head, the posted one after
+         // a chunk delivered from the buffer, and the one after a chunk read from the socket.
+         auto lock = lock_unless_stopped(connection);
+         if (!lock) {
+            if (on_disconnect) on_disconnect();
+            return;
+         }
+
          std::visit(
             [&, this](auto& sock) {
                asio::async_read_until(
@@ -2231,6 +2292,12 @@ namespace glz
       // server sends next, which is the one state that makes it reusable.
       void consume_trailers(std::shared_ptr<http_stream_connection> connection, http_disconnect_handler on_disconnect)
       {
+         auto lock = lock_unless_stopped(connection);
+         if (!lock) {
+            if (on_disconnect) on_disconnect();
+            return;
+         }
+
          std::visit(
             [&, this](auto& sock) {
                asio::async_read_until(*sock, *connection->buffer, "\r\n",
@@ -2299,6 +2366,12 @@ namespace glz
          }
 
          // We need to read more from the socket.
+         auto lock = lock_unless_stopped(connection);
+         if (!lock) {
+            if (on_disconnect) on_disconnect();
+            return;
+         }
+
          std::visit(
             [&, this](auto& sock) {
                asio::async_read(
@@ -2371,6 +2444,12 @@ namespace glz
             }
             start_stream_reading(connection, on_data, on_error, on_disconnect);
          };
+
+         auto lock = lock_unless_stopped(connection);
+         if (!lock) {
+            if (on_disconnect) on_disconnect();
+            return;
+         }
 
          std::visit(
             [&](auto& sock) {
