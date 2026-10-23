@@ -1201,6 +1201,70 @@ suite lazy_beve_tests = [] {
       check(std::vector<double>{3.141592653589793, -1e300});
    };
 
+   "lazy_beve_typed_float_array_integral_get"_test = [] {
+      // A typed float array element carries no tag byte, so get<T>() decodes it in
+      // read_numeric_from_tag rather than the numeric reader. An integral get<T>() must still
+      // fail like read_beve does, instead of casting (UB when out of range, truncation otherwise).
+      const std::vector<double> doubles{1e300, -1e300, 3.7};
+      std::vector<std::byte> buffer;
+      expect(not glz::write_beve(doubles, buffer));
+      auto result = glz::lazy_beve(buffer);
+      expect(result.has_value());
+      if (not result) return;
+
+      const auto root = result->root();
+      const auto indexed = root.index();
+      expect(indexed.size() == doubles.size());
+      for (size_t i = 0; i < doubles.size(); ++i) {
+         const auto by_position = root[i].get<int64_t>();
+         expect(not by_position.has_value());
+         if (not by_position) expect(by_position.error() == glz::error_code::syntax_error);
+         expect(not root[i].get<uint8_t>().has_value());
+         expect(not indexed[i].get<int32_t>().has_value());
+         expect(not indexed[i].get<uint64_t>().has_value());
+
+         const auto as_double = root[i].get<double>();
+         expect(as_double.has_value());
+         if (as_double) expect(*as_double == doubles[i]);
+      }
+
+      // The same bytes through the eager reader and a scalar double in an object agree.
+      std::vector<int64_t> eager{};
+      expect(glz::read_beve(eager, buffer) == glz::error_code::syntax_error);
+      std::string object_buffer{};
+      expect(not glz::write_beve(lazy_beve_test::DoubleField{1e300}, object_buffer));
+      auto object = glz::lazy_beve(object_buffer);
+      expect(object.has_value());
+      if (object) {
+         const auto scalar = (*object)["value"].get<int64_t>();
+         expect(not scalar.has_value());
+      }
+
+      // Four-byte floats take the same path.
+      const std::vector<float> floats{1e30f, 2.5f};
+      buffer.clear();
+      expect(not glz::write_beve(floats, buffer));
+      result = glz::lazy_beve(buffer);
+      expect(result.has_value());
+      if (not result) return;
+      expect(not result->root()[0].get<int32_t>().has_value());
+      expect(not result->root()[1].get<int32_t>().has_value());
+      const auto as_float = result->root()[1].get<float>();
+      expect(as_float.has_value());
+      if (as_float) expect(*as_float == 2.5f);
+
+      // Integer elements still widen to a floating point get<T>().
+      const std::vector<int32_t> ints{7, -8};
+      buffer.clear();
+      expect(not glz::write_beve(ints, buffer));
+      result = glz::lazy_beve(buffer);
+      expect(result.has_value());
+      if (not result) return;
+      const auto widened = result->root()[1].get<double>();
+      expect(widened.has_value());
+      if (widened) expect(*widened == -8.0);
+   };
+
    // ============================================================================
    // Unsigned integer array tests
    // ============================================================================
