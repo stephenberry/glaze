@@ -1158,16 +1158,11 @@ namespace glz
    using http_progress_handler = std::function<bool(size_t transferred, size_t total)>;
 
    // Streaming HTTP connection handle
-   struct http_stream_connection : std::enable_shared_from_this<http_stream_connection>
+   struct http_stream_connection
    {
       std::shared_ptr<socket_variant> socket;
       std::shared_ptr<asio::steady_timer> timer;
       std::shared_ptr<asio::streambuf> buffer; // Use unified streambuf for all reads
-      // The strand every handler of this stream runs on. The client's workers share one
-      // io_context, so without it two of them could run this stream's handlers at once, and a
-      // disconnect() from a caller's thread would touch the socket while a worker reads from or
-      // closes it. Empty until the client starts the stream.
-      asio::any_io_executor strand{};
       bool is_connected{false};
       std::atomic<bool> should_stop{false};
       // Set only once the response has been read to its framed end - terminal chunk,
@@ -1181,6 +1176,12 @@ namespace glz
       // The response asked for the connection to be closed once it is delivered, so
       // the socket is single-use no matter how cleanly the body ends.
       std::atomic<bool> peer_will_close{false};
+      // Orders a stop with the stream's own use of its socket. disconnect() holds it while it cancels
+      // and shuts the socket down; the client holds it while it tests should_stop and starts the next
+      // operation, and while it closes or pools the socket. A disconnect() from any thread so lands
+      // either before an operation starts, which then does not, or after, and ends it; and never
+      // while the socket is being closed.
+      std::mutex mutex;
       stream_read_strategy strategy{stream_read_strategy::bulk_transfer}; // Default strategy
       std::function<bool(int)> status_is_error{}; // Evaluated before treating status as failure
       http_progress_handler on_progress{}; // Reports body bytes delivered; returning false cancels
@@ -1203,53 +1204,39 @@ namespace glz
          : buffer(std::make_shared<asio::streambuf>(max_buffer_size)), strategy(read_strategy)
       {}
 
-      // User-facing disconnect, callable from any thread. Signals the internal loops to stop and
-      // cancels the pending read on the stream's strand, so the cancel is ordered with the reads
-      // it aborts and with the close of the socket, and a read the stream would start after it
-      // sees should_stop first. The actual socket closing/pooling is handled by the internal
-      // disconnect handler.
+      // User-facing disconnect, callable from any thread. Signals the internal loops to stop.
+      // The actual socket closing/pooling is handled by the internal disconnect handler.
       void disconnect()
       {
          bool expected = false;
-         if (!should_stop.compare_exchange_strong(expected, true)) {
-            return;
-         }
-         // On the strand already - in a handler, on_data or on_progress - dispatch cancels at
-         // once; from any other thread it queues the cancel behind the handler now running.
-         if (auto self = weak_from_this().lock(); self && strand) {
-            asio::dispatch(strand, [self] { self->cancel_pending_operations(); });
-         }
-         else {
-            cancel_pending_operations();
+         if (should_stop.compare_exchange_strong(expected, true)) {
+            std::lock_guard lock(mutex);
+            if (socket && detail::socket_is_open(*socket)) {
+               asio::error_code ec;
+               // The cancel aborts the pending operation, whose handler sees operation_aborted.
+               // The shutdown ends one that asio starts after it: a composed read between two of
+               // its steps starts its next read itself, outside this lock, and that read finds the
+               // socket shut down rather than waiting on a peer that may have stalled.
+               std::visit(
+                  [&](auto& sock) {
+                     if constexpr (requires { sock->next_layer(); }) {
+                        sock->next_layer().cancel(ec);
+                        sock->next_layer().shutdown(asio::ip::tcp::socket::shutdown_both, ec);
+                     }
+                     else {
+                        sock->cancel(ec);
+                        sock->shutdown(asio::ip::tcp::socket::shutdown_both, ec);
+                     }
+                  },
+                  *socket);
+            }
+            if (timer) {
+               timer->cancel();
+            }
          }
       }
 
-      // No handler holds the stream once it is being destroyed, so nothing else can be using its
-      // socket or timer.
       ~http_stream_connection() { disconnect(); }
-
-     private:
-      void cancel_pending_operations()
-      {
-         if (socket && detail::socket_is_open(*socket)) {
-            asio::error_code ec;
-            // This cancels pending async operations on the socket, triggering their handlers
-            // with asio::error::operation_aborted.
-            std::visit(
-               [&](auto& sock) {
-                  if constexpr (requires { sock->next_layer(); }) {
-                     sock->next_layer().cancel(ec);
-                  }
-                  else {
-                     sock->cancel(ec);
-                  }
-               },
-               *socket);
-         }
-         if (timer) {
-            timer->cancel();
-         }
-      }
    };
    // deprecated, use stream_request_params_v2 instead
    struct stream_request_params
@@ -1786,7 +1773,6 @@ namespace glz
          connection->socket =
             std::make_shared<socket_variant>(connection_pool->get_connection(url.host, url.port, use_https));
          connection->timer = std::make_shared<asio::steady_timer>(io_executor);
-         connection->strand = asio::make_strand(io_executor);
          connection->is_https = use_https;
 
          connection->status_is_error = std::move(status_is_error);
@@ -1803,6 +1789,7 @@ namespace glz
             // still in hand, so a caller that starts its next request from on_disconnect
             // finds an empty pool and dials a second connection - never reusing the very
             // socket the code below is about to make reusable.
+            std::unique_lock lock(connection->mutex);
             if (connection->socket) {
                // Only a socket sitting at the end of a fully-read response can serve
                // the next request. Pooling one that timed out, errored, or was
@@ -1811,14 +1798,16 @@ namespace glz
                // request reads as its own status line - the same desync a conflicting
                // Content-Length produces, reached through the pool instead. A body
                // framed by connection close leaves the socket at EOF, which is dead
-               // rather than dangerous, but equally unusable.
-               if (connection->response_complete.load(std::memory_order_relaxed)) {
+               // rather than dangerous, but equally unusable. A stop shuts the socket
+               // down, so a response completed after one is not pooled either.
+               if (connection->response_complete.load(std::memory_order_relaxed) && !connection->should_stop) {
                   connection_pool->return_connection(url.host, url.port, use_https, std::move(*connection->socket));
                }
                else {
                   detail::close_socket(*connection->socket, connection_pool->graceful_ssl_shutdown());
                }
             }
+            lock.unlock();
             // Returning the socket leaves a null shared_ptr in the variant; every accessor
             // guards on it, so the disconnect() that http_stream_connection runs from its
             // destructor is a no-op rather than a dereference of a moved-from socket.
@@ -1829,22 +1818,21 @@ namespace glz
 
          // Set connection timeout
          connection->timer->expires_after(timeout);
-         connection->timer->async_wait(asio::bind_executor(
-            connection->strand, [connection, on_error, internal_on_disconnect](asio::error_code ec) {
-               if (!ec && !connection->is_connected && !connection->should_stop) {
-                  // Mark for stop to prevent race conditions
-                  connection->disconnect();
-                  if (on_error) on_error(std::make_error_code(std::errc::timed_out));
-                  internal_on_disconnect();
-               }
-            }));
+         connection->timer->async_wait([connection, on_error, internal_on_disconnect](asio::error_code ec) {
+            if (!ec && !connection->is_connected && !connection->should_stop) {
+               // Mark for stop to prevent race conditions
+               connection->disconnect();
+               if (on_error) on_error(std::make_error_code(std::errc::timed_out));
+               internal_on_disconnect();
+            }
+         });
 
          // Check if the socket is already open
          if (detail::socket_is_open(*connection->socket)) {
             // If already connected, skip resolve and connect, and just send the request
-            asio::post(connection->strand, [this, url, method, body, headers, connection, on_data = std::move(on_data),
-                                            on_error = std::move(on_error), on_connect = std::move(on_connect),
-                                            internal_on_disconnect = std::move(internal_on_disconnect)]() mutable {
+            asio::post(io_executor, [this, url, method, body, headers, connection, on_data = std::move(on_data),
+                                     on_error = std::move(on_error), on_connect = std::move(on_connect),
+                                     internal_on_disconnect = std::move(internal_on_disconnect)]() mutable {
                send_stream_request(url, method, body, headers, connection, std::move(on_data), std::move(on_error),
                                    std::move(on_connect), std::move(internal_on_disconnect));
             });
@@ -1854,65 +1842,66 @@ namespace glz
             auto resolver = std::make_shared<asio::ip::tcp::resolver>(io_executor);
             resolver->async_resolve(
                url.host, std::to_string(url.port),
-               asio::bind_executor(
-                  connection->strand,
-                  [this, url, method, body, headers, connection, resolver, use_https, on_data = std::move(on_data),
-                   on_error = std::move(on_error), on_connect = std::move(on_connect),
-                   internal_on_disconnect = std::move(internal_on_disconnect)](
-                     asio::error_code ec, asio::ip::tcp::resolver::results_type results) mutable {
-                     if (ec || connection->should_stop) {
-                        if (on_error) on_error(ec);
-                        internal_on_disconnect(); // Ensure cleanup on resolve error
-                        return;
-                     }
+               [this, url, method, body, headers, connection, resolver, use_https, on_data = std::move(on_data),
+                on_error = std::move(on_error), on_connect = std::move(on_connect),
+                internal_on_disconnect = std::move(internal_on_disconnect)](
+                  asio::error_code ec, asio::ip::tcp::resolver::results_type results) mutable {
+                  if (ec || connection->should_stop) {
+                     if (on_error) on_error(ec);
+                     internal_on_disconnect(); // Ensure cleanup on resolve error
+                     return;
+                  }
 
-                     // Connect the underlying TCP socket
-                     std::visit(
-                        [&, this](auto& sock) {
-                           asio::ip::tcp::socket* tcp_sock;
-                           if constexpr (requires { sock->next_layer(); }) {
-                              tcp_sock = &sock->next_layer();
-                           }
-                           else {
-                              tcp_sock = sock.get();
-                           }
+                  auto lock = lock_unless_stopped(connection);
+                  if (!lock) {
+                     internal_on_disconnect();
+                     return;
+                  }
 
-                           asio::async_connect(
-                              *tcp_sock, results,
-                              asio::bind_executor(
-                                 connection->strand,
-                                 [this, url, method, body, headers, connection, use_https, on_data = std::move(on_data),
-                                  on_error = std::move(on_error), on_connect = std::move(on_connect),
-                                  internal_on_disconnect = std::move(internal_on_disconnect)](
-                                    asio::error_code ec, const asio::ip::tcp::endpoint&) mutable {
-                                    if (ec || connection->should_stop) {
-                                       if (on_error) on_error(ec);
-                                       internal_on_disconnect(); // Ensure cleanup on connect error
-                                       return;
-                                    }
+                  // Connect the underlying TCP socket
+                  std::visit(
+                     [&, this](auto& sock) {
+                        asio::ip::tcp::socket* tcp_sock;
+                        if constexpr (requires { sock->next_layer(); }) {
+                           tcp_sock = &sock->next_layer();
+                        }
+                        else {
+                           tcp_sock = sock.get();
+                        }
+
+                        asio::async_connect(
+                           *tcp_sock, results,
+                           [this, url, method, body, headers, connection, use_https, on_data = std::move(on_data),
+                            on_error = std::move(on_error), on_connect = std::move(on_connect),
+                            internal_on_disconnect = std::move(internal_on_disconnect)](
+                              asio::error_code ec, const asio::ip::tcp::endpoint&) mutable {
+                              if (ec || connection->should_stop) {
+                                 if (on_error) on_error(ec);
+                                 internal_on_disconnect(); // Ensure cleanup on connect error
+                                 return;
+                              }
 
 #ifndef GLZ_ENABLE_SSL
-                                    (void)use_https;
+                              (void)use_https;
 #endif
 
 #ifdef GLZ_ENABLE_SSL
-                                    if (use_https) {
-                                       perform_stream_ssl_handshake(url, method, body, headers, connection,
-                                                                    std::move(on_data), std::move(on_error),
-                                                                    std::move(on_connect),
-                                                                    std::move(internal_on_disconnect));
-                                    }
-                                    else
+                              if (use_https) {
+                                 perform_stream_ssl_handshake(url, method, body, headers, connection,
+                                                              std::move(on_data), std::move(on_error),
+                                                              std::move(on_connect), std::move(internal_on_disconnect));
+                              }
+                              else
 #endif
-                                    {
-                                       send_stream_request(url, method, body, headers, connection, std::move(on_data),
-                                                           std::move(on_error), std::move(on_connect),
-                                                           std::move(internal_on_disconnect));
-                                    }
-                                 }));
-                        },
-                        *connection->socket);
-                  }));
+                              {
+                                 send_stream_request(url, method, body, headers, connection, std::move(on_data),
+                                                     std::move(on_error), std::move(on_connect),
+                                                     std::move(internal_on_disconnect));
+                              }
+                           });
+                     },
+                     *connection->socket);
+               });
          }
 
          return connection;
@@ -1934,21 +1923,25 @@ namespace glz
             return;
          }
 
-         ssl_sock->async_handshake(
-            asio::ssl::stream_base::client,
-            asio::bind_executor(
-               connection->strand, [this, url, method, body, headers, connection, on_data = std::move(on_data),
-                                    on_error = std::move(on_error), on_connect = std::move(on_connect),
-                                    on_disconnect = std::move(on_disconnect)](asio::error_code ec) mutable {
-                  if (ec || connection->should_stop) {
-                     if (on_error) on_error(ec);
-                     on_disconnect();
-                     return;
-                  }
+         auto lock = lock_unless_stopped(connection);
+         if (!lock) {
+            on_disconnect();
+            return;
+         }
 
-                  send_stream_request(url, method, body, headers, connection, std::move(on_data), std::move(on_error),
-                                      std::move(on_connect), std::move(on_disconnect));
-               }));
+         ssl_sock->async_handshake(
+            asio::ssl::stream_base::client, [this, url, method, body, headers, connection, on_data = std::move(on_data),
+                                             on_error = std::move(on_error), on_connect = std::move(on_connect),
+                                             on_disconnect = std::move(on_disconnect)](asio::error_code ec) mutable {
+               if (ec || connection->should_stop) {
+                  if (on_error) on_error(ec);
+                  on_disconnect();
+                  return;
+               }
+
+               send_stream_request(url, method, body, headers, connection, std::move(on_data), std::move(on_error),
+                                   std::move(on_connect), std::move(on_disconnect));
+            });
       }
 #endif
 
@@ -1963,26 +1956,42 @@ namespace glz
          auto request_buffer =
             std::make_shared<std::string>(detail::build_http_request_bytes(method, url, use_https, body, headers));
 
+         auto lock = lock_unless_stopped(connection);
+         if (!lock) {
+            if (on_disconnect) on_disconnect();
+            return;
+         }
+
          std::visit(
             [&, this](auto& sock) {
-               asio::async_write(
-                  *sock, asio::buffer(*request_buffer),
-                  asio::bind_executor(
-                     connection->strand,
-                     [this, connection, request_buffer, on_data = std::move(on_data), on_error = std::move(on_error),
-                      on_connect = std::move(on_connect),
-                      on_disconnect = std::move(on_disconnect)](asio::error_code ec, std::size_t) mutable {
-                        if (ec || connection->should_stop) {
-                           if (on_error) on_error(ec);
-                           if (on_disconnect) on_disconnect();
-                           return;
-                        }
+               asio::async_write(*sock, asio::buffer(*request_buffer),
+                                 [this, connection, request_buffer, on_data = std::move(on_data),
+                                  on_error = std::move(on_error), on_connect = std::move(on_connect),
+                                  on_disconnect = std::move(on_disconnect)](asio::error_code ec, std::size_t) mutable {
+                                    if (ec || connection->should_stop) {
+                                       if (on_error) on_error(ec);
+                                       if (on_disconnect) on_disconnect();
+                                       return;
+                                    }
 
-                        read_stream_response(connection, std::move(on_data), std::move(on_error), std::move(on_connect),
-                                             std::move(on_disconnect));
-                     }));
+                                    read_stream_response(connection, std::move(on_data), std::move(on_error),
+                                                         std::move(on_connect), std::move(on_disconnect));
+                                 });
             },
             *connection->socket);
+      }
+
+      // Taken before the stream starts its next operation on its socket, and held until it has.
+      // Returns a lock that owns nothing when a stop has been asked for: the caller then starts
+      // nothing and ends the stream. A stop asked for while no operation was pending - from
+      // on_data, on_progress or another thread - cancelled nothing, and is honoured here.
+      static std::unique_lock<std::mutex> lock_unless_stopped(const std::shared_ptr<http_stream_connection>& connection)
+      {
+         std::unique_lock lock(connection->mutex);
+         if (connection->should_stop) {
+            lock.unlock();
+         }
+         return lock;
       }
 
       // Returns false once the caller has cancelled from on_progress, which stops the
@@ -2059,17 +2068,20 @@ namespace glz
                                 http_error_handler on_error, http_connect_handler on_connect,
                                 http_disconnect_handler on_disconnect)
       {
+         auto lock = lock_unless_stopped(connection);
+         if (!lock) {
+            if (on_disconnect) on_disconnect();
+            return;
+         }
+
          // Use the connection's unified buffer
          std::visit(
             [&, this](auto& sock) {
                asio::async_read_until(
                   *sock, *connection->buffer, "\r\n\r\n",
-                  asio::bind_executor(connection->strand, [this, connection, on_data = std::move(on_data),
-                                                           on_error = std::move(on_error),
-                                                           on_connect = std::move(on_connect),
-                                                           on_disconnect = std::move(on_disconnect)](
-                                                             asio::error_code ec,
-                                                             std::size_t bytes_transferred) mutable {
+                  [this, connection, on_data = std::move(on_data), on_error = std::move(on_error),
+                   on_connect = std::move(on_connect), on_disconnect = std::move(on_disconnect)](
+                     asio::error_code ec, std::size_t bytes_transferred) mutable {
                      if (ec || connection->should_stop) {
                         if (on_error) on_error(ec);
                         if (on_disconnect) on_disconnect();
@@ -2127,7 +2139,9 @@ namespace glz
                      connection->buffer->consume(bytes_transferred);
 
                      connection->is_connected = true;
+                     std::unique_lock timer_lock(connection->mutex); // disconnect() cancels the timer too
                      connection->timer->cancel();
+                     timer_lock.unlock();
 
                      // RFC 9112 9.3: before HTTP/1.1 the connection closed after each
                      // response unless the reply opted back in, so the absence of a signal
@@ -2198,7 +2212,7 @@ namespace glz
                         start_stream_reading(connection, std::move(on_data), std::move(on_error),
                                              std::move(on_disconnect));
                      }
-                  }));
+                  });
             },
             *connection->socket);
       }
@@ -2214,11 +2228,10 @@ namespace glz
       void read_chunk_size(std::shared_ptr<http_stream_connection> connection, http_data_handler on_data,
                            http_error_handler on_error, http_disconnect_handler on_disconnect)
       {
-         // A stop asked for while no read was pending - from on_data, on_progress or another
-         // thread, between a chunk's delivery and this read - cancelled nothing, so it is
-         // honoured here, before the next read starts, as start_stream_reading honours one
-         // between reads of a Content-Length body. Every way into the next chunk passes here.
-         if (connection->should_stop) {
+         // Every way into the next chunk passes here: the first after the head, the posted one after
+         // a chunk delivered from the buffer, and the one after a chunk read from the socket.
+         auto lock = lock_unless_stopped(connection);
+         if (!lock) {
             if (on_disconnect) on_disconnect();
             return;
          }
@@ -2227,51 +2240,49 @@ namespace glz
             [&, this](auto& sock) {
                asio::async_read_until(
                   *sock, *connection->buffer, "\r\n",
-                  asio::bind_executor(
-                     connection->strand, [this, connection, on_data = std::move(on_data),
-                                          on_error = std::move(on_error), on_disconnect = std::move(on_disconnect)](
-                                            asio::error_code ec, std::size_t bytes_transferred) mutable {
-                        if (ec || connection->should_stop) {
-                           if (ec != asio::error::eof && ec != asio::error::operation_aborted &&
-                               !connection->should_stop)
-                              if (on_error) on_error(ec);
-                           if (on_disconnect) on_disconnect();
-                           return;
-                        }
+                  [this, connection, on_data = std::move(on_data), on_error = std::move(on_error),
+                   on_disconnect = std::move(on_disconnect)](asio::error_code ec,
+                                                             std::size_t bytes_transferred) mutable {
+                     if (ec || connection->should_stop) {
+                        if (ec != asio::error::eof && ec != asio::error::operation_aborted && !connection->should_stop)
+                           if (on_error) on_error(ec);
+                        if (on_disconnect) on_disconnect();
+                        return;
+                     }
 
-                        std::string_view line_view{static_cast<const char*>(connection->buffer->data().data()),
-                                                   bytes_transferred - 2}; // -2 to exclude CRLF
+                     std::string_view line_view{static_cast<const char*>(connection->buffer->data().data()),
+                                                bytes_transferred - 2}; // -2 to exclude CRLF
 
-                        // Ignore chunk extensions
-                        auto semi_pos = line_view.find(';');
-                        if (semi_pos != std::string_view::npos) {
-                           line_view = line_view.substr(0, semi_pos);
-                        }
+                     // Ignore chunk extensions
+                     auto semi_pos = line_view.find(';');
+                     if (semi_pos != std::string_view::npos) {
+                        line_view = line_view.substr(0, semi_pos);
+                     }
 
-                        size_t chunk_size;
-                        auto [ptr, parse_ec] =
-                           std::from_chars(line_view.data(), line_view.data() + line_view.size(), chunk_size, 16);
+                     size_t chunk_size;
+                     auto [ptr, parse_ec] =
+                        std::from_chars(line_view.data(), line_view.data() + line_view.size(), chunk_size, 16);
 
-                        if (parse_ec != std::errc{}) {
-                           if (on_error) on_error(std::make_error_code(std::errc::protocol_error));
-                           if (on_disconnect) on_disconnect();
-                           return;
-                        }
+                     if (parse_ec != std::errc{}) {
+                        if (on_error) on_error(std::make_error_code(std::errc::protocol_error));
+                        if (on_disconnect) on_disconnect();
+                        return;
+                     }
 
-                        // Consume the size line and CRLF from the buffer
-                        connection->buffer->consume(bytes_transferred);
+                     // Consume the size line and CRLF from the buffer
+                     connection->buffer->consume(bytes_transferred);
 
-                        if (chunk_size == 0) {
-                           // Terminal chunk. The trailer section and the final CRLF still sit in
-                           // front of the next response, so the socket is only reusable once they
-                           // have been consumed too (RFC 9112 7.1).
-                           consume_trailers(connection, std::move(on_disconnect));
-                           return;
-                        }
+                     if (chunk_size == 0) {
+                        // Terminal chunk. The trailer section and the final CRLF still sit in
+                        // front of the next response, so the socket is only reusable once they
+                        // have been consumed too (RFC 9112 7.1).
+                        consume_trailers(connection, std::move(on_disconnect));
+                        return;
+                     }
 
-                        read_chunk_body(connection, chunk_size, std::move(on_data), std::move(on_error),
-                                        std::move(on_disconnect));
-                     }));
+                     read_chunk_body(connection, chunk_size, std::move(on_data), std::move(on_error),
+                                     std::move(on_disconnect));
+                  });
             },
             *connection->socket);
       }
@@ -2281,32 +2292,36 @@ namespace glz
       // server sends next, which is the one state that makes it reusable.
       void consume_trailers(std::shared_ptr<http_stream_connection> connection, http_disconnect_handler on_disconnect)
       {
+         auto lock = lock_unless_stopped(connection);
+         if (!lock) {
+            if (on_disconnect) on_disconnect();
+            return;
+         }
+
          std::visit(
             [&, this](auto& sock) {
-               asio::async_read_until(
-                  *sock, *connection->buffer, "\r\n",
-                  asio::bind_executor(
-                     connection->strand, [this, connection, on_disconnect = std::move(on_disconnect)](
-                                            asio::error_code ec, std::size_t bytes_transferred) mutable {
-                        // The body is already delivered in full, so a failure here is not reported
-                        // to the caller - it only means the socket cannot be reused.
-                        if (ec || connection->should_stop) {
-                           if (on_disconnect) on_disconnect();
-                           return;
-                        }
+               asio::async_read_until(*sock, *connection->buffer, "\r\n",
+                                      [this, connection, on_disconnect = std::move(on_disconnect)](
+                                         asio::error_code ec, std::size_t bytes_transferred) mutable {
+                                         // The body is already delivered in full, so a failure here is not reported
+                                         // to the caller - it only means the socket cannot be reused.
+                                         if (ec || connection->should_stop) {
+                                            if (on_disconnect) on_disconnect();
+                                            return;
+                                         }
 
-                        const bool end_of_trailers = (bytes_transferred == 2); // just "\r\n"
-                        connection->buffer->consume(bytes_transferred);
+                                         const bool end_of_trailers = (bytes_transferred == 2); // just "\r\n"
+                                         connection->buffer->consume(bytes_transferred);
 
-                        if (!end_of_trailers) {
-                           consume_trailers(connection,
-                                            std::move(on_disconnect)); // trailer field line
-                           return;
-                        }
+                                         if (!end_of_trailers) {
+                                            consume_trailers(connection,
+                                                             std::move(on_disconnect)); // trailer field line
+                                            return;
+                                         }
 
-                        mark_stream_reusable(connection);
-                        if (on_disconnect) on_disconnect();
-                     }));
+                                         mark_stream_reusable(connection);
+                                         if (on_disconnect) on_disconnect();
+                                      });
             },
             *connection->socket);
       }
@@ -2338,23 +2353,31 @@ namespace glz
             }
 
             // Post the next read to avoid deep recursion
-            asio::post(
-               connection->strand, [this, connection, on_data = std::move(on_data), on_error = std::move(on_error),
-                                    on_disconnect = std::move(on_disconnect)]() mutable {
-                  read_chunk_size(connection, std::move(on_data), std::move(on_error), std::move(on_disconnect));
-               });
+            std::visit(
+               [&, this](auto& sock) {
+                  asio::post(sock->get_executor(), [this, connection, on_data = std::move(on_data),
+                                                    on_error = std::move(on_error),
+                                                    on_disconnect = std::move(on_disconnect)]() mutable {
+                     read_chunk_size(connection, std::move(on_data), std::move(on_error), std::move(on_disconnect));
+                  });
+               },
+               *connection->socket);
             return;
          }
 
          // We need to read more from the socket.
+         auto lock = lock_unless_stopped(connection);
+         if (!lock) {
+            if (on_disconnect) on_disconnect();
+            return;
+         }
+
          std::visit(
             [&, this](auto& sock) {
                asio::async_read(
                   *sock, *connection->buffer, asio::transfer_exactly(total_to_read - connection->buffer->size()),
-                  asio::bind_executor(connection->strand, [this, connection, chunk_size, on_data = std::move(on_data),
-                                                           on_error = std::move(on_error),
-                                                           on_disconnect = std::move(on_disconnect)](
-                                                             asio::error_code ec, std::size_t) mutable {
+                  [this, connection, chunk_size, on_data = std::move(on_data), on_error = std::move(on_error),
+                   on_disconnect = std::move(on_disconnect)](asio::error_code ec, std::size_t) mutable {
                      if (ec || connection->should_stop) {
                         if (ec != asio::error::eof && ec != asio::error::operation_aborted && !connection->should_stop)
                            if (on_error) on_error(ec);
@@ -2371,7 +2394,7 @@ namespace glz
                      }
 
                      read_chunk_size(connection, std::move(on_data), std::move(on_error), std::move(on_disconnect));
-                  }));
+                  });
             },
             *connection->socket);
       }
@@ -2406,8 +2429,8 @@ namespace glz
             return;
          }
 
-         auto resume = asio::bind_executor(connection->strand, [this, connection, on_data, on_error, on_disconnect](
-                                                                  asio::error_code ec, std::size_t bytes_transferred) {
+         auto resume = [this, connection, on_data, on_error, on_disconnect](asio::error_code ec,
+                                                                            std::size_t bytes_transferred) {
             if (ec || connection->should_stop) {
                if (stream_read_failure_is_error(connection, ec)) {
                   if (on_error) on_error(ec);
@@ -2420,7 +2443,13 @@ namespace glz
                connection->buffer->commit(bytes_transferred); // async_read commits for itself
             }
             start_stream_reading(connection, on_data, on_error, on_disconnect);
-         });
+         };
+
+         auto lock = lock_unless_stopped(connection);
+         if (!lock) {
+            if (on_disconnect) on_disconnect();
+            return;
+         }
 
          std::visit(
             [&](auto& sock) {
