@@ -308,7 +308,7 @@ struct stream_request_params_v2 {
 
 -   `method`: The HTTP method to use. (default is "GET")
 -   `url`: The URL to request.
--   `timeout`: Set connection timeout. (default is 30s)
+-   `timeout`: How long to wait for the response headers (default is 30s). If it runs out first, `on_error` receives `std::errc::timed_out` and `on_disconnect` follows.
 -   `strategy`: Can be `bulk_transfer` (default, larger chunks, better throughput) or `immediate_delivery` (smaller chunks, lower latency)
 -   `max_buffer_size`: Larger buffer can decrease dropouts and increase throughput at cost of memory usage. (default is 1 MiB)
 -   `body`: The HTTP Body to send.
@@ -317,7 +317,7 @@ struct stream_request_params_v2 {
 -   `on_error`: A callback that's called when an error occurs.
 -   `on_progress`: An optional callback reporting download progress; returning `false` cancels the transfer. See [Progress and Cancellation](#progress-and-cancellation).
 -   `on_connect`: A callback that's called when the connection is established and the headers are received.
--   `on_disconnect`: A callback that's called when the connection is closed.
+-   `on_disconnect`: A callback that's called once when a started stream ends, for any reason. It is not called when the request returns `nullptr`.
 -   `status_is_error`: Optional predicate to decide whether a status code should trigger `on_error` (defaults to checking for codes ≥ 400).
 
 To override the default behaviour you can supply a predicate:
@@ -331,7 +331,7 @@ auto conn = client.stream_request_v2({
 });
 ```
 
-The `http_stream_connection` object contains a `disconnect()` method that can be used to close the connection. It may be called from any thread, including from inside `on_data` or `on_progress`. It cancels the stream's pending operation and shuts its socket down under a lock the client also takes to start each operation and to close the socket, so the stream ends with `on_disconnect` even when the server has stopped sending, and its socket is closed rather than returned to the pool.
+The `http_stream_connection` object contains a `disconnect()` method that can be used to close the connection. It may be called from any thread, including from inside `on_data` or `on_progress`. The stream then ends with `on_disconnect`, even if the server has stopped sending, and its socket is closed rather than returned to the pool. A stop is not an error, so `on_error` is not called for it.
 
 ### Progress and Cancellation
 

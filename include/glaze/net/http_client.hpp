@@ -1163,8 +1163,16 @@ namespace glz
       std::shared_ptr<socket_variant> socket;
       std::shared_ptr<asio::steady_timer> timer;
       std::shared_ptr<asio::streambuf> buffer; // Use unified streambuf for all reads
-      bool is_connected{false};
+      // Set once the response head has been read; the timeout watches it from another worker.
+      std::atomic<bool> is_connected{false};
       std::atomic<bool> should_stop{false};
+      // Set by the timeout just before it stops the stream, so the stream's end reports timed_out
+      // rather than the cancel the stop caused.
+      std::atomic<bool> timed_out{false};
+      // Set while the host name is being resolved. Nothing is pending on the socket then, so a
+      // stop has nothing to cancel, and whichever of the resolve and the timeout clears this
+      // first decides how the stream goes on.
+      std::atomic<bool> resolve_pending{false};
       // Set only once the response has been read to its framed end - terminal chunk,
       // trailer section and the final CRLF all consumed - leaving the socket
       // positioned at the start of whatever the server sends next. Every other way a
@@ -1780,8 +1788,8 @@ namespace glz
          connection->head_request = (method == "HEAD");
 
          // Wrap the disconnect handler to return the socket to the pool
-         auto internal_on_disconnect = [this, user_on_disconnect = std::move(on_disconnect), connection, url,
-                                        use_https]() {
+         auto internal_on_disconnect = [this, user_on_disconnect = std::move(on_disconnect), on_error, connection,
+                                        url, use_https]() {
             connection->is_connected = false;
             // Settle the socket before telling the caller the stream ended, matching the
             // non-streaming paths, which return the connection and only then run the
@@ -1790,6 +1798,9 @@ namespace glz
             // finds an empty pool and dials a second connection - never reusing the very
             // socket the code below is about to make reusable.
             std::unique_lock lock(connection->mutex);
+            // The stream is over, so its timeout has nothing left to stop. A stream that failed
+            // before its head arrived would otherwise be reported again when the timer fired.
+            connection->timer->cancel();
             if (connection->socket) {
                // Only a socket sitting at the end of a fully-read response can serve
                // the next request. Pooling one that timed out, errored, or was
@@ -1807,7 +1818,15 @@ namespace glz
                   detail::close_socket(*connection->socket, connection_pool->graceful_ssl_shutdown());
                }
             }
+            // An ended stream counts as stopped, so a timeout already running when the timer was
+            // cancelled, or a later disconnect(), finds nothing left to do.
+            connection->should_stop = true;
             lock.unlock();
+            // A stream the timeout stopped says so here, at its one end, so the caller sees
+            // timed_out once and before on_disconnect, whichever operation the stop cut short.
+            if (connection->timed_out && on_error) {
+               on_error(std::make_error_code(std::errc::timed_out));
+            }
             // Returning the socket leaves a null shared_ptr in the variant; every accessor
             // guards on it, so the disconnect() that http_stream_connection runs from its
             // destructor is a no-op rather than a dereference of a moved-from socket.
@@ -1816,19 +1835,33 @@ namespace glz
             }
          };
 
-         // Set connection timeout
+         const bool needs_connect = !detail::socket_is_open(*connection->socket);
+         connection->resolve_pending = needs_connect;
+
+         // The timeout bounds the wait for the response head. It stops the stream; the operation
+         // the stop cancels then ends it, and internal_on_disconnect reports timed_out once. The
+         // mutex orders the decision with the head's arrival and with the stream's end.
          connection->timer->expires_after(timeout);
-         connection->timer->async_wait([connection, on_error, internal_on_disconnect](asio::error_code ec) {
-            if (!ec && !connection->is_connected && !connection->should_stop) {
-               // Mark for stop to prevent race conditions
-               connection->disconnect();
-               if (on_error) on_error(std::make_error_code(std::errc::timed_out));
+         connection->timer->async_wait([connection, internal_on_disconnect](asio::error_code ec) {
+            if (ec) {
+               return;
+            }
+            {
+               std::lock_guard lock(connection->mutex);
+               if (connection->is_connected || connection->should_stop) {
+                  return;
+               }
+               connection->timed_out = true;
+            }
+            connection->disconnect();
+            // A resolve has no socket operation for the stop to cancel, and asio cannot cut it
+            // short, so the stream ends here instead; the resolve's handler then does nothing.
+            if (connection->resolve_pending.exchange(false)) {
                internal_on_disconnect();
             }
          });
 
-         // Check if the socket is already open
-         if (detail::socket_is_open(*connection->socket)) {
+         if (!needs_connect) {
             // If already connected, skip resolve and connect, and just send the request
             asio::post(io_executor, [this, url, method, body, headers, connection, on_data = std::move(on_data),
                                      on_error = std::move(on_error), on_connect = std::move(on_connect),
@@ -1846,8 +1879,13 @@ namespace glz
                 on_error = std::move(on_error), on_connect = std::move(on_connect),
                 internal_on_disconnect = std::move(internal_on_disconnect)](
                   asio::error_code ec, asio::ip::tcp::resolver::results_type results) mutable {
+                  if (!connection->resolve_pending.exchange(false)) {
+                     return; // The timeout ended the stream while the name was resolving.
+                  }
+                  // A stopped stream's operations fail because of the stop, which is not an
+                  // error of the request's; a timeout reports itself at the stream's end.
                   if (ec || connection->should_stop) {
-                     if (on_error) on_error(ec);
+                     if (on_error && !connection->should_stop) on_error(ec);
                      internal_on_disconnect(); // Ensure cleanup on resolve error
                      return;
                   }
@@ -1869,14 +1907,19 @@ namespace glz
                            tcp_sock = sock.get();
                         }
 
+                        // A stop's cancel aborts only the attempt in progress, and asio goes on to the
+                        // next endpoint unless the socket is closed, so a stop also skips the rest.
                         asio::async_connect(
                            *tcp_sock, results,
+                           [connection](const asio::error_code&, const asio::ip::tcp::endpoint&) {
+                              return !connection->should_stop;
+                           },
                            [this, url, method, body, headers, connection, use_https, on_data = std::move(on_data),
                             on_error = std::move(on_error), on_connect = std::move(on_connect),
                             internal_on_disconnect = std::move(internal_on_disconnect)](
                               asio::error_code ec, const asio::ip::tcp::endpoint&) mutable {
                               if (ec || connection->should_stop) {
-                                 if (on_error) on_error(ec);
+                                 if (on_error && !connection->should_stop) on_error(ec);
                                  internal_on_disconnect(); // Ensure cleanup on connect error
                                  return;
                               }
@@ -1934,7 +1977,7 @@ namespace glz
                                              on_error = std::move(on_error), on_connect = std::move(on_connect),
                                              on_disconnect = std::move(on_disconnect)](asio::error_code ec) mutable {
                if (ec || connection->should_stop) {
-                  if (on_error) on_error(ec);
+                  if (on_error && !connection->should_stop) on_error(ec);
                   on_disconnect();
                   return;
                }
@@ -1969,7 +2012,7 @@ namespace glz
                                   on_error = std::move(on_error), on_connect = std::move(on_connect),
                                   on_disconnect = std::move(on_disconnect)](asio::error_code ec, std::size_t) mutable {
                                     if (ec || connection->should_stop) {
-                                       if (on_error) on_error(ec);
+                                       if (on_error && !connection->should_stop) on_error(ec);
                                        if (on_disconnect) on_disconnect();
                                        return;
                                     }
@@ -2083,7 +2126,7 @@ namespace glz
                    on_connect = std::move(on_connect), on_disconnect = std::move(on_disconnect)](
                      asio::error_code ec, std::size_t bytes_transferred) mutable {
                      if (ec || connection->should_stop) {
-                        if (on_error) on_error(ec);
+                        if (on_error && !connection->should_stop) on_error(ec);
                         if (on_disconnect) on_disconnect();
                         return;
                      }
@@ -2138,8 +2181,14 @@ namespace glz
                      // Consume all processed header data from the streambuf
                      connection->buffer->consume(bytes_transferred);
 
+                     // The timeout and the head race for the mutex; the loser stands down.
+                     std::unique_lock timer_lock(connection->mutex);
+                     if (connection->timed_out) {
+                        timer_lock.unlock();
+                        if (on_disconnect) on_disconnect();
+                        return;
+                     }
                      connection->is_connected = true;
-                     std::unique_lock timer_lock(connection->mutex); // disconnect() cancels the timer too
                      connection->timer->cancel();
                      timer_lock.unlock();
 
