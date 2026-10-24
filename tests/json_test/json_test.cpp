@@ -6784,6 +6784,33 @@ suite get_sv = [] {
       expect(buffer == R"({"a/b":10,"c~d":20})");
    };
 
+   "runtime json_ptr invalid escape"_test = [] {
+      // RFC 6901 3: '~' must be followed by '0' or '1'. An invalid escape must not resolve to the
+      // key before the '~' and drop the rest of the pointer.
+      const std::string original = R"({"a":{"x":"secret"},"a~2":1,"b":1})";
+      std::string buffer = original;
+
+      for (const auto* ptr : {"/a~2", "/a~", "/a~2/zzz", "/a~9/x", "/b/a~"}) {
+         auto view = glz::get_view_json(std::string_view{ptr}, buffer);
+         expect(not view.has_value()) << ptr;
+         if (not view) {
+            expect(view.error().ec == glz::error_code::invalid_json_pointer) << ptr;
+         }
+      }
+
+      auto ec = glz::write_at("/a~2/deep", "0", buffer);
+      expect(ec.ec == glz::error_code::invalid_json_pointer);
+      expect(buffer == original);
+
+      // Valid escapes are unaffected
+      const std::string escaped = R"({"a~2":7})";
+      auto view = glz::get_view_json("/a~02", escaped);
+      expect(view.has_value());
+      if (view) {
+         expect(glz::sv{view->data(), view->size()} == "7");
+      }
+   };
+
    "runtime get_view_json empty pointer"_test = [] {
       std::string buffer = R"({"x":1})";
 
