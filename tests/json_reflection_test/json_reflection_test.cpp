@@ -1,3 +1,4 @@
+#include <concepts>
 #include <deque>
 #include <map>
 #include <optional>
@@ -370,6 +371,22 @@ struct non_default_t
 {
    non_default_t(int) {}
 };
+
+struct non_default_member
+{
+   non_default_t value;
+};
+
+struct non_default_trailing_member
+{
+   int value{};
+   non_default_t trailing;
+};
+
+static_assert(!std::default_initializable<non_default_member>);
+static_assert(glz::detail::count_members<non_default_member> == 1);
+static_assert(!std::default_initializable<non_default_trailing_member>);
+static_assert(glz::detail::count_members<non_default_trailing_member> == 2);
 
 struct nested_t
 {
