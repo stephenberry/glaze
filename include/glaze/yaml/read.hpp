@@ -4772,8 +4772,29 @@ namespace glz
                   else {
                      static constexpr std::string_view null_value{"null"};
                      auto null_it = null_value.data();
-                     from<YAML, val_t>::template op<yaml::flow_context_on<Opts>()>(
-                        val, ctx, null_it, null_value.data() + null_value.size());
+                     if constexpr (requires { ctx.stream_begin; ctx.reset_line_memo(); }) {
+                        const char* const saved_stream_begin = ctx.stream_begin;
+                        const char* const saved_memo_line_begin = ctx.memo_line_begin;
+                        const char* const saved_memo_verified_end = ctx.memo_verified_end;
+                        const char* const saved_memo_first_tab = ctx.memo_first_tab;
+                        const char* const saved_memo_first_content = ctx.memo_first_content;
+
+                        ctx.stream_begin = null_value.data();
+                        ctx.reset_line_memo();
+
+                        from<YAML, val_t>::template op<yaml::flow_context_on<Opts>()>(
+                           val, ctx, null_it, null_value.data() + null_value.size());
+
+                        ctx.stream_begin = saved_stream_begin;
+                        ctx.memo_line_begin = saved_memo_line_begin;
+                        ctx.memo_verified_end = saved_memo_verified_end;
+                        ctx.memo_first_tab = saved_memo_first_tab;
+                        ctx.memo_first_content = saved_memo_first_content;
+                     }
+                     else {
+                        from<YAML, val_t>::template op<yaml::flow_context_on<Opts>()>(
+                           val, ctx, null_it, null_value.data() + null_value.size());
+                     }
                      return !bool(ctx.error);
                   }
                };

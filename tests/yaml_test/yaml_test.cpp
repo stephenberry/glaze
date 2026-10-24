@@ -12224,6 +12224,29 @@ suite yaml_nullable_null_probe_tests = [] {
          expect(!m.at("a").has_value());
       }
       {
+         // Issue #3008: implicit null in flow mapping with non-nullable map value must not read out of bounds
+         struct S {
+            std::map<std::string, std::map<std::string, std::string>> m{};
+         };
+         S s{};
+         std::string yaml = "m: {a}\n# ..................................................\n";
+         expect(glz::read_yaml(s, yaml) == glz::error_code::syntax_error);
+      }
+      {
+         // Flow mapping with omitted value after colon
+         struct S {
+            std::map<std::string, std::map<std::string, std::string>> m{};
+         };
+         S s{};
+         std::string yaml = "m: {a:}\n";
+         expect(glz::read_yaml(s, yaml) == glz::error_code::syntax_error);
+      }
+      {
+         // Multiple entries in flow mapping with implicit null
+         std::map<std::string, std::map<std::string, std::string>> m{};
+         expect(glz::read_yaml(m, std::string{"{b: {c: d}, a}"}) == glz::error_code::syntax_error);
+      }
+      {
          std::optional<int> opt{42};
          expect(!glz::read_yaml(opt, std::string{"null"}));
          expect(!opt.has_value());
