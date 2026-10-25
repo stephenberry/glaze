@@ -69,6 +69,10 @@ namespace glz
 
             static constexpr auto key = tokens[I];
             if constexpr (maybe_numeric_key(key)) {
+               if (it >= end) [[unlikely]] {
+                  ctx.error = error_code::unexpected_end;
+                  return;
+               }
                switch (*it) {
                case '{': {
                   ++it;
@@ -147,6 +151,11 @@ namespace glz
                      return;
                   }
                }
+               default: {
+                  // A scalar has no members or elements to index into
+                  ctx.error = error_code::syntax_error;
+                  return;
+               }
                }
             }
             else {
@@ -197,6 +206,8 @@ namespace glz
                      ++it;
                   }
                }
+               // The object ended after a ',' without the key
+               ctx.error = error_code::unexpected_end;
             }
          });
 

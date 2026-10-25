@@ -2984,6 +2984,36 @@ suite non_null_terminated_scanner_bounds = [] {
       expect(value.has_value());
       expect(*value == 12);
    };
+
+   "compile-time json pointer that does not resolve is an error"_test = [] {
+      // An index into a scalar names nothing. The runtime seek reports it, and the compile-time
+      // seek must too rather than returning an empty view with a null data().
+      const std::string scalar = R"({"a":5})";
+      expect(glz::get_view_json<"/a/0">(scalar).error().ec == glz::error_code::syntax_error);
+      expect(glz::get_view_json("/a/0", scalar).error().ec == glz::error_code::syntax_error);
+      expect(not glz::get_view_json<"/a/1">(std::string{R"({"a":"text"})"}).has_value());
+      expect(not glz::get_sv_json<"/a/0">(scalar).has_value());
+
+      // An object that ends after a ',' without the key.
+      const std::string trailing = R"({"b":1,)";
+      expect(glz::get_view_json<"/a">(trailing).error().ec == glz::error_code::unexpected_end);
+      expect(not glz::get_view_json("/a", trailing).has_value());
+
+      // The same document in a vector ends the seek before the next token, without reading past it.
+      const std::vector<char> truncated{'{', '"', 'b', '"', ':', '1', ','};
+      expect(not glz::get_view_json<"/a/0">(truncated).has_value());
+
+      // write_at reports the error and leaves the buffer alone.
+      std::string doc = R"({"a":5})";
+      expect(glz::write_at<"/a/0">("1", doc).ec == glz::error_code::syntax_error);
+      expect(doc == R"({"a":5})");
+
+      // Pointers that resolve are unchanged.
+      const std::string nested = R"({"a":[1,{"b":2}]})";
+      const auto view = glz::get_view_json<"/a/1/b">(nested);
+      expect(view.has_value());
+      expect(std::string_view{view->data(), view->size()} == "2");
+   };
 };
 
 suite minified_custom_object = [] {
