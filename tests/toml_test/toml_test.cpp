@@ -6844,4 +6844,168 @@ suite toml_line_ending_backslash = [] {
    };
 };
 
+struct duplicate_key_inner
+{
+   int x{};
+   int y{};
+};
+
+struct duplicate_key_mid
+{
+   duplicate_key_inner b{};
+   int z{};
+};
+
+struct duplicate_key_doc
+{
+   std::string role{};
+   int n{};
+   duplicate_key_mid a{};
+   std::vector<duplicate_key_inner> arr{};
+   std::optional<duplicate_key_inner> opt{};
+};
+
+// More than 64 members, so flags past the 64th are held out of line
+struct duplicate_key_wide
+{
+   int m0{}, m1{}, m2{}, m3{}, m4{}, m5{}, m6{}, m7{}, m8{}, m9{};
+   int m10{}, m11{}, m12{}, m13{}, m14{}, m15{}, m16{}, m17{}, m18{}, m19{};
+   int m20{}, m21{}, m22{}, m23{}, m24{}, m25{}, m26{}, m27{}, m28{}, m29{};
+   int m30{}, m31{}, m32{}, m33{}, m34{}, m35{}, m36{}, m37{}, m38{}, m39{};
+   int m40{}, m41{}, m42{}, m43{}, m44{}, m45{}, m46{}, m47{}, m48{}, m49{};
+   int m50{}, m51{}, m52{}, m53{}, m54{}, m55{}, m56{}, m57{}, m58{}, m59{};
+   int m60{}, m61{}, m62{}, m63{}, m64{}, m65{}, m66{}, m67{}, m68{}, m69{};
+};
+
+struct duplicate_key_wide_holder
+{
+   duplicate_key_wide w{};
+};
+
+struct duplicate_key_meta
+{
+   std::string name{};
+   duplicate_key_inner inner{};
+};
+
+template <>
+struct glz::meta<duplicate_key_meta>
+{
+   using T = duplicate_key_meta;
+   static constexpr auto value = object("label", &T::name, "inner", &T::inner);
+};
+
+suite toml_duplicate_key_tests = [] {
+   // TOML v1.0.0: defining a key more than once is invalid, whether the second definition is a
+   // repeated line, a dotted key, a later [table] section, or a line extending an inline table.
+   "a key defined twice is rejected"_test = [] {
+      for (const std::string input : {
+              "role = \"user\"\nrole = \"admin\"\n",
+              "role = \"user\"\nn = 1\n\"role\" = \"admin\"\n",
+              "a.z = 1\na.z = 2\n",
+              "a.b.x = 1\na.b.x = 2\n",
+              "[a]\nz = 1\n[a]\nz = 2\n",
+              "[a.b]\nx = 1\n[a.b]\nx = 2\n",
+              "[[arr]]\nx = 1\nx = 2\n",
+              "a = {z = 1, z = 2}\n",
+              "arr = [{x = 1, x = 2}]\n",
+           }) {
+         duplicate_key_doc doc{};
+         expect(glz::read_toml(doc, input).ec == glz::error_code::syntax_error) << input;
+      }
+   };
+
+   "a table written whole cannot be extended"_test = [] {
+      for (const std::string input : {
+              "a = {z = 1}\n[a]\nz = 2\n",
+              "a = {z = 1}\na.z = 2\n",
+              "a.z = 1\na = {z = 2}\n",
+              "opt = {x = 1}\n[opt]\nx = 2\n",
+              "arr = [{x = 1}]\n[[arr]]\nx = 2\n",
+           }) {
+         duplicate_key_doc doc{};
+         expect(glz::read_toml(doc, input).ec == glz::error_code::syntax_error) << input;
+      }
+   };
+
+   "the earlier value is not overwritten"_test = [] {
+      duplicate_key_doc doc{};
+      expect(bool(glz::read_toml(doc, std::string{"role = \"user\"\nrole = \"admin\"\n"})));
+      expect(doc.role == "user") << doc.role;
+   };
+
+   "tables built up across the document still read"_test = [] {
+      {
+         duplicate_key_doc doc{};
+         const std::string input = "a.z = 1\na.b.x = 2\na.b.y = 3\n";
+         expect(not glz::read_toml(doc, input)) << input;
+         expect(doc.a.z == 1 && doc.a.b.x == 2 && doc.a.b.y == 3);
+      }
+      {
+         duplicate_key_doc doc{};
+         const std::string input = "[a.b]\nx = 1\n[a]\nz = 2\n";
+         expect(not glz::read_toml(doc, input)) << input;
+         expect(doc.a.b.x == 1 && doc.a.z == 2);
+      }
+      {
+         duplicate_key_doc doc{};
+         const std::string input = "role = \"u\"\n[a]\nz = 1\n[a.b]\nx = 1\ny = 2\n[[arr]]\nx = 3\n[[arr]]\nx = 4\n";
+         expect(not glz::read_toml(doc, input)) << input;
+         expect(doc.role == "u" && doc.a.z == 1 && doc.a.b.y == 2 && doc.arr.size() == 2 && doc.arr[1].x == 4);
+      }
+      {
+         duplicate_key_doc doc{};
+         const std::string input = "a = {z = 1, b = {x = 1, y = 2}}\narr = [{x = 1}, {x = 2}]\n[opt]\nx = 1\n";
+         expect(not glz::read_toml(doc, input)) << input;
+         expect(doc.a.b.y == 2 && doc.arr.size() == 2 && doc.opt && doc.opt->x == 1);
+      }
+   };
+
+   "a struct of more than 64 members"_test = [] {
+      for (const std::string input : {
+              "w.m68 = 1\nw.m68 = 2\n",
+              "[w]\nm69 = 1\n[w]\nm69 = 2\n",
+              "w = {m66 = 1, m66 = 2}\n",
+           }) {
+         duplicate_key_wide_holder holder{};
+         expect(glz::read_toml(holder, input).ec == glz::error_code::syntax_error) << input;
+      }
+
+      duplicate_key_wide wide{};
+      const std::string input = "m0 = 1\nm63 = 2\nm64 = 3\nm69 = 4\n";
+      expect(not glz::read_toml(wide, input)) << input;
+      expect(wide.m0 == 1 && wide.m63 == 2 && wide.m64 == 3 && wide.m69 == 4);
+   };
+
+   "a glz::meta struct"_test = [] {
+      for (const std::string input : {
+              "label = \"a\"\nlabel = \"b\"\n",
+              "inner.x = 1\ninner.x = 2\n",
+              "inner = {x = 1}\n[inner]\ny = 2\n",
+           }) {
+         duplicate_key_meta value{};
+         expect(glz::read_toml(value, input).ec == glz::error_code::syntax_error) << input;
+      }
+   };
+
+   "duplicates are reported before missing keys"_test = [] {
+      constexpr glz::opts opts{.format = glz::TOML, .error_on_missing_keys = true};
+      {
+         duplicate_key_inner value{};
+         const std::string input = "x = 1\nx = 2\n"; // y is also missing
+         expect(glz::read<opts>(value, input).ec == glz::error_code::syntax_error) << input;
+      }
+      {
+         duplicate_key_inner value{};
+         const std::string input = "x = 1\n";
+         expect(glz::read<opts>(value, input).ec == glz::error_code::missing_key) << input;
+      }
+      {
+         duplicate_key_inner value{};
+         const std::string input = "x = 1\ny = 2\n";
+         expect(not glz::read<opts>(value, input)) << input;
+      }
+   };
+};
+
 int main() { return 0; }
