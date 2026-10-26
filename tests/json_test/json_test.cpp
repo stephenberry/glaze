@@ -13027,6 +13027,20 @@ struct float_opts : glz::opts
    glz::float_precision float_max_write_precision{};
 };
 
+struct mixed_write_precision_t
+{
+   double f32 = std::numbers::pi_v<double>;
+   double f64 = std::numbers::pi_v<double>;
+   double full = std::numbers::pi_v<double>;
+
+   struct glaze
+   {
+      using T = mixed_write_precision_t;
+      static constexpr auto value = glz::object("f32", glz::write_float32<&T::f32>, "f64", glz::write_float64<&T::f64>,
+                                                "full", glz::write_float_full<&T::full>);
+   };
+};
+
 suite max_write_precision_tests = [] {
    "max_write_precision"_test = [] {
       double pi = std::numbers::pi_v<double>;
@@ -13050,6 +13064,23 @@ suite max_write_precision_tests = [] {
       write_precision_t obj{};
       std::string json_float = glz::write<float_opts{}>(obj).value_or("error");
       expect(json_float == R"({"pi":3.1415927})") << json_float;
+   };
+
+   "write_float wrappers with default opts"_test = [] {
+      write_precision_t obj{};
+      std::string json = glz::write_json(obj).value_or("error");
+      expect(json == R"({"pi":3.1415927})") << json;
+
+      mixed_write_precision_t mixed{};
+      json = glz::write_json(mixed).value_or("error");
+      expect(json == R"({"f32":3.1415927,"f64":3.141592653589793,"full":3.141592653589793})") << json;
+
+      // The wrappers override a float_max_write_precision set in a custom options struct
+      json = glz::write<float_opts{{}, glz::float_precision::float32}>(mixed).value_or("error");
+      expect(json == R"({"f32":3.1415927,"f64":3.141592653589793,"full":3.141592653589793})") << json;
+
+      expect(!glz::read_json(mixed, R"({"f32":1.5,"f64":2.5,"full":3.5})"));
+      expect(mixed.f32 == 1.5 && mixed.f64 == 2.5 && mixed.full == 3.5);
    };
 
    "float32 narrowing of finite values beyond float's range"_test = [] {
