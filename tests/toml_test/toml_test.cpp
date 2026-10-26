@@ -6844,4 +6844,92 @@ suite toml_line_ending_backslash = [] {
    };
 };
 
+struct duplicate_key_inner
+{
+   int x{};
+   int y{};
+};
+
+struct duplicate_key_mid
+{
+   duplicate_key_inner b{};
+   int z{};
+};
+
+struct duplicate_key_doc
+{
+   std::string role{};
+   int n{};
+   duplicate_key_mid a{};
+   std::vector<duplicate_key_inner> arr{};
+   std::optional<duplicate_key_inner> opt{};
+};
+
+suite toml_duplicate_key_tests = [] {
+   // TOML v1.0.0: defining a key more than once is invalid, whether the second definition is a
+   // repeated line, a dotted key, a later [table] section, or a line extending an inline table.
+   "a key defined twice is rejected"_test = [] {
+      for (const std::string input : {
+              "role = \"user\"\nrole = \"admin\"\n",
+              "role = \"user\"\nn = 1\n\"role\" = \"admin\"\n",
+              "a.z = 1\na.z = 2\n",
+              "a.b.x = 1\na.b.x = 2\n",
+              "[a]\nz = 1\n[a]\nz = 2\n",
+              "[a.b]\nx = 1\n[a.b]\nx = 2\n",
+              "[[arr]]\nx = 1\nx = 2\n",
+              "a = {z = 1, z = 2}\n",
+              "arr = [{x = 1, x = 2}]\n",
+           }) {
+         duplicate_key_doc doc{};
+         expect(glz::read_toml(doc, input).ec == glz::error_code::syntax_error) << input;
+      }
+   };
+
+   "a table written whole cannot be extended"_test = [] {
+      for (const std::string input : {
+              "a = {z = 1}\n[a]\nz = 2\n",
+              "a = {z = 1}\na.z = 2\n",
+              "a.z = 1\na = {z = 2}\n",
+              "opt = {x = 1}\n[opt]\nx = 2\n",
+              "arr = [{x = 1}]\n[[arr]]\nx = 2\n",
+           }) {
+         duplicate_key_doc doc{};
+         expect(glz::read_toml(doc, input).ec == glz::error_code::syntax_error) << input;
+      }
+   };
+
+   "the earlier value is not overwritten"_test = [] {
+      duplicate_key_doc doc{};
+      expect(bool(glz::read_toml(doc, std::string{"role = \"user\"\nrole = \"admin\"\n"})));
+      expect(doc.role == "user") << doc.role;
+   };
+
+   "tables built up across the document still read"_test = [] {
+      {
+         duplicate_key_doc doc{};
+         const std::string input = "a.z = 1\na.b.x = 2\na.b.y = 3\n";
+         expect(not glz::read_toml(doc, input)) << input;
+         expect(doc.a.z == 1 && doc.a.b.x == 2 && doc.a.b.y == 3);
+      }
+      {
+         duplicate_key_doc doc{};
+         const std::string input = "[a.b]\nx = 1\n[a]\nz = 2\n";
+         expect(not glz::read_toml(doc, input)) << input;
+         expect(doc.a.b.x == 1 && doc.a.z == 2);
+      }
+      {
+         duplicate_key_doc doc{};
+         const std::string input = "role = \"u\"\n[a]\nz = 1\n[a.b]\nx = 1\ny = 2\n[[arr]]\nx = 3\n[[arr]]\nx = 4\n";
+         expect(not glz::read_toml(doc, input)) << input;
+         expect(doc.role == "u" && doc.a.z == 1 && doc.a.b.y == 2 && doc.arr.size() == 2 && doc.arr[1].x == 4);
+      }
+      {
+         duplicate_key_doc doc{};
+         const std::string input = "a = {z = 1, b = {x = 1, y = 2}}\narr = [{x = 1}, {x = 2}]\n[opt]\nx = 1\n";
+         expect(not glz::read_toml(doc, input)) << input;
+         expect(doc.a.b.y == 2 && doc.arr.size() == 2 && doc.opt && doc.opt->x == 1);
+      }
+   };
+};
+
 int main() { return 0; }

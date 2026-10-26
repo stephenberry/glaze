@@ -1680,9 +1680,48 @@ namespace glz
       // values the document actually touched: one per struct, and for an array of tables one for
       // the array holding one per element. error_on_missing_keys is then resolved by walking the
       // tree once the document has been parsed.
+      //
+      // The same spread is why a key defined twice (TOML v1.0.0, "Keys") cannot be caught within one
+      // table body: "[a]" may name a key a second time sections after the first, or a dotted key may
+      // reach into a table already written whole with "=". The record is therefore kept for every
+      // read, and value_assigned marks the members a "key = value" line wrote outright.
+
+      // One flag per reflected member, held inline for the first 64 so that a record for a typical
+      // struct makes no allocation of its own.
+      struct member_flags
+      {
+         uint64_t low{};
+         std::vector<bool> high{};
+
+         explicit member_flags(const size_t member_count)
+         {
+            if (member_count > 64) {
+               high.resize(member_count - 64);
+            }
+         }
+
+         bool operator[](const size_t index) const
+         {
+            return index < 64 ? ((low >> index) & 1) != 0 : bool(high[index - 64]);
+         }
+
+         void set(const size_t index, const bool flag)
+         {
+            if (index < 64) {
+               const uint64_t bit = uint64_t{1} << index;
+               low = flag ? (low | bit) : (low & ~bit);
+            }
+            else {
+               high[index - 64] = flag;
+            }
+         }
+      };
+
       struct missing_key_record
       {
-         std::vector<bool> assigned{}; // one flag per reflected member of the struct this node mirrors
+         size_t member_count{}; // reflected members of the struct this node mirrors
+         member_flags assigned; // members the document named
+         member_flags value_assigned; // members written as a whole by "key = value"
          // Keyed by member index, or by element index on the node standing in for an array of
          // tables. A vector rather than a map: a document names a handful of keys per struct.
          std::vector<std::pair<size_t, std::unique_ptr<missing_key_record>>> children{};
@@ -1690,13 +1729,24 @@ namespace glz
          // parsed and this node's flags are never filled in. Set to keep the final walk off it.
          bool checked_in_place = false;
 
-         explicit missing_key_record(const size_t member_count) : assigned(member_count, false) {}
+         explicit missing_key_record(const size_t member_count)
+            : member_count(member_count), assigned(member_count), value_assigned(member_count)
+         {}
 
-         void assign(const size_t index)
+         // Records that a document line reaches member `index`, and whether that line is a
+         // "key = value" naming it. Returns false when TOML forbids the line: a value for a key the
+         // document already defined, or any line reaching into a member already written whole.
+         bool define(const size_t index, const bool by_value)
          {
-            if (index < assigned.size()) {
-               assigned[index] = true;
+            if (index >= member_count) {
+               return true;
             }
+            if (value_assigned[index] || (by_value && assigned[index])) {
+               return false;
+            }
+            assigned.set(index, true);
+            value_assigned.set(index, by_value);
+            return true;
          }
 
          missing_key_record* child(const size_t key, const size_t member_count)
@@ -1806,9 +1856,9 @@ namespace glz
          static constexpr auto N = reflect<U>::size;
          static constexpr auto HashInfo = hash_info<U>;
          // An inline table is the complete value of the struct it fills -- the grammar forbids
-         // adding to it from anywhere else in the document -- so its required keys are settled here
-         // rather than deferred to the whole-document walk.
-         [[maybe_unused]] bit_array<N> fields{};
+         // adding to it from anywhere else in the document -- so its required keys and repeated
+         // keys are settled here rather than deferred to the whole-document walk.
+         bit_array<N> fields{};
          // TODO: Think if it's feasible to write a function to find out the deepest nested structure
          // and use it instead of vector
 
@@ -1862,9 +1912,11 @@ namespace glz
             const bool key_matches = index < N && key_str == reflect<U>::keys[index];
 
             if (key_matches) [[likely]] {
-               if constexpr (check_error_on_missing_keys(Opts)) {
-                  fields[index] = true;
+               if (fields[index]) [[unlikely]] {
+                  ctx.error = error_code::syntax_error; // a key may be defined only once
+                  return;
                }
+               fields[index] = true;
                visit<N>(
                   [&]<size_t I>() {
                      // A field skipped on parse consumes its value in a branch of its own, so its
@@ -1943,9 +1995,10 @@ namespace glz
       }
    }
 
+   // by_value: the path is the key of a "key = value" line rather than a "[table]" header.
    template <auto Opts, class T>
    inline bool resolve_nested(T& root, std::span<std::string> path, auto& ctx, auto& it, auto& end,
-                              detail::missing_key_record* node)
+                              detail::missing_key_record* node, const bool by_value = false)
    {
       if constexpr (not nullable_like<T> && detail::is_toml_array_of_tables<T>()) {
          // "[array.sub]" names a sub-table of the last element "[[array]]" defined, per TOML
@@ -1958,13 +2011,11 @@ namespace glz
             ctx.error = error_code::syntax_error;
             return false;
          }
-         [[maybe_unused]] detail::missing_key_record* element_node = nullptr;
-         if constexpr (check_error_on_missing_keys(Opts)) {
-            if (node) {
-               element_node = node->child(root.size() - 1, detail::tracked_element_count<T>());
-            }
+         detail::missing_key_record* element_node = nullptr;
+         if (node) {
+            element_node = node->child(root.size() - 1, detail::tracked_element_count<T>());
          }
-         return resolve_nested<Opts>(root.back(), path, ctx, it, end, element_node);
+         return resolve_nested<Opts>(root.back(), path, ctx, it, end, element_node, by_value);
       }
       else if constexpr (!(glz::reflectable<T> || glz::glaze_object_t<T>)) {
          return true;
@@ -1979,12 +2030,11 @@ namespace glz
          const bool key_matches = index < N && path.front() == reflect<U>::keys[index];
 
          if (key_matches) [[likely]] {
-            if constexpr (check_error_on_missing_keys(Opts)) {
-               // Naming a key assigns it, whether the document stops here or reaches through it
-               // into a deeper table.
-               if (node) {
-                  node->assign(index);
-               }
+            // Naming a key assigns it, whether the document stops here or reaches through it
+            // into a deeper table.
+            if (node && not node->define(index, by_value && path.size() == 1)) [[unlikely]] {
+               ctx.error = error_code::syntax_error; // TOML: a key may be defined only once
+               return false;
             }
             visit<N>(
                [&]<size_t I>() {
@@ -2007,21 +2057,19 @@ namespace glz
 
                      using member_type = std::decay_t<decltype(member_obj)>;
                      [[maybe_unused]] detail::missing_key_record* member_node = nullptr;
-                     if constexpr (check_error_on_missing_keys(Opts)) {
-                        if (node) {
-                           if constexpr (detail::toml_table_like<member_type>()) {
-                              member_node = node->child(I, detail::tracked_member_count<member_type>());
-                           }
-                           else if constexpr (detail::is_toml_array_of_tables<member_type>()) {
-                              // The array's node holds one child per element; the descent below
-                              // picks the element out of it.
-                              member_node = node->child(I, 0);
-                           }
+                     if (node) {
+                        if constexpr (detail::toml_table_like<member_type>()) {
+                           member_node = node->child(I, detail::tracked_member_count<member_type>());
+                        }
+                        else if constexpr (detail::is_toml_array_of_tables<member_type>()) {
+                           // The array's node holds one child per element; the descent below
+                           // picks the element out of it.
+                           member_node = node->child(I, 0);
                         }
                      }
 
                      if (!(path.size() - 1)) {
-                        if constexpr (check_error_on_missing_keys(Opts) && detail::toml_table_like<member_type>()) {
+                        if constexpr (detail::toml_table_like<member_type>()) {
                            detail::read_tracked<toml::is_internal_on<Opts>()>(member_obj, ctx, it, end, member_node);
                         }
                         else {
@@ -2029,7 +2077,7 @@ namespace glz
                         }
                      }
                      else {
-                        return resolve_nested<Opts>(member_obj, path.subspan(1), ctx, it, end, member_node);
+                        return resolve_nested<Opts>(member_obj, path.subspan(1), ctx, it, end, member_node, by_value);
                      }
                   }
                   return !bool(ctx.error);
@@ -2052,14 +2100,14 @@ namespace glz
 
    template <auto Opts, nullable_like T>
    inline bool resolve_nested(T& root, std::span<std::string> path, auto& ctx, auto& it, auto& end,
-                              detail::missing_key_record* node)
+                              detail::missing_key_record* node, const bool by_value = false)
    {
       if (!root) {
          if (!nullable_emplace<Opts>(root, ctx)) {
             return false;
          }
       }
-      return resolve_nested<Opts>(*root, path, ctx, it, end, node);
+      return resolve_nested<Opts>(*root, path, ctx, it, end, node, by_value);
    }
 
    // Helper to resolve an array-of-tables path and emplace a new element
@@ -2082,10 +2130,10 @@ namespace glz
          const bool key_matches = index < N && path.front() == reflect<U>::keys[index];
 
          if (key_matches) [[likely]] {
-            if constexpr (check_error_on_missing_keys(Opts)) {
-               if (node) {
-                  node->assign(index);
-               }
+            // A header cannot reach into a member written whole, such as a static array "a = [...]"
+            if (node && not node->define(index, false)) [[unlikely]] {
+               ctx.error = error_code::syntax_error;
+               return false;
             }
             bool success = false;
             visit<N>(
@@ -2126,14 +2174,12 @@ namespace glz
                      // The array itself gets a node whose children are its elements, so that a
                      // later [array.of.tables.sub] header lands on the element it extends.
                      [[maybe_unused]] detail::missing_key_record* member_node = nullptr;
-                     if constexpr (check_error_on_missing_keys(Opts)) {
-                        if (node) {
-                           if constexpr (emplace_backable<member_type>) {
-                              member_node = node->child(I, 0);
-                           }
-                           else if constexpr (detail::toml_table_like<member_type>()) {
-                              member_node = node->child(I, detail::tracked_member_count<member_type>());
-                           }
+                     if (node) {
+                        if constexpr (emplace_backable<member_type>) {
+                           member_node = node->child(I, 0);
+                        }
+                        else if constexpr (detail::toml_table_like<member_type>()) {
+                           member_node = node->child(I, detail::tracked_member_count<member_type>());
                         }
                      }
 
@@ -2143,7 +2189,7 @@ namespace glz
                            // Emplace a new element and parse into it
                            auto& new_element = member_obj.emplace_back();
                            using element_type = std::decay_t<decltype(new_element)>;
-                           if constexpr (check_error_on_missing_keys(Opts) && detail::toml_table_like<element_type>()) {
+                           if constexpr (detail::toml_table_like<element_type>()) {
                               detail::missing_key_record* element_node =
                                  member_node ? member_node->child(member_obj.size() - 1,
                                                                   detail::tracked_member_count<element_type>())
@@ -2171,12 +2217,10 @@ namespace glz
                               // Need to add an element first
                               member_obj.emplace_back();
                            }
-                           [[maybe_unused]] detail::missing_key_record* element_node = nullptr;
-                           if constexpr (check_error_on_missing_keys(Opts)) {
-                              if (member_node) {
-                                 element_node = member_node->child(member_obj.size() - 1,
-                                                                   detail::tracked_element_count<member_type>());
-                              }
+                           detail::missing_key_record* element_node = nullptr;
+                           if (member_node) {
+                              element_node = member_node->child(member_obj.size() - 1,
+                                                                detail::tracked_element_count<member_type>());
                            }
                            success = resolve_array_of_tables<Opts>(member_obj.back(), path.subspan(1), ctx, it, end,
                                                                    element_node);
@@ -2694,30 +2738,27 @@ namespace glz
       template <auto Opts, class It>
       static void op(auto&& value, is_context auto&& ctx, It&& it, auto end)
       {
+         // An inline table settles its own required and repeated keys where it is parsed, so a record
+         // built for one is never read -- and an array of inline tables would allocate one per element.
+         auto peek = it;
+         skip_ws_newlines_and_comments(peek, end);
+         if (peek != end && *peek == '{') {
+            op_tracked<Opts>(value, ctx, it, end, nullptr);
+            return;
+         }
+         // Entered without a record of what the enclosing document has already assigned, so this
+         // parse owns the whole tree and resolves it once the value is complete.
+         detail::missing_key_record record{reflect<std::remove_cvref_t<decltype(value)>>::size};
+         op_tracked<Opts>(value, ctx, it, end, &record);
          if constexpr (check_error_on_missing_keys(Opts)) {
-            // An inline table settles its own required keys where it is parsed, so a record built
-            // for one is never read -- and an array of inline tables would allocate one per element.
-            auto peek = it;
-            skip_ws_newlines_and_comments(peek, end);
-            if (peek != end && *peek == '{') {
-               op_tracked<Opts>(value, ctx, it, end, nullptr);
-               return;
-            }
-            // Entered without a record of what the enclosing document has already assigned, so this
-            // parse owns the whole tree and resolves it once the value is complete.
-            detail::missing_key_record record{reflect<std::remove_cvref_t<decltype(value)>>::size};
-            op_tracked<Opts>(value, ctx, it, end, &record);
             if (not bool(ctx.error)) {
                detail::check_missing_keys<Opts>(value, record, ctx);
             }
          }
-         else {
-            op_tracked<Opts>(value, ctx, it, end, nullptr);
-         }
       }
 
       // node carries which members the enclosing document has already assigned to this same value,
-      // and collects the ones this call assigns. Null when error_on_missing_keys is off.
+      // and collects the ones this call assigns. Null only for an inline table.
       template <auto Opts, class It>
       static void op_tracked(auto&& value, is_context auto&& ctx, It&& it, auto end,
                              [[maybe_unused]] detail::missing_key_record* node)
@@ -2741,10 +2782,8 @@ namespace glz
             if (*it == '{') { // Check if it's an inline table
                // parse_inline_table_members settles required keys itself, so keep the document walk
                // off this node rather than reporting every member of it as missing.
-               if constexpr (check_error_on_missing_keys(Opts)) {
-                  if (node) {
-                     node->checked_in_place = true;
-                  }
+               if (node) {
+                  node->checked_in_place = true;
                }
                ++it; // Consume '{'
                skip_ws_and_comments(it, end);
@@ -2832,7 +2871,7 @@ namespace glz
                   ctx.error = error_code::unexpected_end; // Value expected
                   return;
                }
-               if (!resolve_nested<Opts>(value, std::span{path}, ctx, it, end, node)) {
+               if (!resolve_nested<Opts>(value, std::span{path}, ctx, it, end, node, true)) {
                   return;
                }
             }
@@ -2878,7 +2917,7 @@ namespace glz
 
          static constexpr auto required = required_fields<U, Opts>();
          for (size_t i = 0; i < N; ++i) {
-            if (required[i] && not(i < node.assigned.size() && node.assigned[i])) {
+            if (required[i] && not(i < node.member_count && node.assigned[i])) {
                ctx.custom_error_message = reflect<U>::keys[i];
                ctx.error = error_code::missing_key;
                return;
