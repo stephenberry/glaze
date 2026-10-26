@@ -41,6 +41,11 @@ if (MSVC)
     $<$<COMPILE_LANG_AND_ID:CXX,MSVC>:/permissive->
     $<$<COMPILE_LANG_AND_ID:CXX,MSVC>:/Zc:lambda>)
 
+  # Suppress MSVC's warnings about "unsafe" CRT functions (e.g. sprintf, strcpy)
+  # so that consumers compiling with real MSVC don't get C4996 noise.
+  target_compile_definitions(glaze_glaze INTERFACE
+    $<$<COMPILE_LANG_AND_ID:CXX,MSVC>:_CRT_SECURE_NO_WARNINGS>)
+
   # Whole-program optimization changes codegen quality, never correctness, and the
   # top-level build is glaze's own test suite -- correctness checks that gain nothing
   # from it. Because glaze is header-only, every test executable pays a full link-time
