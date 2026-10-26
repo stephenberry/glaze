@@ -346,6 +346,9 @@ namespace glz
    struct allow_conversions_opt_tag
    {};
 
+   struct float_max_write_precision_opt_tag
+   {};
+
    // Helper for deprecated option static_asserts (dependent false pattern)
    template <class>
    inline constexpr bool deprecated_opts_raw = false;
@@ -379,6 +382,10 @@ namespace glz
 
    template <auto member_ptr>
    concept is_allow_conversions_tag = std::same_as<std::decay_t<decltype(member_ptr)>, allow_conversions_opt_tag>;
+
+   template <auto member_ptr>
+   concept is_float_max_write_precision_tag =
+      std::same_as<std::decay_t<decltype(member_ptr)>, float_max_write_precision_opt_tag>;
 
    consteval bool check_validate_skipped(auto&& Opts)
    {
@@ -1203,6 +1210,20 @@ namespace glz
                bool structs_as_arrays{};
             };
             return opts_structs_as_arrays{{Opts}, static_cast<bool>(value)};
+         }
+      }
+      else if constexpr (is_float_max_write_precision_tag<member_ptr>) {
+         if constexpr (requires { Opts.float_max_write_precision; }) {
+            auto ret = Opts;
+            ret.float_max_write_precision = static_cast<float_precision>(value);
+            return ret;
+         }
+         else {
+            struct opts_float_max_write_precision : std::decay_t<decltype(Opts)>
+            {
+               float_precision float_max_write_precision{};
+            };
+            return opts_float_max_write_precision{{Opts}, static_cast<float_precision>(value)};
          }
       }
       else {
