@@ -21,6 +21,7 @@
 #include <cstdlib>
 #include <iostream>
 #include <source_location>
+#include <string>
 #include <string_view>
 
 namespace ut
@@ -240,9 +241,18 @@ namespace ut
             }
          }
          else {
-            static const std::string_view filter = []() -> std::string_view {
-               if (const char* env = std::getenv("UT_RUN")) return env;
-               return {};
+            static const std::string filter = [] {
+               std::string value{};
+#if defined(_MSC_VER) && !defined(__clang__)
+               // MSVC deprecates std::getenv (C4996)
+               char* env = nullptr;
+               size_t len = 0;
+               if (_dupenv_s(&env, &len, "UT_RUN") == 0 && env) value = env;
+               std::free(env);
+#else
+               if (const char* env = std::getenv("UT_RUN")) value = env;
+#endif
+               return value;
             }();
 
             auto matches_filter = [](std::string_view test_name, std::string_view f) {
@@ -293,13 +303,8 @@ namespace ut
 
 namespace ut
 {
-   // outputter/reporter/runner (above) are given explicit constructors instead of being initialized as
-   // aggregates (e.g. `reporter{outputter}`). This works around an MSVC code-generation bug where
-   // aggregate-initializing a class whose first member is a reference, followed by further members that
-   // use default member initializers, with a brace-init-list that supplies only the reference and relies
-   // on the defaults for the rest, could leave the reference member null. That reproduced as a crash
-   // (0xC0000005 null-pointer write) the first time a global `suite` ran its test and reached
-   // reporter::on(), since reporter.outputter was never actually bound.
+   // outputter, reporter, and runner have explicit constructors rather than being aggregates. With MSVC 19.52,
+   // aggregate initialization here left reporter.outputter null, crashing the first global suite to run.
    inline struct
    {
       struct

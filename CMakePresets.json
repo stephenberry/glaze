@@ -91,6 +91,8 @@
             },
             "cacheVariables": {
                 "CMAKE_BUILD_TYPE": "Debug",
+                "CMAKE_C_COMPILER": "cl",
+                "CMAKE_CXX_COMPILER": "cl",
                 "CMAKE_EXPORT_COMPILE_COMMANDS": true,
                 "glaze_DEVELOPER_MODE": true,
                 "BUILD_TESTING": true,
@@ -111,6 +113,8 @@
             },
             "cacheVariables": {
                 "CMAKE_BUILD_TYPE": "Release",
+                "CMAKE_C_COMPILER": "cl",
+                "CMAKE_CXX_COMPILER": "cl",
                 "CMAKE_EXPORT_COMPILE_COMMANDS": true,
                 "glaze_DEVELOPER_MODE": true,
                 "BUILD_TESTING": true,
