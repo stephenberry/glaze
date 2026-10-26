@@ -294,6 +294,12 @@ namespace glz
 
       while (!remaining_ptr.empty()) {
          auto [token, next_remaining] = parse_json_ptr_token(remaining_ptr);
+         // RFC 6901 3: '~' must be followed by '0' or '1'. On "~2" or a trailing '~' the token
+         // holds only the characters before the '~' and the rest of the pointer is gone, so
+         // carrying on would resolve "/a~2/b" to "/a".
+         if (next_remaining.data() == nullptr) [[unlikely]] {
+            return result_t{unexpected(error_ctx{size_t(it - start), error_code::invalid_json_pointer})};
+         }
          if (token.empty() && remaining_ptr.size() > 0 && remaining_ptr[0] == '/') {
             // Empty token after '/' is valid (represents empty string key)
             // But if we got here with no token and remaining_ptr doesn't start with '/',
