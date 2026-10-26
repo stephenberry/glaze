@@ -108,6 +108,8 @@ namespace ut
    template <class OStream>
    struct outputter
    {
+      constexpr explicit outputter(OStream& os_) : os(os_) {}
+
       template <events::mode Mode>
       constexpr auto on(const events::test_begin<Mode>&)
       {}
@@ -167,6 +169,8 @@ namespace ut
    template <class Outputter, uint32_t MaxDepth = 16>
    struct reporter
    {
+      constexpr explicit reporter(Outputter& outputter_) : outputter(outputter_) {}
+
       constexpr auto on(const events::test_begin<events::mode::run_time>& event)
       {
          asserts_failed[current++] = summary.asserts[events::summary::FAILED];
@@ -220,6 +224,8 @@ namespace ut
    template <class Reporter>
    struct runner
    {
+      constexpr explicit runner(Reporter& reporter_) : reporter(reporter_) {}
+
       template <class Test>
       constexpr auto on(Test test, const std::string_view file_name, uint_least32_t line, const std::string_view name)
          -> bool
@@ -287,6 +293,13 @@ namespace ut
 
 namespace ut
 {
+   // outputter/reporter/runner (above) are given explicit constructors instead of being initialized as
+   // aggregates (e.g. `reporter{outputter}`). This works around an MSVC code-generation bug where
+   // aggregate-initializing a class whose first member is a reference, followed by further members that
+   // use default member initializers, with a brace-init-list that supplies only the reference and relies
+   // on the defaults for the rest, could leave the reference member null. That reproduced as a crash
+   // (0xC0000005 null-pointer write) the first time a global `suite` ran its test and reached
+   // reporter::on(), since reporter.outputter was never actually bound.
    inline struct
    {
       struct
