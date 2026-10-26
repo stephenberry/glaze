@@ -52,7 +52,7 @@ These options are **not** in `glz::opts` by default. Add them to a custom option
 | `char indentation_char` | `' '` | Prettified JSON indentation character |
 | `uint8_t indentation_width` | `3` | Prettified JSON indentation size |
 | `bool new_lines_in_arrays` | `true` | Whether prettified arrays have new lines per element |
-| `float_precision float_max_write_precision` | `full` | Maximum precision for writing floats (requires custom options struct inheriting `glz::opts`) |
+| `float_precision float_max_write_precision` | `full` | Maximum precision for writing floats |
 | `static constexpr std::string_view float_format` | (none) | Format string for float output using `std::format` (C++23) |
 | `bool skip_null_members_on_read` | `false` | Skip null values when reading (preserve existing value) |
 | `bool skip_read_constraint` | `false` | Skip `read_constraint` validation during reading |
