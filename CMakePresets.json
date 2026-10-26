@@ -77,6 +77,46 @@
                 "BUILD_TESTING": true,
                 "glaze_BUILD_INTEROP": true
             }
+        },
+        {
+            "name": "msvc-debug",
+            "displayName": "MSVC Debug",
+            "description": "Debug build using the MSVC compiler",
+            "binaryDir": "${sourceDir}/build/debug-msvc",
+            "generator": "Ninja",
+            "condition": {
+                "type": "equals",
+                "lhs": "${hostSystemName}",
+                "rhs": "Windows"
+            },
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Debug",
+                "CMAKE_EXPORT_COMPILE_COMMANDS": true,
+                "glaze_DEVELOPER_MODE": true,
+                "BUILD_TESTING": true,
+                "glaze_BUILD_INTEROP": true,
+                "glaze_BUILD_SSL_TESTS": false
+            }
+        },
+        {
+            "name": "msvc-release",
+            "displayName": "MSVC Release",
+            "description": "Release build using the MSVC compiler",
+            "binaryDir": "${sourceDir}/build/release-msvc",
+            "generator": "Ninja",
+            "condition": {
+                "type": "equals",
+                "lhs": "${hostSystemName}",
+                "rhs": "Windows"
+            },
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Release",
+                "CMAKE_EXPORT_COMPILE_COMMANDS": true,
+                "glaze_DEVELOPER_MODE": true,
+                "BUILD_TESTING": true,
+                "glaze_BUILD_INTEROP": true,
+                "glaze_BUILD_SSL_TESTS": false
+            }
         }
     ],
     "buildPresets": [
@@ -95,6 +135,14 @@
         {
             "name": "gcc-release",
             "configurePreset": "gcc-release"
+        },
+        {
+            "name": "msvc-debug",
+            "configurePreset": "msvc-debug"
+        },
+        {
+            "name": "msvc-release",
+            "configurePreset": "msvc-release"
         }
     ],
     "testPresets": [
@@ -111,6 +159,15 @@
             "name": "gcc-debug",
             "displayName": "Test GCC Debug",
             "configurePreset": "gcc-debug",
+            "output": {
+                "verbosity": "verbose",
+                "outputOnFailure": true
+            }
+        },
+        {
+            "name": "msvc-debug",
+            "displayName": "Test MSVC Debug",
+            "configurePreset": "msvc-debug",
             "output": {
                 "verbosity": "verbose",
                 "outputOnFailure": true
