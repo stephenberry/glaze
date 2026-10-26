@@ -1676,7 +1676,7 @@ namespace glz
       // be settled where a table body ends, the way it can for a JSON or YAML object -- the rest of
       // the document may still be carrying them.
       //
-      // missing_key_record accumulates that across the whole read. Nodes mirror the shape of the
+      // key_assignment_record accumulates that across the whole read. Nodes mirror the shape of the
       // values the document actually touched: one per struct, and for an array of tables one for
       // the array holding one per element. error_on_missing_keys is then resolved by walking the
       // tree once the document has been parsed.
@@ -1684,7 +1684,8 @@ namespace glz
       // The same spread is why a key defined twice (TOML v1.0.0, "Keys") cannot be caught within one
       // table body: "[a]" may name a key a second time sections after the first, or a dotted key may
       // reach into a table already written whole with "=". The record is therefore kept for every
-      // read, and value_assigned marks the members a "key = value" line wrote outright.
+      // read, whether or not error_on_missing_keys is set, and value_assigned marks the members a
+      // "key = value" line wrote outright.
 
       // One flag per reflected member, held inline for the first 64 so that a record for a typical
       // struct makes no allocation of its own.
@@ -1705,31 +1706,30 @@ namespace glz
             return index < 64 ? ((low >> index) & 1) != 0 : bool(high[index - 64]);
          }
 
-         void set(const size_t index, const bool flag)
+         void set(const size_t index)
          {
             if (index < 64) {
-               const uint64_t bit = uint64_t{1} << index;
-               low = flag ? (low | bit) : (low & ~bit);
+               low |= uint64_t{1} << index;
             }
             else {
-               high[index - 64] = flag;
+               high[index - 64] = true;
             }
          }
       };
 
-      struct missing_key_record
+      struct key_assignment_record
       {
          size_t member_count{}; // reflected members of the struct this node mirrors
          member_flags assigned; // members the document named
          member_flags value_assigned; // members written as a whole by "key = value"
          // Keyed by member index, or by element index on the node standing in for an array of
          // tables. A vector rather than a map: a document names a handful of keys per struct.
-         std::vector<std::pair<size_t, std::unique_ptr<missing_key_record>>> children{};
+         std::vector<std::pair<size_t, std::unique_ptr<key_assignment_record>>> children{};
          // An inline table is self-contained by the TOML grammar, so it is checked where it is
          // parsed and this node's flags are never filled in. Set to keep the final walk off it.
          bool checked_in_place = false;
 
-         explicit missing_key_record(const size_t member_count)
+         explicit key_assignment_record(const size_t member_count)
             : member_count(member_count), assigned(member_count), value_assigned(member_count)
          {}
 
@@ -1744,25 +1744,27 @@ namespace glz
             if (value_assigned[index] || (by_value && assigned[index])) {
                return false;
             }
-            assigned.set(index, true);
-            value_assigned.set(index, by_value);
+            assigned.set(index);
+            if (by_value) {
+               value_assigned.set(index);
+            }
             return true;
          }
 
-         missing_key_record* child(const size_t key, const size_t member_count)
+         key_assignment_record* child(const size_t key, const size_t member_count)
          {
             for (auto& [k, node] : children) {
                if (k == key) {
                   return node.get();
                }
             }
-            children.emplace_back(key, std::make_unique<missing_key_record>(member_count));
+            children.emplace_back(key, std::make_unique<key_assignment_record>(member_count));
             return children.back().second.get();
          }
       };
 
       // Whether a value is a TOML table -- a reflected struct, seen through any nullable wrapper.
-      // The missing-key tracker follows required keys into one, and a "[array.sub]" header descends
+      // The key assignment record follows assigned keys into one, and a "[array.sub]" header descends
       // into one. A custom reader owns its own parsing, so it is left alone by both.
       template <class T>
       consteval bool toml_table_like()
@@ -1841,13 +1843,13 @@ namespace glz
       }
 
       template <auto Opts, class T, class It, class End>
-      void read_tracked(T& value, auto& ctx, It& it, End end, missing_key_record* node);
+      void read_tracked(T& value, auto& ctx, It& it, End end, key_assignment_record* node);
 
       template <auto Opts, class T, class Ctx>
-      void check_missing_keys(T&& value, const missing_key_record& node, Ctx& ctx);
+      void check_missing_keys(T&& value, const key_assignment_record& node, Ctx& ctx);
 
       template <auto Opts, class T, class Ctx>
-      void check_missing_keys_at(T&& value, const missing_key_record& node, Ctx& ctx);
+      void check_missing_keys_at(T&& value, const key_assignment_record& node, Ctx& ctx);
 
       template <auto Opts, class T, class It, class End, class Ctx>
       inline void parse_inline_table_members(T&& value, It&& it, End end, Ctx&& ctx)
@@ -1998,7 +2000,7 @@ namespace glz
    // by_value: the path is the key of a "key = value" line rather than a "[table]" header.
    template <auto Opts, class T>
    inline bool resolve_nested(T& root, std::span<std::string> path, auto& ctx, auto& it, auto& end,
-                              detail::missing_key_record* node, const bool by_value = false)
+                              detail::key_assignment_record* node, const bool by_value = false)
    {
       if constexpr (not nullable_like<T> && detail::is_toml_array_of_tables<T>()) {
          // "[array.sub]" names a sub-table of the last element "[[array]]" defined, per TOML
@@ -2011,7 +2013,7 @@ namespace glz
             ctx.error = error_code::syntax_error;
             return false;
          }
-         detail::missing_key_record* element_node = nullptr;
+         detail::key_assignment_record* element_node = nullptr;
          if (node) {
             element_node = node->child(root.size() - 1, detail::tracked_element_count<T>());
          }
@@ -2056,7 +2058,7 @@ namespace glz
                      }();
 
                      using member_type = std::decay_t<decltype(member_obj)>;
-                     [[maybe_unused]] detail::missing_key_record* member_node = nullptr;
+                     [[maybe_unused]] detail::key_assignment_record* member_node = nullptr;
                      if (node) {
                         if constexpr (detail::toml_table_like<member_type>()) {
                            member_node = node->child(I, detail::tracked_member_count<member_type>());
@@ -2100,7 +2102,7 @@ namespace glz
 
    template <auto Opts, nullable_like T>
    inline bool resolve_nested(T& root, std::span<std::string> path, auto& ctx, auto& it, auto& end,
-                              detail::missing_key_record* node, const bool by_value = false)
+                              detail::key_assignment_record* node, const bool by_value = false)
    {
       if (!root) {
          if (!nullable_emplace<Opts>(root, ctx)) {
@@ -2114,7 +2116,7 @@ namespace glz
    // Returns true if successful, false if error
    template <auto Opts, class T>
    inline bool resolve_array_of_tables(T& root, std::span<std::string> path, auto& ctx, auto& it, auto& end,
-                                       detail::missing_key_record* node)
+                                       detail::key_assignment_record* node)
    {
       if constexpr (!(glz::reflectable<T> || glz::glaze_object_t<T>)) {
          ctx.error = error_code::syntax_error;
@@ -2173,7 +2175,7 @@ namespace glz
 
                      // The array itself gets a node whose children are its elements, so that a
                      // later [array.of.tables.sub] header lands on the element it extends.
-                     [[maybe_unused]] detail::missing_key_record* member_node = nullptr;
+                     [[maybe_unused]] detail::key_assignment_record* member_node = nullptr;
                      if (node) {
                         if constexpr (emplace_backable<member_type>) {
                            member_node = node->child(I, 0);
@@ -2190,7 +2192,7 @@ namespace glz
                            auto& new_element = member_obj.emplace_back();
                            using element_type = std::decay_t<decltype(new_element)>;
                            if constexpr (detail::toml_table_like<element_type>()) {
-                              detail::missing_key_record* element_node =
+                              detail::key_assignment_record* element_node =
                                  member_node ? member_node->child(member_obj.size() - 1,
                                                                   detail::tracked_member_count<element_type>())
                                              : nullptr;
@@ -2217,7 +2219,7 @@ namespace glz
                               // Need to add an element first
                               member_obj.emplace_back();
                            }
-                           detail::missing_key_record* element_node = nullptr;
+                           detail::key_assignment_record* element_node = nullptr;
                            if (member_node) {
                               element_node = member_node->child(member_obj.size() - 1,
                                                                 detail::tracked_element_count<member_type>());
@@ -2256,7 +2258,7 @@ namespace glz
 
    template <auto Opts, nullable_like T>
    inline bool resolve_array_of_tables(T& root, std::span<std::string> path, auto& ctx, auto& it, auto& end,
-                                       detail::missing_key_record* node)
+                                       detail::key_assignment_record* node)
    {
       if (!root) {
          if (!nullable_emplace<Opts>(root, ctx)) {
@@ -2748,7 +2750,7 @@ namespace glz
          }
          // Entered without a record of what the enclosing document has already assigned, so this
          // parse owns the whole tree and resolves it once the value is complete.
-         detail::missing_key_record record{reflect<std::remove_cvref_t<decltype(value)>>::size};
+         detail::key_assignment_record record{reflect<std::remove_cvref_t<decltype(value)>>::size};
          op_tracked<Opts>(value, ctx, it, end, &record);
          if constexpr (check_error_on_missing_keys(Opts)) {
             if (not bool(ctx.error)) {
@@ -2761,7 +2763,7 @@ namespace glz
       // and collects the ones this call assigns. Null only for an inline table.
       template <auto Opts, class It>
       static void op_tracked(auto&& value, is_context auto&& ctx, It&& it, auto end,
-                             [[maybe_unused]] detail::missing_key_record* node)
+                             [[maybe_unused]] detail::key_assignment_record* node)
       {
          using U = std::remove_cvref_t<decltype(value)>;
          while (it != end) {
@@ -2882,7 +2884,7 @@ namespace glz
    namespace detail
    {
       template <auto Opts, class T, class It, class End>
-      void read_tracked(T& value, auto& ctx, It& it, End end, missing_key_record* node)
+      void read_tracked(T& value, auto& ctx, It& it, End end, key_assignment_record* node)
       {
          using U = std::remove_cvref_t<T>;
          if constexpr (nullable_like<U>) {
@@ -2906,7 +2908,7 @@ namespace glz
       }
 
       template <auto Opts, class T, class Ctx>
-      void check_missing_keys(T&& value, const missing_key_record& node, Ctx& ctx)
+      void check_missing_keys(T&& value, const key_assignment_record& node, Ctx& ctx)
       {
          using U = std::remove_cvref_t<T>;
          static constexpr auto N = reflect<U>::size;
@@ -2950,7 +2952,7 @@ namespace glz
       }
 
       template <auto Opts, class T, class Ctx>
-      void check_missing_keys_at(T&& value, const missing_key_record& node, Ctx& ctx)
+      void check_missing_keys_at(T&& value, const key_assignment_record& node, Ctx& ctx)
       {
          using U = std::remove_cvref_t<T>;
          if constexpr (nullable_like<U>) {
