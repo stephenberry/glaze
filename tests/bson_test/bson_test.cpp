@@ -2084,4 +2084,118 @@ suite bson_cstring_embedded_null_tests = [] {
    };
 };
 
+// Regression coverage for https://github.com/stephenberry/glaze/issues/3044
+// A user specialization of to<BSON, std::variant<...>> (or of a nullable type) must take precedence
+// over the writer's generic variant/nullable dispatch, as it already does on the read side.
+struct bson_shape_circle
+{};
+
+struct bson_shape_square
+{};
+
+// Both alternatives are documents, which the default variant support rejects as ambiguous, so this
+// variant is written as the int32 index of its active alternative.
+using bson_shape = std::variant<bson_shape_circle, bson_shape_square>;
+
+struct bson_level
+{
+   int32_t value{};
+};
+
+// An empty optional is written as int32 -1 rather than null.
+using bson_maybe_level = std::optional<bson_level>;
+
+template <>
+struct glz::to<glz::BSON, bson_shape>
+{
+   static constexpr uint8_t type_code = glz::bson::type::int32;
+
+   template <auto Opts>
+   static void op(const bson_shape& value, is_context auto&& ctx, auto&& b, auto& ix) noexcept
+   {
+      to<BSON, int32_t>::op<Opts>(static_cast<int32_t>(value.index()), ctx, b, ix);
+   }
+};
+
+template <>
+struct glz::from<glz::BSON, bson_shape>
+{
+   template <auto Opts, class It, class End>
+   static void op(bson_shape& value, uint8_t tag, is_context auto& ctx, It& it, const End& end) noexcept
+   {
+      int32_t index{};
+      from<BSON, int32_t>::op<Opts>(index, tag, ctx, it, end);
+      if (bool(ctx.error)) [[unlikely]] {
+         return;
+      }
+      if (index == 0) {
+         value = bson_shape_circle{};
+      }
+      else if (index == 1) {
+         value = bson_shape_square{};
+      }
+      else {
+         ctx.error = error_code::no_matching_variant_type;
+      }
+   }
+};
+
+template <>
+struct glz::to<glz::BSON, bson_maybe_level>
+{
+   static constexpr uint8_t type_code = glz::bson::type::int32;
+
+   template <auto Opts>
+   static void op(const bson_maybe_level& value, is_context auto&& ctx, auto&& b, auto& ix) noexcept
+   {
+      to<BSON, int32_t>::op<Opts>(value ? value->value : int32_t{-1}, ctx, b, ix);
+   }
+};
+
+template <>
+struct glz::from<glz::BSON, bson_maybe_level>
+{
+   template <auto Opts, class It, class End>
+   static void op(bson_maybe_level& value, uint8_t tag, is_context auto& ctx, It& it, const End& end) noexcept
+   {
+      int32_t level{};
+      from<BSON, int32_t>::op<Opts>(level, tag, ctx, it, end);
+      if (bool(ctx.error)) [[unlikely]] {
+         return;
+      }
+      if (level < 0) {
+         value.reset();
+      }
+      else {
+         value = bson_level{level};
+      }
+   }
+};
+
+struct bson_specialized_members
+{
+   bson_shape shape{};
+   bson_maybe_level level{};
+};
+
+suite bson_user_specialization_tests = [] {
+   "bson user to<BSON, variant> and to<BSON, optional> specializations are used for members"_test = [] {
+      bson_specialized_members src{};
+      src.shape = bson_shape_square{};
+      src.level = bson_level{3};
+      std::string buffer{};
+      expect(not glz::write_bson(src, buffer));
+      // {shape: int32 1, level: int32 3}
+      expect(bson_test::bytes_equal(buffer, {0x1B, 0x00, 0x00, 0x00, //
+                                             0x10, 's',  'h',  'a',  'p', 'e', 0x00, 0x01, 0x00, 0x00, 0x00, //
+                                             0x10, 'l',  'e',  'v',  'e', 'l', 0x00, 0x03, 0x00, 0x00, 0x00, //
+                                             0x00}));
+
+      bson_specialized_members dst{};
+      expect(not glz::read_bson(dst, buffer));
+      expect(dst.shape.index() == 1);
+      expect(dst.level.has_value() && dst.level->value == 3);
+   };
+};
+
 int main() { return 0; }
