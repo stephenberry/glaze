@@ -13041,6 +13041,33 @@ struct mixed_write_precision_t
    };
 };
 
+struct conversions_opts : glz::opts
+{
+   bool allow_conversions = true;
+};
+
+suite set_opt_tests = [] {
+   "set_opt adds a missing inheritable option"_test = [] {
+      static constexpr auto conversions = glz::set_opt<glz::opts{}, glz::allow_conversions_opt_tag{}>(false);
+      static_assert(!glz::check_allow_conversions(conversions));
+
+      static constexpr auto precision =
+         glz::set_opt<glz::opts{}, glz::float_max_write_precision_opt_tag{}>(glz::float_precision::float32);
+      static_assert(glz::check_float_max_write_precision(precision) == glz::float_precision::float32);
+   };
+
+   "set_opt updates an existing inheritable option"_test = [] {
+      static constexpr auto conversions = glz::set_opt<conversions_opts{}, glz::allow_conversions_opt_tag{}>(false);
+      static_assert(std::same_as<std::remove_cv_t<decltype(conversions)>, conversions_opts>);
+      static_assert(!conversions.allow_conversions);
+
+      static constexpr auto precision =
+         glz::set_opt<float_opts{}, glz::float_max_write_precision_opt_tag{}>(glz::float_precision::float64);
+      static_assert(std::same_as<std::remove_cv_t<decltype(precision)>, float_opts>);
+      static_assert(precision.float_max_write_precision == glz::float_precision::float64);
+   };
+};
+
 suite max_write_precision_tests = [] {
    "max_write_precision"_test = [] {
       double pi = std::numbers::pi_v<double>;

@@ -1212,6 +1212,20 @@ namespace glz
             return opts_structs_as_arrays{{Opts}, static_cast<bool>(value)};
          }
       }
+      else if constexpr (is_allow_conversions_tag<member_ptr>) {
+         if constexpr (requires { Opts.allow_conversions; }) {
+            auto ret = Opts;
+            ret.allow_conversions = static_cast<bool>(value);
+            return ret;
+         }
+         else {
+            struct opts_allow_conversions : std::decay_t<decltype(Opts)>
+            {
+               bool allow_conversions{};
+            };
+            return opts_allow_conversions{{Opts}, static_cast<bool>(value)};
+         }
+      }
       else if constexpr (is_float_max_write_precision_tag<member_ptr>) {
          if constexpr (requires { Opts.float_max_write_precision; }) {
             auto ret = Opts;
