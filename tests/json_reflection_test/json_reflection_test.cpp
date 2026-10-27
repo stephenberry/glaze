@@ -1489,4 +1489,171 @@ suite rename_tests = [] {
    };
 };
 
+// Members whose type is not default constructible must not zero the member count. The members
+// after the initializer clauses are value initialized, so a walk that stops at the first clause
+// count which is not initializable stops at the first such member and reports no members at all.
+struct count_ctor_only_member
+{
+   count_ctor_only_member(int v) : v{v} {}
+   int v;
+};
+
+template <>
+struct glz::meta<count_ctor_only_member>
+{
+   static constexpr auto value = glz::object(&count_ctor_only_member::v);
+};
+
+struct count_non_default_constructible_second
+{
+   double a;
+   count_ctor_only_member b;
+};
+static_assert(glz::detail::count_members<count_non_default_constructible_second> == 2);
+
+struct count_non_default_constructible_third
+{
+   double a;
+   int b;
+   count_ctor_only_member c;
+};
+static_assert(glz::detail::count_members<count_non_default_constructible_third> == 3);
+
+struct count_non_default_constructible_first_and_last
+{
+   count_ctor_only_member a;
+   int b;
+   count_ctor_only_member c;
+};
+static_assert(glz::detail::count_members<count_non_default_constructible_first_and_last> == 3);
+
+struct count_non_default_constructible_only
+{
+   count_ctor_only_member a;
+};
+static_assert(glz::detail::count_members<count_non_default_constructible_only> == 1);
+
+// The universal clause excludes character pointers from its template conversion, so a dedicated
+// conversion is needed for these members, otherwise they count as no members and write as nothing.
+struct count_c_string_member
+{
+   const char* name{};
+   int count{};
+};
+static_assert(glz::detail::count_members<count_c_string_member> == 2);
+
+struct count_c_string_only
+{
+   const char* name{};
+};
+static_assert(glz::detail::count_members<count_c_string_only> == 1);
+
+struct count_string_view_and_c_string
+{
+   std::string_view view{};
+   const char* name{};
+   int count{};
+};
+static_assert(glz::detail::count_members<count_string_view_and_c_string> == 3);
+
+struct count_nullptr_member
+{
+   std::nullptr_t n{};
+   int a{};
+};
+static_assert(glz::detail::count_members<count_nullptr_member> == 2);
+
+struct count_one_member
+{
+   int a{};
+};
+static_assert(glz::detail::count_members<count_one_member> == 1);
+
+struct count_no_members
+{
+};
+static_assert(glz::detail::count_members<count_no_members> == 0);
+
+#if !GLZ_REFLECTION26
+// The pure reflection path stops at max_pure_reflection_count members, and the boundary is what the
+// over-limit static_assert in count_members keys on: a type exactly at the limit is initializable
+// from that many clauses, a type with more members is not.
+#define GLZ_COUNT_MEMBERS_8(p) int p##0, p##1, p##2, p##3, p##4, p##5, p##6, p##7;
+#define GLZ_COUNT_MEMBERS_64(p)                                                                         \
+   GLZ_COUNT_MEMBERS_8(p##a) GLZ_COUNT_MEMBERS_8(p##b) GLZ_COUNT_MEMBERS_8(p##c) GLZ_COUNT_MEMBERS_8(p##d) \
+   GLZ_COUNT_MEMBERS_8(p##e) GLZ_COUNT_MEMBERS_8(p##f) GLZ_COUNT_MEMBERS_8(p##g) GLZ_COUNT_MEMBERS_8(p##h)
+
+struct count_at_member_limit
+{
+   GLZ_COUNT_MEMBERS_64(x) GLZ_COUNT_MEMBERS_64(y)
+};
+static_assert(glz::detail::count_members<count_at_member_limit> == glz::detail::max_pure_reflection_count);
+static_assert(
+   not glz::detail::initializable_with_n<count_at_member_limit, glz::detail::max_pure_reflection_count + 1>);
+
+struct count_over_member_limit
+{
+   int extra;
+   GLZ_COUNT_MEMBERS_64(x) GLZ_COUNT_MEMBERS_64(y)
+};
+static_assert(
+   glz::detail::initializable_with_n<count_over_member_limit, glz::detail::max_pure_reflection_count + 1>);
+
+#undef GLZ_COUNT_MEMBERS_64
+#undef GLZ_COUNT_MEMBERS_8
+#endif
+
+suite member_count_tests = [] {
+   "non default constructible members are written"_test = [] {
+      std::string buffer{};
+      expect(not glz::write_json(count_non_default_constructible_second{2.0, count_ctor_only_member{1}}, buffer));
+      expect(buffer == R"({"a":2,"b":{"v":1}})") << buffer;
+   };
+
+   "non default constructible members are read"_test = [] {
+      count_non_default_constructible_second obj{0.0, count_ctor_only_member{0}};
+      expect(not glz::read_json(obj, R"({"a":2,"b":{"v":1}})"));
+      expect(obj.a == 2.0);
+      expect(obj.b.v == 1);
+   };
+
+   "members after a non default constructible member are written"_test = [] {
+      std::string buffer{};
+      expect(not glz::write_json(
+         count_non_default_constructible_first_and_last{count_ctor_only_member{1}, 2, count_ctor_only_member{3}},
+         buffer));
+      expect(buffer == R"({"a":{"v":1},"b":2,"c":{"v":3}})") << buffer;
+   };
+
+   "c string members are written"_test = [] {
+      std::string buffer{};
+      expect(not glz::write_json(count_c_string_member{"hello", 7}, buffer));
+      expect(buffer == R"({"name":"hello","count":7})") << buffer;
+
+      buffer.clear();
+      expect(not glz::write_json(count_c_string_only{"hi"}, buffer));
+      expect(buffer == R"({"name":"hi"})") << buffer;
+   };
+
+   // The pointer member itself is not asserted on read: a pointer cannot own the bytes it points to,
+   // so the field is skipped. The members around it must still be read.
+   "c string members do not stop the other members from being read"_test = [] {
+      count_c_string_member obj{};
+      expect(not glz::read_json(obj, R"({"name":"hello","count":7})"));
+      expect(obj.count == 7);
+   };
+
+   "string view and c string members are written"_test = [] {
+      std::string buffer{};
+      expect(not glz::write_json(count_string_view_and_c_string{"view", "name", 3}, buffer));
+      expect(buffer == R"({"view":"view","name":"name","count":3})") << buffer;
+   };
+
+   "a null member is skipped on write"_test = [] {
+      std::string buffer{};
+      expect(not glz::write_json(count_nullptr_member{nullptr, 5}, buffer));
+      expect(buffer == R"({"a":5})") << buffer;
+   };
+};
+
 int main() { return 0; }
