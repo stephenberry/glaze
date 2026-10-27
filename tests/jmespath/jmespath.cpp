@@ -285,6 +285,28 @@ suite jmespath_negative_slice_tests = [] {
       int v{};
       expect(glz::read_jmespath(glz::jmespath_expression{"[9999999999]"}, v, buffer));
    };
+
+   "slice step larger than the remaining range does not overflow"_test = [] {
+      // A step that fits int32 but exceeds the elements left after the first one stepped the
+      // index past INT32_MAX (signed overflow), which wrapped to a negative index and read
+      // outside the array. The slice holds the single element the start index names.
+      std::vector<int> data{1, 2, 3};
+      std::string buffer{};
+      expect(not glz::write_json(data, buffer));
+
+      std::vector<int> out{};
+      expect(not glz::read_jmespath(glz::jmespath_expression{"[1::2147483647]"}, out, buffer));
+      expect(out == (std::vector<int>{2}));
+
+      expect(not glz::read_jmespath(glz::jmespath_expression{"[1::-2147483648]"}, out, buffer));
+      expect(out == (std::vector<int>{2}));
+
+      expect(not glz::read_jmespath<"[1::2147483647]">(out, buffer));
+      expect(out == (std::vector<int>{2}));
+
+      expect(not glz::read_jmespath<"[2::-2147483648]">(out, buffer));
+      expect(out == (std::vector<int>{3}));
+   };
 };
 
 suite jmespath_negative_index_tests = [] {
