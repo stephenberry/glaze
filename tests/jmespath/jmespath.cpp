@@ -445,6 +445,26 @@ suite tuple_slice_tests = [] {
       expect(glz::get<0>(target) == 1);
       expect(glz::get<1>(target) == "a");
    };
+
+   "tuple slice start near INT32_MAX does not wrap"_test = [] {
+      // start + I wrapped to a negative index for I >= 1, so the first array element was read
+      // into the second tuple slot and the read reported success.
+      std::string buffer = R"([10,20,30])";
+
+      std::tuple<int, int> target{-1, -1};
+      expect(glz::read_jmespath<"[2147483647:]">(target, buffer) == glz::error_code::array_element_not_found);
+      expect(std::get<1>(target) == -1);
+
+      target = {-1, -1};
+      expect(glz::read_jmespath(glz::jmespath_expression{"[2147483647:]"}, target, buffer) ==
+             glz::error_code::array_element_not_found);
+      expect(std::get<1>(target) == -1);
+
+      // An explicit end bounds the slice, so the same start selects nothing.
+      target = {-1, -1};
+      expect(not glz::read_jmespath<"[2147483647:2147483647]">(target, buffer));
+      expect(target == std::tuple{-1, -1});
+   };
 };
 
 // Read every truncation prefix of `complete`, each over its own exact-size heap buffer (so ASAN
