@@ -124,21 +124,10 @@ namespace glz
             return;
          }
          case type::string: {
-            int32_t len{};
-            if (!read_le<int32_t>(ctx, it, end, len)) return;
-            if (len < 1) [[unlikely]] {
-               ctx.error = error_code::syntax_error;
-               return;
-            }
-            if (static_cast<int64_t>(end - it) < len) [[unlikely]] {
-               ctx.error = error_code::unexpected_end;
-               return;
-            }
-            // len includes the trailing null byte.
-            const auto n = static_cast<size_t>(len) - 1;
-            std::string_view s{reinterpret_cast<const char*>(&*it), n};
+            // Same decode as read_bson: len includes a trailing null byte that must be there.
+            std::string_view s{};
+            if (!read_bson_string(ctx, it, end, s)) return;
             emit_json_string<Opts>(ctx, s, out, ix);
-            it += len;
             return;
          }
          case type::document: {
@@ -252,43 +241,21 @@ namespace glz
             return;
          }
          case type::javascript: {
-            int32_t len{};
-            if (!read_le<int32_t>(ctx, it, end, len)) return;
-            if (len < 1) [[unlikely]] {
-               ctx.error = error_code::syntax_error;
-               return;
-            }
-            if (static_cast<int64_t>(end - it) < len) [[unlikely]] {
-               ctx.error = error_code::unexpected_end;
-               return;
-            }
-            const auto n = static_cast<size_t>(len) - 1;
-            std::string_view s{reinterpret_cast<const char*>(&*it), n};
+            std::string_view s{};
+            if (!read_bson_string(ctx, it, end, s)) return;
             if (!emit_literal<R"({"$code":)">(ctx, out, ix)) return;
             emit_json_string<Opts>(ctx, s, out, ix);
             if (bool(ctx.error)) return;
             if (!emit_char(ctx, '}', out, ix)) return;
-            it += len;
             return;
          }
          case type::symbol: {
-            int32_t len{};
-            if (!read_le<int32_t>(ctx, it, end, len)) return;
-            if (len < 1) [[unlikely]] {
-               ctx.error = error_code::syntax_error;
-               return;
-            }
-            if (static_cast<int64_t>(end - it) < len) [[unlikely]] {
-               ctx.error = error_code::unexpected_end;
-               return;
-            }
-            const auto n = static_cast<size_t>(len) - 1;
-            std::string_view s{reinterpret_cast<const char*>(&*it), n};
+            std::string_view s{};
+            if (!read_bson_string(ctx, it, end, s)) return;
             if (!emit_literal<R"({"$symbol":)">(ctx, out, ix)) return;
             emit_json_string<Opts>(ctx, s, out, ix);
             if (bool(ctx.error)) return;
             if (!emit_char(ctx, '}', out, ix)) return;
-            it += len;
             return;
          }
          case type::int32: {

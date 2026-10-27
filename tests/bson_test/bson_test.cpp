@@ -1750,6 +1750,25 @@ namespace
          expect(json.error().ec == glz::error_code::syntax_error);
       };
 
+      "convert-rejects-unterminated-strings"_test = [] {
+         // {"e": <len 3> 'a' 'b' 'X'}: the last byte the length covers must be the null
+         // terminator. read_bson rejects it, so the converter must not emit "ab" instead.
+         for (const uint8_t tag : {uint8_t(0x02), uint8_t(0x0D), uint8_t(0x0E)}) {
+            const uint8_t bad[] = {0x0F, 0x00, 0x00, 0x00, tag, 'e', 0x00, 0x03, 0x00, 0x00, 0x00, 'a', 'b', 'X', 0x00};
+            std::string_view buf(reinterpret_cast<const char*>(bad), sizeof(bad));
+            auto json = glz::bson_to_json(buf);
+            expect(not json.has_value()) << json.value_or("");
+            if (not json) {
+               expect(json.error().ec == glz::error_code::syntax_error);
+            }
+         }
+
+         const uint8_t bad[] = {0x0F, 0x00, 0x00, 0x00, 0x02, 'e', 0x00, 0x03, 0x00, 0x00, 0x00, 'a', 'b', 'X', 0x00};
+         std::map<std::string, std::string> m{};
+         expect(glz::read_bson(m, std::string_view(reinterpret_cast<const char*>(bad), sizeof(bad))).ec ==
+                glz::error_code::syntax_error);
+      };
+
       "convert-enforces-depth-limit"_test = [] {
          // Same deeply-nested build as in bson_depth_limit_tests — converter
          // walks the same document tree so the guard must trip here too.
