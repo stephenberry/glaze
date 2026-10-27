@@ -474,8 +474,11 @@ namespace glz
             return false;
          };
 
-         const int32_t start_idx = decomposed_key.start.value_or(0);
-         const int32_t end_idx = decomposed_key.end.value_or((std::numeric_limits<int32_t>::max)());
+         // Indices are 64-bit so start_idx + I cannot wrap for a start near INT32_MAX, and an
+         // omitted end is unbounded so such a start reports a missing element like any other.
+         const int64_t start_idx = decomposed_key.start.value_or(0);
+         const int64_t end_idx =
+            decomposed_key.end.has_value() ? *decomposed_key.end : (std::numeric_limits<int64_t>::max)();
 
          if (at_end()) return;
          if (*it == ']') {
@@ -483,7 +486,7 @@ namespace glz
             return;
          }
 
-         int32_t current_index = 0;
+         int64_t current_index = 0;
 
          // Iterate tuple elements
          using TupleType = std::decay_t<T>;
@@ -492,7 +495,7 @@ namespace glz
          for_each<N>([&]<size_t I>() {
             if (bool(ctx.error)) return;
 
-            int32_t target_idx = start_idx + I;
+            const int64_t target_idx = start_idx + int64_t(I);
 
             // If target is beyond the slice request
             if (target_idx >= end_idx) {
