@@ -728,10 +728,12 @@ namespace glz
             }
             else if (step_idx > 0) {
                // Positive step compacts in place: the write index never overtakes the
-               // read index, so every read stays within the live range.
+               // read index, so every read stays within the live range. The index is
+               // stepped in 64 bits: a step larger than the range left (e.g. [1::2147483647])
+               // would overflow int32 and wrap to a negative index.
                std::size_t dest = 0;
-               for (int32_t i = start_idx; i < end_idx; i += step_idx) {
-                  value[dest++] = std::move(value[i]);
+               for (int64_t i = start_idx; i < end_idx; i += step_idx) {
+                  value[dest++] = std::move(value[size_t(i)]);
                }
                value.resize(dest);
             }
@@ -741,8 +743,8 @@ namespace glz
                // wrap_index already clamps start_idx to at most size-1 and end_idx to at
                // least -1, so every read below stays within [0, size).
                std::decay_t<T> result;
-               for (int32_t i = start_idx; i > end_idx; i += step_idx) {
-                  result.emplace_back(std::move(value[i]));
+               for (int64_t i = start_idx; i > end_idx; i += step_idx) {
+                  result.emplace_back(std::move(value[size_t(i)]));
                }
                value = std::move(result);
             }
