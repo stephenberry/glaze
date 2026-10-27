@@ -92,19 +92,110 @@ namespace glz
          [[maybe_unused]] constexpr operator std::string_view() const { return {}; }
       };
 
-      template <class T, class... Args>
-         requires(std::is_aggregate_v<std::remove_cvref_t<T>>)
-      inline constexpr auto count_members = [] {
-         using V = std::remove_cvref_t<T>;
-         if constexpr (requires { V{Args{}..., any_t{}}; }) {
-            return count_members<V, Args..., any_t>;
-         }
-         else {
-            return sizeof...(Args);
-         }
-      }();
+      // can V be brace-initialized from exactly N any_t values?
+      template <class V, size_t N>
+      inline constexpr bool initializable_with_n = []<size_t... I>(std::index_sequence<I...>) {
+       return requires { V{(void(I), any_t{})...}; };
+      }(std::make_index_sequence<N>{});
 
       inline constexpr size_t max_pure_reflection_count = 128;
+      inline constexpr size_t no_proven_upper_bound = max_pure_reflection_count + 1;
+
+      // Lowest n for which initializable_with_n is true
+      template<class V, size_t K, size_t Max>
+      consteval size_t count_low()
+      {
+       if constexpr (K > Max) {
+           return Max;
+       }
+       else if constexpr (initializable_with_n<V, K>)
+       {
+           return K;
+       }
+       else
+       {
+           return count_low<V, K+1, Max>();
+       }
+      }
+
+      // Double from a knonw-true low until initializable_with_n is false: an exclusive upper bound
+      template<class V, size_t Low, size_t Max>
+      consteval size_t count_high()
+      {
+          if constexpr (Low * 2 > Max)
+          {
+              return no_proven_upper_bound;
+          }
+          else if constexpr (initializable_with_n<V, Low * 2>)
+          {
+              return count_high<V, Low * 2, Max>();
+          }
+          else
+          {
+              return Low * 2;
+          }
+      }
+
+      // Largest true in [Low, High): Low known true, High known false
+      template<class V, size_t Low, size_t High>
+      consteval size_t count_between()
+      {
+          if constexpr (High <= Low + 1)
+          {
+              return Low;
+          }
+          else
+          {
+              constexpr size_t Mid = Low + (High - Low) / 2;
+              if constexpr (initializable_with_n<V, Mid>)
+              {
+                  return count_between<V, Mid, High>();
+              }
+              else
+              {
+                  return count_between<V, Low, Mid>();
+              }
+          }
+      }
+
+      // Largest true value in [Low, Max], given Low is true.
+      template<class V, size_t Low, size_t High, size_t Max>
+      consteval size_t resolve_count()
+      {
+          if constexpr (High > Max && initializable_with_n<V, Max>) {
+              return Max;
+          }
+          else {
+              return count_between<V, Low, High>();
+          }
+      }
+
+      template <class V>
+      consteval size_t count_members_impl()
+      {
+       // Note: this assertion will not catch every violation.
+       // Example: struct with max_pure_reflection_count + 2 fields with the last one non-default constructible
+       static_assert(!initializable_with_n<V, max_pure_reflection_count + 1>,
+                     "glaze: this type has more members than pure reflection supports "
+                     "(max_pure_reflection_count); provide a glz::meta<T> specialization.");
+       constexpr size_t low = count_low<V, 0, max_pure_reflection_count>();
+       if constexpr (low == 0)
+       {
+           // Every member is default-constructible. If false for n=1 that means the struct has no members.
+           if constexpr (!initializable_with_n<V, 1>) return 0;
+           constexpr size_t high = count_high<V, 1, max_pure_reflection_count>();
+           return resolve_count<V, 1, high, max_pure_reflection_count>();
+       }
+       else
+       {
+           constexpr size_t high = count_high<V, low, max_pure_reflection_count>();
+           return resolve_count<V, low, high, max_pure_reflection_count>();
+       }
+      }
+
+      template <class T>
+        requires(std::is_aggregate_v<std::remove_cvref_t<T>>)
+       inline constexpr auto count_members = count_members_impl<std::remove_cvref_t<T>>();
 #endif
    }
 
