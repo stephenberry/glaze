@@ -73,13 +73,8 @@ namespace glz
    template <>
    inline constexpr bool format_supports_streaming<NDJSON> = true;
 
-   // Whether a format's encoding is binary, and so may hold a zero byte anywhere in a document. Such
-   // a document has no length of its own to recover from a bare pointer: glz::read measures a C
-   // string with strlen, which stops at the first zero byte and hands the reader a truncated
-   // document. glz::read therefore rejects a C string for these formats at compile time; pass the
-   // buffer itself, or a std::string_view or std::span that carries its length.
-   //
-   // A user-defined binary format specializes this to get the same protection.
+   // Whether a format's documents may contain zero bytes. glz::read rejects a null-terminated C string
+   // for such a format, since strlen would truncate it. A user-defined binary format specializes this.
    template <std::uint32_t Format>
    inline constexpr bool format_is_binary = false;
 
