@@ -433,7 +433,7 @@ namespace glz
          const bool consumed_whole_value = ctx.error == error_code::none;
          finalize_read_context(ctx);
          if (bool(ctx.error)) {
-            return error_ctx{static_cast<size_t>(it - data_), ctx.error};
+            return error_ctx{static_cast<size_t>(it - data_), ctx.error, ctx.custom_error_message};
          }
          // Streaming cursor: the value spans [data_, it). Record it so a subsequent iterator
          // advance over this element can jump rather than re-scan. Under partial_read the
