@@ -242,8 +242,7 @@ namespace glz::detail
    };
 
    // Extracts the member name from the signature of mangled_name<ptr_t{&fake_object<T>.value.member}>()
-   // Not consteval: Clang 17/18 reject a consteval call in a class template's static data member initializer
-   constexpr std::string_view strip_member_name(std::string_view name)
+   consteval std::string_view strip_member_name(std::string_view name)
    {
       name = name.substr(0, name.find(reflect_field::end));
       return name.substr(name.find_last_of(reflect_field::begin) + 1);
