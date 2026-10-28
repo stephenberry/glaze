@@ -245,6 +245,10 @@ namespace glz
       requires read_supported<T, Opts.format>
    [[nodiscard]] error_ctx read(T& value, Buffer&& buffer, auto&& ctx)
    {
+      static_assert(!format_is_binary<Opts.format>,
+                    "A binary format cannot be read from a null-terminated C string: its length would be taken "
+                    "with strlen and stop at the first zero byte. Pass the buffer itself (e.g. the std::string, "
+                    "not its .data()), or a std::string_view/std::span with an explicit size.");
       const auto str = std::string_view{std::forward<Buffer>(buffer)};
       if (str.empty()) {
          return {0, error_code::no_read_input};
