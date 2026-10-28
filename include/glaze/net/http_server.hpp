@@ -1718,13 +1718,8 @@ namespace glz
          if (running) {
             stop();
          }
-         // Clean up any remaining threads
-         for (auto& thread : threads) {
-            if (thread.joinable()) {
-               thread.join();
-            }
-         }
-         threads.clear();
+         // A stop() made from a worker thread leaves the workers to be joined here
+         join_threads(take_threads());
 
          // Destruction sequence (reverse declaration order of http_server members):
          //   1. threads are joined above (worker threads stop running io_context).
@@ -1818,6 +1813,9 @@ namespace glz
        */
       inline void start(std::optional<size_t> num_threads = std::nullopt)
       {
+         // Held throughout, so a stop() from another thread waits for every worker to exist
+         // before it reads the thread list
+         std::lock_guard<std::mutex> lock(shutdown_mutex);
          if (running || !acceptor) {
             return;
          }
@@ -1854,57 +1852,46 @@ namespace glz
 
       inline void stop()
       {
+         std::vector<std::thread> workers;
          {
             std::lock_guard<std::mutex> lock(shutdown_mutex);
             if (!running) {
                return;
             }
             running = false;
-         }
 
-         // Stop accepting new connections
-         if (acceptor) {
-            try {
-               acceptor->close();
-            }
-            catch (...) {
-               // Ignore errors on close
-            }
-         }
+            // Stop accepting new connections and cancel the signal handler
+            asio::error_code ec;
+            if (acceptor) acceptor->close(ec);
+            if (signals_) signals_->cancel(ec);
 
-         // Cancel the signal handler
-         if (signals_) {
-            try {
-               signals_->cancel();
-            }
-            catch (...) {
-               // Ignore errors on cancel
-            }
-         }
+            // Stop the io_context
+            if (io_context) io_context->stop();
 
-         // Stop the io_context
-         if (io_context) io_context->stop();
-
-         // Only join threads if we're not in one of the worker threads
-         auto current_thread_id = std::this_thread::get_id();
-         bool is_worker_thread = false;
-         for (const auto& thread : threads) {
-            if (thread.get_id() == current_thread_id) {
-               is_worker_thread = true;
-               break;
+            // A worker cannot join itself, so a stop() made from one leaves the workers for
+            // wait_for_signal() or the destructor to join
+            const auto current_thread_id = std::this_thread::get_id();
+            const bool is_worker_thread = std::ranges::any_of(
+               threads, [&](const std::thread& thread) { return thread.get_id() == current_thread_id; });
+            if (!is_worker_thread) {
+               workers.swap(threads);
+               joining_threads = true;
+            }
+            else {
+               // Wake wait_for_signal() so it joins them
+               shutdown_cv.notify_all();
+               return;
             }
          }
 
-         if (!is_worker_thread) {
-            for (auto& thread : threads) {
-               if (thread.joinable()) {
-                  thread.join();
-               }
-            }
-            threads.clear();
-         }
+         // Joined without the lock held: a worker in a handler that calls stop() waits for
+         // the lock, and would never finish if it were held here
+         join_threads(std::move(workers));
 
-         // Notify any threads waiting for shutdown
+         std::lock_guard<std::mutex> lock(shutdown_mutex);
+         joining_threads = false;
+         // Notified under the lock: a woken wait_for_signal() may return and let the server
+         // be destroyed, so the condition variable must not be touched after the unlock
          shutdown_cv.notify_all();
       }
 
@@ -2527,17 +2514,16 @@ namespace glz
        */
       inline void wait_for_signal()
       {
-         std::unique_lock<std::mutex> lock(shutdown_mutex);
-         shutdown_cv.wait(lock, [this] { return !running; });
-
-         // After shutdown is signaled, wait for all threads to finish
-         lock.unlock();
-         for (auto& thread : threads) {
-            if (thread.joinable()) {
-               thread.join();
-            }
+         std::vector<std::thread> workers;
+         {
+            std::unique_lock<std::mutex> lock(shutdown_mutex);
+            // Once a stop() from another thread has also joined the workers, so the server
+            // is fully stopped on return
+            shutdown_cv.wait(lock, [this] { return !running && !joining_threads; });
+            // Left here only by a stop() made from a worker thread
+            workers.swap(threads);
          }
-         threads.clear();
+         join_threads(std::move(workers));
       }
 
       // Get executor for async operations (timers, etc.)
@@ -2603,12 +2589,32 @@ namespace glz
       bool signal_handling_enabled = false;
       std::unique_ptr<asio::signal_set> signals_;
       std::condition_variable shutdown_cv;
+      // Guards running's transitions, threads, joining_threads and the acceptor. start() and
+      // stop() may be called from different threads, and asio objects are not safe for
+      // concurrent use, so the accept loop re-arming the acceptor and stop() closing it take turns.
       std::mutex shutdown_mutex;
+      bool joining_threads = false; // A stop() is joining the workers outside the lock
+
+      std::vector<std::thread> take_threads()
+      {
+         std::lock_guard<std::mutex> lock(shutdown_mutex);
+         return std::exchange(threads, {});
+      }
+
+      static void join_threads(std::vector<std::thread> workers)
+      {
+         for (auto& thread : workers) {
+            if (thread.joinable()) {
+               thread.join();
+            }
+         }
+      }
 
 #ifdef GLZ_ENABLE_SSL
       std::conditional_t<EnableTLS, std::unique_ptr<asio::ssl::context>, std::monostate> ssl_context;
 #endif
 
+      // Called with shutdown_mutex held, so arming the acceptor never overlaps stop() closing it
       inline void do_accept()
       {
          acceptor->async_accept([this](std::error_code ec, asio::ip::tcp::socket socket) {
@@ -2651,6 +2657,7 @@ namespace glz
             }
 
             // Continue accepting if still running
+            std::lock_guard<std::mutex> lock(shutdown_mutex);
             if (running) {
                do_accept();
             }

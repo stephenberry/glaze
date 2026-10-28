@@ -1558,6 +1558,131 @@ suite repeated_response_header_tests = [] {
    };
 };
 
+// start(), stop() and wait_for_signal() called from different threads. A race on the worker
+// list or the acceptor rarely fails these on its own, but ThreadSanitizer reports it.
+namespace
+{
+   // Connects to port until done, so the accept loop keeps re-arming the acceptor while
+   // stop() closes it. Paced, so a full listen backlog cannot stall it on SYN retries.
+   std::thread connect_until(const std::atomic<bool>& done, uint16_t port)
+   {
+      return std::thread([&done, port] {
+         while (!done) {
+            asio::io_context ctx;
+            asio::ip::tcp::socket socket(ctx);
+            asio::error_code ec;
+            socket.connect({asio::ip::make_address("127.0.0.1"), port}, ec);
+            std::this_thread::sleep_for(std::chrono::microseconds(200));
+         }
+      });
+   }
+
+   void send_get(uint16_t port, std::string_view target)
+   {
+      asio::io_context ctx;
+      asio::ip::tcp::socket socket(ctx);
+      socket.connect({asio::ip::make_address("127.0.0.1"), port});
+      const std::string request = "GET " + std::string(target) + " HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n";
+      asio::write(socket, asio::buffer(request));
+   }
+}
+
+suite server_lifecycle_tests = [] {
+   "stop_on_another_thread_than_start"_test = [] {
+      for (int i = 0; i < 20; ++i) {
+         glz::http_server server;
+         server.bind("127.0.0.1", 0);
+         const auto port = server.port();
+
+         std::atomic<bool> done{false};
+         std::thread connector = connect_until(done, port);
+
+         std::thread starter([&] { server.start(2); });
+         std::this_thread::sleep_for(std::chrono::milliseconds(i % 5));
+         // Lands before, during or after start(). When before, it is a no-op and the stop
+         // after the join below is the one that takes effect.
+         server.stop();
+         starter.join();
+         server.stop();
+
+         done = true;
+         connector.join();
+      }
+   };
+
+   "wait_for_signal_with_stop_on_another_thread"_test = [] {
+      glz::http_server server;
+      server.bind("127.0.0.1", 0);
+      server.start(2);
+
+      std::thread stopper([&] {
+         std::this_thread::sleep_for(std::chrono::milliseconds(20));
+         server.stop();
+      });
+      // Both wait_for_signal() and stop() want the workers joined, and only one may join them
+      server.wait_for_signal();
+      stopper.join();
+   };
+
+   "stop_from_a_handler_then_wait_for_signal"_test = [] {
+      glz::http_server server;
+      std::atomic<bool> stop_called{false};
+      server.get("/stop", [&](const glz::request&, glz::response& res) {
+         res.body("stopping");
+         server.stop();
+         stop_called = true;
+      });
+      server.bind("127.0.0.1", 0);
+      server.start(2);
+
+      send_get(server.port(), "/stop");
+
+      // stop() on a worker cannot join the workers, so wait_for_signal() does
+      server.wait_for_signal();
+      expect(stop_called.load());
+   };
+
+   "stop_from_a_handler_then_destroy"_test = [] {
+      std::atomic<bool> stop_called{false};
+      {
+         glz::http_server server;
+         server.get("/stop", [&](const glz::request&, glz::response& res) {
+            res.body("stopping");
+            server.stop();
+            stop_called = true;
+         });
+         server.bind("127.0.0.1", 0);
+         server.start(2);
+         send_get(server.port(), "/stop");
+
+         const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(10);
+         while (!stop_called && std::chrono::steady_clock::now() < deadline) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
+         }
+         // The destructor joins the workers the handler's stop() left behind
+      }
+      expect(stop_called.load());
+   };
+
+   "external_io_context_stop_on_another_thread"_test = [] {
+      auto io_ctx = std::make_shared<asio::io_context>();
+      glz::http_server server(io_ctx);
+      server.bind("127.0.0.1", 0);
+      server.start(0); // The test runs the io_context itself
+      std::thread io_thread([io_ctx] { io_ctx->run(); });
+
+      std::atomic<bool> done{false};
+      std::thread connector = connect_until(done, server.port());
+      std::this_thread::sleep_for(std::chrono::milliseconds(20));
+      server.stop();
+
+      done = true;
+      connector.join();
+      io_ctx->stop();
+      io_thread.join();
+   };
+};
+
 int main()
 {
    std::cout << "Running Glaze Async Server and API Unit Tests...\n";
