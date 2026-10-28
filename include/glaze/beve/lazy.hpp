@@ -251,7 +251,7 @@ namespace glz
          parse<BEVE>::op<Opts>(value, ctx, it, end);
          finalize_read_context(ctx);
          if (bool(ctx.error)) {
-            return error_ctx{static_cast<size_t>(it - data_), ctx.error};
+            return error_ctx{static_cast<size_t>(it - data_), ctx.error, ctx.custom_error_message};
          }
          return {};
       }

@@ -149,6 +149,28 @@ struct MinimalUser
    std::string name{};
 };
 
+// A custom reader that rejects a value with a message, to check read_into() keeps the message.
+struct ValidatedAge
+{
+   int age{};
+};
+
+template <>
+struct glz::meta<ValidatedAge>
+{
+   using T = ValidatedAge;
+   static constexpr auto read_age = [](T& s, int age, glz::context& ctx) {
+      if (age < 21) {
+         ctx.error = glz::error_code::constraint_violated;
+         ctx.custom_error_message = "age too young";
+      }
+      else {
+         s.age = age;
+      }
+   };
+   static constexpr auto value = object("age", glz::custom<read_age, &T::age>);
+};
+
 suite lazy_json_tests = [] {
    "lazy_json_read_basic"_test = [] {
       std::string buffer = R"({"name":"John","age":30,"active":true,"balance":123.45})";
@@ -1007,6 +1029,19 @@ suite lazy_json_tests = [] {
       expect(!ec) << glz::format_error(ec, buffer);
       expect(ec == glz::error_code::none);
       expect(user.name == "Alice");
+   };
+
+   "lazy_json_read_into_preserves_custom_error_message"_test = [] {
+      std::string buffer = R"({"person":{"age":18}})";
+
+      auto result = glz::lazy_json(buffer);
+      expect(result.has_value());
+
+      ValidatedAge person{};
+      auto ec = (*result)["person"].read_into(person);
+
+      expect(ec == glz::error_code::constraint_violated);
+      expect(ec.custom_error_message == "age too young") << ec.custom_error_message;
    };
 
    "lazy_json_read_into_nested"_test = [] {

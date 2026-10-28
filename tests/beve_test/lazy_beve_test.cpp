@@ -2,6 +2,7 @@
 // For the license information refer to glaze.hpp
 
 #include <concepts>
+#include <map>
 
 #include "glaze/glaze.hpp"
 #include "ut/ut.hpp"
@@ -107,6 +108,28 @@ namespace lazy_beve_test
       float value{};
    };
 }
+
+// A custom reader that rejects a value with a message, to check read_into() keeps the message.
+struct ValidatedAge
+{
+   int age{};
+};
+
+template <>
+struct glz::meta<ValidatedAge>
+{
+   using T = ValidatedAge;
+   static constexpr auto read_age = [](T& s, int age, glz::context& ctx) {
+      if (age < 21) {
+         ctx.error = glz::error_code::constraint_violated;
+         ctx.custom_error_message = "age too young";
+      }
+      else {
+         s.age = age;
+      }
+   };
+   static constexpr auto value = object("age", glz::custom<read_age, &T::age>);
+};
 
 // A user options struct that derives from glz::opts to carry an extra field, which is the
 // pattern glz::opts documents ("Add these fields to a custom options struct if you want to
@@ -515,6 +538,20 @@ suite lazy_beve_tests = [] {
       expect(user.name == "Alice");
       expect(user.age == 30);
       expect(user.active == true);
+   };
+
+   "lazy_beve_read_into_preserves_custom_error_message"_test = [] {
+      std::map<std::string, std::map<std::string, int>> source{{"person", {{"age", 18}}}};
+      std::vector<std::byte> buffer;
+      expect(not glz::write_beve(source, buffer));
+
+      auto result = glz::lazy_beve(buffer);
+      expect(result.has_value());
+
+      ValidatedAge person{};
+      auto ec = (*result)["person"].read_into(person);
+      expect(ec == glz::error_code::constraint_violated);
+      expect(ec.custom_error_message == "age too young") << ec.custom_error_message;
    };
 
    "lazy_beve_read_into_nested"_test = [] {
