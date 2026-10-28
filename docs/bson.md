@@ -268,6 +268,7 @@ Notes:
 - `int` is widened to a `float` alternative when the variant has only float (not vice versa).
 - `glz::uuid` and `glz::bson::binary<Bytes>` may coexist in one variant; the reader prefers `binary<Bytes>` because its wire subtype check is permissive.
 - Rejected at compile time: two alternatives in the same category, e.g., `std::variant<int32_t, int64_t>` or `std::variant<struct_a, struct_b>`. The writer and reader cannot tell them apart from the wire tag alone. A tagged-variant convention (as in JSON) is a planned follow-up.
+- To encode a variant these rules don't fit (e.g., one rejected above), specialize `glz::to<glz::BSON, V>` and `glz::from<glz::BSON, V>`; the `to` specialization must define `static constexpr uint8_t type_code`, the element type byte it writes.
 
 ## Maps
 

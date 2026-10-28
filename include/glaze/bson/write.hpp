@@ -637,8 +637,7 @@ namespace glz
    //
    // Both the nullable and variant branches recurse back into this helper so
    // alternatives that are themselves nullable, always_null_t, or nested
-   // variants resolve to a concrete (type_byte | value) pair. Only the final
-   // else-branch reads `to<BSON, DT>::type_code` directly.
+   // variants resolve to a concrete (type_byte | value) pair.
    // ==========================================================================
    namespace bson_detail
    {
@@ -662,6 +661,19 @@ namespace glz
                }
             });
          }
+         else if constexpr (requires { to<BSON, DT>::type_code; }) {
+            // Checked before the nullable and variant branches so that a user specialization such as
+            // to<BSON, std::variant<...>> takes precedence over the generic runtime dispatch.
+            if (!write_element_prefix(ctx, to<BSON, DT>::type_code, key, b, ix)) [[unlikely]] {
+               return;
+            }
+            to<BSON, DT>::template op<Opts>(std::forward<T>(value), ctx, b, ix);
+         }
+         else if constexpr ((nullable_like<DT> || is_variant<DT>) && requires { to<BSON, DT>{}; }) {
+            // Without this, a user specialization missing type_code would be silently bypassed by the
+            // generic dispatch below.
+            static_assert(false_v<DT>, "a to<BSON, T> specialization must define static constexpr uint8_t type_code");
+         }
          else if constexpr (nullable_like<DT>) {
             if (value) {
                write_member_element<Opts>(key, *value, ctx, b, ix);
@@ -673,17 +685,11 @@ namespace glz
          else if constexpr (is_variant<DT>) {
             std::visit([&](auto&& alt) { write_member_element<Opts>(key, alt, ctx, b, ix); }, std::forward<T>(value));
          }
-         else if constexpr (!requires { to<BSON, DT>::type_code; }) {
+         else {
             // A value writer always has a type code, so this is a type BSON cannot write: either a
             // rejection point such as glz::invoke's, or no to<BSON, DT> at all. Calling op directly makes
             // the compiler report that (the rejection's static_assert, or the missing specialization)
             // rather than the missing type_code, which some compilers diagnose first.
-            to<BSON, DT>::template op<Opts>(std::forward<T>(value), ctx, b, ix);
-         }
-         else {
-            if (!write_element_prefix(ctx, to<BSON, DT>::type_code, key, b, ix)) [[unlikely]] {
-               return;
-            }
             to<BSON, DT>::template op<Opts>(std::forward<T>(value), ctx, b, ix);
          }
       }
