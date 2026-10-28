@@ -989,9 +989,10 @@ namespace glz
 
    // Streaming connection handle for server-side streaming
    //
-   // Thread-safety: once send_headers() has returned, send_chunk(), send_event() and close()
-   // may be called concurrently from multiple threads. Outgoing data is serialized via an
-   // internal write queue.
+   // Thread-safety: once send_headers() has returned, send_chunk(), send_event(),
+   // send_json_event() and close() may be called concurrently from multiple threads. Outgoing
+   // data is serialized via an internal write queue. on_disconnect() is not thread-safe and is
+   // meant to be called once, from the handler that starts the stream.
    template <typename SocketType = asio::ip::tcp::socket>
    struct streaming_connection : public streaming_connection_interface,
                                  public std::enable_shared_from_this<streaming_connection<SocketType>>
@@ -1073,7 +1074,10 @@ namespace glz
       // Send a chunk of data
       void send_chunk(std::string_view data, data_sent_handler handler = {}) override
       {
-         if (is_closed_) return;
+         if (is_closed_) {
+            refuse_write(std::move(handler));
+            return;
+         }
 
          if (body_forbidden_) {
             // The response ended with its header section, so the data is discarded. It is
@@ -1263,13 +1267,27 @@ namespace glz
       {
          {
             std::lock_guard<std::mutex> lock(write_mutex_);
-            // A send racing with close() would land after the terminating chunk
-            if (close_pending_) return;
+            if (close_pending_) {
+               // A send racing with close() would land after the terminating chunk. The
+               // handler is posted, so it never runs under the lock.
+               refuse_write(std::move(handler));
+               return;
+            }
             write_queue_.push_back({std::move(buffer), std::move(handler)});
             if (write_in_progress_) return;
             write_in_progress_ = true;
          }
          do_write();
+      }
+
+      // Reports a send made after the stream closed as unsent, so a caller waiting on its
+      // handler is not left waiting forever
+      void refuse_write(data_sent_handler handler)
+      {
+         if (handler) {
+            asio::post(get_executor(),
+                       [handler = std::move(handler)] { handler(std::make_error_code(std::errc::not_connected)); });
+         }
       }
 
       // Starts the next queued write, or closes the socket once the queue is empty and
@@ -1363,7 +1381,6 @@ namespace glz
                asio::buffer(*buffer), asio::socket_base::message_peek, [self, buffer](std::error_code ec, std::size_t) {
                   if (ec && self->disconnect_handler_) {
                      self->is_closed_ = true;
-                     self->fail_queued_writes(ec);
                      self->disconnect_handler_();
                   }
                   else if (!ec && !self->is_closed_) {

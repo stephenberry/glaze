@@ -1,7 +1,8 @@
 // Tests that glz::streaming_connection serializes its writes: sends made back to back, or
 // from several threads at once, reach the client whole and in the order each sender made
 // them, close() waits for the writes queued before it, and a client that goes away fails
-// the writes still queued instead of leaving their handlers uncalled.
+// the writes still queued instead of leaving their handlers uncalled, as does a send made
+// after close().
 
 #include <array>
 #include <atomic>
@@ -379,6 +380,43 @@ suite stream_write_queue_tests = [] {
       // Every queued send has its handler called, the ones that could not be sent with an error
       expect(wait_until([&] { return state->completed == count; })) << "completed " << state->completed.load();
       expect(state->errors > 0u);
+   };
+
+   "send_after_close_reports_error"_test = [] {
+      struct counters
+      {
+         std::atomic<size_t> completed{0};
+         std::atomic<size_t> errors{0};
+      };
+      auto state = std::make_shared<counters>();
+
+      test_server ts;
+      ts.server.stream_get("/closed", [state](glz::request&, glz::streaming_response& res) {
+         res.as_event_stream();
+         res.stream->send_event("tick", make_payload(0, 0), make_id(0, 0));
+         res.stream->close();
+         // Refused, since the stream has ended, but the handlers still run
+         const auto on_sent = [state](std::error_code ec) {
+            if (ec) ++state->errors;
+            ++state->completed;
+         };
+         res.stream->send_event("tick", make_payload(0, 1), make_id(0, 1), on_sent);
+         res.stream->send_chunk("late", on_sent);
+      });
+      expect(ts.start(2));
+
+      const auto raw = fetch_raw(ts.port, "/closed");
+      const auto decoded = decode_chunked(raw);
+      expect(decoded.error.empty()) << decoded.error;
+      expect(decoded.terminated);
+
+      std::vector<sse_event> events;
+      std::string parse_error;
+      expect(parse_events(decoded.body, events, parse_error)) << parse_error;
+      expect_events(events, 1, 1);
+
+      expect(wait_until([&] { return state->completed == 2u; })) << "completed " << state->completed.load();
+      expect(state->errors == 2u);
    };
 };
 
