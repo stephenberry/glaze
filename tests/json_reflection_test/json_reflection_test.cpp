@@ -1489,4 +1489,68 @@ suite rename_tests = [] {
    };
 };
 
+namespace
+{
+   struct anonymous_namespace_t
+   {
+      int id{};
+      std::string name{};
+   };
+}
+
+suite types_without_linkage = [] {
+   // https://github.com/stephenberry/glaze/issues/3040
+   "anonymous namespace"_test = [] {
+      static_assert(glz::member_names<anonymous_namespace_t>[1] == "name");
+
+      anonymous_namespace_t obj{.id = 1, .name = "one"};
+      std::string buffer{};
+      expect(not glz::write_json(obj, buffer));
+      expect(buffer == R"({"id":1,"name":"one"})") << buffer;
+
+      obj = {};
+      expect(not glz::read_json(obj, buffer));
+      expect(obj.id == 1);
+      expect(obj.name == "one");
+   };
+
+   "local struct"_test = [] {
+      struct local_t
+      {
+         int i = 287;
+         std::string hello = "Hello World";
+         std::array<uint64_t, 3> arr = {1, 2, 3};
+         std::map<std::string, int> map{{"one", 1}, {"two", 2}};
+      };
+      static_assert(glz::member_names<local_t>[3] == "map");
+
+      local_t obj{};
+      std::string buffer{};
+      expect(not glz::write_json(obj, buffer));
+      expect(buffer == R"({"i":287,"hello":"Hello World","arr":[1,2,3],"map":{"one":1,"two":2}})") << buffer;
+
+      buffer = R"({"i":5,"hello":"world","arr":[4,5,6],"map":{"three":3}})";
+      expect(not glz::read_json(obj, buffer));
+      expect(obj.i == 5);
+      expect(obj.hello == "world");
+      expect(obj.arr == std::array<uint64_t, 3>{4, 5, 6});
+      expect(obj.map.at("three") == 3);
+   };
+
+   "local struct with non-default-constructible member"_test = [] {
+      struct no_default_t
+      {
+         int value;
+         explicit no_default_t(int v) : value(v) {}
+      };
+      struct local_t
+      {
+         const no_default_t member;
+         int count{};
+      };
+      static_assert(glz::member_names<local_t>[0] == "member");
+      static_assert(glz::member_names<local_t>[1] == "count");
+   };
+};
+
 int main() { return 0; }

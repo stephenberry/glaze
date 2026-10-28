@@ -2921,7 +2921,7 @@ struct reflectable_container
    bool operator==(const reflectable_container&) const = default;
 };
 
-// Struct for the TOML spec example test (needs external linkage)
+// Struct for the TOML spec example test
 struct simple_catalog
 {
    std::vector<product> products{};
@@ -2947,7 +2947,7 @@ struct quoted_header_catalog
    bool operator==(const quoted_header_catalog&) const = default;
 };
 
-// Structs for edge case tests (need external linkage)
+// Structs for edge case tests
 struct item_with_tags
 {
    std::string name{};

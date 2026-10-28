@@ -9,7 +9,7 @@
 
 using namespace ut;
 
-// Structs for deserialization tests - must be at namespace scope for reflection
+// Structs for deserialization tests
 namespace lazy_beve_test
 {
    struct User

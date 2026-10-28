@@ -841,7 +841,6 @@ bool equal(T x, T y)
    return x == y;
 }
 
-// Reflection needs external linkage, so these cannot be declared inside the test that uses them.
 struct partial_reuse_inner_t
 {
    int a{};

@@ -4397,7 +4397,6 @@ suite non_streaming_format_reporting = [] {
    };
 };
 
-// Reflection needs external linkage, so these cannot live in the anonymous namespace below.
 struct ndjson_record_t
 {
    int id{};

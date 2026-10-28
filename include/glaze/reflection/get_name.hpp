@@ -190,11 +190,26 @@ namespace glz
 // For struct fields
 namespace glz::detail
 {
-   // Do not const qualify this value to avoid duplicate `to_tie` template instantiations with rest of Glaze
-   // Temporary fix: const qualify it despite. Caused issues with reflect begin/end indices
-   // See https://github.com/stephenberry/glaze/issues/1568
+   // Storage for a T that is never constructed, so pointers to its members can be formed at compile time and their
+   // names read from GLZ_PRETTY_FUNCTION. T is an inactive union member, so it need not be default constructible.
+   // This is a defined object rather than an `extern` declaration, because a variable whose type has no linkage
+   // (local classes, classes in anonymous namespaces) cannot be used without a definition.
+   // The `mutable` member keeps the object out of read-only data, so when a compiler does emit it (as GCC can at -O0)
+   // it is zero-fill storage and large types do not grow the binary. The destructor is user-provided because the
+   // implicit one is deleted when T is not trivially destructible; as a constexpr object it is constant destroyed, so
+   // no destructor is registered at exit.
    template <class T>
-   extern const T external;
+   union fake_object_storage {
+      mutable char init{};
+      T value;
+      constexpr fake_object_storage() noexcept {}
+      constexpr ~fake_object_storage() {}
+   };
+
+   // Being constexpr, `fake_object<T>.value` is a const lvalue. Keep it const: without the const qualification reflect
+   // begin/end indices broke. See https://github.com/stephenberry/glaze/issues/1568
+   template <class T>
+   inline constexpr fake_object_storage<T> fake_object{};
 
    // using const char* simplifies the compiler's output and should improve compile times
    template <auto Ptr>
@@ -211,19 +226,8 @@ namespace glz::detail
       return GLZ_PRETTY_FUNCTION;
    }
 
-#if defined(__clang__)
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Weverything"
    template <auto N, class T>
-   constexpr std::string_view get_name_impl = mangled_name<get_ptr<N>(external<std::remove_volatile_t<T>>)>();
-#pragma clang diagnostic pop
-#elif __GNUC__
-   template <auto N, class T>
-   constexpr std::string_view get_name_impl = mangled_name<get_ptr<N>(external<std::remove_volatile_t<T>>)>();
-#else
-   template <auto N, class T>
-   constexpr std::string_view get_name_impl = mangled_name<get_ptr<N>(external<std::remove_volatile_t<T>>)>();
-#endif
+   constexpr std::string_view get_name_impl = mangled_name<get_ptr<N>(fake_object<std::remove_volatile_t<T>>.value)>();
 
    struct GLAZE_REFLECTOR
    {
@@ -236,6 +240,13 @@ namespace glz::detail
       static constexpr auto end = name.substr(name.find("GLAZE_FIELD") + sizeof("GLAZE_FIELD") - 1);
       static constexpr auto begin = name[name.find("GLAZE_FIELD") - 1];
    };
+
+   // Extracts the member name from the signature of mangled_name<ptr_t{&fake_object<T>.value.member}>()
+   consteval std::string_view strip_member_name(std::string_view name)
+   {
+      name = name.substr(0, name.find(reflect_field::end));
+      return name.substr(name.find_last_of(reflect_field::begin) + 1);
+   }
 
    struct reflect_type
    {
@@ -254,10 +265,7 @@ namespace glz
    template <auto N, class T>
    struct member_nameof_impl
    {
-      static constexpr auto name = detail::get_name_impl<N, T>;
-      static constexpr auto begin = name.find(detail::reflect_field::end);
-      static constexpr auto tmp = name.substr(0, begin);
-      static constexpr auto stripped = tmp.substr(tmp.find_last_of(detail::reflect_field::begin) + 1);
+      static constexpr auto stripped = detail::strip_member_name(detail::get_name_impl<N, T>);
       // making static memory to stripped to help the compiler optimize away prettified function signature
       static constexpr std::string_view stripped_literal = join_v<stripped>;
    };
@@ -455,14 +463,6 @@ namespace glz
    };
 
    template <class T, auto P>
-   consteval std::string_view get_name_msvc()
-   {
-      std::string_view str = GLZ_PRETTY_FUNCTION;
-      str = str.substr(str.find("->") + 2);
-      return str.substr(0, str.find(">"));
-   }
-
-   template <class T, auto P>
    consteval std::string_view func_name_msvc()
    {
       std::string_view str = GLZ_PRETTY_FUNCTION;
@@ -621,7 +621,8 @@ namespace glz
       if constexpr (std::is_member_object_pointer_v<decltype(P)>) {
          using T = remove_member_pointer<std::decay_t<decltype(P)>>::type;
          constexpr auto p = P;
-         return get_name_msvc<T, &(detail::external<T>.*p)>();
+         using M = std::remove_cvref_t<decltype(detail::fake_object<T>.value.*p)>;
+         return detail::strip_member_name(detail::mangled_name<detail::ptr_t<M>{&(detail::fake_object<T>.value.*p)}>());
       }
       else {
          using T = remove_member_pointer<std::decay_t<decltype(P)>>::type;

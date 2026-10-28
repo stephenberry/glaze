@@ -21,7 +21,6 @@
 
 using namespace ut;
 
-// Structs must be defined at namespace scope for Glaze reflection to work
 struct Event
 {
    std::string name;
@@ -48,8 +47,7 @@ struct DurationBag
 };
 
 // Single-field structs for the BSON/MsgPack wire-equivalence checks and the CSV column
-// test. Glaze reflection requires reflected structs to have linkage, so these live at
-// namespace scope rather than inside the test lambdas.
+// test.
 struct one_duration
 {
    std::chrono::milliseconds v{};
