@@ -622,7 +622,7 @@ namespace glz
       if constexpr (std::is_member_object_pointer_v<decltype(P)>) {
          using T = remove_member_pointer<std::decay_t<decltype(P)>>::type;
          constexpr auto p = P;
-         using M = std::remove_cvref_t<decltype(detail::fake_object<T>.value.*p)>;
+         using M = std::remove_reference_t<decltype(detail::fake_object<T>.value.*p)>;
          return detail::strip_member_name(detail::mangled_name<detail::ptr_t<M>{&(detail::fake_object<T>.value.*p)}>());
       }
       else {

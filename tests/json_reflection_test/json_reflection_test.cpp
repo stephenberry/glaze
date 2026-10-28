@@ -1520,28 +1520,26 @@ suite types_without_linkage = [] {
          int i = 287;
          std::string hello = "Hello World";
          std::array<uint64_t, 3> arr = {1, 2, 3};
-         std::map<std::string, int> map{{"one", 1}, {"two", 2}};
       };
-      static_assert(glz::member_names<local_t>[3] == "map");
+      static_assert(glz::member_names<local_t>[2] == "arr");
 
       local_t obj{};
       std::string buffer{};
       expect(not glz::write_json(obj, buffer));
-      expect(buffer == R"({"i":287,"hello":"Hello World","arr":[1,2,3],"map":{"one":1,"two":2}})") << buffer;
+      expect(buffer == R"({"i":287,"hello":"Hello World","arr":[1,2,3]})") << buffer;
 
-      buffer = R"({"i":5,"hello":"world","arr":[4,5,6],"map":{"three":3}})";
+      buffer = R"({"i":5,"hello":"world","arr":[4,5,6]})";
       expect(not glz::read_json(obj, buffer));
       expect(obj.i == 5);
       expect(obj.hello == "world");
       expect(obj.arr == std::array<uint64_t, 3>{4, 5, 6});
-      expect(obj.map.at("three") == 3);
    };
 
    "local struct with non-default-constructible member"_test = [] {
       struct no_default_t
       {
          int value;
-         explicit no_default_t(int v) : value(v) {}
+         constexpr explicit no_default_t(int v) : value(v) {}
       };
       struct local_t
       {
@@ -1550,6 +1548,37 @@ suite types_without_linkage = [] {
       };
       static_assert(glz::member_names<local_t>[0] == "member");
       static_assert(glz::member_names<local_t>[1] == "count");
+   };
+
+   "local struct with non-literal members"_test = [] {
+      struct local_t
+      {
+         int i = 287;
+         std::map<std::string, int> map{{"one", 1}, {"two", 2}};
+      };
+      static_assert(glz::member_names<local_t>[1] == "map");
+
+      local_t obj{};
+      std::string buffer{};
+      expect(not glz::write_json(obj, buffer));
+      expect(buffer == R"({"i":287,"map":{"one":1,"two":2}})") << buffer;
+
+      buffer = R"({"i":5,"map":{"three":3}})";
+      expect(not glz::read_json(obj, buffer));
+      expect(obj.i == 5);
+      expect(obj.map.at("three") == 3);
+
+      struct not_literal_t
+      {
+         int value;
+         explicit not_literal_t(int v) : value(v) {}
+      };
+      struct with_not_literal_t
+      {
+         const not_literal_t member;
+         int count{};
+      };
+      static_assert(glz::member_names<with_not_literal_t>[0] == "member");
    };
 };
 
