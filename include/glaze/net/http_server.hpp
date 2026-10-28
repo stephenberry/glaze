@@ -14,6 +14,7 @@
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
+#include <deque>
 #include <expected>
 #include <functional>
 #include <glaze/glaze.hpp>
@@ -987,6 +988,10 @@ namespace glz
    };
 
    // Streaming connection handle for server-side streaming
+   //
+   // Thread-safety: once send_headers() has returned, send_chunk(), send_event() and close()
+   // may be called concurrently from multiple threads. Outgoing data is serialized via an
+   // internal write queue.
    template <typename SocketType = asio::ip::tcp::socket>
    struct streaming_connection : public streaming_connection_interface,
                                  public std::enable_shared_from_this<streaming_connection<SocketType>>
@@ -995,14 +1000,13 @@ namespace glz
       using disconnect_handler = std::function<void()>;
 
       streaming_connection(std::shared_ptr<SocketType> socket, http_method request_method = http_method::GET)
-         : socket_(socket), request_method_(request_method), is_headers_sent_(false), is_closed_(false)
+         : socket_(socket), request_method_(request_method)
       {}
 
       // Send initial headers for streaming response
       void send_headers(int status_code, const glz::http_headers& headers = {}, data_sent_handler handler = {}) override
       {
-         if (is_headers_sent_) return;
-         is_headers_sent_ = true;
+         if (is_headers_sent_.exchange(true)) return;
 
          std::string response_str;
          response_str.reserve(512);
@@ -1063,7 +1067,7 @@ namespace glz
 
          response_str.append("\r\n");
 
-         write_tracked(std::make_shared<std::string>(std::move(response_str)), std::move(handler));
+         queue_write(std::make_shared<std::string>(std::move(response_str)), std::move(handler));
       }
 
       // Send a chunk of data
@@ -1106,11 +1110,11 @@ namespace glz
             chunk.append(data);
             chunk.append("\r\n");
 
-            write_tracked(std::make_shared<std::string>(std::move(chunk)), std::move(handler));
+            queue_write(std::make_shared<std::string>(std::move(chunk)), std::move(handler));
          }
          else {
             // Send raw data
-            write_tracked(std::make_shared<std::string>(data), std::move(handler));
+            queue_write(std::make_shared<std::string>(data), std::move(handler));
          }
       }
 
@@ -1168,22 +1172,25 @@ namespace glz
       // Close the streaming connection
       void close(disconnect_handler handler = {}) override
       {
-         if (is_closed_) return;
-         is_closed_ = true;
+         if (is_closed_.exchange(true)) return;
 
          close_handler_ = std::move(handler);
 
          // A chunked body ends with the zero-length chunk; a response that carries no
          // body has none to end. The socket closes once every write queued so far,
-         // the headers included, is on the wire. The terminator is queued before the
-         // close is marked pending, so a write completing on another io thread cannot
-         // see a pending close with nothing in flight and close ahead of it.
-         if (chunked_encoding_ && !body_forbidden_) {
-            write_tracked(std::make_shared<std::string>("0\r\n\r\n"), {});
+         // the headers included, is on the wire.
+         bool start_write = false;
+         {
+            std::lock_guard<std::mutex> lock(write_mutex_);
+            if (chunked_encoding_ && !body_forbidden_) {
+               write_queue_.push_back({std::make_shared<std::string>("0\r\n\r\n"), {}});
+            }
+            close_pending_ = true;
+            start_write = !write_in_progress_;
+            write_in_progress_ = true;
          }
-         close_pending_ = true;
-         if (writes_in_flight_ == 0) {
-            close_socket();
+         if (start_write) {
+            do_write();
          }
       }
 
@@ -1232,31 +1239,82 @@ namespace glz
       http_method request_method_;
       disconnect_handler disconnect_handler_;
       disconnect_handler close_handler_;
-      bool is_headers_sent_;
-      bool is_closed_;
+      // Read by the sending threads, set by them and by the io threads
+      std::atomic<bool> is_headers_sent_{false};
+      std::atomic<bool> is_closed_{false};
       bool chunked_encoding_ = false;
       bool body_forbidden_ = false; // Set by send_headers for a HEAD reply and a 1xx, 204 or 304
-      // Write completions run on whichever io thread the server's pool picks, concurrently
-      // with each other and with the handler that queues writes, so the close bookkeeping
-      // they share is atomic.
-      std::atomic<bool> close_pending_{false};
       std::atomic<bool> socket_closed_{false};
-      std::atomic<size_t> writes_in_flight_{0};
 
-      // Writes are counted until they complete so close() can wait for the bytes already
-      // queued rather than cancel them by closing the socket underneath.
-      void write_tracked(std::shared_ptr<std::string> buffer, data_sent_handler handler)
+      struct pending_write
       {
-         ++writes_in_flight_;
+         std::shared_ptr<std::string> buffer;
+         data_sent_handler handler;
+      };
+
+      // async_write is a series of write_some calls, so two of them on the socket at once
+      // can interleave their bytes. Writes wait here and each completion starts the next.
+      std::mutex write_mutex_;
+      std::deque<pending_write> write_queue_;
+      bool write_in_progress_ = false;
+      bool close_pending_ = false; // Close the socket once the queue is empty
+
+      void queue_write(std::shared_ptr<std::string> buffer, data_sent_handler handler)
+      {
+         {
+            std::lock_guard<std::mutex> lock(write_mutex_);
+            // A send racing with close() would land after the terminating chunk
+            if (close_pending_) return;
+            write_queue_.push_back({std::move(buffer), std::move(handler)});
+            if (write_in_progress_) return;
+            write_in_progress_ = true;
+         }
+         do_write();
+      }
+
+      // Starts the next queued write, or closes the socket once the queue is empty and
+      // close() is pending
+      void do_write()
+      {
+         pending_write next;
+         bool close_now = false;
+         {
+            std::lock_guard<std::mutex> lock(write_mutex_);
+            if (write_queue_.empty()) {
+               write_in_progress_ = false;
+               close_now = close_pending_;
+            }
+            else {
+               next = std::move(write_queue_.front());
+               write_queue_.pop_front();
+            }
+         }
+
+         if (!next.buffer) {
+            if (close_now) close_socket();
+            return;
+         }
+
          auto self = this->shared_from_this();
-         asio::async_write(*socket_, asio::buffer(*buffer),
-                           [self, buffer, handler = std::move(handler)](std::error_code ec, std::size_t) {
-                              --self->writes_in_flight_;
-                              if (handler) handler(ec);
-                              if (self->close_pending_ && self->writes_in_flight_ == 0) {
-                                 self->close_socket();
-                              }
-                           });
+         auto buffer_view = asio::buffer(*next.buffer);
+         asio::async_write(*socket_, buffer_view, [self, write = std::move(next)](std::error_code ec, std::size_t) {
+            if (write.handler) write.handler(ec);
+            if (ec) self->fail_queued_writes(ec);
+            self->do_write();
+         });
+      }
+
+      // The connection is gone, so the writes still queued can never be sent
+      void fail_queued_writes(std::error_code ec)
+      {
+         std::deque<pending_write> failed;
+         {
+            std::lock_guard<std::mutex> lock(write_mutex_);
+            failed.swap(write_queue_);
+         }
+         for (auto& write : failed) {
+            if (write.handler) write.handler(ec);
+         }
       }
 
       // Both close() and the last write completion can see the close due at once, so only
@@ -1305,6 +1363,7 @@ namespace glz
                asio::buffer(*buffer), asio::socket_base::message_peek, [self, buffer](std::error_code ec, std::size_t) {
                   if (ec && self->disconnect_handler_) {
                      self->is_closed_ = true;
+                     self->fail_queued_writes(ec);
                      self->disconnect_handler_();
                   }
                   else if (!ec && !self->is_closed_) {
