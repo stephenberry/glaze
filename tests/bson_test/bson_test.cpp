@@ -413,6 +413,129 @@ struct glz::meta<bson_test::custom_nullable_getter>
    static constexpr auto value = glz::object("opt", glz::custom<&T::set_opt, &T::get_opt>, "plain", &T::plain);
 };
 
+namespace bson_test
+{
+   // Whole-type glz::meta values: the type serializes as the value its meta wraps.
+   struct int_mimic
+   {
+      int32_t v{};
+   };
+
+   struct optional_mimic
+   {
+      std::optional<int32_t> v{};
+   };
+
+   // A sentinel-backed index that serializes as an optional count via a whole-type glz::custom.
+   struct sentinel_index
+   {
+      static constexpr int64_t invalid = -1;
+      int64_t base{invalid};
+   };
+
+   struct mimic_holder
+   {
+      int_mimic a{};
+      optional_mimic b{};
+      sentinel_index c{};
+      std::vector<int_mimic> list{};
+      std::map<std::string, sentinel_index> by_name{};
+   };
+
+   struct mimic_variant_holder
+   {
+      std::variant<int_mimic, std::string> var{};
+   };
+
+   // A meta-value type with its own BSON codec, which must win over the meta value.
+   struct prefixed_id
+   {
+      int32_t v{};
+   };
+
+   struct prefixed_id_holder
+   {
+      prefixed_id id{};
+   };
+
+   struct prefixed_id_holder_plain
+   {
+      std::string id{};
+   };
+
+   struct mimic_holder_plain
+   {
+      int32_t a{};
+      std::optional<int32_t> b{};
+      std::optional<int64_t> c{};
+      std::vector<int32_t> list{};
+      std::map<std::string, std::optional<int64_t>> by_name{};
+   };
+}
+
+template <>
+struct glz::meta<bson_test::int_mimic>
+{
+   static constexpr auto value = &bson_test::int_mimic::v;
+};
+
+template <>
+struct glz::meta<bson_test::optional_mimic>
+{
+   static constexpr auto value = &bson_test::optional_mimic::v;
+};
+
+template <>
+struct glz::meta<bson_test::sentinel_index>
+{
+   using T = bson_test::sentinel_index;
+   static constexpr auto read = [](T& idx, std::optional<int64_t> in) { idx.base = in ? *in : T::invalid; };
+   static constexpr auto write = [](const T& idx) -> std::optional<int64_t> {
+      if (idx.base == T::invalid) return std::nullopt;
+      return idx.base;
+   };
+   static constexpr auto value = glz::custom<read, write>;
+};
+
+template <>
+struct glz::meta<bson_test::prefixed_id>
+{
+   static constexpr auto value = &bson_test::prefixed_id::v;
+};
+
+template <>
+struct glz::to<glz::BSON, bson_test::prefixed_id>
+{
+   static constexpr uint8_t type_code = glz::bson::type::string;
+
+   template <auto Opts>
+   static void op(const bson_test::prefixed_id& value, glz::is_context auto&& ctx, auto&& b, auto& ix)
+   {
+      const std::string s = "id" + std::to_string(value.v);
+      glz::to<glz::BSON, std::string>::template op<Opts>(s, ctx, b, ix);
+   }
+};
+
+template <>
+struct glz::from<glz::BSON, bson_test::prefixed_id>
+{
+   template <auto Opts, class It, class End>
+   static void op(bson_test::prefixed_id& value, uint8_t tag, glz::is_context auto& ctx, It& it, const End& end)
+   {
+      std::string s{};
+      glz::from<glz::BSON, std::string>::template op<Opts>(s, tag, ctx, it, end);
+      if (bool(ctx.error)) return;
+      if (!s.starts_with("id")) {
+         ctx.error = glz::error_code::syntax_error;
+         return;
+      }
+      const auto digits = std::string_view{s}.substr(2);
+      if (std::from_chars(digits.data(), digits.data() + digits.size(), value.v).ec != std::errc{}) {
+         ctx.error = glz::error_code::syntax_error;
+      }
+   }
+};
+
 using namespace bson_test;
 
 namespace
@@ -1317,6 +1440,87 @@ namespace
          auto rec = glz::read_bson(out, buf);
          expect(not rec);
          expect(out.opt == 5);
+      };
+   };
+
+   // A type whose glz::meta value is a member pointer or a whole-type glz::custom serializes as the
+   // value it wraps, wherever it appears as an element (#3052).
+   suite bson_meta_value_tests = [] {
+      "meta-value-round-trips"_test = [] {
+         mimic_holder in{};
+         in.a.v = 1;
+         in.b.v = 2;
+         in.c.base = 3;
+         in.list = {{4}, {5}};
+         in.by_name = {{"x", {6}}, {"y", {}}};
+         std::vector<std::byte> buf{};
+         expect(not glz::write_bson(in, buf));
+
+         mimic_holder out{};
+         auto rec = glz::read_bson(out, buf);
+         expect(not rec) << glz::format_error(rec);
+         expect(out.a.v == 1);
+         expect(out.b.v == 2);
+         expect(out.c.base == 3);
+         expect(out.list.size() == 2 && out.list[0].v == 4 && out.list[1].v == 5);
+         expect(out.by_name.size() == 2);
+         expect(out.by_name.at("x").base == 6);
+         expect(out.by_name.at("y").base == sentinel_index::invalid);
+      };
+
+      "meta-value-wire-matches-wrapped-type"_test = [] {
+         constexpr auto preserve = glz::opts{.skip_null_members = false};
+         mimic_holder in{};
+         in.a.v = 1;
+         in.c.base = 3;
+         in.list = {{4}};
+         in.by_name = {{"y", {}}};
+         mimic_holder_plain plain{1, std::nullopt, 3, {4}, {{"y", std::nullopt}}};
+
+         std::vector<std::byte> buf{}, plain_buf{};
+         expect(not glz::write_bson<preserve>(in, buf));
+         expect(not glz::write_bson<preserve>(plain, plain_buf));
+         expect(buf == plain_buf);
+      };
+
+      "meta-value-null-skipping-matches-json"_test = [] {
+         // A null member-pointer mimic is skipped by default; a whole-type glz::custom getter's null
+         // result is written as null, as JSON does.
+         mimic_holder in{};
+         in.c.base = sentinel_index::invalid;
+         std::vector<std::byte> buf{};
+         expect(not glz::write_bson(in, buf));
+
+         auto json = glz::bson_to_json(buf);
+         expect(json.has_value());
+         expect(json.value() == glz::write_json(in).value()) << json.value();
+      };
+
+      "meta-value-variant-alternative-round-trips"_test = [] {
+         mimic_variant_holder in{int_mimic{5}};
+         std::vector<std::byte> buf{};
+         expect(not glz::write_bson(in, buf));
+
+         mimic_variant_holder out{std::string{"x"}};
+         auto rec = glz::read_bson(out, buf);
+         expect(not rec) << glz::format_error(rec);
+         expect(out.var.index() == 0);
+         expect(std::get<int_mimic>(out.var).v == 5);
+      };
+
+      "user-specialization-wins-over-meta-value"_test = [] {
+         prefixed_id_holder in{{42}};
+         std::vector<std::byte> buf{};
+         expect(not glz::write_bson(in, buf));
+
+         prefixed_id_holder_plain as_string{};
+         expect(not glz::read_bson(as_string, buf));
+         expect(as_string.id == "id42");
+
+         prefixed_id_holder out{};
+         auto rec = glz::read_bson(out, buf);
+         expect(not rec) << glz::format_error(rec);
+         expect(out.id.v == 42);
       };
    };
 
