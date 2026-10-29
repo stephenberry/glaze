@@ -264,6 +264,39 @@ struct glz::meta<yaml_custom_scalar_struct>
    static constexpr auto value = glz::custom<read_fn, write_fn>;
 };
 
+// glz::custom type whose getter returns a reflectable struct (issue #3057): the writer
+// must lay the custom object out as a block mapping inside a sequence, not as an inline
+// scalar, or the keys after the first lose their indentation.
+struct yaml_custom_block_point
+{
+   double x{};
+   double y{};
+
+   bool operator==(const yaml_custom_block_point&) const = default;
+};
+
+struct yaml_custom_block_point_layout
+{
+   double x{};
+   double y{};
+};
+
+template <>
+struct glz::meta<yaml_custom_block_point>
+{
+   using T = yaml_custom_block_point;
+   static constexpr auto value =
+      glz::custom<[](T& p, const yaml_custom_block_point_layout& l) { p = {l.x, l.y}; },
+                  [](const T& p) { return yaml_custom_block_point_layout{p.x, p.y}; }>;
+};
+
+struct yaml_custom_block_doc
+{
+   std::vector<yaml_custom_block_point> points{};
+
+   bool operator==(const yaml_custom_block_doc&) const = default;
+};
+
 // Struct with compile-time skip for YAML
 struct yaml_skip_struct
 {
@@ -9791,6 +9824,31 @@ suite yaml_custom_write_tests = [] {
       ec = glz::read_yaml(parsed, yaml);
       expect(!ec) << glz::format_error(ec, yaml);
       expect(parsed == outer);
+   };
+
+   "yaml_custom_object_sequence_roundtrip"_test = [] {
+      yaml_custom_block_doc original{{{1, 2}, {3, 4}}};
+      std::string yaml;
+      auto ec = glz::write_yaml(original, yaml);
+      expect(!ec);
+      // Each custom object is a compact block mapping: the first key inline after the
+      // dash and the following keys indented to the element's own column (issue #3057).
+      expect(yaml == "points:\n  - x: 1\n    y: 2\n  - x: 3\n    y: 4\n") << yaml;
+
+      yaml_custom_block_doc parsed{};
+      ec = glz::read_yaml(parsed, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(parsed == original);
+   };
+
+   "yaml_custom_object_sequence_matches_plain_layout"_test = [] {
+      // Non-custom control: a sequence of the plain layout struct writes the same compact
+      // block form, confirming the custom object path now matches the reflectable-object path.
+      std::vector<yaml_custom_block_point_layout> plain{{1, 2}, {3, 4}};
+      std::string yaml;
+      auto ec = glz::write_yaml(plain, yaml);
+      expect(!ec);
+      expect(yaml == "- x: 1\n  y: 2\n- x: 3\n  y: 4\n") << yaml;
    };
 };
 
