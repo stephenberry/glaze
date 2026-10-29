@@ -6,14 +6,14 @@ This guide covers some of the ways to install and integrate the Glaze JSON libra
 
 ### Compiler Support
 - **C++23** standard required
-- **Clang 17+**
+- **Clang 19+**
 - **GCC 13+** 
-- **MSVC 2022+**
+- **MSVC (Visual Studio 2026, Build Tools 14.50+)**
 - **Apple Clang (latest Xcode)**
 
 ### Platform Support
 - **Architecture**: 64-bit and 32-bit
-- **Endianness**: Little-endian systems only
+- **Endianness**: Little-endian and big-endian
 - **Operating Systems**: Windows, Linux, macOS
 
 ### MSVC Specific Requirements

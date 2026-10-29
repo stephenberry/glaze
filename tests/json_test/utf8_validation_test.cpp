@@ -631,7 +631,6 @@ suite json_integration = [] {
 // requires it, so every test here has to prove both halves: that the default still rejects the
 // input, and that the same read with the option off accepts it and hands back the original bytes.
 
-// A named namespace rather than an anonymous one, because reflected types need linkage.
 namespace utf8_option_test
 {
    struct unchecked_opts : glz::opts

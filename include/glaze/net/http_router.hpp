@@ -56,8 +56,7 @@ namespace glz
    };
 
    // Serialized to the response body when response::body<Opts>(value) fails
-   // to write `value`. Declared at namespace scope so glaze's reflection can
-   // name the type; function-local types are not reflectable on GCC.
+   // to write `value`.
    struct glz_write_error
    {
       std::string_view error{"glaze write failure"};

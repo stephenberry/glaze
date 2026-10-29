@@ -786,7 +786,6 @@ suite overflow_validation_tests = [] {
    };
 };
 
-// Define throwing_functions_t at namespace scope for proper linkage
 struct throwing_functions_t
 {
    std::function<int()> throw_func = []() -> int { throw std::runtime_error("Test exception"); };
