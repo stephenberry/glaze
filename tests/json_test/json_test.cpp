@@ -12000,13 +12000,22 @@ suite partial_write_tests = [] {
       expect(s == R"({"animals":{"tiger":"Tiger"},"name":"My Awesome Zoo"})") << s;
    };
 
-   "partial write with raw buffer"_test = [] {
+   "partial write with C array"_test = [] {
+      static constexpr auto json_ptrs = glz::json_ptrs("/name");
+      zoo_t obj{};
+      char buf[512]{};
+      const auto result = glz::write_json<json_ptrs>(obj, buf);
+      expect(!result) << "write should succeed";
+      expect(std::string_view{buf, result.count} == R"({"name":"My Awesome Zoo"})");
+   };
+
+   "partial write with small C array reports overflow"_test = [] {
       static constexpr auto json_ptrs = glz::json_ptrs("/name");
       zoo_t obj{};
       char buf[32]{};
       const auto result = glz::write_json<json_ptrs>(obj, buf);
-      expect(!result) << "write should succeed";
-      expect(std::string_view{buf} == R"({"name":"My Awesome Zoo"})");
+      expect(result.ec == glz::error_code::buffer_overflow);
+      expect(result.count <= sizeof(buf));
    };
 
    "partial_write_tester"_test = [] {
