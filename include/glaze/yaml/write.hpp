@@ -897,17 +897,20 @@ namespace glz
                // A glz::custom type serializes as the shape its getter returns: a scalar stays
                // inline after the dash, but an object must take the compact block form so its
                // keys after the first keep the element's indentation (issue #3057).
-               using custom_wrapper_t = decltype(meta<element_t>::value(std::declval<element_t&>()));
+               // Resolve the getter's return type using the element's actual cv-qualification: a
+               // const element whose getter takes a non-const reference is not invocable and must
+               // defer to serialize<YAML>, which reports it with a clear static_assert.
+               using custom_wrapper_t = decltype(meta<element_t>::value(std::declval<decltype(element)>()));
                using resolved_t = resolve_write_type_t<custom_wrapper_t>;
-               if constexpr (glaze_object_t<resolved_t> || reflectable<resolved_t>) {
+               if constexpr (!custom_write<element_t> && (glaze_object_t<resolved_t> || reflectable<resolved_t>)) {
                   dump_dash_padding(b, ix, indent_width);
                   unwrap_write_value(element, ctx, [&]<class Inner>(Inner&& inner) {
                      write_block_mapping<Opts>(std::forward<Inner>(inner), ctx, b, ix, indent_level + 1, true);
                   });
                }
                else {
-                  // Types with top-level custom serialization produce scalar output -
-                  // write inline after dash
+                  // Custom writers (custom_write) and custom getters whose result is not an
+                  // object/reflectable serialize through the value serializer, inline after the dash.
                   dump_dash_padding(b, ix, indent_width);
                   serialize<YAML>::op<Opts>(element, ctx, b, ix);
                   dump('\n', b, ix);

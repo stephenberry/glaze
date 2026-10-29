@@ -99,7 +99,21 @@ namespace glz
    template <class T, class From, class To>
    struct resolve_write_type<custom_t<T, From, To>>
    {
-      using type = typename resolve_write_type<typename custom_getter_result<custom_t<T, From, To>>::type>::type;
+      using ResultT = typename custom_getter_result<custom_t<T, From, To>>::type;
+      // A getter that is not invocable resolves back to its own custom_t wrapper (see
+      // custom_getter_result above). Stop the recursion there and report the wrapper as-is so
+      // the value serializer rejects it with a clear static_assert instead of a hard
+      // "incomplete type" error from self-recursion here.
+      static constexpr auto compute()
+      {
+         if constexpr (std::is_same_v<ResultT, custom_t<T, From, To>>) {
+            return std::type_identity<custom_t<T, From, To>>{};
+         }
+         else {
+            return std::type_identity<typename resolve_write_type<ResultT>::type>{};
+         }
+      }
+      using type = typename decltype(compute())::type;
    };
 
    template <class V>

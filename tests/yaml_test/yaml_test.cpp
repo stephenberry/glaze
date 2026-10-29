@@ -285,9 +285,8 @@ template <>
 struct glz::meta<yaml_custom_block_point>
 {
    using T = yaml_custom_block_point;
-   static constexpr auto value =
-      glz::custom<[](T& p, const yaml_custom_block_point_layout& l) { p = {l.x, l.y}; },
-                  [](const T& p) { return yaml_custom_block_point_layout{p.x, p.y}; }>;
+   static constexpr auto value = glz::custom<[](T& p, const yaml_custom_block_point_layout& l) { p = {l.x, l.y}; },
+                                             [](const T& p) { return yaml_custom_block_point_layout{p.x, p.y}; }>;
 };
 
 struct yaml_custom_block_doc
@@ -295,6 +294,51 @@ struct yaml_custom_block_doc
    std::vector<yaml_custom_block_point> points{};
 
    bool operator==(const yaml_custom_block_doc&) const = default;
+};
+
+// A type that opts into custom_write (supplying its own to<Format,T>) while its glz::meta value is
+// also a glz::custom getter returning an object. Writing it must honor the user's to<Format,T>,
+// not the getter's object shape -- this guards the !custom_write check in the sequence writer.
+struct yaml_custom_write_sequence_layout
+{
+   double x{};
+   double y{};
+};
+
+struct yaml_custom_write_sequence
+{
+   double x{};
+   double y{};
+};
+
+template <>
+struct glz::meta<yaml_custom_write_sequence>
+{
+   static constexpr auto value =
+      glz::custom<[](yaml_custom_write_sequence& v, const yaml_custom_write_sequence_layout& o) {
+         v.x = o.x;
+         v.y = o.y;
+      },
+                  [](const yaml_custom_write_sequence& v) { return yaml_custom_write_sequence_layout{v.x, v.y}; }>;
+   static constexpr bool custom_write = true;
+};
+
+namespace glz
+{
+   template <uint32_t Format>
+   struct to<Format, yaml_custom_write_sequence>
+   {
+      template <auto Opts, class B>
+      static void op(auto&&, is_context auto&& ctx, B&& b, auto& ix)
+      {
+         serialize<Format>::template op<Opts>(std::string_view{"USER_TO"}, ctx, b, ix);
+      }
+   };
+}
+
+struct yaml_custom_write_sequence_doc
+{
+   std::vector<yaml_custom_write_sequence> items{};
 };
 
 // Struct with compile-time skip for YAML
@@ -9849,6 +9893,18 @@ suite yaml_custom_write_tests = [] {
       auto ec = glz::write_yaml(plain, yaml);
       expect(!ec);
       expect(yaml == "- x: 1\n  y: 2\n- x: 3\n  y: 4\n") << yaml;
+   };
+
+   "yaml_custom_write_sequence_uses_user_to"_test = [] {
+      // A custom_write=true type with a glz::custom meta value must be written by its user
+      // to<Format,T> (a scalar), not by the custom getter's object shape.
+      yaml_custom_write_sequence_doc doc{};
+      doc.items.push_back(yaml_custom_write_sequence{1, 2});
+      doc.items.push_back(yaml_custom_write_sequence{3, 4});
+      std::string yaml;
+      auto ec = glz::write_yaml(doc, yaml);
+      expect(!ec);
+      expect(yaml == "items:\n  - USER_TO\n  - USER_TO\n") << yaml;
    };
 };
 
