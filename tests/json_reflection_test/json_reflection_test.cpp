@@ -371,6 +371,70 @@ struct non_default_t
    non_default_t(int) {}
 };
 
+// Aggregates whose members cannot all be initialized from {} (https://github.com/stephenberry/glaze/issues/2982)
+struct non_default_only
+{
+   non_default_t a;
+};
+static_assert(glz::detail::count_members<non_default_only> == 1);
+
+struct non_default_last
+{
+   int a{};
+   int b{};
+   non_default_t c;
+};
+static_assert(glz::detail::count_members<non_default_last> == 3);
+
+struct non_default_first
+{
+   non_default_t a;
+   int b{};
+   std::string c{};
+};
+static_assert(glz::detail::count_members<non_default_first> == 3);
+
+struct non_default_middle
+{
+   int a{};
+   non_default_t b;
+   int c{};
+};
+static_assert(glz::detail::count_members<non_default_middle> == 3);
+
+struct const_member_first
+{
+   const int a;
+   int b{};
+};
+static_assert(glz::detail::count_members<const_member_first> == 2);
+
+struct non_default_value
+{
+   int value;
+   constexpr non_default_value(int v) : value(v) {}
+};
+
+template <>
+struct glz::meta<non_default_value>
+{
+   static constexpr auto value = &non_default_value::value;
+};
+
+struct non_default_value_middle
+{
+   int a{};
+   non_default_value b;
+   std::string c{};
+};
+
+suite non_default_member_tests = [] {
+   "write aggregate with non-default-constructible member"_test = [] {
+      const non_default_value_middle obj{1, non_default_value{2}, "three"};
+      expect(glz::write_json(obj).value_or("error") == R"({"a":1,"b":2,"c":"three"})");
+   };
+};
+
 struct nested_t
 {
    std::optional<std::string> str{};

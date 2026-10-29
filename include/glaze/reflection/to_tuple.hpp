@@ -92,6 +92,11 @@ namespace glz
          [[maybe_unused]] constexpr operator std::string_view() const { return {}; }
       };
 
+      inline constexpr size_t max_pure_reflection_count = 128;
+
+      // The initializer counts an aggregate accepts form a contiguous range ending at its member count. The range
+      // starts above zero when a member cannot be initialized from {} (e.g. no default constructor), so skip the
+      // rejected prefix and return the top of the range.
       template <class T, class... Args>
          requires(std::is_aggregate_v<std::remove_cvref_t<T>>)
       inline constexpr auto count_members = [] {
@@ -99,12 +104,16 @@ namespace glz
          if constexpr (requires { V{Args{}..., any_t{}}; }) {
             return count_members<V, Args..., any_t>;
          }
-         else {
+         else if constexpr (requires { V{Args{}...}; }) {
             return sizeof...(Args);
          }
+         else if constexpr (sizeof...(Args) < max_pure_reflection_count) {
+            return count_members<V, Args..., any_t>;
+         }
+         else {
+            return size_t{0}; // no initializer count is accepted (e.g. a reference member), so not reflectable
+         }
       }();
-
-      inline constexpr size_t max_pure_reflection_count = 128;
 #endif
    }
 
