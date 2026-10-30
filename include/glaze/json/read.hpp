@@ -443,10 +443,12 @@ namespace glz
          }(std::make_index_sequence<N>{});
       }
       else {
-         // Hash-based lookup
+         // Hash-based lookup. A key list whose keys collide leaves `type` invalid; the shared guard in
+         // decode_hash_with_size_impl refuses that type, and this assertion carries the same wording
+         // so that whichever of the two fires first says the same thing.
          constexpr auto& HashInfo = hash_info<T>;
          constexpr auto type = HashInfo.type;
-         static_assert(bool(type), "invalid hash algorithm");
+         static_assert(bool(type), GLZ_DUPLICATE_KEYS_MESSAGE);
 
          const auto index = decode_hash<JSON, T, HashInfo, HashInfo.type>::op(it, end);
 
@@ -3115,7 +3117,7 @@ namespace glz
                   }
                }
                else if constexpr (reflection_type) {
-                  static_assert(bool(hash_info<T>.type));
+                  static_assert(bool(hash_info<T>.type), GLZ_DUPLICATE_KEYS_MESSAGE);
 
                   if (*it != '"') [[unlikely]] {
                      ctx.error = error_code::expected_quote;
