@@ -2222,47 +2222,80 @@ namespace glz
       requires is_specialization_v<T, arr>
    struct to<JSON, T>
    {
-      template <auto Opts, class... Args>
-      static void op(auto&& value, is_context auto&& ctx, Args&&... args)
+      template <auto Opts, class B>
+      static void op(auto&& value, is_context auto&& ctx, B&& b, auto& ix)
       {
          using V = std::decay_t<decltype(value.value)>;
          static constexpr auto N = glz::tuple_size_v<V>;
 
-         dump('[', args...);
+         if (bool(ctx.error)) [[unlikely]] {
+            return;
+         }
+         if constexpr (has_bounded_capacity<B> && not check_write_unchecked(Opts)) {
+            if (!ensure_space(ctx, b, ix + 1)) [[unlikely]] {
+               return;
+            }
+         }
+         dump('[', b, ix);
          if constexpr (N > 0 && Opts.prettify) {
             if constexpr (check_new_lines_in_arrays(Opts)) {
                ctx.depth += check_indentation_width(Opts);
-               dump_newline_indent(check_indentation_char(Opts), ctx.depth, args...);
+               if constexpr (has_bounded_capacity<B> && not check_write_unchecked(Opts)) {
+                  if (!ensure_space(ctx, b, ix + ctx.depth + 1)) [[unlikely]] {
+                     return;
+                  }
+               }
+               dump_newline_indent(check_indentation_char(Opts), ctx.depth, b, ix);
             }
          }
          for_each<N>([&]<size_t I>() {
+            if (bool(ctx.error)) [[unlikely]] {
+               return;
+            }
             if constexpr (glaze_array_t<V>) {
-               serialize<JSON>::op<Opts>(get_member(value.value, glz::get<I>(meta_v<T>)), ctx, args...);
+               serialize<JSON>::op<Opts>(get_member(value.value, glz::get<I>(meta_v<T>)), ctx, b, ix);
             }
             else {
-               serialize<JSON>::op<Opts>(glz::get<I>(value.value), ctx, args...);
+               serialize<JSON>::op<Opts>(glz::get<I>(value.value), ctx, b, ix);
             }
             constexpr bool needs_comma = I < N - 1;
             if constexpr (needs_comma) {
-               write_array_entry_separator<Opts>(ctx, args...);
+               if (bool(ctx.error)) [[unlikely]] {
+                  return;
+               }
+               write_array_entry_separator<Opts>(ctx, b, ix);
             }
          });
+         if (bool(ctx.error)) [[unlikely]] {
+            return;
+         }
          if constexpr (N > 0 && Opts.prettify) {
             if constexpr (check_new_lines_in_arrays(Opts)) {
                ctx.depth -= check_indentation_width(Opts);
-               dump_newline_indent(check_indentation_char(Opts), ctx.depth, args...);
+               if constexpr (has_bounded_capacity<B> && not check_write_unchecked(Opts)) {
+                  if (!ensure_space(ctx, b, ix + ctx.depth + 2)) [[unlikely]] {
+                     return;
+                  }
+               }
+               dump_newline_indent(check_indentation_char(Opts), ctx.depth, b, ix);
             }
          }
-         dump(']', args...);
+         if constexpr (has_bounded_capacity<B> && not check_write_unchecked(Opts)) {
+            if (!ensure_space(ctx, b, ix + 1)) [[unlikely]] {
+               return;
+            }
+         }
+         dump(']', b, ix);
       }
    };
 
+   // Recognize standard tuples before tuple_t probes their first element.
    template <class T>
-      requires glaze_array_t<T> || tuple_t<std::decay_t<T>> || is_std_tuple<T>
+      requires glaze_array_t<T> || is_std_tuple<T> || tuple_t<std::decay_t<T>>
    struct to<JSON, T>
    {
-      template <auto Opts, class... Args>
-      static void op(auto&& value, is_context auto&& ctx, Args&&... args)
+      template <auto Opts, class B>
+      static void op(auto&& value, is_context auto&& ctx, B&& b, auto& ix)
       {
          static constexpr auto N = []() constexpr {
             if constexpr (glaze_array_t<std::decay_t<T>>) {
@@ -2273,38 +2306,70 @@ namespace glz
             }
          }();
 
-         dump('[', args...);
+         if (bool(ctx.error)) [[unlikely]] {
+            return;
+         }
+         if constexpr (has_bounded_capacity<B> && not check_write_unchecked(Opts)) {
+            if (!ensure_space(ctx, b, ix + 1)) [[unlikely]] {
+               return;
+            }
+         }
+         dump('[', b, ix);
          if constexpr (N > 0 && Opts.prettify) {
             if constexpr (check_new_lines_in_arrays(Opts)) {
                ctx.depth += check_indentation_width(Opts);
-               dump_newline_indent(check_indentation_char(Opts), ctx.depth, args...);
+               if constexpr (has_bounded_capacity<B> && not check_write_unchecked(Opts)) {
+                  if (!ensure_space(ctx, b, ix + ctx.depth + 1)) [[unlikely]] {
+                     return;
+                  }
+               }
+               dump_newline_indent(check_indentation_char(Opts), ctx.depth, b, ix);
             }
          }
          using V = std::decay_t<T>;
          for_each<N>([&]<size_t I>() {
+            if (bool(ctx.error)) [[unlikely]] {
+               return;
+            }
             if constexpr (glaze_array_t<V>) {
-               serialize<JSON>::op<Opts>(get_member(value, glz::get<I>(meta_v<T>)), ctx, args...);
+               serialize<JSON>::op<Opts>(get_member(value, glz::get<I>(meta_v<T>)), ctx, b, ix);
             }
             else if constexpr (is_std_tuple<T>) {
                using Value = core_t<decltype(std::get<I>(value))>;
-               to<JSON, Value>::template op<Opts>(std::get<I>(value), ctx, args...);
+               to<JSON, Value>::template op<Opts>(std::get<I>(value), ctx, b, ix);
             }
             else {
                using Value = core_t<decltype(glz::get<I>(value))>;
-               to<JSON, Value>::template op<Opts>(glz::get<I>(value), ctx, args...);
+               to<JSON, Value>::template op<Opts>(glz::get<I>(value), ctx, b, ix);
             }
             constexpr bool needs_comma = I < N - 1;
             if constexpr (needs_comma) {
-               write_array_entry_separator<Opts>(ctx, args...);
+               if (bool(ctx.error)) [[unlikely]] {
+                  return;
+               }
+               write_array_entry_separator<Opts>(ctx, b, ix);
             }
          });
+         if (bool(ctx.error)) [[unlikely]] {
+            return;
+         }
          if constexpr (N > 0 && Opts.prettify) {
             if constexpr (check_new_lines_in_arrays(Opts)) {
                ctx.depth -= check_indentation_width(Opts);
-               dump_newline_indent(check_indentation_char(Opts), ctx.depth, args...);
+               if constexpr (has_bounded_capacity<B> && not check_write_unchecked(Opts)) {
+                  if (!ensure_space(ctx, b, ix + ctx.depth + 2)) [[unlikely]] {
+                     return;
+                  }
+               }
+               dump_newline_indent(check_indentation_char(Opts), ctx.depth, b, ix);
             }
          }
-         dump(']', args...);
+         if constexpr (has_bounded_capacity<B> && not check_write_unchecked(Opts)) {
+            if (!ensure_space(ctx, b, ix + 1)) [[unlikely]] {
+               return;
+            }
+         }
+         dump(']', b, ix);
       }
    };
 
@@ -2741,6 +2806,9 @@ namespace glz
 
             // Options is required here, because it must be the top level
             if constexpr (not check_closing_handled(Options)) {
+               if (bool(ctx.error)) [[unlikely]] {
+                  return;
+               }
                if constexpr (Options.prettify) {
                   ctx.depth -= check_indentation_width(Options);
                   if constexpr (not check_write_unchecked(Options)) {
@@ -2756,6 +2824,11 @@ namespace glz
                   ++ix;
                }
                else {
+                  if constexpr (has_bounded_capacity<B> && not check_write_unchecked(Options)) {
+                     if (!ensure_space(ctx, b, ix + 1)) [[unlikely]] {
+                        return;
+                     }
+                  }
                   dump<not(fixed_padding<T> || check_write_unchecked(Options))>('}', b, ix);
                }
             }
@@ -2895,14 +2968,20 @@ namespace glz
       requires((glaze_object_t<T> || reflectable<T>) && range<Keys>)
    [[nodiscard]] error_ctx write_json_partial(T&& value, const Keys& keys, Buffer&& buffer)
    {
-      context ctx{};
-      size_t ix = 0;
-      to_runtime_partial<std::remove_cvref_t<T>>::template op<set_json<Opts>()>(keys, std::forward<T>(value), ctx,
-                                                                                buffer, ix);
-      if (bool(ctx.error)) [[unlikely]] {
-         return {ix, ctx.error, ctx.custom_error_message};
+      if constexpr (std::is_bounded_array_v<std::remove_reference_t<Buffer>>) {
+         auto bounded = std::span{buffer};
+         return write_json_partial<Opts>(std::forward<T>(value), keys, bounded);
       }
-      return {ix, error_code::none, ctx.custom_error_message};
+      else {
+         context ctx{};
+         size_t ix = 0;
+         to_runtime_partial<std::remove_cvref_t<T>>::template op<set_json<Opts>()>(keys, std::forward<T>(value), ctx,
+                                                                                   buffer, ix);
+         if (bool(ctx.error)) [[unlikely]] {
+            return {ix, ctx.error, ctx.custom_error_message};
+         }
+         return {ix, error_code::none, ctx.custom_error_message};
+      }
    }
 
    template <auto Opts = opts{}, class T, class Keys>
@@ -2956,14 +3035,20 @@ namespace glz
       requires((glaze_object_t<T> || reflectable<T>) && range<Keys>)
    [[nodiscard]] error_ctx write_json_exclude(T&& value, const Keys& exclude_keys, Buffer&& buffer)
    {
-      context ctx{};
-      size_t ix = 0;
-      to_runtime_exclude<std::remove_cvref_t<T>>::template op<set_json<Opts>()>(exclude_keys, std::forward<T>(value),
-                                                                                ctx, buffer, ix);
-      if (bool(ctx.error)) [[unlikely]] {
-         return {ix, ctx.error, ctx.custom_error_message};
+      if constexpr (std::is_bounded_array_v<std::remove_reference_t<Buffer>>) {
+         auto bounded = std::span{buffer};
+         return write_json_exclude<Opts>(std::forward<T>(value), exclude_keys, bounded);
       }
-      return {ix, error_code::none, ctx.custom_error_message};
+      else {
+         context ctx{};
+         size_t ix = 0;
+         to_runtime_exclude<std::remove_cvref_t<T>>::template op<set_json<Opts>()>(exclude_keys, std::forward<T>(value),
+                                                                                   ctx, buffer, ix);
+         if (bool(ctx.error)) [[unlikely]] {
+            return {ix, ctx.error, ctx.custom_error_message};
+         }
+         return {ix, error_code::none, ctx.custom_error_message};
+      }
    }
 
    template <auto Opts = opts{}, class T, class Keys>

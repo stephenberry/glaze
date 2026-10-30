@@ -78,13 +78,20 @@ namespace glz
       requires write_supported<T, Opts.format>
    [[nodiscard]] error_ctx write(T&& value, Buffer& buffer)
    {
-      context ctx{};
-      size_t ix = 0;
-      serialize_partial<Opts.format>::template op<Partial, Opts>(std::forward<T>(value), ctx, buffer, ix);
-      if (bool(ctx.error)) [[unlikely]] {
-         return {ix, ctx.error, ctx.custom_error_message};
+      if constexpr (std::is_bounded_array_v<Buffer>) {
+         // Keep the array extent. Decay would otherwise select the unchecked char* path.
+         auto bounded = std::span{buffer};
+         return write<Partial, Opts>(std::forward<T>(value), bounded);
       }
-      return {ix, error_code::none, ctx.custom_error_message};
+      else {
+         context ctx{};
+         size_t ix = 0;
+         serialize_partial<Opts.format>::template op<Partial, Opts>(std::forward<T>(value), ctx, buffer, ix);
+         if (bool(ctx.error)) [[unlikely]] {
+            return {ix, ctx.error, ctx.custom_error_message};
+         }
+         return {ix, error_code::none, ctx.custom_error_message};
+      }
    }
 
    template <auto Opts, class T, output_buffer Buffer>
@@ -112,13 +119,20 @@ namespace glz
       requires write_supported<T, Opts.format>
    [[nodiscard]] error_ctx write(T&& value, Buffer&& buffer, is_context auto&& ctx)
    {
-      call_scope scope{ctx};
-      size_t ix = 0;
-      to<Opts.format, std::remove_cvref_t<T>>::template op<Opts>(std::forward<T>(value), ctx, buffer, ix);
-      if (bool(ctx.error)) [[unlikely]] {
-         return {ix, ctx.error, ctx.custom_error_message};
+      if constexpr (std::is_bounded_array_v<std::remove_reference_t<Buffer>>) {
+         // Preserve the capacity for every format, including partial writes.
+         auto bounded = std::span{buffer};
+         return write<Opts>(std::forward<T>(value), bounded, std::forward<decltype(ctx)>(ctx));
       }
-      return {ix, error_code::none, ctx.custom_error_message};
+      else {
+         call_scope scope{ctx};
+         size_t ix = 0;
+         to<Opts.format, std::remove_cvref_t<T>>::template op<Opts>(std::forward<T>(value), ctx, buffer, ix);
+         if (bool(ctx.error)) [[unlikely]] {
+            return {ix, ctx.error, ctx.custom_error_message};
+         }
+         return {ix, error_code::none, ctx.custom_error_message};
+      }
    }
 
    template <auto Opts, class T, raw_buffer Buffer>

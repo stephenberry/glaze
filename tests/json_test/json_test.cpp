@@ -12081,13 +12081,22 @@ suite partial_write_tests = [] {
       expect(s == R"({"animals":{"tiger":"Tiger"},"name":"My Awesome Zoo"})") << s;
    };
 
-   "partial write with raw buffer"_test = [] {
+   "partial write with C array"_test = [] {
+      static constexpr auto json_ptrs = glz::json_ptrs("/name");
+      zoo_t obj{};
+      char buf[512]{};
+      const auto result = glz::write_json<json_ptrs>(obj, buf);
+      expect(!result) << "write should succeed";
+      expect(std::string_view{buf, result.count} == R"({"name":"My Awesome Zoo"})");
+   };
+
+   "partial write with small C array reports overflow"_test = [] {
       static constexpr auto json_ptrs = glz::json_ptrs("/name");
       zoo_t obj{};
       char buf[32]{};
       const auto result = glz::write_json<json_ptrs>(obj, buf);
-      expect(!result) << "write should succeed";
-      expect(std::string_view{buf} == R"({"name":"My Awesome Zoo"})");
+      expect(result.ec == glz::error_code::buffer_overflow);
+      expect(result.count <= sizeof(buf));
    };
 
    "partial_write_tester"_test = [] {
@@ -15939,6 +15948,48 @@ suite bounded_buffer_overflow_tests = [] {
 
       auto result = glz::write_json(obj, buffer);
       expect(result.ec == glz::error_code::buffer_overflow) << "should return buffer_overflow error";
+   };
+
+   "write to a C array preserves its capacity"_test = [] {
+      simple_short obj{};
+      char buffer[512]{};
+
+      auto result = glz::write_json(obj, buffer);
+      expect(not result);
+      expect(std::string_view(buffer, result.count) == R"({"x":42,"name":"hi"})");
+   };
+
+   "write to a small C array reports overflow"_test = [] {
+      simple_long obj{};
+      char buffer[16]{};
+
+      auto result = glz::write_json(obj, buffer);
+      expect(result.ec == glz::error_code::buffer_overflow);
+      expect(result.count <= sizeof(buffer));
+   };
+
+   "a failed object member does not write a closing brace past a bounded buffer"_test = [] {
+      simple_long obj{};
+      std::array<char, 1> buffer{};
+
+      auto result = glz::write_json(obj, buffer);
+      expect(result.ec == glz::error_code::buffer_overflow);
+      expect(result.count <= buffer.size());
+   };
+
+   "partial and exclude writes bound C arrays"_test = [] {
+      simple_long obj{};
+      std::array<std::string_view, 1> include_keys{"name"};
+      std::array<std::string_view, 1> exclude_keys{"x"};
+      char partial[16]{};
+      char excluded[16]{};
+
+      auto partial_result = glz::write_json_partial(obj, include_keys, partial);
+      auto exclude_result = glz::write_json_exclude(obj, exclude_keys, excluded);
+      expect(partial_result.ec == glz::error_code::buffer_overflow);
+      expect(exclude_result.ec == glz::error_code::buffer_overflow);
+      expect(partial_result.count <= sizeof(partial));
+      expect(exclude_result.count <= sizeof(excluded));
    };
 
    "bounded buffer reserves what an escaped string escapes to"_test = [] {

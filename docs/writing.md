@@ -42,7 +42,7 @@ std::cout << "Wrote " << ec.count << " bytes\n";
 
 ### Writing to Fixed-Size Buffers
 
-Fixed-size buffers like `std::array` and `std::span` have automatic bounds checking:
+Fixed-size buffers like `char[N]`, `std::array`, and `std::span` have automatic bounds checking. C arrays preserve their extent and use the same bounds checks and padding requirements as `std::array` and `std::span`, including partial and exclude writes:
 
 ```cpp
 std::array<char, 512> buffer;  // Minimum 512 bytes recommended
@@ -130,7 +130,7 @@ if (ec.ec == glz::error_code::buffer_overflow) {
 
 ### Minimum Buffer Size Requirement
 
-Bounded buffers (`std::array`, `std::span`, etc.) must be **at least 512 bytes** for reliable serialization. This requirement exists because Glaze uses internal padding for efficient writes. Buffers smaller than 512 bytes may return `buffer_overflow` even when the serialized output would fit.
+Bounded buffers (`char[N]`, `std::array`, `std::span`, etc.) must be **at least 512 bytes** for reliable serialization. This requirement exists because Glaze uses internal padding for efficient writes. Buffers smaller than 512 bytes may return `buffer_overflow` even when the serialized output would fit.
 
 ```cpp
 // Good: 512+ bytes
