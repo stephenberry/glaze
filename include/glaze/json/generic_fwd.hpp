@@ -351,7 +351,11 @@ namespace glz
          requires(assignable_generic_type<generic_json<Mode, MapType>, T>)
       generic_json& operator=(T&& value);
 
-      [[nodiscard]] generic_json& at(std::convertible_to<std::string_view> auto&& key) { return operator[](key); }
+      [[nodiscard]] generic_json& at(std::convertible_to<std::string_view> auto&& key)
+      {
+         return const_cast<generic_json&>(
+            static_cast<const generic_json&>(*this).operator[](std::forward<decltype(key)>(key)));
+      }
 
       [[nodiscard]] const generic_json& at(std::convertible_to<std::string_view> auto&& key) const
       {
