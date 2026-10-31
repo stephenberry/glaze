@@ -353,6 +353,7 @@ struct stream_request_params_v2 {
     http_data_handler on_data;
     http_error_handler on_error;
     http_progress_handler on_progress;
+    http_progress_handler on_upload_progress;
     http_connect_handler on_connect;
     http_disconnect_handler on_disconnect;
     std::function<bool(int)> status_is_error{[](int status){ return status >= 400; }};
@@ -369,6 +370,7 @@ struct stream_request_params_v2 {
 -   `on_data`: A callback that's called when data is received.
 -   `on_error`: A callback that's called when an error occurs.
 -   `on_progress`: An optional callback reporting download progress; returning `false` cancels the transfer. See [Progress and Cancellation](#progress-and-cancellation).
+-   `on_upload_progress`: An optional callback reporting how much of `body` has been sent; returning `false` cancels the transfer. See [Upload Progress](#upload-progress).
 -   `on_connect`: A callback that's called when the connection is established and the headers are received.
 -   `on_disconnect`: A callback that's called once when a started stream ends, for any reason. It is not called when the request returns `nullptr`.
 -   `status_is_error`: Optional predicate to decide whether a status code should trigger `on_error` (defaults to checking for codes ≥ 400).
@@ -418,6 +420,44 @@ auto conn = client.stream_request_v2({
     },
     .on_disconnect = [&] { file.close(); }
 });
+```
+
+### Upload Progress
+
+`on_upload_progress` is the same callback for the request body, which is what an upload needs to show its progress, to let the user cancel, and to notice a link that has stopped carrying it:
+
+-   `transferred`: body bytes the socket has taken so far. A byte the socket has taken is in the operating system's send buffer, not yet acknowledged by the server.
+-   `total`: the size of `body`.
+-   Return `false` to cancel, with the same result as returning `false` from `on_progress`.
+
+The callback runs once with `(0, total)` before the request is written, again each time the socket takes more of the body, and with `(total, total)` once all of it has gone; a request with no body reports `(0, 0)` once. It runs on the client's I/O thread, as `on_progress` does.
+
+The `timeout` runs from the start of the request to the response headers, so a large body sent over a slow link has to fit inside it. The count is what tells a slow upload from a stalled one: when it stops rising, the socket has stopped taking bytes because the server or the link has stopped reading them, and `disconnect()` ends the stream.
+
+Sending a large body, abandoned if none of it leaves for 30 seconds:
+
+```cpp
+std::atomic<bool> moved{false};
+std::atomic<bool> sent_all{false};
+
+auto conn = client.stream_request_v2({
+    .method = "PUT",
+    .url = "https://example.com/upload",
+    .timeout = std::chrono::seconds{600},
+    .body = std::move(payload),
+    .on_data = [](std::string_view) {},
+    .on_error = [](std::error_code ec) { std::cerr << "Upload failed: " << ec.message() << '\n'; },
+    .on_upload_progress = [&](size_t sent, size_t total) {
+        moved = true;
+        sent_all = sent == total;
+        return true;
+    },
+});
+
+// Every 30 seconds, from a timer of your own, until the whole body has gone:
+if (!sent_all && !moved.exchange(false)) {
+    conn->disconnect(); // nothing has left the socket since the last tick
+}
 ```
 
 ### Body Framing

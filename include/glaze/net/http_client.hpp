@@ -1231,6 +1231,7 @@ namespace glz
       stream_read_strategy strategy{stream_read_strategy::bulk_transfer}; // Default strategy
       std::function<bool(int)> status_is_error{}; // Evaluated before treating status as failure
       http_progress_handler on_progress{}; // Reports body bytes delivered; returning false cancels
+      http_progress_handler on_upload_progress{}; // Reports request body bytes sent; returning false cancels
       bool is_https{false}; // Track if this is an HTTPS connection
       bool head_request{false}; // A HEAD reply is framed as if it had a body, but carries none
       size_t interim_responses{}; // Interim (1xx) responses discarded ahead of the final one
@@ -1320,6 +1321,9 @@ namespace glz
       http_data_handler on_data;
       http_error_handler on_error;
       http_progress_handler on_progress;
+      // How much of `body` the socket has taken, against the body's size; returning false
+      // cancels, as on_progress does for the response.
+      http_progress_handler on_upload_progress;
       http_connect_handler on_connect;
       http_disconnect_handler on_disconnect;
       std::function<bool(int)> status_is_error{[](int status) { return status >= 400; }};
@@ -1636,7 +1640,7 @@ namespace glz
 
          return perform_stream_request(params.method, *url_result, params.body, params.max_buffer_size, params.headers,
                                        params.timeout, params.strategy, params.status_is_error, params.on_data,
-                                       params.on_error, params.on_connect, params.on_disconnect, {});
+                                       params.on_error, params.on_connect, params.on_disconnect, {}, {});
       }
 
       std::shared_ptr<http_stream_connection> stream_request_v2(const stream_request_params_v2& params)
@@ -1651,7 +1655,8 @@ namespace glz
 
          return perform_stream_request(params.method, *url_result, params.body, params.max_buffer_size, params.headers,
                                        params.timeout, params.strategy, params.status_is_error, params.on_data,
-                                       params.on_error, params.on_connect, params.on_disconnect, params.on_progress);
+                                       params.on_error, params.on_connect, params.on_disconnect, params.on_progress,
+                                       params.on_upload_progress);
       }
 
       // Asynchronous GET request
@@ -1867,7 +1872,8 @@ namespace glz
          const std::string& method, const url_parts& url, const std::string& body, size_t max_buffer_size,
          const glz::http_headers& headers, std::chrono::seconds timeout, stream_read_strategy strategy,
          std::function<bool(int)> status_is_error, http_data_handler on_data, http_error_handler on_error,
-         http_connect_handler on_connect, http_disconnect_handler on_disconnect, http_progress_handler on_progress)
+         http_connect_handler on_connect, http_disconnect_handler on_disconnect, http_progress_handler on_progress,
+         http_progress_handler on_upload_progress)
       {
          const bool use_https = (url.protocol == "https");
 
@@ -1888,6 +1894,7 @@ namespace glz
 
          connection->status_is_error = std::move(status_is_error);
          connection->on_progress = std::move(on_progress);
+         connection->on_upload_progress = std::move(on_upload_progress);
          connection->head_request = (method == "HEAD");
 
          // Wrap the disconnect handler to return the socket to the pool
@@ -2101,6 +2108,13 @@ namespace glz
 
          auto request_buffer =
             std::make_shared<std::string>(detail::build_http_request_bytes(method, url, use_https, body, headers));
+         // The body is the request's tail, so everything the socket takes past the head is body.
+         const size_t head_size = request_buffer->size() - body.size();
+         const size_t body_size = body.size();
+
+         // Reported before the lock is taken: a caller that cancels here stops the stream through
+         // disconnect(), which takes the lock itself, and the stop is then honoured below.
+         report_upload_progress(connection, 0, body_size);
 
          auto lock = lock_unless_stopped(connection);
          if (!lock) {
@@ -2108,14 +2122,39 @@ namespace glz
             return;
          }
 
+         // asio asks the completion condition how much to write next before every write after the
+         // first, with the bytes the socket has taken so far, which is where the body's progress is
+         // reported. It is asked once more as the write starts, under the lock, with nothing taken
+         // yet, which reports nothing since (0, total) went out above; and not after the last
+         // write, whose report the completion handler makes.
+         auto report_sent = [connection, head_size, body_size, reported = size_t{0}](
+                               const asio::error_code& ec, std::size_t written) mutable -> std::size_t {
+            if (ec || connection->should_stop) {
+               return 0;
+            }
+            const size_t sent = written > head_size ? written - head_size : 0;
+            if (sent > reported) {
+               reported = sent;
+               if (!report_upload_progress(connection, sent, body_size)) {
+                  return 0;
+               }
+            }
+            return asio::transfer_all()(ec, written);
+         };
+
          std::visit(
             [&, this](auto& sock) {
-               asio::async_write(*sock, asio::buffer(*request_buffer),
-                                 [this, connection, request_buffer, on_data = std::move(on_data),
+               asio::async_write(*sock, asio::buffer(*request_buffer), std::move(report_sent),
+                                 [this, connection, request_buffer, body_size, on_data = std::move(on_data),
                                   on_error = std::move(on_error), on_connect = std::move(on_connect),
                                   on_disconnect = std::move(on_disconnect)](asio::error_code ec, std::size_t) mutable {
                                     if (ec || connection->should_stop) {
                                        if (on_error && !connection->should_stop) on_error(ec);
+                                       if (on_disconnect) on_disconnect();
+                                       return;
+                                    }
+
+                                    if (body_size > 0 && !report_upload_progress(connection, body_size, body_size)) {
                                        if (on_disconnect) on_disconnect();
                                        return;
                                     }
@@ -2125,6 +2164,22 @@ namespace glz
                                  });
             },
             *connection->socket);
+      }
+
+      // Returns false once the caller has cancelled from on_upload_progress, which stops the
+      // stream exactly the way disconnect() does. Never called with the connection's lock held,
+      // since disconnect() takes it.
+      static bool report_upload_progress(const std::shared_ptr<http_stream_connection>& connection, size_t sent,
+                                         size_t total)
+      {
+         if (!connection->on_upload_progress) {
+            return true;
+         }
+         const bool keep_going = connection->on_upload_progress(sent, total);
+         if (!keep_going) {
+            connection->disconnect();
+         }
+         return keep_going;
       }
 
       // Taken before the stream starts its next operation on its socket, and held until it has.
