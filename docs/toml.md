@@ -416,6 +416,8 @@ role = "user"
 role = "admin"  # syntax_error
 ```
 
+This is judged against the document, not the destination. A key a map held before the read is overwritten, so a map member with default entries, or a second read into the same object, behaves as it does for JSON. Other keys in the map are left as they are.
+
 ## File Helpers and Buffers
 
 For convenience Glaze also provides file-oriented helpers:
