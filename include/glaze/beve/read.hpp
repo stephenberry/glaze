@@ -1268,6 +1268,7 @@ namespace glz
          size_t resolved = variant_size;
          bool tag_seen = false;
          bool content_scanned = false;
+         [[maybe_unused]] sv scanned_content{};
 
          if (!walk([&](const sv key) {
                 if (!tag_seen && key == tag_v<T>) {
@@ -1275,8 +1276,13 @@ namespace glz
                    tag_seen = true;
                    return !bool(ctx.error);
                 }
-                if (!content_scanned && key == content_v<T>) {
+                if (!content_scanned && is_variant_content_key<T>(key)) {
                    content_scanned = true;
+                   // With per-alternative keys the discriminator may not have been read yet, so any
+                   // of them is accepted here and checked against the resolved alternative below.
+                   if constexpr (per_alternative_content_v<T>) {
+                      scanned_content = find_variant_content_key<T>(key);
+                   }
                    skip_value<BEVE>::op<Opts>(ctx, it, end);
                    return !bool(ctx.error);
                 }
@@ -1305,13 +1311,26 @@ namespace glz
             return;
          }
 
+         if constexpr (per_alternative_content_v<T>) {
+            if constexpr (requires { Opts.error_on_unknown_keys; }) {
+               if constexpr (Opts.error_on_unknown_keys) {
+                  // Another alternative's content key is as foreign to this one as any other key.
+                  // Checked before emplacing so a rejected buffer leaves `value` as it was.
+                  if (content_scanned && scanned_content != variant_content_key<T>(resolved)) [[unlikely]] {
+                     ctx.error = error_code::unknown_key;
+                     return;
+                  }
+               }
+            }
+         }
+
          if (value.index() != resolved) {
             emplace_runtime_variant(value, resolved);
          }
 
          bool content_seen = false;
          if (!walk([&](const sv key) {
-                if (!content_seen && key == content_v<T>) {
+                if (!content_seen && key == variant_content_key<T>(resolved)) {
                    content_seen = true;
                    std::visit([&](auto&& v) { parse<BEVE>::op<Opts>(v, ctx, it, end); }, value);
                    return !bool(ctx.error);
@@ -1324,7 +1343,7 @@ namespace glz
 
          if (!content_seen) [[unlikely]] {
             ctx.error = error_code::missing_key;
-            ctx.custom_error_message = content_v<T>;
+            ctx.custom_error_message = variant_content_key<T>(resolved);
          }
       }
 

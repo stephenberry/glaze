@@ -2535,14 +2535,10 @@ namespace glz
          // One walk resolves the discriminator wherever it sits in the map and consumes the whole
          // item, noting where the content value began so the adjacent form can return to it. An
          // alternative that needs no body is therefore already finished when the walk returns.
-         auto content_it = it;
-         bool content_seen = false;
+         variant_content_positions<T, std::remove_cvref_t<decltype(it)>> content{};
          const size_t index = scan_map<Opts>(ctx, it, end, [&](sv key) {
             if constexpr (tagging == variant_tagging_kind::adjacent) {
-               if (not content_seen && key == content_v<T>) {
-                  content_it = it;
-                  content_seen = true;
-               }
+               content.note(key, it);
             }
             skip_value<CBOR>::op<Opts>(ctx, it, end);
          });
@@ -2556,11 +2552,11 @@ namespace glz
          }
 
          if constexpr (tagging == variant_tagging_kind::adjacent) {
-            if (not content_seen) [[unlikely]] {
+            if (not content.seen(index)) [[unlikely]] {
                // Resolving the discriminator is not enough: without the content key there is no
                // value. Checked before emplacing so a rejected buffer leaves `value` as it was.
                ctx.error = error_code::missing_key;
-               ctx.custom_error_message = content_v<T>;
+               ctx.custom_error_message = variant_content_key<T>(index);
                return;
             }
          }
@@ -2571,7 +2567,7 @@ namespace glz
          }
 
          if constexpr (tagging == variant_tagging_kind::adjacent) {
-            it = content_it;
+            it = content.at(index);
             std::visit([&](auto& v) { parse<CBOR>::op<Opts>(v, ctx, it, end); }, value);
             if (bool(ctx.error)) [[unlikely]] {
                return;

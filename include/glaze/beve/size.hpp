@@ -220,7 +220,12 @@ namespace glz
             result += compressed_int_size(2); // member count
             result += key_size<tag_v<T>, Opts>();
             result += calculate_size<BEVE, void>::template op<Opts>(ids_v<T>[value.index()], offset + result);
-            result += key_size<content_v<T>, Opts>();
+            if constexpr (per_alternative_content_v<T>) {
+               result += calculate_size<BEVE, void>::template no_header<Opts>(variant_content_key<T>(value.index()));
+            }
+            else {
+               result += key_size<content_v<T>, Opts>();
+            }
             result += std::visit(
                [&](auto&& v) { return calculate_size<BEVE, void>::template op<Opts>(v, offset + result); }, value);
             return result;

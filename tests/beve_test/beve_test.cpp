@@ -9024,6 +9024,34 @@ struct glz::meta<beve_tagging_repr::integral_ids>
    static constexpr std::array<int, 2> ids{7, 9};
 };
 
+namespace beve_per_alternative_content
+{
+   struct disc
+   {
+      double radius{};
+   };
+   using shapes = std::variant<disc, std::vector<double>, int>;
+   using int_keyed = std::variant<disc, std::vector<double>>;
+}
+
+template <>
+struct glz::meta<beve_per_alternative_content::shapes>
+{
+   static constexpr std::string_view tag = "type";
+   static constexpr std::array ids{"circle", "vec", "num"};
+   // Lengths either side of the compressed integer's one byte form, which is sized at runtime here.
+   static constexpr std::array content{"c", "values",
+                                       "a_much_longer_number_key_past_the_one_byte_length_form_of_sixty_three"};
+};
+
+template <>
+struct glz::meta<beve_per_alternative_content::int_keyed>
+{
+   static constexpr std::string_view tag = "t";
+   static constexpr std::array ids{7, 9};
+   static constexpr std::array content{"c", "v"};
+};
+
 // Writes, sizes, reads, and transcodes one value, asserting BEVE and JSON describe it identically.
 template <class V>
 void tagging_round_trip(V value, std::string_view expected_json)
@@ -9099,6 +9127,69 @@ suite beve_variant_tagging_representation = [] {
       with_none out{put{1}};
       expect(not glz::read_beve(out, null_value));
       expect(out.index() == 2);
+   };
+
+   "per-alternative content keys carry every alternative shape through BEVE"_test = [] {
+      using namespace beve_per_alternative_content;
+      tagging_round_trip(shapes{disc{5}}, R"({"type":"circle","c":{"radius":5}})");
+      tagging_round_trip(shapes{std::vector<double>{1, 2}}, R"({"type":"vec","values":[1,2]})");
+      tagging_round_trip(shapes{7},
+                         R"({"type":"num","a_much_longer_number_key_past_the_one_byte_length_form_of_sixty_three":7})");
+      tagging_round_trip(int_keyed{std::vector<double>{1}}, R"({"t":9,"v":[1]})");
+   };
+
+   "per-alternative content keys project positionally without any key"_test = [] {
+      using namespace beve_per_alternative_content;
+      const shapes in{std::vector<double>{1, 2}};
+      auto encoded = glz::write_beve_untagged(in);
+      expect(encoded.has_value());
+      expect(encoded->find("values") == std::string::npos);
+      shapes out{};
+      expect(not glz::read_beve_untagged(out, *encoded));
+      expect(out.index() == 1);
+   };
+
+   "the adjacent reader checks a per-alternative key against the discriminator"_test = [] {
+      using namespace beve_per_alternative_content;
+      const auto obj = [](std::initializer_list<std::string> parts) {
+         std::string s(1, char(glz::tag::object));
+         s += char((parts.size() / 2) << 2);
+         for (const auto& p : parts) s += p;
+         return s;
+      };
+      const auto key = [](std::string_view k) { return std::string(1, char(k.size() << 2)) + std::string{k}; };
+      const auto str = [](std::string_view v) {
+         return std::string(1, char(glz::tag::string)) + std::string(1, char(v.size() << 2)) + std::string{v};
+      };
+      const auto vec = [] { return glz::write_beve(std::vector<double>{1.5, 2.5}).value(); };
+      const auto circ = [] { return glz::write_beve(disc{3.0}).value(); };
+
+      { // the value before the discriminator
+         shapes out{};
+         expect(not glz::read_beve(out, obj({key("values"), vec(), key("type"), str("vec")})));
+         expect(out.index() == 1);
+         expect(std::get<1>(out) == std::vector<double>{1.5, 2.5});
+      }
+      { // the value under another alternative's key, in both orders
+         for (const auto& input : {obj({key("type"), str("vec"), key("c"), circ()}), //
+                                   obj({key("c"), circ(), key("type"), str("vec")})}) {
+            shapes strict{7};
+            expect(glz::read_beve(strict, input).ec == glz::error_code::unknown_key);
+            expect(strict.index() == 2); // rejected before the destination is disturbed
+
+            shapes lax{};
+            expect(glz::read<glz::opts{.format = glz::BEVE, .error_on_unknown_keys = false}>(lax, input).ec ==
+                   glz::error_code::missing_key);
+         }
+      }
+      { // both alternatives' keys: a stray one is skipped only when tolerated
+         const auto input = obj({key("c"), circ(), key("values"), vec(), key("type"), str("vec")});
+         shapes strict{};
+         expect(glz::read_beve(strict, input).ec == glz::error_code::unknown_key);
+         shapes lax{};
+         expect(not glz::read<glz::opts{.format = glz::BEVE, .error_on_unknown_keys = false}>(lax, input));
+         expect(lax.index() == 1);
+      }
    };
 
    "the adjacent reader accepts either key order and rejects a malformed body"_test = [] {
