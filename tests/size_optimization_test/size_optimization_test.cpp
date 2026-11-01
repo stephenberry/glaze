@@ -12,6 +12,7 @@
 #include <cstdint>
 #include <cstdio>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include "glaze/glaze.hpp"
@@ -112,6 +113,17 @@ int main()
       }
       else {
          rc = 1; // expected a parse error
+      }
+   }
+
+   {
+      // Outside the range of double: an error from every reader, never a saturated value.
+      for (const std::string_view input : {"1e309", "-1e309", "1e-324"}) {
+         double d{};
+         if (not glz::read_json(d, input)) {
+            std::printf("%.*s was accepted as %g\n", int(input.size()), input.data(), d);
+            rc = 1;
+         }
       }
    }
 
