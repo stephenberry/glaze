@@ -312,6 +312,59 @@ constexpr auto name2 = glz::name_for_opts<mylib::MyType, my_opts{}>();
 
 When `std::meta::qualified_name_of` is added to the P2996 implementation, these functions will automatically support returning fully-qualified type names with namespace prefixes.
 
+## Partial Types with `glz::optionalize`
+
+`glz::optionalize<T>` generates a type with the same member names as `T` and every member wrapped in `std::optional`. It suits configuration, where a user document overrides a few values of a default, because the partial type no longer has to be written and maintained by hand. It needs P2996 and an explicit include, since `glaze/glaze.hpp` does not pull it in. Without `GLZ_REFLECTION26` the header declares nothing.
+
+```cpp
+#include "glaze/glaze.hpp"
+#include "glaze/reflection/optionalize.hpp"
+
+struct Window {
+   int width = 800;
+   int height = 600;
+};
+
+struct Config {
+   std::string name = "app";
+   Window window{};
+   std::vector<std::string> plugins{"core"};
+};
+
+using PartialConfig = glz::optionalize<Config>;
+
+PartialConfig partial{};
+auto ec = glz::read_json(partial, R"({"window":{"width":1920},"plugins":["mine"]})");
+// partial.name is nullopt, partial.window->height is nullopt
+
+// skip_null_members is on by default, so only what was set is written
+auto json = glz::write_json(partial).value_or("error");
+// {"window":{"width":1920},"plugins":["mine"]}
+
+Config config{};
+glz::apply_partial(config, partial);
+// config.name == "app", config.window is {1920, 600}, config.plugins is {"mine"}
+```
+
+How members are generated:
+
+| Member of `T` | Member of `optionalize<T>` |
+|---------------|----------------------------|
+| Scalar, string, container, variant, pointer, ... | `std::optional<M>` |
+| `std::optional<M>` | `std::optional<M>`, not double wrapped |
+| Nested aggregate `M` that can itself be optionalized | `std::optional<glz::optionalize<M>>` |
+| Nested type that cannot | `std::optional<M>` |
+
+`glz::optionalize_shallow<T>` wraps a nested aggregate whole instead, so `apply_partial` replaces it rather than merging into it.
+
+`T` must be a reflectable aggregate without a `glz::meta` specialization or local `glaze` struct, base classes, or reference, array, const, volatile, bit-field, unnamed, `glz::skip` or `glz::hidden` members. Anything else fails the constraint on the alias. Types with `glz::meta` are rejected because the generated type only has the C++ member names, so renamed or skipped keys would silently change. Default member initializers are not carried over, because every generated member starts as `nullopt`.
+
+`glz::apply_partial(target, partial)` assigns the engaged members onto `target` and recurses into optionalized nested aggregates. Containers are single values and are replaced, not appended to. An rvalue partial is moved from, which also allows move only members. `nullopt` means "not specified", so a partial cannot reset a `std::optional` member of `target`: a document with `null` for that key leaves it as it was.
+
+`glz::merge` does not do this. It concatenates objects for writing, so merging a config with its partial produces duplicate keys such as `{"threads":4,"threads":8}` and leaves the config untouched. A written partial is however a valid [JSON Merge Patch](json-merge-patch.md) for the same struct, so `glz::merge_patch(config, json)` gives the same result as `apply_partial` where the override only exists as JSON text.
+
+`glz::optionalize` is an alias of a member class of an internal class template, because `define_aggregate` may not complete a namespace scope template specialization from inside another class template ([expr.const.reflect]). Its [`glz::type_name`](#cleaner-type-names) is therefore the internal name, such as `glz::detail::optionalized<Config, true>::type`.
+
 ## Docker Development Environment
 
 A Docker container with Bloomberg clang-p2996 can be used for development and testing:
