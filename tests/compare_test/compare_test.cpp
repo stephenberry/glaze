@@ -3,6 +3,10 @@
 
 #include "glaze/compare/compare.hpp"
 
+#include <iterator>
+#include <set>
+#include <string>
+
 #include "glaze/compare/approx.hpp"
 #include "glaze/util/compare.hpp"
 #include "ut/ut.hpp"
@@ -94,6 +98,73 @@ suite striequal_tests = [] {
    "striequal constexpr"_test = [] {
       static_assert(glz::striequal("Host", "host"));
       static_assert(!glz::striequal("Host", "hose"));
+   };
+};
+
+struct ordering_t
+{
+   int a{};
+   int b{};
+   std::string c{};
+};
+
+template <>
+struct glz::meta<ordering_t>
+{
+   using T = ordering_t;
+   static constexpr auto value = object("a", &T::a, "b", &T::b, "c", &T::c);
+};
+
+suite ordering = [] {
+   "orderings compare members lexicographically"_test = [] {
+      const ordering_t x{1, 2, "m"};
+      const ordering_t later_member{1, 3, "a"};
+      const ordering_t earlier_member{0, 9, "z"};
+
+      expect(glz::less{}(x, later_member));
+      expect(!glz::less{}(later_member, x));
+      expect(glz::greater{}(later_member, x));
+      expect(!glz::greater{}(x, later_member));
+      expect(glz::less_equal{}(x, later_member));
+      expect(!glz::less_equal{}(later_member, x));
+      expect(glz::greater_equal{}(later_member, x));
+      expect(!glz::greater_equal{}(x, later_member));
+
+      expect(glz::less{}(earlier_member, x));
+      expect(glz::greater{}(x, earlier_member));
+   };
+
+   "equal objects are neither less nor greater"_test = [] {
+      const ordering_t x{1, 2, "m"};
+      const ordering_t y{1, 2, "m"};
+
+      expect(!glz::less{}(x, y));
+      expect(!glz::greater{}(x, y));
+      expect(glz::less_equal{}(x, y));
+      expect(glz::greater_equal{}(x, y));
+   };
+
+   "incomparability is transitive"_test = [] {
+      const ordering_t a{1, 1, ""};
+      const ordering_t b{2, 0, ""};
+      const ordering_t c{2, 1, ""};
+
+      expect(glz::less{}(a, b));
+      expect(glz::less{}(b, c));
+      expect(glz::less{}(a, c));
+   };
+
+   "less works as a set comparator"_test = [] {
+      std::set<ordering_t, glz::less> values;
+      values.insert({1, 3, ""});
+      values.insert({1, 2, ""});
+      values.insert({0, 9, ""});
+      values.insert({1, 2, ""});
+
+      expect(values.size() == 3u);
+      expect(values.begin()->a == 0);
+      expect(std::next(values.begin())->b == 2);
+      expect(std::prev(values.end())->b == 3);
    };
 };
 

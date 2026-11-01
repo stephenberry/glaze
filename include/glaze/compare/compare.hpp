@@ -37,91 +37,65 @@ namespace glz
       }
    };
 
-   struct less final
+   namespace detail
    {
-      template <glaze_object_t T>
-      constexpr bool operator()(T&& lhs, T&& rhs) noexcept
+      // Lexicographic: the first member that differs decides, and later members are not looked at.
+      template <class Compare, class T>
+      constexpr bool lexicographic(const T& lhs, const T& rhs) noexcept
       {
          constexpr auto N = reflect<T>::size;
 
-         bool less_than = true;
+         bool result = false;
          for_each_short_circuit<N>([&]<auto I>() {
             auto& l = get_member(lhs, get<I>(reflect<T>::values));
             auto& r = get_member(rhs, get<I>(reflect<T>::values));
-            if (!std::less{}(l, r)) {
-               less_than = false;
+            if (Compare{}(l, r)) {
+               result = true;
+               return true; // exit
+            }
+            if (Compare{}(r, l)) {
                return true; // exit
             }
             return false; // continue
          });
 
-         return less_than;
+         return result;
+      }
+   }
+
+   struct less final
+   {
+      template <glaze_object_t T>
+      constexpr bool operator()(T&& lhs, T&& rhs) const noexcept
+      {
+         return detail::lexicographic<std::less<>, std::remove_cvref_t<T>>(lhs, rhs);
       }
    };
 
    struct less_equal final
    {
       template <glaze_object_t T>
-      constexpr bool operator()(T&& lhs, T&& rhs) noexcept
+      constexpr bool operator()(T&& lhs, T&& rhs) const noexcept
       {
-         constexpr auto N = reflect<T>::size;
-
-         bool less_than = true;
-         for_each_short_circuit<N>([&]<auto I>() {
-            auto& l = get_member(lhs, get<I>(reflect<T>::values));
-            auto& r = get_member(rhs, get<I>(reflect<T>::values));
-            if (!std::less_equal{}(l, r)) {
-               less_than = false;
-               return true; // exit
-            }
-            return false; // continue
-         });
-
-         return less_than;
+         return !detail::lexicographic<std::greater<>, std::remove_cvref_t<T>>(lhs, rhs);
       }
    };
 
    struct greater final
    {
       template <glaze_object_t T>
-      constexpr bool operator()(T&& lhs, T&& rhs) noexcept
+      constexpr bool operator()(T&& lhs, T&& rhs) const noexcept
       {
-         constexpr auto N = reflect<T>::size;
-
-         bool greater_than = true;
-         for_each_short_circuit<N>([&]<auto I>() {
-            auto& l = get_member(lhs, get<I>(reflect<T>::values));
-            auto& r = get_member(rhs, get<I>(reflect<T>::values));
-            if (!std::greater{}(l, r)) {
-               greater_than = false;
-               return true; // exit
-            }
-            return false; // continue
-         });
-
-         return greater_than;
+         return detail::lexicographic<std::greater<>, std::remove_cvref_t<T>>(lhs, rhs);
       }
    };
 
    struct greater_equal final
    {
       template <glaze_object_t T>
-      constexpr bool operator()(T&& lhs, T&& rhs) noexcept
+      constexpr bool operator()(T&& lhs, T&& rhs) const noexcept
       {
-         constexpr auto N = reflect<T>::size;
-
-         bool greater_than = true;
-         for_each_short_circuit<N>([&]<auto I>() {
-            auto& l = get_member(lhs, get<I>(reflect<T>::values));
-            auto& r = get_member(rhs, get<I>(reflect<T>::values));
-            if (!std::greater_equal{}(l, r)) {
-               greater_than = false;
-               return true; // exit
-            }
-            return false; // continue
-         });
-
-         return greater_than;
+         return !detail::lexicographic<std::less<>, std::remove_cvref_t<T>>(lhs, rhs);
       }
    };
 }
