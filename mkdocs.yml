@@ -114,6 +114,7 @@ nav:
    - Lazy JSON (On-Demand): lazy-json.md
    - Writing: writing.md
    - Streaming I/O: streaming.md
+   - Incremental JSON Arrays: json-array.md
    - Max Float Precision: max-float-precision.md
    - Ranges: ranges.md
  - Networking:
