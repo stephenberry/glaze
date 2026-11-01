@@ -594,25 +594,30 @@ namespace glz
    // Returns zero if the fixed size cannot be determined
    template <class T>
    inline constexpr size_t fixed_padding = [] {
-      constexpr auto N = reflect<T>::size;
-      size_t fixed = 2 + 16; // {} + extra padding
-      for_each_short_circuit<N>([&]<auto I>() -> bool {
-         using val_t = field_t<T, I>;
-         if constexpr (required_padding<val_t>()) {
-            fixed += required_padding<val_t>();
-            fixed += reflect<T>::keys[I].size() + 2; // quoted key length
-            fixed += 2; // colon and comma
-            return false; // continue
-         }
-         else {
-            fixed = 0;
-            return true; // break
-         }
-      });
-      if (fixed) {
-         fixed = round_up_to_nearest_16(fixed);
+      if constexpr (has_unnameable_members<T>()) {
+         return size_t{0};
       }
-      return fixed;
+      else {
+         constexpr auto N = reflect<T>::size;
+         size_t fixed = 2 + 16; // {} + extra padding
+         for_each_short_circuit<N>([&]<auto I>() -> bool {
+            using val_t = field_t<T, I>;
+            if constexpr (required_padding<val_t>()) {
+               fixed += required_padding<val_t>();
+               fixed += reflect<T>::keys[I].size() + 2; // quoted key length
+               fixed += 2; // colon and comma
+               return false; // continue
+            }
+            else {
+               fixed = 0;
+               return true; // break
+            }
+         });
+         if (fixed) {
+            fixed = round_up_to_nearest_16(fixed);
+         }
+         return fixed;
+      }
    }();
 
    // Returns true if writing type T to JSON can potentially set ctx.error.
