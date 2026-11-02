@@ -586,6 +586,23 @@ namespace glz
          std::lock_guard<std::mutex> lock(impl_->ssl_ctx_mutex_);
          return detail::load_os_ca_certificates(impl_->ensure_ssl_context_locked());
       }
+
+      // Thread-safe access to the TLS context for the settings this class does not wrap:
+      // protocol version bounds, cipher suites, ALPN or a client certificate. The callable
+      // runs while ssl_ctx_mutex_ is held, so it must not call back into this client. It
+      // receives the context connect() uses, created on first use with the platform's trust
+      // anchors loaded. connect() re-applies the mode from set_ssl_verify_mode(), so a verify
+      // mode set on the context here does not last. Call this before connect(), since OpenSSL
+      // reads the context without locking during a handshake.
+      // Example: client.configure_ssl_context([](asio::ssl::context& ctx) {
+      //    SSL_CTX_set_min_proto_version(ctx.native_handle(), TLS1_3_VERSION);
+      // });
+      template <typename Func>
+      void configure_ssl_context(Func&& func)
+      {
+         std::lock_guard<std::mutex> lock(impl_->ssl_ctx_mutex_);
+         func(impl_->ensure_ssl_context_locked());
+      }
 #endif
 
       // Set an additional HTTP header for the opening WebSocket handshake.
