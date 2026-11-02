@@ -1544,7 +1544,13 @@ namespace glz
    template <write_supported<TOML> T, raw_buffer Buffer>
    [[nodiscard]] glz::expected<size_t, error_ctx> write_toml(T&& value, Buffer&& buffer)
    {
-      return write<opts{.format = TOML}>(std::forward<T>(value), std::forward<Buffer>(buffer));
+      // Unpack explicitly: converting error_ctx to expected<size_t> goes through operator bool, which reports
+      // a bounded char[N] overflow as success.
+      const auto ec = write<opts{.format = TOML}>(std::forward<T>(value), std::forward<Buffer>(buffer));
+      if (bool(ec)) [[unlikely]] {
+         return glz::unexpected(ec);
+      }
+      return ec.count;
    }
 
    template <write_supported<TOML> T>

@@ -67,11 +67,12 @@ namespace glz::ex
       requires write_supported<T, Opts.format>
    [[nodiscard]] size_t write(T&& value, Buffer&& buffer)
    {
-      const auto e = write<Opts>(std::forward<T>(value), std::forward<Buffer>(buffer));
-      if (not e) [[unlikely]] {
-         throw std::runtime_error(format_error(e, buffer));
+      // Qualified so it does not recurse into this overload. A char[N] buffer is bounded and can overflow.
+      const auto ec = glz::write<Opts>(std::forward<T>(value), std::forward<Buffer>(buffer));
+      if (bool(ec)) [[unlikely]] {
+         throw std::runtime_error(format_error(ec));
       }
-      return e.value();
+      return ec.count;
    }
 
    // requires file_name to be null terminated

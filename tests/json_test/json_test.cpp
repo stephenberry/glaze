@@ -9636,6 +9636,15 @@ suite write_as_json_raw = [] {
       expect(glz::write_as_json(obj, "/i", b.data()));
       expect(std::string_view{b.data()} == "287");
    };
+
+   "write_as_json reports overflow of a C array"_test = [] {
+      my_struct obj{};
+      char small[16]{};
+      expect(not glz::write_as_json(obj, "/hello", small));
+      char large[512]{};
+      expect(glz::write_as_json(obj, "/hello", large));
+      expect(std::string_view{large} == R"("Hello World")");
+   };
 };
 
 struct error_on_const_read_opts : glz::opts
