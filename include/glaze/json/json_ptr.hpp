@@ -18,12 +18,17 @@ namespace glz
       return key.find_first_not_of("0123456789") == std::string_view::npos;
    }
 
-   template <string_literal JsonPointer, auto Opts = opts{}>
+   template <string_literal JsonPointer, auto Options = opts{}>
    [[nodiscard]] inline auto get_view_json(contiguous auto&& buffer)
    {
       static constexpr auto S = chars<JsonPointer>;
       static constexpr auto tokens = split_json_ptr<S>();
       static constexpr auto N = tokens.size();
+
+      // The buffer decides whether the terminator `null_terminated` asserts can be relied on, the
+      // same way it does for glz::read (see parse_opts_for): a std::vector<char> keeps none, so the
+      // seek below runs with bounds over one rather than scanning for a sentinel past its end.
+      static constexpr auto Opts = parse_opts_for<Options, decltype(buffer)>();
 
       context ctx{};
       auto p = read_iterators<Opts>(buffer);
@@ -64,6 +69,10 @@ namespace glz
 
             static constexpr auto key = tokens[I];
             if constexpr (maybe_numeric_key(key)) {
+               if (it >= end) [[unlikely]] {
+                  ctx.error = error_code::unexpected_end;
+                  return;
+               }
                switch (*it) {
                case '{': {
                   ++it;
@@ -142,6 +151,11 @@ namespace glz
                      return;
                   }
                }
+               default: {
+                  // A scalar has no members or elements to index into
+                  ctx.error = error_code::syntax_error;
+                  return;
+               }
                }
             }
             else {
@@ -192,6 +206,8 @@ namespace glz
                      ++it;
                   }
                }
+               // The object ended after a ',' without the key
+               ctx.error = error_code::unexpected_end;
             }
          });
 
@@ -203,9 +219,12 @@ namespace glz
       }
    }
 
-   template <class T, string_literal Str, auto Opts = opts{}>
+   template <class T, string_literal Str, auto Options = opts{}>
    [[nodiscard]] inline expected<T, error_ctx> get_as_json(contiguous auto&& buffer)
    {
+      // The located value is a span of the caller's buffer, so it is read with the options that
+      // buffer allows (see parse_opts_for) rather than with what a span alone would be taken to promise.
+      static constexpr auto Opts = parse_opts_for<Options, decltype(buffer)>();
       const auto str = glz::get_view_json<Str, Opts>(buffer);
       if (str) {
          T value{};
@@ -256,10 +275,13 @@ namespace glz
    }
 
    // Runtime version of get_view_json - navigate to a JSON value using a runtime JSON pointer
-   template <auto Opts = opts{}>
+   template <auto Options = opts{}>
    [[nodiscard]] inline auto get_view_json(const sv json_ptr, contiguous auto&& buffer)
    {
       using namespace glz::detail;
+
+      // As in the compile-time overload above, the buffer decides what `null_terminated` may assert.
+      static constexpr auto Opts = parse_opts_for<Options, decltype(buffer)>();
 
       context ctx{};
       auto [it, end] = read_iterators<Opts>(buffer);
@@ -283,6 +305,12 @@ namespace glz
 
       while (!remaining_ptr.empty()) {
          auto [token, next_remaining] = parse_json_ptr_token(remaining_ptr);
+         // RFC 6901 3: '~' must be followed by '0' or '1'. On "~2" or a trailing '~' the token
+         // holds only the characters before the '~' and the rest of the pointer is gone, so
+         // carrying on would resolve "/a~2/b" to "/a".
+         if (next_remaining.data() == nullptr) [[unlikely]] {
+            return result_t{unexpected(error_ctx{size_t(it - start), error_code::invalid_json_pointer})};
+         }
          if (token.empty() && remaining_ptr.size() > 0 && remaining_ptr[0] == '/') {
             // Empty token after '/' is valid (represents empty string key)
             // But if we got here with no token and remaining_ptr doesn't start with '/',

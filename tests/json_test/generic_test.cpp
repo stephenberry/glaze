@@ -679,7 +679,6 @@ suite json_pointer_extraction_tests = [] {
    };
 };
 
-// Define structs at namespace level for linkage requirements
 struct Thing
 {
    int value1;

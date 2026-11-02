@@ -12,6 +12,7 @@
 #include <limits>
 #include <string_view>
 
+#include "glaze/bson/common.hpp"
 #include "glaze/bson/header.hpp"
 #include "glaze/bson/skip.hpp"
 #include "glaze/core/chrono.hpp"
@@ -169,6 +170,8 @@ namespace glz
       template <auto Opts, class T, is_context Ctx, class It, class End>
       GLZ_ALWAYS_INLINE static void op(T&& value, Ctx&& ctx, It& it, const End& end) noexcept
       {
+         static_assert(bson_top_level_t<T>,
+                       "BSON can only encode a document (struct, map, or array) without an enclosing element.");
          if constexpr (const_value_v<T>) {
             if constexpr (check_error_on_const_read(Opts)) {
                ctx.error = error_code::attempt_const_read;
@@ -330,6 +333,22 @@ namespace glz
          from<BSON, U>::template op<Opts>(u, tag, ctx, it, end);
          if (bool(ctx.error)) return;
          value = static_cast<T>(u);
+      }
+   };
+
+   // --- Whole-type glz::meta value ----------------------------------------------
+   //
+   // A type whose glz::meta value is a member pointer, a glz::custom, etc. reads as the value it wraps,
+   // under the same element tag. The write side is resolved in bson_detail::write_member_element.
+   template <class T>
+      requires(glaze_value_t<T> && !custom_read<T>)
+   struct from<BSON, T>
+   {
+      template <auto Opts, class Value, is_context Ctx, class It, class End>
+      static void op(Value&& value, uint8_t tag, Ctx&& ctx, It& it, const End& end)
+      {
+         using V = std::remove_cvref_t<decltype(get_member(std::declval<Value>(), meta_wrapper_v<T>))>;
+         from<BSON, V>::template op<Opts>(get_member(std::forward<Value>(value), meta_wrapper_v<T>), tag, ctx, it, end);
       }
    };
 
@@ -727,6 +746,24 @@ namespace glz
    {
       // --- Category traits ---------------------------------------------------
 
+      // An alternative whose glz::meta value is a member pointer is categorized by the type it wraps.
+      // A whole-type glz::custom has no single wrapped type to categorize by, as in JSON.
+      template <class T>
+      struct bson_variant_category
+      {
+         using type = T;
+      };
+
+      template <class T>
+         requires(glaze_value_t<T> && !custom_read<T> && !is_specialization_v<remove_meta_wrapper_t<T>, custom_t>)
+      struct bson_variant_category<T>
+      {
+         using type = typename bson_variant_category<std::remove_cvref_t<remove_meta_wrapper_t<T>>>::type;
+      };
+
+      template <class T>
+      using bson_variant_category_t = typename bson_variant_category<std::remove_cvref_t<T>>::type;
+
       template <class T>
       struct is_bson_variant_null : std::bool_constant<null_t<T>>
       {};
@@ -832,7 +869,7 @@ namespace glz
          {
             size_t result = std::variant_npos;
             size_t idx = 0;
-            ((Trait<std::remove_cvref_t<Ts>>::value && result == std::variant_npos ? (result = idx, ++idx) : ++idx),
+            ((Trait<bson_variant_category_t<Ts>>::value && result == std::variant_npos ? (result = idx, ++idx) : ++idx),
              ...);
             return result;
          }
@@ -852,7 +889,7 @@ namespace glz
                 min_keys = 0, max_keys = 0;
          [&]<size_t... I>(std::index_sequence<I...>) {
             (([&]<size_t Idx>() {
-                using V = std::remove_cvref_t<std::variant_alternative_t<Idx, T>>;
+                using V = bson_variant_category_t<std::variant_alternative_t<Idx, T>>;
                 nulls += is_bson_variant_null<V>::value;
                 bools += is_bson_variant_bool<V>::value;
                 ints += is_bson_variant_int<V>::value;
@@ -1116,7 +1153,9 @@ namespace glz
                   ctx.custom_error_message = key;
                   return;
                }
-               skip_value<BSON>::template op<Opts>(tag, ctx, it, stop);
+               else {
+                  skip_value<BSON>::template op<Opts>(tag, ctx, it, stop);
+               }
             }
          });
 
@@ -1278,11 +1317,6 @@ namespace glz
    // Public entry points
    // ==========================================================================
 
-   template <class T>
-   concept bson_top_level_read_t = glaze_object_t<std::remove_cvref_t<T>> || reflectable<std::remove_cvref_t<T>> ||
-                                   writable_map_t<std::remove_cvref_t<T>> || writable_array_t<std::remove_cvref_t<T>> ||
-                                   glaze_array_t<std::remove_cvref_t<T>>;
-
    // BSON documents are length-prefixed (int32 header = total bytes). The core
    // reader consumes exactly that many bytes, but would otherwise silently
    // ignore anything trailing the top-level document. Enforce exact-fill at the
@@ -1300,7 +1334,7 @@ namespace glz
       }
    }
 
-   template <auto Opts = opts{}, bson_top_level_read_t T, class Buffer>
+   template <auto Opts = opts{}, bson_top_level_t T, class Buffer>
    [[nodiscard]] inline error_ctx read_bson(T&& value, Buffer&& buffer)
    {
       auto ec = read<set_bson<Opts>()>(std::forward<T>(value), buffer);
@@ -1308,7 +1342,7 @@ namespace glz
    }
 
    template <class T, auto Opts = opts{}, class Buffer>
-      requires bson_top_level_read_t<T>
+      requires bson_top_level_t<T>
    [[nodiscard]] inline expected<T, error_ctx> read_bson(Buffer&& buffer)
    {
       T value{};
@@ -1320,7 +1354,7 @@ namespace glz
       return value;
    }
 
-   template <auto Opts = opts{}, bson_top_level_read_t T>
+   template <auto Opts = opts{}, bson_top_level_t T>
    [[nodiscard]] inline error_ctx read_file_bson(T& value, const sv file_name, auto&& buffer)
    {
       context ctx{};

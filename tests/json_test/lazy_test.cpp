@@ -149,6 +149,28 @@ struct MinimalUser
    std::string name{};
 };
 
+// A custom reader that rejects a value with a message, to check read_into() keeps the message.
+struct ValidatedAge
+{
+   int age{};
+};
+
+template <>
+struct glz::meta<ValidatedAge>
+{
+   using T = ValidatedAge;
+   static constexpr auto read_age = [](T& s, int age, glz::context& ctx) {
+      if (age < 21) {
+         ctx.error = glz::error_code::constraint_violated;
+         ctx.custom_error_message = "age too young";
+      }
+      else {
+         s.age = age;
+      }
+   };
+   static constexpr auto value = object("age", glz::custom<read_age, &T::age>);
+};
+
 suite lazy_json_tests = [] {
    "lazy_json_read_basic"_test = [] {
       std::string buffer = R"({"name":"John","age":30,"active":true,"balance":123.45})";
@@ -1009,6 +1031,19 @@ suite lazy_json_tests = [] {
       expect(user.name == "Alice");
    };
 
+   "lazy_json_read_into_preserves_custom_error_message"_test = [] {
+      std::string buffer = R"({"person":{"age":18}})";
+
+      auto result = glz::lazy_json(buffer);
+      expect(result.has_value());
+
+      ValidatedAge person{};
+      auto ec = (*result)["person"].read_into(person);
+
+      expect(ec == glz::error_code::constraint_violated);
+      expect(ec.custom_error_message == "age too young") << ec.custom_error_message;
+   };
+
    "lazy_json_read_into_nested"_test = [] {
       std::string buffer = R"({
          "people": [
@@ -1470,6 +1505,31 @@ suite dynamic_key_custom_tests = [] {
          ++count;
       }
       expect(count == 1u); // only the "a" element is complete
+   };
+
+   // A std::vector<char> keeps no terminator of its own, so glz::read reads it with bounds whatever
+   // null_terminated says. lazy_json derives the same options from the buffer, so with the default
+   // options a document in a vector must stop at its end rather than scan for a sentinel past it.
+   "lazy_json_vector_buffer_bounds"_test = [] {
+      const std::vector<char> truncated{'{', '"', 'a', '"', ':'};
+      auto result = glz::lazy_json(truncated);
+      expect(result.has_value());
+      expect((*result)["a"].has_error());
+      expect((*result)["x"].has_error());
+
+      const std::vector<char> blank{' ', ' '};
+      auto blank_result = glz::lazy_json(blank);
+      expect(not blank_result.has_value());
+      expect(blank_result.error().ec == glz::error_code::unexpected_end);
+
+      // A complete document in a vector still reads.
+      const std::string_view json = R"({"a":1,"b":"two"})";
+      const std::vector<char> buf{json.begin(), json.end()};
+      auto doc = glz::lazy_json(buf);
+      expect(doc.has_value());
+      expect((*doc)["a"].get<int>().value_or(0) == 1);
+      expect((*doc)["b"].get<std::string_view>().value_or("") == "two");
+      expect((*doc).root().size() == 2u);
    };
 
    "lazy_json_truncated_iterate"_test = [] {

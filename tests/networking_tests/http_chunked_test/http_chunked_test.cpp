@@ -916,20 +916,32 @@ suite chunked_sync_tests = [] {
       if (server_thread.joinable()) server_thread.join();
    };
 
-   // Wrong method on a streaming-only path with a query string should still fall through
-   // to the regular router and produce 404 (not match a different streaming method by accident).
-   "sync_stream_wrong_method_with_query_returns_404"_test = [] {
+   // Wrong method on a streaming-only path with a query string should not match a different
+   // streaming method by accident; it answers 405 with the streaming route's methods in Allow.
+   "sync_stream_wrong_method_with_query_returns_405"_test = [] {
       chunked_test_server server;
       expect(server.start()) << "Server should start";
 
       glz::http_client client;
-      // /echo-query is registered for GET only; POST with a query string should 404.
+      // /echo-query is registered for GET only; POST with a query string should 405.
       auto result = client.post(server.base_url() + "/echo-query?a=b", std::string{});
 
       expect(result.has_value()) << "Request should complete";
       if (result) {
-         expect(result->status_code == 404)
-            << "POST to a GET-only streaming route should be 404, got: " << result->status_code;
+         expect(result->status_code == 405)
+            << "POST to a GET-only streaming route should be 405, got: " << result->status_code;
+         const auto allow = result->response_headers.first_value("allow");
+         expect(allow.has_value() && *allow == "GET, HEAD, OPTIONS") << "Allow should list GET, HEAD and OPTIONS";
+      }
+
+      // OPTIONS on the streaming-only path is answered with the same Allow list, not 404.
+      auto options = client.options(server.base_url() + "/echo-query");
+      expect(options.has_value()) << "OPTIONS should complete";
+      if (options) {
+         expect(options->status_code != 404) << "OPTIONS on a streaming route should not 404";
+         const auto options_allow = options->response_headers.first_value("allow");
+         expect(options_allow.has_value() && *options_allow == "GET, HEAD, OPTIONS")
+            << "Allow should list GET, HEAD and OPTIONS";
       }
 
       server.stop();

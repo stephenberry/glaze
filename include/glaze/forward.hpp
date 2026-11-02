@@ -58,6 +58,13 @@ namespace glz
    template <std::uint32_t Format>
    inline constexpr bool format_supports_streaming = false;
 
+   // Whether a format can encode T as a whole top-level value. Most formats can encode anything they
+   // can encode at all; a format whose top level is restricted (BSON requires a document) specializes
+   // this so the generic glz::write/glz::read entry points reject such a T at compile time instead of
+   // producing unframed bytes.
+   template <std::uint32_t Format, class T>
+   inline constexpr bool top_level_supported = true;
+
    template <>
    inline constexpr bool format_supports_streaming<JSON> = true;
 
@@ -65,6 +72,24 @@ namespace glz
    // since nothing refills inside one; a record that does not reports streaming_unsupported.
    template <>
    inline constexpr bool format_supports_streaming<NDJSON> = true;
+
+   // Whether a format's documents may contain zero bytes. glz::read rejects a null-terminated C string
+   // for such a format, since strlen would truncate it. A user-defined binary format specializes this.
+   template <std::uint32_t Format>
+   inline constexpr bool format_is_binary = false;
+
+   template <>
+   inline constexpr bool format_is_binary<BEVE> = true;
+   template <>
+   inline constexpr bool format_is_binary<CBOR> = true;
+   template <>
+   inline constexpr bool format_is_binary<JSONB> = true;
+   template <>
+   inline constexpr bool format_is_binary<BSON> = true;
+   template <>
+   inline constexpr bool format_is_binary<MSGPACK> = true;
+   template <>
+   inline constexpr bool format_is_binary<EETF> = true;
 
    // Reflection metadata customization point.
    template <class T>

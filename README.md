@@ -257,7 +257,7 @@ The buffer refills automatically during parsing, enabling reading of arbitrarily
 - Tested for both 64bit and 32bit
 - Supports both little-endian and big-endian systems
 
-[Actions](https://github.com/stephenberry/glaze/actions) build and test with [Clang](https://clang.llvm.org) (18+), [MSVC](https://visualstudio.microsoft.com/vs/features/cplusplus/) (Visual Studio 2026 MSVC Build Tools 14.50), and [GCC](https://gcc.gnu.org) (13+) on apple, windows, and linux. Big-endian is tested via QEMU emulation on s390x.
+[Actions](https://github.com/stephenberry/glaze/actions) build and test with [Clang](https://clang.llvm.org) (19+), [MSVC](https://visualstudio.microsoft.com/vs/features/cplusplus/) (Visual Studio 2026 MSVC Build Tools 14.50), and [GCC](https://gcc.gnu.org) (13+) on apple, windows, and linux. Big-endian is tested via QEMU emulation on s390x.
 
 ![clang build](https://github.com/stephenberry/glaze/actions/workflows/clang.yml/badge.svg) ![gcc build](https://github.com/stephenberry/glaze/actions/workflows/gcc.yml/badge.svg) ![msvc build](https://github.com/stephenberry/glaze/actions/workflows/msvc.yml/badge.svg) 
 
@@ -866,7 +866,7 @@ This is useful for:
 
 # Input Buffer (Null) Termination
 
-A `std::string` is recommended for input buffers, because it carries the null terminator the default `null_terminated` option expects. Glaze reads the buffer you give it and does not modify it, so a `const std::string&` or a `std::string_view` over one is equally fast. A buffer that keeps no terminator of its own -- a `std::vector<char>`, or a container shaped like `QByteArray` -- is read with bounds instead, at a small cost.
+A `std::string` is recommended for input buffers, because it carries the null terminator the default `null_terminated` option expects. Glaze reads the buffer you give it and does not modify it, so a `const std::string&` or a `std::string_view` covering a whole one is equally fast. A view of only part of a string is not terminated where it ends, so it needs `null_terminated = false`. A buffer that keeps no terminator of its own -- a `std::vector<char>`, or a container shaped like `QByteArray` -- is read with bounds instead, at a small cost.
 
 ## JSON
 

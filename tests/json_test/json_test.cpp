@@ -841,7 +841,6 @@ bool equal(T x, T y)
    return x == y;
 }
 
-// Reflection needs external linkage, so these cannot be declared inside the test that uses them.
 struct partial_reuse_inner_t
 {
    int a{};
@@ -2959,6 +2958,60 @@ suite non_null_terminated_scanner_bounds = [] {
       expect(value_of(R"("\n")") == '\n');
       expect(value_of(R"("\\")") == '\\');
       expect(value_of(R"("")") == '\0');
+   };
+
+   "get_view_json derives bounds from a resizable buffer"_test = [] {
+      // glz::read reads a std::vector<char> with bounds whatever null_terminated says, because the
+      // vector keeps no terminator of its own. The JSON pointer seeks derive the same options from
+      // the buffer, so with the default options a truncated document must fail without scanning
+      // past the end of the vector.
+      const std::vector<char> truncated{'{', '"', 'a', '"', ':'};
+      expect(not glz::get_view_json<"/a">(truncated).has_value());
+      expect(not glz::get_view_json("/a", truncated).has_value());
+      expect(not glz::get_as_json<int, "/a">(truncated).has_value());
+
+      // A complete document in a vector still resolves.
+      const std::string_view complete = R"({"a":12,"b":3})";
+      const std::vector<char> buf{complete.begin(), complete.end()};
+      const auto view = glz::get_view_json<"/b">(buf);
+      expect(view.has_value());
+      expect(std::string_view{view->data(), view->size()} == "3");
+      const auto runtime_view = glz::get_view_json("/a", buf);
+      expect(runtime_view.has_value());
+      expect(std::string_view{runtime_view->data(), runtime_view->size()} == "12");
+      const auto value = glz::get_as_json<int, "/a">(buf);
+      expect(value.has_value());
+      expect(*value == 12);
+   };
+
+   "compile-time json pointer that does not resolve is an error"_test = [] {
+      // An index into a scalar names nothing. The runtime seek reports it, and the compile-time
+      // seek must too rather than returning an empty view with a null data().
+      const std::string scalar = R"({"a":5})";
+      expect(glz::get_view_json<"/a/0">(scalar).error().ec == glz::error_code::syntax_error);
+      expect(glz::get_view_json("/a/0", scalar).error().ec == glz::error_code::syntax_error);
+      expect(not glz::get_view_json<"/a/1">(std::string{R"({"a":"text"})"}).has_value());
+      expect(not glz::get_sv_json<"/a/0">(scalar).has_value());
+
+      // An object that ends after a ',' without the key.
+      const std::string trailing = R"({"b":1,)";
+      expect(glz::get_view_json<"/a">(trailing).error().ec == glz::error_code::unexpected_end);
+      expect(not glz::get_view_json("/a", trailing).has_value());
+
+      // The same document in a vector ends the seek before the next token, without reading past it.
+      const std::vector<char> truncated{'{', '"', 'b', '"', ':', '1', ','};
+      expect(not glz::get_view_json<"/a/0">(truncated).has_value());
+
+      // write_at reports the error and leaves the buffer alone.
+      std::string doc = R"({"a":5})";
+      expect(glz::write_at<"/a/0">("1", doc).ec == glz::error_code::syntax_error);
+      expect(doc == R"({"a":5})");
+
+      // Pointers that resolve are unchanged.
+      const std::string nested = R"({"a":[1,{"b":2}]})";
+      const auto view = glz::get_view_json<"/a/1/b">(nested);
+      expect(view.has_value());
+      expect(std::string_view{view->data(), view->size()} == "2");
    };
 };
 
@@ -6760,6 +6813,33 @@ suite get_sv = [] {
       expect(buffer == R"({"a/b":10,"c~d":20})");
    };
 
+   "runtime json_ptr invalid escape"_test = [] {
+      // RFC 6901 3: '~' must be followed by '0' or '1'. An invalid escape must not resolve to the
+      // key before the '~' and drop the rest of the pointer.
+      const std::string original = R"({"a":{"x":"secret"},"a~2":1,"b":1})";
+      std::string buffer = original;
+
+      for (const auto* ptr : {"/a~2", "/a~", "/a~2/zzz", "/a~9/x", "/b/a~"}) {
+         auto view = glz::get_view_json(std::string_view{ptr}, buffer);
+         expect(not view.has_value()) << ptr;
+         if (not view) {
+            expect(view.error().ec == glz::error_code::invalid_json_pointer) << ptr;
+         }
+      }
+
+      auto ec = glz::write_at("/a~2/deep", "0", buffer);
+      expect(ec.ec == glz::error_code::invalid_json_pointer);
+      expect(buffer == original);
+
+      // Valid escapes are unaffected
+      const std::string escaped = R"({"a~2":7})";
+      auto view = glz::get_view_json("/a~02", escaped);
+      expect(view.has_value());
+      if (view) {
+         expect(glz::sv{view->data(), view->size()} == "7");
+      }
+   };
+
    "runtime get_view_json empty pointer"_test = [] {
       std::string buffer = R"({"x":1})";
 
@@ -9636,6 +9716,15 @@ suite write_as_json_raw = [] {
       expect(glz::write_as_json(obj, "/i", b.data()));
       expect(std::string_view{b.data()} == "287");
    };
+
+   "write_as_json reports overflow of a C array"_test = [] {
+      my_struct obj{};
+      char small[16]{};
+      expect(not glz::write_as_json(obj, "/hello", small));
+      char large[512]{};
+      expect(glz::write_as_json(obj, "/hello", large));
+      expect(std::string_view{large} == R"("Hello World")");
+   };
 };
 
 struct error_on_const_read_opts : glz::opts
@@ -12001,13 +12090,22 @@ suite partial_write_tests = [] {
       expect(s == R"({"animals":{"tiger":"Tiger"},"name":"My Awesome Zoo"})") << s;
    };
 
-   "partial write with raw buffer"_test = [] {
+   "partial write with C array"_test = [] {
+      static constexpr auto json_ptrs = glz::json_ptrs("/name");
+      zoo_t obj{};
+      char buf[512]{};
+      const auto result = glz::write_json<json_ptrs>(obj, buf);
+      expect(!result) << "write should succeed";
+      expect(std::string_view{buf, result.count} == R"({"name":"My Awesome Zoo"})");
+   };
+
+   "partial write with small C array reports overflow"_test = [] {
       static constexpr auto json_ptrs = glz::json_ptrs("/name");
       zoo_t obj{};
       char buf[32]{};
       const auto result = glz::write_json<json_ptrs>(obj, buf);
-      expect(!result) << "write should succeed";
-      expect(std::string_view{buf} == R"({"name":"My Awesome Zoo"})");
+      expect(result.ec == glz::error_code::buffer_overflow);
+      expect(result.count <= sizeof(buf));
    };
 
    "partial_write_tester"_test = [] {
@@ -12976,6 +13074,47 @@ struct float_opts : glz::opts
    glz::float_precision float_max_write_precision{};
 };
 
+struct mixed_write_precision_t
+{
+   double f32 = std::numbers::pi_v<double>;
+   double f64 = std::numbers::pi_v<double>;
+   double full = std::numbers::pi_v<double>;
+
+   struct glaze
+   {
+      using T = mixed_write_precision_t;
+      static constexpr auto value = glz::object("f32", glz::write_float32<&T::f32>, "f64", glz::write_float64<&T::f64>,
+                                                "full", glz::write_float_full<&T::full>);
+   };
+};
+
+struct conversions_opts : glz::opts
+{
+   bool allow_conversions = true;
+};
+
+suite set_opt_tests = [] {
+   "set_opt adds a missing inheritable option"_test = [] {
+      static constexpr auto conversions = glz::set_opt<glz::opts{}, glz::allow_conversions_opt_tag{}>(false);
+      static_assert(!glz::check_allow_conversions(conversions));
+
+      static constexpr auto precision =
+         glz::set_opt<glz::opts{}, glz::float_max_write_precision_opt_tag{}>(glz::float_precision::float32);
+      static_assert(glz::check_float_max_write_precision(precision) == glz::float_precision::float32);
+   };
+
+   "set_opt updates an existing inheritable option"_test = [] {
+      static constexpr auto conversions = glz::set_opt<conversions_opts{}, glz::allow_conversions_opt_tag{}>(false);
+      static_assert(std::same_as<std::remove_cv_t<decltype(conversions)>, conversions_opts>);
+      static_assert(!conversions.allow_conversions);
+
+      static constexpr auto precision =
+         glz::set_opt<float_opts{}, glz::float_max_write_precision_opt_tag{}>(glz::float_precision::float64);
+      static_assert(std::same_as<std::remove_cv_t<decltype(precision)>, float_opts>);
+      static_assert(precision.float_max_write_precision == glz::float_precision::float64);
+   };
+};
+
 suite max_write_precision_tests = [] {
    "max_write_precision"_test = [] {
       double pi = std::numbers::pi_v<double>;
@@ -12999,6 +13138,52 @@ suite max_write_precision_tests = [] {
       write_precision_t obj{};
       std::string json_float = glz::write<float_opts{}>(obj).value_or("error");
       expect(json_float == R"({"pi":3.1415927})") << json_float;
+   };
+
+   "write_float wrappers with default opts"_test = [] {
+      write_precision_t obj{};
+      std::string json = glz::write_json(obj).value_or("error");
+      expect(json == R"({"pi":3.1415927})") << json;
+
+      mixed_write_precision_t mixed{};
+      json = glz::write_json(mixed).value_or("error");
+      expect(json == R"({"f32":3.1415927,"f64":3.141592653589793,"full":3.141592653589793})") << json;
+
+      // The wrappers override a float_max_write_precision set in a custom options struct
+      json = glz::write<float_opts{{}, glz::float_precision::float32}>(mixed).value_or("error");
+      expect(json == R"({"f32":3.1415927,"f64":3.141592653589793,"full":3.141592653589793})") << json;
+
+      expect(!glz::read_json(mixed, R"({"f32":1.5,"f64":2.5,"full":3.5})"));
+      expect(mixed.f32 == 1.5 && mixed.f64 == 2.5 && mixed.full == 3.5);
+   };
+
+   "float32 narrowing of finite values beyond float's range"_test = [] {
+      constexpr float_opts options{{}, glz::float_precision::float32};
+      constexpr auto dbl_max = std::numeric_limits<double>::max();
+      for (const double v : {3.4028235999999999e+38, 1e39, -1e39, 1e100, dbl_max, -dbl_max}) {
+         const auto json = glz::write<options>(v).value_or("error");
+         expect(json == glz::write_json(v).value_or("error")) << json;
+         double back{};
+         expect(!glz::read_json(back, json)) << json;
+         expect(back == v) << json;
+      }
+
+      // Values that narrow to a finite float are still written at float precision
+      constexpr auto flt_max = double(std::numeric_limits<float>::max());
+      expect(glz::write<options>(flt_max).value_or("error") == "3.4028235E38");
+      expect(glz::write<options>(-flt_max).value_or("error") == "-3.4028235E38");
+
+      // Non-finite values are still written as null
+      expect(glz::write<options>(std::numeric_limits<double>::infinity()).value_or("error") == "null");
+      expect(glz::write<options>(-std::numeric_limits<double>::infinity()).value_or("error") == "null");
+      expect(glz::write<options>(std::numeric_limits<double>::quiet_NaN()).value_or("error") == "null");
+
+      write_precision_t obj{1e100};
+      const auto json = glz::write<float_opts{}>(obj).value_or("error");
+      expect(json == R"({"pi":1E100})") << json;
+      write_precision_t back{};
+      expect(!glz::read_json(back, json));
+      expect(back.pi == 1e100);
    };
 };
 
@@ -15772,6 +15957,78 @@ suite bounded_buffer_overflow_tests = [] {
 
       auto result = glz::write_json(obj, buffer);
       expect(result.ec == glz::error_code::buffer_overflow) << "should return buffer_overflow error";
+   };
+
+   "write to a C array preserves its capacity"_test = [] {
+      simple_short obj{};
+      char buffer[512]{};
+
+      auto result = glz::write_json(obj, buffer);
+      expect(not result);
+      expect(std::string_view(buffer, result.count) == R"({"x":42,"name":"hi"})");
+   };
+
+   "write to a small C array reports overflow"_test = [] {
+      simple_long obj{};
+      char buffer[16]{};
+
+      auto result = glz::write_json(obj, buffer);
+      expect(result.ec == glz::error_code::buffer_overflow);
+      expect(result.count <= sizeof(buffer));
+   };
+
+   "a failed object member does not write a closing brace past a bounded buffer"_test = [] {
+      simple_long obj{};
+      std::array<char, 1> buffer{};
+
+      auto result = glz::write_json(obj, buffer);
+      expect(result.ec == glz::error_code::buffer_overflow);
+      expect(result.count <= buffer.size());
+   };
+
+   "partial and exclude writes bound C arrays"_test = [] {
+      simple_long obj{};
+      std::array<std::string_view, 1> include_keys{"name"};
+      std::array<std::string_view, 1> exclude_keys{"x"};
+      char partial[16]{};
+      char excluded[16]{};
+
+      auto partial_result = glz::write_json_partial(obj, include_keys, partial);
+      auto exclude_result = glz::write_json_exclude(obj, exclude_keys, excluded);
+      expect(partial_result.ec == glz::error_code::buffer_overflow);
+      expect(exclude_result.ec == glz::error_code::buffer_overflow);
+      expect(partial_result.count <= sizeof(partial));
+      expect(exclude_result.count <= sizeof(excluded));
+   };
+
+   "a C array is a bounded output buffer, not a raw pointer"_test = [] {
+      static_assert(glz::output_buffer<char (&)[8]>);
+      static_assert(glz::output_buffer<unsigned char (&)[8]>);
+      static_assert(not glz::output_buffer<const char (&)[8]>);
+      static_assert(not glz::raw_buffer<char (&)[8]>);
+      static_assert(glz::raw_buffer<char*>);
+      static_assert(glz::raw_buffer<char*&>);
+   };
+
+   "minify and prettify into a C array"_test = [] {
+      std::string compact = R"({"a":[1,2],"b":"c"})";
+      const std::string pretty = glz::prettify_json(compact);
+
+      char pretty_out[512]{};
+      const auto pretty_ec = glz::prettify_json(compact, pretty_out);
+      expect(not pretty_ec);
+      expect(std::string_view(pretty_out, pretty_ec.count) == pretty);
+
+      std::string pretty_in = pretty;
+      char compact_out[512]{};
+      const auto compact_ec = glz::minify_json(pretty_in, compact_out);
+      expect(not compact_ec);
+      expect(std::string_view(compact_out, compact_ec.count) == compact);
+
+      char small[4]{};
+      const auto overflow = glz::prettify_json(compact, small);
+      expect(bool(overflow));
+      expect(overflow.count <= sizeof(small));
    };
 
    "bounded buffer reserves what an escaped string escapes to"_test = [] {

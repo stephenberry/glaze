@@ -413,6 +413,129 @@ struct glz::meta<bson_test::custom_nullable_getter>
    static constexpr auto value = glz::object("opt", glz::custom<&T::set_opt, &T::get_opt>, "plain", &T::plain);
 };
 
+namespace bson_test
+{
+   // Whole-type glz::meta values: the type serializes as the value its meta wraps.
+   struct int_mimic
+   {
+      int32_t v{};
+   };
+
+   struct optional_mimic
+   {
+      std::optional<int32_t> v{};
+   };
+
+   // A sentinel-backed index that serializes as an optional count via a whole-type glz::custom.
+   struct sentinel_index
+   {
+      static constexpr int64_t invalid = -1;
+      int64_t base{invalid};
+   };
+
+   struct mimic_holder
+   {
+      int_mimic a{};
+      optional_mimic b{};
+      sentinel_index c{};
+      std::vector<int_mimic> list{};
+      std::map<std::string, sentinel_index> by_name{};
+   };
+
+   struct mimic_variant_holder
+   {
+      std::variant<int_mimic, std::string> var{};
+   };
+
+   // A meta-value type with its own BSON codec, which must win over the meta value.
+   struct prefixed_id
+   {
+      int32_t v{};
+   };
+
+   struct prefixed_id_holder
+   {
+      prefixed_id id{};
+   };
+
+   struct prefixed_id_holder_plain
+   {
+      std::string id{};
+   };
+
+   struct mimic_holder_plain
+   {
+      int32_t a{};
+      std::optional<int32_t> b{};
+      std::optional<int64_t> c{};
+      std::vector<int32_t> list{};
+      std::map<std::string, std::optional<int64_t>> by_name{};
+   };
+}
+
+template <>
+struct glz::meta<bson_test::int_mimic>
+{
+   static constexpr auto value = &bson_test::int_mimic::v;
+};
+
+template <>
+struct glz::meta<bson_test::optional_mimic>
+{
+   static constexpr auto value = &bson_test::optional_mimic::v;
+};
+
+template <>
+struct glz::meta<bson_test::sentinel_index>
+{
+   using T = bson_test::sentinel_index;
+   static constexpr auto read = [](T& idx, std::optional<int64_t> in) { idx.base = in ? *in : T::invalid; };
+   static constexpr auto write = [](const T& idx) -> std::optional<int64_t> {
+      if (idx.base == T::invalid) return std::nullopt;
+      return idx.base;
+   };
+   static constexpr auto value = glz::custom<read, write>;
+};
+
+template <>
+struct glz::meta<bson_test::prefixed_id>
+{
+   static constexpr auto value = &bson_test::prefixed_id::v;
+};
+
+template <>
+struct glz::to<glz::BSON, bson_test::prefixed_id>
+{
+   static constexpr uint8_t type_code = glz::bson::type::string;
+
+   template <auto Opts>
+   static void op(const bson_test::prefixed_id& value, glz::is_context auto&& ctx, auto&& b, auto& ix)
+   {
+      const std::string s = "id" + std::to_string(value.v);
+      glz::to<glz::BSON, std::string>::template op<Opts>(s, ctx, b, ix);
+   }
+};
+
+template <>
+struct glz::from<glz::BSON, bson_test::prefixed_id>
+{
+   template <auto Opts, class It, class End>
+   static void op(bson_test::prefixed_id& value, uint8_t tag, glz::is_context auto& ctx, It& it, const End& end)
+   {
+      std::string s{};
+      glz::from<glz::BSON, std::string>::template op<Opts>(s, tag, ctx, it, end);
+      if (bool(ctx.error)) return;
+      if (!s.starts_with("id")) {
+         ctx.error = glz::error_code::syntax_error;
+         return;
+      }
+      const auto digits = std::string_view{s}.substr(2);
+      if (std::from_chars(digits.data(), digits.data() + digits.size(), value.v).ec != std::errc{}) {
+         ctx.error = glz::error_code::syntax_error;
+      }
+   }
+};
+
 using namespace bson_test;
 
 namespace
@@ -1013,11 +1136,11 @@ namespace
       "uint64-write-above-int64-max-rejected"_test = [] {
          // BSON's int64 wire type is signed; uint64_t values above INT64_MAX
          // cannot be represented and must fail the write path with
-         // invalid_length (see write.hpp uint64_t range check).
+         // parse_number_failure, matching the read path (see write.hpp uint64_t range check).
          u64_s src{static_cast<uint64_t>((std::numeric_limits<int64_t>::max)()) + 1};
          auto w = glz::write_bson(src);
          expect(not w.has_value());
-         expect(w.error().ec == glz::error_code::invalid_length);
+         expect(w.error().ec == glz::error_code::parse_number_failure);
       };
 
       "uint64-write-at-int64-max-ok"_test = [] {
@@ -1134,7 +1257,28 @@ namespace
       };
    };
 
+   template <class T>
+   concept bson_generic_writable =
+      requires(T& value, std::string& buffer) { glz::write<glz::opts{.format = glz::BSON}>(value, buffer); };
+
+   template <class T>
+   concept bson_generic_readable =
+      requires(T& value, std::string& buffer) { glz::read<glz::opts{.format = glz::BSON}>(value, buffer); };
+
    suite bson_write_api_tests = [] {
+      "generic-api-rejects-top-level-primitives"_test = [] {
+         // BSON's top level is always a document, so a bare primitive has no valid encoding.
+         static_assert(not bson_generic_writable<int>);
+         static_assert(not bson_generic_writable<std::string>);
+         static_assert(not bson_generic_readable<int>);
+         static_assert(not bson_generic_readable<std::string>);
+         static_assert(bson_generic_writable<hello_t>);
+         static_assert(bson_generic_writable<std::map<std::string, int>>);
+         static_assert(bson_generic_writable<std::vector<int>>);
+         static_assert(bson_generic_readable<hello_t>);
+         static_assert(bson_generic_readable<std::vector<int>>);
+      };
+
       "fixed-buffer-write"_test = [] {
          // Bounded buffers require at least 512 bytes to account for the write
          // padding reservation (see glaze/core/buffer_traits.hpp).
@@ -1296,6 +1440,87 @@ namespace
          auto rec = glz::read_bson(out, buf);
          expect(not rec);
          expect(out.opt == 5);
+      };
+   };
+
+   // A type whose glz::meta value is a member pointer or a whole-type glz::custom serializes as the
+   // value it wraps, wherever it appears as an element (#3052).
+   suite bson_meta_value_tests = [] {
+      "meta-value-round-trips"_test = [] {
+         mimic_holder in{};
+         in.a.v = 1;
+         in.b.v = 2;
+         in.c.base = 3;
+         in.list = {{4}, {5}};
+         in.by_name = {{"x", {6}}, {"y", {}}};
+         std::vector<std::byte> buf{};
+         expect(not glz::write_bson(in, buf));
+
+         mimic_holder out{};
+         auto rec = glz::read_bson(out, buf);
+         expect(not rec) << glz::format_error(rec);
+         expect(out.a.v == 1);
+         expect(out.b.v == 2);
+         expect(out.c.base == 3);
+         expect(out.list.size() == 2 && out.list[0].v == 4 && out.list[1].v == 5);
+         expect(out.by_name.size() == 2);
+         expect(out.by_name.at("x").base == 6);
+         expect(out.by_name.at("y").base == sentinel_index::invalid);
+      };
+
+      "meta-value-wire-matches-wrapped-type"_test = [] {
+         constexpr auto preserve = glz::opts{.skip_null_members = false};
+         mimic_holder in{};
+         in.a.v = 1;
+         in.c.base = 3;
+         in.list = {{4}};
+         in.by_name = {{"y", {}}};
+         mimic_holder_plain plain{1, std::nullopt, 3, {4}, {{"y", std::nullopt}}};
+
+         std::vector<std::byte> buf{}, plain_buf{};
+         expect(not glz::write_bson<preserve>(in, buf));
+         expect(not glz::write_bson<preserve>(plain, plain_buf));
+         expect(buf == plain_buf);
+      };
+
+      "meta-value-null-skipping-matches-json"_test = [] {
+         // A null member-pointer mimic is skipped by default; a whole-type glz::custom getter's null
+         // result is written as null, as JSON does.
+         mimic_holder in{};
+         in.c.base = sentinel_index::invalid;
+         std::vector<std::byte> buf{};
+         expect(not glz::write_bson(in, buf));
+
+         auto json = glz::bson_to_json(buf);
+         expect(json.has_value());
+         expect(json.value() == glz::write_json(in).value()) << json.value();
+      };
+
+      "meta-value-variant-alternative-round-trips"_test = [] {
+         mimic_variant_holder in{int_mimic{5}};
+         std::vector<std::byte> buf{};
+         expect(not glz::write_bson(in, buf));
+
+         mimic_variant_holder out{std::string{"x"}};
+         auto rec = glz::read_bson(out, buf);
+         expect(not rec) << glz::format_error(rec);
+         expect(out.var.index() == 0);
+         expect(std::get<int_mimic>(out.var).v == 5);
+      };
+
+      "user-specialization-wins-over-meta-value"_test = [] {
+         prefixed_id_holder in{{42}};
+         std::vector<std::byte> buf{};
+         expect(not glz::write_bson(in, buf));
+
+         prefixed_id_holder_plain as_string{};
+         expect(not glz::read_bson(as_string, buf));
+         expect(as_string.id == "id42");
+
+         prefixed_id_holder out{};
+         auto rec = glz::read_bson(out, buf);
+         expect(not rec) << glz::format_error(rec);
+         expect(out.id.v == 42);
       };
    };
 
@@ -1729,6 +1954,25 @@ namespace
          expect(json.error().ec == glz::error_code::syntax_error);
       };
 
+      "convert-rejects-unterminated-strings"_test = [] {
+         // {"e": <len 3> 'a' 'b' 'X'}: the last byte the length covers must be the null
+         // terminator. read_bson rejects it, so the converter must not emit "ab" instead.
+         for (const uint8_t tag : {uint8_t(0x02), uint8_t(0x0D), uint8_t(0x0E)}) {
+            const uint8_t bad[] = {0x0F, 0x00, 0x00, 0x00, tag, 'e', 0x00, 0x03, 0x00, 0x00, 0x00, 'a', 'b', 'X', 0x00};
+            std::string_view buf(reinterpret_cast<const char*>(bad), sizeof(bad));
+            auto json = glz::bson_to_json(buf);
+            expect(not json.has_value()) << json.value_or("");
+            if (not json) {
+               expect(json.error().ec == glz::error_code::syntax_error);
+            }
+         }
+
+         const uint8_t bad[] = {0x0F, 0x00, 0x00, 0x00, 0x02, 'e', 0x00, 0x03, 0x00, 0x00, 0x00, 'a', 'b', 'X', 0x00};
+         std::map<std::string, std::string> m{};
+         expect(glz::read_bson(m, std::string_view(reinterpret_cast<const char*>(bad), sizeof(bad))).ec ==
+                glz::error_code::syntax_error);
+      };
+
       "convert-enforces-depth-limit"_test = [] {
          // Same deeply-nested build as in bson_depth_limit_tests — converter
          // walks the same document tree so the guard must trip here too.
@@ -2060,6 +2304,120 @@ suite bson_cstring_embedded_null_tests = [] {
       auto ec = glz::read_bson(r, std::string_view{w.value()});
       expect(not ec);
       expect(r == m);
+   };
+};
+
+// Regression coverage for https://github.com/stephenberry/glaze/issues/3044
+// A user specialization of to<BSON, std::variant<...>> (or of a nullable type) must take precedence
+// over the writer's generic variant/nullable dispatch, as it already does on the read side.
+struct bson_shape_circle
+{};
+
+struct bson_shape_square
+{};
+
+// Both alternatives are documents, which the default variant support rejects as ambiguous, so this
+// variant is written as the int32 index of its active alternative.
+using bson_shape = std::variant<bson_shape_circle, bson_shape_square>;
+
+struct bson_level
+{
+   int32_t value{};
+};
+
+// An empty optional is written as int32 -1 rather than null.
+using bson_maybe_level = std::optional<bson_level>;
+
+template <>
+struct glz::to<glz::BSON, bson_shape>
+{
+   static constexpr uint8_t type_code = glz::bson::type::int32;
+
+   template <auto Opts>
+   static void op(const bson_shape& value, is_context auto&& ctx, auto&& b, auto& ix) noexcept
+   {
+      to<BSON, int32_t>::op<Opts>(static_cast<int32_t>(value.index()), ctx, b, ix);
+   }
+};
+
+template <>
+struct glz::from<glz::BSON, bson_shape>
+{
+   template <auto Opts, class It, class End>
+   static void op(bson_shape& value, uint8_t tag, is_context auto& ctx, It& it, const End& end) noexcept
+   {
+      int32_t index{};
+      from<BSON, int32_t>::op<Opts>(index, tag, ctx, it, end);
+      if (bool(ctx.error)) [[unlikely]] {
+         return;
+      }
+      if (index == 0) {
+         value = bson_shape_circle{};
+      }
+      else if (index == 1) {
+         value = bson_shape_square{};
+      }
+      else {
+         ctx.error = error_code::no_matching_variant_type;
+      }
+   }
+};
+
+template <>
+struct glz::to<glz::BSON, bson_maybe_level>
+{
+   static constexpr uint8_t type_code = glz::bson::type::int32;
+
+   template <auto Opts>
+   static void op(const bson_maybe_level& value, is_context auto&& ctx, auto&& b, auto& ix) noexcept
+   {
+      to<BSON, int32_t>::op<Opts>(value ? value->value : int32_t{-1}, ctx, b, ix);
+   }
+};
+
+template <>
+struct glz::from<glz::BSON, bson_maybe_level>
+{
+   template <auto Opts, class It, class End>
+   static void op(bson_maybe_level& value, uint8_t tag, is_context auto& ctx, It& it, const End& end) noexcept
+   {
+      int32_t level{};
+      from<BSON, int32_t>::op<Opts>(level, tag, ctx, it, end);
+      if (bool(ctx.error)) [[unlikely]] {
+         return;
+      }
+      if (level < 0) {
+         value.reset();
+      }
+      else {
+         value = bson_level{level};
+      }
+   }
+};
+
+struct bson_specialized_members
+{
+   bson_shape shape{};
+   bson_maybe_level level{};
+};
+
+suite bson_user_specialization_tests = [] {
+   "bson user to<BSON, variant> and to<BSON, optional> specializations are used for members"_test = [] {
+      bson_specialized_members src{};
+      src.shape = bson_shape_square{};
+      src.level = bson_level{3};
+      std::string buffer{};
+      expect(not glz::write_bson(src, buffer));
+      // {shape: int32 1, level: int32 3}
+      expect(bson_test::bytes_equal(buffer, {0x1B, 0x00, 0x00, 0x00, //
+                                             0x10, 's',  'h',  'a',  'p', 'e', 0x00, 0x01, 0x00, 0x00, 0x00, //
+                                             0x10, 'l',  'e',  'v',  'e', 'l', 0x00, 0x03, 0x00, 0x00, 0x00, //
+                                             0x00}));
+
+      bson_specialized_members dst{};
+      expect(not glz::read_bson(dst, buffer));
+      expect(dst.shape.index() == 1);
+      expect(dst.level.has_value() && dst.level->value == 3);
    };
 };
 

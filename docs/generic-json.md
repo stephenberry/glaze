@@ -145,6 +145,8 @@ glz::generic wrapped{other};  // one element array containing other
 
 All generic types are variants underneath. The `get<T>()` method mimics a `std::get` call for a variant, which rejects conversions and throws if the type doesn't match. The `as<T>()` method performs conversions.
 
+Type mismatches from `get<T>()` (and the `get_*()` and `as<T>()` accessors built on it), `operator[]`, and `at()` throw `glz::bad_generic_access` (derived from `std::bad_variant_access`) with a message naming the expected and held types, e.g. `glz::generic get: expected double, but holds string`. Looking up a missing key on a `const` generic throws `std::runtime_error` naming the key.
+
 ```c++
 glz::generic json{};
 glz::read_json(json, "3.14");

@@ -2972,7 +2972,7 @@ namespace glz
       const auto file_error = file_to_buffer(buffer, ctx.current_file);
 
       if (bool(file_error)) [[unlikely]] {
-         return error_ctx{file_error};
+         return error_ctx{0, file_error};
       }
 
       // The buffer was sized to the file, so the caller's is_padded promise does not cover it.
