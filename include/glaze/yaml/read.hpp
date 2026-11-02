@@ -2839,7 +2839,7 @@ namespace glz
          }
          else if constexpr (!resizable<V>) {
             // Fixed-size containers (std::array)
-            while (it != end && !adapter.fixed_capacity_reached(value)) {
+            while (it != end) {
                skip_flow_ws_and_newlines(ctx, it, end);
                if (bool(ctx.error)) [[unlikely]]
                   return;
@@ -2871,6 +2871,12 @@ namespace glz
                   return;
                }
                just_saw_comma = false;
+
+               // An item beyond the last slot is an error, as in JSON.
+               if (adapter.fixed_capacity_reached(value)) [[unlikely]] {
+                  ctx.error = error_code::exceeded_static_array_size;
+                  return;
+               }
 
                from<YAML, value_type>::template op<flow_context_on<Opts>()>(value[adapter.index], ctx, it, end);
 
@@ -2910,19 +2916,6 @@ namespace glz
                   ctx.error = error_code::syntax_error;
                   return;
                }
-            }
-
-            // If we exited because the fixed-size container is full but haven't seen ']',
-            // skip to the closing bracket to consume overflow elements.
-            int bracket_depth = 1;
-            while (it != end && bracket_depth > 0) {
-               if (*it == '[') {
-                  ++bracket_depth;
-               }
-               else if (*it == ']') {
-                  --bracket_depth;
-               }
-               ++it;
             }
          }
          else {
@@ -3202,15 +3195,6 @@ namespace glz
          int32_t pending_item_anchor_indent = sequence_indent;
 
          while (it != end) {
-            // For fixed-size arrays (e.g. std::array), stop when we've filled all elements.
-            // Exclude types that grow dynamically without being resizable: emplace_backable
-            // ones (e.g. a fixed-capacity vector without resize()) and emplaceable ones (e.g. std::set).
-            if constexpr (!resizable<V> && !emplace_backable<V> && !emplaceable<V>) {
-               if (adapter.fixed_capacity_reached(value)) {
-                  return;
-               }
-            }
-
             // Skip blank lines and comments, track indent
             int32_t line_indent = 0;
             int32_t dash_col = -1; // actual column of the '-' on the line
@@ -3461,6 +3445,12 @@ namespace glz
                }
             }
             else if constexpr (!resizable<V>) {
+               // Fixed-size (e.g. std::array): an item beyond the last slot is an error, as in JSON.
+               // Checked only once another item is confirmed, so a full container still ends cleanly.
+               if (adapter.fixed_capacity_reached(value)) [[unlikely]] {
+                  ctx.error = error_code::exceeded_static_array_size;
+                  return;
+               }
                parse_element(value[adapter.index]);
                adapter.commit_fixed_slot();
             }

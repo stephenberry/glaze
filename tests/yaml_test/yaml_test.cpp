@@ -2589,6 +2589,142 @@ objects:
 };
 
 // ============================================================
+// Sequences longer than a fixed-size std::array (GitHub issue #2991)
+// Extra items are an error (exceeded_static_array_size), as in JSON and TOML,
+// for block and flow sequences alike. Previously flow sequences dropped them
+// silently and block sequences stopped early, so the leftover items surfaced as
+// an unrelated error in the enclosing value.
+// ============================================================
+
+struct fixed_array_holder
+{
+   std::array<std::string, 2> sources{};
+   int after{};
+};
+
+struct fixed_array_entry
+{
+   uint64_t id{};
+   std::array<std::string, 2> sources{};
+};
+
+struct fixed_array_document
+{
+   std::vector<fixed_array_entry> objects{};
+   std::array<std::string, 2> names{};
+};
+
+suite yaml_fixed_array_overflow_tests = [] {
+   using pair_t = std::array<std::string, 2>;
+
+   "fixed_array_top_level_block_overflow"_test = [] {
+      std::array<int, 2> arr{};
+      const std::string yaml = "- 1\n- 2\n- 3\n";
+      auto ec = glz::read_yaml(arr, yaml);
+      expect(ec.ec == glz::error_code::exceeded_static_array_size) << glz::format_error(ec, yaml);
+   };
+
+   "fixed_array_top_level_flow_overflow"_test = [] {
+      std::array<int, 2> arr{};
+      const std::string yaml = "[1, 2, 3]";
+      auto ec = glz::read_yaml(arr, yaml);
+      expect(ec.ec == glz::error_code::exceeded_static_array_size) << glz::format_error(ec, yaml);
+   };
+
+   // A quoted "]" in the overflow must not be mistaken for the closing bracket.
+   "fixed_array_flow_overflow_with_quoted_bracket"_test = [] {
+      fixed_array_holder h{};
+      const std::string yaml = "sources: [a, b, \"]\"]\nafter: 7\n";
+      auto ec = glz::read_yaml(h, yaml);
+      expect(ec.ec == glz::error_code::exceeded_static_array_size) << glz::format_error(ec, yaml);
+   };
+
+   "fixed_array_exactly_full_block"_test = [] {
+      std::array<int, 2> arr{};
+      const std::string yaml = "- 1\n- 2\n";
+      auto ec = glz::read_yaml(arr, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(arr == std::array<int, 2>{1, 2});
+   };
+
+   "fixed_array_exactly_full_flow_trailing_comma"_test = [] {
+      std::array<int, 2> arr{};
+      const std::string yaml = "[1, 2,]";
+      auto ec = glz::read_yaml(arr, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(arr == std::array<int, 2>{1, 2});
+   };
+
+   // Fewer items than slots is not an error; the remaining slots keep their values.
+   "fixed_array_block_underfill_keeps_tail"_test = [] {
+      std::array<int, 3> arr{9, 9, 9};
+      const std::string yaml = "- 1\n";
+      auto ec = glz::read_yaml(arr, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(arr == std::array<int, 3>{1, 9, 9});
+   };
+
+   // A full block sequence must still hand the following key back to the enclosing mapping.
+   "fixed_array_full_block_member_then_sibling"_test = [] {
+      fixed_array_holder h{};
+      const std::string yaml = "sources:\n  - a\n  - b\n\n# trailing comment\nafter: 7\n";
+      auto ec = glz::read_yaml(h, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(h.sources == pair_t{"a", "b"});
+      expect(h.after == 7);
+   };
+
+   "fixed_array_block_member_overflow"_test = [] {
+      fixed_array_holder h{};
+      const std::string yaml = "sources:\n  - a\n  - b\n  - c\nafter: 7\n";
+      auto ec = glz::read_yaml(h, yaml);
+      expect(ec.ec == glz::error_code::exceeded_static_array_size) << glz::format_error(ec, yaml);
+   };
+
+   "fixed_array_flow_member_overflow"_test = [] {
+      fixed_array_holder h{};
+      const std::string yaml = "sources: [a, b, c]\nafter: 7\n";
+      auto ec = glz::read_yaml(h, yaml);
+      expect(ec.ec == glz::error_code::exceeded_static_array_size) << glz::format_error(ec, yaml);
+   };
+
+   // Layouts from the follow-up report on issue #2991.
+   "fixed_array_overflow_in_sequence_of_structs"_test = [] {
+      fixed_array_document doc{};
+      const std::string yaml =
+         "objects:\n  -\n    id: 1\n    sources:\n      - ax\n      - az\n      - ay\nnames: [x, y]\n";
+      auto ec = glz::read_yaml(doc, yaml);
+      expect(ec.ec == glz::error_code::exceeded_static_array_size) << glz::format_error(ec, yaml);
+   };
+
+   // Previously reported as missing_key for the key that follows the overflowing sequence.
+   "fixed_array_block_overflow_reports_overflow_not_missing_key"_test = [] {
+      fixed_array_document doc{};
+      constexpr glz::yaml::yaml_opts opts{.error_on_missing_keys = true};
+      const std::string yaml = "names:\n  - x\n  - y\n  - z\nobjects:\n  - id: 1\n    sources: [ax]\n";
+      auto ec = glz::read_yaml<opts>(doc, yaml);
+      expect(ec.ec == glz::error_code::exceeded_static_array_size) << glz::format_error(ec, yaml);
+   };
+
+   "fixed_array_full_in_sequence_of_structs"_test = [] {
+      fixed_array_document doc{};
+      const std::string yaml =
+         "objects:\n  -\n    id: 1\n    sources:\n      - ax\n      - az\n  - id: 2\n    sources: [bx, by]\nnames:\n  "
+         "- x\n  - y\n";
+      auto ec = glz::read_yaml(doc, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(doc.objects.size() == 2u);
+      if (doc.objects.size() == 2u) {
+         expect(doc.objects[0].id == 1u);
+         expect(doc.objects[0].sources == pair_t{"ax", "az"});
+         expect(doc.objects[1].id == 2u);
+         expect(doc.objects[1].sources == pair_t{"bx", "by"});
+      }
+      expect(doc.names == pair_t{"x", "y"});
+   };
+};
+
+// ============================================================
 // Map with Various Key Types
 // ============================================================
 
