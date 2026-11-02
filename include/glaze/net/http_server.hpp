@@ -14,6 +14,7 @@
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
+#include <deque>
 #include <expected>
 #include <functional>
 #include <glaze/glaze.hpp>
@@ -987,6 +988,11 @@ namespace glz
    };
 
    // Streaming connection handle for server-side streaming
+   //
+   // Thread-safety: once send_headers() has returned, send_chunk(), send_event(),
+   // send_json_event() and close() may be called concurrently from multiple threads. Outgoing
+   // data is serialized via an internal write queue. on_disconnect() is not thread-safe and is
+   // meant to be called once, from the handler that starts the stream.
    template <typename SocketType = asio::ip::tcp::socket>
    struct streaming_connection : public streaming_connection_interface,
                                  public std::enable_shared_from_this<streaming_connection<SocketType>>
@@ -995,14 +1001,13 @@ namespace glz
       using disconnect_handler = std::function<void()>;
 
       streaming_connection(std::shared_ptr<SocketType> socket, http_method request_method = http_method::GET)
-         : socket_(socket), request_method_(request_method), is_headers_sent_(false), is_closed_(false)
+         : socket_(socket), request_method_(request_method)
       {}
 
       // Send initial headers for streaming response
       void send_headers(int status_code, const glz::http_headers& headers = {}, data_sent_handler handler = {}) override
       {
-         if (is_headers_sent_) return;
-         is_headers_sent_ = true;
+         if (is_headers_sent_.exchange(true)) return;
 
          std::string response_str;
          response_str.reserve(512);
@@ -1063,13 +1068,16 @@ namespace glz
 
          response_str.append("\r\n");
 
-         write_tracked(std::make_shared<std::string>(std::move(response_str)), std::move(handler));
+         queue_write(std::make_shared<std::string>(std::move(response_str)), std::move(handler));
       }
 
       // Send a chunk of data
       void send_chunk(std::string_view data, data_sent_handler handler = {}) override
       {
-         if (is_closed_) return;
+         if (is_closed_) {
+            refuse_write(std::move(handler));
+            return;
+         }
 
          if (body_forbidden_) {
             // The response ended with its header section, so the data is discarded. It is
@@ -1106,11 +1114,11 @@ namespace glz
             chunk.append(data);
             chunk.append("\r\n");
 
-            write_tracked(std::make_shared<std::string>(std::move(chunk)), std::move(handler));
+            queue_write(std::make_shared<std::string>(std::move(chunk)), std::move(handler));
          }
          else {
             // Send raw data
-            write_tracked(std::make_shared<std::string>(data), std::move(handler));
+            queue_write(std::make_shared<std::string>(data), std::move(handler));
          }
       }
 
@@ -1168,22 +1176,25 @@ namespace glz
       // Close the streaming connection
       void close(disconnect_handler handler = {}) override
       {
-         if (is_closed_) return;
-         is_closed_ = true;
+         if (is_closed_.exchange(true)) return;
 
          close_handler_ = std::move(handler);
 
          // A chunked body ends with the zero-length chunk; a response that carries no
          // body has none to end. The socket closes once every write queued so far,
-         // the headers included, is on the wire. The terminator is queued before the
-         // close is marked pending, so a write completing on another io thread cannot
-         // see a pending close with nothing in flight and close ahead of it.
-         if (chunked_encoding_ && !body_forbidden_) {
-            write_tracked(std::make_shared<std::string>("0\r\n\r\n"), {});
+         // the headers included, is on the wire.
+         bool start_write = false;
+         {
+            std::lock_guard<std::mutex> lock(write_mutex_);
+            if (chunked_encoding_ && !body_forbidden_) {
+               write_queue_.push_back({std::make_shared<std::string>("0\r\n\r\n"), {}});
+            }
+            close_pending_ = true;
+            start_write = !write_in_progress_;
+            write_in_progress_ = true;
          }
-         close_pending_ = true;
-         if (writes_in_flight_ == 0) {
-            close_socket();
+         if (start_write) {
+            do_write();
          }
       }
 
@@ -1232,31 +1243,96 @@ namespace glz
       http_method request_method_;
       disconnect_handler disconnect_handler_;
       disconnect_handler close_handler_;
-      bool is_headers_sent_;
-      bool is_closed_;
+      // Read by the sending threads, set by them and by the io threads
+      std::atomic<bool> is_headers_sent_{false};
+      std::atomic<bool> is_closed_{false};
       bool chunked_encoding_ = false;
       bool body_forbidden_ = false; // Set by send_headers for a HEAD reply and a 1xx, 204 or 304
-      // Write completions run on whichever io thread the server's pool picks, concurrently
-      // with each other and with the handler that queues writes, so the close bookkeeping
-      // they share is atomic.
-      std::atomic<bool> close_pending_{false};
       std::atomic<bool> socket_closed_{false};
-      std::atomic<size_t> writes_in_flight_{0};
 
-      // Writes are counted until they complete so close() can wait for the bytes already
-      // queued rather than cancel them by closing the socket underneath.
-      void write_tracked(std::shared_ptr<std::string> buffer, data_sent_handler handler)
+      struct pending_write
       {
-         ++writes_in_flight_;
+         std::shared_ptr<std::string> buffer;
+         data_sent_handler handler;
+      };
+
+      // async_write is a series of write_some calls, so two of them on the socket at once
+      // can interleave their bytes. Writes wait here and each completion starts the next.
+      std::mutex write_mutex_;
+      std::deque<pending_write> write_queue_;
+      bool write_in_progress_ = false;
+      bool close_pending_ = false; // Close the socket once the queue is empty
+
+      void queue_write(std::shared_ptr<std::string> buffer, data_sent_handler handler)
+      {
+         {
+            std::lock_guard<std::mutex> lock(write_mutex_);
+            if (close_pending_) {
+               // A send racing with close() would land after the terminating chunk. The
+               // handler is posted, so it never runs under the lock.
+               refuse_write(std::move(handler));
+               return;
+            }
+            write_queue_.push_back({std::move(buffer), std::move(handler)});
+            if (write_in_progress_) return;
+            write_in_progress_ = true;
+         }
+         do_write();
+      }
+
+      // Reports a send made after the stream closed as unsent, so a caller waiting on its
+      // handler is not left waiting forever
+      void refuse_write(data_sent_handler handler)
+      {
+         if (handler) {
+            asio::post(get_executor(),
+                       [handler = std::move(handler)] { handler(std::make_error_code(std::errc::not_connected)); });
+         }
+      }
+
+      // Starts the next queued write, or closes the socket once the queue is empty and
+      // close() is pending
+      void do_write()
+      {
+         pending_write next;
+         bool close_now = false;
+         {
+            std::lock_guard<std::mutex> lock(write_mutex_);
+            if (write_queue_.empty()) {
+               write_in_progress_ = false;
+               close_now = close_pending_;
+            }
+            else {
+               next = std::move(write_queue_.front());
+               write_queue_.pop_front();
+            }
+         }
+
+         if (!next.buffer) {
+            if (close_now) close_socket();
+            return;
+         }
+
          auto self = this->shared_from_this();
-         asio::async_write(*socket_, asio::buffer(*buffer),
-                           [self, buffer, handler = std::move(handler)](std::error_code ec, std::size_t) {
-                              --self->writes_in_flight_;
-                              if (handler) handler(ec);
-                              if (self->close_pending_ && self->writes_in_flight_ == 0) {
-                                 self->close_socket();
-                              }
-                           });
+         auto buffer_view = asio::buffer(*next.buffer);
+         asio::async_write(*socket_, buffer_view, [self, write = std::move(next)](std::error_code ec, std::size_t) {
+            if (write.handler) write.handler(ec);
+            if (ec) self->fail_queued_writes(ec);
+            self->do_write();
+         });
+      }
+
+      // The connection is gone, so the writes still queued can never be sent
+      void fail_queued_writes(std::error_code ec)
+      {
+         std::deque<pending_write> failed;
+         {
+            std::lock_guard<std::mutex> lock(write_mutex_);
+            failed.swap(write_queue_);
+         }
+         for (auto& write : failed) {
+            if (write.handler) write.handler(ec);
+         }
       }
 
       // Both close() and the last write completion can see the close due at once, so only
@@ -1642,13 +1718,8 @@ namespace glz
          if (running) {
             stop();
          }
-         // Clean up any remaining threads
-         for (auto& thread : threads) {
-            if (thread.joinable()) {
-               thread.join();
-            }
-         }
-         threads.clear();
+         // A stop() made from a worker thread leaves the workers to be joined here
+         join_threads(take_threads());
 
          // Destruction sequence (reverse declaration order of http_server members):
          //   1. threads are joined above (worker threads stop running io_context).
@@ -1742,6 +1813,9 @@ namespace glz
        */
       inline void start(std::optional<size_t> num_threads = std::nullopt)
       {
+         // Held throughout, so a stop() from another thread waits for every worker to exist
+         // before it reads the thread list
+         std::lock_guard<std::mutex> lock(shutdown_mutex);
          if (running || !acceptor) {
             return;
          }
@@ -1778,57 +1852,46 @@ namespace glz
 
       inline void stop()
       {
+         std::vector<std::thread> workers;
          {
             std::lock_guard<std::mutex> lock(shutdown_mutex);
             if (!running) {
                return;
             }
             running = false;
-         }
 
-         // Stop accepting new connections
-         if (acceptor) {
-            try {
-               acceptor->close();
-            }
-            catch (...) {
-               // Ignore errors on close
-            }
-         }
+            // Stop accepting new connections and cancel the signal handler
+            asio::error_code ec;
+            if (acceptor) acceptor->close(ec);
+            if (signals_) signals_->cancel(ec);
 
-         // Cancel the signal handler
-         if (signals_) {
-            try {
-               signals_->cancel();
-            }
-            catch (...) {
-               // Ignore errors on cancel
-            }
-         }
+            // Stop the io_context
+            if (io_context) io_context->stop();
 
-         // Stop the io_context
-         if (io_context) io_context->stop();
-
-         // Only join threads if we're not in one of the worker threads
-         auto current_thread_id = std::this_thread::get_id();
-         bool is_worker_thread = false;
-         for (const auto& thread : threads) {
-            if (thread.get_id() == current_thread_id) {
-               is_worker_thread = true;
-               break;
+            // A worker cannot join itself, so a stop() made from one leaves the workers for
+            // wait_for_signal() or the destructor to join
+            const auto current_thread_id = std::this_thread::get_id();
+            const bool is_worker_thread = std::ranges::any_of(
+               threads, [&](const std::thread& thread) { return thread.get_id() == current_thread_id; });
+            if (!is_worker_thread) {
+               workers.swap(threads);
+               joining_threads = true;
+            }
+            else {
+               // Wake wait_for_signal() so it joins them
+               shutdown_cv.notify_all();
+               return;
             }
          }
 
-         if (!is_worker_thread) {
-            for (auto& thread : threads) {
-               if (thread.joinable()) {
-                  thread.join();
-               }
-            }
-            threads.clear();
-         }
+         // Joined without the lock held: a worker in a handler that calls stop() waits for
+         // the lock, and would never finish if it were held here
+         join_threads(std::move(workers));
 
-         // Notify any threads waiting for shutdown
+         std::lock_guard<std::mutex> lock(shutdown_mutex);
+         joining_threads = false;
+         // Notified under the lock: a woken wait_for_signal() may return and let the server
+         // be destroyed, so the condition variable must not be touched after the unlock
          shutdown_cv.notify_all();
       }
 
@@ -2451,17 +2514,16 @@ namespace glz
        */
       inline void wait_for_signal()
       {
-         std::unique_lock<std::mutex> lock(shutdown_mutex);
-         shutdown_cv.wait(lock, [this] { return !running; });
-
-         // After shutdown is signaled, wait for all threads to finish
-         lock.unlock();
-         for (auto& thread : threads) {
-            if (thread.joinable()) {
-               thread.join();
-            }
+         std::vector<std::thread> workers;
+         {
+            std::unique_lock<std::mutex> lock(shutdown_mutex);
+            // Once a stop() from another thread has also joined the workers, so the server
+            // is fully stopped on return
+            shutdown_cv.wait(lock, [this] { return !running && !joining_threads; });
+            // Left here only by a stop() made from a worker thread
+            workers.swap(threads);
          }
-         threads.clear();
+         join_threads(std::move(workers));
       }
 
       // Get executor for async operations (timers, etc.)
@@ -2527,12 +2589,32 @@ namespace glz
       bool signal_handling_enabled = false;
       std::unique_ptr<asio::signal_set> signals_;
       std::condition_variable shutdown_cv;
+      // Guards running's transitions, threads, joining_threads and the acceptor. start() and
+      // stop() may be called from different threads, and asio objects are not safe for
+      // concurrent use, so the accept loop re-arming the acceptor and stop() closing it take turns.
       std::mutex shutdown_mutex;
+      bool joining_threads = false; // A stop() is joining the workers outside the lock
+
+      std::vector<std::thread> take_threads()
+      {
+         std::lock_guard<std::mutex> lock(shutdown_mutex);
+         return std::exchange(threads, {});
+      }
+
+      static void join_threads(std::vector<std::thread> workers)
+      {
+         for (auto& thread : workers) {
+            if (thread.joinable()) {
+               thread.join();
+            }
+         }
+      }
 
 #ifdef GLZ_ENABLE_SSL
       std::conditional_t<EnableTLS, std::unique_ptr<asio::ssl::context>, std::monostate> ssl_context;
 #endif
 
+      // Called with shutdown_mutex held, so arming the acceptor never overlaps stop() closing it
       inline void do_accept()
       {
          acceptor->async_accept([this](std::error_code ec, asio::ip::tcp::socket socket) {
@@ -2575,6 +2657,7 @@ namespace glz
             }
 
             // Continue accepting if still running
+            std::lock_guard<std::mutex> lock(shutdown_mutex);
             if (running) {
                do_accept();
             }
@@ -2948,25 +3031,29 @@ namespace glz
          request.path = std::string(path_view);
          request.query = parse_urlencoded(query_string);
 
+         const http_method method = request.method;
+
          // Check for a streaming handler first. Streaming routes share the same
          // radix-tree matcher as normal routes, so they support ":param" paths.
-         //
-         // Fast path: if no streaming routes are registered (the common case),
-         // skip the match entirely. match_streaming() would otherwise allocate
-         // a params map, split the path into a vector of segment strings, and
-         // run an empty-tree walk on every request. The empty-check is O(1).
-         if (!root_router.streaming_routes.routes.empty()) {
-            auto [stream_handle, stream_params] = root_router.match_streaming(conn->request_.method, request.path);
-            if (stream_handle) {
-               request.params = std::move(stream_params);
-               // Streaming handlers take over the connection (no keep-alive loop)
-               handle_streaming_request_with_conn(std::move(conn), stream_handle);
-               return;
-            }
+         if (dispatch_streaming_route_with_conn(conn, method)) {
+            return;
          }
 
          // Find a matching route
-         auto [handle, params] = root_router.match(conn->request_.method, request.path);
+         auto [handle, params] = root_router.match(method, request.path);
+
+         // RFC 9110 9.3.2: HEAD is GET without the content, and a server that answers GET
+         // answers HEAD too. A HEAD with no route of its own runs the GET route, normal or
+         // streaming; both writers send a HEAD reply's header section alone, framed as the
+         // GET would have been (send_response_with_conn and streaming_connection::send_headers).
+         if (!handle && method == http_method::HEAD) {
+            if (dispatch_streaming_route_with_conn(conn, http_method::GET)) {
+               return;
+            }
+            auto get_match = root_router.match(http_method::GET, request.path);
+            handle = std::move(get_match.first);
+            params = std::move(get_match.second);
+         }
 
          // Reuse the connection-persistent response object (preserves capacity).
          // Cleared in the keep-alive reset path after the response is written.
@@ -2985,124 +3072,7 @@ namespace glz
          }
 
          if (!handle) {
-            if (conn->request_.method == http_method::OPTIONS) {
-               std::vector<http_method> allowed_methods;
-               std::unordered_map<std::string, std::string> preflight_params;
-
-               auto capture_first_params = [&](std::unordered_map<std::string, std::string>&& candidate_params) {
-                  if (preflight_params.empty()) {
-                     preflight_params = std::move(candidate_params);
-                  }
-               };
-
-               auto try_method = [&](http_method m) {
-                  if (m == http_method::OPTIONS) return;
-                  auto [candidate_handle, candidate_params] = root_router.match(m, conn->request_.target);
-                  if (candidate_handle) {
-                     allowed_methods.push_back(m);
-                     capture_first_params(std::move(candidate_params));
-                  }
-               };
-
-               try_method(http_method::GET);
-               try_method(http_method::POST);
-               try_method(http_method::PUT);
-               try_method(http_method::DELETE);
-               try_method(http_method::PATCH);
-               try_method(http_method::HEAD);
-
-               if (!allowed_methods.empty()) {
-                  request.params = std::move(preflight_params);
-
-                  bool has_request_method_header = false;
-                  bool requested_method_known = false;
-                  http_method requested_method{};
-
-                  if (auto request_method_it = request.headers.find("access-control-request-method");
-                      request_method_it != request.headers.end()) {
-                     has_request_method_header = true;
-                     std::string method_token{request_method_it->value};
-                     auto trim_pos = method_token.find_last_not_of(" \t\r\n");
-                     if (trim_pos != std::string::npos) {
-                        method_token.erase(trim_pos + 1);
-                     }
-                     else {
-                        method_token.clear();
-                     }
-
-                     if (!method_token.empty()) {
-                        std::transform(method_token.begin(), method_token.end(), method_token.begin(),
-                                       [](unsigned char c) { return static_cast<char>(std::toupper(c)); });
-
-                        if (auto parsed = from_string(method_token)) {
-                           requested_method = *parsed;
-                           requested_method_known = true;
-                        }
-                     }
-                  }
-
-                  if (std::none_of(allowed_methods.begin(), allowed_methods.end(),
-                                   [](http_method m) { return m == http_method::OPTIONS; })) {
-                     allowed_methods.push_back(http_method::OPTIONS);
-                  }
-
-                  std::string allow_header;
-                  allow_header.reserve(allowed_methods.size() * 8);
-                  for (size_t i = 0; i < allowed_methods.size(); ++i) {
-                     if (i > 0) allow_header.append(", ");
-                     allow_header.append(std::string{to_string(allowed_methods[i])});
-                  }
-                  response.header("Allow", allow_header);
-
-                  bool requested_method_allowed = true;
-                  if (has_request_method_header) {
-                     requested_method_allowed =
-                        requested_method_known && std::find(allowed_methods.begin(), allowed_methods.end(),
-                                                            requested_method) != allowed_methods.end();
-                  }
-
-                  try {
-                     for (const auto& middleware : root_router.middlewares) {
-                        middleware(request, response);
-                     }
-                  }
-                  catch (const std::exception&) {
-                     error_handler(std::make_error_code(std::errc::invalid_argument), std::source_location::current());
-                     send_error_response_with_close(conn, 500, "Internal Server Error");
-                     return;
-                  }
-
-                  if (!requested_method_allowed) {
-                     response.status(405);
-                     for (const auto& hook : response_hooks_) {
-                        try {
-                           hook(request, response);
-                        }
-                        catch (const std::exception&) {
-                           error_handler(std::make_error_code(std::errc::invalid_argument),
-                                         std::source_location::current());
-                        }
-                     }
-                     send_response_with_conn(conn, response);
-                     return;
-                  }
-
-                  for (const auto& hook : response_hooks_) {
-                     try {
-                        hook(request, response);
-                     }
-                     catch (const std::exception&) {
-                        error_handler(std::make_error_code(std::errc::invalid_argument),
-                                      std::source_location::current());
-                     }
-                  }
-                  send_response_with_conn(conn, response);
-                  return;
-               }
-            }
-
-            // No matching route found
-            send_error_response_with_conn(conn, 404, "Not Found");
+            respond_unrouted_with_conn(conn);
             return;
          }
 
@@ -3120,21 +3090,137 @@ namespace glz
                execute_middleware_chain(0, request, response, handle);
             }
 
-            for (const auto& hook : response_hooks_) {
-               try {
-                  hook(request, response);
-               }
-               catch (const std::exception&) {
-                  error_handler(std::make_error_code(std::errc::invalid_argument), std::source_location::current());
-               }
-            }
-
+            run_response_hooks(request, response);
             send_response_with_conn(conn, response);
          }
          catch (const std::exception&) {
             error_handler(std::make_error_code(std::errc::invalid_argument), std::source_location::current());
             send_error_response_with_close(conn, 500, "Internal Server Error");
          }
+      }
+
+      // Hands the connection to the streaming route for `method` on the request's path, if
+      // there is one. Fast path: if no streaming routes are registered (the common case),
+      // skip the match entirely. match_streaming() would otherwise allocate a params map,
+      // split the path into a vector of segment strings, and run an empty-tree walk on
+      // every request. The empty-check is O(1).
+      inline bool dispatch_streaming_route_with_conn(const std::shared_ptr<connection_state>& conn, http_method method)
+      {
+         if (root_router.streaming_routes.routes.empty()) {
+            return false;
+         }
+         auto [stream_handle, stream_params] = root_router.match_streaming(method, conn->request_.path);
+         if (!stream_handle) {
+            return false;
+         }
+         conn->request_.params = std::move(stream_params);
+         // Streaming handlers take over the connection (no keep-alive loop)
+         handle_streaming_request_with_conn(conn, stream_handle);
+         return true;
+      }
+
+      // Answers a request that no route handles: 404 for a path with no routes, 405 for a
+      // method the path has no route for, the automatic CORS preflight for OPTIONS, and 426
+      // for a plain GET to a WebSocket route. The server builds its response where a route's
+      // handler would run, after middleware and before response hooks, so headers they add
+      // (CORS, request IDs) reach these responses too, as do any set by request hooks, and
+      // hooks see every response. Wrapping middleware wraps route handlers only, so it does
+      // not run here.
+      inline void respond_unrouted_with_conn(const std::shared_ptr<connection_state>& conn)
+      {
+         request& request = conn->request_;
+         response& response = conn->response_;
+         const http_method method = request.method;
+
+         auto [allowed, first_params] = root_router.allowed_methods(request.path);
+         if (!allowed.empty()) {
+            // A HEAD runs the GET route (see process_full_request_with_conn), and the
+            // server answers OPTIONS itself for any routed path.
+            if (allowed.contains(http_method::GET)) {
+               allowed.insert(http_method::HEAD);
+            }
+            allowed.insert(http_method::OPTIONS);
+         }
+
+         // Preflight: give middleware the captures of the first route the path matches
+         if (method == http_method::OPTIONS && !allowed.empty()) {
+            request.params = std::move(first_params);
+         }
+
+         try {
+            for (const auto& middleware : root_router.middlewares) {
+               middleware(request, response);
+            }
+
+            if (allowed.empty()) {
+               set_error_response(response, 404, "Not Found");
+            }
+            else if (method == http_method::OPTIONS) {
+               // The preflight keeps the status middleware chose (CORS answers 204) unless
+               // the method it asks about has no route.
+               response.header("Allow", allowed.to_string());
+               if (!preflight_method_allowed(request, allowed)) {
+                  set_error_response(response, 405, "Method Not Allowed");
+               }
+            }
+            else if (allowed.contains(method)) {
+               // Normal and streaming GET routes were tried before this point, for a HEAD as
+               // well, so a GET or HEAD the path allows comes from a WebSocket route, which
+               // only answers an upgrade. RFC 9110 15.5.22: a 426 names the protocol to use.
+               set_error_response(response, 426, "Upgrade Required").header("Upgrade", "websocket");
+            }
+            else {
+               // RFC 9110 15.5.6: a path with routes for other methods answers 405 with an
+               // Allow header, so a client can tell a wrong method from a wrong URL.
+               set_error_response(response, 405, "Method Not Allowed").header("Allow", allowed.to_string());
+            }
+         }
+         catch (const std::exception&) {
+            error_handler(std::make_error_code(std::errc::invalid_argument), std::source_location::current());
+            send_error_response_with_close(conn, 500, "Internal Server Error");
+            return;
+         }
+
+         run_response_hooks(request, response);
+         send_response_with_conn(conn, response);
+      }
+
+      // Whether a CORS preflight's Access-Control-Request-Method, if it sent one, names a
+      // method the path has a route for.
+      static bool preflight_method_allowed(const request& request, http_method_set allowed)
+      {
+         auto request_method_it = request.headers.find("access-control-request-method");
+         if (request_method_it == request.headers.end()) {
+            return true;
+         }
+
+         // Trim trailing whitespace; npos + 1 wraps to 0, clearing an all-whitespace token.
+         std::string method_token{request_method_it->value};
+         method_token.erase(method_token.find_last_not_of(" \t\r\n") + 1);
+         std::transform(method_token.begin(), method_token.end(), method_token.begin(),
+                        [](unsigned char c) { return static_cast<char>(std::toupper(c)); });
+         const auto requested = from_string(method_token);
+         return requested && allowed.contains(*requested);
+      }
+
+      // Response hooks run on every response the request pipeline sends. A hook that throws
+      // is reported and skipped, so the response still goes out.
+      inline void run_response_hooks(const request& request, response& response)
+      {
+         for (const auto& hook : response_hooks_) {
+            try {
+               hook(request, response);
+            }
+            catch (const std::exception&) {
+               error_handler(std::make_error_code(std::errc::invalid_argument), std::source_location::current());
+            }
+         }
+      }
+
+      // The server's own plain-text error response. Headers already on the response are kept.
+      static response& set_error_response(response& response, int status_code, std::string_view message)
+      {
+         return response.status(status_code).content_type("text/plain").body(message);
       }
 
       // Pre-cached status lines for common HTTP status codes
@@ -3252,13 +3338,15 @@ namespace glz
             h.append("Server: Glaze/1.0\r\n");
          }
 
-         // Add Connection header based on keep-alive decision
+         // Add Connection header based on keep-alive decision. RFC 9110 7.8: a sender of
+         // Upgrade (such as a 426) also lists it in Connection, so intermediaries drop it.
          if (!(response.user_headers_set & response::has_connection)) {
+            h.append((response.user_headers_set & response::has_upgrade) ? "Connection: Upgrade, " : "Connection: ");
             if (conn->should_close) {
-               h.append("Connection: close\r\n");
+               h.append("close\r\n");
             }
             else {
-               h.append("Connection: keep-alive\r\n");
+               h.append("keep-alive\r\n");
                // Add Keep-Alive header with timeout info
                if (conn_config_.keep_alive_timeout > 0) {
                   h.append("Keep-Alive: timeout=");
@@ -3325,12 +3413,14 @@ namespace glz
                            });
       }
 
-      // Send error response with keep-alive support (for normal errors)
+      // Send error response with keep-alive support. The response is cleared first: this
+      // answers a request the pipeline could not finish (a protocol error, or a handler or
+      // hook that threw), so nothing half-built on it is sent.
       inline void send_error_response_with_conn(std::shared_ptr<connection_state> conn, int status_code,
                                                 std::string_view message)
       {
          conn->response_.clear();
-         conn->response_.status(status_code).content_type("text/plain").body(message);
+         set_error_response(conn->response_, status_code, message);
          send_response_with_conn(conn, conn->response_);
       }
 

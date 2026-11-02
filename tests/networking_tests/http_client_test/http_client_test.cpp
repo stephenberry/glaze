@@ -1,12 +1,19 @@
 #include "glaze/net/http_client.hpp"
 
 #include <algorithm>
+#include <array>
 #include <atomic>
 #include <cctype>
 #include <chrono>
+#include <condition_variable>
 #include <future>
+#include <initializer_list>
+#include <memory>
+#include <mutex>
 #include <optional>
+#include <random>
 #include <string_view>
+#include <system_error>
 #include <thread>
 #include <unordered_map>
 #include <utility>
@@ -207,6 +214,23 @@ class working_test_server
          response_body.append(req.body);
          res.status(200).content_type("text/plain").body(response_body);
       });
+
+      server_.del("/items/:id", [](const request& req, response& res) {
+         std::string response_body = "DELETE:";
+         response_body.append(req.params.at("id"));
+         if (auto it = req.headers.find("x-test-header"); it != req.headers.end()) {
+            response_body.append(":");
+            response_body.append(it->value);
+         }
+         res.status(200).content_type("text/plain").body(response_body);
+      });
+
+      // The server frames a HEAD reply and a 304 with the Content-Length of the body built
+      // here but sends no body, which the client must not wait for.
+      server_.route(http_method::HEAD, "/head",
+                    [](const request&, response& res) { res.status(200).content_type("text/plain").body("hello"); });
+
+      server_.get("/not-modified", [](const request&, response& res) { res.status(304).body("cached body"); });
 
       server_.get("/slow", [](const request&, response& res) {
          std::this_thread::sleep_for(std::chrono::milliseconds(50));
@@ -776,6 +800,43 @@ suite working_http_tests = [] {
       std::this_thread::sleep_for(std::chrono::milliseconds(50));
    };
 
+   // RFC 9110 15.5.6: a known path requested with a method it has no route for answers
+   // 405 with an Allow header listing the methods it does have; an unknown path stays 404.
+   "wrong_method_returns_405_with_allow"_test = [] {
+      working_test_server server;
+      expect(server.start()) << "Server should start\n";
+
+      simple_test_client client;
+
+      auto expect_405 = [](const auto& result, std::string_view expected_allow) {
+         expect(result.has_value()) << "Request should yield a response\n";
+         if (result.has_value()) {
+            expect(result->status_code == 405) << "Expected 405, got " << result->status_code << "\n";
+            auto allow_it = result->response_headers.find("allow");
+            expect(allow_it != result->response_headers.end()) << "Allow header should be present\n";
+            if (allow_it != result->response_headers.end()) {
+               expect(allow_it->value == expected_allow) << "Allow was: " << allow_it->value << "\n";
+            }
+         }
+      };
+
+      // A path with a GET route answers HEAD too (RFC 9110 9.3.2), so Allow lists both.
+      expect_405(client.post(server.base_url() + "/hello", "body"), "GET, HEAD, OPTIONS");
+      expect_405(client.get(server.base_url() + "/update?x=1"), "PUT, OPTIONS");
+      expect_405(client.post(server.base_url() + "/files/a/b.txt", "body"), "GET, HEAD, OPTIONS");
+
+      auto missing = client.get(server.base_url() + "/no-such-path");
+      expect(missing.has_value()) << "Request should yield a response\n";
+      if (missing.has_value()) {
+         expect(missing->status_code == 404) << "Unknown path should stay 404\n";
+         expect(missing->response_headers.find("allow") == missing->response_headers.end())
+            << "404 should not carry an Allow header\n";
+      }
+
+      server.stop();
+      std::this_thread::sleep_for(std::chrono::milliseconds(50));
+   };
+
    "cors_full_config_combination"_test = [] {
       // Non-wildcard origin list + credentials + custom max_age + restricted methods.
       // Existing tests cover these settings individually; this one exercises them together
@@ -1026,6 +1087,175 @@ suite glz_http_client_tests = [] {
          expect(result->response_body == "PATCH:payload:header-value")
             << "Response body should echo payload and header";
       }
+
+      server.stop();
+   };
+
+   "synchronous_head_request"_test = [] {
+      working_test_server server;
+      expect(server.start());
+
+      glz::http_client client;
+
+      auto result = client.head(server.base_url() + "/head");
+
+      expect(result.has_value()) << "HEAD request should succeed";
+      if (result.has_value()) {
+         expect(result->status_code == 200) << "HEAD status should be 200";
+         expect(result->response_body.empty()) << "HEAD response should have no body";
+         const auto content_length = result->response_headers.first_value("content-length");
+         expect(content_length.has_value() && *content_length == "5") << "HEAD should report the GET body length";
+      }
+
+      // The pooled connection must be clean for the next request.
+      auto follow_up = client.get(server.base_url() + "/hello");
+      expect(follow_up.has_value() && follow_up->response_body == "Hello, World!") << "Follow-up GET should succeed";
+
+      server.stop();
+   };
+
+   // RFC 9110 9.3.2: a server that answers GET answers HEAD, so a HEAD on a GET-only route
+   // runs the GET route and reports its Content-Length without the body.
+   "synchronous_head_on_get_route"_test = [] {
+      working_test_server server;
+      expect(server.start());
+
+      glz::http_client client;
+
+      auto result = client.head(server.base_url() + "/hello");
+
+      expect(result.has_value()) << "HEAD request should succeed";
+      if (result.has_value()) {
+         expect(result->status_code == 200) << "HEAD on a GET route should be 200, got " << result->status_code;
+         expect(result->response_body.empty()) << "HEAD response should have no body";
+         const auto content_length = result->response_headers.first_value("content-length");
+         expect(content_length.has_value() && *content_length == "13") << "HEAD should report the GET body length";
+      }
+
+      auto follow_up = client.get(server.base_url() + "/hello");
+      expect(follow_up.has_value() && follow_up->response_body == "Hello, World!") << "Follow-up GET should succeed";
+
+      server.stop();
+   };
+
+   "async_head_request"_test = [] {
+      working_test_server server;
+      expect(server.start());
+
+      glz::http_client client;
+
+      // Both an explicit HEAD route and a GET route the HEAD falls back to.
+      for (const std::string_view path : {"/head", "/hello"}) {
+         auto future = client.head_async(server.base_url() + std::string(path));
+         expect(future.wait_for(std::chrono::seconds(5)) == std::future_status::ready)
+            << "Async HEAD should complete without waiting for a body";
+         if (future.wait_for(std::chrono::seconds(0)) != std::future_status::ready) {
+            continue;
+         }
+         auto result = future.get();
+         expect(result.has_value()) << "Async HEAD request should succeed";
+         if (result.has_value()) {
+            expect(result->status_code == 200) << "HEAD status should be 200";
+            expect(result->response_body.empty()) << "HEAD response should have no body";
+            expect(result->response_headers.first_value("content-length").has_value())
+               << "HEAD should report the GET body length";
+         }
+      }
+
+      // The pooled connection must be clean for the next request.
+      auto follow_up = client.get_async(server.base_url() + "/hello");
+      expect(follow_up.wait_for(std::chrono::seconds(5)) == std::future_status::ready)
+         << "Follow-up async GET should complete";
+      if (follow_up.wait_for(std::chrono::seconds(0)) == std::future_status::ready) {
+         auto result = follow_up.get();
+         expect(result.has_value() && result->response_body == "Hello, World!") << "Follow-up GET should succeed";
+      }
+
+      server.stop();
+   };
+
+   "synchronous_304_with_content_length"_test = [] {
+      working_test_server server;
+      expect(server.start());
+
+      glz::http_client client;
+
+      auto result = client.get(server.base_url() + "/not-modified");
+
+      expect(result.has_value()) << "304 request should succeed";
+      if (result.has_value()) {
+         expect(result->status_code == 304) << "Status should be 304";
+         expect(result->response_body.empty()) << "304 response should have no body";
+      }
+
+      auto follow_up = client.get(server.base_url() + "/hello");
+      expect(follow_up.has_value() && follow_up->response_body == "Hello, World!") << "Follow-up GET should succeed";
+
+      server.stop();
+   };
+
+   "async_304_with_content_length"_test = [] {
+      working_test_server server;
+      expect(server.start());
+
+      glz::http_client client;
+
+      auto future = client.get_async(server.base_url() + "/not-modified");
+      expect(future.wait_for(std::chrono::seconds(5)) == std::future_status::ready)
+         << "Async 304 should complete without waiting for a body";
+      if (future.valid() && future.wait_for(std::chrono::seconds(0)) == std::future_status::ready) {
+         auto result = future.get();
+         expect(result.has_value()) << "Async 304 request should succeed";
+         if (result.has_value()) {
+            expect(result->status_code == 304) << "Status should be 304";
+            expect(result->response_body.empty()) << "304 response should have no body";
+         }
+      }
+
+      auto follow_up = client.get_async(server.base_url() + "/hello");
+      expect(follow_up.wait_for(std::chrono::seconds(5)) == std::future_status::ready)
+         << "Follow-up async GET should complete";
+
+      server.stop();
+   };
+
+   "synchronous_delete_request"_test = [] {
+      working_test_server server;
+      expect(server.start());
+
+      glz::http_client client;
+
+      glz::http_headers headers{{"x-test-header", "header-value"}};
+      auto result = client.del(server.base_url() + "/items/7", headers);
+
+      expect(result.has_value()) << "DELETE request should succeed";
+      if (result.has_value()) {
+         expect(result->status_code == 200) << "DELETE status should be 200";
+         expect(result->response_body == "DELETE:7:header-value") << "Response body should echo id and header";
+      }
+
+      server.stop();
+   };
+
+   "synchronous_options_request"_test = [] {
+      working_test_server server;
+      expect(server.start());
+
+      glz::http_client client;
+
+      auto result = client.options(server.base_url() + "/items/7",
+                                   {{"Origin", "http://app.local"}, {"Access-Control-Request-Method", "DELETE"}});
+
+      expect(result.has_value()) << "OPTIONS request should succeed";
+      if (result.has_value()) {
+         expect(result->status_code == 204) << "Preflight status should be 204";
+         const auto allow = result->response_headers.first_value("allow");
+         expect(allow.has_value() && *allow == "DELETE, OPTIONS") << "Allow should list DELETE and OPTIONS";
+      }
+
+      // The bodyless 204 must leave the pooled connection clean for the next request.
+      auto follow_up = client.del(server.base_url() + "/items/8");
+      expect(follow_up.has_value() && follow_up->response_body == "DELETE:8") << "Follow-up DELETE should succeed";
 
       server.stop();
    };
@@ -1557,6 +1787,248 @@ class host_header_server
    std::string host_header_;
 };
 
+// Answers every request with `reply`, which may be empty, then sends nothing, holding the
+// connection open until the client closes it or `stall` passes.
+class stalling_server
+{
+  public:
+   stalling_server(std::string reply, std::chrono::milliseconds stall) : reply_(std::move(reply)), stall_(stall) {}
+   ~stalling_server() { stop(); }
+
+   bool start()
+   {
+      try {
+         acceptor_ = std::make_unique<asio::ip::tcp::acceptor>(
+            io_, asio::ip::tcp::endpoint(asio::ip::make_address("127.0.0.1"), 0));
+         port_ = acceptor_->local_endpoint().port();
+         accept();
+         server_thread_ = std::thread([this]() { io_.run(); });
+         return true;
+      }
+      catch (...) {
+         return false;
+      }
+   }
+
+   void stop()
+   {
+      io_.stop();
+      if (server_thread_.joinable()) server_thread_.join();
+   }
+
+   std::string base_url() const { return "http://127.0.0.1:" + std::to_string(port_); }
+
+  private:
+   void accept()
+   {
+      acceptor_->async_accept([this](asio::error_code ec, asio::ip::tcp::socket socket) {
+         if (ec) return;
+         serve(std::make_shared<asio::ip::tcp::socket>(std::move(socket)));
+         accept();
+      });
+   }
+
+   void serve(std::shared_ptr<asio::ip::tcp::socket> socket)
+   {
+      auto request = std::make_shared<asio::streambuf>();
+      asio::async_read_until(*socket, *request, "\r\n\r\n", [this, socket, request](asio::error_code ec, std::size_t) {
+         if (ec) return;
+         asio::async_write(*socket, asio::buffer(reply_), [this, socket](asio::error_code ec, std::size_t) {
+            if (ec) return;
+            // The client's close or the end of the stall, whichever comes first, closes the socket.
+            auto timer = std::make_shared<asio::steady_timer>(io_, stall_);
+            timer->async_wait([socket, timer](asio::error_code) {
+               asio::error_code ignored;
+               socket->close(ignored);
+            });
+            auto sink = std::make_shared<std::array<char, 64>>();
+            socket->async_read_some(asio::buffer(*sink),
+                                    [timer, sink](asio::error_code, std::size_t) { timer->cancel(); });
+         });
+      });
+   }
+
+   std::string reply_;
+   std::chrono::milliseconds stall_;
+   asio::io_context io_;
+   std::unique_ptr<asio::ip::tcp::acceptor> acceptor_;
+   std::thread server_thread_;
+   uint16_t port_{0};
+};
+
+// Records how a stream ends, for tests that count its error and disconnect reports.
+struct stream_end_log
+{
+   std::mutex mutex;
+   std::condition_variable ended;
+   std::vector<std::error_code> errors;
+   int disconnects{};
+   bool error_after_disconnect{};
+
+   glz::http_error_handler on_error()
+   {
+      return [this](std::error_code ec) {
+         std::lock_guard lock(mutex);
+         errors.push_back(ec);
+         error_after_disconnect |= disconnects > 0;
+      };
+   }
+
+   glz::http_disconnect_handler on_disconnect()
+   {
+      return [this] {
+         {
+            std::lock_guard lock(mutex);
+            ++disconnects;
+         }
+         ended.notify_all();
+      };
+   }
+
+   bool wait_for_end(std::chrono::steady_clock::duration timeout)
+   {
+      std::unique_lock lock(mutex);
+      return ended.wait_for(lock, timeout, [&] { return disconnects > 0; });
+   }
+
+   // One error, one of `allowed`, reported before the stream's one on_disconnect.
+   void expect_one_end(std::initializer_list<std::error_code> allowed)
+   {
+      std::lock_guard lock(mutex);
+      expect(disconnects == 1) << "on_disconnect ran " << disconnects << " times";
+      expect(errors.size() == 1) << "on_error ran " << errors.size() << " times";
+      for (const auto& ec : errors) {
+         expect(std::find(allowed.begin(), allowed.end(), ec) != allowed.end()) << "unexpected error: " << ec.message();
+      }
+      expect(!error_after_disconnect) << "on_error ran after on_disconnect";
+   }
+};
+
+suite stream_disconnect_tests = [] {
+   // disconnect() called from a thread other than the client's workers, a few microseconds after
+   // the first chunk is delivered, while a worker moves on to the next read. The server then
+   // stalls, so a stop the client loses holds the stream until the server gives up, while one it
+   // honours ends the stream at once. A stop that races the client's own close of the socket
+   // crashes under AddressSanitizer when the two are not ordered.
+   "disconnect_from_another_thread_ends_a_stalled_chunked_stream"_test = [] {
+      constexpr auto stall = std::chrono::milliseconds(1000);
+      stalling_server server{
+         "HTTP/1.1 200 OK\r\n"
+         "Transfer-Encoding: chunked\r\n"
+         "\r\n"
+         "5\r\nhello\r\n",
+         stall};
+      expect(server.start()) << "Stalling server should start";
+
+      glz::http_client client;
+      std::mt19937 random{3021};
+      std::uniform_int_distribution<int> spin_us{0, 20};
+      const auto spin_for = [](std::chrono::steady_clock::duration span, const std::atomic<bool>* until_set) {
+         const auto deadline = std::chrono::steady_clock::now() + span;
+         while (std::chrono::steady_clock::now() < deadline) {
+            if (until_set && until_set->load()) return true;
+         }
+         return until_set == nullptr;
+      };
+
+      // Each lost stop costs a stall, so a failing run stops counting at a handful.
+      constexpr int rounds = 200;
+      constexpr int enough_lost = 5;
+      int ran = 0;
+      int lost = 0;
+      for (; ran < rounds && lost < enough_lost; ++ran) {
+         std::atomic<bool> delivered = false;
+         std::atomic<bool> released = false;
+         std::promise<void> disconnect_promise;
+         auto disconnect_future = disconnect_promise.get_future();
+
+         auto conn = client.stream_request_v2({.url = server.base_url() + "/stall",
+                                               .body = {},
+                                               .headers = {},
+                                               .on_data =
+                                                  [&](std::string_view) {
+                                                     // Hold the worker until the test thread is running, so
+                                                     // the stop below lands as the worker takes its next step.
+                                                     delivered = true;
+                                                     spin_for(std::chrono::seconds(5), &released);
+                                                  },
+                                               .on_error = [](std::error_code) {},
+                                               .on_progress = {},
+                                               .on_connect = {},
+                                               .on_disconnect = [&] { disconnect_promise.set_value(); }});
+         expect(conn != nullptr);
+         if (!conn || !spin_for(std::chrono::seconds(5), &delivered)) {
+            expect(false) << "The first chunk did not arrive";
+            break;
+         }
+
+         released = true;
+         spin_for(std::chrono::microseconds(spin_us(random)), nullptr);
+         conn->disconnect();
+
+         if (disconnect_future.wait_for(stall / 2) != std::future_status::ready) {
+            ++lost;
+         }
+         // A lost stop still ends when the server closes, so the next round starts on a clean slate.
+         if (disconnect_future.wait_for(std::chrono::seconds(5)) != std::future_status::ready) {
+            expect(false) << "The stream never ended";
+            break;
+         }
+      }
+
+      expect(ran == rounds && lost == 0) << lost << " stops were lost in " << ran << " rounds";
+      server.stop();
+   };
+
+   // The timeout cancels the pending read of the head. The stream must still end once: one
+   // timed_out, then one on_disconnect, and no operation_aborted from the cancelled read.
+   "timeout_before_head_ends_the_stream_once"_test = [] {
+      stalling_server server{"", std::chrono::milliseconds(3000)};
+      expect(server.start()) << "Stalling server should start";
+
+      stream_end_log log; // outlives the client, whose workers run its handlers
+      glz::http_client client;
+      auto conn = client.stream_request_v2({.url = server.base_url() + "/silent",
+                                            .timeout = std::chrono::seconds(1),
+                                            .on_data = [](std::string_view) {},
+                                            .on_error = log.on_error(),
+                                            .on_disconnect = log.on_disconnect()});
+      expect(conn != nullptr);
+
+      expect(log.wait_for_end(std::chrono::seconds(5))) << "The stream never ended";
+      std::this_thread::sleep_for(std::chrono::milliseconds(300)); // room for a second report
+      log.expect_one_end({std::make_error_code(std::errc::timed_out)});
+      server.stop();
+   };
+
+   // A stream that fails before its head arrives ends there, and its timeout must not report it
+   // a second time once the timer runs out.
+   "refused_connect_is_not_reported_again_by_the_timeout"_test = [] {
+      // A bound socket that never listens refuses connections and keeps the port from being reused.
+      asio::io_context io;
+      asio::ip::tcp::socket closed{io};
+      closed.open(asio::ip::tcp::v4());
+      closed.bind(asio::ip::tcp::endpoint(asio::ip::make_address("127.0.0.1"), 0));
+      const uint16_t closed_port = closed.local_endpoint().port();
+
+      stream_end_log log; // outlives the client, whose workers run its handlers
+      glz::http_client client;
+      auto conn = client.stream_request_v2({.url = "http://127.0.0.1:" + std::to_string(closed_port) + "/",
+                                            .timeout = std::chrono::seconds(1),
+                                            .on_data = [](std::string_view) {},
+                                            .on_error = log.on_error(),
+                                            .on_disconnect = log.on_disconnect()});
+      expect(conn != nullptr);
+
+      expect(log.wait_for_end(std::chrono::seconds(5))) << "The stream never ended";
+      std::this_thread::sleep_for(std::chrono::milliseconds(1500)); // past the timeout
+      // Windows retries a refused loopback connect for about two seconds, so there the timeout
+      // may end the stream first. Either way it ends once.
+      log.expect_one_end(
+         {make_error_code(asio::error::connection_refused), std::make_error_code(std::errc::timed_out)});
+   };
+};
+
 suite eof_delimited_tests = [] {
    "sync_eof_delimited_body"_test = [] {
       const std::string expected_body = R"({"name":"Hue Bridge","modelid":"BSB002"})";
@@ -1714,6 +2186,155 @@ suite with_json_content_type_tests = [] {
 
       expect(!original.contains("Content-Type")) << "The caller's container is taken by value";
       expect(headers.contains("Content-Type"));
+   };
+};
+
+// The server's own answers to requests no route handles (404, 405, 426 and the automatic
+// preflight) go through the same middleware and hooks as a route's response.
+suite unrouted_request_tests = [] {
+   struct unrouted_server
+   {
+      std::shared_ptr<asio::io_context> io_ctx = std::make_shared<asio::io_context>();
+      glz::http_server<> server{io_ctx};
+      std::thread thread;
+      std::atomic<int> hooked_responses{0};
+      std::atomic<int> last_hooked_status{0};
+
+      unrouted_server()
+      {
+         // Headers set by a request hook belong to the response whatever answers it.
+         server.on_request([](const request&, response& res) { res.header("X-Request-Id", "req-1"); });
+         server.use([](const request&, response& res) { res.header("X-Middleware", "ran"); });
+         server.on_response([this](const request&, const response& res) {
+            hooked_responses.fetch_add(1);
+            last_hooked_status.store(res.status_code);
+         });
+         server.enable_cors();
+
+         server.get("/thing", [](const request&, response& res) { res.body("thing"); });
+         server.route(http_method::OPTIONS, "/probe", [](const request&, response& res) { res.status(204); });
+         server.websocket("/ws/:room", std::make_shared<glz::websocket_server>());
+
+         server.bind("127.0.0.1", 0);
+         server.start(0);
+         thread = std::thread([this] { io_ctx->run(); });
+      }
+
+      ~unrouted_server()
+      {
+         server.stop();
+         io_ctx->stop();
+         if (thread.joinable()) thread.join();
+      }
+
+      std::string url(std::string_view path) const
+      {
+         return "http://127.0.0.1:" + std::to_string(server.port()) + std::string(path);
+      }
+   };
+
+   const auto header_value = [](const auto& result, std::string_view name) {
+      return result->response_headers.first_value(name).value_or("");
+   };
+
+   "not_found_runs_middleware_and_hooks"_test = [&] {
+      unrouted_server s;
+      glz::http_client client;
+
+      auto result = client.get(s.url("/missing"), {{"Origin", "http://app.local"}});
+      expect(result.has_value()) << "Request should yield a response";
+      if (result) {
+         expect(result->status_code == 404);
+         expect(result->response_body == "Not Found");
+         expect(header_value(result, "x-request-id") == "req-1") << "request hook headers are kept";
+         expect(header_value(result, "x-middleware") == "ran") << "middleware runs on a 404";
+         expect(header_value(result, "access-control-allow-origin") == "*") << "CORS headers reach a 404";
+         expect(!result->response_headers.first_value("allow").has_value());
+      }
+      expect(s.hooked_responses.load() == 1) << "response hooks see the 404";
+      expect(s.last_hooked_status.load() == 404);
+   };
+
+   "method_not_allowed_runs_middleware_and_hooks"_test = [&] {
+      unrouted_server s;
+      glz::http_client client;
+
+      auto result = client.del(s.url("/thing"), {{"Origin", "http://app.local"}});
+      expect(result.has_value()) << "Request should yield a response";
+      if (result) {
+         expect(result->status_code == 405);
+         expect(result->response_body == "Method Not Allowed");
+         expect(header_value(result, "allow") == "GET, HEAD, OPTIONS");
+         expect(header_value(result, "x-request-id") == "req-1") << "request hook headers are kept";
+         expect(header_value(result, "x-middleware") == "ran") << "middleware runs on a 405";
+         expect(header_value(result, "access-control-allow-origin") == "*") << "CORS headers reach a 405";
+      }
+      expect(s.hooked_responses.load() == 1) << "response hooks see the 405";
+      expect(s.last_hooked_status.load() == 405);
+   };
+
+   "preflight_with_unrouted_method_answers_405"_test = [&] {
+      unrouted_server s;
+      glz::http_client client;
+
+      auto result =
+         client.options(s.url("/thing"), {{"Origin", "http://app.local"}, {"Access-Control-Request-Method", "PUT"}});
+      expect(result.has_value()) << "Request should yield a response";
+      if (result) {
+         expect(result->status_code == 405);
+         expect(header_value(result, "allow") == "GET, HEAD, OPTIONS");
+         expect(header_value(result, "x-request-id") == "req-1") << "request hook headers are kept";
+      }
+      expect(s.last_hooked_status.load() == 405);
+   };
+
+   // A path served only by an explicit OPTIONS route has a route, so other methods get 405.
+   "options_only_path_answers_405"_test = [&] {
+      unrouted_server s;
+      glz::http_client client;
+
+      auto result = client.get(s.url("/probe"));
+      expect(result.has_value()) << "Request should yield a response";
+      if (result) {
+         expect(result->status_code == 405) << "got " << result->status_code;
+         expect(header_value(result, "allow") == "OPTIONS");
+      }
+
+      auto options = client.options(s.url("/probe"));
+      expect(options.has_value() && options->status_code == 204) << "the explicit OPTIONS route still answers";
+   };
+
+   // A WebSocket route only answers the upgrade: other methods get 405, and a GET that does
+   // not ask to upgrade gets 426 naming the protocol (RFC 9110 15.5.22).
+   "websocket_path_answers_405_or_426"_test = [&] {
+      unrouted_server s;
+      glz::http_client client;
+
+      auto post = client.post(s.url("/ws/lobby"), "body");
+      expect(post.has_value()) << "Request should yield a response";
+      if (post) {
+         expect(post->status_code == 405) << "got " << post->status_code;
+         expect(header_value(post, "allow") == "GET, HEAD, OPTIONS");
+      }
+
+      auto get = client.get(s.url("/ws/lobby"));
+      expect(get.has_value()) << "Request should yield a response";
+      if (get) {
+         expect(get->status_code == 426) << "got " << get->status_code;
+         expect(header_value(get, "upgrade") == "websocket");
+         expect(get->response_headers.contains_token("connection", "upgrade"))
+            << "RFC 9110 7.8: Upgrade is listed in Connection";
+         expect(get->response_headers.contains_token("connection", "keep-alive"))
+            << "the keep-alive decision is still announced";
+         expect(header_value(get, "x-middleware") == "ran");
+      }
+
+      // The 426 left the connection usable.
+      auto thing = client.get(s.url("/thing"));
+      expect(thing.has_value() && thing->response_body == "thing");
+
+      auto other = client.get(s.url("/ws"));
+      expect(other.has_value() && other->status_code == 404) << "the parameter is required";
    };
 };
 

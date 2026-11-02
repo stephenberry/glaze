@@ -9,6 +9,7 @@
 #include <complex>
 #include <deque>
 #include <expected>
+#include <filesystem>
 #include <list>
 #include <map>
 #include <random>
@@ -5415,6 +5416,39 @@ suite cbor_context_reuse = [] {
       const auto ec = glz::read<options>(second, good, ctx);
       expect(ec == glz::error_code::none) << glz::format_error(ec, good);
       expect(second == value);
+   };
+};
+
+suite cbor_file_io_tests = [] {
+   "read_file / write_file round-trip"_test = [] {
+      const auto path = (std::filesystem::temp_directory_path() / "glaze_cbor_roundtrip.cbor").string();
+
+      const reflectable_t value{4, 5, 6};
+      std::string write_buf;
+      const auto wec = glz::write_file_cbor(value, path, write_buf);
+      expect(not wec);
+
+      reflectable_t out{};
+      std::string read_buf;
+      const auto rec = glz::read_file_cbor(out, path, read_buf);
+      expect(not rec) << glz::format_error(rec, read_buf);
+      expect(out == value);
+
+      std::error_code ignored;
+      std::filesystem::remove(path, ignored);
+   };
+
+   "read_file of a missing file reports file_open_failure"_test = [] {
+      const auto path = (std::filesystem::temp_directory_path() / "glaze_cbor_missing_dir" / "missing.cbor").string();
+      reflectable_t out{};
+      std::string buffer;
+      expect(glz::read_file_cbor(out, path, buffer) == glz::error_code::file_open_failure);
+   };
+
+   "write_file to an unopenable path reports file_open_failure"_test = [] {
+      const auto path = (std::filesystem::temp_directory_path() / "glaze_cbor_missing_dir" / "out.cbor").string();
+      std::string buffer;
+      expect(glz::write_file_cbor(reflectable_t{}, path, buffer) == glz::error_code::file_open_failure);
    };
 };
 

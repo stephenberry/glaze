@@ -153,6 +153,12 @@ namespace glz
 
          const bool origin_allowed = !origin.empty() && is_origin_allowed(config, origin);
 
+         // The CORS headers below depend on the request's Origin: it is echoed back, or the
+         // headers are left out for a missing or rejected origin. A shared cache that is not
+         // told so serves one origin's answer to the next (Fetch Standard, "CORS protocol and
+         // HTTP caches"), so every response this middleware handles names Origin in Vary.
+         res.add_header("Vary", "Origin");
+
          if (is_preflight && config.handle_preflight && !origin_allowed) {
             // Origin not allowed, but it's a preflight request - respond with 403
             res.status(403).body("CORS: Origin not allowed");
@@ -189,9 +195,13 @@ namespace glz
                if (!config.allowed_headers.empty()) {
                   res.header("Access-Control-Allow-Headers", join_strings(config.allowed_headers, ", "));
                }
-               else if (auto requested_headers = req.headers.find("access-control-request-headers");
-                        requested_headers != req.headers.end()) {
-                  res.header("Access-Control-Allow-Headers", requested_headers->value);
+               else {
+                  // Echoed from the request, so this answer varies with it too.
+                  res.add_header("Vary", "Access-Control-Request-Headers");
+                  if (auto requested_headers = req.headers.find("access-control-request-headers");
+                      requested_headers != req.headers.end()) {
+                     res.header("Access-Control-Allow-Headers", requested_headers->value);
+                  }
                }
 
                // Add max age

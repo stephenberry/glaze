@@ -474,8 +474,11 @@ namespace glz
             return false;
          };
 
-         const int32_t start_idx = decomposed_key.start.value_or(0);
-         const int32_t end_idx = decomposed_key.end.value_or((std::numeric_limits<int32_t>::max)());
+         // Indices are 64-bit so start_idx + I cannot wrap for a start near INT32_MAX, and an
+         // omitted end is unbounded so such a start reports a missing element like any other.
+         const int64_t start_idx = decomposed_key.start.value_or(0);
+         const int64_t end_idx =
+            decomposed_key.end.has_value() ? *decomposed_key.end : (std::numeric_limits<int64_t>::max)();
 
          if (at_end()) return;
          if (*it == ']') {
@@ -483,7 +486,7 @@ namespace glz
             return;
          }
 
-         int32_t current_index = 0;
+         int64_t current_index = 0;
 
          // Iterate tuple elements
          using TupleType = std::decay_t<T>;
@@ -492,7 +495,7 @@ namespace glz
          for_each<N>([&]<size_t I>() {
             if (bool(ctx.error)) return;
 
-            int32_t target_idx = start_idx + I;
+            const int64_t target_idx = start_idx + int64_t(I);
 
             // If target is beyond the slice request
             if (target_idx >= end_idx) {
@@ -728,10 +731,12 @@ namespace glz
             }
             else if (step_idx > 0) {
                // Positive step compacts in place: the write index never overtakes the
-               // read index, so every read stays within the live range.
+               // read index, so every read stays within the live range. The index is
+               // stepped in 64 bits: a step larger than the range left (e.g. [1::2147483647])
+               // would overflow int32 and wrap to a negative index.
                std::size_t dest = 0;
-               for (int32_t i = start_idx; i < end_idx; i += step_idx) {
-                  value[dest++] = std::move(value[i]);
+               for (int64_t i = start_idx; i < end_idx; i += step_idx) {
+                  value[dest++] = std::move(value[size_t(i)]);
                }
                value.resize(dest);
             }
@@ -741,8 +746,8 @@ namespace glz
                // wrap_index already clamps start_idx to at most size-1 and end_idx to at
                // least -1, so every read below stays within [0, size).
                std::decay_t<T> result;
-               for (int32_t i = start_idx; i > end_idx; i += step_idx) {
-                  result.emplace_back(std::move(value[i]));
+               for (int64_t i = start_idx; i > end_idx; i += step_idx) {
+                  result.emplace_back(std::move(value[size_t(i)]));
                }
                value = std::move(result);
             }

@@ -161,7 +161,7 @@ glz::write_msgpack(point{1, 2}, buffer); // 82 a1 78 01 a1 79 02  ->  {"x":1,"y"
 
 Set `structs_as_arrays` to write the members positionally instead, dropping the keys.
 
-> **Wire format change.** Glaze 8.3.0 and earlier wrote a struct with no `glz::meta` as a positional array while writing one with a `glz::meta` as a map. Both are now maps. A reflected struct needs member names, so, as in every other format, it must be a type with linkage: a function-local struct no longer serializes.
+> **Wire format change.** Glaze 8.3.0 and earlier wrote a struct with no `glz::meta` as a positional array while writing one with a `glz::meta` as a map. Both are now maps.
 
 ## Variants and `glz::generic`
 

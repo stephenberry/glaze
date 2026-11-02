@@ -346,6 +346,9 @@ namespace glz
    struct allow_conversions_opt_tag
    {};
 
+   struct float_max_write_precision_opt_tag
+   {};
+
    // Helper for deprecated option static_asserts (dependent false pattern)
    template <class>
    inline constexpr bool deprecated_opts_raw = false;
@@ -379,6 +382,10 @@ namespace glz
 
    template <auto member_ptr>
    concept is_allow_conversions_tag = std::same_as<std::decay_t<decltype(member_ptr)>, allow_conversions_opt_tag>;
+
+   template <auto member_ptr>
+   concept is_float_max_write_precision_tag =
+      std::same_as<std::decay_t<decltype(member_ptr)>, float_max_write_precision_opt_tag>;
 
    consteval bool check_validate_skipped(auto&& Opts)
    {
@@ -1205,6 +1212,34 @@ namespace glz
             return opts_structs_as_arrays{{Opts}, static_cast<bool>(value)};
          }
       }
+      else if constexpr (is_allow_conversions_tag<member_ptr>) {
+         if constexpr (requires { Opts.allow_conversions; }) {
+            auto ret = Opts;
+            ret.allow_conversions = static_cast<bool>(value);
+            return ret;
+         }
+         else {
+            struct opts_allow_conversions : std::decay_t<decltype(Opts)>
+            {
+               bool allow_conversions{};
+            };
+            return opts_allow_conversions{{Opts}, static_cast<bool>(value)};
+         }
+      }
+      else if constexpr (is_float_max_write_precision_tag<member_ptr>) {
+         if constexpr (requires { Opts.float_max_write_precision; }) {
+            auto ret = Opts;
+            ret.float_max_write_precision = static_cast<float_precision>(value);
+            return ret;
+         }
+         else {
+            struct opts_float_max_write_precision : std::decay_t<decltype(Opts)>
+            {
+               float_precision float_max_write_precision{};
+            };
+            return opts_float_max_write_precision{{Opts}, static_cast<float_precision>(value)};
+         }
+      }
       else {
          auto ret = Opts;
          ret.*member_ptr = value;
@@ -1588,10 +1623,12 @@ namespace glz
    // Note: specified and is_specified are defined in glaze/core/traits.hpp.
 
    template <class T, uint32_t Format>
-   concept write_supported = requires { to<Format, std::remove_cvref_t<T>>{}; };
+   concept write_supported =
+      requires { to<Format, std::remove_cvref_t<T>>{}; } && top_level_supported<Format, std::remove_cvref_t<T>>;
 
    template <class T, uint32_t Format>
-   concept read_supported = requires { from<Format, std::remove_cvref_t<T>>{}; };
+   concept read_supported =
+      requires { from<Format, std::remove_cvref_t<T>>{}; } && top_level_supported<Format, std::remove_cvref_t<T>>;
 
    // Default context type for a format.
    // Formats that need a richer context (e.g. YAML) specialize this.

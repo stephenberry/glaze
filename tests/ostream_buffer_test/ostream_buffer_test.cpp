@@ -1015,7 +1015,6 @@ namespace
 
 // The reflected writers indent through &b[ix], whose operator[] already maps a logical index onto
 // the sliding window, so they take a different path to the same output as the generic writer above.
-// Reflected types must have linkage, so this cannot live in an anonymous namespace.
 struct prettify_leaf
 {
    std::string label{};
@@ -1114,7 +1113,6 @@ suite ostream_buffer_prettify_overflow_tests = [] {
 // vector-like buffer wants) sized the window to the document instead, which defeated the bounded
 // memory usage streaming exists to provide. These assert the window stays near the configured
 // capacity, and that the bytes are unaffected.
-// Reflected types must have linkage, so this cannot live in an anonymous namespace.
 struct bounded_row
 {
    std::string name{};

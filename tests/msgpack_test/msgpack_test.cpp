@@ -509,6 +509,26 @@ suite msgpack_char_array_tests = [] {
    };
 };
 
+suite msgpack_local_struct_tests = [] {
+   // https://github.com/stephenberry/glaze/issues/3040
+   "msgpack function-local struct writes a map and round trips"_test = [] {
+      struct local_t
+      {
+         int count{};
+         std::string label{};
+      };
+      local_t src{.count = 3, .label = "three"};
+      std::string buffer{};
+      expect(not glz::write_msgpack(src, buffer));
+      expect(buffer.find("count") != std::string::npos);
+      expect(buffer.find("label") != std::string::npos);
+      local_t dst{};
+      expect(not glz::read_msgpack(dst, buffer));
+      expect(dst.count == 3);
+      expect(dst.label == "three");
+   };
+};
+
 // Records the largest single allocation request so a test can assert that an array/map reserve was
 // bounded by the input rather than by an attacker-controlled wire count.
 inline size_t g_largest_alloc_count = 0;

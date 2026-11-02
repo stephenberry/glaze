@@ -571,6 +571,29 @@ suite json_patch_tests = [] {
       expect(!glz::seek([](auto&&) {}, *doc, "/a/99999999999999999999999"));
    };
 
+   // RFC 6901 section 3: '~' is only valid as "~0" or "~1". A trailing '~' is an invalid pointer,
+   // not a literal '~' in the key, so it must fail in every segment, not only the last one.
+   "trailing tilde rejected by every op"_test = [] {
+      constexpr std::string_view doc = R"({"a~":{"b":1}})";
+
+      auto parsed = glz::read_json<glz::generic>(doc);
+      expect(parsed.has_value());
+      expect(!glz::navigate_to(&*parsed, "/a~"));
+      expect(!glz::navigate_to(&*parsed, "/a~/b"));
+      expect(!glz::seek([](auto&&) {}, *parsed, "/a~"));
+
+      expect(!glz::patch_json(doc, R"([{"op":"test","path":"/a~","value":{"b":1}}])").has_value());
+      expect(!glz::patch_json(doc, R"([{"op":"replace","path":"/a~/b","value":99}])").has_value());
+      expect(!glz::patch_json(doc, R"([{"op":"copy","from":"/a~","path":"/c"}])").has_value());
+      expect(!glz::patch_json(doc, R"([{"op":"add","path":"/a~/c","value":2}])").has_value());
+      expect(!glz::patch_json(doc, R"([{"op":"remove","path":"/a~/b"}])").has_value());
+
+      // The escaped form of the same key still works
+      auto replaced = glz::patch_json(doc, R"([{"op":"replace","path":"/a~0/b","value":99}])");
+      expect(replaced.has_value());
+      expect(*replaced == R"({"a~":{"b":99}})");
+   };
+
    // RFC 6902: "-" is only meaningful as the target of "add"; every other op must fail on it
    "end of array token accepted only by add"_test = [] {
       constexpr std::string_view doc = R"(["foo","bar"])";

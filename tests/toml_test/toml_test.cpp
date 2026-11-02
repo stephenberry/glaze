@@ -102,6 +102,11 @@ struct float_special_struct
    std::vector<double> values{};
 };
 
+struct float32_write_opts : glz::opts
+{
+   glz::float_precision float_max_write_precision{glz::float_precision::float32};
+};
+
 struct int_array_struct
 {
    std::vector<int> values{};
@@ -405,6 +410,19 @@ struct glz::meta<config_with_enums>
 };
 
 suite starter = [] {
+   "write to a C array reports the byte count or the overflow"_test = [] {
+      my_struct s{};
+      char small[16]{};
+      expect(glz::write_toml(s, small).ec == glz::error_code::buffer_overflow);
+
+      char large[512]{};
+      const auto ec = glz::write_toml(s, large);
+      expect(not ec);
+      std::string expected{};
+      expect(not glz::write_toml(s, expected));
+      expect(std::string_view(large, ec.count) == expected);
+   };
+
    "example"_test = [] {
       my_struct s{};
       std::string buffer{};
@@ -2916,7 +2934,7 @@ struct reflectable_container
    bool operator==(const reflectable_container&) const = default;
 };
 
-// Struct for the TOML spec example test (needs external linkage)
+// Struct for the TOML spec example test
 struct simple_catalog
 {
    std::vector<product> products{};
@@ -2942,7 +2960,7 @@ struct quoted_header_catalog
    bool operator==(const quoted_header_catalog&) const = default;
 };
 
-// Structs for edge case tests (need external linkage)
+// Structs for edge case tests
 struct item_with_tags
 {
    std::string name{};
@@ -3958,6 +3976,124 @@ suite generic_f64_toml_tests = [] {
    };
 };
 
+// glz::cast reads its member through parse<TOML>, so the member is in value position below the root
+struct generic_cast_member
+{
+   glz::generic g{};
+   int b{};
+};
+
+template <>
+struct glz::meta<generic_cast_member>
+{
+   using T = generic_cast_member;
+   static constexpr auto value = object("g", glz::cast<&T::g, glz::generic>, "b", &T::b);
+};
+
+suite generic_toml_document_root_tests = [] {
+   // A document whose first key is quoted or starts like a value must not read as that one scalar
+   "generic_read_toml_quoted_first_key"_test = [] {
+      glz::generic g;
+      std::string toml = "\"a b\" = 1\nrole = \"user\"";
+      auto ec = glz::read_toml(g, toml);
+      expect(not ec) << glz::format_error(ec, toml);
+      expect(g.is_object());
+      expect(g["a b"].get<double>() == 1.0);
+      expect(g["role"].get<std::string>() == "user");
+
+      glz::generic literal;
+      toml = "'k' = 1\nx = 2";
+      ec = glz::read_toml(literal, toml);
+      expect(not ec) << glz::format_error(ec, toml);
+      expect(literal.is_object());
+      expect(literal["k"].get<double>() == 1.0);
+      expect(literal["x"].get<double>() == 2.0);
+
+      glz::generic dotted;
+      toml = "\"a b\".c = 1";
+      ec = glz::read_toml(dotted, toml);
+      expect(not ec) << glz::format_error(ec, toml);
+      expect(dotted["a b"]["c"].get<double>() == 1.0);
+   };
+
+   "generic_read_toml_value_like_first_key"_test = [] {
+      for (const std::string key : {"true", "false", "1234", "inf", "nan", "1979-05-27", "-x"}) {
+         glz::generic g;
+         const std::string toml = key + " = 1\nnext = 2";
+         auto ec = glz::read_toml(g, toml);
+         expect(not ec) << glz::format_error(ec, toml);
+         expect(g.is_object()) << toml;
+         expect(g[key].get<double>() == 1.0) << toml;
+         expect(g["next"].get<double>() == 2.0) << toml;
+      }
+
+      glz::generic g;
+      std::string toml = "1.5 = 2";
+      auto ec = glz::read_toml(g, toml);
+      expect(not ec) << glz::format_error(ec, toml);
+      expect(g["1"]["5"].get<double>() == 2.0);
+   };
+
+   "generic_read_toml_leading_blank_line_and_comment"_test = [] {
+      glz::generic g;
+      std::string toml = "\nname = \"config\"\nport = 8080\n";
+      auto ec = glz::read_toml(g, toml);
+      expect(not ec) << glz::format_error(ec, toml);
+      expect(g["name"].get<std::string>() == "config");
+      expect(g["port"].get<double>() == 8080.0);
+
+      glz::generic commented;
+      toml = "# header\n\"k\" = 1\n";
+      ec = glz::read_toml(commented, toml);
+      expect(not ec) << glz::format_error(ec, toml);
+      expect(commented["k"].get<double>() == 1.0);
+   };
+
+   "generic_read_toml_key_in_value_position"_test = [] {
+      // `a = x = 1` is not TOML; it must not read `x = 1` and the lines after it as a table under a
+      glz::generic identifier;
+      expect(glz::read_toml(identifier, "a = x = 1\nb = 2") == glz::error_code::syntax_error);
+      glz::generic quoted;
+      expect(glz::read_toml(quoted, "a = \"x\" = 1") == glz::error_code::syntax_error);
+
+      std::map<std::string, glz::generic> m;
+      expect(glz::read_toml(m, "a = x = 1\nb = 2") == glz::error_code::syntax_error);
+
+      // A wrapper that reads its value through parse<TOML> is still in value position
+      generic_cast_member cast_identifier{};
+      expect(glz::read_toml(cast_identifier, "g = x = 1\nb = 2") == glz::error_code::syntax_error);
+      generic_cast_member cast_quoted{};
+      expect(glz::read_toml(cast_quoted, "g = \"k\" = 1\nb = 2") == glz::error_code::syntax_error);
+
+      generic_cast_member cast_value{};
+      const std::string toml = "g = 5\nb = 2";
+      const auto ec = glz::read_toml(cast_value, toml);
+      expect(not ec) << glz::format_error(ec, toml);
+      expect(cast_value.g.get<double>() == 5.0);
+      expect(cast_value.b == 2);
+   };
+
+   "variant_read_toml_quoted_first_key"_test = [] {
+      std::variant<std::string, std::map<std::string, int64_t>> v;
+      std::string toml = "\"k\" = 1\nx = 2";
+      auto ec = glz::read_toml(v, toml);
+      expect(not ec) << glz::format_error(ec, toml);
+      expect(std::holds_alternative<std::map<std::string, int64_t>>(v));
+      auto& m = std::get<std::map<std::string, int64_t>>(v);
+      expect(m.size() == 2);
+      expect(m["k"] == 1);
+      expect(m["x"] == 2);
+
+      // A bare value at the root is still read as a value
+      std::variant<std::string, std::map<std::string, int64_t>> bare;
+      toml = "\"k\"";
+      ec = glz::read_toml(bare, toml);
+      expect(not ec) << glz::format_error(ec, toml);
+      expect(std::holds_alternative<std::string>(bare));
+      expect(std::get<std::string>(bare) == "k");
+   };
+};
+
 // ============================================
 // Corner cases and nested structure tests
 // ============================================
@@ -4927,6 +5063,23 @@ sname = "Second String")";
       expect(std::isinf(read.values[0]));
       expect(read.values[0] < 0.0);
       expect(std::isnan(read.values[1]));
+      expect(read.values[2] == 1.5);
+   };
+
+   // Narrowing a finite double beyond float's range must not produce an infinity, which TOML would write as inf
+   "toml_write_float32_narrowing_beyond_float_range"_test = [] {
+      const float_special_struct value{1e100, {-1e39, std::numeric_limits<double>::infinity(), 1.5}};
+      std::string buffer{};
+      expect(not glz::write<glz::set_toml<float32_write_opts{}>()>(value, buffer));
+      expect(buffer == "value = 1E100\nvalues = [-1E39, inf, 1.5]") << buffer;
+
+      float_special_struct read{};
+      const auto error = glz::read_toml(read, buffer);
+      expect(not error) << glz::format_error(error, buffer);
+      expect(read.value == 1e100);
+      expect(read.values.size() == 3);
+      expect(read.values[0] == -1e39);
+      expect(std::isinf(read.values[1]));
       expect(read.values[2] == 1.5);
    };
 
@@ -6701,6 +6854,170 @@ suite toml_line_ending_backslash = [] {
       const std::string input = "\"\"\"a\\ b\"\"\"";
       std::string value{};
       expect(bool(read(input, value)));
+   };
+};
+
+struct duplicate_key_inner
+{
+   int x{};
+   int y{};
+};
+
+struct duplicate_key_mid
+{
+   duplicate_key_inner b{};
+   int z{};
+};
+
+struct duplicate_key_doc
+{
+   std::string role{};
+   int n{};
+   duplicate_key_mid a{};
+   std::vector<duplicate_key_inner> arr{};
+   std::optional<duplicate_key_inner> opt{};
+};
+
+// More than 64 members, so flags past the 64th are held out of line
+struct duplicate_key_wide
+{
+   int m0{}, m1{}, m2{}, m3{}, m4{}, m5{}, m6{}, m7{}, m8{}, m9{};
+   int m10{}, m11{}, m12{}, m13{}, m14{}, m15{}, m16{}, m17{}, m18{}, m19{};
+   int m20{}, m21{}, m22{}, m23{}, m24{}, m25{}, m26{}, m27{}, m28{}, m29{};
+   int m30{}, m31{}, m32{}, m33{}, m34{}, m35{}, m36{}, m37{}, m38{}, m39{};
+   int m40{}, m41{}, m42{}, m43{}, m44{}, m45{}, m46{}, m47{}, m48{}, m49{};
+   int m50{}, m51{}, m52{}, m53{}, m54{}, m55{}, m56{}, m57{}, m58{}, m59{};
+   int m60{}, m61{}, m62{}, m63{}, m64{}, m65{}, m66{}, m67{}, m68{}, m69{};
+};
+
+struct duplicate_key_wide_holder
+{
+   duplicate_key_wide w{};
+};
+
+struct duplicate_key_meta
+{
+   std::string name{};
+   duplicate_key_inner inner{};
+};
+
+template <>
+struct glz::meta<duplicate_key_meta>
+{
+   using T = duplicate_key_meta;
+   static constexpr auto value = object("label", &T::name, "inner", &T::inner);
+};
+
+suite toml_duplicate_key_tests = [] {
+   // TOML v1.0.0: defining a key more than once is invalid, whether the second definition is a
+   // repeated line, a dotted key, a later [table] section, or a line extending an inline table.
+   "a key defined twice is rejected"_test = [] {
+      for (const std::string input : {
+              "role = \"user\"\nrole = \"admin\"\n",
+              "role = \"user\"\nn = 1\n\"role\" = \"admin\"\n",
+              "a.z = 1\na.z = 2\n",
+              "a.b.x = 1\na.b.x = 2\n",
+              "[a]\nz = 1\n[a]\nz = 2\n",
+              "[a.b]\nx = 1\n[a.b]\nx = 2\n",
+              "[[arr]]\nx = 1\nx = 2\n",
+              "a = {z = 1, z = 2}\n",
+              "arr = [{x = 1, x = 2}]\n",
+           }) {
+         duplicate_key_doc doc{};
+         expect(glz::read_toml(doc, input).ec == glz::error_code::syntax_error) << input;
+      }
+   };
+
+   "a table written whole cannot be extended"_test = [] {
+      for (const std::string input : {
+              "a = {z = 1}\n[a]\nz = 2\n",
+              "a = {z = 1}\na.z = 2\n",
+              "a.z = 1\na = {z = 2}\n",
+              "opt = {x = 1}\n[opt]\nx = 2\n",
+              "arr = [{x = 1}]\n[[arr]]\nx = 2\n",
+           }) {
+         duplicate_key_doc doc{};
+         expect(glz::read_toml(doc, input).ec == glz::error_code::syntax_error) << input;
+      }
+   };
+
+   "the earlier value is not overwritten"_test = [] {
+      duplicate_key_doc doc{};
+      expect(bool(glz::read_toml(doc, std::string{"role = \"user\"\nrole = \"admin\"\n"})));
+      expect(doc.role == "user") << doc.role;
+   };
+
+   "tables built up across the document still read"_test = [] {
+      {
+         duplicate_key_doc doc{};
+         const std::string input = "a.z = 1\na.b.x = 2\na.b.y = 3\n";
+         expect(not glz::read_toml(doc, input)) << input;
+         expect(doc.a.z == 1 && doc.a.b.x == 2 && doc.a.b.y == 3);
+      }
+      {
+         duplicate_key_doc doc{};
+         const std::string input = "[a.b]\nx = 1\n[a]\nz = 2\n";
+         expect(not glz::read_toml(doc, input)) << input;
+         expect(doc.a.b.x == 1 && doc.a.z == 2);
+      }
+      {
+         duplicate_key_doc doc{};
+         const std::string input = "role = \"u\"\n[a]\nz = 1\n[a.b]\nx = 1\ny = 2\n[[arr]]\nx = 3\n[[arr]]\nx = 4\n";
+         expect(not glz::read_toml(doc, input)) << input;
+         expect(doc.role == "u" && doc.a.z == 1 && doc.a.b.y == 2 && doc.arr.size() == 2 && doc.arr[1].x == 4);
+      }
+      {
+         duplicate_key_doc doc{};
+         const std::string input = "a = {z = 1, b = {x = 1, y = 2}}\narr = [{x = 1}, {x = 2}]\n[opt]\nx = 1\n";
+         expect(not glz::read_toml(doc, input)) << input;
+         expect(doc.a.b.y == 2 && doc.arr.size() == 2 && doc.opt && doc.opt->x == 1);
+      }
+   };
+
+   "a struct of more than 64 members"_test = [] {
+      for (const std::string input : {
+              "w.m68 = 1\nw.m68 = 2\n",
+              "[w]\nm69 = 1\n[w]\nm69 = 2\n",
+              "w = {m66 = 1, m66 = 2}\n",
+           }) {
+         duplicate_key_wide_holder holder{};
+         expect(glz::read_toml(holder, input).ec == glz::error_code::syntax_error) << input;
+      }
+
+      duplicate_key_wide wide{};
+      const std::string input = "m0 = 1\nm63 = 2\nm64 = 3\nm69 = 4\n";
+      expect(not glz::read_toml(wide, input)) << input;
+      expect(wide.m0 == 1 && wide.m63 == 2 && wide.m64 == 3 && wide.m69 == 4);
+   };
+
+   "a glz::meta struct"_test = [] {
+      for (const std::string input : {
+              "label = \"a\"\nlabel = \"b\"\n",
+              "inner.x = 1\ninner.x = 2\n",
+              "inner = {x = 1}\n[inner]\ny = 2\n",
+           }) {
+         duplicate_key_meta value{};
+         expect(glz::read_toml(value, input).ec == glz::error_code::syntax_error) << input;
+      }
+   };
+
+   "duplicates are reported before missing keys"_test = [] {
+      constexpr glz::opts opts{.format = glz::TOML, .error_on_missing_keys = true};
+      {
+         duplicate_key_inner value{};
+         const std::string input = "x = 1\nx = 2\n"; // y is also missing
+         expect(glz::read<opts>(value, input).ec == glz::error_code::syntax_error) << input;
+      }
+      {
+         duplicate_key_inner value{};
+         const std::string input = "x = 1\n";
+         expect(glz::read<opts>(value, input).ec == glz::error_code::missing_key) << input;
+      }
+      {
+         duplicate_key_inner value{};
+         const std::string input = "x = 1\ny = 2\n";
+         expect(not glz::read<opts>(value, input)) << input;
+      }
    };
 };
 

@@ -124,4 +124,47 @@ suite cors_preflight_tests = [] {
    };
 };
 
+suite cors_vary_tests = [] {
+   // Without Vary: Origin a shared cache stores the answer for one origin and serves it
+   // to the next, with the wrong Access-Control-Allow-Origin or none at all.
+   "reflected_origin_varies_on_origin"_test = [] {
+      glz::cors_config config;
+      config.allowed_origins = {"https://app.example", "https://admin.example"};
+
+      auto res = run_cors(config, "https://app.example");
+      expect(res.response_headers.first_value("access-control-allow-origin") == "https://app.example");
+      expect(res.response_headers.contains_token("vary", "Origin"));
+   };
+
+   "rejected_origin_varies_on_origin"_test = [] {
+      glz::cors_config config;
+      config.allowed_origins = {"https://app.example"};
+
+      auto res = run_cors(config, "https://evil.example");
+      expect(!res.response_headers.contains("access-control-allow-origin"));
+      expect(res.response_headers.contains_token("vary", "Origin"));
+   };
+
+   "wildcard_without_origin_varies_on_origin"_test = [] {
+      auto middleware = glz::create_cors_middleware();
+      glz::request req{};
+      req.method = glz::http_method::GET;
+      glz::response res{};
+      middleware(req, res);
+      expect(!res.response_headers.contains("access-control-allow-origin"));
+      expect(res.response_headers.contains_token("vary", "Origin"));
+   };
+
+   "preflight_echoing_request_headers_varies_on_them"_test = [] {
+      glz::cors_config config;
+      config.allowed_origins = {"https://app.example"};
+      config.allowed_headers.clear();
+
+      auto res = run_preflight(config, "https://app.example");
+      expect(res.status_code == 204);
+      expect(res.response_headers.contains_token("vary", "Origin"));
+      expect(res.response_headers.contains_token("vary", "Access-Control-Request-Headers"));
+   };
+};
+
 int main() {}

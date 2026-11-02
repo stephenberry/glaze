@@ -407,6 +407,15 @@ if (write_ec) {
 
 Both `glz::read` and `glz::write` return `error_ctx`, so remember to check the result in production code.
 
+## Duplicate Keys
+
+As TOML v1.0.0 requires, a key may be defined only once. Reading a document that repeats one returns `glz::error_code::syntax_error`, and the first value is kept. This covers a repeated line, a repeated dotted key, the same key under a repeated `[table]` header, a repeated key inside an inline table, and any later line that extends a value already written whole, such as `[a]` after `a = { ... }` or `[[arr]]` after `arr = [ ... ]`:
+
+```toml
+role = "user"
+role = "admin"  # syntax_error
+```
+
 ## File Helpers and Buffers
 
 For convenience Glaze also provides file-oriented helpers:
