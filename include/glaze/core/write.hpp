@@ -13,7 +13,7 @@ namespace glz
 {
    // For writing to a std::string, std::vector<char>, std::deque<char> and the like
    template <auto Opts, class T, output_buffer Buffer>
-      requires write_supported<T, Opts.format>
+      requires(write_supported<T, Opts.format> && not byte_array_buffer<Buffer>)
    [[nodiscard]] error_ctx write(T&& value, Buffer& buffer, is_context auto&& ctx)
    {
       using traits = buffer_traits<std::remove_cvref_t<Buffer>>;
@@ -44,7 +44,7 @@ namespace glz
    }
 
    template <auto& Partial, auto Opts, class T, output_buffer Buffer>
-      requires write_supported<T, Opts.format>
+      requires(write_supported<T, Opts.format> && not byte_array_buffer<Buffer>)
    [[nodiscard]] error_ctx write(T&& value, Buffer& buffer)
    {
       using traits = buffer_traits<std::remove_cvref_t<Buffer>>;
@@ -74,24 +74,35 @@ namespace glz
       return {ix, error_code::none, ctx.custom_error_message};
    }
 
+   // A C array has no members to serialize through. A span over it keeps the extent as the capacity, so it is
+   // bounds checked exactly like std::array.
+   template <auto Opts, class T, byte_array_buffer Buffer>
+      requires write_supported<T, Opts.format>
+   [[nodiscard]] error_ctx write(T&& value, Buffer& buffer, is_context auto&& ctx)
+   {
+      auto view = std::span{buffer};
+      return write<Opts>(std::forward<T>(value), view, ctx);
+   }
+
+   template <auto& Partial, auto Opts, class T, byte_array_buffer Buffer>
+      requires write_supported<T, Opts.format>
+   [[nodiscard]] error_ctx write(T&& value, Buffer& buffer)
+   {
+      auto view = std::span{buffer};
+      return write<Partial, Opts>(std::forward<T>(value), view);
+   }
+
    template <auto& Partial, auto Opts, class T, raw_buffer Buffer>
       requires write_supported<T, Opts.format>
    [[nodiscard]] error_ctx write(T&& value, Buffer& buffer)
    {
-      if constexpr (std::is_bounded_array_v<Buffer>) {
-         // Keep the array extent. Decay would otherwise select the unchecked char* path.
-         auto bounded = std::span{buffer};
-         return write<Partial, Opts>(std::forward<T>(value), bounded);
+      context ctx{};
+      size_t ix = 0;
+      serialize_partial<Opts.format>::template op<Partial, Opts>(std::forward<T>(value), ctx, buffer, ix);
+      if (bool(ctx.error)) [[unlikely]] {
+         return {ix, ctx.error, ctx.custom_error_message};
       }
-      else {
-         context ctx{};
-         size_t ix = 0;
-         serialize_partial<Opts.format>::template op<Partial, Opts>(std::forward<T>(value), ctx, buffer, ix);
-         if (bool(ctx.error)) [[unlikely]] {
-            return {ix, ctx.error, ctx.custom_error_message};
-         }
-         return {ix, error_code::none, ctx.custom_error_message};
-      }
+      return {ix, error_code::none, ctx.custom_error_message};
    }
 
    template <auto Opts, class T, output_buffer Buffer>
@@ -119,20 +130,13 @@ namespace glz
       requires write_supported<T, Opts.format>
    [[nodiscard]] error_ctx write(T&& value, Buffer&& buffer, is_context auto&& ctx)
    {
-      if constexpr (std::is_bounded_array_v<std::remove_reference_t<Buffer>>) {
-         // Preserve the capacity for every format, including partial writes.
-         auto bounded = std::span{buffer};
-         return write<Opts>(std::forward<T>(value), bounded, std::forward<decltype(ctx)>(ctx));
+      call_scope scope{ctx};
+      size_t ix = 0;
+      to<Opts.format, std::remove_cvref_t<T>>::template op<Opts>(std::forward<T>(value), ctx, buffer, ix);
+      if (bool(ctx.error)) [[unlikely]] {
+         return {ix, ctx.error, ctx.custom_error_message};
       }
-      else {
-         call_scope scope{ctx};
-         size_t ix = 0;
-         to<Opts.format, std::remove_cvref_t<T>>::template op<Opts>(std::forward<T>(value), ctx, buffer, ix);
-         if (bool(ctx.error)) [[unlikely]] {
-            return {ix, ctx.error, ctx.custom_error_message};
-         }
-         return {ix, error_code::none, ctx.custom_error_message};
-      }
+      return {ix, error_code::none, ctx.custom_error_message};
    }
 
    template <auto Opts, class T, raw_buffer Buffer>

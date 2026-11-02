@@ -23,15 +23,18 @@ namespace glz::ex
 
 namespace glz::ex
 {
-   // For writing to a std::string, std::vector<char>, std::deque<char> and the like
+   // For writing to a std::string, std::vector<char>, std::deque<char> and the like.
+   // Returns the byte count, which is the only way a bounded buffer (std::array, std::span, char[N]) learns where
+   // the output ends.
    template <auto Opts, class T, output_buffer Buffer>
       requires write_supported<T, Opts.format>
-   void write(T&& value, Buffer& buffer, is_context auto&& ctx)
+   size_t write(T&& value, Buffer& buffer, is_context auto&& ctx)
    {
       const auto ec = glz::write<Opts>(std::forward<T>(value), buffer, ctx);
       if (bool(ec)) [[unlikely]] {
          throw std::runtime_error(format_error(ec, buffer));
       }
+      return ec.count;
    }
 
    template <auto& Partial, auto Opts, class T, output_buffer Buffer>
@@ -46,10 +49,10 @@ namespace glz::ex
 
    template <auto Opts, class T, output_buffer Buffer>
       requires write_supported<T, Opts.format>
-   void write(T&& value, Buffer& buffer)
+   size_t write(T&& value, Buffer& buffer)
    {
       glz::context ctx{};
-      glz::ex::write<Opts>(std::forward<T>(value), buffer, ctx);
+      return glz::ex::write<Opts>(std::forward<T>(value), buffer, ctx);
    }
 
    template <auto Opts, class T>
@@ -67,7 +70,7 @@ namespace glz::ex
       requires write_supported<T, Opts.format>
    [[nodiscard]] size_t write(T&& value, Buffer&& buffer)
    {
-      // Qualified so it does not recurse into this overload. A char[N] buffer is bounded and can overflow.
+      // Qualified so it does not recurse into this overload.
       const auto ec = glz::write<Opts>(std::forward<T>(value), std::forward<Buffer>(buffer));
       if (bool(ec)) [[unlikely]] {
          throw std::runtime_error(format_error(ec));

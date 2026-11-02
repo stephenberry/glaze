@@ -42,7 +42,7 @@ std::cout << "Wrote " << ec.count << " bytes\n";
 
 ### Writing to Fixed-Size Buffers
 
-Fixed-size buffers like `char[N]`, `std::array`, and `std::span` have automatic bounds checking. C arrays preserve their extent and use the same bounds checks and padding requirements as `std::array` and `std::span`, including partial and exclude writes:
+Fixed-size buffers like `char[N]`, `std::array`, and `std::span` have automatic bounds checking. A C array of bytes is a bounded buffer like `std::array`, not a raw pointer: anywhere a write accepts a `std::array` or `std::span` it also accepts a `char[N]`, with the same return type, bounds checks, and padding requirements.
 
 ```cpp
 std::array<char, 512> buffer;  // Minimum 512 bytes recommended
@@ -83,7 +83,7 @@ notify_consumers(ec.count);
 
 ### Writing to Raw Pointers
 
-Raw `char*` pointers are trusted to have sufficient space (no bounds checking):
+Raw `char*` pointers are trusted to have sufficient space (no bounds checking). This applies only to an actual pointer; a `char[N]` does not decay to one, so it keeps its bounds checking:
 
 ```cpp
 char* dma_buffer = get_dma_buffer();  // Caller guarantees sufficient space

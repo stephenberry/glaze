@@ -1545,7 +1545,7 @@ namespace glz
    [[nodiscard]] glz::expected<size_t, error_ctx> write_toml(T&& value, Buffer&& buffer)
    {
       // Unpack explicitly: converting error_ctx to expected<size_t> goes through operator bool, which reports
-      // a bounded char[N] overflow as success.
+      // a failed write as success.
       const auto ec = write<opts{.format = TOML}>(std::forward<T>(value), std::forward<Buffer>(buffer));
       if (bool(ec)) [[unlikely]] {
          return glz::unexpected(ec);

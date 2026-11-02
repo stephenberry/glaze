@@ -405,20 +405,17 @@ struct glz::meta<config_with_enums>
 };
 
 suite starter = [] {
-   "write to a C array returns the byte count or the overflow"_test = [] {
+   "write to a C array reports the byte count or the overflow"_test = [] {
       my_struct s{};
       char small[16]{};
-      const auto overflow = glz::write_toml(s, small);
-      expect(not overflow.has_value());
-      expect(overflow.error().ec == glz::error_code::buffer_overflow);
+      expect(glz::write_toml(s, small).ec == glz::error_code::buffer_overflow);
 
       char large[512]{};
-      const auto written = glz::write_toml(s, large);
-      expect(written.has_value());
+      const auto ec = glz::write_toml(s, large);
+      expect(not ec);
       std::string expected{};
       expect(not glz::write_toml(s, expected));
-      expect(written.value() == expected.size());
-      expect(std::string_view(large, written.value()) == expected);
+      expect(std::string_view(large, ec.count) == expected);
    };
 
    "example"_test = [] {

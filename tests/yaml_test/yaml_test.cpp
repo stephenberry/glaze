@@ -341,6 +341,17 @@ struct yaml_multi_empty_arrays_struct
 const glz_test::scratch_directory scratch{"yaml_test"};
 
 suite yaml_write_tests = [] {
+   "write to a C array"_test = [] {
+      simple_struct obj{42, 3.14, "test"};
+      char large[512]{};
+      const auto ec = glz::write_yaml(obj, large);
+      expect(not ec);
+      expect(std::string_view(large, ec.count) == glz::write_yaml(obj).value());
+
+      char small[4]{};
+      expect(glz::write_yaml(obj, small).ec == glz::error_code::buffer_overflow);
+   };
+
    "write_simple_struct"_test = [] {
       simple_struct obj{42, 3.14, "test"};
       std::string buffer;

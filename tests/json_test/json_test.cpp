@@ -15833,6 +15833,36 @@ suite bounded_buffer_overflow_tests = [] {
       expect(exclude_result.count <= sizeof(excluded));
    };
 
+   "a C array is a bounded output buffer, not a raw pointer"_test = [] {
+      static_assert(glz::output_buffer<char (&)[8]>);
+      static_assert(glz::output_buffer<unsigned char (&)[8]>);
+      static_assert(not glz::output_buffer<const char (&)[8]>);
+      static_assert(not glz::raw_buffer<char (&)[8]>);
+      static_assert(glz::raw_buffer<char*>);
+      static_assert(glz::raw_buffer<char*&>);
+   };
+
+   "minify and prettify into a C array"_test = [] {
+      std::string compact = R"({"a":[1,2],"b":"c"})";
+      const std::string pretty = glz::prettify_json(compact);
+
+      char pretty_out[512]{};
+      const auto pretty_ec = glz::prettify_json(compact, pretty_out);
+      expect(not pretty_ec);
+      expect(std::string_view(pretty_out, pretty_ec.count) == pretty);
+
+      std::string pretty_in = pretty;
+      char compact_out[512]{};
+      const auto compact_ec = glz::minify_json(pretty_in, compact_out);
+      expect(not compact_ec);
+      expect(std::string_view(compact_out, compact_ec.count) == compact);
+
+      char small[4]{};
+      const auto overflow = glz::prettify_json(compact, small);
+      expect(bool(overflow));
+      expect(overflow.count <= sizeof(small));
+   };
+
    "bounded buffer reserves what an escaped string escapes to"_test = [] {
       // escape_control_characters reserves 6 bytes per character, a ceiling only a string of
       // nothing but control characters reaches. A resizable buffer over-allocates against it,

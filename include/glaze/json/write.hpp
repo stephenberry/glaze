@@ -2935,7 +2935,7 @@ namespace glz
    // Returns error_code::unknown_key if any key doesn't exist in the struct
 
    template <auto Opts = opts{}, class T, class Keys, output_buffer Buffer>
-      requires((glaze_object_t<T> || reflectable<T>) && range<Keys>)
+      requires((glaze_object_t<T> || reflectable<T>) && range<Keys> && not byte_array_buffer<Buffer>)
    [[nodiscard]] error_ctx write_json_partial(T&& value, const Keys& keys, Buffer&& buffer)
    {
       using traits = buffer_traits<std::remove_cvref_t<Buffer>>;
@@ -2968,20 +2968,23 @@ namespace glz
       requires((glaze_object_t<T> || reflectable<T>) && range<Keys>)
    [[nodiscard]] error_ctx write_json_partial(T&& value, const Keys& keys, Buffer&& buffer)
    {
-      if constexpr (std::is_bounded_array_v<std::remove_reference_t<Buffer>>) {
-         auto bounded = std::span{buffer};
-         return write_json_partial<Opts>(std::forward<T>(value), keys, bounded);
+      context ctx{};
+      size_t ix = 0;
+      to_runtime_partial<std::remove_cvref_t<T>>::template op<set_json<Opts>()>(keys, std::forward<T>(value), ctx,
+                                                                                buffer, ix);
+      if (bool(ctx.error)) [[unlikely]] {
+         return {ix, ctx.error, ctx.custom_error_message};
       }
-      else {
-         context ctx{};
-         size_t ix = 0;
-         to_runtime_partial<std::remove_cvref_t<T>>::template op<set_json<Opts>()>(keys, std::forward<T>(value), ctx,
-                                                                                   buffer, ix);
-         if (bool(ctx.error)) [[unlikely]] {
-            return {ix, ctx.error, ctx.custom_error_message};
-         }
-         return {ix, error_code::none, ctx.custom_error_message};
-      }
+      return {ix, error_code::none, ctx.custom_error_message};
+   }
+
+   // A C array has no members to serialize through; a span over it keeps the extent as the capacity.
+   template <auto Opts = opts{}, class T, class Keys, byte_array_buffer Buffer>
+      requires((glaze_object_t<T> || reflectable<T>) && range<Keys>)
+   [[nodiscard]] error_ctx write_json_partial(T&& value, const Keys& keys, Buffer& buffer)
+   {
+      auto view = std::span{buffer};
+      return write_json_partial<Opts>(std::forward<T>(value), keys, view);
    }
 
    template <auto Opts = opts{}, class T, class Keys>
@@ -3002,7 +3005,7 @@ namespace glz
    // Returns error_code::unknown_key if any exclude key doesn't exist in the struct
 
    template <auto Opts = opts{}, class T, class Keys, output_buffer Buffer>
-      requires((glaze_object_t<T> || reflectable<T>) && range<Keys>)
+      requires((glaze_object_t<T> || reflectable<T>) && range<Keys> && not byte_array_buffer<Buffer>)
    [[nodiscard]] error_ctx write_json_exclude(T&& value, const Keys& exclude_keys, Buffer&& buffer)
    {
       using traits = buffer_traits<std::remove_cvref_t<Buffer>>;
@@ -3035,20 +3038,23 @@ namespace glz
       requires((glaze_object_t<T> || reflectable<T>) && range<Keys>)
    [[nodiscard]] error_ctx write_json_exclude(T&& value, const Keys& exclude_keys, Buffer&& buffer)
    {
-      if constexpr (std::is_bounded_array_v<std::remove_reference_t<Buffer>>) {
-         auto bounded = std::span{buffer};
-         return write_json_exclude<Opts>(std::forward<T>(value), exclude_keys, bounded);
+      context ctx{};
+      size_t ix = 0;
+      to_runtime_exclude<std::remove_cvref_t<T>>::template op<set_json<Opts>()>(exclude_keys, std::forward<T>(value),
+                                                                                ctx, buffer, ix);
+      if (bool(ctx.error)) [[unlikely]] {
+         return {ix, ctx.error, ctx.custom_error_message};
       }
-      else {
-         context ctx{};
-         size_t ix = 0;
-         to_runtime_exclude<std::remove_cvref_t<T>>::template op<set_json<Opts>()>(exclude_keys, std::forward<T>(value),
-                                                                                   ctx, buffer, ix);
-         if (bool(ctx.error)) [[unlikely]] {
-            return {ix, ctx.error, ctx.custom_error_message};
-         }
-         return {ix, error_code::none, ctx.custom_error_message};
-      }
+      return {ix, error_code::none, ctx.custom_error_message};
+   }
+
+   // A C array has no members to serialize through; a span over it keeps the extent as the capacity.
+   template <auto Opts = opts{}, class T, class Keys, byte_array_buffer Buffer>
+      requires((glaze_object_t<T> || reflectable<T>) && range<Keys>)
+   [[nodiscard]] error_ctx write_json_exclude(T&& value, const Keys& exclude_keys, Buffer& buffer)
+   {
+      auto view = std::span{buffer};
+      return write_json_exclude<Opts>(std::forward<T>(value), exclude_keys, view);
    }
 
    template <auto Opts = opts{}, class T, class Keys>
