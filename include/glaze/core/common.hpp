@@ -627,10 +627,9 @@ namespace glz
    // Keep this a separate constraint so tuple_t is not instantiated for registered serializers,
    // including empty standard tuples that do not support glz::get<0>.
    template <class T>
-   concept reflectable =
-      std::is_class_v<std::remove_cvref_t<T>> && !is_specified<T> &&
-      !(is_no_reflect<T> || glaze_wrapper<std::remove_cvref_t<T>> || glaze_t<T> || meta_keys<T> || range<T> ||
-        pair_t<T> || null_t<T> || str_t<T> || bool_t<T> || tuple_t<T> || func_t<T>);
+   concept reflectable = std::is_class_v<std::remove_cvref_t<T>> && !is_specified<T> &&
+                         !(is_no_reflect<T> || glaze_wrapper<std::remove_cvref_t<T>> || glaze_t<T> || meta_keys<T> ||
+                           range<T> || pair_t<T> || null_t<T> || str_t<T> || bool_t<T> || tuple_t<T> || func_t<T>);
 #else
    // Traditional reflection requires aggregates. The exclusion list mirrors P2996 for consistency.
    // These exclusions handle aggregate types that shouldn't be reflected as objects:
