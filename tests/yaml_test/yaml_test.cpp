@@ -13347,4 +13347,79 @@ suite yaml_context_reuse = [] {
    };
 };
 
+// An implicit null in a flow mapping (`{a}` or `{a:}`) is read into a value type that cannot be null
+// by parsing the literal "null", a buffer separate from the document. Run under the document's
+// stream, the nested parse walked back from the literal towards the document's start and read out
+// of bounds (#3008). Whether that lands on unmapped bytes depends on where the two buffers sit, and
+// a document held in a string literal places them close enough for ASan to catch it.
+namespace flow_implicit_null
+{
+   struct nested_map_holder
+   {
+      std::map<std::string, std::map<std::string, std::string>> m{};
+   };
+
+   struct flow_then_block
+   {
+      std::map<std::string, std::string> x{};
+      std::map<std::string, std::string> y{};
+   };
+}
+
+suite yaml_flow_implicit_null_tests = [] {
+   using nested_map = std::map<std::string, std::map<std::string, std::string>>;
+
+   // The reads below only fault when the buffers happen to sit where ASan sees the walk, so the
+   // mechanism that keeps them apart is pinned directly.
+   "scoped_stream isolates a nested buffer and restores the document"_test = [] {
+      const std::string_view document = "a: b\nc: d\n";
+      const std::string_view literal = "null";
+      glz::yaml::yaml_context ctx{};
+      ctx.stream_begin = document.data();
+      const auto memoized = ctx.line_prefix_before(document.data() + 7);
+      expect(memoized.column == 2);
+      const char* const memo_line_begin = ctx.memo_line_begin;
+      const char* const memo_verified_end = ctx.memo_verified_end;
+      const char* const memo_first_content = ctx.memo_first_content;
+      {
+         const glz::yaml::yaml_context::scoped_stream scope{ctx, literal.data()};
+         expect(ctx.stream_begin == literal.data());
+         expect(ctx.memo_line_begin == nullptr);
+         expect(ctx.memo_verified_end == nullptr);
+         expect(ctx.line_prefix_before(literal.data() + 2).column == 2);
+      }
+      expect(ctx.stream_begin == document.data());
+      expect(ctx.memo_line_begin == memo_line_begin);
+      expect(ctx.memo_verified_end == memo_verified_end);
+      expect(ctx.memo_first_content == memo_first_content);
+   };
+
+   "implicit null into a non-nullable map is a syntax error"_test = [] {
+      for (const std::string_view yaml : {"{a}", "{b: {c: d}, a}", "{a:}", "{b: {c: d}, a: }"}) {
+         nested_map m{};
+         const auto ec = glz::read_yaml(m, yaml);
+         expect(ec == glz::error_code::syntax_error) << yaml;
+      }
+   };
+
+   "implicit null in a nested flow mapping on the heap is a syntax error"_test = [] {
+      using namespace flow_implicit_null;
+      nested_map_holder s{};
+      const std::string yaml = "m: {a}\n# ..................................................\n";
+      expect(glz::read_yaml(s, yaml) == glz::error_code::syntax_error);
+   };
+
+   "block parsing after an implicit null still sees the document"_test = [] {
+      using namespace flow_implicit_null;
+      flow_then_block s{};
+      const std::string yaml = "x: {a, b: c}\ny:\n  k: v\n  l: w\n";
+      const auto ec = glz::read_yaml(s, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(s.x.size() == 2u);
+      expect(s.x.contains("a"));
+      expect(s.x["b"] == "c");
+      expect(s.y == std::map<std::string, std::string>{{"k", "v"}, {"l", "w"}});
+   };
+};
+
 int main() { return 0; }

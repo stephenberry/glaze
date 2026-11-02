@@ -4772,6 +4772,7 @@ namespace glz
                   else {
                      static constexpr std::string_view null_value{"null"};
                      auto null_it = null_value.data();
+                     const yaml::yaml_context::scoped_stream literal_stream{ctx, null_value.data()};
                      from<YAML, val_t>::template op<yaml::flow_context_on<Opts>()>(
                         val, ctx, null_it, null_value.data() + null_value.size());
                      return !bool(ctx.error);
