@@ -231,6 +231,19 @@ suite generic_access_error_tests = [] {
              R"(glz::generic key not found: "missing")");
    };
 
+   "generic mutable at does not insert"_test = [] {
+      glz::generic json = {{"present", 1.0}};
+      expect(json.at("present").get<double>() == 1.0);
+      expect(caught_message<std::runtime_error>([&] { (void)json.at("missing"); }) ==
+             R"(glz::generic key not found: "missing")");
+      expect(!json.contains("missing"));
+
+      glz::generic null_value{};
+      expect(caught_message<std::bad_variant_access>([&] { (void)null_value.at("key"); }) ==
+             R"(glz::generic key "key": expected object, but holds null)");
+      expect(null_value.is_null());
+   };
+
    "generic get names expected and held types"_test = [] {
       const glz::generic json = {{"name", "Niels"}};
       expect(caught_message<std::bad_variant_access>([&] { (void)json["name"].get<double>(); }) ==
