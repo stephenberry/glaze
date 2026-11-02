@@ -304,9 +304,22 @@ namespace glz
    // a constant ~8 ms at any depth instead of 55 seconds at depth 12 and forever beyond that.
    inline constexpr size_t min_speculative_parse_bytes = 1 << 20;
 
+   // Seed the per-read speculation budget for `input_bytes` of input. glz::read does this for every
+   // read, and so must any public entry point that runs a reader over caller input on a context of
+   // its own (a lazy view's read_into, read_jmespath, REPE read_params): an unseeded context is not
+   // policed (see charge_speculation), so its variant resolution keeps the exponential cost above.
+   GLZ_ALWAYS_INLINE void seed_speculation_budget(is_context auto& ctx, const size_t input_bytes) noexcept
+   {
+      if constexpr (requires { ctx.speculation_budget; }) {
+         const size_t proportional = max_speculative_parse_factor * input_bytes;
+         ctx.speculation_budget =
+            (proportional > min_speculative_parse_bytes ? proportional : min_speculative_parse_bytes) + 2;
+      }
+   }
+
    // Charge `consumed` bytes of speculative parsing. Returns false once the budget is spent, at which
    // point the caller must stop trying alternatives. A zero budget means unlimited: a context that
-   // never went through glz::read (a nested or hand-rolled parse) is not policed.
+   // was never seeded (a nested or hand-rolled parse) is not policed.
    [[nodiscard]] GLZ_ALWAYS_INLINE bool charge_speculation(is_context auto& ctx, const size_t consumed) noexcept
    {
       if constexpr (requires { ctx.speculation_budget; }) {

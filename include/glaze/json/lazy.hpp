@@ -425,6 +425,8 @@ namespace glz
          context ctx{};
          auto it = data_;
          auto end = json_end();
+         // Seeded as glz::read would; a detached view has no end, which leaves the budget's floor.
+         seed_speculation_budget(ctx, end ? size_t(end - it) : 0);
          parse<JSON>::op<Opts>(value, ctx, it, end);
          // Capture completeness before finalize_read_context, which downgrades
          // partial_read_complete and a depth-zero end_reached to success. Those leave `it`
