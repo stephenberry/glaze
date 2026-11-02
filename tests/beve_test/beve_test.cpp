@@ -5503,6 +5503,14 @@ suite delimited_beve_tests = [] {
       expect(result == values);
    };
 
+   "write_beve_delimited into a C array"_test = [] {
+      std::vector<int> values{1, 2, 3};
+      char buffer[512]{};
+      const auto ec = glz::write_beve_delimited(values, buffer);
+      expect(not ec);
+      expect(std::string_view(buffer, ec.count) == glz::write_beve_delimited(values).value());
+   };
+
    "write_beve_delimited returning string"_test = [] {
       std::vector<double> values{1.5, 2.5, 3.5};
       auto result = glz::write_beve_delimited(values);

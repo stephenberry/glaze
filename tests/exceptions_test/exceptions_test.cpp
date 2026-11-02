@@ -124,6 +124,16 @@ suite basic_types = [] {
       expect(buffer == "true");
    };
 
+   "write to a C array"_test = [] {
+      my_struct obj{};
+      char small[16]{};
+      expect(throws([&] { std::ignore = glz::ex::write<glz::opts{}>(obj, small); }));
+
+      char large[512]{};
+      const auto count = glz::ex::write<glz::opts{}>(obj, large);
+      expect(std::string_view(large, count) == glz::write_json(obj).value());
+   };
+
    "bool read valid"_test = [] {
       bool val{};
       glz::ex::read_json(val, "true");
