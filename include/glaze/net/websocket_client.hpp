@@ -74,7 +74,9 @@ namespace glz
 
          size_t max_message_size{1024 * 1024 * 16}; // 16 MB limit
 #ifdef GLZ_ENABLE_SSL
-         mutable std::mutex ssl_ctx_mutex_; // Guards ssl_ctx_ creation and trust-anchor mutation
+         // Guards ssl_ctx_ creation and every mutation of it: trust anchors, the verify mode
+         // connect() applies, and configure_ssl_context(). Also guards ssl_verify_mode_.
+         mutable std::mutex ssl_ctx_mutex_;
          asio::ssl::verify_mode ssl_verify_mode_{asio::ssl::verify_peer}; // Default to verify peer
 #endif
 
