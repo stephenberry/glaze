@@ -71,15 +71,17 @@ namespace glz
          assign(value, temp);
       }
 
+      // The caller has already consumed the value's type tag and passes it in: MessagePack does
+      // this for every value, BEVE inside no_header contexts. MessagePack clears no_header before
+      // calling here for a struct member, so it is set again for the inner read.
       template <auto Opts>
-         requires(check_no_header(Opts))
       static void op(auto&& value, const uint8_t tag, is_context auto&& ctx, auto&& it, auto end)
       {
          using V = std::decay_t<decltype(value)>;
          using Cast = typename V::cast_type;
 
          Cast temp{};
-         parse<Format>::template op<Opts>(temp, tag, ctx, it, end);
+         parse<Format>::template op<no_header_on<Opts>()>(temp, tag, ctx, it, end);
          if (parse_failed(ctx.error)) [[unlikely]] {
             return;
          }
