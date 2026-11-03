@@ -208,8 +208,9 @@ namespace glz
    template <auto Target, auto Constraint, string_literal Message>
    constexpr auto read_constraint_impl() noexcept
    {
-      return
-         [](auto&& v) { return read_constraint_t<std::remove_cvref_t<decltype(v)>, Target, Constraint, Message>{v}; };
+      return [](auto&& v) {
+         return read_constraint_t<std::remove_reference_t<decltype(v)>, Target, Constraint, Message>{v};
+      };
    }
 
    template <auto Target, auto Constraint, string_literal Message>
