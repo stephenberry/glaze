@@ -1304,6 +1304,207 @@ suite msgpack_glaze_value_wrapper_tests = [] {
    };
 };
 
+namespace wrapper_members
+{
+   struct constrained
+   {
+      int age{};
+      std::string name{};
+   };
+
+   struct cast_member
+   {
+      int value{};
+   };
+
+   struct cast_source
+   {
+      double value{};
+   };
+
+   struct point
+   {
+      int x{};
+      int y{};
+   };
+
+   struct as_array_member
+   {
+      point p{};
+   };
+
+   struct managed
+   {
+      std::vector<int> values{};
+      int sum{};
+      bool reject{};
+
+      bool read_values()
+      {
+         sum = 0;
+         for (auto v : values) sum += v;
+         return !reject;
+      }
+      bool write_values() { return true; }
+   };
+
+   struct skip_constraint_opts : glz::opts
+   {
+      bool skip_read_constraint = true;
+   };
+
+   struct holder
+   {
+      std::vector<constrained> people{};
+      cast_member c{};
+      as_array_member a{};
+   };
+}
+
+template <>
+struct glz::meta<wrapper_members::constrained>
+{
+   using T = wrapper_members::constrained;
+   static constexpr auto limit_age = [](const T&, int age) { return age >= 0 && age <= 120; };
+   static constexpr auto value = object("age", read_constraint<&T::age, limit_age, "Age out of range">, //
+                                        "name", &T::name);
+};
+
+template <>
+struct glz::meta<wrapper_members::cast_member>
+{
+   using T = wrapper_members::cast_member;
+   static constexpr auto value = object("value", cast<&T::value, double>);
+};
+
+template <>
+struct glz::meta<wrapper_members::as_array_member>
+{
+   using T = wrapper_members::as_array_member;
+   static constexpr auto value = object("p", as_array<&T::p>);
+};
+
+template <>
+struct glz::meta<wrapper_members::managed>
+{
+   using T = wrapper_members::managed;
+   static constexpr auto value = object("values", manage<&T::values, &T::read_values, &T::write_values>);
+};
+
+namespace wrapper_members
+{
+   struct mfp_constrained
+   {
+      int x{};
+      bool positive(int v) { return v > 0; }
+   };
+}
+
+template <>
+struct glz::meta<wrapper_members::mfp_constrained>
+{
+   using T = wrapper_members::mfp_constrained;
+   static constexpr auto value = object("x", read_constraint<&T::x, &T::positive, "x must be positive">);
+};
+
+// MessagePack reads a value's type tag before dispatching and hands it to the reader. The generic
+// wrappers below must accept it when used as struct members.
+suite msgpack_wrapper_member_tests = [] {
+   using namespace wrapper_members;
+
+   "read_constraint member round trips"_test = [] {
+      std::string buffer{};
+      expect(not glz::write_msgpack(constrained{.age = 30, .name = "Ada"}, buffer));
+      constrained out{};
+      expect(not glz::read_msgpack(out, buffer));
+      expect(out.age == 30);
+      expect(out.name == "Ada");
+   };
+
+   "read_constraint member rejects a violation"_test = [] {
+      std::string buffer{};
+      expect(not glz::write_msgpack(constrained{.age = 200, .name = "Old"}, buffer));
+      constrained out{};
+      auto ec = glz::read_msgpack(out, buffer);
+      expect(ec == glz::error_code::constraint_violated);
+      expect(ec.custom_error_message == "Age out of range");
+      expect(out.age == 0);
+   };
+
+   "read_constraint violation is ignored with skip_read_constraint"_test = [] {
+      std::string buffer{};
+      expect(not glz::write_msgpack(constrained{.age = 200, .name = "Old"}, buffer));
+      constrained out{};
+      expect(not glz::read<skip_constraint_opts{{.format = glz::MSGPACK}}>(out, buffer));
+      expect(out.age == 200);
+   };
+
+   "read_constraint with a member function constraint"_test = [] {
+      std::string buffer{};
+      expect(not glz::write_msgpack(mfp_constrained{.x = 5}, buffer));
+      mfp_constrained out{};
+      expect(not glz::read_msgpack(out, buffer));
+      expect(out.x == 5);
+
+      buffer.clear();
+      expect(not glz::write_msgpack(mfp_constrained{.x = -5}, buffer));
+      expect(glz::read_msgpack(out, buffer) == glz::error_code::constraint_violated);
+   };
+
+   "cast member round trips"_test = [] {
+      std::string buffer{};
+      expect(not glz::write_msgpack(cast_member{.value = 42}, buffer));
+      cast_member out{};
+      expect(not glz::read_msgpack(out, buffer));
+      expect(out.value == 42);
+   };
+
+   "cast member reads the cast type"_test = [] {
+      std::string buffer{};
+      expect(not glz::write_msgpack(cast_source{.value = 7.75}, buffer));
+      cast_member out{};
+      expect(not glz::read_msgpack(out, buffer));
+      expect(out.value == 7);
+   };
+
+   "as_array member round trips"_test = [] {
+      std::string buffer{};
+      expect(not glz::write_msgpack(as_array_member{.p = {3, 4}}, buffer));
+      as_array_member out{};
+      expect(not glz::read_msgpack(out, buffer));
+      expect(out.p.x == 3);
+      expect(out.p.y == 4);
+   };
+
+   "manage member round trips and runs the read hook"_test = [] {
+      std::string buffer{};
+      expect(not glz::write_msgpack(managed{.values = {1, 2, 3}}, buffer));
+      managed out{};
+      expect(not glz::read_msgpack(out, buffer));
+      expect(out.values == std::vector<int>{1, 2, 3});
+      expect(out.sum == 6);
+   };
+
+   "manage member reports a failing read hook"_test = [] {
+      std::string buffer{};
+      expect(not glz::write_msgpack(managed{.values = {1}}, buffer));
+      managed out{.reject = true};
+      expect(glz::read_msgpack(out, buffer) == glz::error_code::syntax_error);
+   };
+
+   "wrapped members nested in containers and structs"_test = [] {
+      holder in{.people = {{.age = 1, .name = "a"}, {.age = 2, .name = "b"}}, .c = {9}, .a = {{5, 6}}};
+      std::string buffer{};
+      expect(not glz::write_msgpack(in, buffer));
+      holder out{};
+      expect(not glz::read_msgpack(out, buffer));
+      expect(out.people.size() == 2);
+      expect(out.people[1].age == 2 && out.people[1].name == "b");
+      expect(out.c.value == 9);
+      expect(out.a.p.x == 5 && out.a.p.y == 6);
+   };
+};
+
 namespace msgpack_depth
 {
    struct tree_node
