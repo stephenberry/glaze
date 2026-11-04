@@ -3540,14 +3540,17 @@ namespace glz
       consteval bool toml_reads_document()
       {
          using U = std::remove_cvref_t<T>;
-         if constexpr (has_variant_data_member<U> && glaze_value_t<U>) {
-            return toml_reads_document<decltype(std::declval<U&>().data)>();
+         if constexpr (custom_read<U>) {
+            return false;
+         }
+         else if constexpr (glaze_value_t<U>) {
+            // Read as its member, so it takes a document when that member does (glz::generic, or a
+            // meta value naming a struct member).
+            using M = std::remove_cvref_t<decltype(get_member(std::declval<U&>(), meta_wrapper_v<U>))>;
+            return toml_reads_document<M>();
          }
          else if constexpr (is_variant<U>) {
             return find_map_alternative_index<U>() != std::variant_npos;
-         }
-         else if constexpr (custom_read<U>) {
-            return false;
          }
          else if constexpr (nullable_like<U>) {
             return toml_reads_document<decltype(*std::declval<U&>())>();

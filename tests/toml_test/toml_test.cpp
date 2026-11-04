@@ -6903,6 +6903,17 @@ struct empty_document_required
    std::optional<int> y{};
 };
 
+struct empty_document_value_wrapper
+{
+   empty_document_optional inner{};
+};
+
+template <>
+struct glz::meta<empty_document_value_wrapper>
+{
+   static constexpr auto value = &empty_document_value_wrapper::inner;
+};
+
 suite toml_empty_document_tests = [] {
    "an all empty optional struct round trips"_test = [] {
       const empty_document_optional original{};
@@ -6984,6 +6995,15 @@ suite toml_empty_document_tests = [] {
          ec = glz::read_toml(v, input);
          expect(not ec) << glz::format_error(ec, input);
          expect(std::holds_alternative<std::map<std::string, int>>(v)) << input;
+      }
+   };
+
+   "a meta value naming a struct reads it as the document"_test = [] {
+      for (const std::string input : {"", "\n", "# comment"}) {
+         empty_document_value_wrapper value{.inner = {.a = 3}};
+         const auto ec = glz::read_toml(value, input);
+         expect(not ec) << glz::format_error(ec, input);
+         expect(value.inner.a == 3) << input;
       }
    };
 
