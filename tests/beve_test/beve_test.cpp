@@ -3445,6 +3445,12 @@ suite skip_tests = [] {
    };
 };
 
+struct beve_char_member
+{
+   char c{};
+   int x{};
+};
+
 suite type_conversions = [] {
    "double -> float"_test = [] {
       constexpr double pi64 = std::numbers::pi_v<double>;
@@ -3502,6 +3508,58 @@ suite type_conversions = [] {
       std::map<uint32_t, float> v{};
       expect(!glz::read_beve(v, b));
       expect(v == std::map<uint32_t, float>{{1, 1.1f}, {2, 2.2f}, {3, 3.3f}});
+   };
+
+   "map<uint16_t, int> -> map<uint64_t, int>"_test = [] {
+      std::map<uint16_t, int> input{{1, 2}, {3, 4}};
+      auto b = glz::write_beve(input).value_or("error");
+      std::map<uint64_t, int> v{};
+      expect(!glz::read_beve(v, b));
+      expect(v == std::map<uint64_t, int>{{1, 2}, {3, 4}});
+   };
+
+   "map<int64_t, int> -> map<int8_t, int>"_test = [] {
+      std::map<int64_t, int> input{{-5, 6}, {7, 8}};
+      auto b = glz::write_beve(input).value_or("error");
+      std::map<int8_t, int> v{};
+      expect(!glz::read_beve(v, b));
+      expect(v == std::map<int8_t, int>{{-5, 6}, {7, 8}});
+   };
+
+   "numeric map keys are read at the width the header declares"_test = [] {
+      // Each key of a map<uint8_t, ...> is one byte. Reading four bytes per key took the first three
+      // bytes of the value as the rest of the key and left "evil" as the value.
+      const std::string value = std::string("\0\x02\x10", 3) + "evil";
+      auto b = glz::write_beve(std::map<uint8_t, std::string>{{1, value}}).value_or("error");
+
+      std::map<int32_t, std::string> m{};
+      expect(!glz::read_beve(m, b));
+      expect(m == std::map<int32_t, std::string>{{1, value}});
+
+      std::vector<std::pair<int32_t, std::string>> pairs{};
+      expect(!glz::read_beve(pairs, b));
+      expect(pairs == std::vector<std::pair<int32_t, std::string>>{{1, value}});
+
+      std::map<char, std::string> c{};
+      expect(!glz::read_beve(c, glz::write_beve(std::map<int64_t, std::string>{{65, value}}).value_or("error")));
+      expect(c == std::map<char, std::string>{{'A', value}});
+   };
+
+   "char and enum reads honor the width of a converted tag"_test = [] {
+      // "c" is an i64 whose eight payload bytes hold another entry, "x": 42, ahead of the real "x": 1.
+      // Reading one byte for c parsed the hidden entry as the next key.
+      std::string b{char(glz::tag::object), char(2 << 2)};
+      b += {char(1 << 2), 'c', char(glz::tag::i64)};
+      b += {'A', char(1 << 2), 'x', char(glz::tag::i32), 42, 0, 0, 0}; // the eight bytes of c
+      b += {char(1 << 2), 'x', char(glz::tag::i32), 1, 0, 0, 0};
+      beve_char_member out{};
+      expect(!glz::read_beve(out, b));
+      expect(out.c == 'A');
+      expect(out.x == 1);
+
+      Color color{};
+      expect(!glz::read_beve(color, glz::write_beve(int8_t{2}).value_or("error")));
+      expect(color == Color::Blue);
    };
 };
 
