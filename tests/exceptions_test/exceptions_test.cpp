@@ -124,6 +124,16 @@ suite basic_types = [] {
       expect(buffer == "true");
    };
 
+   "write to a C array"_test = [] {
+      my_struct obj{};
+      char small[16]{};
+      expect(throws([&] { std::ignore = glz::ex::write<glz::opts{}>(obj, small); }));
+
+      char large[512]{};
+      const auto count = glz::ex::write<glz::opts{}>(obj, large);
+      expect(std::string_view(large, count) == glz::write_json(obj).value());
+   };
+
    "bool read valid"_test = [] {
       bool val{};
       glz::ex::read_json(val, "true");
@@ -219,6 +229,19 @@ suite generic_access_error_tests = [] {
       const glz::generic json = {{"name", "Niels"}};
       expect(caught_message<std::runtime_error>([&] { (void)json.at("missing"); }) ==
              R"(glz::generic key not found: "missing")");
+   };
+
+   "generic mutable at does not insert"_test = [] {
+      glz::generic json = {{"present", 1.0}};
+      expect(json.at("present").get<double>() == 1.0);
+      expect(caught_message<std::runtime_error>([&] { (void)json.at("missing"); }) ==
+             R"(glz::generic key not found: "missing")");
+      expect(!json.contains("missing"));
+
+      glz::generic null_value{};
+      expect(caught_message<std::bad_variant_access>([&] { (void)null_value.at("key"); }) ==
+             R"(glz::generic key "key": expected object, but holds null)");
+      expect(null_value.is_null());
    };
 
    "generic get names expected and held types"_test = [] {
