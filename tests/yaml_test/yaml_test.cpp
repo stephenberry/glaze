@@ -6,6 +6,7 @@
 #include <array>
 #include <chrono>
 #include <cmath>
+#include <concepts>
 #include <cstdio>
 #include <deque>
 #include <forward_list>
@@ -451,7 +452,11 @@ struct yaml_block_positions
    std::vector<T> sequence{};
    std::vector<std::optional<T>> optional_sequence{};
 
-   bool operator==(const yaml_block_positions&) const = default;
+   // Constrained because T may have no operator== (the write-only custom_write types). Unconstrained,
+   // the defaulted body is instantiated under P2996 reflection even though nothing compares them.
+   bool operator==(const yaml_block_positions&) const
+      requires std::equality_comparable<T>
+   = default;
 };
 
 template <class T>

@@ -93,7 +93,10 @@ namespace glz
       requires(glaze_value_t<V> && !custom_write<V>)
    struct resolve_write_type<V>
    {
-      using type = typename resolve_write_type<remove_meta_wrapper_t<V>>::type;
+      // The type unwrap_write_value yields. get_member also invokes a whole-type glz::custom meta,
+      // a callable producing the custom_t, where remove_meta_wrapper_t would stop at the callable.
+      using type = typename resolve_write_type<
+         std::remove_cvref_t<decltype(get_member(std::declval<V&>(), meta_wrapper_v<V>))>>::type;
    };
 
    template <class T, class From, class To>
