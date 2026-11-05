@@ -10,6 +10,7 @@
 #include <string>
 #include <string_view>
 #include <tuple>
+#include <utility>
 #include <variant>
 #include <vector>
 
@@ -2733,6 +2734,20 @@ namespace indistinguishable
    static_assert(not flagged<std::variant<std::map<std::string, int>, std::map<std::string, int>>>);
    static_assert(not flagged<std::variant<std::monostate, std::monostate>>);
    static_assert(not flagged<std::variant<same_a, custom_a>>);
+
+   // Many alternatives sharing every key, with one member type differing, must not exhaust the
+   // compiler's constant evaluation budget: each pair is compared, and none of them match.
+   template <size_t I>
+   struct envelope
+   {
+      int k0{}, k1{}, k2{}, k3{}, k4{}, k5{}, k6{}, k7{}, k8{};
+      std::array<int, I + 1> payload{};
+   };
+
+   template <size_t... I>
+   auto make_envelopes(std::index_sequence<I...>) -> std::variant<envelope<I>...>;
+
+   static_assert(not flagged<decltype(make_envelopes(std::make_index_sequence<128>{}))>);
 }
 
 suite indistinguishable_alternatives_tests = [] {
