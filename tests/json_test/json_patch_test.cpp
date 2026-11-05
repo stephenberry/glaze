@@ -1,7 +1,11 @@
 // Glaze Library
 // For the license information refer to glaze.hpp
 
+#include <cstdint>
 #include <cstdlib>
+#include <limits>
+#include <string>
+#include <string_view>
 
 #include "glaze/json/patch.hpp"
 #include "ut/ut.hpp"
@@ -1386,6 +1390,62 @@ suite generic_u64_patch_tests = [] {
                                                       R"([{"op":"replace","path":"/a","value":18446744073709551615}])");
       expect(result.has_value());
       expect(*result == R"({"a":18446744073709551615})");
+   };
+};
+
+suite numeric_equality_across_alternatives = [] {
+   "test compares numbers by value in generic_i64"_test = [] {
+      const auto passes = [](const std::string_view doc, const std::string_view value) {
+         const std::string patch = R"([{"op":"test","path":"/a","value":)" + std::string{value} + "}]";
+         return glz::patch_json<glz::generic_i64>(std::string{doc}, patch).has_value();
+      };
+      expect(passes(R"({"a":1})", "1.0"));
+      expect(passes(R"({"a":1.0})", "1"));
+      expect(passes(R"({"a":-3})", "-3.0"));
+      expect(!passes(R"({"a":1})", "1.5"));
+      expect(!passes(R"({"a":1})", "2.0"));
+   };
+
+   "test compares numbers by value in generic_u64"_test = [] {
+      const auto passes = [](const std::string_view doc, const std::string_view value) {
+         const std::string patch = R"([{"op":"test","path":"/a","value":)" + std::string{value} + "}]";
+         return glz::patch_json<glz::generic_u64>(std::string{doc}, patch).has_value();
+      };
+      expect(passes(R"({"a":1})", "1.0"));
+      expect(passes(R"({"a":-1})", "-1.0"));
+      expect(!passes(R"({"a":-1})", "1.0"));
+   };
+
+   "an integer equals a double only when no rounding is involved"_test = [] {
+      const auto equal = [](const auto integer, const double number) {
+         glz::generic_u64 a{};
+         glz::generic_u64 b{};
+         a.data = integer;
+         b.data = number;
+         return glz::equal(a, b) && glz::equal(b, a);
+      };
+      // 2^53 + 1 rounds to 2^53 as a double
+      expect(!equal(int64_t{9007199254740993}, 9007199254740992.0));
+      expect(equal(int64_t{9007199254740992}, 9007199254740992.0));
+      // 2^63 and 2^64 are just outside the integer types, and rounding the limits up would hide it
+      expect(!equal((std::numeric_limits<int64_t>::max)(), 9223372036854775808.0));
+      expect(!equal((std::numeric_limits<uint64_t>::max)(), 18446744073709551616.0));
+      expect(equal((std::numeric_limits<int64_t>::min)(), -9223372036854775808.0));
+      expect(!equal(uint64_t{1}, std::numeric_limits<double>::quiet_NaN()));
+      expect(!equal(uint64_t{1}, std::numeric_limits<double>::infinity()));
+      expect(!equal(int64_t{-1}, -std::numeric_limits<double>::infinity()));
+   };
+
+   "a number never equals a value of another JSON type"_test = [] {
+      glz::generic_i64 number{};
+      number.data = int64_t{1};
+      glz::generic_i64 boolean{};
+      boolean.data = true;
+      glz::generic_i64 string{};
+      string.data = std::string{"1"};
+      expect(!glz::equal(number, boolean));
+      expect(!glz::equal(boolean, number));
+      expect(!glz::equal(number, string));
    };
 };
 

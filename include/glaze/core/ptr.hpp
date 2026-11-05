@@ -28,16 +28,11 @@ namespace glz
    template <auto Opts, class T, class B>
    [[nodiscard]] bool write_as(T&& root_value, const sv json_ptr, B&& buffer)
    {
-      return seek(
-         [&](auto&& val) {
-            if constexpr (raw_buffer<B>) {
-               std::ignore = write<Opts>(
-                  val, buffer); // We assume the user has sufficient null characters at the end of the buffer
-            }
-            else {
-               write<Opts>(val, buffer);
-            }
-         },
-         std::forward<T>(root_value), json_ptr);
+      // Bounded buffers (std::array, std::span, char[N]) can overflow, so a failed write must not report
+      // success. A raw char* is unbounded; we assume the user has null characters at the end of it.
+      bool written = false;
+      const bool found =
+         seek([&](auto&& val) { written = not bool(write<Opts>(val, buffer)); }, std::forward<T>(root_value), json_ptr);
+      return found && written;
    }
 }
