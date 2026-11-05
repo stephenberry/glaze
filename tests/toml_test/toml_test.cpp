@@ -6058,6 +6058,26 @@ namespace i2595
       void set_items(std::vector<leaf> v) { items = std::move(v); }
       bool operator==(const custom_seq&) const = default;
    };
+
+   // A type whose whole glz::meta value is a glz::custom getter/setter exposing an object.
+   struct whole_custom_leaf
+   {
+      leaf v{};
+      bool operator==(const whole_custom_leaf&) const = default;
+   };
+   struct whole_custom_doc
+   {
+      int before{};
+      whole_custom_leaf field{};
+      int after{};
+      bool operator==(const whole_custom_doc&) const = default;
+   };
+   struct whole_plain_doc
+   {
+      int before{};
+      leaf field{};
+      int after{};
+   };
 }
 
 template <>
@@ -6109,6 +6129,13 @@ struct glz::meta<i2595::plain_obj>
    static constexpr auto value = object("inner", &T::inner);
 };
 template <>
+struct glz::meta<i2595::whole_custom_leaf>
+{
+   using T = i2595::whole_custom_leaf;
+   static constexpr auto value =
+      glz::custom<[](T& s, const i2595::leaf& l) { s.v = l; }, [](const T& s) -> const i2595::leaf& { return s.v; }>;
+};
+template <>
 struct glz::meta<i2595::custom_seq>
 {
    using T = i2595::custom_seq;
@@ -6151,6 +6178,24 @@ suite issue_2595_transparent_wrappers = [] {
       expect(cs.value() == ps.value()) << cs.value();
 
       custom_obj r{};
+      expect(not glz::read_toml(r, cs.value()));
+      expect(r == c);
+   };
+
+   // Resolving a whole-type glz::custom meta used to stop at the meta's callable, so the object it
+   // returns was written as an inline table, or as a [table] under P2996 where the callable counts
+   // as reflectable.
+   "whole-type custom getter object matches plain layout"_test = [] {
+      const whole_custom_doc c{1, {{"asdf", 123}}, 2};
+      const whole_plain_doc p{1, {"asdf", 123}, 2};
+
+      const auto cs = glz::write_toml(c);
+      const auto ps = glz::write_toml(p);
+      expect(cs.has_value());
+      expect(ps.has_value());
+      expect(cs.value() == ps.value()) << cs.value();
+
+      whole_custom_doc r{};
       expect(not glz::read_toml(r, cs.value()));
       expect(r == c);
    };
