@@ -16,6 +16,7 @@
 #include "glaze/util/dump.hpp"
 #include "glaze/util/for_each.hpp"
 #include "glaze/util/itoa.hpp"
+#include "glaze/util/non_finite.hpp"
 #include "glaze/util/parse.hpp"
 #include "glaze/util/variant.hpp"
 
@@ -198,13 +199,26 @@ namespace glz
          if constexpr (check_quoted_num(Opts)) {
             std::memcpy(&b[ix], "\"", 1);
             ++ix;
-            write_chars::op<Opts>(value, ctx, b, ix);
+            write_number<Opts>(value, ctx, b, ix);
             std::memcpy(&b[ix], "\"", 1);
             ++ix;
          }
          else {
-            write_chars::op<Opts>(value, ctx, b, ix);
+            write_number<Opts>(value, ctx, b, ix);
          }
+      }
+
+      // write_chars writes JSON's null for a non-finite float, which TOML cannot read back.
+      // TOML spells these values inf, -inf and nan.
+      template <auto Opts, class B>
+      static void write_number(auto&& value, is_context auto&& ctx, B&& b, auto& ix)
+      {
+         if constexpr (std::floating_point<std::remove_cvref_t<T>>) {
+            if (detail::write_non_finite_float(value, "nan", "inf", "-inf", b, ix)) {
+               return;
+            }
+         }
+         write_chars::op<Opts>(value, ctx, b, ix);
       }
    };
 
@@ -685,6 +699,53 @@ namespace glz
    template <auto Opts, class V, class B>
    void write_inline_map(V&& value, is_context auto&& ctx, B&& b, auto& ix);
 
+   // Whether a keyed value (a struct field or map entry) is null: an always-null type, an empty
+   // nullable, or a nullable, variant, or mimic (e.g. glz::generic) whose contents are null.
+   // TOML has no null, so the struct and map writers drop such entries, key and all; writing
+   // the key would leave `key = ` with nothing after the equals, which no TOML parser accepts.
+   // Looking through engaged nullables and variants keeps the rule independent of how the null
+   // is wrapped: std::optional<std::optional<int>>{std::optional<int>{}} and a glz::generic
+   // holding null are dropped exactly as an empty std::optional<int> is.
+   template <class V>
+   GLZ_ALWAYS_INLINE constexpr bool toml_value_is_null(const V& val)
+   {
+      if constexpr (always_null_t<V>) {
+         return true;
+      }
+      else if constexpr (nullable_like<V>) {
+         return !bool(val) || toml_value_is_null(*val);
+      }
+      else if constexpr (nullable_value_t<V>) {
+         return !val.has_value() || toml_value_is_null(val.value());
+      }
+      else if constexpr (is_variant<V>) {
+         return std::visit([](const auto& alt) { return toml_value_is_null(alt); }, val);
+      }
+      else if constexpr (glaze_value_t<V> && !custom_write<V>) {
+         return toml_value_is_null(get_member(val, meta_wrapper_v<V>));
+      }
+      else {
+         return false;
+      }
+   }
+
+   // An empty typed nullable (std::optional<int>, std::unique_ptr<T>, ...) in an array or tuple
+   // slot has no TOML spelling: there is no key to drop, dropping the element would shift every
+   // later index, and a "" placeholder would succeed on write and then fail to read back into
+   // the same type. The write fails instead, rather than produce output its own type rejects.
+   GLZ_ALWAYS_INLINE void report_unrepresentable_toml_null(is_context auto&& ctx) noexcept
+   {
+      ctx.error = error_code::feature_not_supported;
+      ctx.custom_error_message = "TOML has no null; an empty nullable cannot be written as an array or tuple element";
+   }
+
+   // Whether toml_value_is_null can ever be true for a field of type V that is not itself a
+   // null_t. A glz::custom getter is excluded: is_custom_field_null owns that case, since
+   // invoking the getter needs the parent object and the context.
+   template <class V>
+   inline constexpr bool toml_may_hold_null_v =
+      !is_specialization_v<V, custom_t> && (is_variant<V> || (glaze_value_t<V> && !custom_write<V>));
+
    // Dispatches a value to the appropriate writer for use inside an inline context
    // (the value of a key in an inline table, or an element of an inline array).
    // Inside such a context the value must be inline TOML: no multi-line `key = value`
@@ -794,10 +855,8 @@ namespace glz
                   bool is_null = false;
                   if constexpr (nullable_wrapper<val_t>)
                      is_null = !bool(element()(value).val);
-                  else if constexpr (nullable_value_t<val_t>)
-                     is_null = !get_member(value, element()).has_value();
                   else
-                     is_null = !bool(get_member(value, element()));
+                     is_null = toml_value_is_null(get_member(value, element()));
 
                   if (is_null) {
                      return;
@@ -808,6 +867,19 @@ namespace glz
                // See is_null_field in write_toml_object_with_path: a null glz::custom getter
                // result leaves nothing to write, so the key is dropped.
                if (is_custom_field_null<Type, I>(value, t, ctx)) {
+                  return;
+               }
+            }
+            else if constexpr (toml_may_hold_null_v<val_t>) {
+               // A variant or glz::generic field holding null; see toml_value_is_null.
+               bool is_null = false;
+               if constexpr (reflectable<Type>) {
+                  is_null = toml_value_is_null(get_member(value, get<I>(t)));
+               }
+               else {
+                  is_null = toml_value_is_null(get_member(value, get<I>(reflect<Type>::values)));
+               }
+               if (is_null) {
                   return;
                }
             }
@@ -864,6 +936,11 @@ namespace glz
             return;
          }
 
+         // Dropped like a null struct field; see toml_value_is_null.
+         if (toml_value_is_null(val)) {
+            continue;
+         }
+
          if (!first) {
             if (!ensure_space(ctx, b, ix + 2 + write_padding_bytes)) [[unlikely]] {
                return;
@@ -896,13 +973,24 @@ namespace glz
    void write_inline_value(V&& val, is_context auto&& ctx, B&& b, auto& ix)
    {
       using val_t = std::remove_cvref_t<V>;
+      // A struct field or map entry holding a null never reaches the null branches below; its
+      // writer drops the entry whole, key and all (see toml_value_is_null). What does reach them
+      // is a null with no key to drop: an array or tuple element, or a variant alternative.
+      // Emitting nothing there corrupts the structure around the value: [1, , 3] parses
+      // nowhere, and [1, ] parses everywhere as the one-element [1], silently losing an element.
       if constexpr (always_null_t<val_t>) {
-         // No inner value to recurse into; emit nothing.
+         // The null alternative of a variant such as glz::generic: written as the "" placeholder
+         // the std::nullptr_t writer documents, which keeps the element count and reads back
+         // into glz::generic.
+         to<TOML, std::nullptr_t>::template op<Options>(nullptr, ctx, b, ix);
       }
       else if constexpr (nullable_like<val_t>) {
          // bool / dereferencing access (raw pointers, smart pointers, std::optional, ...).
          if (val) {
             write_inline_value<Options>(*val, ctx, b, ix);
+         }
+         else {
+            report_unrepresentable_toml_null(ctx);
          }
       }
       else if constexpr (nullable_value_t<val_t>) {
@@ -911,6 +999,9 @@ namespace glz
          // coverage used at the struct field level.
          if (val.has_value()) {
             write_inline_value<Options>(val.value(), ctx, b, ix);
+         }
+         else {
+            report_unrepresentable_toml_null(ctx);
          }
       }
       else if constexpr (is_variant<val_t>) {
@@ -922,7 +1013,7 @@ namespace glz
       else if constexpr (glaze_object_t<val_t> || reflectable<val_t>) {
          write_inline_object<Options, val_t>(std::forward<V>(val), ctx, b, ix);
       }
-      else if constexpr (transparent_write_wrapper<val_t>) {
+      else if constexpr (resolvable_write_wrapper<val_t>) {
          // A mimic glaze_value_t or glz::custom getter: unwrap to the value it serializes as so
          // a wrapped object/map/array stays inline here, rather than dispatching through its
          // multi-line writer and leaking `key = value` lines or `[table]` headers (issue #2595).
@@ -1014,16 +1105,23 @@ namespace glz
 
                if constexpr (nullable_wrapper<val_t>)
                   return !bool(element()(value).val);
-               else if constexpr (nullable_value_t<val_t>)
-                  return !get_member(value, element()).has_value();
                else
-                  return !bool(get_member(value, element()));
+                  return toml_value_is_null(get_member(value, element()));
             }
          }
          else if constexpr (custom_getter_returns_nullable<val_t>()) {
             // A glz::custom getter yielding a null optional has nothing to put to the right of
             // `=`, so the key is dropped exactly as a plain nullable field would be.
             return is_custom_field_null<T, I>(value, t, ctx);
+         }
+         else if constexpr (toml_may_hold_null_v<val_t>) {
+            // A variant or glz::generic field holding null; see toml_value_is_null.
+            if constexpr (reflectable<T>) {
+               return toml_value_is_null(get_member(value, get<I>(t)));
+            }
+            else {
+               return toml_value_is_null(get_member(value, get<I>(reflect<T>::values)));
+            }
          }
          else { // else used to fix MSVC unreachable code warning
             return false;
@@ -1416,6 +1514,10 @@ namespace glz
             if (bool(ctx.error)) [[unlikely]] {
                return;
             }
+            // Dropped like a null struct field; see toml_value_is_null.
+            if (toml_value_is_null(val)) {
+               continue;
+            }
             if (!first) {
                write_object_entry_separator<Opts>(ctx, b, ix);
                if (bool(ctx.error)) [[unlikely]] {
@@ -1549,7 +1651,13 @@ namespace glz
    template <write_supported<TOML> T, raw_buffer Buffer>
    [[nodiscard]] glz::expected<size_t, error_ctx> write_toml(T&& value, Buffer&& buffer)
    {
-      return write<opts{.format = TOML}>(std::forward<T>(value), std::forward<Buffer>(buffer));
+      // Unpack explicitly: converting error_ctx to expected<size_t> goes through operator bool, which reports
+      // a failed write as success.
+      const auto ec = write<opts{.format = TOML}>(std::forward<T>(value), std::forward<Buffer>(buffer));
+      if (bool(ec)) [[unlikely]] {
+         return glz::unexpected(ec);
+      }
+      return ec.count;
    }
 
    template <write_supported<TOML> T>

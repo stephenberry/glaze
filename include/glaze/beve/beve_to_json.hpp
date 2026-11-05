@@ -498,9 +498,33 @@ namespace glz
                const auto string_or_boolean = (tag & 0b001'00'000) >> 5;
                switch (string_or_boolean) {
                case 0: {
-                  // boolean array (bit packed)
-                  // TODO: implement
-                  ctx.error = error_code::syntax_error;
+                  // boolean array (bit packed, LSB first)
+                  const auto n = int_from_compressed(ctx, it, end);
+                  if (bool(ctx.error)) [[unlikely]] {
+                     return;
+                  }
+                  const auto num_bytes = (n + 7) / 8;
+                  if (uint64_t(end - it) < num_bytes) [[unlikely]] {
+                     ctx.error = error_code::unexpected_end;
+                     return;
+                  }
+                  if (num_bytes && !packed_bool_padding_is_zero(uint8_t(*(it + (num_bytes - 1))), n)) [[unlikely]] {
+                     ctx.error = error_code::syntax_error;
+                     return;
+                  }
+                  for (size_t i = 0; i < n; ++i) {
+                     if (i != 0) {
+                        if (!emit_char(ctx, ',', out, ix)) return;
+                     }
+                     const bool x = (uint8_t(it[i / 8]) >> (i % 8)) & uint8_t(1);
+                     if (x) {
+                        if (!emit_literal<"true">(ctx, out, ix)) return;
+                     }
+                     else {
+                        if (!emit_literal<"false">(ctx, out, ix)) return;
+                     }
+                  }
+                  it += num_bytes;
                   break;
                }
                case 1: {

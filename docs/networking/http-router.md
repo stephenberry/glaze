@@ -106,8 +106,10 @@ router.get("/users/:id/posts", [](const glz::request& req, glz::response& res) {
 The request object provides:
 - `req.target` - Full URL including query string (e.g., `/api/users?limit=10`)
 - `req.path` - Path only, without query string (e.g., `/api/users`)
-- `req.params` - Path parameters from route (e.g., `:id`) - **URL-decoded**
+- `req.params` - Path parameters from route (e.g., `:id`) - **URL-decoded**, with `+` kept as a literal plus
 - `req.query` - Parsed query parameters - **URL-decoded**
+
+Decoded `:param` and `*wildcard` captures with a `..` component, a leading `/` or `\`, a leading Windows drive prefix (a single letter followed by `:`, such as `C:`), or a NUL byte (`%00`) do not match. Encoded separators elsewhere in a capture remain valid, as do colons anywhere else (`ab:c`, `notes/C:x`).
 
 See [URL Utilities](url.md) for more details on query string parsing and URL decoding.
 
@@ -163,7 +165,7 @@ Constraints are passed through the `route_spec` argument (`.constraints = ...`).
 Constraint behavior:
 - If validation returns `false`, the route is treated as a non-match.
 - `router.match(...)` returns no handler in this case.
-- With `glz::http_server`, the default result is `404 Not Found`.
+- With `glz::http_server`, the default result is `404 Not Found`, or `405 Method Not Allowed` when a route for another method matches.
 - `param_constraint.description` is used for generated OpenAPI path parameter descriptions and debug output, not automatic runtime error bodies.
 
 ### Advanced Validation Functions
@@ -284,6 +286,24 @@ server.mount("/api", router);
 Streaming handlers take over the connection (no keep-alive loop) and write chunked responses through `streaming_response`. The server closes the connection when the stream ends, so the response carries `Connection: close` unless the handler sets its own. An empty `send` writes nothing, since a zero-length chunk would end the body.
 
 > **Behavior change.** Before streaming and WebSocket routes shared the matcher, `streaming_handlers_` was an exact-path lookup, so registering `/items/:id` as a streaming route was effectively dead and a request to `/items/42` fell through to the normal router. After the unification, streaming routes are matched first (see [Route Priority](#route-priority)), so a streaming `/items/:id` will intercept requests that a static normal `/items/42` would otherwise handle. Code that registered both kinds on the same path needs to be aware of the new ordering.
+
+### Server-Sent Events
+
+`as_event_stream()` starts a `text/event-stream` response and `send_event(event_type, data, id)` writes one event to it:
+
+```cpp
+router.stream_get("/rooms/:room/events",
+    [](glz::request& req, glz::streaming_response& res) {
+        res.as_event_stream();
+        res.send_event("chat", "first line\nsecond line", "42");
+        res.close();
+    });
+```
+
+An event stream is framed by line breaks: each one ends a field and an empty line dispatches the event. `send_event` keeps a line break in its arguments from being read as framing, so text taken from a request can be relayed as it is:
+
+- `data` is written as one `data:` field per line. The recipient gets the lines joined with `\n`, so a `\r\n` or a lone `\r` arrives as `\n`.
+- An `event_type` or `id` holds a single line. An event whose `event_type` or `id` contains `\r` or `\n` is not written, and a send callback passed to `res.stream->send_event` receives `std::errc::invalid_argument`.
 
 ## WebSocket Routes
 

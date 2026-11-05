@@ -3007,6 +3007,25 @@ suite beve_to_json_tests = [] {
       expect(json == R"([1,2,3,4,5])") << json;
    };
 
+   "beve_to_json std::vector<bool>"_test = [] {
+      for (const std::vector<bool>& v :
+           {std::vector<bool>{}, std::vector<bool>{true, false, true},
+            std::vector<bool>{true, false, false, true, false, false, true, false, true}}) {
+         std::string buffer{};
+         expect(not glz::write_beve(v, buffer));
+
+         std::string json{};
+         expect(!glz::beve_to_json(buffer, json));
+         expect(json == glz::write_json(v).value()) << json;
+      }
+
+      std::string json{};
+      // three bools with a set padding bit
+      expect(glz::beve_to_json(std::string{"\x1c\x0c\x0d"}, json).ec == glz::error_code::syntax_error);
+      // nine bools need two bytes
+      expect(glz::beve_to_json(std::string{"\x1c\x24\xff"}, json).ec == glz::error_code::unexpected_end);
+   };
+
    "beve_to_json std::vector<std::string>"_test = [] {
       std::vector<std::string> v = {"one", "two", "three"};
       std::string buffer{};
@@ -3426,6 +3445,12 @@ suite skip_tests = [] {
    };
 };
 
+struct beve_char_member
+{
+   char c{};
+   int x{};
+};
+
 suite type_conversions = [] {
    "double -> float"_test = [] {
       constexpr double pi64 = std::numbers::pi_v<double>;
@@ -3483,6 +3508,58 @@ suite type_conversions = [] {
       std::map<uint32_t, float> v{};
       expect(!glz::read_beve(v, b));
       expect(v == std::map<uint32_t, float>{{1, 1.1f}, {2, 2.2f}, {3, 3.3f}});
+   };
+
+   "map<uint16_t, int> -> map<uint64_t, int>"_test = [] {
+      std::map<uint16_t, int> input{{1, 2}, {3, 4}};
+      auto b = glz::write_beve(input).value_or("error");
+      std::map<uint64_t, int> v{};
+      expect(!glz::read_beve(v, b));
+      expect(v == std::map<uint64_t, int>{{1, 2}, {3, 4}});
+   };
+
+   "map<int64_t, int> -> map<int8_t, int>"_test = [] {
+      std::map<int64_t, int> input{{-5, 6}, {7, 8}};
+      auto b = glz::write_beve(input).value_or("error");
+      std::map<int8_t, int> v{};
+      expect(!glz::read_beve(v, b));
+      expect(v == std::map<int8_t, int>{{-5, 6}, {7, 8}});
+   };
+
+   "numeric map keys are read at the width the header declares"_test = [] {
+      // Each key of a map<uint8_t, ...> is one byte. Reading four bytes per key took the first three
+      // bytes of the value as the rest of the key and left "evil" as the value.
+      const std::string value = std::string("\0\x02\x10", 3) + "evil";
+      auto b = glz::write_beve(std::map<uint8_t, std::string>{{1, value}}).value_or("error");
+
+      std::map<int32_t, std::string> m{};
+      expect(!glz::read_beve(m, b));
+      expect(m == std::map<int32_t, std::string>{{1, value}});
+
+      std::vector<std::pair<int32_t, std::string>> pairs{};
+      expect(!glz::read_beve(pairs, b));
+      expect(pairs == std::vector<std::pair<int32_t, std::string>>{{1, value}});
+
+      std::map<char, std::string> c{};
+      expect(!glz::read_beve(c, glz::write_beve(std::map<int64_t, std::string>{{65, value}}).value_or("error")));
+      expect(c == std::map<char, std::string>{{'A', value}});
+   };
+
+   "char and enum reads honor the width of a converted tag"_test = [] {
+      // "c" is an i64 whose eight payload bytes hold another entry, "x": 42, ahead of the real "x": 1.
+      // Reading one byte for c parsed the hidden entry as the next key.
+      std::string b{char(glz::tag::object), char(2 << 2)};
+      b += {char(1 << 2), 'c', char(glz::tag::i64)};
+      b += {'A', char(1 << 2), 'x', char(glz::tag::i32), 42, 0, 0, 0}; // the eight bytes of c
+      b += {char(1 << 2), 'x', char(glz::tag::i32), 1, 0, 0, 0};
+      beve_char_member out{};
+      expect(!glz::read_beve(out, b));
+      expect(out.c == 'A');
+      expect(out.x == 1);
+
+      Color color{};
+      expect(!glz::read_beve(color, glz::write_beve(int8_t{2}).value_or("error")));
+      expect(color == Color::Blue);
    };
 };
 
@@ -5482,6 +5559,14 @@ suite delimited_beve_tests = [] {
       expect(!ec);
       expect(result.size() == size_t(5));
       expect(result == values);
+   };
+
+   "write_beve_delimited into a C array"_test = [] {
+      std::vector<int> values{1, 2, 3};
+      char buffer[512]{};
+      const auto ec = glz::write_beve_delimited(values, buffer);
+      expect(not ec);
+      expect(std::string_view(buffer, ec.count) == glz::write_beve_delimited(values).value());
    };
 
    "write_beve_delimited returning string"_test = [] {
@@ -8377,6 +8462,35 @@ suite beve_fully_custom_variant_tests = [] {
    };
 };
 
+struct beve_fixed_args_cmd
+{
+   std::array<std::string, 2> args{};
+   std::string role = "user";
+};
+
+struct beve_dynamic_args_cmd
+{
+   std::vector<std::string> args{};
+   std::string role{};
+};
+
+struct beve_fixed_point
+{
+   int x{};
+};
+
+struct beve_fixed_wide_cmd
+{
+   std::array<int32_t, 2> values{};
+   int16_t tail{};
+};
+
+struct beve_dynamic_narrow_cmd
+{
+   std::vector<int16_t> values{};
+   int16_t tail{};
+};
+
 suite beve_fixed_array_bounds_tests = [] {
    "beve fixed array rejects oversized complex typed array"_test = [] {
       std::vector<std::complex<double>> src(8, std::complex<double>{1.0, 2.0});
@@ -8420,6 +8534,68 @@ suite beve_fixed_array_bounds_tests = [] {
          std::array<bool, 5> dst{};
          expect(not glz::read_beve(dst, buffer));
          expect(src == dst);
+      }
+   };
+
+   "beve fixed array rejects oversized string typed array"_test = [] {
+      std::vector<std::string> src{"a", "b", "c"};
+      std::string buffer{};
+      expect(not glz::write_beve(src, buffer));
+      std::array<std::string, 2> dst{};
+      expect(glz::read_beve(dst, buffer).ec == glz::error_code::syntax_error);
+   };
+
+   "beve fixed array rejects oversized generic array"_test = [] {
+      std::vector<beve_fixed_point> src{{1}, {2}};
+      std::string buffer{};
+      expect(not glz::write_beve(src, buffer));
+      std::array<beve_fixed_point, 1> dst{};
+      expect(glz::read_beve(dst, buffer).ec == glz::error_code::syntax_error);
+   };
+
+   "beve fixed string array does not read a surplus element as the next key"_test = [] {
+      // args declares three strings and the third one spells the next key, so the bytes after it
+      // read as a value for "role" if the reader stops after two elements
+      beve_dynamic_args_cmd src{{"x", "y", "role"}, "admin"};
+      std::string buffer{};
+      expect(not glz::write_beve(src, buffer));
+      const auto pos = buffer.rfind(std::string("\x10role", 5));
+      expect(pos != std::string::npos);
+      buffer.erase(pos, 5);
+
+      beve_fixed_args_cmd dst{};
+      expect(glz::read<glz::opts{.format = glz::BEVE, .null_terminated = false}>(dst, std::string_view{buffer}));
+      expect(dst.role == "user");
+   };
+
+   "beve fixed arrays read only the elements on the wire"_test = [] {
+      {
+         beve_dynamic_args_cmd src{{"guest"}, "user"};
+         std::string buffer{};
+         expect(not glz::write_beve(src, buffer));
+         beve_fixed_args_cmd dst{};
+         expect(not glz::read_beve(dst, buffer));
+         expect(dst.args[0] == "guest");
+         expect(dst.args[1].empty());
+         expect(dst.role == "user");
+      }
+      {
+         beve_dynamic_narrow_cmd src{{7}, 9};
+         std::string buffer{};
+         expect(not glz::write_beve(src, buffer));
+         beve_fixed_wide_cmd dst{};
+         expect(not glz::read_beve(dst, buffer));
+         expect(dst.values == std::array<int32_t, 2>{7, 0});
+         expect(dst.tail == 9);
+      }
+      {
+         std::vector<beve_fixed_point> src{{5}};
+         std::string buffer{};
+         expect(not glz::write_beve(src, buffer));
+         std::array<beve_fixed_point, 2> dst{};
+         expect(not glz::read_beve(dst, buffer));
+         expect(dst[0].x == 5);
+         expect(dst[1].x == 0);
       }
    };
 };

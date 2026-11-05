@@ -322,6 +322,26 @@ suite etf_tests = [] {
       expect(!glz::eetf_to_json(buffer, json));
       expect(json == R"([1.2,3.4,5.6])") << json;
    };
+
+   "truncated string term into a byte sequence"_test = [] {
+      // ERL_STRING_EXT "abc" with the buffer ending one byte early, inside a larger allocation the
+      // way a frame cut out of a receive buffer would be. decode_token fails on it, and its scratch
+      // string is then one byte longer than the sequence it would be copied into.
+      const std::array<char, 7> storage{char(glz::eetf_magic_version), char(ERL_STRING_EXT), 0, 3, 'a', 'b', 'c'};
+      const std::string_view truncated{storage.data(), storage.size() - 1};
+
+      // Under AddressSanitizer the overrun shows as a heap-buffer-overflow WRITE.
+      std::vector<std::uint8_t> bytes{};
+      expect(glz::read_term(bytes, truncated).ec == glz::error_code::unexpected_end);
+
+      struct
+      {
+         std::array<std::uint8_t, 3> bytes{};
+         std::uint8_t next = 0x55;
+      } fixed{};
+      expect(glz::read_term(fixed.bytes, truncated).ec == glz::error_code::unexpected_end);
+      expect(fixed.next == 0x55) << "the read wrote past the end of the array";
+   };
 };
 
 struct eetf_escape_opts : glz::eetf::eetf_opts

@@ -229,88 +229,89 @@ namespace glz
 
          if (tag != header) {
             if constexpr (check_allow_conversions(Opts)) {
-               if constexpr (num_t<T>) {
-                  if ((tag & 0b00000111) != tag::number) {
-                     ctx.error = error_code::syntax_error;
-                     return;
-                  }
+               // char and glaze_enum_t values convert here as well. The tag fixes how many bytes the
+               // value occupies, so reading sizeof(V) bytes under a wider or narrower tag would leave
+               // the cursor inside the value and parse its remaining bytes as whatever comes next.
+               if ((tag & 0b00000111) != tag::number) {
+                  ctx.error = error_code::syntax_error;
+                  return;
+               }
 
-                  auto decode = [&](auto&& i) {
-                     if (size_t(end - it) < sizeof(i)) [[unlikely]] {
-                        ctx.error = error_code::unexpected_end;
-                        return;
-                     }
-                     using I = std::decay_t<decltype(i)>;
-                     std::memcpy(&i, it, sizeof(I));
-                     if constexpr (std::endian::native == std::endian::big && sizeof(I) > 1) {
-                        byteswap_le(i);
-                     }
-                     value = static_cast<V>(i);
-                     it += sizeof(i);
-                  };
+               auto decode = [&](auto&& i) {
+                  if (size_t(end - it) < sizeof(i)) [[unlikely]] {
+                     ctx.error = error_code::unexpected_end;
+                     return;
+                  }
+                  using I = std::decay_t<decltype(i)>;
+                  std::memcpy(&i, it, sizeof(I));
+                  if constexpr (std::endian::native == std::endian::big && sizeof(I) > 1) {
+                     byteswap_le(i);
+                  }
+                  value = static_cast<V>(i);
+                  it += sizeof(i);
+               };
 
-                  switch (tag) {
-                  case tag::f32: {
-                     if constexpr (std::integral<V>) {
-                        // We do not allow cross conversions from floats to integral types
-                        ctx.error = error_code::syntax_error;
-                     }
-                     else {
-                        static_assert(sizeof(float) == 4);
-                        // TODO: use float32_t in C++23
-                        decode(float{});
-                     }
-                     return;
-                  }
-                  case tag::f64: {
-                     if constexpr (std::integral<V>) {
-                        // We do not allow cross conversions from floats to integral types
-                        ctx.error = error_code::syntax_error;
-                     }
-                     else {
-                        static_assert(sizeof(double) == 8);
-                        // TODO: use float64_t in C++23
-                        decode(double{});
-                     }
-                     return;
-                  }
-                  case tag::i8: {
-                     decode(int8_t{});
-                     return;
-                  }
-                  case tag::i16: {
-                     decode(int16_t{});
-                     return;
-                  }
-                  case tag::i32: {
-                     decode(int32_t{});
-                     return;
-                  }
-                  case tag::i64: {
-                     decode(int64_t{});
-                     return;
-                  }
-                  case tag::u8: {
-                     decode(uint8_t{});
-                     return;
-                  }
-                  case tag::u16: {
-                     decode(uint16_t{});
-                     return;
-                  }
-                  case tag::u32: {
-                     decode(uint32_t{});
-                     return;
-                  }
-                  case tag::u64: {
-                     decode(uint64_t{});
-                     return;
-                  }
-                  default: {
+               switch (tag) {
+               case tag::f32: {
+                  if constexpr (!std::floating_point<V>) {
+                     // We do not allow cross conversions from floats to integral or enum types
                      ctx.error = error_code::syntax_error;
-                     return;
                   }
+                  else {
+                     static_assert(sizeof(float) == 4);
+                     // TODO: use float32_t in C++23
+                     decode(float{});
                   }
+                  return;
+               }
+               case tag::f64: {
+                  if constexpr (!std::floating_point<V>) {
+                     // We do not allow cross conversions from floats to integral or enum types
+                     ctx.error = error_code::syntax_error;
+                  }
+                  else {
+                     static_assert(sizeof(double) == 8);
+                     // TODO: use float64_t in C++23
+                     decode(double{});
+                  }
+                  return;
+               }
+               case tag::i8: {
+                  decode(int8_t{});
+                  return;
+               }
+               case tag::i16: {
+                  decode(int16_t{});
+                  return;
+               }
+               case tag::i32: {
+                  decode(int32_t{});
+                  return;
+               }
+               case tag::i64: {
+                  decode(int64_t{});
+                  return;
+               }
+               case tag::u8: {
+                  decode(uint8_t{});
+                  return;
+               }
+               case tag::u16: {
+                  decode(uint16_t{});
+                  return;
+               }
+               case tag::u32: {
+                  decode(uint32_t{});
+                  return;
+               }
+               case tag::u64: {
+                  decode(uint64_t{});
+                  return;
+               }
+               default: {
+                  ctx.error = error_code::syntax_error;
+                  return;
+               }
                }
             }
             else {
@@ -2096,9 +2097,10 @@ namespace glz
                         return;
                      }
 
-                     for (auto&& x : value) {
+                     auto x_it = value.begin();
+                     for (size_t i = 0; i < count; ++i, ++x_it) {
                         const uint8_t number_tag = tag::number | (numeric_tag & 0b11111000);
-                        parse<BEVE>::op<no_header_on<Opts>()>(x, number_tag, ctx, it, end);
+                        parse<BEVE>::op<no_header_on<Opts>()>(*x_it, number_tag, ctx, it, end);
                      }
                      return;
                   }
@@ -2146,14 +2148,15 @@ namespace glz
                         }
 
                         const uint8_t byte_count = byte_count_lookup[tag >> 5];
-                        prepare(byte_count);
+                        const size_t count = prepare(byte_count);
                         if (bool(ctx.error)) [[unlikely]] {
                            return;
                         }
 
-                        for (auto&& x : value) {
+                        auto x_it = value.begin();
+                        for (size_t i = 0; i < count; ++i, ++x_it) {
                            const uint8_t number_tag = tag::number | (tag & 0b11111000);
-                           parse<BEVE>::op<no_header_on<Opts>()>(x, number_tag, ctx, it, end);
+                           parse<BEVE>::op<no_header_on<Opts>()>(*x_it, number_tag, ctx, it, end);
                         }
                         return;
                      }
@@ -2218,7 +2221,9 @@ namespace glz
                }
             }
             else {
-               for (auto&& x : value) {
+               auto x_it = value.begin();
+               for (size_t i = 0; i < n; ++i, ++x_it) {
+                  auto&& x = *x_it;
                   if (size_t(end - it) < sizeof(V)) [[unlikely]] {
                      ctx.error = error_code::unexpected_end;
                      return;
@@ -2282,8 +2287,16 @@ namespace glz
                   value.shrink_to_fit();
                }
             }
+            else {
+               if (n > value.size()) {
+                  ctx.error = error_code::syntax_error;
+                  return;
+               }
+            }
 
-            for (auto&& x : value) {
+            auto x_it = value.begin();
+            for (size_t i = 0; i < n; ++i, ++x_it) {
+               auto&& x = *x_it;
                const auto length = int_from_compressed(ctx, it, end);
                if (bool(ctx.error)) [[unlikely]] {
                   return;
@@ -2389,7 +2402,9 @@ namespace glz
                }
             }
             else {
-               for (auto&& x : value) {
+               auto x_it = value.begin();
+               for (size_t i = 0; i < n; ++i, ++x_it) {
+                  auto&& x = *x_it;
                   std::memcpy(&x, it, sizeof(V));
                   if constexpr (std::endian::native == std::endian::big && sizeof(X) > 1) {
                      X real_part = x.real();
@@ -2451,9 +2466,16 @@ namespace glz
                   value.shrink_to_fit();
                }
             }
+            else {
+               if (n > value.size()) {
+                  ctx.error = error_code::syntax_error;
+                  return;
+               }
+            }
 
-            for (auto&& item : value) {
-               parse<BEVE>::op<Opts>(item, ctx, it, end);
+            auto item_it = value.begin();
+            for (size_t i = 0; i < n; ++i, ++item_it) {
+               parse<BEVE>::op<Opts>(*item_it, ctx, it, end);
             }
          }
       }
@@ -2524,7 +2546,11 @@ namespace glz
 
          value.clear();
 
-         constexpr uint8_t key_tag = beve_key_traits<Key>::key_tag;
+         // Numeric keys carry no tag of their own: the object header's key type and byte count
+         // (bits 3-7) describe every key. Under allow_conversions those may differ from Key's, so
+         // read each key with the tag the header declares rather than as sizeof(Key) bytes.
+         const uint8_t key_tag = beve_key_traits<Key>::as_number ? uint8_t(tag::number | (tag & 0b111'11'000))
+                                                                 : beve_key_traits<Key>::key_tag;
          for (size_t i = 0; i < n; ++i) {
             if (exceeds_capacity(value, i + 1, ctx)) [[unlikely]] {
                return;
@@ -2662,7 +2688,11 @@ namespace glz
             }
          }
 
-         constexpr uint8_t key_tag = beve_key_traits<Key>::key_tag;
+         // Numeric keys carry no tag of their own: the object header's key type and byte count
+         // (bits 3-7) describe every key. Under allow_conversions those may differ from Key's, so
+         // read each key with the tag the header declares rather than as sizeof(Key) bytes.
+         const uint8_t key_tag = beve_key_traits<Key>::as_number ? uint8_t(tag::number | (tag & 0b111'11'000))
+                                                                 : beve_key_traits<Key>::key_tag;
 
          if constexpr (beve_key_traits<Key>::as_number) {
             Key key{}; // Value-initialize to silence false positive -Wmaybe-uninitialized

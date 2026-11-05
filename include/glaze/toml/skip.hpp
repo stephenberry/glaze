@@ -43,16 +43,19 @@ namespace glz::toml
                it += 3;
                break;
             }
-            if (forbidden_control_multiline_table[uint8_t(*it)]) [[unlikely]] {
+            if (forbidden_control_multiline_table[uint8_t(*it)] || is_bare_carriage_return(it, end)) [[unlikely]] {
                ctx.error = error_code::invalid_control_character;
                return;
             }
             if (*it == '\\') {
                ++it;
-               if (it == end) [[unlikely]] {
-                  ctx.error = error_code::unexpected_end;
-                  return;
+               // Step over an escaped quote or backslash so it is not read as a delimiter or
+               // another escape. Any other byte, including a line ending, is left for the
+               // checks above.
+               if (*it == '"' || *it == '\\') {
+                  ++it;
                }
+               continue;
             }
             ++it;
          }
@@ -66,7 +69,10 @@ namespace glz::toml
                   ctx.error = error_code::unexpected_end;
                   return;
                }
-               ++it;
+               // As above: only an escaped quote or backslash needs stepping over.
+               if (*it == '"' || *it == '\\') {
+                  ++it;
+               }
                continue;
             }
             if (*it == '"') {
@@ -113,7 +119,7 @@ namespace glz::toml
                it += 3;
                break;
             }
-            if (forbidden_control_multiline_table[uint8_t(*it)]) [[unlikely]] {
+            if (forbidden_control_multiline_table[uint8_t(*it)] || is_bare_carriage_return(it, end)) [[unlikely]] {
                ctx.error = error_code::invalid_control_character;
                return;
             }
@@ -187,6 +193,11 @@ namespace glz::toml
          if (c == '#') {
             skip_comment(it, end);
             continue;
+         }
+
+         if (is_bare_carriage_return(it, end)) [[unlikely]] {
+            ctx.error = error_code::syntax_error;
+            return;
          }
 
          if (c == closers[depth - 1]) {

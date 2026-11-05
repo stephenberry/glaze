@@ -219,7 +219,6 @@ jobs:
         run: |
           set -euo pipefail
           source /tmp/emsdk/emsdk_env.sh
-          git clone --depth 1 --branch v1.2.1 https://github.com/openalgz/ut /tmp/ut
           # Both configurations escape with SWAR: Glaze has no WASM escape helper. Pinning the
           # backend in the same compile that builds the suite means a toolchain change that quietly
           # drops SIMD128 fails to build, rather than running the scalar path twice and passing.
@@ -229,7 +228,7 @@ jobs:
             em++ -std=c++23 -O2 $flags \
               -DGLZ_EXPECT_DETECTED=$label -DGLZ_EXPECT_UTF8_VALIDATION=$label \
               -DGLZ_EXPECT_STRING_ESCAPE=SWAR \
-              -I include -I /tmp/ut/include \
+              -I include -I tests \
               tests/json_test/utf8_validation_test.cpp \
               -o /tmp/utf8_wasm.js -sALLOW_MEMORY_GROWTH=1 -sEXIT_RUNTIME=1 -sTOTAL_STACK=8MB
             node /tmp/utf8_wasm.js
@@ -249,7 +248,6 @@ jobs:
       - name: Build and run at each width
         run: |
           set -euo pipefail
-          git clone --depth 1 --branch v1.2.1 https://github.com/openalgz/ut /tmp/ut
           for w in 16 32 64; do
             echo "::group::generic width $w"
             # Pin the portable backend, or the vector path could compile away and all three widths
@@ -261,7 +259,7 @@ jobs:
             # Only the validator is pinned here: what the runner detects underneath the hook is not
             # this job's to promise.
             g++ -std=c++23 -O2 -DGLZ_UTF8_GENERIC_WIDTH=$w -DGLZ_EXPECT_UTF8_VALIDATION=generic$w \
-              -I include -I /tmp/ut/include \
+              -I include -I tests \
               tests/json_test/utf8_validation_test.cpp -o /tmp/utf8_generic_$w
             /tmp/utf8_generic_$w
             echo "::endgroup::"

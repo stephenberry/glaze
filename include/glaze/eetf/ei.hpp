@@ -319,6 +319,11 @@ namespace glz
          if (eetf::is_string(type)) {
             std::string buff;
             decode_token(buff, std::forward<Ctx>(ctx), std::forward<It0>(it), end);
+            // A failed decode leaves buff at sz + 1 bytes (decode_token's room for the NUL), one more
+            // than the sz elements value is given below, so it must not be copied out.
+            if (bool(ctx.error)) [[unlikely]] {
+               return;
+            }
             if constexpr (resizable<T>) {
                value.resize(sz);
                if constexpr (check_shrink_to_fit(Opts) && has_shrink_to_fit<T>) {

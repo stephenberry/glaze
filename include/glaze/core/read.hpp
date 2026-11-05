@@ -154,7 +154,8 @@ namespace glz
 
       call_scope scope{ctx};
 
-      if constexpr (Opts.format != NDJSON) {
+      // A TOML document with no keys is valid, so its reader decides by the type being read.
+      if constexpr (Opts.format != NDJSON && Opts.format != TOML) {
          if (buffer.size() == 0) [[unlikely]] {
             ctx.error = error_code::no_read_input;
             return {0, ctx.error, ctx.custom_error_message};
@@ -245,9 +246,15 @@ namespace glz
       requires read_supported<T, Opts.format>
    [[nodiscard]] error_ctx read(T& value, Buffer&& buffer, auto&& ctx)
    {
+      static_assert(!format_is_binary<Opts.format>,
+                    "A binary format cannot be read from a null-terminated C string: its length would be taken "
+                    "with strlen and stop at the first zero byte. Pass the buffer itself (e.g. the std::string, "
+                    "not its .data()), or a std::string_view/std::span with an explicit size.");
       const auto str = std::string_view{std::forward<Buffer>(buffer)};
-      if (str.empty()) {
-         return {0, error_code::no_read_input};
+      if constexpr (Opts.format != TOML) {
+         if (str.empty()) {
+            return {0, error_code::no_read_input};
+         }
       }
       return read<Opts>(value, str, ctx);
    }

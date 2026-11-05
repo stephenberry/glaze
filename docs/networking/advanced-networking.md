@@ -50,6 +50,8 @@ config.options_success_status = 200; // Use legacy-friendly 200 instead of 204
 server.enable_cors(config);
 ```
 
+The CORS headers depend on the request's `Origin`, so every response the middleware handles carries `Vary: Origin`, and a preflight that echoes `Access-Control-Request-Headers` (an empty `allowed_headers`) also carries `Vary: Access-Control-Request-Headers`. A shared cache then keeps one answer per origin instead of serving one origin's headers to another. A handler that sets its own `Vary` with `res.header()` replaces these; use `res.add_header("Vary", ...)` to keep them.
+
 ### Custom CORS Middleware
 
 ```cpp
@@ -83,7 +85,7 @@ server.get("/test-cors", [](const glz::request& req, glz::response& res) {
 
 ### Automatic Preflight Handling
 
-The server builds the `Allow` header dynamically, and runs middleware (including CORS) before returning a response. If the origin is denied the preflight receives `403`; if the browser asks for a verb that is not implemented the server answers with `405` (after running middleware so diagnostics still flow); otherwise the CORS middleware fills in the appropriate `Access-Control-Allow-*` headers.
+An `OPTIONS` request to a routed path without an `OPTIONS` route of its own is answered by the server. It builds the `Allow` header dynamically, and runs middleware (including CORS) and response hooks as for any response. If the origin is denied the preflight receives `403`; if the browser asks for a verb that is not implemented the server answers with `405` (after running middleware so diagnostics still flow); otherwise the CORS middleware fills in the appropriate `Access-Control-Allow-*` headers. The same middleware runs on the server's `404` and `405` responses, so a browser can read them cross-origin.
 
 ### Extended CORS Configuration
 

@@ -169,7 +169,7 @@ Read back with `SELECT json(col)` or pass the blob through Glaze's `jsonb_to_jso
 // Write
 error_ctx         glz::write_jsonb<T>(T&& value, Buffer& buffer);
 expected<string>  glz::write_jsonb<T>(T&& value);   // returns a new string
-error_code        glz::write_file_jsonb<T>(T&& value, sv filename, Buffer& scratch);
+error_ctx         glz::write_file_jsonb<T>(T&& value, sv filename, Buffer& scratch);
 
 // Read
 error_ctx         glz::read_jsonb<T>(T& value, const Buffer& buffer);

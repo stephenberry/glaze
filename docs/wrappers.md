@@ -889,21 +889,17 @@ struct write_precision_t
 };
 ```
 
-> [!IMPORTANT]
->
-> The `glz::float_precision float_max_write_precision` is not a core option in `glz::opts`. You must create an options structure that adds this field to enable float precision control. The example below shows this user defined options struct that inherits from `glz::opts`.
-
 In use:
 
 ```c++
-struct float_opts : glz::opts {
-   glz::float_precision float_max_write_precision{};
-};
-
 write_precision_t obj{};
-std::string json_float = glz::write<float_opts{}>(obj);
+std::string json_float = glz::write_json(obj).value();
 expect(json_float == R"({"pi":3.1415927})") << json_float;
 ```
+
+> [!NOTE]
+>
+> The float precision wrappers work with any options, including the default `glz::opts`. To limit the precision of every float rather than individual fields, add `float_max_write_precision` to a custom options struct (see [Associated glz::opts for float precision](#associated-glzopts-for-float-precision)).
 
 ## write_float64
 
@@ -1031,11 +1027,16 @@ std::string json = glz::write<format_opts{}>(pi).value_or("error");
 enum struct float_precision : uint8_t { full, float32 = 4, float64 = 8, float128 = 16 };
 ```
 
-glz::opts
+`float_max_write_precision` is an inheritable option, so it is not a member of `glz::opts`. Add it to a custom options struct:
 
 ```c++
-// The maximum precision type used for writing floats, higher precision floats will be cast down to this precision
-float_precision float_max_write_precision{};
+struct float_opts : glz::opts
+{
+   // The maximum precision type used for writing floats, higher precision floats will be cast down to this precision
+   glz::float_precision float_max_write_precision{};
+};
+
+std::string json = glz::write<float_opts{{}, glz::float_precision::float32}>(value).value();
 ```
 
 ## custom

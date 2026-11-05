@@ -126,6 +126,12 @@ struct four_int_columns
    int delta{};
 };
 
+struct non_finite_columns
+{
+   std::vector<double> d{};
+   std::vector<float> f{};
+};
+
 suite csv_tests = [] {
    "read/write column wise"_test = [] {
       std::string input_col =
@@ -267,6 +273,63 @@ suite csv_tests = [] {
       expect(obj.i32.size() == 1);
       expect(obj.i8[0] == (std::numeric_limits<std::int8_t>::min)());
       expect(obj.i32[0] == (std::numeric_limits<std::int32_t>::min)());
+   };
+
+   // https://github.com/stephenberry/glaze/issues/2963
+   "non-finite floats round trip"_test = [] {
+      constexpr auto inf = std::numeric_limits<double>::infinity();
+      constexpr auto qnan = std::numeric_limits<double>::quiet_NaN();
+      constexpr auto inf_f = std::numeric_limits<float>::infinity();
+      const non_finite_columns obj{{inf, -inf, qnan, 1.5}, {float(qnan), 2.f, -inf_f, inf_f}};
+
+      const auto check = [](const non_finite_columns& read) {
+         expect(read.d.size() == 4);
+         expect(read.f.size() == 4);
+         expect(std::isinf(read.d[0]) && read.d[0] > 0.0);
+         expect(std::isinf(read.d[1]) && read.d[1] < 0.0);
+         expect(std::isnan(read.d[2]));
+         expect(read.d[3] == 1.5);
+         expect(std::isnan(read.f[0]));
+         expect(read.f[1] == 2.f);
+         expect(std::isinf(read.f[2]) && read.f[2] < 0.f);
+         expect(std::isinf(read.f[3]) && read.f[3] > 0.f);
+      };
+
+      std::string out{};
+      expect(not glz::write<glz::opts_csv{.layout = glz::colwise}>(obj, out));
+      expect(out == "d,f\ninf,nan\n-inf,2\nnan,-inf\n1.5,inf\n") << out;
+      non_finite_columns read{};
+      expect(!glz::read<glz::opts_csv{.layout = glz::colwise}>(read, out));
+      check(read);
+
+      out.clear();
+      expect(not glz::write<glz::opts_csv{.delimiter = ';'}>(obj, out));
+      expect(out == "d;inf;-inf;nan;1.5\nf;nan;2;-inf;inf\n") << out;
+      read = {};
+      expect(!glz::read<glz::opts_csv{.delimiter = ';'}>(read, out));
+      check(read);
+
+      // Signed spellings, CRLF line endings, and a last field with no line break
+      std::string signed_tokens = "d,f\r\n+inf,-nan\r\n-nan,+nan\r\n1.5,-inf";
+      read = {};
+      expect(!glz::read<glz::opts_csv{.layout = glz::colwise}>(read, signed_tokens));
+      expect(read.d.size() == 3 && read.f.size() == 3);
+      if (read.d.size() == 3 && read.f.size() == 3) {
+         expect(std::isinf(read.d[0]) && read.d[0] > 0.0);
+         expect(std::isnan(read.f[0]));
+         expect(std::isnan(read.d[1]));
+         expect(std::isnan(read.f[1]));
+         expect(read.d[2] == 1.5);
+         expect(std::isinf(read.f[2]) && read.f[2] < 0.f);
+      }
+
+      // Only the lowercase tokens are accepted, and only when they fill the field
+      for (const std::string_view field : {"infinity", "Inf", "NaN", "INF", "nan ", "-"}) {
+         std::string bad = "d,f\n" + std::string(field) + ",1\n";
+         read = {};
+         const auto ec = glz::read<glz::opts_csv{.layout = glz::colwise}>(read, bad);
+         expect(ec.ec == glz::error_code::parse_number_failure) << field;
+      }
    };
 
    "rowwise char round trip"_test = [] {
@@ -465,6 +528,33 @@ y,1,2,3,4,5,6,7,8,9,10
       expect(m["y"] == std::vector<uint64_t>{1, 2, 3, 4, 5, 6, 7, 8, 9, 10});
    };
 
+   "std::map column wise rejects extra cells"_test = [] {
+      {
+         std::map<std::string, std::vector<std::string>> m;
+         auto ec = glz::read<glz::opts_csv{.layout = glz::colwise}>(m, std::string("a,b\n1,2,3\n"));
+         expect(bool(ec));
+         expect(ec == glz::error_code::syntax_error);
+      }
+      {
+         std::map<std::string, std::vector<double>> m;
+         auto ec = glz::read<glz::opts_csv{.layout = glz::colwise}>(m, std::string("a,b\n1,2,3\n"));
+         expect(ec == glz::error_code::syntax_error);
+      }
+      {
+         // A field reader that stops on a stray byte must end the read, not loop.
+         std::map<std::string, std::vector<double>> m;
+         auto ec = glz::read<glz::opts_csv{.layout = glz::colwise}>(m, std::string("a\n1x\n"));
+         expect(bool(ec));
+      }
+      {
+         // A well-formed document, including a final row without a trailing newline, still reads.
+         std::map<std::string, std::vector<double>> m;
+         expect(!glz::read<glz::opts_csv{.layout = glz::colwise}>(m, std::string("a,b\n1,2")));
+         expect(m["a"] == std::vector<double>{1});
+         expect(m["b"] == std::vector<double>{2});
+      }
+   };
+
    "std::unordered_map row wise"_test = [] {
       std::unordered_map<std::string, std::vector<uint64_t>> m;
       auto& x = m["x"];
@@ -491,6 +581,57 @@ y,1,2,3,4,5,6,7,8,9,10
 
       expect(m["x"] == std::vector<uint64_t>{0, 1, 2, 3, 4, 5, 6, 7, 8, 9});
       expect(m["y"] == std::vector<uint64_t>{1, 2, 3, 4, 5, 6, 7, 8, 9, 10});
+   };
+
+   "map key with delimiter is quoted row wise"_test = [] {
+      std::map<std::string, std::vector<int>> m;
+      m["temp,1000000\ninjected"] = {1, 2, 3};
+
+      std::string out{};
+      expect(not glz::write<glz::opts_csv{}>(m, out));
+      expect(out == "\"temp,1000000\ninjected\",1,2,3\n") << out;
+
+      std::map<std::string, std::vector<int>> in{};
+      expect(not glz::read<glz::opts_csv{}>(in, out));
+      expect(in == m);
+   };
+
+   "map key with quotes is quoted row wise"_test = [] {
+      std::map<std::string, std::vector<int>> m;
+      m["temp \"C\""] = {1, 2};
+      m["plain"] = {3, 4};
+
+      std::string out{};
+      expect(not glz::write<glz::opts_csv{}>(m, out));
+      expect(out == "plain,3,4\n\"temp \"\"C\"\"\",1,2\n") << out;
+
+      std::map<std::string, std::vector<int>> in{};
+      expect(not glz::read<glz::opts_csv{}>(in, out));
+      expect(in == m);
+   };
+
+   "map key with delimiter is quoted column wise"_test = [] {
+      std::map<std::string, std::vector<int>> m;
+      m["a,b"] = {1, 2};
+      m["x"] = {3, 4};
+
+      std::string out{};
+      expect(not glz::write<glz::opts_csv{.layout = glz::colwise}>(m, out));
+      expect(out == "\"a,b\",x\n1,3\n2,4\n") << out;
+
+      std::map<std::string, std::vector<int>> in{};
+      expect(not glz::read<glz::opts_csv{.layout = glz::colwise}>(in, out));
+      expect(in == m);
+   };
+
+   "quoted header names column wise"_test = [] {
+      std::string buffer = "\"num1\",\"num2\",maybe,v3s[0],v3s[1],v3s[2]\n11,22,1,1,2,3\n";
+      my_struct obj{};
+      expect(not glz::read<glz::opts_csv{.layout = glz::colwise}>(obj, buffer));
+      expect(obj.num1 == std::vector<int>{11});
+      expect(obj.num2 == std::deque<float>{22.f});
+      expect(obj.maybe == std::vector<bool>{true});
+      expect(obj.v3s == std::vector<std::array<int, 3>>{{1, 2, 3}});
    };
 
    "recorder rowwise"_test = [] {

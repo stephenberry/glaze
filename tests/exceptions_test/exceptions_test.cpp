@@ -124,6 +124,16 @@ suite basic_types = [] {
       expect(buffer == "true");
    };
 
+   "write to a C array"_test = [] {
+      my_struct obj{};
+      char small[16]{};
+      expect(throws([&] { std::ignore = glz::ex::write<glz::opts{}>(obj, small); }));
+
+      char large[512]{};
+      const auto count = glz::ex::write<glz::opts{}>(obj, large);
+      expect(std::string_view(large, count) == glz::write_json(obj).value());
+   };
+
    "bool read valid"_test = [] {
       bool val{};
       glz::ex::read_json(val, "true");
@@ -194,6 +204,70 @@ suite generic_read_tests = [] {
                 "            ^")
             << error.what();
       }
+   };
+};
+
+// Catches only the expected type: existing handlers catch std::runtime_error for missing keys and
+// std::bad_variant_access for type mismatches, so the descriptive errors must keep those types.
+template <class Exception>
+std::string caught_message(auto&& fn)
+{
+   try {
+      fn();
+   }
+   catch (const Exception& e) {
+      return e.what();
+   }
+   catch (...) {
+      return "unexpected exception type";
+   }
+   return "no exception";
+}
+
+suite generic_access_error_tests = [] {
+   "generic missing key names the key"_test = [] {
+      const glz::generic json = {{"name", "Niels"}};
+      expect(caught_message<std::runtime_error>([&] { (void)json.at("missing"); }) ==
+             R"(glz::generic key not found: "missing")");
+   };
+
+   "generic mutable at does not insert"_test = [] {
+      glz::generic json = {{"present", 1.0}};
+      expect(json.at("present").get<double>() == 1.0);
+      expect(caught_message<std::runtime_error>([&] { (void)json.at("missing"); }) ==
+             R"(glz::generic key not found: "missing")");
+      expect(!json.contains("missing"));
+
+      glz::generic null_value{};
+      expect(caught_message<std::bad_variant_access>([&] { (void)null_value.at("key"); }) ==
+             R"(glz::generic key "key": expected object, but holds null)");
+      expect(null_value.is_null());
+   };
+
+   "generic get names expected and held types"_test = [] {
+      const glz::generic json = {{"name", "Niels"}};
+      expect(caught_message<std::bad_variant_access>([&] { (void)json["name"].get<double>(); }) ==
+             "glz::generic get: expected double, but holds string");
+
+      glz::generic value = 5.0;
+      expect(caught_message<std::bad_variant_access>([&] { (void)value.get<bool>(); }) ==
+             "glz::generic get: expected bool, but holds double");
+
+      glz::generic_u64 u64_value = uint64_t{7};
+      expect(caught_message<std::bad_variant_access>([&] { (void)u64_value.get<int64_t>(); }) ==
+             "glz::generic get: expected int64_t, but holds uint64_t");
+   };
+
+   "generic key or index on wrong type"_test = [] {
+      const glz::generic json = {{"name", "Niels"}, {"list", {1.0, 2.0}}};
+      expect(caught_message<std::bad_variant_access>([&] { (void)json["list"]["key"]; }) ==
+             R"(glz::generic key "key": expected object, but holds array)");
+      expect(caught_message<std::bad_variant_access>([&] { (void)json["name"][0]; }) ==
+             "glz::generic index: expected array, but holds string");
+
+      glz::generic value = 5.0;
+      expect(caught_message<std::bad_variant_access>([&] { (void)value["key"]; }) ==
+             R"(glz::generic key "key": expected object, but holds double)");
    };
 };
 

@@ -330,10 +330,10 @@ namespace glz
             return true;
          }
 
-         // Replaying an anchor re-enters the reader directly, bypassing the variant reader's
-         // depth guard, so this is the only depth accounting a chain of aliases into a
-         // non-variant target gets. The cycle check above stops the unbounded case; this bounds
-         // a legitimate but deeply chained one.
+         // Replaying an anchor re-enters the reader without opening a collection, so the
+         // sequence and mapping readers' depth accounting never sees a chain of aliases. The
+         // cycle check above stops the unbounded case; this bounds a legitimate but deeply
+         // chained one.
          depth_guard guard{ctx, yaml::max_yaml_recursive_depth};
          if (!guard) [[unlikely]]
             return true;
@@ -2839,7 +2839,7 @@ namespace glz
          }
          else if constexpr (!resizable<V>) {
             // Fixed-size containers (std::array)
-            while (it != end && !adapter.fixed_capacity_reached(value)) {
+            while (it != end) {
                skip_flow_ws_and_newlines(ctx, it, end);
                if (bool(ctx.error)) [[unlikely]]
                   return;
@@ -2871,6 +2871,12 @@ namespace glz
                   return;
                }
                just_saw_comma = false;
+
+               // An item beyond the last slot is an error, as in JSON.
+               if (adapter.fixed_capacity_reached(value)) [[unlikely]] {
+                  ctx.error = error_code::exceeded_static_array_size;
+                  return;
+               }
 
                from<YAML, value_type>::template op<flow_context_on<Opts>()>(value[adapter.index], ctx, it, end);
 
@@ -2910,19 +2916,6 @@ namespace glz
                   ctx.error = error_code::syntax_error;
                   return;
                }
-            }
-
-            // If we exited because the fixed-size container is full but haven't seen ']',
-            // skip to the closing bracket to consume overflow elements.
-            int bracket_depth = 1;
-            while (it != end && bracket_depth > 0) {
-               if (*it == '[') {
-                  ++bracket_depth;
-               }
-               else if (*it == ']') {
-                  --bracket_depth;
-               }
-               ++it;
             }
          }
          else {
@@ -3202,14 +3195,6 @@ namespace glz
          int32_t pending_item_anchor_indent = sequence_indent;
 
          while (it != end) {
-            // For fixed-size arrays (e.g. std::array), stop when we've filled all elements.
-            // Exclude emplaceable types (e.g. std::set) which are not resizable but grow dynamically.
-            if constexpr (!resizable<V> && !emplaceable<V>) {
-               if (adapter.fixed_capacity_reached(value)) {
-                  return;
-               }
-            }
-
             // Skip blank lines and comments, track indent
             int32_t line_indent = 0;
             int32_t dash_col = -1; // actual column of the '-' on the line
@@ -3460,6 +3445,12 @@ namespace glz
                }
             }
             else if constexpr (!resizable<V>) {
+               // Fixed-size (e.g. std::array): an item beyond the last slot is an error, as in JSON.
+               // Checked only once another item is confirmed, so a full container still ends cleanly.
+               if (adapter.fixed_capacity_reached(value)) [[unlikely]] {
+                  ctx.error = error_code::exceeded_static_array_size;
+                  return;
+               }
                parse_element(value[adapter.index]);
                adapter.commit_fixed_slot();
             }
@@ -4141,6 +4132,12 @@ namespace glz
             return;
          }
 
+         // Each sequence and mapping is a level of nesting (see `yaml::max_yaml_recursive_depth`).
+         // Taken after the preamble so a null or alias in place of the collection costs nothing.
+         depth_guard guard{ctx, yaml::max_yaml_recursive_depth};
+         if (!guard) [[unlikely]]
+            return;
+
          if (*peek == '[') {
             // Flow sequence
             it = peek;
@@ -4185,6 +4182,11 @@ namespace glz
             it = peek;
             return;
          }
+
+         // A level of nesting, taken past the preamble as for sets above.
+         depth_guard guard{ctx, yaml::max_yaml_recursive_depth};
+         if (!guard) [[unlikely]]
+            return;
 
          if (*peek == '[') {
             // Flow sequence - consume whitespace and parse
@@ -4256,6 +4258,10 @@ namespace glz
             ctx.error = error_code::unexpected_end;
             return;
          }
+
+         depth_guard guard{ctx, yaml::max_yaml_recursive_depth};
+         if (!guard) [[unlikely]]
+            return;
 
          if (*it == '[') {
             // Flow sequence
@@ -4420,6 +4426,10 @@ namespace glz
          using first_type = typename std::remove_cvref_t<T>::first_type;
          using second_type = typename std::remove_cvref_t<T>::second_type;
 
+         depth_guard guard{ctx, yaml::max_yaml_recursive_depth};
+         if (!guard) [[unlikely]]
+            return;
+
          if (*it == '{') {
             // Flow mapping style: {key: value}
             ++it; // Skip '{'
@@ -4571,6 +4581,10 @@ namespace glz
                 value, ctx, it, end, preamble, [](yaml::yaml_tag tag) { return yaml::tag_valid_for_map(tag); }))
             return;
 
+         depth_guard guard{ctx, yaml::max_yaml_recursive_depth};
+         if (!guard) [[unlikely]]
+            return;
+
          if (*it == '{') {
             // Flow mapping
             yaml::parse_flow_mapping<Opts, Tag>(value, ctx, it, end);
@@ -4597,6 +4611,10 @@ namespace glz
          yaml::node_preamble_state preamble{};
          if (yaml::parse_node_preamble<Opts, yaml::node_property_policy{true, true, false, false}>(
                 value, ctx, it, end, preamble, [](yaml::yaml_tag tag) { return yaml::tag_valid_for_map(tag); }))
+            return;
+
+         depth_guard guard{ctx, yaml::max_yaml_recursive_depth};
+         if (!guard) [[unlikely]]
             return;
 
          using key_t = typename std::remove_cvref_t<T>::key_type;
@@ -4745,6 +4763,7 @@ namespace glz
                   else {
                      static constexpr std::string_view null_value{"null"};
                      auto null_it = null_value.data();
+                     const yaml::yaml_context::scoped_stream literal_stream{ctx, null_value.data()};
                      from<YAML, val_t>::template op<yaml::flow_context_on<Opts>()>(
                         val, ctx, null_it, null_value.data() + null_value.size());
                      return !bool(ctx.error);
@@ -5732,12 +5751,9 @@ namespace glz
          if (bool(ctx.error)) [[unlikely]]
             return;
 
-         // Every nested generic/variant value routes back through this reader, so bounding
-         // depth here caps flow-collection and flow-embedded mapping recursion that the
-         // indent stack does not cover.
-         depth_guard guard{ctx, yaml::max_yaml_recursive_depth};
-         if (!guard) [[unlikely]]
-            return;
+         // No depth is taken here: the sequence and mapping readers this dispatches to count the
+         // levels, so a scalar at the bottom of a document costs nothing, as in JSON. The one way
+         // back into this reader that opens no collection is `redispatch`, which counts itself.
 
          // At root level (indent == -1), skip leading whitespace, newlines, and comments
          // For nested values, only skip inline whitespace to preserve block structure
@@ -6138,7 +6154,7 @@ namespace glz
                                                                                                         end);
                      }
                      else {
-                        from<YAML, V>::template op<Opts>(value, ctx, it, end);
+                        redispatch<Opts>(value, ctx, it, end);
                      }
                      return;
                   }
@@ -6146,7 +6162,7 @@ namespace glz
 
                const bool prev_allow_indentless_sequence = ctx.allow_indentless_sequence;
                ctx.allow_indentless_sequence = value_is_indentless_sequence;
-               from<YAML, V>::template op<Opts>(value, ctx, it, end);
+               redispatch<Opts>(value, ctx, it, end);
                ctx.allow_indentless_sequence = prev_allow_indentless_sequence;
                if (!bool(ctx.error)) {
                   ctx.anchors[std::string(aname)] = {anchor_start, &*it, anchor_indent};
@@ -6260,7 +6276,7 @@ namespace glz
                      if (!starts_block_sequence_entry && yaml::line_could_be_block_mapping(it, end)) {
                         // Re-dispatch from the post-tag token so '&key key: val' is
                         // handled by the anchor-aware key path, not as a map-level anchor.
-                        from<YAML, V>::template op<Opts>(value, ctx, it, end);
+                        redispatch<Opts>(value, ctx, it, end);
                         return;
                      }
                   }
@@ -6404,7 +6420,7 @@ namespace glz
                   }
 
                   // Fall back if no string alternative exists.
-                  from<YAML, V>::template op<Opts>(value, ctx, it, end);
+                  redispatch<Opts>(value, ctx, it, end);
                   return;
                }
                }
@@ -6683,6 +6699,18 @@ namespace glz
                ctx.error = error_code::no_matching_variant_type;
             }
          }
+      }
+
+      // Dispatches the same node again once a property in front of it (an anchor or a tag) has been
+      // consumed. That opens no collection, so no reader below counts it, yet a document can stack
+      // properties to recurse here without end; each re-dispatch therefore takes a level itself.
+      template <auto Opts, class It>
+      static void redispatch(auto&& value, is_context auto&& ctx, It&& it, auto end) noexcept
+      {
+         depth_guard guard{ctx, yaml::max_yaml_recursive_depth};
+         if (!guard) [[unlikely]]
+            return;
+         op<Opts>(value, ctx, it, end);
       }
 #ifdef _MSC_VER
 #pragma warning(pop)
