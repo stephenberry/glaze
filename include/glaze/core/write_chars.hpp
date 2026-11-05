@@ -5,6 +5,7 @@
 
 #include <charconv>
 #include <cmath>
+#include <cstring>
 #include <type_traits>
 
 // Detection: is std::to_chars for floating-point available?
@@ -329,6 +330,17 @@ namespace glz
 // float128_t requires std::to_chars for floating-point, unavailable on older Apple platforms (iOS < 16.3)
 #if !defined(_LIBCPP_VERSION) || _LIBCPP_AVAILABILITY_HAS_TO_CHARS_FLOATING_POINT
                else if constexpr (is_float128<V>) {
+                  // std::to_chars spells these inf and nan. Write null, as glz::to_chars does for float and double.
+                  // value - value is zero for every finite value and NaN otherwise.
+                  if (value - value != V(0)) {
+                     if (b.size() - ix < 4) {
+                        ctx.error = error_code::unexpected_end;
+                        return;
+                     }
+                     std::memcpy(&b[ix], "null", 4);
+                     ix += 4;
+                     return;
+                  }
                   const auto start = reinterpret_cast<char*>(&b[ix]);
                   const auto [ptr, ec] = std::to_chars(start, &b[0] + b.size(), value, std::chars_format::general);
                   if (ec != std::errc()) {

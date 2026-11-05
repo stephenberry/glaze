@@ -507,8 +507,11 @@ namespace glz
             }
             else {
                s.type = sv{"number"};
-               s.minimum = std::numeric_limits<V>::lowest();
-               s.maximum = (std::numeric_limits<V>::max)();
+               // Schema bounds are doubles, so a type with a wider range (long double) has none it can state.
+               if constexpr (std::numeric_limits<V>::max_exponent <= std::numeric_limits<double>::max_exponent) {
+                  s.minimum = static_cast<double>(std::numeric_limits<V>::lowest());
+                  s.maximum = static_cast<double>((std::numeric_limits<V>::max)());
+               }
             }
          }
       };
