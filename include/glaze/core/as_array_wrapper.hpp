@@ -20,6 +20,15 @@ namespace glz
          auto tie = to_tie(wrapper.value);
          parse<Format>::template op<Opts>(tie, ctx, it, end);
       }
+
+      // The caller has already consumed the value's type tag and passes it in: MessagePack does
+      // this for every value, BEVE inside no_header contexts.
+      template <auto Opts>
+      static void op(auto&& wrapper, const uint8_t tag, is_context auto&& ctx, auto&& it, auto end)
+      {
+         auto tie = to_tie(wrapper.value);
+         parse<Format>::template op<no_header_on<Opts>()>(tie, tag, ctx, it, end);
+      }
    };
 
    template <uint32_t Format, class T>

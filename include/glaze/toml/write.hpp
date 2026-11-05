@@ -1013,7 +1013,7 @@ namespace glz
       else if constexpr (glaze_object_t<val_t> || reflectable<val_t>) {
          write_inline_object<Options, val_t>(std::forward<V>(val), ctx, b, ix);
       }
-      else if constexpr (transparent_write_wrapper<val_t>) {
+      else if constexpr (resolvable_write_wrapper<val_t>) {
          // A mimic glaze_value_t or glz::custom getter: unwrap to the value it serializes as so
          // a wrapped object/map/array stays inline here, rather than dispatching through its
          // multi-line writer and leaking `key = value` lines or `[table]` headers (issue #2595).
@@ -1646,7 +1646,13 @@ namespace glz
    template <write_supported<TOML> T, raw_buffer Buffer>
    [[nodiscard]] glz::expected<size_t, error_ctx> write_toml(T&& value, Buffer&& buffer)
    {
-      return write<opts{.format = TOML}>(std::forward<T>(value), std::forward<Buffer>(buffer));
+      // Unpack explicitly: converting error_ctx to expected<size_t> goes through operator bool, which reports
+      // a failed write as success.
+      const auto ec = write<opts{.format = TOML}>(std::forward<T>(value), std::forward<Buffer>(buffer));
+      if (bool(ec)) [[unlikely]] {
+         return glz::unexpected(ec);
+      }
+      return ec.count;
    }
 
    template <write_supported<TOML> T>

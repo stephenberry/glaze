@@ -332,6 +332,46 @@ namespace glz::yaml
          memo_first_content = nullptr;
       }
 
+      // Makes a buffer other than the document the stream for one nested parse, and gives the
+      // document back when it goes out of scope. Line queries walk back from a position towards
+      // `stream_begin`, so parsing a separate buffer under the document's stream compares pointers
+      // into two unrelated arrays and can walk off the start of the one being parsed.
+      class scoped_stream
+      {
+        public:
+         scoped_stream(yaml_context& ctx, const char* begin) noexcept
+            : ctx_(ctx),
+              stream_begin_(ctx.stream_begin),
+              memo_line_begin_(ctx.memo_line_begin),
+              memo_verified_end_(ctx.memo_verified_end),
+              memo_first_tab_(ctx.memo_first_tab),
+              memo_first_content_(ctx.memo_first_content)
+         {
+            ctx.stream_begin = begin;
+            ctx.reset_line_memo();
+         }
+
+         ~scoped_stream()
+         {
+            ctx_.stream_begin = stream_begin_;
+            ctx_.memo_line_begin = memo_line_begin_;
+            ctx_.memo_verified_end = memo_verified_end_;
+            ctx_.memo_first_tab = memo_first_tab_;
+            ctx_.memo_first_content = memo_first_content_;
+         }
+
+         scoped_stream(const scoped_stream&) = delete;
+         scoped_stream& operator=(const scoped_stream&) = delete;
+
+        private:
+         yaml_context& ctx_;
+         const char* stream_begin_;
+         const char* memo_line_begin_;
+         const char* memo_verified_end_;
+         const char* memo_first_tab_;
+         const char* memo_first_content_;
+      };
+
       // Drop everything a previous read left that describes its document rather than how to read
       // one; the outermost parse calls this as it takes ownership of a new buffer. Anchors and the
       // alias spans being replayed point into the previous read's buffer, so carried over they let
