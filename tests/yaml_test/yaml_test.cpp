@@ -264,6 +264,150 @@ struct glz::meta<yaml_custom_scalar_struct>
    static constexpr auto value = glz::custom<read_fn, write_fn>;
 };
 
+// glz::custom type whose getter returns a reflectable struct (issue #3057): the writer
+// must lay the custom object out as a block mapping inside a sequence, not as an inline
+// scalar, or the keys after the first lose their indentation.
+struct yaml_custom_block_point
+{
+   double x{};
+   double y{};
+
+   bool operator==(const yaml_custom_block_point&) const = default;
+};
+
+struct yaml_custom_block_point_layout
+{
+   double x{};
+   double y{};
+
+   bool operator==(const yaml_custom_block_point_layout&) const = default;
+};
+
+template <>
+struct glz::meta<yaml_custom_block_point>
+{
+   using T = yaml_custom_block_point;
+   static constexpr auto value = glz::custom<[](T& p, const yaml_custom_block_point_layout& l) { p = {l.x, l.y}; },
+                                             [](const T& p) { return yaml_custom_block_point_layout{p.x, p.y}; }>;
+};
+
+struct yaml_custom_block_doc
+{
+   std::vector<yaml_custom_block_point> points{};
+
+   bool operator==(const yaml_custom_block_doc&) const = default;
+};
+
+// A type that opts into custom_write (supplying its own to<Format,T>) while its glz::meta value is
+// also a glz::custom getter returning an object. Writing it must honor the user's to<Format,T>,
+// not the getter's object shape -- this guards the !custom_write check in the sequence writer.
+struct yaml_custom_write_sequence_layout
+{
+   double x{};
+   double y{};
+};
+
+struct yaml_custom_write_sequence
+{
+   double x{};
+   double y{};
+};
+
+template <>
+struct glz::meta<yaml_custom_write_sequence>
+{
+   static constexpr auto value =
+      glz::custom<[](yaml_custom_write_sequence& v, const yaml_custom_write_sequence_layout& o) {
+         v.x = o.x;
+         v.y = o.y;
+      },
+                  [](const yaml_custom_write_sequence& v) { return yaml_custom_write_sequence_layout{v.x, v.y}; }>;
+   static constexpr bool custom_write = true;
+};
+
+namespace glz
+{
+   template <uint32_t Format>
+   struct to<Format, yaml_custom_write_sequence>
+   {
+      template <auto Opts, class B>
+      static void op(auto&&, is_context auto&& ctx, B&& b, auto& ix)
+      {
+         serialize<Format>::template op<Opts>(std::string_view{"USER_TO"}, ctx, b, ix);
+      }
+   };
+}
+
+struct yaml_custom_write_sequence_doc
+{
+   std::vector<yaml_custom_write_sequence> items{};
+};
+
+// glz::custom types whose getters return a container and a nullable object. Like
+// yaml_custom_block_point, each must be laid out exactly as the type its getter returns.
+struct yaml_custom_int_list
+{
+   std::vector<int> values{};
+
+   bool operator==(const yaml_custom_int_list&) const = default;
+};
+
+template <>
+struct glz::meta<yaml_custom_int_list>
+{
+   using T = yaml_custom_int_list;
+   static constexpr auto value =
+      glz::custom<[](T& s, const std::vector<int>& v) { s.values = v; }, [](const T& s) { return s.values; }>;
+};
+
+struct yaml_custom_maybe_point
+{
+   std::optional<yaml_custom_block_point_layout> value{};
+
+   bool operator==(const yaml_custom_maybe_point&) const = default;
+};
+
+template <>
+struct glz::meta<yaml_custom_maybe_point>
+{
+   using T = yaml_custom_maybe_point;
+   static constexpr auto value =
+      glz::custom<[](T& s, const std::optional<yaml_custom_block_point_layout>& v) { s.value = v; },
+                  [](const T& s) { return s.value; }>;
+};
+
+// Custom objects behind optional members and optional map values, with a plain counterpart
+struct yaml_custom_optional_members
+{
+   std::optional<yaml_custom_block_point> point{};
+   std::map<std::string, std::optional<yaml_custom_block_point>> named{};
+
+   bool operator==(const yaml_custom_optional_members&) const = default;
+};
+
+struct yaml_custom_optional_members_plain
+{
+   std::optional<yaml_custom_block_point_layout> point{};
+   std::map<std::string, std::optional<yaml_custom_block_point_layout>> named{};
+};
+
+// Writes `custom` and `plain` -- the same data with each glz::custom type replaced by what its getter
+// returns -- expecting identical YAML, then expects `custom` to read back unchanged.
+template <auto Opts = glz::yaml::yaml_opts{}, class Custom, class Plain>
+void expect_custom_writes_as_resolved(const Custom& custom, const Plain& plain)
+{
+   std::string custom_yaml{};
+   expect(!glz::write<Opts>(custom, custom_yaml));
+   std::string plain_yaml{};
+   expect(!glz::write<Opts>(plain, plain_yaml));
+   expect(custom_yaml == plain_yaml) << "custom:\n" << custom_yaml << "plain:\n" << plain_yaml;
+
+   Custom parsed{};
+   const auto ec = glz::read<Opts>(parsed, custom_yaml);
+   expect(!ec) << glz::format_error(ec, custom_yaml);
+   expect(parsed == custom) << custom_yaml;
+}
+
 // Struct with compile-time skip for YAML
 struct yaml_skip_struct
 {
@@ -10065,6 +10209,92 @@ suite yaml_custom_write_tests = [] {
       ec = glz::read_yaml(parsed, yaml);
       expect(!ec) << glz::format_error(ec, yaml);
       expect(parsed == outer);
+   };
+
+   "yaml_custom_object_sequence_roundtrip"_test = [] {
+      yaml_custom_block_doc original{{{1, 2}, {3, 4}}};
+      std::string yaml;
+      auto ec = glz::write_yaml(original, yaml);
+      expect(!ec);
+      // Each custom object is a compact block mapping: the first key inline after the
+      // dash and the following keys indented to the element's own column (issue #3057).
+      expect(yaml == "points:\n  - x: 1\n    y: 2\n  - x: 3\n    y: 4\n") << yaml;
+
+      yaml_custom_block_doc parsed{};
+      ec = glz::read_yaml(parsed, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(parsed == original);
+   };
+
+   "yaml_custom_object_sequence_matches_plain_layout"_test = [] {
+      // Non-custom control: a sequence of the plain layout struct writes the same compact
+      // block form, confirming the custom object path now matches the reflectable-object path.
+      std::vector<yaml_custom_block_point_layout> plain{{1, 2}, {3, 4}};
+      std::string yaml;
+      auto ec = glz::write_yaml(plain, yaml);
+      expect(!ec);
+      expect(yaml == "- x: 1\n  y: 2\n- x: 3\n  y: 4\n") << yaml;
+   };
+
+   "yaml_custom_write_sequence_uses_user_to"_test = [] {
+      // A custom_write=true type with a glz::custom meta value must be written by its user
+      // to<Format,T> (a scalar), not by the custom getter's object shape.
+      yaml_custom_write_sequence_doc doc{};
+      doc.items.push_back(yaml_custom_write_sequence{1, 2});
+      doc.items.push_back(yaml_custom_write_sequence{3, 4});
+      std::string yaml;
+      auto ec = glz::write_yaml(doc, yaml);
+      expect(!ec);
+      expect(yaml == "items:\n  - USER_TO\n  - USER_TO\n") << yaml;
+   };
+
+   // Issue #3057 beyond a plain sequence: every block position lays a glz::custom type out by the
+   // type its getter returns.
+   using point = yaml_custom_block_point;
+   using layout = yaml_custom_block_point_layout;
+
+   "yaml_custom_object_nested_sequence"_test = [] {
+      expect_custom_writes_as_resolved(std::vector<std::vector<point>>{{{1, 2}, {3, 4}}, {{5, 6}}},
+                                       std::vector<std::vector<layout>>{{{1, 2}, {3, 4}}, {{5, 6}}});
+   };
+
+   "yaml_custom_object_map_value"_test = [] {
+      expect_custom_writes_as_resolved(std::map<std::string, point>{{"a", {1, 2}}, {"b", {3, 4}}},
+                                       std::map<std::string, layout>{{"a", {1, 2}}, {"b", {3, 4}}});
+   };
+
+   "yaml_custom_object_map_in_sequence"_test = [] {
+      expect_custom_writes_as_resolved(std::vector<std::map<std::string, point>>{{{"a", {1, 2}}, {"b", {3, 4}}}},
+                                       std::vector<std::map<std::string, layout>>{{{"a", {1, 2}}, {"b", {3, 4}}}});
+   };
+
+   "yaml_custom_object_optional_in_sequence"_test = [] {
+      expect_custom_writes_as_resolved(std::vector<std::optional<point>>{point{1, 2}, std::nullopt, point{3, 4}},
+                                       std::vector<std::optional<layout>>{layout{1, 2}, std::nullopt, layout{3, 4}});
+   };
+
+   "yaml_custom_object_optional_members"_test = [] {
+      expect_custom_writes_as_resolved(
+         yaml_custom_optional_members{point{1, 2}, {{"a", point{3, 4}}, {"b", std::nullopt}}},
+         yaml_custom_optional_members_plain{layout{1, 2}, {{"a", layout{3, 4}}, {"b", std::nullopt}}});
+   };
+
+   "yaml_custom_container_getter"_test = [] {
+      expect_custom_writes_as_resolved(std::vector<yaml_custom_int_list>{{{1, 2}}, {{}}, {{3}}},
+                                       std::vector<std::vector<int>>{{1, 2}, {}, {3}});
+      expect_custom_writes_as_resolved(std::map<std::string, yaml_custom_int_list>{{"a", {{1, 2}}}, {"b", {{}}}},
+                                       std::map<std::string, std::vector<int>>{{"a", {1, 2}}, {"b", {}}});
+   };
+
+   "yaml_custom_nullable_getter_in_sequence"_test = [] {
+      expect_custom_writes_as_resolved(std::vector<yaml_custom_maybe_point>{{layout{1, 2}}, {}},
+                                       std::vector<std::optional<layout>>{layout{1, 2}, std::nullopt});
+   };
+
+   "yaml_custom_object_sequence_indent_width"_test = [] {
+      constexpr glz::yaml::yaml_opts opts{.indent_width = 4};
+      expect_custom_writes_as_resolved<opts>(yaml_custom_block_doc{{{1, 2}, {3, 4}}},
+                                             std::map<std::string, std::vector<layout>>{{"points", {{1, 2}, {3, 4}}}});
    };
 };
 
