@@ -744,9 +744,9 @@ namespace glz
       }
 
       // Write one sequence element after its dash. A transparent write wrapper (mimic glaze_value_t or
-      // a glz::custom getter) is laid out by the type it resolves to, as block-mapping values are
-      // (issue #2595); dispatching on the wrapper would write a getter's object as an unindented
-      // scalar so its keys after the first fall to column 0 (issue #3057).
+      // a glz::custom getter) is laid out by the type it resolves to: serialize<YAML> carries no
+      // indentation, so dispatching on the wrapper would write a getter's object with its keys after
+      // the first at column 0 (issue #3057). A non-null optional is laid out as its value.
       template <auto Opts, class E, class B>
       inline void write_block_sequence_element(E&& element, is_context auto&& ctx, B&& b, auto& ix,
                                                int32_t indent_level)
@@ -754,18 +754,18 @@ namespace glz
          constexpr uint8_t indent_width = check_indent_width<Opts>();
          using element_t = std::remove_cvref_t<E>;
 
-         if constexpr (transparent_write_wrapper<element_t> && !is_or_wraps_variant<element_t>()) {
-            unwrap_write_value(element, ctx, [&]<class Inner>(Inner&& inner) {
-               if constexpr (std::same_as<std::remove_cvref_t<Inner>, element_t>) {
-                  // A getter that cannot be invoked resolves to itself; its serializer reports why
-                  dump_dash_padding(b, ix, indent_width);
-                  serialize<YAML>::op<Opts>(inner, ctx, b, ix);
-                  dump('\n', b, ix);
-               }
-               else {
-                  write_block_sequence_element<Opts>(std::forward<Inner>(inner), ctx, b, ix, indent_level);
-               }
+         if constexpr (resolvable_write_wrapper<element_t>) {
+            unwrap_write_value(element, ctx, [&](auto&& inner) {
+               write_block_sequence_element<Opts>(inner, ctx, b, ix, indent_level);
             });
+         }
+         else if constexpr (custom_write<element_t>) {
+            // A custom writer decides its own representation, written inline after the dash.
+            // Checked before the object branch below, which a reflectable custom_write type also
+            // satisfies.
+            dump_dash_padding(b, ix, indent_width);
+            serialize<YAML>::op<Opts>(element, ctx, b, ix);
+            dump('\n', b, ix);
          }
          else if constexpr (str_t<element_t>) {
             dump_dash_padding(b, ix, indent_width);
@@ -778,37 +778,13 @@ namespace glz
             dump('\n', b, ix);
          }
          else if constexpr (nullable_like<element_t>) {
-            using inner_t = std::remove_cvref_t<decltype(*element)>;
-            if (!element) {
-               dump_dash_padding(b, ix, indent_width);
-               dump("null", b, ix);
-               dump('\n', b, ix);
-            }
-            else if constexpr (str_t<inner_t>) {
-               dump_dash_padding(b, ix, indent_width);
-               write_yaml_string<Opts>(str_view<inner_t>(*element), ctx, b, ix, indent_level);
-               dump('\n', b, ix);
-            }
-            else if constexpr (is_simple_type<inner_t>()) {
-               dump_dash_padding(b, ix, indent_width);
-               serialize<YAML>::op<Opts>(*element, ctx, b, ix);
-               dump('\n', b, ix);
-            }
-            else if constexpr (transparent_write_wrapper<inner_t> && !is_or_wraps_variant<inner_t>()) {
-               // Laid out by what the wrapper resolves to, e.g. the compact form for a getter's object
+            if (element) {
                write_block_sequence_element<Opts>(*element, ctx, b, ix, indent_level);
             }
             else {
-               // Complex inner type - an empty container has no block form
-               if (!write_empty_block_inline(*element, b, ix, indent_width - 1)) {
-                  if constexpr (glaze_object_t<inner_t> || reflectable<inner_t>) {
-                     dump_dash_padding(b, ix, indent_width);
-                     write_block_mapping<Opts>(*element, ctx, b, ix, indent_level + 1, true);
-                  }
-                  else {
-                     write_nested_block<Opts>(*element, ctx, b, ix, indent_level + 1);
-                  }
-               }
+               dump_dash_padding(b, ix, indent_width);
+               dump("null", b, ix);
+               dump('\n', b, ix);
             }
          }
          else if constexpr (is_or_wraps_variant<element_t>()) {
@@ -871,13 +847,6 @@ namespace glz
             // A pair is a single-entry mapping - compact form, entry inline after dash
             dump_dash_padding(b, ix, indent_width);
             write_block_pair<Opts>(element, ctx, b, ix, indent_level + 1, true);
-         }
-         else if constexpr (has_custom_meta_v<element_t>) {
-            // Custom getters were unwrapped above, so this is a custom_write type: its own writer
-            // produces scalar output - write inline after dash
-            dump_dash_padding(b, ix, indent_width);
-            serialize<YAML>::op<Opts>(element, ctx, b, ix);
-            dump('\n', b, ix);
          }
          else if constexpr (writable_map_t<element_t> || writable_array_t<element_t> || glaze_value_t<element_t>) {
             // Containers and glaze_value_t (which may wrap containers) - write on next line
@@ -1144,23 +1113,28 @@ namespace glz
       inline void write_block_mapping_nested(T&& value, is_context auto&& ctx, B&& b, auto& ix, int32_t indent_level);
 
       // Write the value portion of a block-mapping entry (everything after the already-written
-      // "key:"). Dispatches on `val_t` to choose the layout: simple scalars stay on the same
-      // line, complex objects/arrays/maps move to the next line with increased indent. Factored
-      // out so transparent write wrappers (mimic glaze_value_t and glz::custom getters) can be
-      // unwrapped and routed through the same logic by their resolved type (issue #2595).
-      template <auto Opts, class val_t, class Member, class B>
+      // "key:") for object members, pairs, and map entries. Simple scalars stay on the same line;
+      // complex objects/arrays/maps move to the next line with increased indent. A transparent write
+      // wrapper (mimic glaze_value_t or glz::custom getter) is laid out by the type it resolves to
+      // (issues #2595, #3057), and a non-null optional as its value.
+      template <auto Opts, class Member, class B>
       inline void write_block_mapping_value(Member&& member, is_context auto&& ctx, B&& b, auto& ix,
                                             int32_t indent_level)
       {
-         // An empty mapping or sequence has no block form and is written inline (issue #2827).
-         // Covers dynamic values (glz::generic) and optionals as well as plain containers.
-         if constexpr (!is_simple_type<val_t>()) {
-            if (write_empty_block_inline(member, b, ix)) {
-               return;
-            }
-         }
+         using val_t = std::remove_cvref_t<Member>;
 
-         if constexpr (is_simple_type<val_t>()) {
+         if constexpr (resolvable_write_wrapper<val_t>) {
+            unwrap_write_value(member, ctx,
+                               [&](auto&& inner) { write_block_mapping_value<Opts>(inner, ctx, b, ix, indent_level); });
+         }
+         else if constexpr (custom_write<val_t>) {
+            // A custom writer decides its own representation, written on the key's line. Checked
+            // before the object branch below, which a reflectable custom_write type also satisfies.
+            dump(' ', b, ix);
+            serialize<YAML>::op<Opts>(member, ctx, b, ix);
+            dump('\n', b, ix);
+         }
+         else if constexpr (is_simple_type<val_t>()) {
             // Simple types go on same line
             dump(' ', b, ix);
             if constexpr (str_t<val_t>) {
@@ -1172,29 +1146,18 @@ namespace glz
             dump('\n', b, ix);
          }
          else if constexpr (nullable_like<val_t>) {
-            using inner_t = std::remove_cvref_t<decltype(*std::declval<val_t&>())>;
-            if (!member) {
-               // Null - always same line
+            if (member) {
+               write_block_mapping_value<Opts>(*member, ctx, b, ix, indent_level);
+            }
+            else {
                dump(' ', b, ix);
                serialize<YAML>::op<Opts>(member, ctx, b, ix);
                dump('\n', b, ix);
             }
-            else if constexpr (is_simple_type<inner_t>() || str_t<inner_t>) {
-               // Simple inner type - same line
-               dump(' ', b, ix);
-               if constexpr (str_t<inner_t>) {
-                  yaml::write_yaml_string<Opts>(str_view<inner_t>(*member), ctx, b, ix, indent_level);
-               }
-               else {
-                  serialize<YAML>::op<Opts>(*member, ctx, b, ix);
-               }
-               dump('\n', b, ix);
-            }
-            else {
-               // Non-empty complex inner type (emptiness was handled above) - next line with
-               // increased indent
-               yaml::write_nested_block<Opts>(*member, ctx, b, ix, indent_level + 1);
-            }
+         }
+         else if (write_empty_block_inline(member, b, ix)) {
+            // An empty mapping or sequence has no block form and is written inline (issue #2827).
+            // Covers dynamic values (glz::generic) as well as plain containers.
          }
          else if constexpr (is_or_wraps_variant<val_t>()) {
             // Variants and variant-wrappers (e.g., glz::generic) may hold simple values
@@ -1214,8 +1177,8 @@ namespace glz
             yaml::write_nested_block<Opts>(member, ctx, b, ix, indent_level + 1);
          }
          else {
-            // All other types (custom_t, types with custom to/from<YAML>, etc.)
-            // are assumed to produce scalar values - write on same line
+            // All other types (an uninvocable custom_t, types with their own to<YAML>, etc.) are
+            // assumed to produce scalar values - write on same line
             dump(' ', b, ix);
             serialize<YAML>::op<Opts>(member, ctx, b, ix);
             dump('\n', b, ix);
@@ -1232,7 +1195,6 @@ namespace glz
       {
          using V = std::remove_cvref_t<T>;
          using first_type = typename V::first_type;
-         using second_type = std::remove_cvref_t<typename V::second_type>;
          constexpr uint8_t indent_width = check_indent_width<Opts>();
 
          if (bool(ctx.error)) [[unlikely]]
@@ -1267,17 +1229,7 @@ namespace glz
 
          dump(':', b, ix);
 
-         // A value exposed through a transparent write wrapper is laid out by the type it resolves
-         // to, matching write_block_mapping's handling of such members (issue #2595).
-         if constexpr (transparent_write_wrapper<second_type> && !is_or_wraps_variant<second_type>()) {
-            unwrap_write_value(val, ctx, [&]<class Inner>(Inner&& inner) {
-               write_block_mapping_value<Opts, std::remove_cvref_t<Inner>>(std::forward<Inner>(inner), ctx, b, ix,
-                                                                           indent_level);
-            });
-         }
-         else {
-            write_block_mapping_value<Opts, second_type>(val, ctx, b, ix, indent_level);
-         }
+         write_block_mapping_value<Opts>(val, ctx, b, ix, indent_level);
       }
 
       // Write block-style mapping
@@ -1361,20 +1313,7 @@ namespace glz
                dump(key, b, ix);
                dump(':', b, ix);
 
-               // A field exposed through a transparent write wrapper (mimic glaze_value_t or a
-               // glz::custom getter) that does not itself wrap a variant is laid out by the type
-               // it resolves to, not the wrapper type. Without this it would fall through to the
-               // scalar branch and emit a nested object/array on the same line (issue #2595).
-               // Variant-wrappers (e.g. glz::generic) keep their existing path unchanged.
-               if constexpr (transparent_write_wrapper<val_t> && !is_or_wraps_variant<val_t>()) {
-                  unwrap_write_value(member, ctx, [&]<class Inner>(Inner&& inner) {
-                     write_block_mapping_value<Opts, std::remove_cvref_t<Inner>>(std::forward<Inner>(inner), ctx, b, ix,
-                                                                                 indent_level);
-                  });
-               }
-               else {
-                  write_block_mapping_value<Opts, val_t>(member, ctx, b, ix, indent_level);
-               }
+               write_block_mapping_value<Opts>(member, ctx, b, ix, indent_level);
             }
          });
 
@@ -1391,25 +1330,13 @@ namespace glz
       {
          using V = std::remove_cvref_t<T>;
 
-         if constexpr (glaze_object_t<V> || reflectable<V>) {
+         if constexpr ((glaze_object_t<V> || reflectable<V>) && !custom_write<V>) {
             write_block_mapping<Opts>(value, ctx, b, ix, indent_level);
          }
-         else if constexpr (glaze_value_t<V>) {
-            // Unwrap glaze_value_t types (like glz::generic) and recurse
-            write_block_mapping_nested<Opts>(get_member(value, meta_wrapper_v<V>), ctx, b, ix, indent_level);
-         }
-         else if constexpr (is_specialization_v<V, custom_t>) {
-            // A glz::custom getter is laid out by the value it returns (issue #3057)
-            unwrap_write_value(value, ctx, [&]<class Inner>(Inner&& inner) {
-               if constexpr (std::same_as<std::remove_cvref_t<Inner>, V>) {
-                  // A getter that cannot be invoked resolves to itself; its serializer reports why
-                  serialize<YAML>::op<Opts>(inner, ctx, b, ix);
-                  dump('\n', b, ix);
-               }
-               else {
-                  write_block_mapping_nested<Opts>(std::forward<Inner>(inner), ctx, b, ix, indent_level);
-               }
-            });
+         else if constexpr (resolvable_write_wrapper<V>) {
+            // Laid out by what the wrapper resolves to, e.g. a getter's object (issue #3057)
+            unwrap_write_value(
+               value, ctx, [&](auto&& inner) { write_block_mapping_nested<Opts>(inner, ctx, b, ix, indent_level); });
          }
          else if constexpr (is_variant<V>) {
             // Handle variants by visiting and recursing with the same indent level. A tagged
@@ -1441,8 +1368,6 @@ namespace glz
          }
          else if constexpr (writable_map_t<V>) {
             // Map handling
-            constexpr uint8_t indent_width = check_indent_width<Opts>();
-
             if constexpr (has_empty<V>) {
                if (value.empty()) {
                   // A mapping with no entries has no block form: writing nothing would read back
@@ -1453,95 +1378,11 @@ namespace glz
                }
             }
 
-            for (auto&& [k, v] : value) {
+            for (auto&& entry : value) {
                if (bool(ctx.error)) [[unlikely]]
                   return;
-
-               // Write indentation and key
-               const int32_t spaces = indent_level * indent_width;
-               if (!ensure_space(ctx, b, ix + spaces + 64)) [[unlikely]] {
-                  return;
-               }
-               for (int32_t i = 0; i < spaces; ++i) {
-                  b[ix++] = ' ';
-               }
-
-               // Write key
-               using key_t = std::remove_cvref_t<decltype(k)>;
-               if constexpr (str_t<key_t>) {
-                  write_yaml_key_string<Opts>(str_view<key_t>(k), ctx, b, ix);
-               }
-               else {
-                  serialize<YAML>::op<Opts>(k, ctx, b, ix);
-               }
-               dump(':', b, ix);
-
-               using val_t = std::remove_cvref_t<decltype(v)>;
-
-               // A value exposed through a transparent write wrapper is laid out by the type it
-               // resolves to, matching object members (issue #2595).
-               if constexpr (transparent_write_wrapper<val_t> && !is_or_wraps_variant<val_t>()) {
-                  unwrap_write_value(v, ctx, [&]<class Inner>(Inner&& inner) {
-                     write_block_mapping_value<Opts, std::remove_cvref_t<Inner>>(std::forward<Inner>(inner), ctx, b, ix,
-                                                                                 indent_level);
-                  });
-                  continue;
-               }
-
-               // An empty mapping or sequence has no block form and is written inline (issue #2827)
-               if constexpr (!is_simple_type<val_t>()) {
-                  if (write_empty_block_inline(v, b, ix)) {
-                     continue;
-                  }
-               }
-
-               if constexpr (str_t<val_t>) {
-                  dump(' ', b, ix);
-                  write_yaml_string<Opts>(str_view<val_t>(v), ctx, b, ix, indent_level);
-                  dump('\n', b, ix);
-               }
-               else if constexpr (is_simple_type<val_t>()) {
-                  dump(' ', b, ix);
-                  serialize<YAML>::op<Opts>(v, ctx, b, ix);
-                  dump('\n', b, ix);
-               }
-               else if constexpr (nullable_like<val_t>) {
-                  using inner_t = std::remove_cvref_t<decltype(*v)>;
-                  if (!v) {
-                     dump(' ', b, ix);
-                     dump("null", b, ix);
-                     dump('\n', b, ix);
-                  }
-                  else if constexpr (str_t<inner_t>) {
-                     dump(' ', b, ix);
-                     write_yaml_string<Opts>(str_view<inner_t>(*v), ctx, b, ix, indent_level);
-                     dump('\n', b, ix);
-                  }
-                  else if constexpr (is_simple_type<inner_t>()) {
-                     dump(' ', b, ix);
-                     serialize<YAML>::op<Opts>(*v, ctx, b, ix);
-                     dump('\n', b, ix);
-                  }
-                  else {
-                     // Complex inner type (emptiness was handled above)
-                     write_nested_block<Opts>(*v, ctx, b, ix, indent_level + 1);
-                  }
-               }
-               else if constexpr (is_or_wraps_variant<val_t>()) {
-                  // For variants and types wrapping variants (like glz::generic),
-                  // check at runtime if they hold a simple type
-                  if (variant_holds_simple_type(v)) {
-                     dump(' ', b, ix);
-                     write_variant_value<Opts>(v, ctx, b, ix, indent_level);
-                     dump('\n', b, ix);
-                  }
-                  else {
-                     write_nested_block<Opts>(v, ctx, b, ix, indent_level + 1);
-                  }
-               }
-               else {
-                  write_nested_block<Opts>(v, ctx, b, ix, indent_level + 1);
-               }
+               // Each entry is laid out exactly as a standalone pair is
+               write_block_pair<Opts>(entry, ctx, b, ix, indent_level);
             }
          }
          else {
