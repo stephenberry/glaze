@@ -1055,8 +1055,6 @@ namespace glz
       requires(glaze_object_t<T> || reflectable<T>)
    struct to<TOML, T>
    {
-      static_assert(reflected_keys_are_unique<T>(), GLZ_DUPLICATE_KEYS_MESSAGE);
-
       template <auto Options, class V, class B>
          requires(not std::is_pointer_v<std::remove_cvref_t<V>>)
       static void op(V&& value, is_context auto&& ctx, B&& b, auto& ix)

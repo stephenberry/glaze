@@ -447,8 +447,6 @@ namespace glz
       requires((glaze_object_t<T> || reflectable<T>) && !custom_write<T>)
    struct to<JSONB, T> final
    {
-      static_assert(reflected_keys_are_unique<T>(), GLZ_DUPLICATE_KEYS_MESSAGE);
-
       static constexpr auto N = reflect<T>::size;
 
       template <auto Opts, size_t I>

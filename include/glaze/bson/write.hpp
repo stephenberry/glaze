@@ -749,8 +749,6 @@ namespace glz
       requires((glaze_object_t<T> || reflectable<T>) && !custom_write<T>)
    struct to<BSON, T>
    {
-      static_assert(reflected_keys_are_unique<T>(), GLZ_DUPLICATE_KEYS_MESSAGE);
-
       static constexpr uint8_t type_code = bson::type::document;
       static constexpr auto N = reflect<T>::size;
 

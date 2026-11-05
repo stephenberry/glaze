@@ -18,13 +18,6 @@
 #include <meta>
 #endif
 
-// Shared by the keyed readers and the C++26 keyed writers. With C++26 reflection, a member that
-// hides a base-class member, or two bases with a member of the same name, produce equal keys.
-#define GLZ_DUPLICATE_KEYS_MESSAGE                                                                   \
-   "glaze could not build a keyed mapping for this type, usually because two of its keys are equal " \
-   "(with C++26 reflection: a member hiding a base-class member, or two bases with a member of the " \
-   "same name). Give the type a glz::meta that names the members apart."
-
 #if defined(_MSC_VER) && !defined(__clang__)
 // Turn off MSVC warning for unreferenced formal parameter, which is referenced in a constexpr branch
 #pragma warning(push)
@@ -2498,27 +2491,6 @@ namespace glz
       }
    }();
 
-   // Whether the keys of an automatically reflected type are distinct. Only C++26 reflection can
-   // produce equal keys (through inheritance); keys written in a glz::meta are the author's
-   // responsibility and are not checked.
-   template <class T>
-   consteval bool reflected_keys_are_unique()
-   {
-#if GLZ_REFLECTION26
-      if constexpr (reflectable<std::remove_cvref_t<T>>) {
-         constexpr auto& keys = reflect<std::remove_cvref_t<T>>::keys;
-         for (size_t i = 0; i < keys.size(); ++i) {
-            for (size_t j = i + 1; j < keys.size(); ++j) {
-               if (keys[i] == keys[j]) {
-                  return false;
-               }
-            }
-         }
-      }
-#endif
-      return true;
-   }
-
    // Finds the closing quote of an object key, or nullptr when there is none where one could be.
    //
    // Bounded by the longest reflected key rather than by `end`: a key longer than that matches
@@ -2813,16 +2785,8 @@ namespace glz
       }
    };
 
-   // Primary template: reached only when no keyed lookup could be built (hash_type::invalid), or a
-   // hash_type has no specialization below.
    template <uint32_t Format, class T, auto HashInfo, hash_type Type>
-   struct decode_hash_with_size_impl
-   {
-      static_assert(Type != hash_type::invalid, GLZ_DUPLICATE_KEYS_MESSAGE);
-      static_assert(Type == hash_type::invalid, "missing decode_hash_with_size_impl specialization");
-
-      GLZ_ALWAYS_INLINE static constexpr size_t op(auto&&, auto&&, const size_t) noexcept { return reflect<T>::size; }
-   };
+   struct decode_hash_with_size_impl;
 
    // Single entry point for the in-place key-hash readers (BSON, MessagePack, CBOR, CSV, TOML, plus
    // the compile-time-key callers). Every reader below dereferences key bytes only at offsets that

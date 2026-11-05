@@ -631,8 +631,6 @@ namespace glz
       template <auto Opts, size_t Extra = 0, class Value, is_context Ctx, class B, class IX>
       GLZ_ALWAYS_INLINE static void write_members(Value&& value, Ctx&& ctx, B&& b, IX&& ix, auto&& prefix)
       {
-         static_assert(reflected_keys_are_unique<T>(), GLZ_DUPLICATE_KEYS_MESSAGE);
-
          [[maybe_unused]] decltype(auto) t = [&]() -> decltype(auto) {
             if constexpr (reflectable<T>) {
                return to_tie(value);

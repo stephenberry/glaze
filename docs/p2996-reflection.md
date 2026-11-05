@@ -230,7 +230,7 @@ constexpr auto count = glz::detail::count_members<Derived>;
 
 These shapes need a `glz::meta` on the derived type:
 
-- **Duplicate names**: a member that hides a base member, or two bases with a member of the same name. Keyed formats refuse the type at compile time. Name the members apart, e.g. `glz::object("base_x", &Base::x, "x", &Derived::x)`. In a `modify` entry, use a member pointer (not a key alone) so the entry says which member it means.
+- **Duplicate names**: a member that hides a base member, or two bases with a member of the same name. Reflection refuses the type with a `static_assert`. Name the members apart with a full `glz::meta` value, e.g. `glz::object("base_x", &Base::x, "x", &Derived::x)`.
 - **A base inherited twice non-virtually** that contributes members: its two subobjects cannot be named through the derived type, so reflection refuses it with a `static_assert`. Reach each subobject with a lambda, e.g. `[](auto& self) -> auto& { return self.Left::member; }`.
 - **Base state you want serialized** that is private, protected, or behind a non-public base.
 

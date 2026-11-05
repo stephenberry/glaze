@@ -484,10 +484,6 @@ namespace glz
       {
          static constexpr auto N = reflect<T>::size;
 
-         if constexpr (check_use_headers(Opts)) {
-            static_assert(reflected_keys_are_unique<T>(), GLZ_DUPLICATE_KEYS_MESSAGE);
-         }
-
          [[maybe_unused]] decltype(auto) t = [&] {
             if constexpr (reflectable<T>) {
                return to_tie(value);
@@ -714,7 +710,6 @@ namespace glz
 
          // Write headers (field names) if enabled
          if constexpr (check_use_headers(Opts)) {
-            static_assert(reflected_keys_are_unique<U>(), GLZ_DUPLICATE_KEYS_MESSAGE);
             for_each<N>([&]<auto I>() {
                if (bool(ctx.error)) [[unlikely]] {
                   return;

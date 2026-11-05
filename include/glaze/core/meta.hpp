@@ -229,46 +229,6 @@ namespace glz
          return modify_npos;
       }
 
-#if GLZ_REFLECTION26
-      // With C++26 reflection a name can repeat across a hierarchy (a member hiding a base member, or
-      // two bases sharing a name), so a modify entry may need its member pointer to pick the member.
-      template <class T>
-      consteval size_t count_member_name_matches(std::string_view name)
-      {
-         constexpr auto names = member_names<T>;
-         size_t count = 0;
-         for (size_t i = 0; i < names.size(); ++i) {
-            if (names[i] == name) {
-               ++count;
-            }
-         }
-         return count;
-      }
-#endif
-
-      // The index of the member a modify entry's pointer names. The name lookup decides first (a name
-      // with no matching key is an alias, not a rename); the pointer's class then picks among members
-      // that share the name.
-      template <class T, class Mp = void>
-      consteval size_t find_member_index_of(std::string_view name)
-      {
-         const size_t by_name = find_member_index<T>(name);
-         if (by_name == modify_npos) {
-            return modify_npos;
-         }
-#if GLZ_REFLECTION26
-         if constexpr (not std::is_void_v<Mp>) {
-            auto members = all_members_of(^^T);
-            for (size_t i = 0; i < members.size(); ++i) {
-               if (member_pointer_target<Mp>::matches(members[i], name)) {
-                  return i;
-               }
-            }
-         }
-#endif
-         return by_name;
-      }
-
       template <class T>
       consteval auto get_modify_object()
       {
@@ -346,14 +306,9 @@ namespace glz
          {
             using elem_t = element_type<EntryPos>;
             if constexpr (std::is_member_pointer_v<elem_t>) {
-               return find_member_index_of<value_type, elem_t>(pointer_name<EntryPos>());
+               return find_member_index<value_type>(pointer_name<EntryPos>());
             }
             else if constexpr (has_key<EntryPos>()) {
-#if GLZ_REFLECTION26
-               static_assert(count_member_name_matches<value_type>(key<EntryPos>()) <= 1,
-                             "glz::modify: more than one member of this hierarchy has this name; name the "
-                             "member with a member pointer, e.g. glz::object(\"key\", &Derived::member)");
-#endif
                return find_member_index<value_type>(key<EntryPos>());
             }
             else {

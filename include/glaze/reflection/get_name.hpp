@@ -29,32 +29,12 @@
 // ============================================================================
 namespace glz::detail
 {
-   // Get member name using P2996 reflection, in the order all_members_of lists the members
-   // (inherited members included). Each index re-walks the hierarchy; the cost is compile time only.
+   // Get member name using P2996 reflection (inherited members included, see reflected_members)
    template <class T, size_t I>
    consteval std::string_view get_member_name_p2996()
    {
-      auto members = all_members_of(^^T);
-      return std::meta::identifier_of(members[I]);
+      return std::meta::identifier_of(reflected_members<T>[I]);
    }
-
-   // Whether a modify entry's pointer-to-member names the given member. The class in `M C::*` tells
-   // apart two members of a hierarchy that share a name. (C is taken as a specialization parameter
-   // because on GCC 16 a spliced dependent member typedef does not compare equal to the class.)
-   template <class Mp>
-   struct member_pointer_target
-   {
-      static consteval bool matches(std::meta::info, std::string_view) { return false; }
-   };
-
-   template <class M, class C>
-   struct member_pointer_target<M C::*>
-   {
-      static consteval bool matches(std::meta::info member, std::string_view name)
-      {
-         return std::meta::identifier_of(member) == name and std::meta::parent_of(member) == ^^C;
-      }
-   };
 }
 
 namespace glz

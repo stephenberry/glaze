@@ -1612,8 +1612,6 @@ namespace glz
       requires((glaze_object_t<T> || reflectable<T>) && !custom_write<T>)
    struct to<YAML, T>
    {
-      static_assert(reflected_keys_are_unique<T>(), GLZ_DUPLICATE_KEYS_MESSAGE);
-
       template <auto Opts, class B>
       static void op(auto&& value, is_context auto&& ctx, B&& b, auto& ix)
       {

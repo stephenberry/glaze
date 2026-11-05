@@ -2518,8 +2518,6 @@ namespace glz
       requires((glaze_object_t<T> || reflectable<T>) && not custom_write<T>)
    struct to<JSON, T>
    {
-      static_assert(reflected_keys_are_unique<T>(), GLZ_DUPLICATE_KEYS_MESSAGE);
-
       static constexpr bool can_error = [] {
          constexpr auto N = reflect<T>::size;
          if constexpr (N == 0) {

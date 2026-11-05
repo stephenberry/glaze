@@ -153,7 +153,6 @@ No additional boilerplate is required—Glaze reuses the existing container seri
 - `modify` is only considered for aggregate types that would otherwise satisfy `glz::reflectable<T>`.
 - Lambdas or function objects used inside `modify` must return an lvalue reference to participate in assignment, or a value if they are write-only extras.
 - If a callable entry does not reference an existing member you **must** provide a key string (member pointers infer their key automatically).
-- With C++26 P2996 reflection, inherited members can share a name (a member hiding a base member). A `modify` entry for such a name must use a member pointer, e.g. `glz::object("x", &Derived::x)`; a key-only entry is refused with a `static_assert`.
 - `modify` complements other `glz::meta` hooks: `skip`, `requires_key`, `unknown_read`, etc. continue to work as before.
 - You can still provide a full `value` specialization later; it will override pure reflection and `modify` entirely.
 

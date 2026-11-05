@@ -446,7 +446,7 @@ namespace glz
          // Hash-based lookup
          constexpr auto& HashInfo = hash_info<T>;
          constexpr auto type = HashInfo.type;
-         static_assert(bool(type), GLZ_DUPLICATE_KEYS_MESSAGE);
+         static_assert(bool(type), "invalid hash algorithm");
 
          const auto index = decode_hash<JSON, T, HashInfo, HashInfo.type>::op(it, end);
 
@@ -3115,7 +3115,7 @@ namespace glz
                   }
                }
                else if constexpr (reflection_type) {
-                  static_assert(bool(hash_info<T>.type), GLZ_DUPLICATE_KEYS_MESSAGE);
+                  static_assert(bool(hash_info<T>.type));
 
                   if (*it != '"') [[unlikely]] {
                      ctx.error = error_code::expected_quote;
