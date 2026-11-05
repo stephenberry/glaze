@@ -74,7 +74,9 @@ namespace glz
 
          size_t max_message_size{1024 * 1024 * 16}; // 16 MB limit
 #ifdef GLZ_ENABLE_SSL
-         mutable std::mutex ssl_ctx_mutex_; // Guards ssl_ctx_ creation and trust-anchor mutation
+         // Guards ssl_ctx_ creation and every mutation of it: trust anchors, the verify mode
+         // connect() applies, and configure_ssl_context(). Also guards ssl_verify_mode_.
+         mutable std::mutex ssl_ctx_mutex_;
          asio::ssl::verify_mode ssl_verify_mode_{asio::ssl::verify_peer}; // Default to verify peer
 #endif
 
@@ -585,6 +587,23 @@ namespace glz
       {
          std::lock_guard<std::mutex> lock(impl_->ssl_ctx_mutex_);
          return detail::load_os_ca_certificates(impl_->ensure_ssl_context_locked());
+      }
+
+      // Thread-safe access to the TLS context for the settings this class does not wrap:
+      // protocol version bounds, cipher suites, ALPN or a client certificate. The callable
+      // runs while ssl_ctx_mutex_ is held, so it must not call back into this client. It
+      // receives the context connect() uses, created on first use with the platform's trust
+      // anchors loaded. connect() re-applies the mode from set_ssl_verify_mode(), so a verify
+      // mode set on the context here does not last. Call this before connect(), since OpenSSL
+      // reads the context without locking during a handshake.
+      // Example: client.configure_ssl_context([](asio::ssl::context& ctx) {
+      //    SSL_CTX_set_min_proto_version(ctx.native_handle(), TLS1_3_VERSION);
+      // });
+      template <typename Func>
+      void configure_ssl_context(Func&& func)
+      {
+         std::lock_guard<std::mutex> lock(impl_->ssl_ctx_mutex_);
+         func(impl_->ensure_ssl_context_locked());
       }
 #endif
 

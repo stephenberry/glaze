@@ -93,17 +93,32 @@ namespace glz
       requires(glaze_value_t<V> && !custom_write<V>)
    struct resolve_write_type<V>
    {
-      using type = typename resolve_write_type<remove_meta_wrapper_t<V>>::type;
+      // The type unwrap_write_value yields. get_member also invokes a whole-type glz::custom meta,
+      // a callable producing the custom_t, where remove_meta_wrapper_t would stop at the callable.
+      using type = typename resolve_write_type<
+         std::remove_cvref_t<decltype(get_member(std::declval<V&>(), meta_wrapper_v<V>))>>::type;
    };
 
    template <class T, class From, class To>
    struct resolve_write_type<custom_t<T, From, To>>
    {
-      using type = typename resolve_write_type<typename custom_getter_result<custom_t<T, From, To>>::type>::type;
+      using getter_result_t = typename custom_getter_result<custom_t<T, From, To>>::type;
+      // A getter that cannot be invoked resolves to its own wrapper: stop there rather than
+      // recurse into this specialization, leaving the serializer to report why.
+      using type =
+         typename std::conditional_t<std::same_as<getter_result_t, custom_t<T, From, To>>,
+                                     std::type_identity<getter_result_t>, resolve_write_type<getter_result_t>>::type;
    };
 
    template <class V>
    using resolve_write_type_t = typename resolve_write_type<std::remove_cvref_t<V>>::type;
+
+   // A transparent write wrapper that unwrap_write_value actually sees through. A glz::custom
+   // getter that cannot be invoked resolves to itself, so a writer that unwrapped it and dispatched
+   // the result again would recurse forever; it is left to its own serializer, which reports why.
+   template <class V>
+   concept resolvable_write_wrapper =
+      transparent_write_wrapper<V> && !std::same_as<resolve_write_type_t<V>, std::remove_cvref_t<V>>;
 
    // Invoke `func` with the value a field actually serializes, recursively unwrapping any
    // transparent write wrappers. Continuation-passing keeps a by-value custom getter result
