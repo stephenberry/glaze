@@ -443,9 +443,7 @@ namespace glz
          }(std::make_index_sequence<N>{});
       }
       else {
-         // Hash-based lookup. A key list whose keys collide leaves `type` invalid; the shared guard in
-         // decode_hash_with_size_impl refuses that type, and this assertion carries the same wording
-         // so that whichever of the two fires first says the same thing.
+         // Hash-based lookup
          constexpr auto& HashInfo = hash_info<T>;
          constexpr auto type = HashInfo.type;
          static_assert(bool(type), GLZ_DUPLICATE_KEYS_MESSAGE);

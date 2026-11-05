@@ -1055,10 +1055,7 @@ namespace glz
       requires(glaze_object_t<T> || reflectable<T>)
    struct to<TOML, T>
    {
-      // A keyed write emits one key per member; a repeated key would name one member twice and lose
-      // the other, and TOML cannot even express the document, so the writer refuses the shape the
-      // keyed reader already refuses. Array-shaped writes use the array writer, which has no keys.
-      static_assert(keys_are_unique<T>(), GLZ_DUPLICATE_KEYS_MESSAGE);
+      static_assert(reflected_keys_are_unique<T>(), GLZ_DUPLICATE_KEYS_MESSAGE);
 
       template <auto Options, class V, class B>
          requires(not std::is_pointer_v<std::remove_cvref_t<V>>)

@@ -3,6 +3,7 @@
 // P2996 Reflection Test - Verifies C++26 P2996 reflection works with Glaze
 
 #include <cstdint>
+#include <memory>
 
 #include "glaze/glaze.hpp"
 #include "ut/ut.hpp"
@@ -445,18 +446,47 @@ struct VirtualDiamond : LeftBranch, RightBranch
    int bottom{};
 };
 
-// A private base and a private member inside it are reachable through unchecked access
-class PrivateBaseMembers
+// A base contributes only its public members, and only through a public base: implementation details
+// of a base (such as std::enable_shared_from_this's weak_ptr) stay out of the serialized form
+class MixedAccessBase
 {
    int hidden{1};
 
+  protected:
+   int guarded{2};
+
   public:
-   int shown{2};
+   int shown{3};
 };
 
-struct PrivateBaseDerived : private PrivateBaseMembers
+struct PublicMixedDerived : MixedAccessBase
 {
-   int own{3};
+   int own{4};
+};
+
+struct PrivateBaseDerived : private MixedAccessBase
+{
+   int own{5};
+};
+
+struct ProtectedBaseDerived : protected MixedAccessBase
+{
+   int own{6};
+};
+
+// The type's own private members are still reflected
+class PrivateOwnDerived : public MixedAccessBase
+{
+   int secret{7};
+
+  public:
+   int get_secret() const { return secret; }
+};
+
+struct SharedFromThisNode : std::enable_shared_from_this<SharedFromThisNode>
+{
+   SharedFromThisNode() = default; // not an aggregate: the base's constructor is protected
+   int value{8};
 };
 
 // A polymorphic base contributes its data members and not the vtable pointer
@@ -651,9 +681,7 @@ struct TaggedMixed : TaggedLeft, TaggedRight
    int bottom{3};
 };
 
-// A base inherited twice non-virtually that does hold members cannot be reflected at all, and the
-// count asks before it hands out a number. These three shapes pin the verdict, so a compiler that
-// does not ship the query the walk needs fails to build here instead of losing the check quietly.
+// A base inherited twice non-virtually that contributes members cannot be reflected
 struct UnnamableRoot
 {
    int root{1};
@@ -832,26 +860,65 @@ suite p2996_inherited_members = [] {
       expect(back.bottom == 4);
    };
 
-   "members of a private base are reflected and read back"_test = [] {
-      constexpr auto names = glz::member_names<PrivateBaseDerived>;
-      static_assert(names.size() == 3);
-      expect(names[0] == "hidden");
-      expect(names[1] == "shown");
-      expect(names[2] == "own");
+   "a base contributes only its public members"_test = [] {
+      constexpr auto names = glz::member_names<PublicMixedDerived>;
+      static_assert(names.size() == 2);
+      expect(names[0] == "shown");
+      expect(names[1] == "own");
+
+      PublicMixedDerived obj{};
+      obj.shown = 13;
+      obj.own = 14;
+      std::string s{};
+      expect(not glz::write_json(obj, s));
+      expect(s == R"({"shown":13,"own":14})") << s;
+
+      PublicMixedDerived back{};
+      expect(not glz::read_json(back, s));
+      expect(back.shown == 13);
+      expect(back.own == 14);
+   };
+
+   "private and protected bases are not reflected"_test = [] {
+      static_assert(glz::member_names<PrivateBaseDerived>.size() == 1);
+      static_assert(glz::member_names<ProtectedBaseDerived>.size() == 1);
 
       PrivateBaseDerived obj{};
       std::string s{};
       expect(not glz::write_json(obj, s));
-      expect(s == R"({"hidden":1,"shown":2,"own":3})") << s;
+      expect(s == R"({"own":5})") << s;
 
-      // the private members cannot be read here, so the read is pinned by what the object writes
-      // back: the document carries values the defaults do not have
-      PrivateBaseDerived back{};
-      expect(not glz::read_json(back, R"({"hidden":8,"shown":9,"own":7})"));
-      expect(back.own == 7);
-      std::string s2{};
-      expect(not glz::write_json(back, s2));
-      expect(s2 == R"({"hidden":8,"shown":9,"own":7})") << s2;
+      ProtectedBaseDerived obj2{};
+      expect(not glz::write_json(obj2, s));
+      expect(s == R"({"own":6})") << s;
+   };
+
+   "the type's own private members are still reflected"_test = [] {
+      constexpr auto names = glz::member_names<PrivateOwnDerived>;
+      static_assert(names.size() == 2);
+      expect(names[0] == "shown");
+      expect(names[1] == "secret");
+
+      PrivateOwnDerived back{};
+      expect(not glz::read_json(back, R"({"shown":9,"secret":10})"));
+      expect(back.shown == 9);
+      expect(back.get_secret() == 10);
+   };
+
+   "std::enable_shared_from_this does not leak into the reflection"_test = [] {
+      constexpr auto names = glz::member_names<SharedFromThisNode>;
+      static_assert(names.size() == 1);
+      expect(names[0] == "value");
+
+      auto node = std::make_shared<SharedFromThisNode>();
+      node->value = 21;
+      std::string s{};
+      expect(not glz::write_json(*node, s));
+      expect(s == R"({"value":21})") << s;
+
+      SharedFromThisNode back{};
+      expect(not glz::read_json(back, s));
+      expect(back.value == 21);
    };
 
    "a polymorphic base contributes its members, not the vtable"_test = [] {
@@ -1102,9 +1169,7 @@ suite p2996_inherited_members = [] {
    };
 
    "the reflection refuses a repeated base that holds members"_test = [] {
-      // the verdicts are pinned here because `count_members` consumes them in a static_assert, so the
-      // refusal itself cannot be exercised as a positive test: a compiler that lost the query the walk
-      // needs would let every one of these through, and the negative pins below fail the build instead
+      // count_members refuses these with a static_assert, so the verdict is checked directly here
       static_assert(glz::detail::members_are_namable(^^VirtualDiamond));
       static_assert(glz::detail::members_are_namable(^^TaggedMixed));
       static_assert(glz::detail::members_are_namable(^^SharedDiamond));
