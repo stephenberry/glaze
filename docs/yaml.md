@@ -325,7 +325,7 @@ YAML support leverages the same type system as JSON. All types that work with `g
 
 - Arithmetic types (integers, floating-point)
 - `std::string` (read and write), `std::string_view` (write only, see below)
-- `std::vector`, `std::array`, `std::deque`, `std::list`
+- `std::vector`, `std::array`, `std::deque`, `std::list`, and fixed-capacity vectors that have `emplace_back` but no `resize` (a sequence longer than a `std::array` is a read error, `exceeded_static_array_size`, as in JSON)
 - `std::map`, `std::unordered_map`
 - `std::optional`, `std::unique_ptr`, `std::shared_ptr`
 - `std::variant`
