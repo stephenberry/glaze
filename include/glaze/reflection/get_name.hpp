@@ -29,12 +29,11 @@
 // ============================================================================
 namespace glz::detail
 {
-   // Get member name using P2996 reflection
+   // Get member name using P2996 reflection (inherited members included, see reflected_members)
    template <class T, size_t I>
    consteval std::string_view get_member_name_p2996()
    {
-      auto members = std::meta::nonstatic_data_members_of(^^T, reflection_access_ctx());
-      return std::meta::identifier_of(members[I]);
+      return std::meta::identifier_of(reflected_members<T>[I]);
    }
 }
 

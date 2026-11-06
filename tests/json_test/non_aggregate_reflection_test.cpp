@@ -92,13 +92,24 @@ class DerivedClass : public BaseClass
    {}
 };
 
-// Need explicit meta for derived class to include both base and derived members
-// (P2996's bases_of iteration has limitations in current Bloomberg clang)
+// A user's meta still wins over automatic reflection: this one names the base and derived members
+// itself, which is also the escape for the shapes reflection cannot name on its own
 template <>
 struct glz::meta<DerivedClass>
 {
    using T = DerivedClass;
    static constexpr auto value = object(&T::base_name, &T::base_id, &T::derived_data, &T::derived_value);
+};
+
+// The same shape as DerivedClass without a meta, so the base members come from the reflection: a
+// non-aggregate type reflects whatever the hierarchy holds
+class AutoDerivedClass : public BaseClass
+{
+  public:
+   std::string more;
+
+   AutoDerivedClass() : BaseClass(), more("auto") {}
+   AutoDerivedClass(std::string bn, int bi, std::string m) : BaseClass(std::move(bn), bi), more(std::move(m)) {}
 };
 
 // ============================================================================
@@ -285,6 +296,23 @@ suite non_aggregate_reflection_tests = [] {
       expect(obj2.base_id == 1);
       expect(obj2.derived_data == "derived_data");
       expect(obj2.derived_value == 2.5);
+   };
+
+   "derived class without a meta reflects the base members"_test = [] {
+      constexpr auto names = glz::member_names<AutoDerivedClass>;
+      static_assert(names.size() == 3);
+
+      AutoDerivedClass obj("from_base", 4, "from_derived");
+
+      std::string json;
+      expect(not glz::write_json(obj, json));
+      expect(json == R"({"base_name":"from_base","base_id":4,"more":"from_derived"})") << json;
+
+      AutoDerivedClass obj2;
+      expect(not glz::read_json(obj2, json));
+      expect(obj2.base_name == "from_base");
+      expect(obj2.base_id == 4);
+      expect(obj2.more == "from_derived");
    };
 
    "no copy class serialization"_test = [] {

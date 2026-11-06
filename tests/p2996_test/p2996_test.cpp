@@ -3,6 +3,7 @@
 // P2996 Reflection Test - Verifies C++26 P2996 reflection works with Glaze
 
 #include <cstdint>
+#include <memory>
 
 #include "glaze/glaze.hpp"
 #include "ut/ut.hpp"
@@ -403,6 +404,400 @@ suite p2996_reflect_array = [] {
       expect(obj2.x == 1.5);
       expect(obj2.y == 2.5);
       expect(obj2.label == "origin");
+   };
+};
+
+// Inherited members (issue #2852): a type reflects the public members of its public bases, base
+// members first, followed by its own members.
+struct InheritBase
+{
+   std::string name;
+   int id{};
+};
+
+struct InheritDerived : InheritBase
+{
+   std::string extra;
+};
+
+struct InheritSecond : InheritDerived
+{
+   double factor{};
+};
+
+// A virtual base is one shared subobject, reflected once
+struct RootMember
+{
+   int root{};
+};
+
+struct LeftBranch : virtual RootMember
+{
+   int left{};
+};
+
+struct RightBranch : virtual RootMember
+{
+   int right{};
+};
+
+struct VirtualDiamond : LeftBranch, RightBranch
+{
+   int bottom{};
+};
+
+// Access rules: only public members of public bases; the type's own private members still count
+class MixedAccessBase
+{
+   int hidden{1};
+
+  protected:
+   int guarded{2};
+
+  public:
+   int shown{3};
+};
+
+struct PublicMixedDerived : MixedAccessBase
+{
+   int own{4};
+};
+
+struct PrivateBaseDerived : private MixedAccessBase
+{
+   int own{5};
+};
+
+struct ProtectedBaseDerived : protected MixedAccessBase
+{
+   int own{6};
+};
+
+class PrivateOwnDerived : public MixedAccessBase
+{
+   int secret{7};
+
+  public:
+   int get_secret() const { return secret; }
+};
+
+struct SharedFromThisNode : std::enable_shared_from_this<SharedFromThisNode>
+{
+   SharedFromThisNode() = default; // not an aggregate: the base's constructor is protected
+   int value{8};
+};
+
+// glz::modify layers on top of the inherited members
+struct ModifiedBase
+{
+   int inherited{1};
+};
+
+struct ModifiedDerived : ModifiedBase
+{
+   int own{2};
+};
+
+template <>
+struct glz::meta<ModifiedDerived>
+{
+   using T = ModifiedDerived;
+   static constexpr auto modify = glz::object("renamed_own", &T::own);
+};
+
+// A base's glz::meta is not consulted when a derived type is reflected automatically
+struct RenamedBase
+{
+   int raw{1};
+};
+
+template <>
+struct glz::meta<RenamedBase>
+{
+   static constexpr auto value = glz::object("renamed", &RenamedBase::raw);
+};
+
+struct RenamedBaseDerived : RenamedBase
+{
+   int extra{2};
+};
+
+// Duplicate names are refused by reflection; a glz::meta names the members apart
+struct ShadowedBase
+{
+   int x{1};
+};
+
+struct ShadowedDerived : ShadowedBase
+{
+   int x{2};
+};
+
+template <>
+struct glz::meta<ShadowedDerived>
+{
+   using T = ShadowedDerived;
+   static constexpr auto value = glz::object("base_x", &ShadowedBase::x, "x", &T::x);
+};
+
+struct SameNameLeft
+{
+   int id{1};
+};
+
+struct SameNameRight
+{
+   int id{2};
+};
+
+struct SameNameBoth : SameNameLeft, SameNameRight
+{};
+
+// Repeated bases: refused only when a repeated subobject contributes members
+struct EmptyTag
+{};
+
+struct TaggedLeft : EmptyTag
+{
+   int left{1};
+};
+
+struct TaggedRight : EmptyTag
+{
+   int right{2};
+};
+
+struct TaggedMixed : TaggedLeft, TaggedRight
+{
+   int bottom{3};
+};
+
+struct EmptyDerived : EmptyTag
+{};
+
+struct SharedRoot
+{
+   int shared{1};
+};
+
+struct SharedMid : virtual SharedRoot
+{};
+
+struct SharedLeft : SharedMid
+{
+   int left{2};
+};
+
+struct SharedRight : SharedMid
+{
+   int right{3};
+};
+
+struct SharedDiamond : SharedLeft, SharedRight
+{
+   int bottom{4};
+};
+
+struct NestedRoot
+{
+   int nested{1};
+};
+
+struct NestedMid : NestedRoot
+{};
+
+struct NestedLeft : NestedMid
+{
+   int left{2};
+};
+
+struct NestedRight : NestedMid
+{
+   int right{3};
+};
+
+struct NestedDiamond : NestedLeft, NestedRight
+{
+   int bottom{4};
+};
+
+// One virtual and one non-virtual path to the same base: still two subobjects
+#if defined(__clang__)
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Winaccessible-base"
+#elif defined(__GNUC__)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Winaccessible-base"
+#endif
+struct EdgeRoot
+{
+   int root{1};
+};
+
+struct EdgeVirtual : virtual EdgeRoot
+{
+   int virt{2};
+};
+
+struct EdgeMixed : EdgeVirtual, EdgeRoot
+{
+   int bottom{3};
+};
+#if defined(__clang__)
+#pragma clang diagnostic pop
+#elif defined(__GNUC__)
+#pragma GCC diagnostic pop
+#endif
+
+suite p2996_inherited_members = [] {
+   "inherited members, base first"_test = [] {
+      constexpr auto names = glz::member_names<InheritSecond>;
+      static_assert(names.size() == 4);
+      expect(names[0] == "name");
+      expect(names[1] == "id");
+      expect(names[2] == "extra");
+      expect(names[3] == "factor");
+
+      InheritSecond obj{};
+      obj.name = "base";
+      obj.id = 7;
+      obj.extra = "derived";
+      obj.factor = 2.5;
+
+      std::string s{};
+      expect(not glz::write_json(obj, s));
+      expect(s == R"({"name":"base","id":7,"extra":"derived","factor":2.5})") << s;
+
+      InheritSecond back{};
+      expect(not glz::read_json(back, s));
+      expect(back.name == "base");
+      expect(back.id == 7);
+      expect(back.extra == "derived");
+      expect(back.factor == 2.5);
+   };
+
+   "array-shaped writes carry the inherited members"_test = [] {
+      constexpr auto as_arrays = glz::opt_true<glz::opts{.format = glz::BEVE}, glz::structs_as_arrays_opt_tag{}>;
+      InheritSecond obj{};
+      obj.name = "array";
+      obj.id = 21;
+      obj.extra = "elements";
+      obj.factor = 2.0;
+
+      std::string s{};
+      expect(not glz::write<as_arrays>(obj, s));
+      InheritSecond back{};
+      expect(not glz::read<as_arrays>(back, s));
+      expect(back.name == "array");
+      expect(back.id == 21);
+      expect(back.extra == "elements");
+      expect(back.factor == 2.0);
+   };
+
+   "a virtual base contributes its members once"_test = [] {
+      constexpr auto names = glz::member_names<VirtualDiamond>;
+      static_assert(names.size() == 4);
+      expect(names[0] == "root");
+      expect(names[3] == "bottom");
+
+      VirtualDiamond obj{};
+      obj.root = 1;
+      obj.left = 2;
+      obj.right = 3;
+      obj.bottom = 4;
+      std::string s{};
+      expect(not glz::write_json(obj, s));
+      expect(s == R"({"root":1,"left":2,"right":3,"bottom":4})") << s;
+
+      VirtualDiamond back{};
+      expect(not glz::read_json(back, s));
+      expect(back.root == 1);
+      expect(back.bottom == 4);
+   };
+
+   "only public members of public bases are reflected"_test = [] {
+      static_assert(glz::member_names<PublicMixedDerived>.size() == 2);
+      expect(glz::member_names<PublicMixedDerived>[0] == "shown");
+      static_assert(glz::member_names<PrivateBaseDerived>.size() == 1);
+      static_assert(glz::member_names<ProtectedBaseDerived>.size() == 1);
+      static_assert(glz::member_names<SharedFromThisNode>.size() == 1);
+
+      std::string s{};
+      expect(not glz::write_json(PublicMixedDerived{}, s));
+      expect(s == R"({"shown":3,"own":4})") << s;
+      expect(not glz::write_json(PrivateBaseDerived{}, s));
+      expect(s == R"({"own":5})") << s;
+      expect(not glz::write_json(*std::make_shared<SharedFromThisNode>(), s));
+      expect(s == R"({"value":8})") << s;
+
+      // the type's own private members are still reflected
+      static_assert(glz::member_names<PrivateOwnDerived>.size() == 2);
+      PrivateOwnDerived own{};
+      expect(not glz::read_json(own, R"({"shown":9,"secret":10})"));
+      expect(own.shown == 9);
+      expect(own.get_secret() == 10);
+   };
+
+   "glz::modify layers on top of the inherited members"_test = [] {
+      ModifiedDerived obj{};
+      obj.inherited = 5;
+      obj.own = 6;
+      std::string s{};
+      expect(not glz::write_json(obj, s));
+      expect(s == R"({"inherited":5,"renamed_own":6})") << s;
+
+      ModifiedDerived back{};
+      expect(not glz::read_json(back, s));
+      expect(back.inherited == 5);
+      expect(back.own == 6);
+   };
+
+   "a base's glz::meta is not consulted for the derived type"_test = [] {
+      std::string s{};
+      expect(not glz::write_json(RenamedBase{}, s));
+      expect(s == R"({"renamed":1})") << s;
+      expect(not glz::write_json(RenamedBaseDerived{}, s));
+      expect(s == R"({"raw":1,"extra":2})") << s;
+   };
+
+   "duplicate names are refused; a glz::meta names them apart"_test = [] {
+      static_assert(not glz::detail::member_names_are_unique(^^ShadowedDerived));
+      static_assert(not glz::detail::member_names_are_unique(^^SameNameBoth));
+      static_assert(glz::detail::member_names_are_unique(^^InheritSecond));
+
+      ShadowedDerived obj{};
+      obj.ShadowedBase::x = 11;
+      obj.x = 12;
+      std::string s{};
+      expect(not glz::write_json(obj, s));
+      expect(s == R"({"base_x":11,"x":12})") << s;
+
+      ShadowedDerived back{};
+      expect(not glz::read_json(back, s));
+      expect(back.ShadowedBase::x == 11);
+      expect(back.x == 12);
+   };
+
+   "repeated bases are refused only when they contribute members"_test = [] {
+      static_assert(glz::detail::members_are_namable(^^VirtualDiamond));
+      static_assert(glz::detail::members_are_namable(^^TaggedMixed));
+      static_assert(glz::detail::members_are_namable(^^SharedDiamond));
+      static_assert(not glz::detail::members_are_namable(^^NestedDiamond));
+      static_assert(not glz::detail::members_are_namable(^^EdgeMixed));
+
+      static_assert(glz::member_names<TaggedMixed>.size() == 3);
+      constexpr auto shared = glz::member_names<SharedDiamond>;
+      static_assert(shared.size() == 4);
+      expect(shared[0] == "shared");
+
+      TaggedMixed obj{};
+      std::string s{};
+      expect(not glz::write_json(obj, s));
+      expect(s == R"({"left":1,"right":2,"bottom":3})") << s;
+
+      static_assert(glz::detail::count_members<EmptyDerived> == 0);
+      expect(not glz::write_json(EmptyDerived{}, s));
+      expect(s == "{}") << s;
    };
 };
 
