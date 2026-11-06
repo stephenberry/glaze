@@ -7,10 +7,12 @@
 #include <cmath>
 #include <cstdint>
 #include <cstdio>
+#include <deque>
 #include <expected>
 #include <filesystem>
 #include <limits>
 #include <map>
+#include <memory>
 #include <optional>
 #include <string>
 #include <unordered_map>
@@ -2832,6 +2834,326 @@ suite short_ids_write_guard = [] {
       expect(bool(glz::write_jsonb(v_t{unlabeled{7}}, buffer)));
       buffer.clear();
       expect(not glz::write_jsonb(v_t{labeled{3}}, buffer)); // the labeled alternative is unaffected
+   };
+};
+
+// Adjacent tagging in JSONB has the same shape and read rules as JSON, so one glz::meta serves both.
+namespace jsonb_adjacent
+{
+   struct circle
+   {
+      double radius{};
+      bool operator==(const circle&) const = default;
+   };
+   struct rectangle
+   {
+      double w{};
+      double h{};
+      bool operator==(const rectangle&) const = default;
+   };
+
+   // Every JSONB category, which internal tagging and deduction cannot both represent.
+   using mixed = std::variant<circle, std::vector<double>, std::map<std::string, int>, int, double, std::string, bool,
+                              std::monostate>;
+   // Share a category, so only the discriminator can tell them apart.
+   using same_shape = std::variant<std::vector<double>, std::deque<double>>;
+   using same_keys = std::variant<circle, rectangle>;
+   using integral_ids = std::variant<circle, int>;
+   // An adjacent variant holding another, so its reader recurses.
+   using nested = std::variant<same_shape, int>;
+
+   // Key orders and extra keys the writer never produces, spelled as reflected structs.
+   struct content_first
+   {
+      std::vector<double> value{};
+      std::string type{};
+   };
+   struct with_extra
+   {
+      std::string type{};
+      std::vector<double> value{};
+      int extra{};
+   };
+   struct tag_only
+   {
+      std::string type{};
+   };
+   struct content_only
+   {
+      std::vector<double> value{};
+   };
+   struct wrong_id
+   {
+      std::string type{"nope"};
+      std::vector<double> value{};
+   };
+
+   // Fills in the object header around a hand-built body, for what no struct can spell.
+   inline std::string object_of(const std::string& body)
+   {
+      std::string out(9, '\0');
+      glz::jsonb::patch_header_9(out, 0, glz::jsonb::type::object, body.size());
+      return out + body;
+   }
+
+   inline std::string encoded(const auto& v)
+   {
+      std::string out{};
+      expect(not glz::write_jsonb(v, out));
+      return out;
+   }
+
+   template <class V>
+   void round_trip(const V& in, std::string_view expected_json)
+   {
+      const auto blob = encoded(in);
+      expect(glz::jsonb::get_type(static_cast<uint8_t>(blob[0])) == glz::jsonb::type::object);
+
+      // The wire shape is JSON's, member for member.
+      auto json = glz::write_json(in);
+      expect(json.has_value());
+      expect(*json == expected_json) << *json;
+      std::string transcoded{};
+      expect(not glz::jsonb_to_json(blob, transcoded));
+      expect(transcoded == expected_json) << transcoded;
+
+      V out{};
+      expect(not glz::read_jsonb(out, blob));
+      expect(out == in);
+   }
+}
+
+template <>
+struct glz::meta<jsonb_adjacent::mixed>
+{
+   static constexpr std::string_view tag = "type";
+   static constexpr std::string_view content = "value";
+   static constexpr auto ids = std::array{"circle", "vec", "map", "int", "dbl", "str", "bool", "none"};
+};
+
+template <>
+struct glz::meta<jsonb_adjacent::same_shape>
+{
+   static constexpr std::string_view tag = "type";
+   static constexpr std::string_view content = "value";
+   static constexpr auto ids = std::array{"vec", "deq"};
+};
+
+template <>
+struct glz::meta<jsonb_adjacent::same_keys>
+{
+   static constexpr std::string_view tag = "type";
+   static constexpr std::string_view content = "value";
+   static constexpr auto ids = std::array{"c", "r"};
+};
+
+template <>
+struct glz::meta<jsonb_adjacent::integral_ids>
+{
+   static constexpr std::string_view tag = "t";
+   static constexpr std::string_view content = "c";
+   static constexpr auto ids = std::array{10, 20};
+};
+
+template <>
+struct glz::meta<jsonb_adjacent::nested>
+{
+   static constexpr std::string_view tag = "outer";
+   static constexpr std::string_view content = "inner";
+   static constexpr auto ids = std::array{"shape", "num"};
+};
+
+namespace jsonb_adjacent
+{
+   using smart = std::variant<std::unique_ptr<circle>, std::shared_ptr<rectangle>>;
+
+   // Fewer ids than alternatives: the first unlabeled alternative is the default for an unknown id.
+   struct unlabeled_default
+   {
+      int code{};
+      bool operator==(const unlabeled_default&) const = default;
+   };
+   using short_ids = std::variant<circle, unlabeled_default>;
+}
+
+template <>
+struct glz::meta<jsonb_adjacent::smart>
+{
+   static constexpr std::string_view tag = "type";
+   static constexpr std::string_view content = "value";
+   static constexpr auto ids = std::array{"c", "r"};
+};
+
+template <>
+struct glz::meta<jsonb_adjacent::short_ids>
+{
+   static constexpr std::string_view tag = "t";
+   static constexpr std::string_view content = "c";
+   static constexpr std::array<std::string_view, 1> ids{"known"};
+};
+
+suite jsonb_adjacent_tagging = [] {
+   using namespace jsonb_adjacent;
+
+   "every alternative takes the same shape"_test = [] {
+      round_trip(mixed{circle{5}}, R"({"type":"circle","value":{"radius":5}})");
+      round_trip(mixed{std::vector<double>{1, 2}}, R"({"type":"vec","value":[1,2]})");
+      round_trip(mixed{std::map<std::string, int>{{"k", 1}}}, R"({"type":"map","value":{"k":1}})");
+      round_trip(mixed{42}, R"({"type":"int","value":42})");
+      round_trip(mixed{2.5}, R"({"type":"dbl","value":2.5})");
+      round_trip(mixed{std::string{"hi"}}, R"({"type":"str","value":"hi"})");
+      round_trip(mixed{true}, R"({"type":"bool","value":true})");
+      round_trip(mixed{std::monostate{}}, R"({"type":"none","value":null})");
+   };
+
+   "alternatives sharing a shape are told apart"_test = [] {
+      round_trip(same_shape{std::deque<double>{1, 2}}, R"({"type":"deq","value":[1,2]})");
+      round_trip(same_shape{std::vector<double>{3}}, R"({"type":"vec","value":[3]})");
+      round_trip(same_keys{rectangle{1, 2}}, R"({"type":"r","value":{"w":1,"h":2}})");
+   };
+
+   "integral ids round trip"_test = [] {
+      round_trip(integral_ids{circle{1}}, R"({"t":10,"c":{"radius":1}})");
+      round_trip(integral_ids{7}, R"({"t":20,"c":7})");
+   };
+
+   "adjacent variants nest"_test = [] {
+      round_trip(nested{same_shape{std::deque<double>{1}}}, R"({"outer":"shape","inner":{"type":"deq","value":[1]}})");
+   };
+
+   "smart pointer alternatives behave as a bare smart pointer does"_test = [] {
+      const auto blob = encoded(smart{std::make_shared<rectangle>(rectangle{1, 2})});
+
+      // JSONB reads into an existing pointee and does not allocate one, with or without a variant.
+      smart empty{};
+      expect(glz::read_jsonb(empty, blob) == glz::error_code::invalid_nullable_read);
+      expect(empty.index() == 1u);
+
+      smart out{std::make_shared<rectangle>()};
+      expect(not glz::read_jsonb(out, blob));
+      expect(*std::get<1>(out) == rectangle{1, 2});
+   };
+
+   "either key order reads"_test = [] {
+      same_shape out{};
+      expect(not glz::read_jsonb(out, encoded(content_first{{1.5, 2.5}, "deq"})));
+      expect(out == same_shape{std::deque<double>{1.5, 2.5}});
+   };
+
+   "the content is read wherever it sits and the whole object is consumed"_test = [] {
+      // Followed by another element in an array: stopping at the content's end would misread it.
+      std::vector<same_shape> out{};
+      const auto a = encoded(std::vector<content_first>{{{1.0}, "deq"}, {{2.0}, "vec"}});
+      expect(not glz::read_jsonb(out, a));
+      expect(out.size() == 2u);
+      expect(out[0] == same_shape{std::deque<double>{1.0}});
+      expect(out[1] == same_shape{std::vector<double>{2.0}});
+   };
+
+   "an unknown key is rejected unless tolerated"_test = [] {
+      const auto blob = encoded(with_extra{"deq", {1.0}, 3});
+      same_shape strict{std::vector<double>{9}};
+      expect(glz::read_jsonb(strict, blob) == glz::error_code::unknown_key);
+      expect(strict == same_shape{std::vector<double>{9}}); // rejected before the destination is disturbed
+
+      same_shape lax{};
+      expect(not glz::read<glz::opts{.format = glz::JSONB, .error_on_unknown_keys = false}>(lax, blob));
+      expect(lax == same_shape{std::deque<double>{1.0}});
+   };
+
+   "a repeated key is rejected unless tolerated, and then the first counts"_test = [] {
+      const auto repeated_content =
+         object_of(encoded(std::string{"type"}) + encoded(std::string{"deq"}) + encoded(std::string{"value"}) +
+                   encoded(std::vector<double>{1}) + encoded(std::string{"value"}) + encoded(std::vector<double>{2}));
+      const auto repeated_tag =
+         object_of(encoded(std::string{"type"}) + encoded(std::string{"deq"}) + encoded(std::string{"type"}) +
+                   encoded(std::string{"vec"}) + encoded(std::string{"value"}) + encoded(std::vector<double>{1}));
+      for (const auto& blob : {repeated_content, repeated_tag}) {
+         same_shape strict{};
+         expect(glz::read_jsonb(strict, blob) == glz::error_code::unknown_key);
+
+         same_shape lax{};
+         expect(not glz::read<glz::opts{.format = glz::JSONB, .error_on_unknown_keys = false}>(lax, blob));
+         expect(lax == same_shape{std::deque<double>{1}});
+      }
+   };
+
+   "a missing key is reported without disturbing the destination"_test = [] {
+      {
+         same_shape out{std::vector<double>{9}};
+         glz::context ctx{};
+         expect(glz::read<glz::opts{.format = glz::JSONB}>(out, encoded(tag_only{"deq"}), ctx) ==
+                glz::error_code::missing_key);
+         expect(ctx.custom_error_message == "value");
+         expect(out == same_shape{std::vector<double>{9}});
+      }
+      {
+         same_shape out{std::vector<double>{9}};
+         expect(glz::read_jsonb(out, encoded(content_only{{1.0}})) == glz::error_code::missing_key);
+         expect(out == same_shape{std::vector<double>{9}});
+      }
+   };
+
+   "an id naming no alternative is an error"_test = [] {
+      same_shape out{std::vector<double>{9}};
+      expect(glz::read_jsonb(out, encoded(wrong_id{})) == glz::error_code::no_matching_variant_type);
+      expect(out == same_shape{std::vector<double>{9}});
+   };
+
+   "an unknown id selects the unlabeled default"_test = [] {
+      const auto blob = object_of(encoded(std::string{"t"}) + encoded(std::string{"future"}) +
+                                  encoded(std::string{"c"}) + encoded(unlabeled_default{3}));
+      short_ids out{};
+      expect(not glz::read_jsonb(out, blob));
+      expect(out == short_ids{unlabeled_default{3}});
+
+      // The default has no id to write.
+      std::string buffer{};
+      expect(glz::write_jsonb(short_ids{unlabeled_default{3}}, buffer) == glz::error_code::no_matching_variant_type);
+   };
+
+   "an escaped key reads as the key it spells"_test = [] {
+      std::string key(1, char((9 << 4) | glz::jsonb::type::textj));
+      key += R"(ty\u0070e)"; // 9 bytes, spelling "type"
+      same_shape out{};
+      expect(not glz::read_jsonb(out, object_of(key + encoded(std::string{"deq"}) + encoded(std::string{"value"}) +
+                                                encoded(std::vector<double>{1}))));
+      expect(out == same_shape{std::deque<double>{1}});
+   };
+
+   "malformed objects are rejected"_test = [] {
+      same_shape out{};
+      expect(glz::read_jsonb(out, encoded(std::vector<double>{1})) == glz::error_code::syntax_error);
+      expect(bool(glz::read_jsonb(out, encoded(std::string{"type"}))));
+
+      // A key with no value.
+      expect(bool(glz::read_jsonb(out, object_of(encoded(std::string{"type"})))));
+      // A non-string discriminator where the ids are strings.
+      expect(bool(glz::read_jsonb(out, object_of(encoded(std::string{"type"}) + encoded(1) +
+                                                 encoded(std::string{"value"}) + encoded(std::vector<double>{1})))));
+      // A value whose declared size runs past the object holding it.
+      const auto good = encoded(same_shape{std::vector<double>{1, 2, 3}});
+      expect(bool(glz::read_jsonb(out, std::string_view{good}.substr(0, good.size() - 1))));
+      auto cut = object_of(encoded(std::string{"type"}) + encoded(std::string{"vec"}) + encoded(std::string{"value"}) +
+                           encoded(std::vector<double>{1, 2, 3}));
+      cut.resize(cut.size() - 1);
+      glz::jsonb::patch_header_9(cut, 0, glz::jsonb::type::object, cut.size() - 9);
+      expect(bool(glz::read_jsonb(out, cut)));
+   };
+
+   "a truncated value at every length is an error, never a crash"_test = [] {
+      const auto blob = encoded(mixed{circle{5}});
+      for (size_t n = 0; n < blob.size(); ++n) {
+         mixed out{};
+         expect(bool(glz::read_jsonb(out, std::string_view{blob}.substr(0, n)))) << n;
+      }
+   };
+
+   "reading many adjacent variants does not leak depth"_test = [] {
+      std::vector<same_shape> in(glz::max_recursive_depth_limit + 16, same_shape{std::deque<double>{1}});
+      std::vector<same_shape> out{};
+      expect(not glz::read_jsonb(out, encoded(in)));
+      expect(out == in);
    };
 };
 
