@@ -420,6 +420,14 @@ int main()
       expect(c1.matrix() == c2.matrix());
    };
 
+   "Eigen meta names"_test = [] {
+      static_assert(glz::name_v<Eigen::Matrix3d>.starts_with("Eigen::Matrix<"));
+      static_assert(glz::name_v<Eigen::Array<float, 2, 3>>.starts_with("Eigen::Array<"));
+      static_assert(glz::name_v<Eigen::Isometry3d>.starts_with("Eigen::Transform<"));
+      static_assert(glz::name_v<Eigen::AffineCompact2d>.starts_with("Eigen::Transform<"));
+      expect(glz::name_v<Eigen::Isometry3d> != glz::name_v<Eigen::AffineCompact2d>);
+   };
+
    "const Matrix4d JSON"_test = [] {
       const Eigen::Matrix4d m = Eigen::Matrix4d::Identity();
       std::string json;
