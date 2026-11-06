@@ -154,6 +154,17 @@ suite ordering = [] {
       expect(glz::less{}(a, c));
    };
 
+   "orderings accept mixed const arguments"_test = [] {
+      ordering_t mutable_value{1, 2, ""};
+      const ordering_t const_value{1, 3, ""};
+
+      expect(glz::less{}(mutable_value, const_value));
+      expect(glz::greater{}(const_value, mutable_value));
+      expect(glz::less_equal{}(mutable_value, const_value));
+      expect(glz::greater_equal{}(const_value, mutable_value));
+      expect(!glz::less{}(ordering_t{1, 3, ""}, const_value));
+   };
+
    "less works as a set comparator"_test = [] {
       std::set<ordering_t, glz::less> values;
       values.insert({1, 3, ""});

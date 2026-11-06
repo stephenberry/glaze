@@ -66,36 +66,36 @@ namespace glz
    struct less final
    {
       template <glaze_object_t T>
-      constexpr bool operator()(T&& lhs, T&& rhs) const noexcept
+      constexpr bool operator()(const T& lhs, const T& rhs) const noexcept
       {
-         return detail::lexicographic<std::less<>, std::remove_cvref_t<T>>(lhs, rhs);
+         return detail::lexicographic<std::less<>>(lhs, rhs);
       }
    };
 
    struct less_equal final
    {
       template <glaze_object_t T>
-      constexpr bool operator()(T&& lhs, T&& rhs) const noexcept
+      constexpr bool operator()(const T& lhs, const T& rhs) const noexcept
       {
-         return !detail::lexicographic<std::greater<>, std::remove_cvref_t<T>>(lhs, rhs);
+         return !detail::lexicographic<std::greater<>>(lhs, rhs);
       }
    };
 
    struct greater final
    {
       template <glaze_object_t T>
-      constexpr bool operator()(T&& lhs, T&& rhs) const noexcept
+      constexpr bool operator()(const T& lhs, const T& rhs) const noexcept
       {
-         return detail::lexicographic<std::greater<>, std::remove_cvref_t<T>>(lhs, rhs);
+         return detail::lexicographic<std::greater<>>(lhs, rhs);
       }
    };
 
    struct greater_equal final
    {
       template <glaze_object_t T>
-      constexpr bool operator()(T&& lhs, T&& rhs) const noexcept
+      constexpr bool operator()(const T& lhs, const T& rhs) const noexcept
       {
-         return !detail::lexicographic<std::less<>, std::remove_cvref_t<T>>(lhs, rhs);
+         return !detail::lexicographic<std::less<>>(lhs, rhs);
       }
    };
 }
