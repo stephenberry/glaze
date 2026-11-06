@@ -5,6 +5,7 @@
 #include <any>
 #include <array>
 #include <atomic>
+#include <bit>
 #include <bitset>
 #include <chrono>
 #include <complex>
@@ -12780,6 +12781,116 @@ namespace glz
       }
    };
 }
+
+// The tagged value example from docs/custom-serialization.md
+struct nan_boxed
+{
+   static constexpr uint64_t qnan = 0x7ffc000000000000ull;
+   static constexpr uint64_t tag_null = qnan | 1;
+   static constexpr uint64_t tag_false = qnan | 2;
+   static constexpr uint64_t tag_true = qnan | 3;
+
+   uint64_t bits = tag_null;
+
+   bool is_double() const { return (bits & qnan) != qnan; }
+   bool is_bool() const { return bits == tag_true || bits == tag_false; }
+   double as_double() const { return std::bit_cast<double>(bits); }
+
+   static nan_boxed make(double d) { return {std::bit_cast<uint64_t>(d)}; }
+   static nan_boxed make(bool b) { return {b ? tag_true : tag_false}; }
+};
+
+namespace glz
+{
+   template <>
+   struct to<JSON, nan_boxed>
+   {
+      template <auto Opts>
+      static void op(const nan_boxed& value, is_context auto&& ctx, auto&& b, auto&& ix)
+      {
+         if (value.is_double()) {
+            const double d = value.as_double();
+            serialize<JSON>::op<Opts>(d, ctx, b, ix);
+         }
+         else if (value.is_bool()) {
+            const bool x = value.bits == nan_boxed::tag_true;
+            serialize<JSON>::op<Opts>(x, ctx, b, ix);
+         }
+         else {
+            serialize<JSON>::op<Opts>(nullptr, ctx, b, ix);
+         }
+      }
+   };
+
+   template <>
+   struct from<JSON, nan_boxed>
+   {
+      template <auto Opts>
+      static void op(nan_boxed& value, is_context auto&& ctx, auto&& it, auto&& end)
+      {
+         if (skip_ws<Opts>(ctx, it, end)) {
+            return;
+         }
+
+         switch (*it) {
+         case 'n': {
+            std::nullptr_t null{};
+            parse<JSON>::op<ws_handled<Opts>()>(null, ctx, it, end);
+            value = nan_boxed{};
+            break;
+         }
+         case 't':
+         case 'f': {
+            bool x{};
+            parse<JSON>::op<ws_handled<Opts>()>(x, ctx, it, end);
+            value = nan_boxed::make(x);
+            break;
+         }
+         default: {
+            double d{};
+            parse<JSON>::op<ws_handled<Opts>()>(d, ctx, it, end);
+            value = nan_boxed::make(d);
+            break;
+         }
+         }
+      }
+   };
+}
+
+suite nan_boxed_tests = [] {
+   "nan_boxed round trip"_test = [] {
+      std::vector<nan_boxed> values{};
+      expect(not glz::read_json(values, R"([1.5, true, null, false, -2])"));
+      expect(values.size() == 5);
+      expect(values[0].is_double() && values[0].as_double() == 1.5);
+      expect(values[1].bits == nan_boxed::tag_true);
+      expect(values[2].bits == nan_boxed::tag_null);
+      expect(values[3].bits == nan_boxed::tag_false);
+      expect(values[4].is_double() && values[4].as_double() == -2.0);
+
+      std::string buffer{};
+      expect(not glz::write_json(values, buffer));
+      expect(buffer == R"([1.5,true,null,false,-2])") << buffer;
+   };
+
+   "nan_boxed invalid input"_test = [] {
+      nan_boxed value{};
+      expect(bool(glz::read_json(value, R"("text")")));
+      expect(bool(glz::read_json(value, "")));
+      expect(bool(glz::read_json(value, "   ")));
+      expect(bool(glz::read_json(value, "tru")));
+
+      std::vector<nan_boxed> values{};
+      expect(bool(glz::read_json(values, "[")));
+      expect(bool(glz::read_json(values, "[1,")));
+
+      // Without the null terminator guarantee
+      const std::string unterminated = "[1, ";
+      expect(bool(glz::read_json(values, std::string_view{unterminated})));
+      const std::string_view no_room = std::string_view{"true"}.substr(0, 2);
+      expect(bool(glz::read_json(value, no_room)));
+   };
+};
 
 suite custom_struct_tests = [] {
    "custom_struct"_test = [] {
