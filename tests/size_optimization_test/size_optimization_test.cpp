@@ -9,10 +9,12 @@
 // regression in the consteval fallbacks (check_optimization_level / check_linear_search /
 // is_size_optimized) fails the build instead of silently re-bloating embedded binaries.
 
+#include <bit>
 #include <cstdint>
 #include <cstdio>
 #include <string>
 #include <string_view>
+#include <type_traits>
 #include <vector>
 
 #include "glaze/glaze.hpp"
@@ -68,6 +70,48 @@ namespace
       glz::optimization_level optimization_level = glz::optimization_level::size;
    };
    static_assert(not check_linear_search(force_hash_opts{}));
+
+   // The size-optimized reader parses floats with simple_float::from_chars, while the normal
+   // reader uses fast_float. Two parsers can drift apart silently: opts_size once accepted
+   // 1e309 as inf while the normal reader rejected it. These inputs sit where parsers tend to
+   // disagree (range limits, rounding halfway points, truncated digits, malformed syntax), and
+   // both readers must give the same error code and, on success, the same bits.
+   constexpr std::string_view float_parity_inputs[] = {
+      // zero, including exponents far outside the range
+      "0", "-0", "0.0", "0e999999", "-0e-999999",
+      // the top of double: max, rounding down to max, rounding up to inf, overflow
+      "1.7976931348623157e308", "1.7976931348623158e308", "1.7976931348623159e308", "1e309", "-1e309",
+      "1e999999",
+      // the bottom of double: smallest normal, subnormals, either side of the halfway point to zero
+      "2.2250738585072014e-308", "2.2250738585072011e-308", "4.9406564584124654e-324", "5e-324",
+      "2.4703282292062328e-324", "2.4703282292062327e-324", "2e-324", "1e-324", "-1e-324", "1e-999999",
+      // the edges of float, which differ from double only for the float reads
+      "3.4028235e38", "3.4028236e38", "1e39", "1.4e-45", "7.1e-46", "7e-46", "1e-46",
+      // more significant digits than a 64-bit mantissa holds
+      "9007199254740993", "0.1000000000000000055511151231257827021181583404541015625",
+      "1000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000e300",
+      "0.000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001e-300",
+      // malformed: both must reject
+      "", "-", "+1", "1.", ".1", "01", "1e", "1e+", "--1", "1.0.0", "inf", "nan", "0x1p3",
+   };
+
+   template <class T>
+   bool same_read_result(const std::string_view input)
+   {
+      using bits_type = std::conditional_t<sizeof(T) == 4, uint32_t, uint64_t>;
+      T normal{};
+      T size{};
+      const auto normal_ec = glz::read<force_normal_opts{}>(normal, input);
+      const auto size_ec = glz::read<opts_size{}>(size, input);
+      if (normal_ec.ec != size_ec.ec ||
+          (not normal_ec && std::bit_cast<bits_type>(normal) != std::bit_cast<bits_type>(size))) {
+         std::printf("%s '%.*s': normal reader ec=%d value=%.17g, opts_size ec=%d value=%.17g\n",
+                     sizeof(T) == 4 ? "float" : "double", int(input.size()), input.data(), int(normal_ec.ec),
+                     double(normal), int(size_ec.ec), double(size));
+         return false;
+      }
+      return true;
+   }
 }
 
 int main()
@@ -124,6 +168,15 @@ int main()
             std::printf("%.*s was accepted as %g\n", int(input.size()), input.data(), d);
             rc = 1;
          }
+      }
+   }
+
+   for (const std::string_view input : float_parity_inputs) {
+      // Both checks run so a failure report lists every mismatch, not just the first per input.
+      const bool double_matches = same_read_result<double>(input);
+      const bool float_matches = same_read_result<float>(input);
+      if (not double_matches || not float_matches) {
+         rc = 1;
       }
    }
 
