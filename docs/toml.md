@@ -763,6 +763,10 @@ For integers in `glz::generic_u64` mode:
 - Numbers starting with `-` are stored as `int64_t`
 - Positive numbers are stored as `uint64_t`
 
+A generic type or a variant with a map alternative also takes a whole TOML document at the root. A document is recognized by a `key = value` line or by a `[table]` or `[[array of tables]]` header, and the tables go into the map alternative, including arrays of tables and their sub-tables. A bare array such as `[1, 2, 3]` still reads as an array.
+
+The text of a one element array can also be a header. `[1]`, `["a"]` and `[[1]]` read as arrays when they are all there is, and as headers when anything follows them, so `[1]` on its own is the array and `[1]` followed by `x = 2` is the table `{"1": {"x": 2}}`. A key that could not be an array element, such as `[server]`, is always a header.
+
 ### Writing Generic Types
 
 Generic types can be written back to TOML:

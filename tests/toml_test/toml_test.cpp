@@ -3991,6 +3991,29 @@ struct glz::meta<generic_cast_member>
    static constexpr auto value = object("g", glz::cast<&T::g, glz::generic>, "b", &T::b);
 };
 
+struct generic_document_tls
+{
+   bool on{};
+};
+
+struct generic_document_server
+{
+   std::string host{};
+   generic_document_tls tls{};
+};
+
+struct generic_document_route
+{
+   std::string name{};
+   generic_document_tls tls{};
+};
+
+struct generic_document_writer
+{
+   generic_document_server server{};
+   std::vector<generic_document_route> routes{};
+};
+
 suite generic_toml_document_root_tests = [] {
    // A document whose first key is quoted or starts like a value must not read as that one scalar
    "generic_read_toml_quoted_first_key"_test = [] {
@@ -4092,6 +4115,187 @@ suite generic_toml_document_root_tests = [] {
       expect(not ec) << glz::format_error(ec, toml);
       expect(std::holds_alternative<std::string>(bare));
       expect(std::get<std::string>(bare) == "k");
+   };
+
+   "generic_read_toml_table_header_first"_test = [] {
+      glz::generic g;
+      std::string toml = "[server]\nport = 8080\n";
+      auto ec = glz::read_toml(g, toml);
+      expect(not ec) << glz::format_error(ec, toml);
+      expect(g["server"]["port"].get<double>() == 8080.0);
+
+      // After a comment or blank lines, with blanks in the header, and dotted or quoted
+      for (const std::string first : {"# header\n\n[a.b]", "  [ a . b ]", "[\"a\".'b']"}) {
+         glz::generic dotted;
+         toml = first + "\nx = 1\n[c]\ny = 2\n";
+         ec = glz::read_toml(dotted, toml);
+         expect(not ec) << glz::format_error(ec, toml);
+         expect(dotted["a"]["b"]["x"].get<double>() == 1.0) << toml;
+         expect(dotted["c"]["y"].get<double>() == 2.0) << toml;
+      }
+
+      glz::generic alone;
+      ec = glz::read_toml(alone, std::string{"[server]\n"});
+      expect(not ec);
+      expect(alone["server"].is_object());
+
+      glz::generic_i64 exact;
+      toml = "[server]\nport = 9007199254740993\n";
+      ec = glz::read_toml(exact, toml);
+      expect(not ec) << glz::format_error(ec, toml);
+      expect(exact["server"]["port"].get<int64_t>() == 9007199254740993);
+
+      glz::generic_u64 big;
+      toml = "[[a]]\nn = 18446744073709551615\n";
+      ec = glz::read_toml(big, toml);
+      expect(not ec) << glz::format_error(ec, toml);
+      expect(big["a"].get<glz::generic_u64::array_t>()[0]["n"].get<uint64_t>() == UINT64_MAX);
+   };
+
+   "generic_read_toml_array_of_tables_first"_test = [] {
+      glz::generic g;
+      std::string toml = "[[routes]]\nname = \"a\"\n";
+      auto ec = glz::read_toml(g, toml);
+      expect(not ec) << glz::format_error(ec, toml);
+      auto json = glz::write_json(g);
+      expect(json.has_value() && *json == R"({"routes":[{"name":"a"}]})") << json.value_or("");
+
+      glz::generic several;
+      toml = R"([[a]]
+x = 1
+[[a]]
+[[a]]
+x = 3
+y.z = 4
+[other]
+k = 5
+[[a]]
+x = 6
+)";
+      ec = glz::read_toml(several, toml);
+      expect(not ec) << glz::format_error(ec, toml);
+      json = glz::write_json(several);
+      expect(json.has_value() && *json == R"({"a":[{"x":1},{},{"x":3,"y":{"z":4}},{"x":6}],"other":{"k":5}})")
+         << json.value_or("");
+
+      glz::generic alone;
+      ec = glz::read_toml(alone, std::string{"[[routes]]"});
+      expect(not ec);
+      expect(glz::write_json(alone).value_or("") == R"({"routes":[{}]})");
+   };
+
+   "generic_read_toml_array_of_tables_nesting"_test = [] {
+      glz::generic g;
+      // TOML v1.0.0's own example: sub-tables and nested arrays attach to the latest element
+      const std::string toml = R"([[fruits]]
+name = "apple"
+
+[fruits.physical]
+color = "red"
+
+[[fruits.varieties]]
+name = "red delicious"
+
+[[fruits.varieties]]
+name = "granny smith"
+
+[[fruits]]
+name = "banana"
+
+[[fruits.varieties]]
+name = "plantain"
+)";
+      const auto ec = glz::read_toml(g, toml);
+      expect(not ec) << glz::format_error(ec, toml);
+      const auto json = glz::write_json(g);
+      expect(
+         json.has_value() &&
+         *json ==
+            R"({"fruits":[{"name":"apple","physical":{"color":"red"},"varieties":[{"name":"red delicious"},{"name":"granny smith"}]},{"name":"banana","varieties":[{"name":"plantain"}]}]})")
+         << json.value_or("");
+
+      // Only the path that was opened is an array of tables, not the same key elsewhere
+      glz::generic same_key;
+      expect(not glz::read_toml(same_key, std::string{"[[a]]\n[x]\ny = 1\n[x.a]\nz = 1\n"}));
+      expect(glz::write_json(same_key).value_or("") == R"({"a":[{}],"x":{"y":1,"a":{"z":1}}})");
+
+      glz::generic under_table;
+      const std::string nested = "[a]\nb = 1\n[[a.list]]\nx = 1\n[[a.list]]\nx = 2\n";
+      const auto nested_ec = glz::read_toml(under_table, nested);
+      expect(not nested_ec) << glz::format_error(nested_ec, nested);
+      expect(glz::write_json(under_table).value_or("") == R"({"a":{"b":1,"list":[{"x":1},{"x":2}]}})");
+
+      // The map document reader is shared, so a map of generics takes the same documents
+      std::map<std::string, glz::generic> m;
+      const auto map_ec = glz::read_toml(m, toml);
+      expect(not map_ec) << glz::format_error(map_ec, toml);
+      expect(m.at("fruits").get<glz::generic::array_t>().size() == 2);
+   };
+
+   "generic_read_toml_array_of_tables_invalid"_test = [] {
+      for (const std::string toml : {
+              "a = [1]\n[[a]]\n", // an array written as a value is complete
+              "a = [{x = 1}]\n[[a]]\nx = 2\n",
+              "a = [{x = 1}]\n[a.b]\ny = 2\n",
+              "a = [{x = 1}]\n[[a.b]]\ny = 2\n",
+              "a = [{x = 1}]\na.y = 2\n",
+              "a = 1\n[[a]]\n",
+              "[a]\n[[a]]\n",
+              "[[a]]\n[a]\n",
+              "[[a]]\nx = 1\nx = 2\n",
+              "[[a]]\nb = [{x = 1}]\n[[a.b]]\n",
+              // The array under the previous element says nothing about the one under this element
+              "[[a]]\n[[a.b]]\n[[a]]\nb = [1]\n[[a.b]]\n",
+              "[[a]\nx = 1\n",
+              "[[a]] x = 1\n",
+           }) {
+         glz::generic g;
+         expect(glz::read_toml(g, toml).ec == glz::error_code::syntax_error) << toml;
+      }
+
+      // A map whose values cannot hold an array of tables has nowhere to put one
+      std::map<std::string, std::map<std::string, int>> nested;
+      expect(glz::read_toml(nested, std::string{"[[a]]\n"}).ec == glz::error_code::syntax_error);
+   };
+
+   // The text of a one element array is also a valid header, so only what follows can tell them apart
+   "generic_read_toml_bare_array_is_not_a_header"_test = [] {
+      for (const std::string toml :
+           {"[1, 2, 3]", "[1]",    "[1]\n", "[ 1 ] # c\n\n", "[1.5]",   "[-1]",    "[+1]",          "[\"a\"]",
+            "['a']",     "[true]", "[inf]", "[nan]",         "[[1]]",   "[[1]]\n", "[[1, 2], [3]]", "[[1], [2]]",
+            "[[\"a\"]]", "[]",     "[[]]",  "[ [1] ]",       "[\n1\n]", "[1\n,2]", "[{a = 1}]"}) {
+         glz::generic g;
+         const auto ec = glz::read_toml(g, toml);
+         expect(not ec) << glz::format_error(ec, toml);
+         expect(g.is_array()) << toml;
+      }
+
+      for (const std::string toml :
+           {"[1]\nx = 2\n", "[true]\nx = 2\n", "[\"a\"]\nx = 2\n", "[1]\n[2]\n", "[[1]]\nx = 2\n"}) {
+         glz::generic g;
+         const auto ec = glz::read_toml(g, toml);
+         expect(not ec) << glz::format_error(ec, toml);
+         expect(g.is_object()) << toml;
+      }
+
+      glz::generic text;
+      expect(not glz::read_toml(text, std::string{"[\"a\"]\nx = 2\n"}));
+      expect(text["a"]["x"].get<double>() == 2.0);
+   };
+
+   // The struct writer emits headers, which a schema-less reader of the same file has to follow
+   "generic_read_toml_written_from_struct"_test = [] {
+      const generic_document_writer original{{"localhost", {true}}, {{"a", {true}}, {"b", {false}}}};
+      const auto toml = glz::write_toml(original);
+      expect(toml.has_value());
+      if (not toml) return;
+      glz::generic parsed;
+      const auto ec = glz::read_toml(parsed, *toml);
+      expect(not ec) << glz::format_error(ec, *toml);
+      expect(
+         glz::write_json(parsed).value_or("") ==
+         R"({"server":{"host":"localhost","tls":{"on":true}},"routes":[{"name":"a","tls":{"on":true}},{"name":"b","tls":{"on":false}}]})")
+         << *toml;
    };
 };
 
