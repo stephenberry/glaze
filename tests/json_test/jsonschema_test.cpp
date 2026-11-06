@@ -657,6 +657,14 @@ suite value_type_variant_schema = [] {
          << schema;
    };
 
+   "unordered_map<string,string> additionalProperties inlined"_test = [] {
+      auto schema = glz::write_json_schema<std::unordered_map<std::string, std::string>>().value();
+      expect(
+         schema ==
+         R"({"type":"object","additionalProperties":{"type":"string"},"title":"std::unordered_map<std::string,std::string>"})")
+         << schema;
+   };
+
    "glaze_array_t schema"_test = [] {
       auto schema = glz::write_json_schema<point3d>().value();
       auto obj = glz::read_json<glz::schema>(schema);
