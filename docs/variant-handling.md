@@ -339,6 +339,26 @@ glz::read_json(p1, R"({"name": "Bob", "age": 30})");  // → PersonWithAge
 glz::read_json(p1, R"({"name": "Charlie", "age": 25, "height": 175.5})"); // → PersonFull
 ```
 
+### Alternatives That Cannot Be Told Apart
+
+Two alternatives with the same keys holding the same types leave nothing in a document to separate them. Reading could only ever produce the first, whichever was written, so reading JSON into such a variant without a discriminator is a compile error:
+
+```c++
+struct Celsius { double value{}; };
+struct Fahrenheit { double value{}; };
+using Temperature = std::variant<Celsius, Fahrenheit>;
+
+Temperature t{};
+glz::write_json(Fahrenheit{98.6});     // fine: {"value":98.6}
+glz::read_json(t, R"({"value":98.6})"); // ❌ static_assert
+```
+
+Declare `tag` and `ids` for the variant to fix it (see below), or remove one of the two if they really are interchangeable. Code that only writes is unaffected.
+
+What counts is the reflected key set, in any order, and each key's member type, seen through smart pointers: `std::variant<Celsius, std::unique_ptr<Fahrenheit>>` is rejected too. Alternatives that share keys but not their types are not rejected, nor are alternatives without a compile-time key set, such as `std::variant<std::vector<int>, std::deque<int>>`, a map, or a type with a custom reader. Those still resolve as described above, which can land on an earlier alternative whose reader accepts the value. Only a discriminator is certain to preserve the alternative that was written.
+
+The other formats do not reject these variants. JSONB and BSON reject every untagged variant with two object alternatives, and BEVE, MessagePack, CBOR, and YAML collapse them to the first alternative at runtime, as [Binary Format](./binary.md#variants) describes for BEVE.
+
 ### Deduction of Tagged Object Types
 If you don't want auto deduction, need explicit type control, or need to deduce the type based on the value associated with a key, Glaze supports custom tags. This is particularly useful when:
 - You want explicit control over type selection regardless of field presence
@@ -455,7 +475,7 @@ Notes:
 - The two keys may appear in either order on read. Any other key is an `unknown_key` error under the default options.
 - `tag` and `content` must differ, and `content` requires `tag`.
 - Both representations are identical in JSON, BEVE, MessagePack, and CBOR, so `glz::beve_to_json(glz::write_beve(v))` matches `glz::write_json(v)`.
-- A variant that declares neither `tag` nor `content` is written as the active alternative's own value, with no discriminator, in every one of those formats. Reading it back tries the alternatives in declaration order, so alternatives that share a wire shape cannot be told apart — declare a `tag` when that matters.
+- A variant that declares neither `tag` nor `content` is written as the active alternative's own value, with no discriminator, in every one of those formats. Reading it back tries the alternatives in declaration order, so alternatives that share a wire shape cannot be told apart — declare a `tag` when that matters. In JSON, some of these are [a compile error](#alternatives-that-cannot-be-told-apart).
 - Under BEVE's `structs_as_arrays`, adjacent tagging projects to the two element array `[id, value]`. Internal tagging has nothing to project there — its whole mechanism is a key — so `tag` without `content` is a compile error in that mode.
 - `glz::json_schema` describes an adjacently tagged variant as a `oneOf` of two-property objects with a `const` discriminator. Unlike the internally tagged case, each alternative's own schema is nested under the content key rather than merged with the discriminator, so an alternative reached through `$defs` no longer needs its `additionalProperties: false` relaxed. (Whether a given definition ends up as a `$ref` or inlined is decided afterwards by the usual single-use inlining.)
 - Adjacent tagging is not yet implemented for YAML or JSONB, which support internal tagging only. Declaring `content` and then writing or reading one of those formats is a compile error rather than a silent fallback to a different shape. MessagePack and CBOR implement both representations as maps, matching JSON and BEVE. TOML has no discriminator support in either representation and writes the active alternative bare.
