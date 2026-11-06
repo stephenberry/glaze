@@ -1728,7 +1728,8 @@ namespace glz
             value, // "key = value", which closes the key to anything further
             implicit_table, // on the way to a deeper [header], and may still get a header of its own
             header_table,
-            dotted_table
+            dotted_table,
+            table_array // [[key]], whose record is that of the element the last [[key]] opened
          };
 
          struct entry
@@ -1791,10 +1792,31 @@ namespace glz
             if (found == entries.end()) {
                return add_table(key, exists, defined_by::dotted_table);
             }
-            if (found->second.how == defined_by::value || found->second.how == defined_by::header_table) {
+            if (found->second.how != defined_by::implicit_table && found->second.how != defined_by::dotted_table) {
                return nullptr;
             }
             found->second.how = defined_by::dotted_table;
+            return found->second.table.get();
+         }
+
+         bool is_table_array(const std::string& key) const
+         {
+            const auto found = entries.find(key);
+            return found != entries.end() && found->second.how == defined_by::table_array;
+         }
+
+         // A [[header]] naming the key as its last segment, which opens a new element of the array.
+         // Returns the record of that element, which starts with nothing the previous element defined.
+         toml_map_keys* open_table_array_element(const std::string& key, const bool exists)
+         {
+            const auto found = entries.find(key);
+            if (found == entries.end()) {
+               return add_table(key, exists, defined_by::table_array);
+            }
+            if (found->second.how != defined_by::table_array) {
+               return nullptr;
+            }
+            found->second.table = std::make_unique<toml_map_keys>();
             return found->second.table.get();
          }
 
@@ -2434,11 +2456,101 @@ namespace glz
          }
       }
 
+      // The variant behind a map's value type: the value itself, or the data member of a generic.
+      template <class Value>
+      constexpr auto& toml_value_variant(Value& value) noexcept
+      {
+         if constexpr (has_variant_data_member<Value>) {
+            return value.data;
+         }
+         else {
+            return value;
+         }
+      }
+
+      template <class Value>
+      consteval size_t toml_value_map_index()
+      {
+         using V = std::remove_cvref_t<decltype(toml_value_variant(std::declval<Value&>()))>;
+         if constexpr (is_variant<V>) {
+            return find_map_alternative_index<V>();
+         }
+         else {
+            return std::variant_npos;
+         }
+      }
+
+      // Find the index of the first alternative that can store an array of tables
+      template <class Variant, size_t I = 0>
+      consteval size_t find_table_array_alternative_index()
+      {
+         if constexpr (I >= std::variant_size_v<Variant>) {
+            return std::variant_npos;
+         }
+         else {
+            using Alt = std::variant_alternative_t<I, Variant>;
+            if constexpr (requires { typename Alt::value_type; } && emplace_backable<Alt>) {
+               if constexpr (toml_value_map_index<typename Alt::value_type>() != std::variant_npos) {
+                  return I;
+               }
+               else {
+                  return find_table_array_alternative_index<Variant, I + 1>();
+               }
+            }
+            else {
+               return find_table_array_alternative_index<Variant, I + 1>();
+            }
+         }
+      }
+
+      template <class Value>
+      consteval size_t toml_value_table_array_index()
+      {
+         using V = std::remove_cvref_t<decltype(toml_value_variant(std::declval<Value&>()))>;
+         if constexpr (is_variant<V>) {
+            return find_table_array_alternative_index<V>();
+         }
+         else {
+            return std::variant_npos;
+         }
+      }
+
+      // The table in the last element of the array of tables a value holds, or null if it holds none
+      template <class Value>
+      auto* last_table_array_element(Value& value)
+      {
+         constexpr auto array_idx = toml_value_table_array_index<Value>();
+         using Variant = std::remove_cvref_t<decltype(toml_value_variant(value))>;
+         using Element = typename std::variant_alternative_t<array_idx, Variant>::value_type;
+         constexpr auto map_idx = toml_value_map_index<Element>();
+         auto* array = std::get_if<array_idx>(&toml_value_variant(value));
+         return array && !array->empty() ? std::get_if<map_idx>(&toml_value_variant(array->back())) : nullptr;
+      }
+
+      // Appends an empty table to the array of tables a value holds, first replacing whatever the
+      // value held with an empty array when new_array. Returns that table, or null if the value holds
+      // something other than an array of tables.
+      template <class Value>
+      auto* append_table_array_element(Value& value, const bool new_array)
+      {
+         constexpr auto array_idx = toml_value_table_array_index<Value>();
+         auto& variant = toml_value_variant(value);
+         if (new_array) {
+            variant.template emplace<array_idx>();
+         }
+         if (auto* array = std::get_if<array_idx>(&variant)) {
+            using Element = typename std::remove_cvref_t<decltype(*array)>::value_type;
+            toml_value_variant(array->emplace_back()).template emplace<toml_value_map_index<Element>()>();
+         }
+         return last_table_array_element(value);
+      }
+
       // Helper to resolve a dotted key path into a nested map, creating entries as needed
       // Returns a reference to the innermost value where data should be stored
       // Note: Not inline because this function is recursive
       // section_depth: how many leading segments came from the [header] above the key. ensure_map_path
-      // settled those already, so keys is the record of the table they lead to, not of root.
+      // settled those already, so keys is the record of the table they lead to, not of root, and only
+      // those segments can cross into an array of tables.
       template <auto Opts, class T>
       bool resolve_nested_map(T& root, std::span<std::string> path, auto& ctx, auto& it, auto& end, toml_map_keys& keys,
                               const size_t section_depth)
@@ -2475,12 +2587,21 @@ namespace glz
             return !bool(ctx.error);
          }
 
+         [[maybe_unused]] const size_t next_depth = section_depth ? section_depth - 1 : 0;
+
+         if constexpr (toml_value_table_array_index<Value>() != std::variant_npos) {
+            if (exists && section_depth) {
+               if (auto* table = last_table_array_element(map_it->second)) {
+                  return resolve_nested_map<Opts>(*table, path.subspan(1), ctx, it, end, keys, next_depth);
+               }
+            }
+         }
+
          auto* nested_keys = section_depth ? &keys : keys.through_dotted(path.front(), exists);
          if (!nested_keys) {
             ctx.error = error_code::syntax_error;
             return false;
          }
-         [[maybe_unused]] const size_t next_depth = section_depth ? section_depth - 1 : 0;
 
          // Navigate/create nested map. Anything other than a map found on the way predates this read,
          // as nested_keys rules out what the document defined, so it gets replaced.
@@ -2533,11 +2654,13 @@ namespace glz
       }
 
       // Helper to ensure a path of nested maps exists (for table section headers)
-      // This creates the nested map structure without parsing a value
+      // This creates the nested map structure without parsing a value. is_array: the header is an
+      // [[array of tables]], so its last segment gets a new element.
       // Returns the record of the table the path leads to, or null on an error
       // Note: Not inline because this function is recursive
       template <auto Opts, class T>
-      toml_map_keys* ensure_map_path(T& root, std::span<std::string> path, auto& ctx, toml_map_keys& keys)
+      toml_map_keys* ensure_map_path(T& root, std::span<std::string> path, auto& ctx, toml_map_keys& keys,
+                                     const bool is_array)
       {
          // A table header "[a.a.a.…]" recurses one frame per path segment with nothing bounding
          // the descent, so cap it on the shared depth budget to avoid a stack overflow.
@@ -2556,6 +2679,19 @@ namespace glz
          const auto map_it = root.find(path.front());
          const bool exists = (map_it != root.end());
 
+         if (path.size() == 1 && is_array) {
+            if constexpr (toml_value_table_array_index<Value>() != std::variant_npos) {
+               const bool new_array = !keys.is_table_array(path.front());
+               auto* element_keys = keys.open_table_array_element(path.front(), exists);
+               if (element_keys &&
+                   append_table_array_element(exists ? map_it->second : root[path.front()], new_array)) {
+                  return element_keys;
+               }
+            }
+            ctx.error = error_code::syntax_error;
+            return nullptr;
+         }
+
          // Re-defining a table, or reaching into a value, is what the record rejects here. Anything
          // other than a map found on the way predates this read, so it gets replaced.
          auto* nested_keys =
@@ -2563,6 +2699,16 @@ namespace glz
          if (!nested_keys) {
             ctx.error = error_code::syntax_error;
             return nullptr;
+         }
+
+         if constexpr (toml_value_table_array_index<Value>() != std::variant_npos) {
+            // [a.b] after [[a]]: the rest of the path is in the element the last [[a]] opened
+            if (exists) {
+               auto* table = last_table_array_element(map_it->second);
+               if (table && keys.is_table_array(path.front())) {
+                  return ensure_map_path<Opts>(*table, path.subspan(1), ctx, *nested_keys, is_array);
+               }
+            }
          }
 
          if constexpr (is_variant<Value>) {
@@ -2575,7 +2721,8 @@ namespace glz
                   nested_value.template emplace<map_idx>();
                }
 
-               return ensure_map_path<Opts>(std::get<MapType>(nested_value), path.subspan(1), ctx, *nested_keys);
+               return ensure_map_path<Opts>(std::get<MapType>(nested_value), path.subspan(1), ctx, *nested_keys,
+                                            is_array);
             }
             else {
                ctx.error = error_code::no_matching_variant_type;
@@ -2593,7 +2740,8 @@ namespace glz
                   nested_value.data.template emplace<map_idx>();
                }
 
-               return ensure_map_path<Opts>(std::get<MapType>(nested_value.data), path.subspan(1), ctx, *nested_keys);
+               return ensure_map_path<Opts>(std::get<MapType>(nested_value.data), path.subspan(1), ctx, *nested_keys,
+                                            is_array);
             }
             else {
                ctx.error = error_code::no_matching_variant_type;
@@ -2602,7 +2750,7 @@ namespace glz
          }
          else if constexpr (readable_map_t<Value>) {
             return ensure_map_path<Opts>(exists ? map_it->second : root[path.front()], path.subspan(1), ctx,
-                                         *nested_keys);
+                                         *nested_keys, is_array);
          }
          else {
             ctx.error = error_code::syntax_error;
@@ -2748,30 +2896,36 @@ namespace glz
                }
 
                ++it;
-               if (it != end && *it == '[') {
-                  // Array of tables [[name]] - not fully supported for maps yet
-                  // For now, skip array of tables in map context
+               const bool is_array = it != end && *it == '[';
+               if (is_array) {
+                  ++it;
+               }
+
+               // Table section [name] or array of tables [[name]]
+               skip_ws_and_comments(it, end);
+               current_section_path.clear();
+               if (!parse_toml_key(current_section_path, ctx, it, end)) {
+                  return;
+               }
+               skip_ws_and_comments(it, end);
+               if (it == end || *it != ']') {
                   ctx.error = error_code::syntax_error;
                   return;
                }
-               else {
-                  // Table section [name]
-                  skip_ws_and_comments(it, end);
-                  current_section_path.clear();
-                  if (!parse_toml_key(current_section_path, ctx, it, end)) {
-                     return;
-                  }
+               ++it; // skip ']'
+               if (is_array) {
                   if (it == end || *it != ']') {
                      ctx.error = error_code::syntax_error;
                      return;
                   }
-                  ++it; // skip ']'
+                  ++it; // skip second ']'
+               }
 
-                  // Ensure the nested map structure exists for this section
-                  section_keys = detail::ensure_map_path<Opts>(value, std::span{current_section_path}, ctx, keys);
-                  if (!section_keys) {
-                     return;
-                  }
+               // Ensure the nested map structure exists for this section
+               section_keys =
+                  detail::ensure_map_path<Opts>(value, std::span{current_section_path}, ctx, keys, is_array);
+               if (!section_keys) {
+                  return;
                }
             }
             else {
@@ -3354,11 +3508,9 @@ namespace glz
          return false;
       }
 
-      // True when [it, end) starts with a key, possibly dotted, followed by '=' on the same line.
-      // A value is never followed by '=', so this tells a key/value line apart from a value whose
-      // first byte looks like a key ("a b" = 1, 1234 = 5, true = 1) without consuming anything.
+      // Advances over a key, possibly dotted, and the blanks after it. False when there is no key.
       template <class It, class End>
-      inline bool is_toml_keyval(It it, End end) noexcept
+      inline bool skip_toml_key_text(It& it, End end) noexcept
       {
          while (true) {
             if (it == end) return false;
@@ -3386,14 +3538,55 @@ namespace glz
             while (it != end && (*it == ' ' || *it == '\t')) {
                ++it;
             }
-            if (it == end) return false;
-            if (*it == '=') return true;
-            if (*it != '.') return false;
+            if (it == end || *it != '.') return true;
             ++it;
             while (it != end && (*it == ' ' || *it == '\t')) {
                ++it;
             }
          }
+      }
+
+      // True when [it, end) starts with a key, possibly dotted, followed by '=' on the same line.
+      // A value is never followed by '=', so this tells a key/value line apart from a value whose
+      // first byte looks like a key ("a b" = 1, 1234 = 5, true = 1) without consuming anything.
+      template <class It, class End>
+      inline bool is_toml_keyval(It it, End end) noexcept
+      {
+         return skip_toml_key_text(it, end) && it != end && *it == '=';
+      }
+
+      // True when [it, end) starts with a [table] or [[array of tables]] header rather than an array
+      // value. The text can be both: [1], ["a"] and [[1]] are valid values and valid headers. A value
+      // is the whole input, so anything further down the input makes it a header; otherwise a key that
+      // could not be an array element ([server]) still does, and the rest stay the values they always
+      // read as.
+      template <class It, class End>
+      inline bool is_toml_table_header(It it, End end) noexcept
+      {
+         if (it == end || *it != '[') return false;
+         ++it;
+         const bool is_array = it != end && *it == '[';
+         if (is_array) ++it;
+         skip_ws_and_comments(it, end);
+
+         const auto key_start = it;
+         if (!skip_toml_key_text(it, end)) return false;
+         if (it == end || *it != ']') return false;
+         ++it;
+         if (is_array) {
+            if (it == end || *it != ']') return false;
+            ++it;
+         }
+
+         skip_ws_and_comments(it, end);
+         if (it != end && *it != '\n' && *it != '\r') return false;
+         skip_ws_newlines_and_comments(it, end);
+         if (it != end) return true;
+
+         const char c = *key_start;
+         const bool value_like = c == '"' || c == '\'' || c == '+' || c == '-' || (c >= '0' && c <= '9') ||
+                                 is_toml_bool(key_start, end) || is_inf_or_nan(key_start, end);
+         return !value_like;
       }
    } // namespace detail
 
@@ -3612,11 +3805,38 @@ namespace glz
 
    namespace detail
    {
+      // Whether reading T takes a TOML document, for which no input at all is the document with no
+      // keys. Anything else has nothing to read from it.
+      template <class T>
+      consteval bool toml_reads_document()
+      {
+         using U = std::remove_cvref_t<T>;
+         if constexpr (custom_read<U>) {
+            return false;
+         }
+         else if constexpr (glaze_value_t<U>) {
+            // Read as its member, so it takes a document when that member does (glz::generic, or a
+            // meta value naming a struct member).
+            using M = std::remove_cvref_t<decltype(get_member(std::declval<U&>(), meta_wrapper_v<U>))>;
+            return toml_reads_document<M>();
+         }
+         else if constexpr (is_variant<U>) {
+            return find_map_alternative_index<U>() != std::variant_npos;
+         }
+         else if constexpr (nullable_like<U>) {
+            return toml_reads_document<decltype(*std::declval<U&>())>();
+         }
+         else {
+            return glaze_object_t<U> || reflectable<U> || readable_map_t<U>;
+         }
+      }
+
       // A schema-less target (glz::generic, or a variant with a map alternative) read at the root
       // takes either a document or a single bare value. The variant reader picks by the first byte
       // of a value, so a document whose first key is quoted or starts like a value ("a b" = 1,
       // 1234 = 5, true = 1) read as that one scalar and the rest of the document was dropped, and a
-      // leading blank line or comment failed. Lines of key/value pairs make it a document.
+      // leading blank line or comment failed. Lines of key/value pairs, or a table header, make it a
+      // document, and so does having no lines at all.
       template <auto Opts, class T, class Ctx, class It, class End>
       bool read_toml_document_root(T& value, Ctx& ctx, It& it, End end)
       {
@@ -3631,7 +3851,7 @@ namespace glz
             if constexpr (map_idx != std::variant_npos) {
                auto start = it;
                skip_ws_newlines_and_comments(start, end);
-               if (is_toml_keyval(start, end)) {
+               if (start == end || is_toml_keyval(start, end) || is_toml_table_header(start, end)) {
                   depth_guard guard{ctx};
                   if (!guard) [[unlikely]] {
                      return true;
@@ -3644,6 +3864,12 @@ namespace glz
                   from<TOML, M>::template op<Opts>(std::get<M>(value), ctx, it, end);
                   return true;
                }
+            }
+         }
+         if constexpr (!toml::check_is_internal(Opts) && !toml_reads_document<V>()) {
+            if (it == end) [[unlikely]] {
+               ctx.error = error_code::no_read_input;
+               return true;
             }
          }
          (void)value, (void)ctx, (void)it, (void)end;

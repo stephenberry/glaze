@@ -6,7 +6,13 @@
 // RFC 6902 JSON Patch implementation
 // https://datatracker.ietf.org/doc/html/rfc6902
 
+#include <cmath>
+#include <concepts>
+#include <cstdint>
+#include <limits>
 #include <optional>
+#include <utility>
+#include <variant>
 
 #include "glaze/json/generic.hpp"
 
@@ -160,13 +166,61 @@ namespace glz
       return result;
    }
 
+   namespace detail
+   {
+      template <class T>
+      concept generic_number = std::same_as<T, double> || std::same_as<T, int64_t> || std::same_as<T, uint64_t>;
+
+      // Exact: the integer is never rounded to a double, so 2^53 + 1 does not equal 2^53.
+      template <std::integral I>
+      [[nodiscard]] inline bool integer_equals_double(const I integer, const double number) noexcept
+      {
+         // The limits below are exact powers of two, and max rounds up to the first value past the type.
+         constexpr auto lower = static_cast<double>((std::numeric_limits<I>::min)());
+         constexpr auto upper = static_cast<double>((std::numeric_limits<I>::max)());
+         if (!(number >= lower && number < upper) || std::trunc(number) != number) {
+            return false;
+         }
+         return static_cast<I>(number) == integer;
+      }
+
+      // Generic numbers are held as whichever alternative their text selected, so 1 and 1.0 are different
+      // alternatives of the same value.
+      template <generic_number A, generic_number B>
+      [[nodiscard]] inline bool numbers_equal(const A a, const B b) noexcept
+      {
+         if constexpr (std::same_as<A, B>) {
+            return a == b;
+         }
+         else if constexpr (std::same_as<A, double>) {
+            return integer_equals_double(b, a);
+         }
+         else if constexpr (std::same_as<B, double>) {
+            return integer_equals_double(a, b);
+         }
+         else {
+            return std::cmp_equal(a, b);
+         }
+      }
+   }
+
    // Deep equality comparison for generic values
    template <class GenericType>
       requires is_generic_json<GenericType>
    [[nodiscard]] bool equal(const GenericType& a, const GenericType& b) noexcept
    {
       if (a.data.index() != b.data.index()) {
-         return false;
+         // RFC 6902 section 4.6: numbers are equal when their values are numerically equal
+         return std::visit(
+            []<class A, class B>(const A& val_a, const B& val_b) -> bool {
+               if constexpr (detail::generic_number<A> && detail::generic_number<B>) {
+                  return detail::numbers_equal(val_a, val_b);
+               }
+               else {
+                  return false;
+               }
+            },
+            a.data, b.data);
       }
 
       // After index check, we know both variants hold the same type

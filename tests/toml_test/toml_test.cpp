@@ -3,6 +3,7 @@
 #include <chrono>
 #include <cmath>
 #include <cstdint>
+#include <cstdio>
 #include <limits>
 #include <map>
 #include <memory>
@@ -411,6 +412,19 @@ struct glz::meta<config_with_enums>
 };
 
 suite starter = [] {
+   "write to a C array reports the byte count or the overflow"_test = [] {
+      my_struct s{};
+      char small[16]{};
+      expect(glz::write_toml(s, small).ec == glz::error_code::buffer_overflow);
+
+      char large[512]{};
+      const auto ec = glz::write_toml(s, large);
+      expect(not ec);
+      std::string expected{};
+      expect(not glz::write_toml(s, expected));
+      expect(std::string_view(large, ec.count) == expected);
+   };
+
    "example"_test = [] {
       my_struct s{};
       std::string buffer{};
@@ -3978,6 +3992,29 @@ struct glz::meta<generic_cast_member>
    static constexpr auto value = object("g", glz::cast<&T::g, glz::generic>, "b", &T::b);
 };
 
+struct generic_document_tls
+{
+   bool on{};
+};
+
+struct generic_document_server
+{
+   std::string host{};
+   generic_document_tls tls{};
+};
+
+struct generic_document_route
+{
+   std::string name{};
+   generic_document_tls tls{};
+};
+
+struct generic_document_writer
+{
+   generic_document_server server{};
+   std::vector<generic_document_route> routes{};
+};
+
 suite generic_toml_document_root_tests = [] {
    // A document whose first key is quoted or starts like a value must not read as that one scalar
    "generic_read_toml_quoted_first_key"_test = [] {
@@ -4079,6 +4116,187 @@ suite generic_toml_document_root_tests = [] {
       expect(not ec) << glz::format_error(ec, toml);
       expect(std::holds_alternative<std::string>(bare));
       expect(std::get<std::string>(bare) == "k");
+   };
+
+   "generic_read_toml_table_header_first"_test = [] {
+      glz::generic g;
+      std::string toml = "[server]\nport = 8080\n";
+      auto ec = glz::read_toml(g, toml);
+      expect(not ec) << glz::format_error(ec, toml);
+      expect(g["server"]["port"].get<double>() == 8080.0);
+
+      // After a comment or blank lines, with blanks in the header, and dotted or quoted
+      for (const std::string first : {"# header\n\n[a.b]", "  [ a . b ]", "[\"a\".'b']"}) {
+         glz::generic dotted;
+         toml = first + "\nx = 1\n[c]\ny = 2\n";
+         ec = glz::read_toml(dotted, toml);
+         expect(not ec) << glz::format_error(ec, toml);
+         expect(dotted["a"]["b"]["x"].get<double>() == 1.0) << toml;
+         expect(dotted["c"]["y"].get<double>() == 2.0) << toml;
+      }
+
+      glz::generic alone;
+      ec = glz::read_toml(alone, std::string{"[server]\n"});
+      expect(not ec);
+      expect(alone["server"].is_object());
+
+      glz::generic_i64 exact;
+      toml = "[server]\nport = 9007199254740993\n";
+      ec = glz::read_toml(exact, toml);
+      expect(not ec) << glz::format_error(ec, toml);
+      expect(exact["server"]["port"].get<int64_t>() == 9007199254740993);
+
+      glz::generic_u64 big;
+      toml = "[[a]]\nn = 18446744073709551615\n";
+      ec = glz::read_toml(big, toml);
+      expect(not ec) << glz::format_error(ec, toml);
+      expect(big["a"].get<glz::generic_u64::array_t>()[0]["n"].get<uint64_t>() == UINT64_MAX);
+   };
+
+   "generic_read_toml_array_of_tables_first"_test = [] {
+      glz::generic g;
+      std::string toml = "[[routes]]\nname = \"a\"\n";
+      auto ec = glz::read_toml(g, toml);
+      expect(not ec) << glz::format_error(ec, toml);
+      auto json = glz::write_json(g);
+      expect(json.has_value() && *json == R"({"routes":[{"name":"a"}]})") << json.value_or("");
+
+      glz::generic several;
+      toml = R"([[a]]
+x = 1
+[[a]]
+[[a]]
+x = 3
+y.z = 4
+[other]
+k = 5
+[[a]]
+x = 6
+)";
+      ec = glz::read_toml(several, toml);
+      expect(not ec) << glz::format_error(ec, toml);
+      json = glz::write_json(several);
+      expect(json.has_value() && *json == R"({"a":[{"x":1},{},{"x":3,"y":{"z":4}},{"x":6}],"other":{"k":5}})")
+         << json.value_or("");
+
+      glz::generic alone;
+      ec = glz::read_toml(alone, std::string{"[[routes]]"});
+      expect(not ec);
+      expect(glz::write_json(alone).value_or("") == R"({"routes":[{}]})");
+   };
+
+   "generic_read_toml_array_of_tables_nesting"_test = [] {
+      glz::generic g;
+      // TOML v1.0.0's own example: sub-tables and nested arrays attach to the latest element
+      const std::string toml = R"([[fruits]]
+name = "apple"
+
+[fruits.physical]
+color = "red"
+
+[[fruits.varieties]]
+name = "red delicious"
+
+[[fruits.varieties]]
+name = "granny smith"
+
+[[fruits]]
+name = "banana"
+
+[[fruits.varieties]]
+name = "plantain"
+)";
+      const auto ec = glz::read_toml(g, toml);
+      expect(not ec) << glz::format_error(ec, toml);
+      const auto json = glz::write_json(g);
+      expect(
+         json.has_value() &&
+         *json ==
+            R"({"fruits":[{"name":"apple","physical":{"color":"red"},"varieties":[{"name":"red delicious"},{"name":"granny smith"}]},{"name":"banana","varieties":[{"name":"plantain"}]}]})")
+         << json.value_or("");
+
+      // Only the path that was opened is an array of tables, not the same key elsewhere
+      glz::generic same_key;
+      expect(not glz::read_toml(same_key, std::string{"[[a]]\n[x]\ny = 1\n[x.a]\nz = 1\n"}));
+      expect(glz::write_json(same_key).value_or("") == R"({"a":[{}],"x":{"y":1,"a":{"z":1}}})");
+
+      glz::generic under_table;
+      const std::string nested = "[a]\nb = 1\n[[a.list]]\nx = 1\n[[a.list]]\nx = 2\n";
+      const auto nested_ec = glz::read_toml(under_table, nested);
+      expect(not nested_ec) << glz::format_error(nested_ec, nested);
+      expect(glz::write_json(under_table).value_or("") == R"({"a":{"b":1,"list":[{"x":1},{"x":2}]}})");
+
+      // The map document reader is shared, so a map of generics takes the same documents
+      std::map<std::string, glz::generic> m;
+      const auto map_ec = glz::read_toml(m, toml);
+      expect(not map_ec) << glz::format_error(map_ec, toml);
+      expect(m.at("fruits").get<glz::generic::array_t>().size() == 2);
+   };
+
+   "generic_read_toml_array_of_tables_invalid"_test = [] {
+      for (const std::string toml : {
+              "a = [1]\n[[a]]\n", // an array written as a value is complete
+              "a = [{x = 1}]\n[[a]]\nx = 2\n",
+              "a = [{x = 1}]\n[a.b]\ny = 2\n",
+              "a = [{x = 1}]\n[[a.b]]\ny = 2\n",
+              "a = [{x = 1}]\na.y = 2\n",
+              "a = 1\n[[a]]\n",
+              "[a]\n[[a]]\n",
+              "[[a]]\n[a]\n",
+              "[[a]]\nx = 1\nx = 2\n",
+              "[[a]]\nb = [{x = 1}]\n[[a.b]]\n",
+              // The array under the previous element says nothing about the one under this element
+              "[[a]]\n[[a.b]]\n[[a]]\nb = [1]\n[[a.b]]\n",
+              "[[a]\nx = 1\n",
+              "[[a]] x = 1\n",
+           }) {
+         glz::generic g;
+         expect(glz::read_toml(g, toml).ec == glz::error_code::syntax_error) << toml;
+      }
+
+      // A map whose values cannot hold an array of tables has nowhere to put one
+      std::map<std::string, std::map<std::string, int>> nested;
+      expect(glz::read_toml(nested, std::string{"[[a]]\n"}).ec == glz::error_code::syntax_error);
+   };
+
+   // The text of a one element array is also a valid header, so only what follows can tell them apart
+   "generic_read_toml_bare_array_is_not_a_header"_test = [] {
+      for (const std::string toml :
+           {"[1, 2, 3]", "[1]",    "[1]\n", "[ 1 ] # c\n\n", "[1.5]",   "[-1]",    "[+1]",          "[\"a\"]",
+            "['a']",     "[true]", "[inf]", "[nan]",         "[[1]]",   "[[1]]\n", "[[1, 2], [3]]", "[[1], [2]]",
+            "[[\"a\"]]", "[]",     "[[]]",  "[ [1] ]",       "[\n1\n]", "[1\n,2]", "[{a = 1}]"}) {
+         glz::generic g;
+         const auto ec = glz::read_toml(g, toml);
+         expect(not ec) << glz::format_error(ec, toml);
+         expect(g.is_array()) << toml;
+      }
+
+      for (const std::string toml :
+           {"[1]\nx = 2\n", "[true]\nx = 2\n", "[\"a\"]\nx = 2\n", "[1]\n[2]\n", "[[1]]\nx = 2\n"}) {
+         glz::generic g;
+         const auto ec = glz::read_toml(g, toml);
+         expect(not ec) << glz::format_error(ec, toml);
+         expect(g.is_object()) << toml;
+      }
+
+      glz::generic text;
+      expect(not glz::read_toml(text, std::string{"[\"a\"]\nx = 2\n"}));
+      expect(text["a"]["x"].get<double>() == 2.0);
+   };
+
+   // The struct writer emits headers, which a schema-less reader of the same file has to follow
+   "generic_read_toml_written_from_struct"_test = [] {
+      const generic_document_writer original{{"localhost", {true}}, {{"a", {true}}, {"b", {false}}}};
+      const auto toml = glz::write_toml(original);
+      expect(toml.has_value());
+      if (not toml) return;
+      glz::generic parsed;
+      const auto ec = glz::read_toml(parsed, *toml);
+      expect(not ec) << glz::format_error(ec, *toml);
+      expect(
+         glz::write_json(parsed).value_or("") ==
+         R"({"server":{"host":"localhost","tls":{"on":true}},"routes":[{"name":"a","tls":{"on":true}},{"name":"b","tls":{"on":false}}]})")
+         << *toml;
    };
 };
 
@@ -4593,10 +4811,6 @@ a.e = true)";
       expect(obj.at("name").get<std::string>() == "inline");
       expect(obj.at("value").get<int64_t>() == 42);
    };
-
-   // Note: Empty string input produces no_read_input error from core reader.
-   // This is consistent with other formats (JSON, etc.). Use whitespace-only
-   // or comment-only documents if you need to represent "no data".
 
    // u64 mode document test
    "generic_u64_read_document"_test = [] {
@@ -6049,6 +6263,26 @@ namespace i2595
       void set_items(std::vector<leaf> v) { items = std::move(v); }
       bool operator==(const custom_seq&) const = default;
    };
+
+   // A type whose whole glz::meta value is a glz::custom getter/setter exposing an object.
+   struct whole_custom_leaf
+   {
+      leaf v{};
+      bool operator==(const whole_custom_leaf&) const = default;
+   };
+   struct whole_custom_doc
+   {
+      int before{};
+      whole_custom_leaf field{};
+      int after{};
+      bool operator==(const whole_custom_doc&) const = default;
+   };
+   struct whole_plain_doc
+   {
+      int before{};
+      leaf field{};
+      int after{};
+   };
 }
 
 template <>
@@ -6100,6 +6334,13 @@ struct glz::meta<i2595::plain_obj>
    static constexpr auto value = object("inner", &T::inner);
 };
 template <>
+struct glz::meta<i2595::whole_custom_leaf>
+{
+   using T = i2595::whole_custom_leaf;
+   static constexpr auto value =
+      glz::custom<[](T& s, const i2595::leaf& l) { s.v = l; }, [](const T& s) -> const i2595::leaf& { return s.v; }>;
+};
+template <>
 struct glz::meta<i2595::custom_seq>
 {
    using T = i2595::custom_seq;
@@ -6142,6 +6383,24 @@ suite issue_2595_transparent_wrappers = [] {
       expect(cs.value() == ps.value()) << cs.value();
 
       custom_obj r{};
+      expect(not glz::read_toml(r, cs.value()));
+      expect(r == c);
+   };
+
+   // Resolving a whole-type glz::custom meta used to stop at the meta's callable, so the object it
+   // returns was written as an inline table, or as a [table] under P2996 where the callable counts
+   // as reflectable.
+   "whole-type custom getter object matches plain layout"_test = [] {
+      const whole_custom_doc c{1, {{"asdf", 123}}, 2};
+      const whole_plain_doc p{1, {"asdf", 123}, 2};
+
+      const auto cs = glz::write_toml(c);
+      const auto ps = glz::write_toml(p);
+      expect(cs.has_value());
+      expect(ps.has_value());
+      expect(cs.value() == ps.value()) << cs.value();
+
+      whole_custom_doc r{};
       expect(not glz::read_toml(r, cs.value()));
       expect(r == c);
    };
@@ -6896,6 +7155,163 @@ struct glz::meta<duplicate_key_meta>
    static constexpr auto value = object("label", &T::name, "inner", &T::inner);
 };
 
+struct empty_document_optional
+{
+   std::optional<int> a{};
+};
+
+struct empty_document_required
+{
+   int x{};
+   std::optional<int> y{};
+};
+
+struct empty_document_value_wrapper
+{
+   empty_document_optional inner{};
+};
+
+template <>
+struct glz::meta<empty_document_value_wrapper>
+{
+   static constexpr auto value = &empty_document_value_wrapper::inner;
+};
+
+suite toml_empty_document_tests = [] {
+   "an all empty optional struct round trips"_test = [] {
+      const empty_document_optional original{};
+      std::string out = "not empty";
+      expect(not glz::write_toml(original, out));
+      expect(out.empty());
+
+      empty_document_optional back{};
+      const auto ec = glz::read_toml(back, out);
+      expect(not ec) << glz::format_error(ec, out);
+      expect(not back.a.has_value());
+   };
+
+   "every way to spell an empty buffer"_test = [] {
+      empty_document_optional value{};
+      expect(not glz::read_toml(value, std::string{}));
+      expect(not glz::read_toml(value, std::string_view{}));
+      expect(not glz::read_toml(value, ""));
+      const char* c_string = "";
+      expect(not glz::read_toml(value, c_string));
+
+      const auto expected = glz::read_toml<empty_document_optional>(std::string{});
+      expect(expected.has_value());
+
+      std::vector<char> bytes{};
+      expect(not glz::read_toml(value, bytes));
+   };
+
+   "an empty file"_test = [] {
+      const std::string path = "toml_empty_document_test.toml";
+      std::string buffer{};
+      expect(not glz::write_file_toml(empty_document_optional{}, path, buffer));
+      expect(buffer.empty());
+
+      empty_document_optional value{};
+      const auto ec = glz::read_file_toml(value, path, buffer);
+      std::remove(path.c_str());
+      expect(not ec) << glz::format_error(ec, buffer);
+   };
+
+   "nothing is assigned or cleared"_test = [] {
+      empty_document_optional value{.a = 3};
+      expect(not glz::read_toml(value, std::string{}));
+      expect(value.a == 3);
+
+      std::map<std::string, int> m{{"k", 7}};
+      expect(not glz::read_toml(m, std::string{}));
+      expect(m.at("k") == 7);
+   };
+
+   "a map is empty"_test = [] {
+      std::map<std::string, int> m{};
+      expect(not glz::read_toml(m, std::string{}));
+      expect(m.empty());
+      std::unordered_map<std::string, int> u{};
+      expect(not glz::read_toml(u, std::string{}));
+      expect(u.empty());
+   };
+
+   "generic targets become an empty table"_test = [] {
+      for (const std::string input : {"", "\n", "  \n\r\n", "# comment", "# comment\n\n# another\n"}) {
+         glz::generic g{};
+         auto ec = glz::read_toml(g, input);
+         expect(not ec) << glz::format_error(ec, input);
+         expect(g.is_object()) << input;
+         expect(g.get<glz::generic::object_t>().empty()) << input;
+
+         glz::generic_i64 i{};
+         ec = glz::read_toml(i, input);
+         expect(not ec) << glz::format_error(ec, input);
+         expect(i.holds<glz::generic_i64::object_t>()) << input;
+
+         glz::generic_u64 u{};
+         ec = glz::read_toml(u, input);
+         expect(not ec) << glz::format_error(ec, input);
+         expect(u.holds<glz::generic_u64::object_t>()) << input;
+
+         std::variant<std::string, std::map<std::string, int>> v{};
+         ec = glz::read_toml(v, input);
+         expect(not ec) << glz::format_error(ec, input);
+         expect(std::holds_alternative<std::map<std::string, int>>(v)) << input;
+      }
+   };
+
+   "a meta value naming a struct reads it as the document"_test = [] {
+      for (const std::string input : {"", "\n", "# comment"}) {
+         empty_document_value_wrapper value{.inner = {.a = 3}};
+         const auto ec = glz::read_toml(value, input);
+         expect(not ec) << glz::format_error(ec, input);
+         expect(value.inner.a == 3) << input;
+      }
+   };
+
+   "an optional document stays empty"_test = [] {
+      std::optional<empty_document_optional> value{};
+      expect(not glz::read_toml(value, std::string{}));
+      expect(not value.has_value());
+
+      std::optional<glz::generic> g{};
+      expect(not glz::read_toml(g, std::string{}));
+      expect(not g.has_value());
+   };
+
+   "required keys are still missing"_test = [] {
+      constexpr glz::opts opts{.format = glz::TOML, .error_on_missing_keys = true};
+      empty_document_required required{};
+      expect(glz::read<opts>(required, std::string{}).ec == glz::error_code::missing_key);
+      expect(glz::read<opts>(required, std::string{"\n"}).ec == glz::error_code::missing_key);
+
+      empty_document_optional optional{};
+      expect(not glz::read<opts>(optional, std::string{}));
+   };
+
+   "a target that cannot hold a document has no input"_test = [] {
+      const std::string empty{};
+      int i{};
+      expect(glz::read_toml(i, empty).ec == glz::error_code::no_read_input);
+      double d{};
+      expect(glz::read_toml(d, empty).ec == glz::error_code::no_read_input);
+      bool b{};
+      expect(glz::read_toml(b, empty).ec == glz::error_code::no_read_input);
+      std::string s{};
+      expect(glz::read_toml(s, empty).ec == glz::error_code::no_read_input);
+      expect(glz::read_toml(s, "").ec == glz::error_code::no_read_input);
+      std::vector<int> a{};
+      expect(glz::read_toml(a, empty).ec == glz::error_code::no_read_input);
+      std::set<int> set{};
+      expect(glz::read_toml(set, empty).ec == glz::error_code::no_read_input);
+      std::optional<int> o{};
+      expect(glz::read_toml(o, empty).ec == glz::error_code::no_read_input);
+      std::variant<int, std::string> v{};
+      expect(glz::read_toml(v, empty).ec == glz::error_code::no_read_input);
+   };
+};
+
 suite toml_duplicate_key_tests = [] {
    // TOML v1.0.0: defining a key more than once is invalid, whether the second definition is a
    // repeated line, a dotted key, a later [table] section, or a line extending an inline table.
@@ -7245,6 +7661,42 @@ s.k = "new"
       expect(not glz::read_toml(m, std::string{"[a.b]\nx = 1\n[a]\ny = 2\n"}));
       expect(m.at("a")["b"]["x"].get<double>() == 1.0);
       expect(m.at("a")["y"].get<double>() == 2.0);
+   };
+
+   // An array of tables is an entry of the record, holding the record of its last element
+   "arrays of tables in a map of tables"_test = [] {
+      for (const std::string input : {
+              "[[a]]\nx = 1\nx = 2\n",
+              "[[a]]\n[a.b]\n[a.b]\n",
+              "[[t.a]]\n[t]\na.y = 1\n",
+              "[[t.a]]\n[t]\na = 1\n",
+              "[a.b]\n[[a]]\n",
+              "a.b = 1\n[[a]]\n",
+              "[[a]]\n[a]\n",
+           }) {
+         std::map<std::string, glz::generic> empty{};
+         expect(glz::read_toml(empty, input).ec == glz::error_code::syntax_error) << input;
+
+         std::map<std::string, glz::generic> filled{};
+         expect(not glz::read_json(filled, std::string{R"({"zz":1,"a":[{"zz":1}],"t":{"a":[{"zz":1}]}})"}));
+         expect(glz::read_toml(filled, input).ec == glz::error_code::syntax_error) << input;
+      }
+
+      // Each element starts with nothing the previous one defined
+      std::map<std::string, glz::generic> fresh{};
+      std::string input = "[[a]]\nx = 1\n[a.b]\ny = 1\n[[a]]\nx = 2\n[a.b]\ny = 2\n[t]\n[[t.a]]\n";
+      auto ec = glz::read_toml(fresh, input);
+      expect(not ec) << glz::format_error(ec, input);
+      expect(glz::write_json(fresh).value_or("") ==
+             R"({"a":[{"x":1,"b":{"y":1}},{"x":2,"b":{"y":2}}],"t":{"a":[{}]}})");
+
+      // An array from before the read is replaced, not appended to, and gives way to a table
+      std::map<std::string, glz::generic> replaced{};
+      expect(not glz::read_json(replaced, std::string{R"({"a":[{"x":1}],"b":[{"x":1}],"c":5})"}));
+      input = "b.y = 2\n[[a]]\nx = 2\n[[c]]\n";
+      ec = glz::read_toml(replaced, input);
+      expect(not ec) << glz::format_error(ec, input);
+      expect(glz::write_json(replaced).value_or("") == R"({"a":[{"x":2}],"b":{"y":2},"c":[{}]})");
    };
 };
 
