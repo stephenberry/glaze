@@ -3,11 +3,11 @@
 
 #pragma once
 
-#include <algorithm>
 #include <cctype>
 #include <charconv>
 #include <iterator>
 #include <limits>
+#include <map>
 #include <memory>
 #include <utility>
 #include <vector>
@@ -1718,6 +1718,120 @@ namespace glz
          }
       };
 
+      // What this document has defined in a map. The map cannot answer that itself: it may hold entries
+      // from before the read, which a document is free to overwrite, and a table written whole looks
+      // the same as one built up line by line. A level that started out empty is the exception, since
+      // all it holds came from this document, so its values need no entry and only its tables have one.
+      struct toml_map_keys
+      {
+         enum class defined_by : uint8_t {
+            value, // "key = value", which closes the key to anything further
+            implicit_table, // on the way to a deeper [header], and may still get a header of its own
+            header_table,
+            dotted_table,
+            table_array // [[key]], whose record is that of the element the last [[key]] opened
+         };
+
+         struct entry
+         {
+            defined_by how;
+            std::unique_ptr<toml_map_keys> table;
+         };
+
+         bool visited = false;
+         bool started_empty = false;
+         std::map<std::string, entry> entries{};
+
+         void first_visit(const bool map_is_empty)
+         {
+            if (!visited) {
+               visited = true;
+               started_empty = map_is_empty;
+            }
+         }
+
+         // exists: whether the destination map holds the key. Each of these says what TOML allows, false
+         // or null when the line defines the key a second time or reaches into a closed one.
+         bool define_value(const std::string& key, const bool exists)
+         {
+            if (started_empty) {
+               return !exists;
+            }
+            return entries.try_emplace(key, entry{defined_by::value, nullptr}).second;
+         }
+
+         // A [header] naming the key as its last segment
+         toml_map_keys* define_header(const std::string& key, const bool exists)
+         {
+            const auto found = entries.find(key);
+            if (found == entries.end()) {
+               return add_table(key, exists, defined_by::header_table);
+            }
+            if (found->second.how != defined_by::implicit_table) {
+               return nullptr;
+            }
+            found->second.how = defined_by::header_table;
+            return found->second.table.get();
+         }
+
+         // A [header] passing through the key on its way deeper
+         toml_map_keys* through_header(const std::string& key, const bool exists)
+         {
+            const auto found = entries.find(key);
+            if (found == entries.end()) {
+               return add_table(key, exists, defined_by::implicit_table);
+            }
+            return found->second.how == defined_by::value ? nullptr : found->second.table.get();
+         }
+
+         // A dotted key passing through the key on its way deeper, which it cannot do for a table
+         // that has a [header] of its own
+         toml_map_keys* through_dotted(const std::string& key, const bool exists)
+         {
+            const auto found = entries.find(key);
+            if (found == entries.end()) {
+               return add_table(key, exists, defined_by::dotted_table);
+            }
+            if (found->second.how != defined_by::implicit_table && found->second.how != defined_by::dotted_table) {
+               return nullptr;
+            }
+            found->second.how = defined_by::dotted_table;
+            return found->second.table.get();
+         }
+
+         bool is_table_array(const std::string& key) const
+         {
+            const auto found = entries.find(key);
+            return found != entries.end() && found->second.how == defined_by::table_array;
+         }
+
+         // A [[header]] naming the key as its last segment, which opens a new element of the array.
+         // Returns the record of that element, which starts with nothing the previous element defined.
+         toml_map_keys* open_table_array_element(const std::string& key, const bool exists)
+         {
+            const auto found = entries.find(key);
+            if (found == entries.end()) {
+               return add_table(key, exists, defined_by::table_array);
+            }
+            if (found->second.how != defined_by::table_array) {
+               return nullptr;
+            }
+            found->second.table = std::make_unique<toml_map_keys>();
+            return found->second.table.get();
+         }
+
+         toml_map_keys* add_table(const std::string& key, const bool exists, const defined_by how)
+         {
+            if (exists && started_empty) {
+               return nullptr; // a value this document wrote
+            }
+            auto table = std::make_unique<toml_map_keys>();
+            auto* added = table.get();
+            entries.try_emplace(key, entry{how, std::move(table)});
+            return added;
+         }
+      };
+
       struct key_assignment_record
       {
          size_t member_count{}; // reflected members of the struct this node mirrors
@@ -1729,6 +1843,16 @@ namespace glz
          // An inline table is self-contained by the TOML grammar, so it is checked where it is
          // parsed and this node's flags are never filled in. Set to keep the final walk off it.
          bool checked_in_place = false;
+         // For a map member, which [m] sections and dotted m.k keys may fill in between other tables
+         std::unique_ptr<toml_map_keys> map_key_record{};
+
+         toml_map_keys& map_keys()
+         {
+            if (!map_key_record) {
+               map_key_record = std::make_unique<toml_map_keys>();
+            }
+            return *map_key_record;
+         }
 
          explicit key_assignment_record(const size_t member_count)
             : member_count(member_count), assigned(member_count), value_assigned(member_count)
@@ -1803,6 +1927,22 @@ namespace glz
          }
       }
 
+      // Whether a value is a map read by the map reader, seen through any nullable wrapper.
+      template <class T>
+      consteval bool toml_map_like()
+      {
+         using U = std::remove_cvref_t<T>;
+         if constexpr (glaze_object_t<U> || reflectable<U> || custom_read<U>) {
+            return false;
+         }
+         else if constexpr (nullable_like<U>) {
+            return toml_map_like<std::remove_cvref_t<decltype(*std::declval<U&>())>>();
+         }
+         else {
+            return readable_map_t<U>;
+         }
+      }
+
       // Whether a "[array.sub]" header can descend into this value's last element: a growable array
       // whose elements are tables, seen through any nullable wrapper. resolve_array_of_tables
       // unwraps the member before it classifies it, so this has to as well or "[[a]]" and "[a.sub]"
@@ -1845,6 +1985,10 @@ namespace glz
 
       template <auto Opts, class T, class It, class End>
       void read_tracked(T& value, auto& ctx, It& it, End end, key_assignment_record* node);
+
+      template <auto Opts, class T>
+      bool resolve_nested_map(T& root, std::span<std::string> path, auto& ctx, auto& it, auto& end, toml_map_keys& keys,
+                              size_t section_depth = 0);
 
       template <auto Opts, class T, class Ctx>
       void check_missing_keys(T&& value, const key_assignment_record& node, Ctx& ctx);
@@ -2020,6 +2164,17 @@ namespace glz
          }
          return resolve_nested<Opts>(root.back(), path, ctx, it, end, element_node, by_value);
       }
+      else if constexpr (not nullable_like<T> && detail::toml_map_like<T>()) {
+         if (!by_value) {
+            return true;
+         }
+         // m.k = 1: what is left of the path is a key of the map member
+         if (node) {
+            return detail::resolve_nested_map<Opts>(root, path, ctx, it, end, node->map_keys());
+         }
+         detail::toml_map_keys keys{};
+         return detail::resolve_nested_map<Opts>(root, path, ctx, it, end, keys);
+      }
       else if constexpr (!(glz::reflectable<T> || glz::glaze_object_t<T>)) {
          return true;
       }
@@ -2069,10 +2224,13 @@ namespace glz
                            // picks the element out of it.
                            member_node = node->child(I, 0);
                         }
+                        else if constexpr (detail::toml_map_like<member_type>()) {
+                           member_node = node->child(I, 0);
+                        }
                      }
 
                      if (!(path.size() - 1)) {
-                        if constexpr (detail::toml_table_like<member_type>()) {
+                        if constexpr (detail::toml_table_like<member_type>() || detail::toml_map_like<member_type>()) {
                            detail::read_tracked<toml::is_internal_on<Opts>()>(member_obj, ctx, it, end, member_node);
                         }
                         else {
@@ -2357,39 +2515,6 @@ namespace glz
          }
       }
 
-      // A [table] or [[array]] header being resolved against the map it is read into. An array the
-      // document wrote as a value is complete: TOML forbids appending to it or reaching into it, and
-      // the stored array looks the same as one built from headers, so those are remembered by path.
-      struct toml_map_header
-      {
-         std::span<std::string> path;
-         bool is_array;
-         std::vector<std::vector<std::string>>& table_arrays;
-
-         // rest is what is left of path, and its first segment is the one being resolved
-         std::span<std::string> upto(std::span<std::string> rest) const
-         {
-            return path.first(path.size() - rest.size() + 1);
-         }
-
-         bool is_table_array(std::span<std::string> rest) const
-         {
-            const auto segments = upto(rest);
-            return std::ranges::any_of(table_arrays,
-                                       [&](const auto& known) { return std::ranges::equal(known, segments); });
-         }
-
-         // A new element starts with none of the arrays the previous element opened below it
-         void forget_below(std::span<std::string> rest) const
-         {
-            const auto segments = upto(rest);
-            std::erase_if(table_arrays, [&](const auto& known) {
-               return known.size() > segments.size() &&
-                      std::ranges::equal(segments, std::span{known}.first(segments.size()));
-            });
-         }
-      };
-
       // The table in the last element of the array of tables a value holds, or null if it holds none
       template <class Value>
       auto* last_table_array_element(Value& value)
@@ -2402,36 +2527,33 @@ namespace glz
          return array && !array->empty() ? std::get_if<map_idx>(&toml_value_variant(array->back())) : nullptr;
       }
 
-      // Opens a new element of the array of tables named by the last segment of a [[header]]
+      // Appends an empty table to the array of tables a value holds, first replacing whatever the
+      // value held with an empty array when new_array. Returns that table, or null if the value holds
+      // something other than an array of tables.
       template <class Value>
-      bool append_table_array_element(Value& value, const bool exists, std::span<std::string> rest,
-                                      const toml_map_header& header, auto& ctx)
+      auto* append_table_array_element(Value& value, const bool new_array)
       {
          constexpr auto array_idx = toml_value_table_array_index<Value>();
          auto& variant = toml_value_variant(value);
-         if (!exists) {
+         if (new_array) {
             variant.template emplace<array_idx>();
-            header.table_arrays.emplace_back(header.path.begin(), header.path.end());
          }
-         else if (variant.index() != array_idx || !header.is_table_array(rest)) {
-            ctx.error = error_code::syntax_error;
-            return false;
+         if (auto* array = std::get_if<array_idx>(&variant)) {
+            using Element = typename std::remove_cvref_t<decltype(*array)>::value_type;
+            toml_value_variant(array->emplace_back()).template emplace<toml_value_map_index<Element>()>();
          }
-         header.forget_below(rest);
-         auto& element = std::get<array_idx>(variant).emplace_back();
-         using Element = std::remove_cvref_t<decltype(element)>;
-         toml_value_variant(element).template emplace<toml_value_map_index<Element>()>();
-         return true;
+         return last_table_array_element(value);
       }
 
       // Helper to resolve a dotted key path into a nested map, creating entries as needed
       // Returns a reference to the innermost value where data should be stored
       // Note: Not inline because this function is recursive
-      // section_depth: how many leading segments came from the [header] above the key. Only those can
-      // cross an array of tables; the header was checked when it was read.
+      // section_depth: how many leading segments came from the [header] above the key. ensure_map_path
+      // settled those already, so keys is the record of the table they lead to, not of root, and only
+      // those segments can cross into an array of tables.
       template <auto Opts, class T>
-      bool resolve_nested_map(T& root, std::span<std::string> path, auto& ctx, auto& it, auto& end,
-                              const size_t section_depth = 0)
+      bool resolve_nested_map(T& root, std::span<std::string> path, auto& ctx, auto& it, auto& end, toml_map_keys& keys,
+                              const size_t section_depth)
       {
          // A dotted key recurses one frame per path segment, with nothing else bounding the
          // descent, so an adversarial key like "a.a.a.…=1" otherwise overflows the stack. Share
@@ -2450,9 +2572,12 @@ namespace glz
          const auto map_it = root.find(path.front());
          const bool exists = (map_it != root.end());
 
+         if (section_depth == 0) {
+            keys.first_visit(root.empty());
+         }
+
          if (path.size() == 1) {
-            // Duplicate assignment for an already-defined key is invalid.
-            if (exists) {
+            if (!keys.define_value(path.front(), exists)) {
                ctx.error = error_code::syntax_error;
                return false;
             }
@@ -2467,32 +2592,31 @@ namespace glz
          if constexpr (toml_value_table_array_index<Value>() != std::variant_npos) {
             if (exists && section_depth) {
                if (auto* table = last_table_array_element(map_it->second)) {
-                  return resolve_nested_map<Opts>(*table, path.subspan(1), ctx, it, end, next_depth);
+                  return resolve_nested_map<Opts>(*table, path.subspan(1), ctx, it, end, keys, next_depth);
                }
             }
          }
 
-         // Navigate/create nested map
+         auto* nested_keys = section_depth ? &keys : keys.through_dotted(path.front(), exists);
+         if (!nested_keys) {
+            ctx.error = error_code::syntax_error;
+            return false;
+         }
+
+         // Navigate/create nested map. Anything other than a map found on the way predates this read,
+         // as nested_keys rules out what the document defined, so it gets replaced.
          if constexpr (is_variant<Value>) {
             constexpr auto map_idx = find_map_alternative_index<Value>();
             if constexpr (map_idx != std::variant_npos) {
                using MapType = std::variant_alternative_t<map_idx, Value>;
 
-               if (!exists) {
-                  auto& nested_value = root[path.front()];
-                  nested_value.template emplace<map_idx>();
-                  return resolve_nested_map<Opts>(std::get<MapType>(nested_value), path.subspan(1), ctx, it, end,
-                                                  next_depth);
-               }
-
-               auto& nested_value = map_it->second;
+               auto& nested_value = exists ? map_it->second : root[path.front()];
                if (!std::holds_alternative<MapType>(nested_value)) {
-                  ctx.error = error_code::syntax_error;
-                  return false;
+                  nested_value.template emplace<map_idx>();
                }
 
                return resolve_nested_map<Opts>(std::get<MapType>(nested_value), path.subspan(1), ctx, it, end,
-                                               next_depth);
+                                               *nested_keys, next_depth);
             }
             else {
                ctx.error = error_code::no_matching_variant_type;
@@ -2505,21 +2629,13 @@ namespace glz
             if constexpr (map_idx != std::variant_npos) {
                using MapType = std::variant_alternative_t<map_idx, std::remove_reference_t<DataType>>;
 
-               if (!exists) {
-                  auto& nested_value = root[path.front()];
-                  nested_value.data.template emplace<map_idx>();
-                  return resolve_nested_map<Opts>(std::get<MapType>(nested_value.data), path.subspan(1), ctx, it, end,
-                                                  next_depth);
-               }
-
-               auto& nested_value = map_it->second;
+               auto& nested_value = exists ? map_it->second : root[path.front()];
                if (!std::holds_alternative<MapType>(nested_value.data)) {
-                  ctx.error = error_code::syntax_error;
-                  return false;
+                  nested_value.data.template emplace<map_idx>();
                }
 
                return resolve_nested_map<Opts>(std::get<MapType>(nested_value.data), path.subspan(1), ctx, it, end,
-                                               next_depth);
+                                               *nested_keys, next_depth);
             }
             else {
                ctx.error = error_code::no_matching_variant_type;
@@ -2527,11 +2643,8 @@ namespace glz
             }
          }
          else if constexpr (readable_map_t<Value>) {
-            if (!exists) {
-               return resolve_nested_map<Opts>(root[path.front()], path.subspan(1), ctx, it, end, next_depth);
-            }
-
-            return resolve_nested_map<Opts>(map_it->second, path.subspan(1), ctx, it, end, next_depth);
+            return resolve_nested_map<Opts>(exists ? map_it->second : root[path.front()], path.subspan(1), ctx, it, end,
+                                            *nested_keys, next_depth);
          }
          else {
             // Value type doesn't support nesting.
@@ -2541,171 +2654,107 @@ namespace glz
       }
 
       // Helper to ensure a path of nested maps exists (for table section headers)
-      // This creates the nested map structure without parsing a value
+      // This creates the nested map structure without parsing a value. is_array: the header is an
+      // [[array of tables]], so its last segment gets a new element.
+      // Returns the record of the table the path leads to, or null on an error
       // Note: Not inline because this function is recursive
       template <auto Opts, class T>
-      bool ensure_map_path(T& root, std::span<std::string> path, auto& ctx, const toml_map_header& header)
+      toml_map_keys* ensure_map_path(T& root, std::span<std::string> path, auto& ctx, toml_map_keys& keys,
+                                     const bool is_array)
       {
          // A table header "[a.a.a.…]" recurses one frame per path segment with nothing bounding
          // the descent, so cap it on the shared depth budget to avoid a stack overflow.
          depth_guard guard{ctx};
          if (!guard) [[unlikely]] {
-            return false;
+            return nullptr;
          }
 
          if (path.empty()) {
-            return true;
+            return &keys;
          }
+
+         keys.first_visit(root.empty());
 
          using Value = typename T::mapped_type;
          const auto map_it = root.find(path.front());
          const bool exists = (map_it != root.end());
 
-         if constexpr (toml_value_table_array_index<Value>() != std::variant_npos) {
-            if (path.size() == 1 && header.is_array) {
-               return append_table_array_element(exists ? map_it->second : root[path.front()], exists, path, header,
-                                                 ctx);
-            }
-            if (exists && path.size() > 1 && header.is_table_array(path)) {
-               if (auto* table = last_table_array_element(map_it->second)) {
-                  return ensure_map_path<Opts>(*table, path.subspan(1), ctx, header);
+         if (path.size() == 1 && is_array) {
+            if constexpr (toml_value_table_array_index<Value>() != std::variant_npos) {
+               const bool new_array = !keys.is_table_array(path.front());
+               auto* element_keys = keys.open_table_array_element(path.front(), exists);
+               if (element_keys &&
+                   append_table_array_element(exists ? map_it->second : root[path.front()], new_array)) {
+                  return element_keys;
                }
             }
-         }
-         else if (path.size() == 1 && header.is_array) {
             ctx.error = error_code::syntax_error;
-            return false;
+            return nullptr;
          }
 
-         if (path.size() == 1) {
-            // Last key in path - just ensure the map exists at this location
-            if constexpr (is_variant<Value>) {
-               constexpr auto map_idx = find_map_alternative_index<Value>();
-               if constexpr (map_idx != std::variant_npos) {
-                  using MapType = std::variant_alternative_t<map_idx, Value>;
+         // Re-defining a table, or reaching into a value, is what the record rejects here. Anything
+         // other than a map found on the way predates this read, so it gets replaced.
+         auto* nested_keys =
+            path.size() == 1 ? keys.define_header(path.front(), exists) : keys.through_header(path.front(), exists);
+         if (!nested_keys) {
+            ctx.error = error_code::syntax_error;
+            return nullptr;
+         }
 
-                  if (!exists) {
-                     auto& nested_value = root[path.front()];
-                     nested_value.template emplace<map_idx>();
-                     return true;
-                  }
-
-                  if (!std::holds_alternative<MapType>(map_it->second)) {
-                     ctx.error = error_code::syntax_error;
-                     return false;
-                  }
-
-                  // Re-defining an already-defined table is invalid.
-                  ctx.error = error_code::syntax_error;
-                  return false;
-               }
-               else {
-                  ctx.error = error_code::no_matching_variant_type;
-                  return false;
+         if constexpr (toml_value_table_array_index<Value>() != std::variant_npos) {
+            // [a.b] after [[a]]: the rest of the path is in the element the last [[a]] opened
+            if (exists) {
+               auto* table = last_table_array_element(map_it->second);
+               if (table && keys.is_table_array(path.front())) {
+                  return ensure_map_path<Opts>(*table, path.subspan(1), ctx, *nested_keys, is_array);
                }
             }
-            else if constexpr (has_variant_data_member<Value>) {
-               using DataType = std::remove_reference_t<decltype(std::declval<Value&>().data)>;
-               constexpr auto map_idx = find_map_alternative_index<DataType>();
-               if constexpr (map_idx != std::variant_npos) {
-                  using MapType = std::variant_alternative_t<map_idx, DataType>;
+         }
 
-                  if (!exists) {
-                     auto& nested_value = root[path.front()];
-                     nested_value.data.template emplace<map_idx>();
-                     return true;
-                  }
+         if constexpr (is_variant<Value>) {
+            constexpr auto map_idx = find_map_alternative_index<Value>();
+            if constexpr (map_idx != std::variant_npos) {
+               using MapType = std::variant_alternative_t<map_idx, Value>;
 
-                  if (!std::holds_alternative<MapType>(map_it->second.data)) {
-                     ctx.error = error_code::syntax_error;
-                     return false;
-                  }
-
-                  // Re-defining an already-defined table is invalid.
-                  ctx.error = error_code::syntax_error;
-                  return false;
-               }
-               else {
-                  ctx.error = error_code::no_matching_variant_type;
-                  return false;
-               }
-            }
-            else if constexpr (readable_map_t<Value>) {
-               if (exists) {
-                  ctx.error = error_code::syntax_error;
-                  return false;
+               auto& nested_value = exists ? map_it->second : root[path.front()];
+               if (!std::holds_alternative<MapType>(nested_value)) {
+                  nested_value.template emplace<map_idx>();
                }
 
-               root[path.front()];
-               return true;
+               return ensure_map_path<Opts>(std::get<MapType>(nested_value), path.subspan(1), ctx, *nested_keys,
+                                            is_array);
             }
             else {
-               ctx.error = error_code::syntax_error;
-               return false;
+               ctx.error = error_code::no_matching_variant_type;
+               return nullptr;
             }
+         }
+         else if constexpr (has_variant_data_member<Value>) {
+            using DataType = std::remove_reference_t<decltype(std::declval<Value&>().data)>;
+            constexpr auto map_idx = find_map_alternative_index<DataType>();
+            if constexpr (map_idx != std::variant_npos) {
+               using MapType = std::variant_alternative_t<map_idx, DataType>;
+
+               auto& nested_value = exists ? map_it->second : root[path.front()];
+               if (!std::holds_alternative<MapType>(nested_value.data)) {
+                  nested_value.data.template emplace<map_idx>();
+               }
+
+               return ensure_map_path<Opts>(std::get<MapType>(nested_value.data), path.subspan(1), ctx, *nested_keys,
+                                            is_array);
+            }
+            else {
+               ctx.error = error_code::no_matching_variant_type;
+               return nullptr;
+            }
+         }
+         else if constexpr (readable_map_t<Value>) {
+            return ensure_map_path<Opts>(exists ? map_it->second : root[path.front()], path.subspan(1), ctx,
+                                         *nested_keys, is_array);
          }
          else {
-            // Navigate deeper
-            if constexpr (is_variant<Value>) {
-               constexpr auto map_idx = find_map_alternative_index<Value>();
-               if constexpr (map_idx != std::variant_npos) {
-                  using MapType = std::variant_alternative_t<map_idx, Value>;
-
-                  if (!exists) {
-                     auto& nested_value = root[path.front()];
-                     nested_value.template emplace<map_idx>();
-                     return ensure_map_path<Opts>(std::get<MapType>(nested_value), path.subspan(1), ctx, header);
-                  }
-
-                  auto& nested_value = map_it->second;
-                  if (!std::holds_alternative<MapType>(nested_value)) {
-                     ctx.error = error_code::syntax_error;
-                     return false;
-                  }
-
-                  return ensure_map_path<Opts>(std::get<MapType>(nested_value), path.subspan(1), ctx, header);
-               }
-               else {
-                  ctx.error = error_code::no_matching_variant_type;
-                  return false;
-               }
-            }
-            else if constexpr (has_variant_data_member<Value>) {
-               using DataType = std::remove_reference_t<decltype(std::declval<Value&>().data)>;
-               constexpr auto map_idx = find_map_alternative_index<DataType>();
-               if constexpr (map_idx != std::variant_npos) {
-                  using MapType = std::variant_alternative_t<map_idx, DataType>;
-
-                  if (!exists) {
-                     auto& nested_value = root[path.front()];
-                     nested_value.data.template emplace<map_idx>();
-                     return ensure_map_path<Opts>(std::get<MapType>(nested_value.data), path.subspan(1), ctx, header);
-                  }
-
-                  auto& nested_value = map_it->second;
-                  if (!std::holds_alternative<MapType>(nested_value.data)) {
-                     ctx.error = error_code::syntax_error;
-                     return false;
-                  }
-
-                  return ensure_map_path<Opts>(std::get<MapType>(nested_value.data), path.subspan(1), ctx, header);
-               }
-               else {
-                  ctx.error = error_code::no_matching_variant_type;
-                  return false;
-               }
-            }
-            else if constexpr (readable_map_t<Value>) {
-               if (!exists) {
-                  return ensure_map_path<Opts>(root[path.front()], path.subspan(1), ctx, header);
-               }
-
-               return ensure_map_path<Opts>(map_it->second, path.subspan(1), ctx, header);
-            }
-            else {
-               ctx.error = error_code::syntax_error;
-               return false;
-            }
+            ctx.error = error_code::syntax_error;
+            return nullptr;
          }
       }
 
@@ -2720,6 +2769,9 @@ namespace glz
             ++it; // Empty inline table
             return;
          }
+
+         // Nothing outside the braces can add to an inline table, so its keys are settled in here
+         toml_map_keys keys{};
 
          while (it != end) {
             skip_ws_and_comments(it, end);
@@ -2758,7 +2810,7 @@ namespace glz
                return;
             }
 
-            if (!resolve_nested_map<Opts>(value, std::span{path}, ctx, it, end)) {
+            if (!resolve_nested_map<Opts>(value, std::span{path}, ctx, it, end, keys)) {
                return;
             }
 
@@ -2795,6 +2847,15 @@ namespace glz
       template <auto Opts, class It>
       static void op(auto&& value, is_context auto&& ctx, It&& it, auto end)
       {
+         op_tracked<Opts>(value, ctx, it, end, nullptr);
+      }
+
+      // node carries what the enclosing document has already defined in this map, for a map member
+      // that more than one [m] section fills in. Null when this read is the whole of the map.
+      template <auto Opts, class It>
+      static void op_tracked(auto&& value, is_context auto&& ctx, It&& it, auto end,
+                             detail::key_assignment_record* node)
+      {
          skip_ws_and_comments(it, end);
 
          if (it == end) {
@@ -2812,7 +2873,9 @@ namespace glz
          // Track current section path instead of a pointer to avoid UB from casting
          // between map types with different comparators (e.g., std::less<> vs std::less<std::string>)
          std::vector<std::string> current_section_path;
-         std::vector<std::vector<std::string>> table_arrays;
+         detail::toml_map_keys own_keys{};
+         detail::toml_map_keys& keys = node ? node->map_keys() : own_keys;
+         detail::toml_map_keys* section_keys = &keys;
 
          while (it != end) {
             skip_ws_and_comments(it, end);
@@ -2859,8 +2922,9 @@ namespace glz
                }
 
                // Ensure the nested map structure exists for this section
-               const detail::toml_map_header header{current_section_path, is_array, table_arrays};
-               if (!detail::ensure_map_path<Opts>(value, std::span{current_section_path}, ctx, header)) {
+               section_keys =
+                  detail::ensure_map_path<Opts>(value, std::span{current_section_path}, ctx, keys, is_array);
+               if (!section_keys) {
                   return;
                }
             }
@@ -2889,7 +2953,7 @@ namespace glz
                full_path.insert(full_path.end(), current_section_path.begin(), current_section_path.end());
                full_path.insert(full_path.end(), key_path.begin(), key_path.end());
 
-               if (!detail::resolve_nested_map<Opts>(value, std::span{full_path}, ctx, it, end,
+               if (!detail::resolve_nested_map<Opts>(value, std::span{full_path}, ctx, it, end, *section_keys,
                                                      current_section_path.size())) {
                   return;
                }

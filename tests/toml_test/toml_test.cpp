@@ -11,6 +11,7 @@
 #include <set>
 #include <span>
 #include <string_view>
+#include <unordered_map>
 #include <unordered_set>
 
 #include "ut/ut.hpp"
@@ -7421,6 +7422,281 @@ suite toml_duplicate_key_tests = [] {
          const std::string input = "x = 1\ny = 2\n";
          expect(not glz::read<opts>(value, input)) << input;
       }
+   };
+};
+
+struct map_duplicate_doc
+{
+   std::map<std::string, int> m{{"k", 7}, {"other", 1}};
+};
+
+struct map_duplicate_empty_doc
+{
+   std::map<std::string, int> m{};
+};
+
+struct map_duplicate_shapes
+{
+   std::map<std::string, std::map<std::string, int>> nested{{"a", {{"x", 1}, {"y", 2}}}};
+   std::optional<std::map<std::string, int>> opt{};
+   std::unordered_map<std::string, int> hashed{{"k", 7}};
+   std::map<std::string, std::string> s{{"k", "old"}};
+   int after{};
+};
+
+struct map_duplicate_element
+{
+   std::map<std::string, int> m{};
+};
+
+struct map_duplicate_array
+{
+   std::vector<map_duplicate_element> arr{};
+};
+
+suite toml_map_duplicate_key_tests = [] {
+   // #2962 item 3: whether a key is a duplicate is a question about the document
+   "a key the map held before the read is overwritten"_test = [] {
+      for (const std::string input : {"m = {k = 9}\n", "[m]\nk = 9\n", "m.k = 9\n", "m.\"k\" = 9\n"}) {
+         map_duplicate_doc doc{};
+         const auto ec = glz::read_toml(doc, input);
+         expect(not ec) << glz::format_error(ec, input);
+         expect(doc.m.at("k") == 9) << input;
+         expect(doc.m.at("other") == 1) << input;
+
+         // A second read into the same object is the same case
+         const auto again = glz::read_toml(doc, input);
+         expect(not again) << glz::format_error(again, input);
+      }
+
+      map_duplicate_doc json{};
+      expect(not glz::read_json(json, std::string{R"({"m":{"k":9}})"}));
+      map_duplicate_doc toml{};
+      expect(not glz::read_toml(toml, std::string{"m = {k = 9}\n"}));
+      expect(toml.m == json.m);
+   };
+
+   "a map read at the root"_test = [] {
+      for (const std::string input : {"k = 9\n", "{k = 9}", "\"k\" = 9\n"}) {
+         std::map<std::string, int> m{{"k", 7}, {"other", 1}};
+         const auto ec = glz::read_toml(m, input);
+         expect(not ec) << glz::format_error(ec, input);
+         expect(m.at("k") == 9 && m.at("other") == 1) << input;
+      }
+
+      std::unordered_map<std::string, int> hashed{{"k", 7}};
+      expect(not glz::read_toml(hashed, std::string{"k = 9\n"}));
+      expect(hashed.at("k") == 9);
+   };
+
+   "a generic holding the key"_test = [] {
+      glz::generic g{};
+      expect(not glz::read_json(g, std::string{R"({"a":{"k":1},"b":5,"c":{"z":1}})"}));
+      const std::string input = "b = 6\n[a]\nk = 2\nj = 3\n[c.d]\ne = 4\n";
+      const auto ec = glz::read_toml(g, input);
+      expect(not ec) << glz::format_error(ec, input);
+      expect(glz::write_json(g).value_or("") == R"({"a":{"k":2,"j":3},"b":6,"c":{"z":1,"d":{"e":4}}})");
+   };
+
+   "other member shapes"_test = [] {
+      map_duplicate_shapes doc{};
+      const std::string input = R"(after = 1
+nested.a.x = 9
+nested.b.x = 5
+opt.k = 1
+hashed.k = 9
+s.k = "new"
+)";
+      const auto ec = glz::read_toml(doc, input);
+      expect(not ec) << glz::format_error(ec, input);
+      expect(doc.after == 1);
+      expect(doc.nested.at("a").at("x") == 9);
+      expect(doc.nested.at("a").at("y") == 2);
+      expect(doc.nested.at("b").at("x") == 5);
+      expect(doc.opt.has_value() && doc.opt->at("k") == 1);
+      expect(doc.hashed.at("k") == 9);
+      expect(doc.s.at("k") == "new");
+
+      map_duplicate_shapes json_doc{};
+      expect(not glz::read_json(json_doc, std::string{R"({"nested":{"a":{"x":9},"b":{"x":5}}})"}));
+      expect(doc.nested == json_doc.nested);
+
+      map_duplicate_shapes section{};
+      expect(not glz::read_toml(section, std::string{"[opt]\nk = 1\n[nested]\nb.c = 2\n"}));
+      expect(section.opt->at("k") == 1 && section.nested.at("b").at("c") == 2);
+      expect(section.nested.at("a").at("x") == 1);
+   };
+
+   "a value from before the read gives way to a table"_test = [] {
+      for (const std::string input : {"a.x = 1\n", "[a]\nx = 1\n"}) {
+         std::map<std::string, glz::generic> m{};
+         m["a"] = 5.0;
+         const auto ec = glz::read_toml(m, input);
+         expect(not ec) << glz::format_error(ec, input);
+         expect(m.at("a")["x"].get<double>() == 1.0) << input;
+      }
+
+      std::map<std::string, glz::generic> m{};
+      m["a"] = 5.0;
+      const std::string input = "[a.b]\nx = 1\n";
+      const auto ec = glz::read_toml(m, input);
+      expect(not ec) << glz::format_error(ec, input);
+      expect(m.at("a")["b"]["x"].get<double>() == 1.0);
+   };
+
+   "a key defined twice in the document is still rejected"_test = [] {
+      for (const std::string input : {
+              "m = {k = 1, k = 2}\n",
+              "m = {k = 1, \"k\" = 2}\n",
+              "[m]\nk = 1\nk = 2\n",
+              "[m]\nk = 1\n[m]\nk = 2\n",
+              "m.k = 1\nm.k = 2\n",
+              "m.k = 1\n[m]\nk = 2\n",
+              "[m]\nk = 1\nk = 2\nother = 3\n",
+              "m = {k = 1}\nm.k = 2\n",
+              "m = {j = 1}\nm.k = 2\n",
+              "m = {j = 1}\n[m]\nk = 2\n",
+              "m.k = 1\nm = {j = 2}\n",
+           }) {
+         map_duplicate_doc filled{};
+         expect(glz::read_toml(filled, input).ec == glz::error_code::syntax_error) << input;
+         map_duplicate_empty_doc empty{};
+         expect(glz::read_toml(empty, input).ec == glz::error_code::syntax_error) << input;
+      }
+
+      map_duplicate_doc doc{};
+      expect(bool(glz::read_toml(doc, std::string{"m.k = 1\nm.k = 2\n"})));
+      expect(doc.m.at("k") == 1);
+
+      for (const std::string input :
+           {"k = 1\nk = 2\n", "\"k\" = 1\nk = 2\n", "{k = 1, k = 2}", "'k' = 1\nj = 2\nk = 3\n"}) {
+         std::map<std::string, int> filled{{"k", 7}};
+         expect(glz::read_toml(filled, input).ec == glz::error_code::syntax_error) << input;
+         std::map<std::string, int> empty{};
+         expect(glz::read_toml(empty, input).ec == glz::error_code::syntax_error) << input;
+      }
+
+      map_duplicate_shapes nested{};
+      expect(glz::read_toml(nested, std::string{"nested.a.x = 1\nnested.a.x = 2\n"}).ec ==
+             glz::error_code::syntax_error);
+      map_duplicate_shapes optional{};
+      expect(glz::read_toml(optional, std::string{"[opt]\nk = 1\n[s]\n[opt]\nk = 2\n"}).ec ==
+             glz::error_code::syntax_error);
+   };
+
+   "each element of an array of tables is its own document region"_test = [] {
+      map_duplicate_array doc{};
+      const std::string input = "[[arr]]\nm.k = 1\n[[arr]]\nm.k = 2\n";
+      const auto ec = glz::read_toml(doc, input);
+      expect(not ec) << glz::format_error(ec, input);
+      expect(doc.arr.size() == 2 && doc.arr[1].m.at("k") == 2);
+
+      map_duplicate_array repeated{};
+      expect(glz::read_toml(repeated, std::string{"[[arr]]\nm.k = 1\nm.k = 2\n"}).ec == glz::error_code::syntax_error);
+   };
+
+   // Everything below runs twice: on an empty map, where the map itself answers for a plain value, and
+   // on one that already holds other keys and the table the document names, where only the record can.
+   "what TOML forbids in a map of tables"_test = [] {
+      for (const std::string input : {
+              "a = 1\na = 2\n",
+              "a = 1\na.b = 2\n",
+              "a = 1\n[a]\n",
+              "a = 1\n[a.b]\n",
+              "a.b = 1\na = 2\n",
+              "a.b = 1\na.b = 2\n",
+              "a.b = 1\na.b.c = 2\n",
+              "a.b = 1\n[a.b]\n",
+              "a = {x = 1}\na.y = 2\n",
+              "a = {x = 1}\n[a]\ny = 2\n",
+              "a = {x = 1}\n[a.y]\nz = 2\n",
+              "a = [1]\n[a.b]\n",
+              "[a]\n[a]\n",
+              "[a.b]\n[a.b]\n",
+              "[a]\nb = 1\nb = 2\n",
+              "[a]\nb = 1\n[a.b]\n",
+              "[a]\nb.c = 1\n[a.b]\n",
+              "a.b.c = 1\n[a]\n",
+              "a.b.c = 1\n[a.b]\n",
+              "[a.b]\nc = 1\n[a]\nb.d = 2\n",
+              "[a.b.c]\nz = 9\n[a]\nb.c.t = 1\n",
+              "x = {a = 1, a = 2}\n",
+              "x = {a = {b = 1}, a.c = 2}\n",
+              "x = {a.b = 1, a = 2}\n",
+              "x = {a.b = 1, a.b = 2}\n",
+              "x = {a.b = 1, a.b.c = 2}\n",
+           }) {
+         std::map<std::string, glz::generic> empty{};
+         expect(glz::read_toml(empty, input).ec == glz::error_code::syntax_error) << input;
+
+         std::map<std::string, glz::generic> filled{};
+         expect(not glz::read_json(filled, std::string{R"({"zz":1,"a":{"zz":1,"b":{"zz":1}},"x":{"zz":1}})"}));
+         expect(glz::read_toml(filled, input).ec == glz::error_code::syntax_error) << input;
+      }
+   };
+
+   "what TOML allows in a map of tables"_test = [] {
+      for (const std::string input : {
+              "[a.b]\nx = 1\n[a]\ny = 2\n",
+              "[a.b.c]\nx = 1\n[a.b]\ny = 2\n[a]\nz = 3\n",
+              "[a]\nb.c = 1\n[a.b.d]\ne = 2\n",
+              "a.b = 1\na.c = 2\n",
+              "a.b.c = 1\na.b.d = 2\n[a.e]\nf = 3\n",
+              "[a.b.c]\nx = 1\n[a]\nb.y = 2\n",
+              "x = {a.b = 1, a.c = 2}\n",
+              "[a]\nb = 1\n[c]\nb = 2\n",
+              "a = 1\nb.a = 2\n[c]\na = 3\n",
+           }) {
+         std::map<std::string, glz::generic> empty{};
+         auto ec = glz::read_toml(empty, input);
+         expect(not ec) << glz::format_error(ec, input);
+
+         std::map<std::string, glz::generic> filled{};
+         expect(not glz::read_json(filled, std::string{R"({"zz":1,"a":{"zz":1},"x":{"zz":1}})"}));
+         ec = glz::read_toml(filled, input);
+         expect(not ec) << glz::format_error(ec, input);
+      }
+
+      std::map<std::string, glz::generic> m{};
+      expect(not glz::read_toml(m, std::string{"[a.b]\nx = 1\n[a]\ny = 2\n"}));
+      expect(m.at("a")["b"]["x"].get<double>() == 1.0);
+      expect(m.at("a")["y"].get<double>() == 2.0);
+   };
+
+   // An array of tables is an entry of the record, holding the record of its last element
+   "arrays of tables in a map of tables"_test = [] {
+      for (const std::string input : {
+              "[[a]]\nx = 1\nx = 2\n",
+              "[[a]]\n[a.b]\n[a.b]\n",
+              "[[t.a]]\n[t]\na.y = 1\n",
+              "[[t.a]]\n[t]\na = 1\n",
+              "[a.b]\n[[a]]\n",
+              "a.b = 1\n[[a]]\n",
+              "[[a]]\n[a]\n",
+           }) {
+         std::map<std::string, glz::generic> empty{};
+         expect(glz::read_toml(empty, input).ec == glz::error_code::syntax_error) << input;
+
+         std::map<std::string, glz::generic> filled{};
+         expect(not glz::read_json(filled, std::string{R"({"zz":1,"a":[{"zz":1}],"t":{"a":[{"zz":1}]}})"}));
+         expect(glz::read_toml(filled, input).ec == glz::error_code::syntax_error) << input;
+      }
+
+      // Each element starts with nothing the previous one defined
+      std::map<std::string, glz::generic> fresh{};
+      std::string input = "[[a]]\nx = 1\n[a.b]\ny = 1\n[[a]]\nx = 2\n[a.b]\ny = 2\n[t]\n[[t.a]]\n";
+      auto ec = glz::read_toml(fresh, input);
+      expect(not ec) << glz::format_error(ec, input);
+      expect(glz::write_json(fresh).value_or("") ==
+             R"({"a":[{"x":1,"b":{"y":1}},{"x":2,"b":{"y":2}}],"t":{"a":[{}]}})");
+
+      // An array from before the read is replaced, not appended to, and gives way to a table
+      std::map<std::string, glz::generic> replaced{};
+      expect(not glz::read_json(replaced, std::string{R"({"a":[{"x":1}],"b":[{"x":1}],"c":5})"}));
+      input = "b.y = 2\n[[a]]\nx = 2\n[[c]]\n";
+      ec = glz::read_toml(replaced, input);
+      expect(not ec) << glz::format_error(ec, input);
+      expect(glz::write_json(replaced).value_or("") == R"({"a":[{"x":2}],"b":{"y":2},"c":[{}]})");
    };
 };
 
