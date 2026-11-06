@@ -195,3 +195,4 @@ That second pass needs the opening brace to still be in the window. A refill rel
 
 - [Writing](writing.md) - Writing to buffers and error handling
 - [Reading](reading.md) - Reading from buffers
+- [Incremental JSON Arrays](json-array.md) - One array element at a time over a buffer already in memory
