@@ -21,6 +21,7 @@
 // OpenSSL includes for certificate generation
 #include <openssl/evp.h>
 #include <openssl/pem.h>
+#include <openssl/ssl.h>
 #include <openssl/x509.h>
 #include <openssl/x509v3.h>
 
@@ -149,6 +150,60 @@ namespace
       }
       return generate_test_certificates();
    }
+
+   // Reports whether a client that `configure_client` set up completes its WebSocket handshake
+   // with a server whose TLS context `configure_server` shaped.
+   template <class ServerFunc, class ClientFunc>
+   bool wss_handshake_completes(ServerFunc&& configure_server, ClientFunc&& configure_client,
+                                const std::string& host = "127.0.0.1")
+   {
+      https_server server;
+      server.load_certificate("wss_test_cert.pem", "wss_test_key.pem");
+      server.set_ssl_verify_mode(0);
+      server.configure_ssl_context(configure_server);
+
+      auto ws_server = std::make_shared<websocket_server>();
+      ws_server->on_error([](auto /*conn*/, std::error_code /*ec*/) {});
+      server.websocket("/ws", ws_server);
+      server.bind("127.0.0.1", 0);
+      uint16_t port = server.port();
+
+      std::thread server_thread([&]() { server.start(); });
+      std::this_thread::sleep_for(std::chrono::milliseconds(200));
+
+      websocket_client client;
+
+      std::atomic<bool> client_open{false};
+      std::atomic<bool> client_error{false};
+      client.on_open([&]() { client_open = true; });
+      client.on_close([&](ws_close_code, std::string_view) { client.context()->stop(); });
+      client.on_error([&](std::error_code) { client_error = true; });
+
+      configure_client(client);
+      client.connect("wss://" + host + ":" + std::to_string(port) + "/ws");
+
+      std::thread client_thread([&client]() { client.context()->run(); });
+
+      for (int i = 0; i < 50 && !client_open && !client_error; ++i) {
+         std::this_thread::sleep_for(std::chrono::milliseconds(100));
+      }
+      const bool opened = client_open.load();
+
+      client.close();
+      client.context()->stop();
+      client_thread.join();
+      server.stop();
+      server_thread.join();
+      return opened;
+   }
+
+   void pin_to_tls12(asio::ssl::context& ctx)
+   {
+      SSL_CTX_set_min_proto_version(ctx.native_handle(), TLS1_2_VERSION);
+      SSL_CTX_set_max_proto_version(ctx.native_handle(), TLS1_2_VERSION);
+   }
+
+   void require_tls13(asio::ssl::context& ctx) { SSL_CTX_set_min_proto_version(ctx.native_handle(), TLS1_3_VERSION); }
 } // namespace
 
 suite wss_client_tests = [] {
@@ -412,6 +467,85 @@ suite wss_server_tests = [] {
       client_thread.join();
       server.stop();
       server_thread.join();
+   };
+
+   // The same client and the same TLS 1.2 server, with and without the hook, so the refusal
+   // can only come from the bound the hook set on the context connect() uses.
+   "wss_client_configure_ssl_context_refuses_a_lower_protocol"_test = [] {
+      bool certs_ok = ensure_test_certificates();
+      expect(certs_ok) << "Failed to generate test certificates";
+      if (!certs_ok) return;
+
+      expect(wss_handshake_completes(pin_to_tls12, [](websocket_client& client) {
+         client.set_ssl_verify_mode(asio::ssl::verify_none);
+      })) << "A client with no bound of its own should reach a TLS 1.2 server\n";
+
+      expect(!wss_handshake_completes(pin_to_tls12, [](websocket_client& client) {
+         client.set_ssl_verify_mode(asio::ssl::verify_none);
+         client.configure_ssl_context(require_tls13);
+      })) << "A client requiring TLS 1.3 should refuse a TLS 1.2 server\n";
+   };
+
+   "wss_client_configure_ssl_context_reaches_tls13"_test = [] {
+      bool certs_ok = ensure_test_certificates();
+      expect(certs_ok) << "Failed to generate test certificates";
+      if (!certs_ok) return;
+
+      expect(wss_handshake_completes([](asio::ssl::context&) {},
+                                     [](websocket_client& client) {
+                                        client.set_ssl_verify_mode(asio::ssl::verify_none);
+                                        client.configure_ssl_context(require_tls13);
+                                     }))
+         << "A client requiring TLS 1.3 should reach a server offering it\n";
+   };
+
+   // Verification stays at the default verify_peer here, so each handshake depends on the
+   // trust anchors of the one context, whichever order the two calls come in.
+   "wss_client_configure_ssl_context_shares_the_trust_anchors"_test = [] {
+      bool certs_ok = ensure_test_certificates();
+      expect(certs_ok) << "Failed to generate test certificates";
+      if (!certs_ok) return;
+
+      auto no_server_change = [](asio::ssl::context&) {};
+
+      expect(wss_handshake_completes(
+         no_server_change,
+         [](websocket_client& client) {
+            expect(client.add_ca_certificate_file("wss_test_cert.pem").has_value());
+            client.configure_ssl_context(require_tls13);
+         },
+         "localhost"))
+         << "An anchor added before the hook should still be trusted\n";
+
+      expect(wss_handshake_completes(
+         no_server_change,
+         [](websocket_client& client) {
+            client.configure_ssl_context(require_tls13);
+            expect(client.add_ca_certificate_file("wss_test_cert.pem").has_value());
+         },
+         "localhost"))
+         << "An anchor added after the hook should be trusted\n";
+
+      expect(!wss_handshake_completes(
+         no_server_change, [](websocket_client& client) { client.configure_ssl_context(require_tls13); }, "localhost"))
+         << "The hook should leave an untrusted certificate refused\n";
+   };
+
+   // connect() applies set_ssl_verify_mode() to the context on every connect, so that setter
+   // decides, as the hook's documentation says.
+   "wss_client_set_ssl_verify_mode_outlasts_configure_ssl_context"_test = [] {
+      bool certs_ok = ensure_test_certificates();
+      expect(certs_ok) << "Failed to generate test certificates";
+      if (!certs_ok) return;
+
+      expect(wss_handshake_completes([](asio::ssl::context&) {},
+                                     [](websocket_client& client) {
+                                        client.set_ssl_verify_mode(asio::ssl::verify_none);
+                                        client.configure_ssl_context([](asio::ssl::context& ctx) {
+                                           ctx.set_verify_mode(asio::ssl::verify_peer);
+                                        });
+                                     }))
+         << "set_ssl_verify_mode() should decide over a mode set through the hook\n";
    };
 
    "wss_multiple_clients_test"_test = [] {

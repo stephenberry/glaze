@@ -3741,12 +3741,38 @@ namespace glz
 
    namespace detail
    {
+      // Whether reading T takes a TOML document, for which no input at all is the document with no
+      // keys. Anything else has nothing to read from it.
+      template <class T>
+      consteval bool toml_reads_document()
+      {
+         using U = std::remove_cvref_t<T>;
+         if constexpr (custom_read<U>) {
+            return false;
+         }
+         else if constexpr (glaze_value_t<U>) {
+            // Read as its member, so it takes a document when that member does (glz::generic, or a
+            // meta value naming a struct member).
+            using M = std::remove_cvref_t<decltype(get_member(std::declval<U&>(), meta_wrapper_v<U>))>;
+            return toml_reads_document<M>();
+         }
+         else if constexpr (is_variant<U>) {
+            return find_map_alternative_index<U>() != std::variant_npos;
+         }
+         else if constexpr (nullable_like<U>) {
+            return toml_reads_document<decltype(*std::declval<U&>())>();
+         }
+         else {
+            return glaze_object_t<U> || reflectable<U> || readable_map_t<U>;
+         }
+      }
+
       // A schema-less target (glz::generic, or a variant with a map alternative) read at the root
       // takes either a document or a single bare value. The variant reader picks by the first byte
       // of a value, so a document whose first key is quoted or starts like a value ("a b" = 1,
       // 1234 = 5, true = 1) read as that one scalar and the rest of the document was dropped, and a
       // leading blank line or comment failed. Lines of key/value pairs, or a table header, make it a
-      // document.
+      // document, and so does having no lines at all.
       template <auto Opts, class T, class Ctx, class It, class End>
       bool read_toml_document_root(T& value, Ctx& ctx, It& it, End end)
       {
@@ -3761,7 +3787,7 @@ namespace glz
             if constexpr (map_idx != std::variant_npos) {
                auto start = it;
                skip_ws_newlines_and_comments(start, end);
-               if (is_toml_keyval(start, end) || is_toml_table_header(start, end)) {
+               if (start == end || is_toml_keyval(start, end) || is_toml_table_header(start, end)) {
                   depth_guard guard{ctx};
                   if (!guard) [[unlikely]] {
                      return true;
@@ -3774,6 +3800,12 @@ namespace glz
                   from<TOML, M>::template op<Opts>(std::get<M>(value), ctx, it, end);
                   return true;
                }
+            }
+         }
+         if constexpr (!toml::check_is_internal(Opts) && !toml_reads_document<V>()) {
+            if (it == end) [[unlikely]] {
+               ctx.error = error_code::no_read_input;
+               return true;
             }
          }
          (void)value, (void)ctx, (void)it, (void)end;

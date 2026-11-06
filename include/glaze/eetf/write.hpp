@@ -327,8 +327,14 @@ namespace glz
    template <uint8_t layout = glz::eetf::map_layout, write_supported<EETF> T, raw_buffer Buffer>
    [[nodiscard]] expected<size_t, error_ctx> write_term(T&& value, Buffer&& buffer) noexcept
    {
-      return write<eetf::eetf_opts{.format = EETF, .layout = layout}>(std::forward<T>(value),
-                                                                      std::forward<Buffer>(buffer));
+      // Unpack explicitly: converting error_ctx to expected<size_t> goes through operator bool, which reports
+      // a failed write as success.
+      const auto ec =
+         write<eetf::eetf_opts{.format = EETF, .layout = layout}>(std::forward<T>(value), std::forward<Buffer>(buffer));
+      if (bool(ec)) [[unlikely]] {
+         return unexpected(ec);
+      }
+      return ec.count;
    }
 
    template <write_supported<EETF> T>
