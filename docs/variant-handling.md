@@ -404,6 +404,7 @@ How a discriminated variant is laid out on the wire is a property of the **varia
 | nothing | none | the alternative's own value, deduced on read |
 | `tag` | internal | `{"type":"circle","radius":5}` |
 | `tag` and `content` | adjacent | `{"type":"circle","value":{"radius":5}}` |
+| `tag` and a `content` array | adjacent, one key per alternative | `{"type":"circle","circle":{"radius":5}}` |
 
 **Internal tagging** merges the discriminator into the alternative's own object. It produces the nicest shape and is the right default, but it only exists for alternatives that *are* objects — there is nowhere to put a key in `[1,2]` or `42`.
 
@@ -459,6 +460,45 @@ Notes:
 - Under BEVE's `structs_as_arrays`, adjacent tagging projects to the two element array `[id, value]`. Internal tagging has nothing to project there — its whole mechanism is a key — so `tag` without `content` is a compile error in that mode.
 - `glz::json_schema` describes an adjacently tagged variant as a `oneOf` of two-property objects with a `const` discriminator. Unlike the internally tagged case, each alternative's own schema is nested under the content key rather than merged with the discriminator, so an alternative reached through `$defs` no longer needs its `additionalProperties: false` relaxed. (Whether a given definition ends up as a `$ref` or inlined is decided afterwards by the usual single-use inlining.)
 - Adjacent tagging is not yet implemented for YAML or JSONB, which support internal tagging only. Declaring `content` and then writing or reading one of those formats is a compile error rather than a silent fallback to a different shape. MessagePack and CBOR implement both representations as maps, matching JSON and BEVE. TOML has no discriminator support in either representation and writes the active alternative bare.
+
+#### A Content Key per Alternative
+
+Some formats name the key holding the value after the alternative, as glTF does for cameras. `content` may also be an array with one key per alternative, in the same order as `ids`:
+
+```c++
+struct PerspectiveCamera {
+   std::optional<float> aspectRatio;
+   float yfov;
+   std::optional<float> zfar;
+   float znear;
+};
+
+struct OrthographicCamera {
+   float xmag;
+   float ymag;
+   float zfar;
+   float znear;
+};
+
+using Camera = std::variant<PerspectiveCamera, OrthographicCamera>;
+
+template <> struct glz::meta<Camera> {
+   static constexpr std::string_view tag = "type";
+   static constexpr std::array ids{"perspective", "orthographic"};
+   static constexpr std::array content{"perspective", "orthographic"};
+};
+
+glz::write_json(Camera{OrthographicCamera{1, 1, 100, 0.01f}});
+// {"type":"orthographic","orthographic":{"xmag":1,"ymag":1,"zfar":100,"znear":0.01}}
+```
+
+Everything above about adjacent tagging still applies, including JSON, BEVE, MessagePack, and CBOR representing it identically, and the positional `[id, value]` projection, which has no keys to differ. In addition:
+
+- The array must have exactly as many entries as `ids`, and `ids` must name every alternative: an unrecognized id selects the first unlabeled alternative (see [Default Variant Types](#default-variant-types-catch-all-handler)), and there would be no key to read its value from. Both are compile errors, as are an empty entry and an entry equal to `tag`.
+- Keys need not be distinct or match the ids. Alternatives may share a key.
+- The value may come before the discriminator on read. Since only the discriminator says which key holds the value, the reader looks at it first either way, and nothing is written to the destination until it has.
+- A key belonging to a different alternative is treated like any other key, so `{"type":"perspective","orthographic":{}}` is an `unknown_key` error in JSON and BEVE under the default options. With `error_on_unknown_keys = false`, or in MessagePack and CBOR, which ignore foreign keys in this form, it is skipped, and the read is a `missing_key` error if the alternative's own key is absent.
+- The discriminator and the value are still the only members of the object. A glTF camera also has an optional `name` beside them, which is a foreign key like any other: read with `error_on_unknown_keys = false` to skip it.
 
 ### Tagged Variants with Embedded Tags
 

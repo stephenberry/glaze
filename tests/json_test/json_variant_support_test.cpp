@@ -2602,6 +2602,218 @@ suite ids_bounds_tests = [] {
    };
 };
 
+namespace per_alternative_content
+{
+   // The glTF camera from the request: the discriminator names the key holding the value.
+   struct perspective_camera
+   {
+      std::optional<float> aspectRatio{};
+      float yfov{};
+      std::optional<float> zfar{};
+      float znear{};
+   };
+   struct orthographic_camera
+   {
+      float xmag{};
+      float ymag{};
+      float zfar{};
+      float znear{};
+   };
+   using camera = std::variant<perspective_camera, orthographic_camera>;
+
+   // Any alternative shape, integral ids, and two alternatives sharing one key.
+   using shapes = std::variant<std::vector<int>, std::string, int>;
+   using shared_key = std::variant<std::vector<int>, std::deque<int>, std::string>;
+
+   struct left
+   {
+      int l{};
+   };
+   struct right
+   {
+      int r{};
+   };
+   using sides = std::variant<left, right>;
+}
+
+template <>
+struct glz::meta<per_alternative_content::camera>
+{
+   static constexpr std::string_view tag = "type";
+   static constexpr std::array ids{"perspective", "orthographic"};
+   static constexpr std::array content{"perspective", "orthographic"};
+};
+
+template <>
+struct glz::meta<per_alternative_content::shapes>
+{
+   static constexpr std::string_view tag = "t";
+   static constexpr std::array ids{1, 2, 3};
+   static constexpr std::array<std::string_view, 3> content{"list", "text", "num"};
+};
+
+template <>
+struct glz::meta<per_alternative_content::shared_key>
+{
+   static constexpr std::string_view tag = "t";
+   static constexpr std::array ids{"vec", "deq", "str"};
+   static constexpr std::array content{"items", "items", "text"};
+};
+
+template <>
+struct glz::meta<per_alternative_content::sides>
+{
+   static constexpr std::string_view tag = "side";
+   static constexpr auto ids = std::array{"left", "right"};
+   static constexpr auto content = std::array{"l", "r"};
+};
+
+static_assert(glz::per_alternative_content_v<per_alternative_content::camera>);
+static_assert(glz::adjacently_tagged_v<per_alternative_content::camera>);
+static_assert(not glz::per_alternative_content_v<tagging_repr::same_shape>);
+static_assert(std::same_as<std::remove_cvref_t<decltype(glz::content_v<tagging_repr::same_shape>)>, std::string_view>);
+
+suite per_alternative_content_tests = [] {
+   using namespace per_alternative_content;
+
+   "the discriminator names the key of the value"_test = [] {
+      camera in{orthographic_camera{1.f, 2.f, 100.f, 0.5f}};
+      auto s = glz::write_json(in);
+      expect(s.has_value());
+      expect(*s == R"({"type":"orthographic","orthographic":{"xmag":1,"ymag":2,"zfar":100,"znear":0.5}})") << *s;
+      camera out{};
+      expect(not glz::read_json(out, *s));
+      expect(out.index() == 1);
+      expect(std::get<1>(out).zfar == 100.f);
+   };
+
+   "the glTF document from the request reads"_test = [] {
+      std::vector<camera> cameras{};
+      expect(not glz::read_json(cameras, R"([
+         {"type":"perspective","perspective":{"aspectRatio":1.0,"yfov":0.7,"zfar":100,"znear":0.01}},
+         {"type":"orthographic","orthographic":{"xmag":1.0,"ymag":1.0,"zfar":100,"znear":0.01}}
+      ])"));
+      expect(cameras.size() == 2);
+      expect(cameras[0].index() == 0);
+      expect(std::get<0>(cameras[0]).yfov == 0.7f);
+      expect(cameras[1].index() == 1);
+   };
+
+   "the value may come before the discriminator"_test = [] {
+      camera out{};
+      expect(
+         not glz::read_json(out, R"({"orthographic":{"xmag":3,"ymag":1,"zfar":1,"znear":1},"type":"orthographic"})"));
+      expect(out.index() == 1);
+      expect(std::get<1>(out).xmag == 3.f);
+   };
+
+   "a value under another alternative's key is rejected"_test = [] {
+      const auto swapped = R"({"type":"perspective","orthographic":{"xmag":1,"ymag":1,"zfar":1,"znear":1}})";
+      const auto swapped_reversed = R"({"orthographic":{"xmag":1,"ymag":1,"zfar":1,"znear":1},"type":"perspective"})";
+      for (const auto* input : {swapped, swapped_reversed}) {
+         camera out{orthographic_camera{9.f, 9.f, 9.f, 9.f}};
+         expect(glz::read_json(out, input).ec == glz::error_code::unknown_key) << input;
+         // Rejected before the destination is disturbed.
+         expect(out.index() == 1);
+         expect(std::get<1>(out).xmag == 9.f);
+
+         // Tolerating unknown keys makes it a stray key, which leaves the value itself missing.
+         camera lax{};
+         expect(glz::read<glz::opts{.error_on_unknown_keys = false}>(lax, std::string_view{input}).ec ==
+                glz::error_code::missing_key)
+            << input;
+      }
+   };
+
+   "both alternatives' keys in one object are rejected"_test = [] {
+      const auto both = R"({"side":"left","l":{"l":1},"r":{"r":2}})";
+      const auto both_reversed = R"({"r":{"r":2},"l":{"l":1},"side":"left"})";
+      for (const auto* input : {both, both_reversed}) {
+         sides out{};
+         expect(glz::read_json(out, std::string_view{input}).ec == glz::error_code::unknown_key) << input;
+      }
+
+      sides lax{};
+      expect(not glz::read<glz::opts{.error_on_unknown_keys = false}>(
+         lax, std::string_view{R"({"r":{"r":2},"l":{"l":1},"side":"left"})"}));
+      expect(lax.index() == 0);
+      expect(std::get<0>(lax).l == 1);
+   };
+
+   "a repeated content key follows the shared key's rule"_test = [] {
+      const auto repeated = std::string_view{R"({"side":"left","l":{"l":1},"l":{"l":2}})"};
+      sides strict{};
+      expect(glz::read_json(strict, repeated).ec == glz::error_code::unknown_key);
+
+      sides lax{};
+      expect(not glz::read<glz::opts{.error_on_unknown_keys = false}>(lax, repeated));
+      expect(std::get<0>(lax).l == 1); // the first one counts
+   };
+
+   "a missing value reports the key the discriminator named"_test = [] {
+      glz::context ctx{};
+      camera out{};
+      const std::string_view input = R"({"type":"orthographic"})";
+      auto ec = glz::read<glz::opts{}>(out, input, ctx);
+      expect(ec.ec == glz::error_code::missing_key);
+      expect(ctx.custom_error_message == "orthographic");
+   };
+
+   "a missing or unknown discriminator is still an error"_test = [] {
+      camera out{};
+      expect(glz::read_json(out, R"({"perspective":{}})").ec == glz::error_code::missing_key);
+      expect(glz::read_json(out, R"({"type":"fisheye","perspective":{}})").ec ==
+             glz::error_code::no_matching_variant_type);
+   };
+
+   "alternatives of any shape take their own keys"_test = [] {
+      for (const auto& [in, expected] : std::vector<std::pair<shapes, std::string_view>>{
+              {shapes{std::vector<int>{1, 2}}, R"({"t":1,"list":[1,2]})"},
+              {shapes{std::string{"hi"}}, R"({"t":2,"text":"hi"})"},
+              {shapes{7}, R"({"t":3,"num":7})"},
+           }) {
+         auto s = glz::write_json(in);
+         expect(s.has_value());
+         expect(*s == expected) << *s;
+         shapes out{};
+         expect(not glz::read_json(out, *s));
+         expect(out == in);
+      }
+   };
+
+   "alternatives may share a key"_test = [] {
+      shared_key out{};
+      expect(not glz::read_json(out, R"({"items":[1],"t":"deq"})"));
+      expect(out.index() == 1);
+      expect(not glz::read_json(out, R"({"t":"vec","items":[1]})"));
+      expect(out.index() == 0);
+      expect(glz::read_json(out, R"({"items":[1],"t":"str"})").ec == glz::error_code::unknown_key);
+      expect(not glz::read_json(out, R"({"t":"str","text":"x"})"));
+      expect(out.index() == 2);
+   };
+
+   "per-alternative keys prettify"_test = [] {
+      std::string s{};
+      expect(not glz::write<glz::opts{.prettify = true}>(sides{right{4}}, s));
+      expect(s == "{\n   \"side\": \"right\",\n   \"r\": {\n      \"r\": 4\n   }\n}") << s;
+      sides out{};
+      expect(not glz::read_json(out, s));
+      expect(out.index() == 1);
+   };
+
+   "the schema names each alternative's key"_test = [] {
+      const auto schema = glz::write_json_schema<shared_key>();
+      expect(schema.has_value());
+      for (const auto& [id, key] :
+           std::vector<std::pair<std::string, std::string>>{{"vec", "items"}, {"deq", "items"}, {"str", "text"}}) {
+         const auto closed =
+            R"("additionalProperties":false,"required":["t",")" + key + R"("],"title":")" + id + R"("})";
+         expect(schema->find(closed) != std::string::npos) << id << " branch: " << *schema;
+      }
+      expect(schema->find(R"("t":{"const":"str"},"text":{)") != std::string::npos) << *schema;
+   };
+};
+
 suite adjacent_schema_tests = [] {
    using namespace tagging_repr;
 

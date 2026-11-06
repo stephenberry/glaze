@@ -833,14 +833,14 @@ namespace glz
                if constexpr (std::is_convertible_v<id_t, sv>) {
                   alt.title = sv{ids[I]}; // integral ids have no name to title the branch with
                }
-               alt.required = std::vector<sv>{tag_v<T>, content_v<T>};
+               alt.required = std::vector<sv>{tag_v<T>, variant_content_key<T>(I)};
                // The reader rejects anything but these two keys under default options.
                alt.additionalProperties = false;
                alt.properties = std::map<sv, schema, std::less<>>();
 
                (*alt.properties)[tag_v<T>].constant = ids[I];
 
-               auto& content = (*alt.properties)[content_v<T>];
+               auto& content = (*alt.properties)[variant_content_key<T>(I)];
                constexpr bool is_complex = glaze_object_t<V> || reflectable<V> || array_t<V> || writable_map_t<V>;
                if constexpr (is_complex) {
                   auto& def = defs[name_v<V>];
