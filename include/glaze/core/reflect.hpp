@@ -478,8 +478,10 @@ namespace glz
       using V = std::remove_cvref_t<T>;
       using tie_type = decltype(to_tie(std::declval<T&>()));
 
-      static constexpr auto keys = member_names<V>;
-      static constexpr auto size = keys.size();
+      // The type is spelled out so that naming reflect<T> or asking for its size does not evaluate the names, which
+      // are an error for some members. Types with their own to and from specializations get here as well.
+      static constexpr size_t size = detail::count_members<V>;
+      static constexpr std::array<sv, size> keys = member_names<V>;
 
       template <size_t I>
       using elem = decltype(get<I>(std::declval<tie_type>()));

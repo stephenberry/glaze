@@ -21,6 +21,49 @@ Types that support pure reflection satisfy the `glz::reflectable<T>` concept. To
 
 - You can still write a full `glz::meta` to customize your serialization, which will override the default reflection entirely.
 
+## Raw arrays
+
+A raw array member is reflected as a single member. In JSON a numeric array such as `int values[3]` becomes an array and a `char name[32]` becomes a string.
+
+```c++
+struct Packet
+{
+   char name[8]{};
+   int values[3]{};
+};
+
+Packet p{"abc", {1, 2, 3}};
+auto out = glz::write_json(p).value();
+// out == R"({"name":"abc","values":[1,2,3]})"
+```
+
+Counting takes more work with a raw array, since every element counts as an initializer, and compile time grows with the length of the array. A struct whose members and array elements add up to 65536 or more fails to compile and needs a `glz::meta` specialization. `std::array` has neither cost nor limit.
+
+Support for reading and writing raw arrays is up to each format. JSON handles all of them, and a format that does not support a member fails to compile.
+
+## Reference members
+
+Without [P2996](p2996-reflection.md), a member name is read from the address of the member, and a reference member has no address of its own. A struct with one therefore fails to compile wherever it needs its keys, for example when written as a JSON object. These alternatives work:
+
+- A `std::reference_wrapper` member is reflected like any other member.
+- [`glz::reflect_array`](#marking-an-entire-type-as-a-positional-array) needs no keys, so a reference member can be used positionally. `glz::to_tie` reaches it as well.
+- A `glz::meta` specialization can provide the member with a lambda:
+
+```c++
+struct View
+{
+   int id{};
+   int& value;
+};
+
+template <>
+struct glz::meta<View>
+{
+   using T = View;
+   static constexpr auto value = glz::object("id", &T::id, "value", [](auto& self) -> auto& { return self.value; });
+};
+```
+
 ## Treating reflected structs as positional arrays
 
 Some JSON use cases employ arrays even though the target type is a struct. Wrap a member with `glz::as_array<&T::member>` to map between the positional representation and your reflected struct.
