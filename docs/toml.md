@@ -407,6 +407,12 @@ if (write_ec) {
 
 Both `glz::read` and `glz::write` return `error_ctx`, so remember to check the result in production code.
 
+## Empty Documents
+
+A TOML document with no keys is valid, and that includes an empty buffer. A struct keeps its current values, as it does for a document holding only comments, so a struct whose members are all empty `std::optional`s reads back the `""` it writes. `glz::generic` and a variant with a map alternative become an empty table, and an empty document read with `error_on_missing_keys` returns `missing_key` if the struct has required keys.
+
+A target that cannot hold a document, such as an `int`, a `std::string` or a `std::vector`, still returns `glz::error_code::no_read_input` for an empty buffer.
+
 ## Duplicate Keys
 
 As TOML v1.0.0 requires, a key may be defined only once. Reading a document that repeats one returns `glz::error_code::syntax_error`, and the first value is kept. This covers a repeated line, a repeated dotted key, the same key under a repeated `[table]` header, a repeated key inside an inline table, and any later line that extends a value already written whole, such as `[a]` after `a = { ... }` or `[[arr]]` after `arr = [ ... ]`:
@@ -415,6 +421,8 @@ As TOML v1.0.0 requires, a key may be defined only once. Reading a document that
 role = "user"
 role = "admin"  # syntax_error
 ```
+
+This is judged against the document, not the destination. A key a map held before the read is overwritten, so a map member with default entries, or a second read into the same object, behaves as it does for JSON. Other keys in the map are left as they are.
 
 ## File Helpers and Buffers
 
@@ -756,6 +764,10 @@ When reading into a variant or generic type, Glaze uses these rules to determine
 For integers in `glz::generic_u64` mode:
 - Numbers starting with `-` are stored as `int64_t`
 - Positive numbers are stored as `uint64_t`
+
+A generic type or a variant with a map alternative also takes a whole TOML document at the root. A document is recognized by a `key = value` line or by a `[table]` or `[[array of tables]]` header, and the tables go into the map alternative, including arrays of tables and their sub-tables. A bare array such as `[1, 2, 3]` still reads as an array.
+
+The text of a one element array can also be a header. `[1]`, `["a"]` and `[[1]]` read as arrays when they are all there is, and as headers when anything follows them, so `[1]` on its own is the array and `[1]` followed by `x = 2` is the table `{"1": {"x": 2}}`. A key that could not be an array element, such as `[server]`, is always a header.
 
 ### Writing Generic Types
 

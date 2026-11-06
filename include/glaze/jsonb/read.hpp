@@ -1051,6 +1051,10 @@ namespace glz
       template <is_variant T>
       consteval bool variant_jsonb_auto_deducible()
       {
+         // Adjacent tagging names the alternative outright, so nothing has to be deduced.
+         if (not content_v<T>.empty()) {
+            return true;
+         }
          constexpr auto N = std::variant_size_v<T>;
          size_t bools = 0, ints = 0, floats = 0, strings = 0, arrays = 0, objects = 0, nulls = 0;
          [&]<size_t... I>(std::index_sequence<I...>) {
@@ -1083,15 +1087,117 @@ namespace glz
       template <auto Opts>
       static void op(auto& value, is_context auto& ctx, auto& it, auto end)
       {
-         // Inside op() rather than at class scope: read_supported is `requires { from<Format, T>{}; }`,
-         // so a class-scope assert turns that feature probe into a hard error instead of `false`.
-         static_assert(content_v<T>.empty(),
-                       "Adjacent variant tagging (glz::meta `content`) is implemented for JSON and "
-                       "BEVE but not yet for JSONB. Reading this variant as JSONB would silently "
-                       "expect the internally tagged shape, so it is rejected here instead.");
          depth_guard g{ctx};
          if (!g) return;
 
+         // Only variants that declare `content` reach for variant_tagging, which also rejects internal
+         // tagging of non-object alternatives. JSONB has written those bare, and still reads them.
+         if constexpr (not content_v<T>.empty()) {
+            static_assert(adjacently_tagged_v<T>);
+            read_adjacent<Opts>(value, ctx, it, end);
+         }
+         else {
+            read_deduced<Opts>(value, ctx, it, end);
+         }
+      }
+
+      // Adjacent tagging: {tag: id, content: value}, with the keys in either order. Nothing is deduced,
+      // so this works for alternatives of any shape, including several that share one. Unlike JSON a
+      // JSONB object is length-prefixed and its values can be stepped over, so one walk finds both
+      // keys, and a rejected object leaves `value` as it was.
+      template <auto Opts>
+      static void read_adjacent(auto& value, is_context auto& ctx, auto& it, auto end)
+      {
+         uint8_t obj_tc{};
+         uint64_t obj_sz{};
+         if (!jsonb::read_header(ctx, it, end, obj_tc, obj_sz)) return;
+         if (obj_tc != jsonb::type::object) [[unlikely]] {
+            ctx.error = error_code::syntax_error;
+            return;
+         }
+         if (static_cast<uint64_t>(end - it) < obj_sz) [[unlikely]] {
+            ctx.error = error_code::unexpected_end;
+            return;
+         }
+         const auto stop = it + obj_sz;
+
+         using id_type = std::decay_t<decltype(ids_v<T>[0])>;
+         std::string scratch;
+         size_t index = std::variant_size_v<T>;
+         bool tag_seen = false;
+         auto content_it = it;
+         bool content_seen = false;
+
+         while (it < stop) {
+            sv key{};
+            if (!jsonb_detail::read_string_key(ctx, it, stop, scratch, key)) return;
+            if (it >= stop) [[unlikely]] {
+               ctx.error = error_code::syntax_error;
+               return;
+            }
+
+            if (!tag_seen && key == tag_v<T>) {
+               size_t id_index{};
+               if constexpr (std::integral<id_type>) {
+                  id_type id{};
+                  parse<JSONB>::op<Opts>(id, ctx, it, stop);
+                  if (bool(ctx.error)) [[unlikely]]
+                     return;
+                  id_index = variant_id_to_index<T>::op(id);
+               }
+               else {
+                  sv id{};
+                  if (!jsonb_detail::read_string_key(ctx, it, stop, scratch, id)) return;
+                  id_index = variant_id_to_index<T>::op(id.data(), id.data() + id.size(), id.size());
+               }
+               index = variant_index_from_id<T>(id_index);
+               tag_seen = true;
+               continue;
+            }
+            if (!content_seen && key == content_v<T>) {
+               content_it = it;
+               content_seen = true;
+            }
+            else if constexpr (Opts.error_on_unknown_keys) {
+               // Only the two declared keys belong in an adjacently tagged object, and each only
+               // once. Anything else is the caller reading data this variant did not describe.
+               ctx.error = error_code::unknown_key;
+               return;
+            }
+            skip_value<JSONB>::op<Opts>(ctx, it, stop);
+            if (bool(ctx.error)) [[unlikely]]
+               return;
+         }
+
+         if (!tag_seen) [[unlikely]] {
+            ctx.error = error_code::missing_key;
+            ctx.custom_error_message = variant_ids_string_v<T>;
+            return;
+         }
+         if (index >= std::variant_size_v<T>) [[unlikely]] {
+            ctx.error = error_code::no_matching_variant_type;
+            ctx.custom_error_message = variant_ids_string_v<T>;
+            return;
+         }
+         if (!content_seen) [[unlikely]] {
+            ctx.error = error_code::missing_key;
+            ctx.custom_error_message = content_v<T>;
+            return;
+         }
+
+         if (value.index() != index) {
+            emplace_runtime_variant(value, index);
+         }
+         it = content_it;
+         std::visit([&](auto& v) { parse<JSONB>::op<Opts>(v, ctx, it, stop); }, value);
+         if (bool(ctx.error)) [[unlikely]]
+            return;
+         it = stop; // the content entry need not be the last one
+      }
+
+      template <auto Opts>
+      static void read_deduced(auto& value, is_context auto& ctx, auto& it, auto end)
+      {
          if (it >= end) [[unlikely]] {
             ctx.error = error_code::unexpected_end;
             return;
