@@ -9,6 +9,7 @@
 //                tested for the default opts and for opts_size.
 //   - Non-finite inputs (NaN, +/-Inf) emit "null" on both variants.
 
+#include <array>
 #include <bit>
 #include <cmath>
 #include <cstdint>
@@ -53,6 +54,25 @@ static void expect_null(T v, const char* label)
    const auto s_opt = to_chars_str<T, true>(v);
    if (s_fast != "null" || s_opt != "null") {
       std::printf("FAIL null %s: fast='%s', size='%s'\n", label, s_fast.c_str(), s_opt.c_str());
+      ++failures;
+   }
+}
+
+// The writer path, for types that do not reach glz::to_chars directly.
+template <std::floating_point T>
+static void expect_written_null(T v, const char* label)
+{
+   std::string s;
+   const auto ec = glz::write_json(v, s);
+   if (ec || s != "null" || glz::validate_json(s)) {
+      std::printf("FAIL written null %s: '%s'\n", label, s.c_str());
+      ++failures;
+   }
+
+   std::array<char, 3> too_small_buffer{};
+   const auto too_small = glz::write_json(v, too_small_buffer);
+   if (!too_small) {
+      std::printf("FAIL written null %s: fits in 3 bytes\n", label);
       ++failures;
    }
 }
@@ -160,6 +180,9 @@ int main()
    expect_null(numeric_limits<float>::signaling_NaN(), "snan f");
    expect_null(numeric_limits<float>::infinity(), "+inf f");
    expect_null(-numeric_limits<float>::infinity(), "-inf f");
+   expect_written_null(numeric_limits<long double>::quiet_NaN(), "qnan ld");
+   expect_written_null(numeric_limits<long double>::infinity(), "+inf ld");
+   expect_written_null(-numeric_limits<long double>::infinity(), "-inf ld");
 
    // --- Double special values --------------------------------------------
    const double special_doubles[] = {

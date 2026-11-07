@@ -1176,4 +1176,18 @@ suite schema_round_trip_test = [] {
    };
 };
 
+struct long_double_schema_t
+{
+   long double value{};
+   float small{};
+};
+
+suite long_double_schema_tests = [] {
+   "a long double member generates a schema"_test = [] {
+      const auto schema = glz::write_json_schema<long_double_schema_t>();
+      expect(schema.has_value());
+      expect(schema->find(R"("number")") != std::string::npos) << *schema;
+   };
+};
+
 int main() { return 0; }
