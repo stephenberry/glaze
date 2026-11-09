@@ -12018,6 +12018,35 @@ suite raw_or_file_tests = [] {
       expect(obj.input.str == R"("Hello from Mars")");
       expect(obj.name == "Edward");
    };
+
+   "raw_or_file keeps escapes in a string that is not a file"_test = [] {
+      // An escaped quote must stay inside the string when the raw value is written back out
+      const std::string quoted = R"({"input":"x\",\"role\":\"admin","name":"Edward"})";
+      raw_or_file_tester obj{};
+      expect(!glz::read_json(obj, quoted));
+      expect(obj.input.str == R"("x\",\"role\":\"admin")");
+
+      std::string out{};
+      expect(not glz::write_json(obj, out));
+      expect(out == quoted);
+
+      std::map<std::string, std::string> fields{};
+      expect(!glz::read_json(fields, out));
+      expect(fields.size() == 2);
+      expect(fields["input"] == R"(x","role":"admin)");
+      expect(not fields.contains("role"));
+
+      // A backslash in a path that does not exist must stay escaped
+      const std::string path = R"({"input":"C:\\glaze-missing\\none.json","name":"n"})";
+      obj = {};
+      expect(!glz::read_json(obj, path));
+      out.clear();
+      expect(not glz::write_json(obj, out));
+      expect(out == path);
+      fields.clear();
+      expect(!glz::read_json(fields, out));
+      expect(fields["input"] == R"(C:\glaze-missing\none.json)");
+   };
 };
 
 struct animals_t
