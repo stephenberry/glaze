@@ -7,6 +7,7 @@
 #include "glaze/beve/key_traits.hpp"
 #include "glaze/beve/skip.hpp"
 #include "glaze/core/chrono.hpp"
+#include "glaze/core/filesystem_path.hpp"
 #include "glaze/core/opts.hpp"
 #include "glaze/core/read.hpp"
 #include "glaze/core/reflect.hpp"
@@ -3344,7 +3345,9 @@ namespace glz
          if (bool(ctx.error)) [[unlikely]] {
             return;
          }
-         value = buffer;
+         if (!assign_utf8_path(value, buffer)) [[unlikely]] {
+            ctx.error = error_code::invalid_utf8;
+         }
       }
    };
 

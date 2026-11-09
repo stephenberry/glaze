@@ -10,6 +10,7 @@
 #include <complex>
 #include <deque>
 #include <expected>
+#include <filesystem>
 #include <forward_list>
 #include <initializer_list>
 #include <iostream>
@@ -12936,6 +12937,47 @@ suite filesystem_tests = [] {
 
       expect(glz::write_json(p) == R"("C:/123")");
    };
+
+   "non-ASCII path writes UTF-8"_test = [] {
+      const auto latin1 = glz::write_json(std::filesystem::path{u8"C:/Z\u00FCrich.txt"});
+      expect(latin1.has_value());
+      expect(*latin1 == std::string{"\"C:/Z\xC3\xBCrich.txt\""}) << *latin1;
+
+      // U+0105 has no code page 1252 byte, so the writer must not be consulting the ANSI code page
+      const auto not_in_code_page = glz::write_json(std::filesystem::path{u8"C:/\u0105.txt"});
+      expect(not_in_code_page.has_value());
+      expect(*not_in_code_page == std::string{"\"C:/\xC4\x85.txt\""}) << *not_in_code_page;
+
+      const auto supplementary = glz::write_json(std::filesystem::path{u8"C:/\U0001F600.txt"});
+      expect(supplementary.has_value());
+      expect(*supplementary == std::string{"\"C:/\xF0\x9F\x98\x80.txt\""}) << *supplementary;
+   };
+
+   "non-ASCII path reads UTF-8"_test = [] {
+      std::filesystem::path latin1{};
+      expect(!glz::read_json(latin1, "\"C:/Z\xC3\xBCrich.txt\""));
+      expect(latin1 == std::filesystem::path{u8"C:/Z\u00FCrich.txt"});
+
+      std::filesystem::path supplementary{};
+      expect(!glz::read_json(supplementary, "\"C:/\xF0\x9F\x98\x80.txt\""));
+      expect(supplementary == std::filesystem::path{u8"C:/\U0001F600.txt"});
+   };
+
+#ifdef _WIN32
+   "unpaired surrogates write invalid_utf8"_test = [] {
+      const auto write_path = [](wchar_t surrogate) {
+         return glz::write_json(std::filesystem::path{std::wstring{L"C:/bad_"} + surrogate});
+      };
+
+      const auto high = write_path(wchar_t(0xD800));
+      expect(!high.has_value());
+      expect(high.error().ec == glz::error_code::invalid_utf8);
+
+      const auto low = write_path(wchar_t(0xDC00));
+      expect(!low.has_value());
+      expect(low.error().ec == glz::error_code::invalid_utf8);
+   };
+#endif
 
    "path_test_struct"_test = [] {
       path_test_struct obj{};

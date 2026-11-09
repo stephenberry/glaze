@@ -5,6 +5,7 @@
 
 #include "glaze/beve/header.hpp"
 #include "glaze/beve/key_traits.hpp"
+#include "glaze/core/filesystem_path.hpp"
 #include "glaze/core/opts.hpp"
 #include "glaze/core/reflect.hpp"
 #include "glaze/util/expected.hpp"
@@ -1008,7 +1009,17 @@ namespace glz
       template <auto Opts>
       [[nodiscard]] static size_t op(auto&& value, size_t offset = 0)
       {
-         return calculate_size<BEVE, decltype(value.string())>::template op<Opts>(value.string(), offset);
+         if constexpr (wide_native_path<T>) {
+            // native() is UTF-16 on Windows; string() would go through the ANSI code page
+            std::string utf8{};
+            if (!utf16_to_utf8(value.native(), utf8)) {
+               return 0; // not representable as UTF-8, the writer reports invalid_utf8
+            }
+            return calculate_size<BEVE, std::string>::template op<Opts>(utf8, offset);
+         }
+         else {
+            return calculate_size<BEVE, decltype(value.string())>::template op<Opts>(value.string(), offset);
+         }
       }
    };
 

@@ -8,6 +8,7 @@
 #include <complex>
 #include <deque>
 #include <expected>
+#include <filesystem>
 #include <list>
 #include <map>
 #include <numbers>
@@ -3177,6 +3178,45 @@ suite filesystem_tests = [] {
       expect(!glz::read_beve(obj, buffer));
       expect(obj.p == "./my_path");
    };
+
+   "non-ASCII path round-trips as UTF-8"_test = [] {
+      const std::filesystem::path latin1{u8"C:/Z\u00FCrich.txt"};
+      const auto latin1_buffer = glz::write_beve(latin1).value_or("error");
+      expect(latin1_buffer.find("\xC3\xBC") != std::string::npos);
+
+      std::filesystem::path latin1_out{};
+      expect(!glz::read_beve(latin1_out, latin1_buffer));
+      expect(latin1_out == latin1);
+
+      const std::filesystem::path supplementary{u8"C:/\U0001F600.txt"};
+      const auto supplementary_buffer = glz::write_beve(supplementary).value_or("error");
+
+      std::filesystem::path supplementary_out{};
+      expect(!glz::read_beve(supplementary_out, supplementary_buffer));
+      expect(supplementary_out == supplementary);
+   };
+
+#ifdef _WIN32
+   "invalid UTF-8 paths report invalid_utf8"_test = [] {
+      const auto make_unpaired = [](wchar_t surrogate) {
+         return std::filesystem::path{std::wstring{L"C:/bad_"} + surrogate};
+      };
+
+      const auto high = glz::write_beve(make_unpaired(wchar_t(0xD800)));
+      expect(!high.has_value());
+      expect(high.error().ec == glz::error_code::invalid_utf8);
+
+      const auto low = glz::write_beve(make_unpaired(wchar_t(0xDC00)));
+      expect(!low.has_value());
+      expect(low.error().ec == glz::error_code::invalid_utf8);
+
+      // the BEVE reader takes the string payload straight from the wire, so the path assignment is
+      // the only thing standing between malformed input and a path built from it
+      const auto malformed = glz::write_beve(std::string{"C:/\xFF.txt"}).value_or("error");
+      std::filesystem::path out{};
+      expect(glz::read_beve(out, malformed) == glz::error_code::invalid_utf8);
+   };
+#endif
 };
 
 struct struct_c_arrays
