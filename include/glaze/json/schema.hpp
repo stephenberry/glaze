@@ -493,6 +493,12 @@ namespace glz
          }
       };
 
+      // A double's full range excludes no value a double can hold, so a floating-point type states
+      // its range only when that range is narrower than a double's.
+      template <class V>
+      constexpr bool schema_writes_float_bounds =
+         std::numeric_limits<V>::max_exponent < std::numeric_limits<double>::max_exponent;
+
       template <num_t T>
       struct to_json_schema<T>
       {
@@ -507,9 +513,7 @@ namespace glz
             }
             else {
                s.type = sv{"number"};
-               // A range as wide as a double's bounds no number a JSON reader holds, so only a
-               // narrower type's range is written.
-               if constexpr (std::numeric_limits<V>::max_exponent < std::numeric_limits<double>::max_exponent) {
+               if constexpr (schema_writes_float_bounds<V>) {
                   s.minimum = std::numeric_limits<V>::lowest();
                   s.maximum = (std::numeric_limits<V>::max)();
                }
@@ -638,7 +642,7 @@ namespace glz
          }
          else if constexpr (std::floating_point<V>) {
             s->type = sv{"number"};
-            if constexpr (std::numeric_limits<V>::max_exponent < std::numeric_limits<double>::max_exponent) {
+            if constexpr (schema_writes_float_bounds<V>) {
                s->minimum = std::numeric_limits<V>::lowest();
                s->maximum = (std::numeric_limits<V>::max)();
             }
