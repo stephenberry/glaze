@@ -513,8 +513,10 @@ namespace glz
          }
       };
 
+      // A filesystem path is written as its text, so its schema is a string, though it is also a
+      // range of paths.
       template <class T>
-         requires str_t<T> || char_t<T>
+         requires str_t<T> || char_t<T> || filesystem_path<T>
       struct to_json_schema<T>
       {
          template <auto Opts>
@@ -664,6 +666,7 @@ namespace glz
       }
 
       template <array_t T>
+         requires(!filesystem_path<T>)
       struct to_json_schema<T>
       {
          template <auto Opts>
