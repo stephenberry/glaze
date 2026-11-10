@@ -391,7 +391,10 @@ suite schema_tests = [] {
    "a double's whole range is no bound, and a float's narrower range is one"_test = [] {
       expect(glz::write_json_schema<double>().value_or("error") == R"({"type":"number","title":"double"})");
       // A long double's range is at least a double's, so it states no bounds either.
-      expect(glz::write_json_schema<long double>().value_or("error") == R"({"type":"number","title":"long double"})");
+      // The title is the compiler's spelling of the type, which differs between compilers.
+      const auto long_double_schema = glz::write_json_schema<long double>().value_or("error");
+      expect(long_double_schema == R"({"type":"number","title":")" + std::string(glz::name_v<long double>) + R"("})")
+         << long_double_schema;
       expect(glz::write_json_schema<float>().value_or("error") ==
              R"({"type":"number","title":"float","minimum":-3.4028234663852886E38,"maximum":3.4028234663852886E38})");
    };
