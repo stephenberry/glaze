@@ -507,8 +507,12 @@ namespace glz
             }
             else {
                s.type = sv{"number"};
-               s.minimum = std::numeric_limits<V>::lowest();
-               s.maximum = (std::numeric_limits<V>::max)();
+               // A range as wide as a double's bounds no number a JSON reader holds, so only a
+               // narrower type's range is written.
+               if constexpr (std::numeric_limits<V>::max_exponent < std::numeric_limits<double>::max_exponent) {
+                  s.minimum = std::numeric_limits<V>::lowest();
+                  s.maximum = (std::numeric_limits<V>::max)();
+               }
             }
          }
       };
@@ -634,8 +638,10 @@ namespace glz
          }
          else if constexpr (std::floating_point<V>) {
             s->type = sv{"number"};
-            s->minimum = std::numeric_limits<V>::lowest();
-            s->maximum = (std::numeric_limits<V>::max)();
+            if constexpr (std::numeric_limits<V>::max_exponent < std::numeric_limits<double>::max_exponent) {
+               s->minimum = std::numeric_limits<V>::lowest();
+               s->maximum = (std::numeric_limits<V>::max)();
+            }
          }
          return s;
       }

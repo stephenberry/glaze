@@ -386,7 +386,12 @@ suite schema_tests = [] {
       };
       test(std::int64_t{});
       test(std::uint8_t{});
-      // double todo parse_number_failure when reading "minimum":-1.7976931348623157E308
+   };
+
+   "a double's whole range is no bound, and a float's narrower range is one"_test = [] {
+      expect(glz::write_json_schema<double>().value_or("error") == R"({"type":"number","title":"double"})");
+      expect(glz::write_json_schema<float>().value_or("error") ==
+             R"({"type":"number","title":"float","minimum":-3.4028234663852886E38,"maximum":3.4028234663852886E38})");
    };
 
    "always nullable type is constant null"_test = [] {
@@ -645,7 +650,7 @@ suite value_type_variant_schema = [] {
       auto schema = glz::write_json_schema<std::vector<double>>().value();
       expect(
          schema ==
-         R"({"type":"array","items":{"$ref":"#/$defs/double"},"$defs":{"double":{"type":"number","minimum":-1.7976931348623157E308,"maximum":1.7976931348623157E308}},"title":"std::vector<double>"})")
+         R"({"type":"array","items":{"$ref":"#/$defs/double"},"$defs":{"double":{"type":"number"}},"title":"std::vector<double>"})")
          << schema;
    };
 
