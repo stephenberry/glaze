@@ -444,6 +444,16 @@ suite schema_tests = [] {
       expect(obj.maxItems.value() == 42);
    };
 
+   "a 64-bit integer names the format that keeps it exact, and a narrower one names none"_test = [] {
+      expect(
+         glz::write_json_schema<std::int64_t>().value_or("error") ==
+         R"({"type":"integer","title":"int64_t","format":"int64","minimum":-9223372036854775808,"maximum":9223372036854775807})");
+      expect(glz::write_json_schema<std::uint64_t>().value_or("error") ==
+             R"({"type":"integer","title":"uint64_t","format":"uint64","minimum":0,"maximum":18446744073709551615})");
+      expect(glz::write_json_schema<std::int32_t>().value_or("error") ==
+             R"({"type":"integer","title":"int32_t","minimum":-2147483648,"maximum":2147483647})");
+   };
+
    "required_key meta is correctly used"_test = [] {
       std::string schema_str = glz::write_json_schema<required_meta>().value_or("error");
       expect(

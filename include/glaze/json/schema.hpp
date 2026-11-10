@@ -237,7 +237,11 @@ namespace glz
          uri_template, //
          json_pointer, //
          relative_json_pointer, //
-         regex
+         regex, //
+         // OpenAPI's formats for an integer a double cannot hold exactly, which a generated client
+         // reads as a 64-bit or big integer rather than a double
+         int64, //
+         uint64
       };
    }
 }
@@ -248,10 +252,10 @@ struct glz::meta<glz::detail::defined_formats>
    static constexpr std::string_view name = "defined_formats";
    using enum glz::detail::defined_formats;
    static constexpr std::array keys{
-      "date-time", "date",          "time", "duration",     "email",        "idn-email",
-      "hostname",  "idn-hostname",  "ipv4", "ipv6",         "uri",          "uri-reference",
-      "iri",       "iri-reference", "uuid", "uri-template", "json-pointer", "relative-json-pointer",
-      "regex"};
+      "date-time", "date",          "time",  "duration",     "email",        "idn-email",
+      "hostname",  "idn-hostname",  "ipv4",  "ipv6",         "uri",          "uri-reference",
+      "iri",       "iri-reference", "uuid",  "uri-template", "json-pointer", "relative-json-pointer",
+      "regex",     "int64",         "uint64"};
 #if defined(__clang__)
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wmissing-braces"
@@ -274,7 +278,9 @@ struct glz::meta<glz::detail::defined_formats>
                                      uri_template, //
                                      json_pointer, //
                                      relative_json_pointer, //
-                                     regex};
+                                     regex, //
+                                     int64, //
+                                     uint64};
 #if defined(__clang__)
 #pragma clang diagnostic pop
 #endif
@@ -504,6 +510,9 @@ namespace glz
                s.type = sv{"integer"};
                s.minimum = static_cast<std::int64_t>(std::numeric_limits<V>::lowest());
                s.maximum = static_cast<std::uint64_t>((std::numeric_limits<V>::max)());
+               if constexpr (sizeof(V) == 8) {
+                  s.format = std::signed_integral<V> ? defined_formats::int64 : defined_formats::uint64;
+               }
             }
             else {
                s.type = sv{"number"};
@@ -631,6 +640,9 @@ namespace glz
             s->type = sv{"integer"};
             s->minimum = static_cast<std::int64_t>(std::numeric_limits<V>::lowest());
             s->maximum = static_cast<std::uint64_t>((std::numeric_limits<V>::max)());
+            if constexpr (sizeof(V) == 8) {
+               s->format = std::signed_integral<V> ? defined_formats::int64 : defined_formats::uint64;
+            }
          }
          else if constexpr (std::floating_point<V>) {
             s->type = sv{"number"};
