@@ -1371,6 +1371,11 @@ namespace glz::simple_float
       // Use 128-bit arithmetic for correct rounding
       const T magnitude = detail::decimal_to_binary<T>(dec);
       value = dec.negative ? -magnitude : magnitude;
+      // A nonzero mantissa reached zero or infinity only by leaving the range of T. As with fast_float, the
+      // saturated value is still stored.
+      if (magnitude == T(0) || magnitude == std::numeric_limits<T>::infinity()) [[unlikely]] {
+         return {end_ptr, std::errc::result_out_of_range};
+      }
       return {end_ptr, std::errc{}};
    }
 
