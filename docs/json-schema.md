@@ -55,6 +55,19 @@ struct local_schema_t
 };
 ```
 
+## Keeping Every Definition
+
+`write_json_schema` writes a definition its schema uses only once in the place that uses it, and keeps a definition used more than once in `$defs`. A caller that places several types' schemas in one document, such as an OpenAPI document's `components/schemas`, needs each type to stay a definition it can name. The inheritable option `keep_single_use_definitions` keeps every definition in `$defs`, referred to by `$ref`:
+
+```c++
+struct schema_opts : glz::opts
+{
+   bool keep_single_use_definitions = true;
+};
+
+auto schema = glz::write_json_schema<my_struct, schema_opts{}>().value();
+```
+
 ## Required Fields
 
 Glaze can automatically mark fields as required in the generated JSON schema based on their nullability and compile options.

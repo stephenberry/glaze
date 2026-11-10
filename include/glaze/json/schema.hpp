@@ -1386,16 +1386,23 @@ namespace glz
       detail::to_json_schema<std::decay_t<T>>::template op<Opts>(s, *s.defs);
       s.title = name_v<T>;
 
-      // Inline single-use $defs entries at their reference sites
-      std::map<std::string_view, size_t> ref_counts;
-      detail::count_schema_refs(s, ref_counts);
-      // First inline refs within defs entries (for chained single-use types)
-      for (auto& [_, def] : *s.defs) {
-         detail::inline_single_use_refs(def, *s.defs, ref_counts);
+      if constexpr (check_keep_single_use_definitions(Opts)) {
+         if (s.defs->empty()) {
+            s.defs.reset();
+         }
       }
-      // Then inline refs in the main schema tree
-      detail::inline_single_use_refs(s, *s.defs, ref_counts);
-      detail::prune_inlined_defs(s, ref_counts);
+      else {
+         // Inline single-use $defs entries at their reference sites
+         std::map<std::string_view, size_t> ref_counts;
+         detail::count_schema_refs(s, ref_counts);
+         // First inline refs within defs entries (for chained single-use types)
+         for (auto& [_, def] : *s.defs) {
+            detail::inline_single_use_refs(def, *s.defs, ref_counts);
+         }
+         // Then inline refs in the main schema tree
+         detail::inline_single_use_refs(s, *s.defs, ref_counts);
+         detail::prune_inlined_defs(s, ref_counts);
+      }
 
       // Making this static constexpr options to fix MSVC bug
       static constexpr opts options = opts_write_type_info_off<decltype(Opts)>{{Opts}};

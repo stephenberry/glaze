@@ -321,6 +321,21 @@ struct Person
    Address address{};
 };
 
+struct single_use_inner
+{
+   int value{};
+};
+
+struct single_use_outer
+{
+   single_use_inner inner{};
+};
+
+struct keep_definitions_opts : glz::opts
+{
+   bool keep_single_use_definitions = true;
+};
+
 #if 0
 struct invalid_name
 {
@@ -452,6 +467,20 @@ suite schema_tests = [] {
       expect[(!obj.minItems.has_value())];
       expect[(obj.maxItems.has_value())];
       expect(obj.maxItems.value() == 42);
+   };
+
+   "keep_single_use_definitions refers to a type used once by its definition"_test = [] {
+      expect(
+         glz::write_json_schema<single_use_outer>().value_or("error") ==
+         R"({"type":"object","properties":{"inner":{"type":"object","properties":{"value":{"$ref":"#/$defs/int32_t"}},"additionalProperties":false}},"additionalProperties":false,"$defs":{"int32_t":{"type":"integer","minimum":-2147483648,"maximum":2147483647}},"title":"single_use_outer"})");
+      expect(
+         glz::write_json_schema<single_use_outer, keep_definitions_opts{}>().value_or("error") ==
+         R"({"type":"object","properties":{"inner":{"$ref":"#/$defs/single_use_inner"}},"additionalProperties":false,"$defs":{"int32_t":{"type":"integer","minimum":-2147483648,"maximum":2147483647},"single_use_inner":{"type":"object","properties":{"value":{"$ref":"#/$defs/int32_t"}},"additionalProperties":false}},"title":"single_use_outer"})");
+   };
+
+   "keep_single_use_definitions writes no $defs for a schema that has none"_test = [] {
+      expect(glz::write_json_schema<std::vector<bool>, keep_definitions_opts{}>().value_or("error") ==
+             R"({"type":"array","items":{"type":"boolean"},"title":"std::vector<bool>"})");
    };
 
    "required_key meta is correctly used"_test = [] {
