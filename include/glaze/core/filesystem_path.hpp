@@ -13,7 +13,7 @@
 #include "glaze/concepts/container_concepts.hpp"
 #include "glaze/util/parse.hpp"
 
-namespace glz
+namespace glz::detail
 {
    // True when the path stores its native name as UTF-16, which is the case on Windows.
    template <class T>

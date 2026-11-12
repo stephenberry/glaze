@@ -37,10 +37,10 @@ namespace glz
       template <auto Opts, class... Args>
       static void op(auto&& value, is_context auto&& ctx, Args&&... args)
       {
-         if constexpr (wide_native_path<T>) {
+         if constexpr (detail::wide_native_path<T>) {
             // native() is UTF-16 on Windows; string() would go through the ANSI code page
             std::string utf8{};
-            if (!utf16_to_utf8(value.native(), utf8)) {
+            if (!detail::utf16_to_utf8(value.native(), utf8)) {
                ctx.error = error_code::invalid_utf8;
                return;
             }

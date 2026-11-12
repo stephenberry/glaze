@@ -4944,7 +4944,7 @@ namespace glz
          if (parse_failed(ctx.error)) [[unlikely]] {
             return;
          }
-         if (!assign_utf8_path(value, ctx.scratch)) [[unlikely]] {
+         if (!detail::assign_utf8_path(value, ctx.scratch)) [[unlikely]] {
             ctx.error = error_code::invalid_utf8;
          }
       }

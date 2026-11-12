@@ -3345,7 +3345,7 @@ namespace glz
          if (bool(ctx.error)) [[unlikely]] {
             return;
          }
-         if (!assign_utf8_path(value, buffer)) [[unlikely]] {
+         if (!detail::assign_utf8_path(value, buffer)) [[unlikely]] {
             ctx.error = error_code::invalid_utf8;
          }
       }
