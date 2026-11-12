@@ -857,7 +857,17 @@ void check_halfway_neighbors(float_bits_t<T> lower_bits, int& failures)
       for (const bool negative : {false, true}) {
          const std::string signed_input = negative ? '-' + input : input;
          const T expected_value = negative ? -expected : expected;
-         const T parsed = read_opts_size<T>(signed_input);
+         // A result that rounds to zero or infinity has left the range of T. Reading it is an error, and the
+         // rounding is checked on the saturated value from_chars stores.
+         T parsed{};
+         if (expected_value == T(0) || std::isinf(expected_value)) {
+            const char* const first = signed_input.data();
+            const auto [ptr, ec] = glz::simple_float::from_chars<false>(first, first + signed_input.size(), parsed);
+            expect(ec == std::errc::result_out_of_range) << signed_input;
+         }
+         else {
+            parsed = read_opts_size<T>(signed_input);
+         }
          if (std::bit_cast<bits_type>(parsed) != std::bit_cast<bits_type>(expected_value)) {
             if (failures == 0) {
                std::cerr << "Halfway neighbor failure for input: " << signed_input.substr(0, 80) << std::endl;
@@ -1330,6 +1340,37 @@ suite invalid_input_tests = [] {
       expect(should_accept("0.123456789", "many decimal digits"));
       expect(should_accept("1.7976931348623157e308", "near max double"));
       expect(should_accept("2.2250738585072014e-308", "near min normal double"));
+   };
+};
+
+suite out_of_range_tests = [] {
+   "values outside the range of the type report result_out_of_range"_test = [] {
+      const auto out_of_range = []<class T>(const std::string_view input, const T expected) {
+         T value{};
+         const auto [ptr, ec] = glz::simple_float::from_chars<false>(input.data(), input.data() + input.size(), value);
+         return ec == std::errc::result_out_of_range && ptr == input.data() + input.size() && value == expected;
+      };
+      const auto inf = std::numeric_limits<double>::infinity();
+      expect(out_of_range("1e309", inf));
+      expect(out_of_range("1e999999", inf));
+      expect(out_of_range("-1e999999", -inf));
+      expect(out_of_range("1e-999999", 0.0));
+      expect(out_of_range("1e-324", 0.0));
+      expect(out_of_range("-1e-324", -0.0));
+      expect(out_of_range("1e39", std::numeric_limits<float>::infinity()));
+      expect(out_of_range("1e-60", 0.0f));
+   };
+
+   "values at the edges of the range and zero still parse"_test = [] {
+      const auto parses = []<class T>(const std::string_view input, const T expected) {
+         T value{};
+         const auto [ptr, ec] = glz::simple_float::from_chars<false>(input.data(), input.data() + input.size(), value);
+         return ec == std::errc{} && value == expected;
+      };
+      expect(parses("1.7976931348623157e308", (std::numeric_limits<double>::max)()));
+      expect(parses("5e-324", std::numeric_limits<double>::denorm_min()));
+      expect(parses("0e999999", 0.0));
+      expect(parses("3.4028235e38", (std::numeric_limits<float>::max)()));
    };
 };
 

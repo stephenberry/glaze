@@ -386,7 +386,17 @@ suite schema_tests = [] {
       };
       test(std::int64_t{});
       test(std::uint8_t{});
-      // double todo parse_number_failure when reading "minimum":-1.7976931348623157E308
+   };
+
+   "a double's whole range is no bound, and a float's narrower range is one"_test = [] {
+      expect(glz::write_json_schema<double>().value_or("error") == R"({"type":"number","title":"double"})");
+      // A long double's range is at least a double's, so it states no bounds either.
+      // The title is the compiler's spelling of the type, which differs between compilers.
+      const auto long_double_schema = glz::write_json_schema<long double>().value_or("error");
+      expect(long_double_schema == R"({"type":"number","title":")" + std::string(glz::name_v<long double>) + R"("})")
+         << long_double_schema;
+      expect(glz::write_json_schema<float>().value_or("error") ==
+             R"({"type":"number","title":"float","minimum":-3.4028234663852886E38,"maximum":3.4028234663852886E38})");
    };
 
    "always nullable type is constant null"_test = [] {
@@ -442,6 +452,16 @@ suite schema_tests = [] {
       expect[(!obj.minItems.has_value())];
       expect[(obj.maxItems.has_value())];
       expect(obj.maxItems.value() == 42);
+   };
+
+   "a 64-bit integer names the format that keeps it exact, and a narrower one names none"_test = [] {
+      expect(
+         glz::write_json_schema<std::int64_t>().value_or("error") ==
+         R"({"type":"integer","title":"int64_t","format":"int64","minimum":-9223372036854775808,"maximum":9223372036854775807})");
+      expect(glz::write_json_schema<std::uint64_t>().value_or("error") ==
+             R"({"type":"integer","title":"uint64_t","format":"uint64","minimum":0,"maximum":18446744073709551615})");
+      expect(glz::write_json_schema<std::int32_t>().value_or("error") ==
+             R"({"type":"integer","title":"int32_t","minimum":-2147483648,"maximum":2147483647})");
    };
 
    "required_key meta is correctly used"_test = [] {
@@ -645,7 +665,7 @@ suite value_type_variant_schema = [] {
       auto schema = glz::write_json_schema<std::vector<double>>().value();
       expect(
          schema ==
-         R"({"type":"array","items":{"$ref":"#/$defs/double"},"$defs":{"double":{"type":"number","minimum":-1.7976931348623157E308,"maximum":1.7976931348623157E308}},"title":"std::vector<double>"})")
+         R"({"type":"array","items":{"$ref":"#/$defs/double"},"$defs":{"double":{"type":"number"}},"title":"std::vector<double>"})")
          << schema;
    };
 
