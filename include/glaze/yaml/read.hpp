@@ -1948,6 +1948,23 @@ namespace glz
       template <class T>
       concept owning_scalar_target = not string_view_t<T> && std::assignable_from<std::decay_t<T>&, std::string&&>;
 
+      // Whether the node at `it` opens a collection rather than a plain scalar: a flow
+      // sequence or mapping, a block sequence entry, or an explicit mapping key. "-" and "?"
+      // are indicators only when whitespace or the end of the input follows, so "-1" and
+      // "?x" remain plain scalars.
+      template <class It, class End>
+      [[nodiscard]] inline bool plain_scalar_starts_collection(It it, End end) noexcept
+      {
+         if (it == end) return false;
+         const char c = *it;
+         if (c == '[' || c == '{') return true;
+         if (c == '-' || c == '?') {
+            ++it;
+            return it == end || whitespace_or_line_end_table[static_cast<uint8_t>(*it)];
+         }
+         return false;
+      }
+
    } // namespace yaml
 
    // String types
@@ -1985,6 +2002,13 @@ namespace glz
                                      ctx.current_indent() > 0 ? (ctx.current_indent() - 1) : ctx.current_indent());
             break;
          case yaml::scalar_style::plain:
+            // A collection where a string is expected is a type mismatch. Reading it as a
+            // plain scalar would store its source text, and for a block sequence only the
+            // first entry, as the value.
+            if (yaml::plain_scalar_starts_collection(it, end)) [[unlikely]] {
+               ctx.error = error_code::syntax_error;
+               return;
+            }
             // In block context with known indent, use multiline parsing to support
             // plain scalars that span multiple lines (folding behavior)
             if constexpr (!yaml::check_flow_context(Opts)) {

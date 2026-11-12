@@ -3999,6 +3999,107 @@ y: 2.0)";
       expect(bool(ec));
    };
 
+   "type_mismatch_flow_collection_to_string"_test = [] {
+      for (const std::string yaml : {"name: [1, 2, 3]", "name: []", "name: {}", "name: {a: 5}"}) {
+         simple_struct obj{};
+         auto ec = glz::read_yaml(obj, yaml);
+         expect(bool(ec)) << yaml;
+      }
+   };
+
+   "type_mismatch_block_sequence_to_string"_test = [] {
+      for (const std::string yaml : {"name:\n  - 1\n  - 2", "name: - 1", "name: -"}) {
+         simple_struct obj{};
+         auto ec = glz::read_yaml(obj, yaml);
+         expect(bool(ec)) << yaml;
+      }
+   };
+
+   "type_mismatch_explicit_key_to_string"_test = [] {
+      simple_struct obj{};
+      std::string yaml = "name: ? a";
+      auto ec = glz::read_yaml(obj, yaml);
+      expect(bool(ec));
+   };
+
+   "type_mismatch_collection_to_top_level_string"_test = [] {
+      for (const std::string yaml : {"[1, 2]", "- a\n- b", "--- [1]"}) {
+         std::string value{};
+         auto ec = glz::read_yaml(value, yaml);
+         expect(bool(ec)) << yaml;
+      }
+   };
+
+   "type_mismatch_collection_to_string_element"_test = [] {
+      for (const std::string yaml : {"- [1, 2]\n- x", "- - 1\n- x", "-\n  - 1"}) {
+         std::vector<std::string> vec{};
+         auto ec = glz::read_yaml(vec, yaml);
+         expect(bool(ec)) << yaml;
+      }
+
+      for (const std::string yaml : {"a: [1]", "a:\n  - 1"}) {
+         std::map<std::string, std::string> m{};
+         auto ec = glz::read_yaml(m, yaml);
+         expect(bool(ec)) << yaml;
+      }
+   };
+
+   // "-" and "?" only introduce a collection when whitespace follows, and a bracket or
+   // brace only at the start of the scalar.
+   "plain_string_resembling_collection"_test = [] {
+      for (const std::string text : {"-1", "-x", "?x", "---", "a[1]", "a{b}", "a - b"}) {
+         simple_struct obj{};
+         const std::string yaml = "name: " + text;
+         auto ec = glz::read_yaml(obj, yaml);
+         expect(!ec) << glz::format_error(ec, yaml);
+         expect(obj.name == text) << yaml;
+      }
+   };
+
+   "quoted_string_resembling_collection"_test = [] {
+      for (const std::string text : {"[1, 2, 3]", "{a: 5}", "- 1", "? a", "-"}) {
+         for (const char quote : {'"', '\''}) {
+            simple_struct obj{};
+            const std::string yaml = "name: " + (quote + text + quote);
+            auto ec = glz::read_yaml(obj, yaml);
+            expect(!ec) << glz::format_error(ec, yaml);
+            expect(obj.name == text) << yaml;
+         }
+      }
+   };
+
+   "string_resembling_collection_roundtrip"_test = [] {
+      for (const std::string text : {"[1, 2, 3]", "{}", "- 1", "-", "? a", "- 1\n- 2"}) {
+         std::vector<std::string> original{text, text};
+         std::string yaml{};
+         expect(not glz::write_yaml(original, yaml));
+
+         std::vector<std::string> parsed{};
+         auto ec = glz::read_yaml(parsed, yaml);
+         expect(!ec) << glz::format_error(ec, yaml);
+         expect(parsed == original) << yaml;
+      }
+   };
+
+   "collection_still_selects_variant_alternative"_test = [] {
+      std::variant<std::string, std::vector<int>> value{};
+
+      std::string yaml = "[1, 2, 3]";
+      auto ec = glz::read_yaml(value, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(std::holds_alternative<std::vector<int>>(value));
+
+      yaml = "- 1\n- 2";
+      ec = glz::read_yaml(value, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(std::holds_alternative<std::vector<int>>(value));
+
+      yaml = "-1";
+      ec = glz::read_yaml(value, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(std::holds_alternative<std::string>(value));
+   };
+
    "unclosed_bracket"_test = [] {
       std::vector<int> vec{};
       std::string yaml = "[1, 2, 3";
