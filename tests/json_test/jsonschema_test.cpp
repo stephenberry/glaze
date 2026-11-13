@@ -498,6 +498,21 @@ suite schema_tests = [] {
       expect(glz::write_json_schema<T, glz::opts{.skip_null_members = false}>().value_or("error") == expected);
    };
 
+   "required keys match what the reader requires"_test = [] {
+      using T = error_on_missing_keys_test;
+      // With skip_null_members = false, error_on_missing_keys requires nullable keys too
+      constexpr glz::opts opts{.skip_null_members = false, .error_on_missing_keys = true};
+      glz::schema obj{};
+      const auto schema = glz::write_json_schema<T, opts>().value_or("error");
+      expect(!glz::read<glz::opts{.error_on_unknown_keys = false}>(obj, schema));
+      expect(obj.required.has_value() && *obj.required == std::vector<std::string_view>{"unimportant", "important"})
+         << schema;
+
+      T value{};
+      expect(glz::read<opts>(value, R"({"important":1})") == glz::error_code::missing_key);
+      expect(!glz::read<opts>(value, R"({"unimportant":null,"important":1})"));
+   };
+
    // Demonstrates using error_on_missing_keys to mark all non-nullable fields as required in JSON schema
    "error_on_missing_keys marks all non-nullable fields as required"_test = [] {
       // Generate schema with all non-nullable fields marked as required

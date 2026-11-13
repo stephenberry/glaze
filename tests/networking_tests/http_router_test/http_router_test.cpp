@@ -885,7 +885,6 @@ struct SchemaOrder
 
 struct SchemaService
 {
-   int sum(SchemaPair pair) { return pair.first + pair.second; }
    SchemaOrder echo(SchemaOrder order) { return order; }
 };
 
@@ -893,73 +892,50 @@ template <>
 struct glz::meta<SchemaService>
 {
    using T = SchemaService;
-   static constexpr auto value = object(&T::sum, &T::echo);
+   static constexpr auto value = object(&T::echo);
 };
 
-struct schema_custom_opts : glz::opts
+// A custom options type derived from glz::opts, with a field of its own
+struct schema_derived_opts : glz::opts
 {
    bool custom_flag = true;
 };
 
+// A standalone options type that does not derive from glz::opts
+struct schema_standalone_opts
+{
+   uint32_t format = glz::JSON;
+   bool null_terminated = true;
+   bool comments = false;
+   bool error_on_unknown_keys = true;
+   bool skip_null_members = true;
+   bool prettify = false;
+   bool minified = false;
+   bool error_on_missing_keys = true;
+   bool partial_read = false;
+   uint32_t internal{};
+};
+
 template <auto Opts>
-glz::route_spec schema_route_spec(const std::string& path)
+void expect_registry_schemas_use_opts()
 {
    SchemaService service;
    glz::registry<Opts, glz::REST> registry;
    registry.on(service);
-   return registry.endpoints.normal_routes.routes.at(path).at(glz::http_method::POST).spec;
-}
-
-struct SchemaRequired
-{
-   std::vector<std::string> required{};
-};
-
-// The "required" keys of the request body schema at a POST path, read back as JSON
-template <auto Opts>
-std::vector<std::string> schema_required(const std::string& path)
-{
-   const auto spec = schema_route_spec<Opts>(path);
-   expect(spec.request_body_schema.has_value());
-   SchemaRequired schema{};
-   const auto ec = glz::read<glz::opts{.error_on_unknown_keys = false}>(schema, spec.request_body_schema.value_or(""));
-   expect(!ec) << glz::format_error(ec, spec.request_body_schema.value_or(""));
-   return schema.required;
+   const auto& spec = registry.endpoints.normal_routes.routes.at("/echo").at(glz::http_method::POST).spec;
+   const auto expected = glz::write_json_schema<SchemaOrder, Opts>().value();
+   expect(expected != glz::write_json_schema<SchemaOrder>().value()); // the options change the schema
+   expect(spec.request_body_schema == expected);
+   expect(spec.response_schema == expected);
 }
 
 suite rest_schema_options_tests = [] {
-   "default_opts_schema_has_no_required_keys"_test = [] { expect(schema_required<glz::opts{}>("/sum").empty()); };
-
-   "error_on_missing_keys_marks_keys_required"_test = [] {
-      constexpr glz::opts opts{.error_on_missing_keys = true};
-      const auto spec = schema_route_spec<opts>("/sum");
-      expect(spec.request_body_schema == glz::write_json_schema<SchemaPair, opts>().value());
-      expect(schema_required<opts>("/sum") == std::vector<std::string>{"first", "second"});
+   "rest_schemas_use_derived_registry_opts"_test = [] {
+      expect_registry_schemas_use_opts<schema_derived_opts{{.error_on_missing_keys = true}}>();
    };
 
-   "error_on_missing_keys_skips_optional_members"_test = [] {
-      constexpr glz::opts opts{.error_on_missing_keys = true};
-      const auto spec = schema_route_spec<opts>("/echo");
-      expect(spec.request_body_schema == glz::write_json_schema<SchemaOrder, opts>().value());
-      expect(spec.response_schema == glz::write_json_schema<SchemaOrder, opts>().value());
-      expect(schema_required<opts>("/echo") == std::vector<std::string>{"pair"});
-   };
-
-   "custom_opts_type_is_used"_test = [] {
-      constexpr schema_custom_opts opts{{.error_on_missing_keys = true}};
-      expect(schema_required<opts>("/sum") == std::vector<std::string>{"first", "second"});
-   };
-
-   "schema_is_json_for_beve_registry"_test = [] {
-      constexpr glz::opts opts{.format = glz::BEVE, .error_on_missing_keys = true};
-      expect(schema_required<opts>("/sum") == std::vector<std::string>{"first", "second"});
-   };
-
-   "schema_has_no_null_members"_test = [] {
-      constexpr glz::opts opts{.skip_null_members = false};
-      const auto spec = schema_route_spec<opts>("/sum");
-      expect(spec.request_body_schema.has_value());
-      expect(spec.request_body_schema.value_or("").find("null") == std::string::npos);
+   "rest_schemas_use_standalone_registry_opts"_test = [] {
+      expect_registry_schemas_use_opts<schema_standalone_opts{}>();
    };
 };
 

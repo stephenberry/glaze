@@ -77,6 +77,8 @@ auto schema = glz::write_json_schema<user_config, glz::opts{.error_on_missing_ke
 
 This will generate a schema with `"required": ["username", "id"]`.
 
+The `"required"` array lists exactly the keys that reading with the same options requires, so with `skip_null_members = false` nullable fields are listed too.
+
 ### Custom Required Field Logic
 
 You can override the default behavior by providing a custom `requires_key` function in your type's `glz::meta` specialization:
