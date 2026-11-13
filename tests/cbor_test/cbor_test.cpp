@@ -5452,6 +5452,35 @@ suite cbor_file_io_tests = [] {
    };
 };
 
+suite cbor_filesystem_path_tests = [] {
+   "non-ASCII paths round-trip as UTF-8"_test = [] {
+      const std::filesystem::path latin1{u8"C:/Z\u00FCrich.txt"};
+      const auto latin1_buffer = glz::write_cbor(latin1).value_or("error");
+      expect(latin1_buffer.find("\xC3\xBC") != std::string::npos);
+
+      std::filesystem::path latin1_out{};
+      expect(!glz::read_cbor(latin1_out, latin1_buffer));
+      expect(latin1_out == latin1);
+
+      const std::filesystem::path supplementary{u8"C:/\U0001F600.txt"};
+      const auto supplementary_buffer = glz::write_cbor(supplementary).value_or("error");
+
+      std::filesystem::path supplementary_out{};
+      expect(!glz::read_cbor(supplementary_out, supplementary_buffer));
+      expect(supplementary_out == supplementary);
+   };
+
+#ifdef _WIN32
+   "invalid UTF-8 paths report invalid_utf8"_test = [] {
+      // the CBOR reader copies the text string payload verbatim, so the path assignment is what
+      // has to reject malformed input
+      const auto malformed = glz::write_cbor(std::string{"C:/\xFF.txt"}).value_or("error");
+      std::filesystem::path out{};
+      expect(glz::read_cbor(out, malformed) == glz::error_code::invalid_utf8);
+   };
+#endif
+};
+
 int main()
 {
    custom_variant_ambiguity_tests();

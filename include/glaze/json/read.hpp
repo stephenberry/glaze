@@ -14,6 +14,7 @@
 #include "glaze/core/chrono.hpp"
 #include "glaze/core/common.hpp"
 #include "glaze/core/custom_meta.hpp"
+#include "glaze/core/filesystem_path.hpp"
 #include "glaze/core/opts.hpp"
 #include "glaze/core/read.hpp"
 #include "glaze/core/reflect.hpp"
@@ -4943,7 +4944,9 @@ namespace glz
          if (parse_failed(ctx.error)) [[unlikely]] {
             return;
          }
-         value = ctx.scratch;
+         if (!detail::assign_utf8_path(value, ctx.scratch)) [[unlikely]] {
+            ctx.error = error_code::invalid_utf8;
+         }
       }
    };
 
