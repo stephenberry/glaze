@@ -248,6 +248,7 @@ namespace glz
          context ctx{};
          auto it = data_;
          auto end = beve_end();
+         seed_speculation_budget(ctx, size_t(end - it)); // as glz::read would; see charge_speculation
          parse<BEVE>::op<Opts>(value, ctx, it, end);
          finalize_read_context(ctx);
          if (bool(ctx.error)) {

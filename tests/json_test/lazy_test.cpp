@@ -2,10 +2,13 @@
 // For the license information refer to glaze.hpp
 
 #include <concepts>
+#include <list>
 #include <utility>
+#include <variant>
 #include <vector>
 
 #include "glaze/json.hpp"
+#include "speculation_guard.hpp"
 #include "ut/ut.hpp"
 
 using namespace ut;
@@ -2503,6 +2506,45 @@ suite lazy_writer_bounds_tests = [] {
       std::string out{};
       expect(not glz::write_json(d->root(), out));
       expect(out == doc) << out;
+   };
+};
+
+// Two array alternatives, so every level of the nest tries both (see json_test's ambiguous nest).
+namespace lazy_speculation
+{
+   struct node;
+   using two_arrays = std::variant<std::vector<node>, std::list<node>>;
+   struct node
+   {
+      two_arrays child{};
+   };
+
+   inline std::string ambiguous_nest(size_t levels)
+   {
+      std::string b;
+      for (size_t i = 0; i < levels; ++i) b += R"([{"child":)";
+      b += "[{]"; // malformed leaf
+      for (size_t i = 0; i < levels; ++i) b += "}]";
+      return b;
+   }
+}
+
+suite lazy_speculation_budget_tests = [] {
+   "read_into seeds the speculation budget like glz::read"_test = [] {
+      // read_into parses on a context of its own; without the budget this nest takes seconds.
+      using namespace lazy_speculation;
+      const auto buffer = ambiguous_nest(24);
+      glz_test::expect_budgeted_like_read(
+         [&] {
+            two_arrays out{};
+            return glz::read_json(out, buffer).ec;
+         },
+         [&] {
+            auto doc = glz::lazy_json(buffer);
+            two_arrays out{};
+            return doc ? doc->root().read_into(out).ec : doc.error().ec;
+         },
+         glz::error_code::expected_quote);
    };
 };
 
