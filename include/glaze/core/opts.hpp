@@ -63,13 +63,13 @@ namespace glz
 
    // NOTE TO USER:
    // glz::opts are the default options for using Glaze
-   // You can create your own options struct with more or less fields as long as your struct has:
-   // - opts_internal internal{};
-   // - uint32_t format
-   // The recommended approach is to inherit:
+   // To add options, create your own options struct that inherits from glz::opts:
    // struct custom_opts : glz::opts {
    //   bool validate_trailing_whitespace = true;
    // };
+   // The built-in formats other than CSV (see opts_csv) read the fields of glz::opts directly, so a custom options
+   // struct must provide all of them. Inheriting does that. A struct that leaves some out compiles only where
+   // nothing reads the missing fields, which depends on the format and the types being read or written.
 
    struct opts
    {
@@ -477,8 +477,8 @@ namespace glz
       }
    }
 
-   // Not every options struct carries this: the docs invite trimmed-down custom ones, and formats
-   // that never enforced required keys never made their users declare it. Absent means off.
+   // Not every options struct carries this: opts_csv does not, and formats that never enforced
+   // required keys never made their users declare it. Absent means off.
    consteval bool check_error_on_missing_keys(auto&& Opts)
    {
       if constexpr (requires { Opts.error_on_missing_keys; }) {
