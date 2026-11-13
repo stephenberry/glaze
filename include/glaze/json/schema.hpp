@@ -1390,6 +1390,19 @@ namespace glz
       bool write_type_info = false;
    };
 
+   namespace detail
+   {
+      // A JSON Schema is always written as JSON, and an unset schema keyword is omitted rather than written as null
+      template <auto Opts>
+      constexpr opts json_schema_write_opts()
+      {
+         opts options = opts_write_type_info_off<decltype(Opts)>{{Opts}};
+         options.format = JSON;
+         options.skip_null_members = true;
+         return options;
+      }
+   }
+
    template <class T, auto Opts = opts{}, class Buffer>
    [[nodiscard]] error_ctx write_json_schema(Buffer&& buffer)
    {
@@ -1410,7 +1423,7 @@ namespace glz
       detail::prune_inlined_defs(s, ref_counts);
 
       // Making this static constexpr options to fix MSVC bug
-      static constexpr opts options = opts_write_type_info_off<decltype(Opts)>{{Opts}};
+      static constexpr opts options = detail::json_schema_write_opts<Opts>();
       return write<options>(std::move(s), std::forward<Buffer>(buffer));
    }
 

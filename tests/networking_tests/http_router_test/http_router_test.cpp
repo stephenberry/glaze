@@ -898,7 +898,7 @@ struct glz::meta<SchemaService>
 
 struct schema_custom_opts : glz::opts
 {
-   bool error_on_missing_keys = true;
+   bool custom_flag = true;
 };
 
 template <auto Opts>
@@ -946,7 +946,8 @@ suite rest_schema_options_tests = [] {
    };
 
    "custom_opts_type_is_used"_test = [] {
-      expect(schema_required<schema_custom_opts{}>("/sum") == std::vector<std::string>{"first", "second"});
+      constexpr schema_custom_opts opts{{.error_on_missing_keys = true}};
+      expect(schema_required<opts>("/sum") == std::vector<std::string>{"first", "second"});
    };
 
    "schema_is_json_for_beve_registry"_test = [] {

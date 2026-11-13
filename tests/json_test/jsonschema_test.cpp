@@ -491,6 +491,13 @@ suite schema_tests = [] {
          << schema_str_nreq;
    };
 
+   "schema is JSON without nulls whatever the format and skip_null_members options"_test = [] {
+      using T = error_on_missing_keys_test;
+      const auto expected = glz::write_json_schema<T>().value_or("error");
+      expect(glz::write_json_schema<T, glz::opts{.format = glz::BEVE}>().value_or("error") == expected);
+      expect(glz::write_json_schema<T, glz::opts{.skip_null_members = false}>().value_or("error") == expected);
+   };
+
    // Demonstrates using error_on_missing_keys to mark all non-nullable fields as required in JSON schema
    "error_on_missing_keys marks all non-nullable fields as required"_test = [] {
       // Generate schema with all non-nullable fields marked as required
