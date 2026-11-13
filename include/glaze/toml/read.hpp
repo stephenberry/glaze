@@ -1102,7 +1102,7 @@ namespace glz
                value = glz::get<0>(reflect<T>::values);
             }
             else {
-               ctx.error = error_code::unexpected_enum;
+               reread_unknown_enum<TOML, Opts, T>(value, ctx, it, start - 1, end);
             }
          }
          else {
@@ -1111,7 +1111,7 @@ namespace glz
             const auto index = decode_hash_with_size<TOML, T, HashInfo, HashInfo.type>::op(start, start + n, n);
 
             if (index >= N) [[unlikely]] {
-               ctx.error = error_code::unexpected_enum;
+               reread_unknown_enum<TOML, Opts, T>(value, ctx, it, start - 1, end);
                return;
             }
 
@@ -1128,6 +1128,15 @@ namespace glz
                   }
                },
                index);
+
+            // Out here because naming `it` and `end` inside the lambda makes GCC capture them for every
+            // enum, even in a discarded branch, which grows the frame on the path that finds a match.
+            if constexpr (has_enum_unknown_reader<T>) {
+               if (ctx.error == error_code::unexpected_enum) [[unlikely]] {
+                  ctx.error = error_code::none;
+                  reread_enum_name<TOML, Opts, T>(value, ctx, it, start - 1, end);
+               }
+            }
          }
       }
    };

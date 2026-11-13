@@ -357,7 +357,7 @@ namespace glz
       if (((end - it) > std::ptrdiff_t(Length)) && comparitor<TargetKey>(it)) [[likely]] {
          it += Length;
          if (*it != '"') [[unlikely]] {
-            ctx.error = error_code::unexpected_enum;
+            reread_unknown_enum<JSON, Opts, T>(value, ctx, it, it - Length - 1, end);
             return;
          }
          value = get<I>(reflect<T>::values);
@@ -371,7 +371,7 @@ namespace glz
          }
       }
       else [[unlikely]] {
-         ctx.error = error_code::unexpected_enum;
+         reread_unknown_enum<JSON, Opts, T>(value, ctx, it, it - 1, end);
          return;
       }
    }
@@ -1821,12 +1821,13 @@ namespace glz
          }
          else if constexpr (check_linear_search(Opts)) {
             // Linear search path for enums - decode_linear advances past closing quote
+            const auto name = it;
             const auto index = decode_linear<T>(ctx, it, end);
             if (bool(ctx.error)) [[unlikely]]
                return;
 
             if (index >= N) [[unlikely]] {
-               ctx.error = error_code::unexpected_enum;
+               reread_unknown_enum<JSON, Opts, T>(value, ctx, it, name - 1, end);
                return;
             }
 
@@ -1841,7 +1842,7 @@ namespace glz
             const auto index = decode_hash<JSON, T, HashInfo, HashInfo.type>::op(it, end);
 
             if (index >= N) [[unlikely]] {
-               ctx.error = error_code::unexpected_enum;
+               reread_unknown_enum<JSON, Opts, T>(value, ctx, it, it - 1, end);
                return;
             }
 
