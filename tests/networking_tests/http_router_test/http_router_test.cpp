@@ -869,4 +869,97 @@ suite service_composition_tests = [] {
    };
 };
 
+// Schema generation uses the registry's options (GitHub issue #3080)
+
+struct SchemaPair
+{
+   int first{};
+   int second{};
+};
+
+struct SchemaOrder
+{
+   SchemaPair pair{};
+   std::optional<std::string> note{};
+};
+
+struct SchemaService
+{
+   int sum(SchemaPair pair) { return pair.first + pair.second; }
+   SchemaOrder echo(SchemaOrder order) { return order; }
+};
+
+template <>
+struct glz::meta<SchemaService>
+{
+   using T = SchemaService;
+   static constexpr auto value = object(&T::sum, &T::echo);
+};
+
+struct schema_custom_opts : glz::opts
+{
+   bool error_on_missing_keys = true;
+};
+
+template <auto Opts>
+glz::route_spec schema_route_spec(const std::string& path)
+{
+   SchemaService service;
+   glz::registry<Opts, glz::REST> registry;
+   registry.on(service);
+   return registry.endpoints.normal_routes.routes.at(path).at(glz::http_method::POST).spec;
+}
+
+struct SchemaRequired
+{
+   std::vector<std::string> required{};
+};
+
+// The "required" keys of the request body schema at a POST path, read back as JSON
+template <auto Opts>
+std::vector<std::string> schema_required(const std::string& path)
+{
+   const auto spec = schema_route_spec<Opts>(path);
+   expect(spec.request_body_schema.has_value());
+   SchemaRequired schema{};
+   const auto ec = glz::read<glz::opts{.error_on_unknown_keys = false}>(schema, spec.request_body_schema.value_or(""));
+   expect(!ec) << glz::format_error(ec, spec.request_body_schema.value_or(""));
+   return schema.required;
+}
+
+suite rest_schema_options_tests = [] {
+   "default_opts_schema_has_no_required_keys"_test = [] { expect(schema_required<glz::opts{}>("/sum").empty()); };
+
+   "error_on_missing_keys_marks_keys_required"_test = [] {
+      constexpr glz::opts opts{.error_on_missing_keys = true};
+      const auto spec = schema_route_spec<opts>("/sum");
+      expect(spec.request_body_schema == glz::write_json_schema<SchemaPair, opts>().value());
+      expect(schema_required<opts>("/sum") == std::vector<std::string>{"first", "second"});
+   };
+
+   "error_on_missing_keys_skips_optional_members"_test = [] {
+      constexpr glz::opts opts{.error_on_missing_keys = true};
+      const auto spec = schema_route_spec<opts>("/echo");
+      expect(spec.request_body_schema == glz::write_json_schema<SchemaOrder, opts>().value());
+      expect(spec.response_schema == glz::write_json_schema<SchemaOrder, opts>().value());
+      expect(schema_required<opts>("/echo") == std::vector<std::string>{"pair"});
+   };
+
+   "custom_opts_type_is_used"_test = [] {
+      expect(schema_required<schema_custom_opts{}>("/sum") == std::vector<std::string>{"first", "second"});
+   };
+
+   "schema_is_json_for_beve_registry"_test = [] {
+      constexpr glz::opts opts{.format = glz::BEVE, .error_on_missing_keys = true};
+      expect(schema_required<opts>("/sum") == std::vector<std::string>{"first", "second"});
+   };
+
+   "schema_has_no_null_members"_test = [] {
+      constexpr glz::opts opts{.skip_null_members = false};
+      const auto spec = schema_route_spec<opts>("/sum");
+      expect(spec.request_body_schema.has_value());
+      expect(spec.request_body_schema.value_or("").find("null") == std::string::npos);
+   };
+};
+
 int main() {}

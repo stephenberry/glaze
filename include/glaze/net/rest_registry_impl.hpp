@@ -41,12 +41,21 @@ namespace glz
          return rest_path;
       }
 
+      // Options for generating JSON schemas: the registry's options (e.g. error_on_missing_keys marks keys as
+      // required), but always written as JSON without null members, whatever format the registry uses for bodies
+      static constexpr auto schema_opts = [] {
+         auto opts = Opts;
+         opts.format = JSON;
+         opts.skip_null_members = true;
+         return opts;
+      }();
+
       // Helper to generate JSON schema for a type
       template <class T>
       static std::string generate_schema_for_type()
       {
          std::string schema_str;
-         auto ec = write_json_schema<T>(schema_str);
+         auto ec = write_json_schema<T, schema_opts>(schema_str);
          if (ec) {
             return "{}";
          }
