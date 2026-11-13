@@ -11404,10 +11404,43 @@ struct Sinks
    };
 };
 
+struct FlagPermissions
+{
+   bool read = false;
+   bool write = false;
+   bool execute = false;
+
+   struct glaze
+   {
+      using T = FlagPermissions;
+      static constexpr auto value = glz::flags("read", &T::read, "write", &T::write, "execute", &T::execute);
+   };
+};
+
 suite flags_test = [] {
    const auto opt = glz::read_json<Sinks>(R"([  "file"])");
    expect(opt.has_value());
    expect(opt.value().file);
+
+   "flags reject strings that only hash to a flag"_test = [] {
+      // Each of these lands on a member's hash slot without naming the member.
+      for (const std::string_view input : {R"(["fail"])", R"(["none"])"}) {
+         Sinks sinks{};
+         expect(glz::read_json(sinks, input).ec == glz::error_code::invalid_flag_input) << input;
+         expect(not sinks.file && not sinks.console) << input;
+      }
+      for (const std::string_view input : {R"(["exec"])", R"(["wrote"])", R"(["reed"])", R"(["read", "exec"])"}) {
+         FlagPermissions perms{};
+         expect(glz::read_json(perms, input).ec == glz::error_code::invalid_flag_input) << input;
+         expect(not perms.write && not perms.execute) << input;
+      }
+   };
+
+   "flags read every declared name"_test = [] {
+      FlagPermissions perms{};
+      expect(not glz::read_json(perms, R"(["read", "execute"])"));
+      expect(perms.read && not perms.write && perms.execute);
+   };
 };
 
 struct Header

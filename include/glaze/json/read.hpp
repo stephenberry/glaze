@@ -2601,8 +2601,10 @@ namespace glz
             const auto index = decode_hash_with_size<JSON, T, HashInfo, HashInfo.type>::op(
                ctx.scratch.data(), ctx.scratch.data() + ctx.scratch.size(), ctx.scratch.size());
 
+            // The hash narrows a string to one candidate flag but does not reject strings that are not
+            // flag names, so the name itself has to match.
             constexpr auto N = reflect<T>::size;
-            if (index < N) [[likely]] {
+            if (index < N && std::string_view{ctx.scratch} == reflect<T>::keys[index]) [[likely]] {
                visit<N>([&]<size_t I>() { get_member(value, get<I>(reflect<T>::values)) = true; }, index);
             }
             else [[unlikely]] {
