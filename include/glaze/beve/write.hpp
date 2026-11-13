@@ -576,7 +576,12 @@ namespace glz
          if (bool(ctx.error)) [[unlikely]] {
             return;
          }
-         write_key<content_v<T>>(ctx, b, ix);
+         if constexpr (per_alternative_content_v<T>) {
+            serialize<BEVE>::no_header<Opts>(variant_content_key<T>(value.index()), ctx, b, ix);
+         }
+         else {
+            write_key<content_v<T>>(ctx, b, ix);
+         }
          if (bool(ctx.error)) [[unlikely]] {
             return;
          }

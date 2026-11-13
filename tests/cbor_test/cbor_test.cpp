@@ -4803,6 +4803,35 @@ namespace cbor_variant_shapes
    }
 }
 
+namespace cbor_variant_shapes
+{
+   struct octagon
+   {
+      double side{};
+      bool operator==(const octagon&) const = default;
+   };
+   struct hexagon
+   {
+      double side{};
+      bool operator==(const hexagon&) const = default;
+   };
+   using per_alternative_t = std::variant<octagon, hexagon, int>;
+
+   // One map entry, in the shape every adjacent read test needs to assemble by hand.
+   inline std::string map_entry(const std::string& key, const std::string& value)
+   {
+      return char(0x60 + key.size()) + key + value;
+   }
+}
+
+template <>
+struct glz::meta<cbor_variant_shapes::per_alternative_t>
+{
+   static constexpr std::string_view tag = "kind";
+   static constexpr std::array ids{"oct", "hex", "num"};
+   static constexpr std::array content{"o", "h", "n"};
+};
+
 template <>
 struct glz::meta<cbor_variant_shapes::adjacent_t>
 {
@@ -4961,6 +4990,51 @@ suite cbor_variant_tagging = [] {
       std::variant<int, std::string> decoded{std::string{"keep"}};
       expect(glz::read_cbor(decoded, std::string{"\xa0", 1}) == glz::error_code::no_matching_variant_type);
       expect(std::get<std::string>(decoded) == "keep");
+   };
+
+   "per-alternative content keys round trip"_test = [] {
+      for (const per_alternative_t& in :
+           {per_alternative_t{octagon{1.5}}, per_alternative_t{hexagon{2.5}}, per_alternative_t{7}}) {
+         std::string buffer{};
+         expect(not glz::write_cbor(in, buffer));
+         per_alternative_t out{};
+         expect(not glz::read_cbor(out, buffer));
+         expect(out == in);
+      }
+
+      std::string buffer{};
+      expect(not glz::write_cbor(per_alternative_t{7}, buffer));
+      expect(buffer.find(map_entry("n", "")) != std::string::npos);
+      expect(buffer.find(map_entry("o", "")) == std::string::npos);
+   };
+
+   "per-alternative content keys are resolved wherever the discriminator sits"_test = [] {
+      std::string value{};
+      expect(not glz::write_cbor(hexagon{4.5}, value));
+      std::string id{};
+      expect(not glz::write_cbor(std::string{"hex"}, id));
+      std::string stray{};
+      expect(not glz::write_cbor(octagon{9.5}, stray));
+
+      const std::string kind = map_entry("kind", id);
+      const std::string h = map_entry("h", value);
+      const std::string o = map_entry("o", stray);
+      const auto map_of = [](const uint8_t n, const auto&... entries) {
+         return (std::string(1, char(0xa0 + n)) + ... + entries);
+      };
+
+      for (const auto& input : {map_of(2, kind, h), map_of(2, h, kind), map_of(3, o, h, kind), map_of(3, kind, o, h)}) {
+         per_alternative_t out{};
+         expect(not glz::read_cbor(out, input));
+         expect(out == per_alternative_t{hexagon{4.5}});
+      }
+
+      // Only the resolved alternative's key holds its value.
+      for (const auto& input : {map_of(2, kind, o), map_of(2, o, kind)}) {
+         per_alternative_t out{7};
+         expect(glz::read_cbor(out, input) == glz::error_code::missing_key);
+         expect(out == per_alternative_t{7}); // rejected before the destination is disturbed
+      }
    };
 
    "adjacent tagging requires the content key"_test = [] {
