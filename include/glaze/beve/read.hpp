@@ -7,6 +7,7 @@
 #include "glaze/beve/key_traits.hpp"
 #include "glaze/beve/skip.hpp"
 #include "glaze/core/chrono.hpp"
+#include "glaze/core/constraint.hpp"
 #include "glaze/core/filesystem_path.hpp"
 #include "glaze/core/opts.hpp"
 #include "glaze/core/read.hpp"
@@ -3220,6 +3221,8 @@ namespace glz
                return;
             }
          }
+
+         check_self_constraint<BEVE, Opts>(value, ctx);
       }
    };
 #if defined(_MSC_VER)

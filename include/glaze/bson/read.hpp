@@ -16,6 +16,7 @@
 #include "glaze/bson/header.hpp"
 #include "glaze/bson/skip.hpp"
 #include "glaze/core/chrono.hpp"
+#include "glaze/core/constraint.hpp"
 #include "glaze/core/opts.hpp"
 #include "glaze/core/read.hpp"
 #include "glaze/core/reflect.hpp"
@@ -1171,8 +1172,11 @@ namespace glz
                   }
                }
                ctx.error = error_code::missing_key;
+               return;
             }
          }
+
+         check_self_constraint<BSON, Opts>(value, ctx);
       }
    } // namespace bson_detail
 
