@@ -33,6 +33,7 @@ namespace glz
          auto& v = value;
          // check if we are decoding a string, which could be a file path
          if (*it == '"') {
+            auto it_start = it;
             parse<JSON>::op<Opts>(v.str, ctx, it, end);
             if (bool(ctx.error)) [[unlikely]]
                return;
@@ -62,10 +63,10 @@ namespace glz
                }
             }
             else {
-               // The file path doesn't exist, so we want a string with quotes
-               // But, we skipped the quotes when first reading
-               // So, now we add back the quotes
-               v.str = "\"" + v.str + "\"";
+               // The file path doesn't exist, so keep the string token exactly as it was read, escapes
+               // included. Quoting the decoded text instead would let a '"' or '\' in the value end the
+               // string early when the raw JSON is written back out.
+               v.str = {it_start, static_cast<size_t>(it - it_start)};
             }
          }
          else {
