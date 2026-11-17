@@ -1707,6 +1707,83 @@ suite msgpack_self_constraint_tests = [] {
    };
 };
 
+struct msgpack_limited_opts : glz::opts
+{
+   uint32_t format = glz::MSGPACK;
+   size_t max_string_length = 8;
+   size_t max_array_size = 4;
+   size_t max_map_size = 2;
+};
+
+struct msgpack_limited_context : glz::context
+{
+   size_t max_string_length = 8;
+   size_t max_array_size = 4;
+   size_t max_map_size = 2;
+};
+
+suite msgpack_allocation_limits_tests = [] {
+   "msgpack max_string_length rejects oversized strings"_test = [] {
+      std::string buffer{};
+      expect(not glz::write_msgpack(std::string(9, 'x'), buffer));
+
+      std::string out{};
+      expect(glz::read<msgpack_limited_opts{}>(out, buffer) == glz::error_code::invalid_length);
+      msgpack_limited_context ctx{};
+      expect(glz::read<glz::opts{.format = glz::MSGPACK}>(out, buffer, ctx) == glz::error_code::invalid_length);
+
+      std::string_view view{};
+      expect(glz::read<msgpack_limited_opts{}>(view, buffer) == glz::error_code::invalid_length);
+
+      expect(not glz::write_msgpack(std::string(8, 'x'), buffer));
+      expect(not glz::read<msgpack_limited_opts{}>(out, buffer));
+      expect(out == std::string(8, 'x'));
+   };
+
+   "msgpack max_array_size rejects oversized arrays"_test = [] {
+      std::string buffer{};
+      expect(not glz::write_msgpack(std::vector<int>{1, 2, 3, 4, 5}, buffer));
+
+      std::vector<int> out{};
+      expect(glz::read<msgpack_limited_opts{}>(out, buffer) == glz::error_code::invalid_length);
+      msgpack_limited_context ctx{};
+      expect(glz::read<glz::opts{.format = glz::MSGPACK}>(out, buffer, ctx) == glz::error_code::invalid_length);
+
+      std::set<int> set_out{};
+      expect(glz::read<msgpack_limited_opts{}>(set_out, buffer) == glz::error_code::invalid_length);
+
+      expect(not glz::write_msgpack(std::vector<int>{1, 2, 3, 4}, buffer));
+      expect(not glz::read<msgpack_limited_opts{}>(out, buffer));
+      expect(out.size() == 4);
+   };
+
+   "msgpack max_array_size rejects oversized binary payloads"_test = [] {
+      std::string buffer{};
+      expect(not glz::write_msgpack(std::vector<uint8_t>(5, 0xAB), buffer));
+
+      std::vector<uint8_t> out{};
+      expect(glz::read<msgpack_limited_opts{}>(out, buffer) == glz::error_code::invalid_length);
+
+      expect(not glz::write_msgpack(std::vector<uint8_t>(4, 0xAB), buffer));
+      expect(not glz::read<msgpack_limited_opts{}>(out, buffer));
+      expect(out.size() == 4);
+   };
+
+   "msgpack max_map_size rejects oversized maps"_test = [] {
+      std::string buffer{};
+      expect(not glz::write_msgpack(std::map<std::string, int>{{"a", 1}, {"b", 2}, {"c", 3}}, buffer));
+
+      std::map<std::string, int> out{};
+      expect(glz::read<msgpack_limited_opts{}>(out, buffer) == glz::error_code::invalid_length);
+      msgpack_limited_context ctx{};
+      expect(glz::read<glz::opts{.format = glz::MSGPACK}>(out, buffer, ctx) == glz::error_code::invalid_length);
+
+      expect(not glz::write_msgpack(std::map<std::string, int>{{"a", 1}, {"b", 2}}, buffer));
+      expect(not glz::read<msgpack_limited_opts{}>(out, buffer));
+      expect(out.size() == 2);
+   };
+};
+
 int main()
 {
    using namespace local_aggregates;
