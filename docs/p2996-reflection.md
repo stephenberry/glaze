@@ -128,9 +128,9 @@ int main() {
 |---------|-------------|-------|
 | Max struct members | 128 | Unlimited |
 | Non-aggregate types | Not supported | Full support |
-| Inheritance | Requires explicit `glz::meta` | Automatic (via `nonstatic_data_members_of`) |
+| Inheritance | Requires explicit `glz::meta` | Automatic (base members first, then the type's own) |
 | Member name extraction | `__PRETTY_FUNCTION__` parsing | `std::meta::identifier_of` |
-| Member count | Structured binding probe | `nonstatic_data_members_of().size()` |
+| Member count | Structured binding probe | Number of members across the hierarchy |
 | Private member access | Limited | Full (with `access_context::unchecked()`) |
 | Compile-time safety | Compiler-specific hacks | Standardized API |
 
@@ -221,6 +221,20 @@ constexpr auto names = glz::member_names<Derived>;
 constexpr auto count = glz::detail::count_members<Derived>;
 // count == 3 (2 from Base + 1 from Derived)
 ```
+
+#### Inheritance rules
+
+- A type reflects all of its own members (private included), then adds the **public members of its public bases**, base members first. Private and protected bases, and non-public members of bases, are not reflected. This keeps implementation bases such as `std::enable_shared_from_this` out of the serialized form.
+- A virtual base is reflected once, however many paths reach it.
+- A `glz::meta` on a base class is not used when a derived type is reflected automatically; the derived type uses the base's member names.
+
+These shapes need a `glz::meta` on the derived type:
+
+- **Duplicate names**: a member that hides a base member, or two bases with a member of the same name. Reflection refuses the type with a `static_assert`. Name the members apart with a full `glz::meta` value, e.g. `glz::object("base_x", &Base::x, "x", &Derived::x)`.
+- **A base inherited twice non-virtually** that contributes members: its two subobjects cannot be named through the derived type, so reflection refuses it with a `static_assert`. Reach each subobject with a lambda, e.g. `[](auto& self) -> auto& { return self.Left::member; }`.
+- **Base state you want serialized** that is private, protected, or behind a non-public base.
+
+> **Upgrading:** derived types now serialize their public base members. Payloads written by earlier versions with `structs_as_arrays` or `glz::reflect_array` have fewer elements and fail to read. Keyed payloads still read; the missing base members keep their current values.
 
 ### Automatic Enum String Serialization
 
@@ -353,11 +367,9 @@ The P2996 implementation uses these key primitives:
 // Reflect on a type to get meta-info
 constexpr auto type_info = ^^Person;
 
-// Get all non-static data members
-constexpr auto members = std::meta::nonstatic_data_members_of(
-    ^^Person,
-    std::meta::access_context::unchecked()
-);
+// Get the reflected data members: the type's own (private included, via
+// std::meta::access_context::unchecked()) plus the public members of its public bases, base first
+constexpr auto members = glz::detail::all_members_of(^^Person);
 
 // Get member name
 constexpr auto name = std::meta::identifier_of(members[0]);

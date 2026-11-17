@@ -15,7 +15,9 @@
 #include "glaze/util/type_traits.hpp"
 
 #if GLZ_REFLECTION26
+#include <array>
 #include <meta>
+#include <vector>
 #endif
 
 namespace glz
@@ -24,29 +26,136 @@ namespace glz
    {
 #if GLZ_REFLECTION26
       // C++26 P2996 Reflection Implementation
-      // Uses std::meta::nonstatic_data_members_of for true compile-time reflection
-      // Supports inheritance - automatically includes base class members
+      // Uses std::meta queries for true compile-time reflection.
+      //
+      // Inheritance: a type reflects all of its own members (private included), followed by the public
+      // members of its public bases, base members first. Private/protected bases and non-public base
+      // members are left out, so implementation bases such as std::enable_shared_from_this do not leak
+      // into the serialized form. Use a glz::meta on the derived type to serialize them.
 
       // Helper to get access context for reflection
       inline consteval auto reflection_access_ctx() { return std::meta::access_context::unchecked(); }
 
+      // Queries are indexed rather than ranged over: GCC 16 yields nothing for a range-for over a
+      // std::meta query inside a recursive consteval function.
+      inline consteval bool contains_info(const std::vector<std::meta::info>& v, std::meta::info x)
+      {
+         for (size_t i = 0; i < v.size(); ++i) {
+            if (v[i] == x) {
+               return true;
+            }
+         }
+         return false;
+      }
+
+      // Appends the public members of the public bases of `type`, base members first. A base reached
+      // twice (a virtual base) is visited once.
+      inline consteval void append_base_members(std::meta::info type, std::vector<std::meta::info>& visited,
+                                                std::vector<std::meta::info>& members)
+      {
+         const auto bases = std::meta::bases_of(type, reflection_access_ctx());
+         for (size_t i = 0; i < bases.size(); ++i) {
+            const auto base = std::meta::type_of(bases[i]);
+            if (not std::meta::is_public(bases[i]) || contains_info(visited, base)) {
+               continue;
+            }
+            visited.push_back(base);
+            append_base_members(base, visited, members);
+            const auto direct = std::meta::nonstatic_data_members_of(base, reflection_access_ctx());
+            for (size_t j = 0; j < direct.size(); ++j) {
+               if (std::meta::is_public(direct[j])) {
+                  members.push_back(direct[j]);
+               }
+            }
+         }
+      }
+
+      inline consteval std::vector<std::meta::info> all_members_of(std::meta::info type)
+      {
+         std::vector<std::meta::info> visited{};
+         std::vector<std::meta::info> members{};
+         append_base_members(type, visited, members);
+         const auto own = std::meta::nonstatic_data_members_of(type, reflection_access_ctx());
+         for (size_t i = 0; i < own.size(); ++i) {
+            members.push_back(own[i]);
+         }
+         return members;
+      }
+
+      // The member list, computed once per type and indexed by position. Sized at least 1 because
+      // libstdc++'s std::array<T, 0> has non-consteval members, which a consteval-only T rejects.
+      template <class T>
+      inline constexpr auto reflected_members = [] {
+         constexpr size_t N = all_members_of(^^T).size();
+         std::array<std::meta::info, (N > 0 ? N : 1)> out{};
+         const auto members = all_members_of(^^T);
+         for (size_t i = 0; i < members.size(); ++i) {
+            out[i] = members[i];
+         }
+         return out;
+      }();
+
+      // A base inherited twice non-virtually has two subobjects, so `T*` does not convert to a pointer to it
+      // and its members cannot be named through T.
+      inline consteval bool members_are_namable(std::meta::info type)
+      {
+         const auto members = all_members_of(type);
+         const auto ptr = std::meta::add_pointer(type);
+         for (size_t i = 0; i < members.size(); ++i) {
+            const auto owner = std::meta::parent_of(members[i]);
+            if (owner != type && not std::meta::is_convertible_type(ptr, std::meta::add_pointer(owner))) {
+               return false;
+            }
+         }
+         return true;
+      }
+
+      // A member that hides a base member, or two bases with a member of the same name, would give two
+      // members one key.
+      inline consteval bool member_names_are_unique(std::meta::info type)
+      {
+         if (std::meta::bases_of(type, reflection_access_ctx()).size() == 0) {
+            return true; // a class's own members cannot repeat a name
+         }
+         const auto members = all_members_of(type);
+         for (size_t i = 0; i < members.size(); ++i) {
+            if (not std::meta::has_identifier(members[i])) {
+               continue;
+            }
+            for (size_t j = i + 1; j < members.size(); ++j) {
+               if (std::meta::has_identifier(members[j]) &&
+                   std::meta::identifier_of(members[i]) == std::meta::identifier_of(members[j])) {
+                  return false;
+               }
+            }
+         }
+         return true;
+      }
+
       // Count members using P2996 reflection
       // Works for any class type, including non-aggregates (classes with custom constructors)
-      // Inherited members are automatically included via nonstatic_data_members_of
       template <class T>
          requires(std::is_class_v<std::remove_cvref_t<T>>)
-      inline constexpr size_t count_members =
-         std::meta::nonstatic_data_members_of(^^std::remove_cvref_t<T>, reflection_access_ctx()).size();
+      inline constexpr size_t count_members = [] {
+         using V = std::remove_cvref_t<T>;
+         static_assert(members_are_namable(^^V),
+                       "glz::meta is needed for this type: a public base class with public members is "
+                       "inherited more than once non-virtually, so its members cannot be named through "
+                       "the derived type. Give the type a glz::meta that reaches each subobject, e.g. "
+                       "[](auto& self) -> auto& { return self.Left::member; }.");
+         static_assert(member_names_are_unique(^^V),
+                       "glz::meta is needed for this type: two of its reflected members have the same name "
+                       "(a member hiding a base-class member, or two bases with a member of the same name). "
+                       "Give the type a glz::meta that names them apart, e.g. "
+                       "glz::object(\"base_x\", &Base::x, \"x\", &Derived::x).");
+         return all_members_of(^^V).size();
+      }();
 
       // Helper struct to get member info at a specific index
       template <class T, size_t I>
       struct member_info_at
       {
-         static consteval auto info()
-         {
-            auto members = std::meta::nonstatic_data_members_of(^^T, reflection_access_ctx());
-            return members[I];
-         }
+         static consteval auto info() { return reflected_members<T>[I]; }
       };
 
       // Access member by index using reflection splice
