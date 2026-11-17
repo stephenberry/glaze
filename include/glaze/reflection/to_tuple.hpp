@@ -115,9 +115,12 @@ namespace glz
                        "A member of a base class has the same name as another member, so the two would share a key. "
                        "Rename one, or give the type a glz::meta.");
 
-         static constexpr size_t size = reflected_data_members(^^T).size();
+         // Walked once per type and kept as a static array, so looking up each member is a constant time index
+         static constexpr auto members = std::define_static_array(reflected_data_members(^^T));
 
-         static consteval std::meta::info at(size_t I) { return reflected_data_members(^^T)[I]; }
+         static constexpr size_t size = members.size();
+
+         static consteval std::meta::info at(size_t I) { return members[I]; }
       };
 
       // Count members using P2996 reflection, inherited members included
