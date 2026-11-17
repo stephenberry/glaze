@@ -276,10 +276,10 @@ namespace glz
    inline char* to_chars(char* buf, T val) noexcept
    {
       *buf = '-';
-      // The magnitude is computed in int after promotion; cast it back so it reaches the uint8_t overload.
-      // int is not int32_t on every target (e.g. ESP32, ARM EABI, where int32_t is long), so no other overload
-      // can be relied on to accept it.
-      return to_chars(buf + (val < 0), static_cast<uint8_t>(static_cast<uint8_t>(val ^ (val >> 7)) - (val >> 7)));
+      // Keep the magnitude uint8_t: arithmetic promotes to int, which has no overload where int32_t is long
+      // (e.g. arm-none-eabi, ESP32).
+      const uint8_t u = uint8_t(val);
+      return to_chars(buf + (val < 0), uint8_t(val < 0 ? 0u - u : u));
    }
 
    // uint16_t: 0-65535 (1-5 digits)
@@ -308,8 +308,8 @@ namespace glz
    inline char* to_chars(char* buf, T val) noexcept
    {
       *buf = '-';
-      // Cast back from int for the same reason as the int8_t overload.
-      return to_chars(buf + (val < 0), static_cast<uint16_t>(static_cast<uint16_t>(val ^ (val >> 15)) - (val >> 15)));
+      const uint16_t u = uint16_t(val); // see int8_t
+      return to_chars(buf + (val < 0), uint16_t(val < 0 ? 0u - u : u));
    }
 
    // Shared two-digit char table; re-exposed at glz scope for callers that need it.
