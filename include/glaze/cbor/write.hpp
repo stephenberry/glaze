@@ -988,7 +988,7 @@ namespace glz
             if (bool(ctx.error)) [[unlikely]] {
                return;
             }
-            if (!write_str(ctx, content_v<T>, b, ix)) [[unlikely]] {
+            if (!write_str(ctx, variant_content_key<T>(value.index()), b, ix)) [[unlikely]] {
                return;
             }
             std::visit([&](auto&& v) { serialize<CBOR>::op<Opts>(v, ctx, b, ix); }, value);

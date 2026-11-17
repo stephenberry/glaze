@@ -709,8 +709,9 @@ namespace glz
    concept ided = requires { meta<std::decay_t<T>>::ids; } || requires { std::decay_t<T>::glaze::ids; };
 
    // `content` selects adjacent tagging for a variant: the discriminator and the alternative's value
-   // sit beside each other under two fixed keys ({tag: id, content: value}) instead of the
-   // discriminator being merged into the alternative's own object. See `variant_tagging_v`.
+   // sit beside each other ({tag: id, content: value}) instead of the discriminator being merged into
+   // the alternative's own object. It is one key shared by every alternative, or an array holding each
+   // alternative's own key. See `variant_tagging_v`.
    template <class T>
    concept contented = requires { meta<std::decay_t<T>>::content; } || requires { std::decay_t<T>::glaze::content; };
 
@@ -744,21 +745,6 @@ namespace glz
       }
    }();
 
-   template <class T>
-   inline constexpr std::string_view content_v = [] {
-      if constexpr (contented<T>) {
-         if constexpr (local_meta_t<T>) {
-            return std::decay_t<T>::glaze::content;
-         }
-         else {
-            return meta<std::decay_t<T>>::content;
-         }
-      }
-      else {
-         return "";
-      }
-   }();
-
    namespace detail
    {
       template <class T, size_t N>
@@ -783,6 +769,44 @@ namespace glz
          return result;
       }
    }
+
+   namespace detail
+   {
+      template <class C>
+      constexpr auto convert_content(const C& content)
+      {
+         if constexpr (std::convertible_to<const C&, std::string_view>) {
+            return std::string_view{content};
+         }
+         else {
+            static_assert(std::convertible_to<typename C::value_type, std::string_view>,
+                          "A glz::meta `content` array must hold strings: the key of each alternative's value.");
+            return convert_ids_to_array(content);
+         }
+      }
+   }
+
+   // A std::string_view, or a std::array of them when `content` names each alternative's key. The two
+   // are different types so that code written for a single key cannot compile against per-alternative
+   // keys and quietly look for the wrong one.
+   template <class T>
+   inline constexpr auto content_v = [] {
+      if constexpr (contented<T>) {
+         if constexpr (local_meta_t<T>) {
+            return detail::convert_content(std::decay_t<T>::glaze::content);
+         }
+         else {
+            return detail::convert_content(meta<std::decay_t<T>>::content);
+         }
+      }
+      else {
+         return std::string_view{};
+      }
+   }();
+
+   template <class T>
+   inline constexpr bool per_alternative_content_v =
+      not std::same_as<std::remove_cvref_t<decltype(content_v<T>)>, std::string_view>;
 
    template <is_variant T>
    inline constexpr auto ids_v = [] {

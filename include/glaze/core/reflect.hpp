@@ -3664,18 +3664,124 @@ namespace glz
       return std::variant_size_v<T>;
    }
 
+   // The content key of the alternative at `index`, which must be in range.
+   template <is_variant T>
+   [[nodiscard]] GLZ_ALWAYS_INLINE constexpr sv variant_content_key([[maybe_unused]] const size_t index) noexcept
+   {
+      if constexpr (per_alternative_content_v<T>) {
+         return content_v<T>[index];
+      }
+      else {
+         return content_v<T>;
+      }
+   }
+
+   // The declared content key that `key` spells, or an empty view if it is none of them. Returning the
+   // declared key rather than `key` lets a reader keep it past a streaming refill.
+   template <is_variant T>
+      requires(per_alternative_content_v<T>)
+   [[nodiscard]] constexpr sv find_variant_content_key(const sv key) noexcept
+   {
+      for (const sv name : content_v<T>) {
+         if (key == name) {
+            return name;
+         }
+      }
+      return {};
+   }
+
+   // Whether `key` is the content key of any alternative.
+   template <is_variant T>
+   [[nodiscard]] GLZ_ALWAYS_INLINE constexpr bool is_variant_content_key(const sv key) noexcept
+   {
+      if constexpr (per_alternative_content_v<T>) {
+         return not find_variant_content_key<T>(key).empty();
+      }
+      else {
+         return key == content_v<T>;
+      }
+   }
+
+   // Where each alternative's content value starts, for a reader that walks a map once and only learns
+   // which alternative it holds once it reaches the discriminator, which may come last. A single shared
+   // key needs one slot however many alternatives there are.
+   template <is_variant T, class It>
+   struct variant_content_positions
+   {
+      static constexpr size_t slots = per_alternative_content_v<T> ? std::variant_size_v<T> : 1;
+
+      std::array<It, slots> positions{};
+      std::array<bool, slots> found{};
+
+      constexpr void note(const sv key, const It& it) noexcept
+      {
+         for (size_t i = 0; i < slots; ++i) {
+            if (not found[i] && key == variant_content_key<T>(i)) {
+               positions[i] = it;
+               found[i] = true;
+            }
+         }
+      }
+
+      [[nodiscard]] constexpr bool seen(const size_t index) const noexcept
+      {
+         return found[per_alternative_content_v<T> ? index : 0];
+      }
+
+      [[nodiscard]] constexpr const It& at(const size_t index) const noexcept
+      {
+         return positions[per_alternative_content_v<T> ? index : 0];
+      }
+   };
+
    template <is_variant T>
    struct variant_tagging
    {
       static constexpr size_t size = std::variant_size_v<T>;
       static constexpr bool has_tag = not tag_v<T>.empty();
-      static constexpr bool has_content = not content_v<T>.empty();
+      static constexpr bool per_alternative_content = per_alternative_content_v<T>;
+      static constexpr bool has_content = per_alternative_content || not content_v<T>.empty();
 
       static_assert(has_tag || not has_content,
                     "glz::meta `content` selects adjacent tagging for a variant and means nothing on "
                     "its own. Declare `tag` beside it, or remove `content`.");
 
-      static_assert(not(has_tag && has_content) || tag_v<T> != content_v<T>,
+      // Every declared key as a range, since a shared key is not one and an array is not a key.
+      static consteval auto content_keys()
+      {
+         if constexpr (per_alternative_content) {
+            return content_v<T>;
+         }
+         else {
+            return std::array<sv, 1>{content_v<T>};
+         }
+      }
+
+      static_assert(not per_alternative_content || content_keys().size() == ids_v<T>.size(),
+                    "A glz::meta `content` array must have one entry per `ids` entry: the Nth key holds the "
+                    "value of the alternative the Nth id names.");
+
+      // An unrecognized id selects the first unlabeled alternative, and nothing could name its key.
+      static_assert(not per_alternative_content || ids_v<T>.size() == size,
+                    "A glz::meta `content` array needs an id for every alternative. With fewer ids than "
+                    "alternatives, the first unlabeled alternative is the default for an unrecognized id, "
+                    "and there is no entry to name the key of its value. Declare one id per alternative, "
+                    "or use a single `content` key.");
+
+      static consteval bool any_content_key(auto&& predicate)
+      {
+         for (const sv key : content_keys()) {
+            if (predicate(key)) {
+               return true;
+            }
+         }
+         return false;
+      }
+
+      static_assert(not per_alternative_content || not any_content_key([](const sv key) { return key.empty(); }),
+                    "Every entry of a glz::meta `content` array must be a non-empty key.");
+
+      static_assert(not(has_tag && has_content) || not any_content_key([](const sv key) { return key == tag_v<T>; }),
                     "glz::meta `tag` and `content` must differ: adjacent tagging writes them as two "
                     "distinct keys of the same object.");
 

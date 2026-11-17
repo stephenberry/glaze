@@ -1923,7 +1923,7 @@ namespace glz
             dump(",\n", b, ix);
             dumpn(check_indentation_char(Opts), ctx.depth, b, ix);
             dump('"', b, ix);
-            dump_maybe_empty(content_v<T>, b, ix);
+            dump_maybe_empty(variant_content_key<T>(value.index()), b, ix);
             dump("\": ", b, ix);
             std::visit([&](auto&& v) { serialize<JSON>::op<Opts>(v, ctx, b, ix); }, value);
             ctx.depth -= check_indentation_width(Opts);
@@ -1943,7 +1943,7 @@ namespace glz
             dump("\":", b, ix);
             write_id<Opts>(value, ctx, b, ix);
             dump(",\"", b, ix);
-            dump_maybe_empty(content_v<T>, b, ix);
+            dump_maybe_empty(variant_content_key<T>(value.index()), b, ix);
             dump("\":", b, ix);
             std::visit([&](auto&& v) { serialize<JSON>::op<Opts>(v, ctx, b, ix); }, value);
             dump('}', b, ix);

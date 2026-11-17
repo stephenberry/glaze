@@ -4874,6 +4874,28 @@ struct glz::meta<adjacent_variant_t>
    static constexpr auto ids = std::array{"a", "b"};
 };
 
+// Which per-alternative key holds the value is only known once the discriminator has been read, and
+// a streaming read may have moved the key by then, so the reader must not hold on to it.
+struct streamed_left_t
+{
+   int x{};
+};
+
+struct streamed_right_t
+{
+   std::string y{};
+};
+
+using per_alternative_stream_t = std::variant<streamed_left_t, streamed_right_t>;
+
+template <>
+struct glz::meta<per_alternative_stream_t>
+{
+   static constexpr std::string_view tag = "kind";
+   static constexpr auto ids = std::array{"left", "right"};
+   static constexpr auto content = std::array{"left", "right"};
+};
+
 struct unit_alternative_t
 {};
 
@@ -4955,6 +4977,26 @@ suite tagged_variant_streaming_tests = [] {
       expect(!glz::read_json(value, buffer));
       expect(std::holds_alternative<adjacent_b_t>(value));
       expect(std::get<adjacent_b_t>(value).y == "hello");
+   };
+
+   "per-alternative content keys stream in either order"_test = [] {
+      const std::string padding(100, ' ');
+      for (const auto& json : {R"({"kind":"right",)" + padding + R"("right":{"y":"hello"}})",
+                               R"({"right":{"y":"hello"},)" + padding + R"("kind":"right"})"}) {
+         std::istringstream in{json};
+         glz::basic_istream_buffer<std::istringstream, 512> buffer{in};
+         per_alternative_stream_t value{};
+         expect(!glz::read_json(value, buffer)) << json;
+         expect(std::holds_alternative<streamed_right_t>(value));
+         expect(std::get<streamed_right_t>(value).y == "hello");
+      }
+   };
+
+   "a value under another alternative's key is rejected while streaming"_test = [] {
+      std::istringstream in{R"({"left":{"x":1},"kind":"right"})"};
+      glz::basic_istream_buffer<std::istringstream, 512> buffer{in};
+      per_alternative_stream_t value{};
+      expect(glz::read_json(value, buffer).ec == glz::error_code::unknown_key);
    };
 
    "a unit alternative streams"_test = [] {
