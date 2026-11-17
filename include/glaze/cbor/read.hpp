@@ -6,6 +6,8 @@
 #include "glaze/cbor/header.hpp"
 #include "glaze/cbor/skip.hpp"
 #include "glaze/core/chrono.hpp"
+#include "glaze/core/constraint.hpp"
+#include "glaze/core/filesystem_path.hpp"
 #include "glaze/core/opts.hpp"
 #include "glaze/core/read.hpp"
 #include "glaze/core/reflect.hpp"
@@ -584,6 +586,7 @@ namespace glz
                   value.clear();
                }
                size_t offset = 0; // fill position for fixed-size targets
+               uint64_t total = 0;
                while (true) {
                   if (it >= end) [[unlikely]] {
                      ctx.error = error_code::unexpected_end;
@@ -620,6 +623,22 @@ namespace glz
                   if (static_cast<uint64_t>(end - it) < chunk_len) [[unlikely]] {
                      ctx.error = error_code::unexpected_end;
                      return;
+                  }
+
+                  // A break code rather than a length ends this text string, so the caller's limit is
+                  // enforced against the running total instead of a single header.
+                  total += chunk_len;
+                  if constexpr (check_max_string_length(Opts) > 0) {
+                     if (total > check_max_string_length(Opts)) [[unlikely]] {
+                        ctx.error = error_code::invalid_length;
+                        return;
+                     }
+                  }
+                  if constexpr (has_runtime_max_string_length<std::decay_t<decltype(ctx)>>) {
+                     if (ctx.max_string_length > 0 && total > ctx.max_string_length) [[unlikely]] {
+                        ctx.error = error_code::invalid_length;
+                        return;
+                     }
                   }
 
                   if constexpr (array_char_t<T>) {
@@ -2005,6 +2024,8 @@ namespace glz
                   return;
             }
          }
+
+         check_self_constraint<CBOR, Opts>(value, ctx);
       }
    };
 #if defined(_MSC_VER)
@@ -2732,7 +2753,9 @@ namespace glz
          if (bool(ctx.error)) [[unlikely]] {
             return;
          }
-         value = buffer;
+         if (!detail::assign_utf8_path(value, buffer)) [[unlikely]] {
+            ctx.error = error_code::invalid_utf8;
+         }
       }
    };
 

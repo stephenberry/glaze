@@ -15,6 +15,7 @@
 
 #include "glaze/core/chrono.hpp"
 #include "glaze/core/common.hpp"
+#include "glaze/core/constraint.hpp"
 #include "glaze/core/meta.hpp"
 #include "glaze/core/opts.hpp"
 #include "glaze/core/read.hpp"
@@ -804,6 +805,8 @@ namespace glz
                   return;
                }
             }
+
+            check_self_constraint<MSGPACK, Opts>(value, ctx);
          }
       }
    };

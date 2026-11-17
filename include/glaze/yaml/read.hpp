@@ -10,6 +10,7 @@
 
 #include "glaze/core/chrono.hpp"
 #include "glaze/core/common.hpp"
+#include "glaze/core/constraint.hpp"
 #include "glaze/core/read.hpp"
 #include "glaze/core/reflect.hpp"
 #include "glaze/file/file_ops.hpp"
@@ -179,6 +180,14 @@ namespace glz
                      // But a plain "key: value" pattern here indicates malformed
                      // trailing mapping content after a completed root node.
                      const char first = *line;
+                     // A block sequence entry here has nothing it can belong to: every node
+                     // that could own it has returned, so accepting it would drop it and every
+                     // line after it from the document.
+                     if (first == '-' &&
+                         ((line + 1) == end || yaml::whitespace_or_line_end_table[static_cast<uint8_t>(*(line + 1))])) {
+                        ctx.error = error_code::syntax_error;
+                        return;
+                     }
                      const bool explicit_or_structural_start =
                         (first == ':' || first == '?' || first == '!' || first == '&' || first == '*' || first == '[' ||
                          first == '{' || first == '"' || first == '\'' || first == '-');
@@ -1256,14 +1265,15 @@ namespace glz
                   // Terminates the scalar when the dash is at or above the
                   // enclosing sequence's indicator column, meaning it starts
                   // a sibling entry.  A dash deeper than the indicator is
-                  // plain content (yaml-test-suite AB8U).
-                  if (*lookahead == '-') {
+                  // plain content (yaml-test-suite AB8U). Outside a sequence
+                  // the line has already passed the dedent check above, so it
+                  // is a continuation: "k: a\n  - b" reads as "a - b", since a
+                  // node that began as a scalar cannot turn into a sequence.
+                  if (*lookahead == '-' && ctx.sequence_dash_indent >= 0 && line_indent <= ctx.sequence_dash_indent) {
                      auto after_dash = lookahead + 1;
                      if (after_dash == end || *after_dash == ' ' || *after_dash == '\t' || *after_dash == '\n' ||
                          *after_dash == '\r') {
-                        if (ctx.sequence_dash_indent < 0 || line_indent <= ctx.sequence_dash_indent) {
-                           return;
-                        }
+                        return;
                      }
                   }
 
@@ -1948,6 +1958,23 @@ namespace glz
       template <class T>
       concept owning_scalar_target = not string_view_t<T> && std::assignable_from<std::decay_t<T>&, std::string&&>;
 
+      // Whether the node at `it` opens a collection rather than a plain scalar: a flow
+      // sequence or mapping, a block sequence entry, or an explicit mapping key. "-" and "?"
+      // are indicators only when whitespace or the end of the input follows, so "-1" and
+      // "?x" remain plain scalars.
+      template <class It, class End>
+      [[nodiscard]] inline bool plain_scalar_starts_collection(It it, End end) noexcept
+      {
+         if (it == end) return false;
+         const char c = *it;
+         if (c == '[' || c == '{') return true;
+         if (c == '-' || c == '?') {
+            ++it;
+            return it == end || whitespace_or_line_end_table[static_cast<uint8_t>(*it)];
+         }
+         return false;
+      }
+
    } // namespace yaml
 
    // String types
@@ -1985,6 +2012,13 @@ namespace glz
                                      ctx.current_indent() > 0 ? (ctx.current_indent() - 1) : ctx.current_indent());
             break;
          case yaml::scalar_style::plain:
+            // A collection where a string is expected is a type mismatch. Reading it as a
+            // plain scalar would store its source text, and for a block sequence only the
+            // first entry, as the value.
+            if (yaml::plain_scalar_starts_collection(it, end)) [[unlikely]] {
+               ctx.error = error_code::syntax_error;
+               return;
+            }
             // In block context with known indent, use multiline parsing to support
             // plain scalars that span multiple lines (folding behavior)
             if constexpr (!yaml::check_flow_context(Opts)) {
@@ -4337,6 +4371,15 @@ namespace glz
                   break;
                }
 
+               // Published to the element as parse_block_sequence does, so a multi-line plain
+               // scalar element ends at the next "- " entry rather than folding it in.
+               int32_t dash_col = static_cast<int32_t>(it - line_start);
+               if constexpr (std::is_pointer_v<std::decay_t<It>>) {
+                  if (ctx.stream_begin) {
+                     dash_col = ctx.line_prefix_before(&*it).column;
+                  }
+               }
+
                ++it; // Skip '-'
 
                // Check valid sequence indicator
@@ -4346,6 +4389,11 @@ namespace glz
                }
 
                yaml::skip_inline_ws(it, end);
+
+               const bool prev_sequence_item_value_context = ctx.sequence_item_value_context;
+               const int32_t prev_sequence_dash_indent = ctx.sequence_dash_indent;
+               ctx.sequence_item_value_context = true;
+               ctx.sequence_dash_indent = dash_col;
 
                // Parse element at current index
                [&]<size_t... Is>(std::index_sequence<Is...>) {
@@ -4369,6 +4417,9 @@ namespace glz
                      }.template operator()<Is>(),
                      ...);
                }(std::make_index_sequence<N>{});
+
+               ctx.sequence_dash_indent = prev_sequence_dash_indent;
+               ctx.sequence_item_value_context = prev_sequence_item_value_context;
 
                if (bool(ctx.error)) [[unlikely]]
                   return;
@@ -4593,6 +4644,8 @@ namespace glz
             // Block mapping - use indent from context (set by parent parser)
             yaml::parse_block_mapping<Opts, Tag>(value, ctx, it, end, ctx.current_indent());
          }
+
+         check_self_constraint<YAML, Opts>(value, ctx);
 
          yaml::finalize_node_anchor(preamble.node_props, ctx, it);
       }
