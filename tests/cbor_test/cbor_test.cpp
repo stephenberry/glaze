@@ -2997,6 +2997,61 @@ void allocation_limits_tests()
       expect(result == short_string);
    };
 
+   // An indefinite-length text string carries no total length in its header, only per-chunk
+   // lengths, so the limit has to hold against the sum of the chunks.
+   "cbor max_string_length rejects oversized indefinite strings"_test = [] {
+      std::string buffer{char(0x7F)};
+      for (int i = 0; i < 5; ++i) {
+         buffer.push_back(char(0x74)); // text(20)
+         buffer.append(20, 'x');
+      }
+      buffer.push_back(char(0xFF));
+
+      struct limited_opts : glz::opts
+      {
+         uint32_t format = glz::CBOR;
+         size_t max_string_length = 50;
+      };
+
+      std::string result;
+      auto ec = glz::read<limited_opts{}>(result, buffer);
+      expect(ec.ec == glz::error_code::invalid_length) << "should reject oversized indefinite string";
+
+      std::array<char, 128> fixed{};
+      ec = glz::read<limited_opts{}>(fixed, buffer);
+      expect(ec.ec == glz::error_code::invalid_length) << "should reject into a fixed-size buffer too";
+
+      struct limited_context : glz::context
+      {
+         size_t max_string_length = 50;
+      };
+      limited_context ctx{};
+      result.clear();
+      ec = glz::read<glz::opts{.format = glz::CBOR}>(result, buffer, ctx);
+      expect(ec.ec == glz::error_code::invalid_length) << "should reject with a runtime limit";
+
+      ctx.max_string_length = 100;
+      ec = glz::read<glz::opts{.format = glz::CBOR}>(result, buffer, ctx);
+      expect(!ec) << "should accept an indefinite string within the runtime limit";
+      expect(result == std::string(100, 'x'));
+   };
+
+   "cbor max_string_length accepts indefinite strings within limit"_test = [] {
+      // text(*) "abc" "de" break
+      const std::string buffer{char(0x7F), char(0x63), 'a', 'b', 'c', char(0x62), 'd', 'e', char(0xFF)};
+
+      struct limited_opts : glz::opts
+      {
+         uint32_t format = glz::CBOR;
+         size_t max_string_length = 5;
+      };
+
+      std::string result;
+      auto ec = glz::read<limited_opts{}>(result, buffer);
+      expect(!ec) << "should accept indefinite string within limit";
+      expect(result == "abcde");
+   };
+
    "cbor max_array_size rejects oversized arrays"_test = [] {
       std::vector<int> large_array(100, 42);
       std::string buffer;
@@ -3170,6 +3225,27 @@ void max_length_wrapper_cbor_tests()
       CborMaxLengthStringStruct result{};
       auto ec = glz::read_cbor(result, buffer);
       expect(ec.ec == glz::error_code::invalid_length) << "should reject oversized name";
+   };
+
+   "cbor max_length wrapper rejects oversized indefinite string field"_test = [] {
+      // {"name": text(*) "this is wa" "y too long" break, "description": "ok"}
+      std::string buffer{char(0xA2), char(0x64)};
+      buffer.append("name");
+      buffer.push_back(char(0x7F));
+      buffer.push_back(char(0x6A));
+      buffer.append("this is wa");
+      buffer.push_back(char(0x6A));
+      buffer.append("y too long");
+      buffer.push_back(char(0xFF));
+      buffer.push_back(char(0x6B));
+      buffer.append("description");
+      buffer.push_back(char(0x62));
+      buffer.append("ok");
+
+      CborMaxLengthStringStruct result{};
+      auto ec = glz::read_cbor(result, buffer);
+      expect(ec.ec == glz::error_code::invalid_length) << "should reject oversized indefinite name";
+      expect(result.name.size() <= 10);
    };
 
    "cbor max_length wrapper limits array field"_test = [] {
