@@ -6,6 +6,7 @@
 #include <chrono>
 #include <cstddef>
 #include <string>
+#include <utility>
 
 #include "glaze/core/context.hpp"
 #include "glaze/core/reflect.hpp"
@@ -54,5 +55,27 @@ namespace glz_test
       // The 50 ms floor keeps timer and allocator noise in fast builds from reading as growth.
       ut::expect(d.ms < 4.0 * s.ms + 50.0)
          << shallow << " levels took " << s.ms << " ms but " << deep << " levels took " << d.ms << " ms";
+   }
+
+   // An entry point that runs a reader on a context of its own (a lazy view's read_into,
+   // read_jmespath, REPE read_params) takes no context to inspect, so it is timed against glz::read
+   // of the same nest instead. Both seed the same budget and parse the same bytes, so they cost
+   // about the same on any build; one left unbudgeted costs branching^depth more. Pick a nest deep
+   // enough for the budget to bind and shallow enough that a regression fails rather than hangs.
+   template <class Read, class Entry>
+   void expect_budgeted_like_read(Read&& read, Entry&& entry, const glz::error_code expected)
+   {
+      const auto timed = [](auto&& f) {
+         const auto start = std::chrono::steady_clock::now();
+         const glz::error_code ec = f();
+         return std::pair{ec,
+                          std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count()};
+      };
+      const auto [read_ec, read_ms] = timed(read);
+      const auto [entry_ec, entry_ms] = timed(entry);
+      ut::expect(read_ec == expected) << "glz::read: " << glz::format_error(read_ec);
+      ut::expect(entry_ec == expected) << "entry point: " << glz::format_error(entry_ec);
+      ut::expect(entry_ms < 4.0 * read_ms + 50.0)
+         << "glz::read took " << read_ms << " ms but the entry point took " << entry_ms << " ms";
    }
 }

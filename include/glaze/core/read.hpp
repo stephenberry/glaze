@@ -180,11 +180,7 @@ namespace glz
 
       // Bound the speculative re-parsing a variant resolution may do, in bytes, relative to this
       // input. Seeded per read so a reused context starts fresh. See charge_speculation.
-      if constexpr (requires { ctx.speculation_budget; }) {
-         const size_t proportional = max_speculative_parse_factor * size_t(end - it);
-         ctx.speculation_budget =
-            (proportional > min_speculative_parse_bytes ? proportional : min_speculative_parse_bytes) + 2;
-      }
+      seed_speculation_budget(ctx, size_t(end - it));
 
       // A YAML context marks its outermost parse with stream_begin and seeds its expansion budgets
       // there, so clearing it here is what makes those budgets per-read like the one above. A

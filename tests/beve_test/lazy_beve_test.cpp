@@ -3,8 +3,11 @@
 
 #include <concepts>
 #include <map>
+#include <memory>
+#include <variant>
 
 #include "glaze/glaze.hpp"
+#include "speculation_guard.hpp"
 #include "ut/ut.hpp"
 
 using namespace ut;
@@ -1568,6 +1571,65 @@ suite lazy_beve_writer_tests = [] {
       std::string out{};
       expect(not glz::write_beve(doc->root(), out));
       expect(out == buffer);
+   };
+};
+
+// Two object alternatives with identical keys, so resolution tries both at every level of the nest
+// (see beve_test's ambiguous nest).
+namespace lazy_beve_speculation
+{
+   struct node_a;
+   struct node_b;
+   struct leaf
+   {
+      int v{};
+   };
+   using amb_v = std::variant<leaf, std::shared_ptr<node_a>, std::shared_ptr<node_b>>;
+   struct node_a
+   {
+      amb_v child{};
+      int n{};
+   };
+   struct node_b
+   {
+      amb_v child{};
+      int n{};
+   };
+
+   inline std::string ambiguous_nest(size_t levels)
+   {
+      amb_v v{leaf{1}};
+      const auto leaf_bytes = glz::write_beve(v).value();
+      for (size_t i = 0; i < levels; ++i) {
+         auto n = std::make_shared<node_b>();
+         n->child = std::move(v);
+         n->n = int(i);
+         v = std::move(n);
+      }
+      auto buffer = glz::write_beve(v).value();
+      // Rename the innermost leaf's only key so the bottom of the nest fails with unknown_key.
+      const auto at = buffer.find(leaf_bytes);
+      buffer[at + leaf_bytes.find('v')] = 'q';
+      return buffer;
+   }
+}
+
+suite lazy_beve_speculation_budget_tests = [] {
+   "read_into seeds the speculation budget like glz::read"_test = [] {
+      // read_into parses on a context of its own; without the budget this nest takes seconds.
+      using namespace lazy_beve_speculation;
+      const auto buffer = ambiguous_nest(10);
+      glz_test::expect_budgeted_like_read(
+         [&] {
+            amb_v out{};
+            return glz::read_beve(out, buffer).ec;
+         },
+         [&] {
+            auto doc = glz::lazy_beve(buffer);
+            amb_v out{};
+            return doc ? doc->root().read_into(out).ec : doc.error().ec;
+         },
+         glz::error_code::unknown_key);
    };
 };
 

@@ -134,6 +134,9 @@ namespace glz::repe
          ctx.error = error_code::no_read_input;
       }
       else {
+         // This bypasses glz::read, so the speculation budget glz::read seeds before the parse has to
+         // be seeded here too, or a body that nests an ambiguous variant costs exponential time.
+         seed_speculation_budget(ctx, size_t(e - b));
          glz::parse<Opts.format>::template op<is_padded_off<Opts>()>(std::forward<Value>(value), ctx, b, e);
          // This bypasses glz::read, so the bookkeeping glz::read performs after the parse has to be
          // repeated here: a value that finishes exactly at the end of the body reports end_reached,
@@ -577,6 +580,7 @@ namespace glz::repe
          ctx.error = error_code::no_read_input;
       }
       else {
+         seed_speculation_budget(ctx, size_t(e - b));
          glz::parse<Opts.format>::template op<is_padded_off<Opts>()>(std::forward<Value>(value), ctx, b, e);
          // See the note in the message overload above for why glz::read's bookkeeping is repeated.
          finalize_top_level_read<Opts>(ctx, start, b, e);

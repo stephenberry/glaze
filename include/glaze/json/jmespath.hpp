@@ -839,6 +839,7 @@ namespace glz
       auto start = it;
 
       context ctx{};
+      seed_speculation_budget(ctx, size_t(end - it)); // as glz::read would; see charge_speculation
 
       if constexpr (N == 0) {
          parse<Opts.format>::template op<Opts>(value, ctx, it, end);
@@ -1035,6 +1036,7 @@ namespace glz
       auto start = it;
 
       context ctx{};
+      seed_speculation_budget(ctx, size_t(end - it)); // as glz::read would; see charge_speculation
 
       if (N == 0) {
          parse<Opts.format>::template op<Opts>(value, ctx, it, end);
