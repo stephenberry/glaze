@@ -11,11 +11,13 @@
 
 #include "glaze/core/feature_test.hpp"
 #include "glaze/core/tuple.hpp"
+#include "glaze/forward.hpp"
 #include "glaze/util/inline.hpp"
 #include "glaze/util/type_traits.hpp"
 
 #if GLZ_REFLECTION26
 #include <meta>
+#include <vector>
 #endif
 
 namespace glz
@@ -24,29 +26,110 @@ namespace glz
    {
 #if GLZ_REFLECTION26
       // C++26 P2996 Reflection Implementation
-      // Uses std::meta::nonstatic_data_members_of for true compile-time reflection
-      // Supports inheritance - automatically includes base class members
+      // Works for any class type, including non-aggregates and classes with base classes
 
       // Helper to get access context for reflection
       inline consteval auto reflection_access_ctx() { return std::meta::access_context::unchecked(); }
 
-      // Count members using P2996 reflection
-      // Works for any class type, including non-aggregates (classes with custom constructors)
-      // Inherited members are automatically included via nonstatic_data_members_of
+      // std::meta::nonstatic_data_members_of lists only the members a class declares itself, so the members of each
+      // base class are appended first: bases in declaration order, each one recursively. A virtual base is a single
+      // subobject however many paths lead to it, so its members are appended once, where it is first reached.
+      consteval void append_reflected_data_members(std::meta::info type, std::vector<std::meta::info>& members,
+                                                   std::vector<std::meta::info>& virtual_bases)
+      {
+         for (const auto base : std::meta::bases_of(type, reflection_access_ctx())) {
+            const auto base_type = std::meta::dealias(std::meta::type_of(base));
+            if (std::meta::is_virtual(base)) {
+               bool seen = false;
+               for (const auto visited : virtual_bases) {
+                  seen = seen || visited == base_type;
+               }
+               if (seen) {
+                  continue;
+               }
+               virtual_bases.push_back(base_type);
+            }
+            append_reflected_data_members(base_type, members, virtual_bases);
+         }
+         for (const auto member : std::meta::nonstatic_data_members_of(type, reflection_access_ctx())) {
+            members.push_back(member);
+         }
+      }
+
+      // Every non-static data member of type, inherited members first
+      consteval std::vector<std::meta::info> reflected_data_members(std::meta::info type)
+      {
+         std::vector<std::meta::info> members;
+         std::vector<std::meta::info> virtual_bases;
+         append_reflected_data_members(type, members, virtual_bases);
+         return members;
+      }
+
+      // A class can only declare a name once, but a base can declare a member with the same name as a member of the
+      // derived class or of another base. Both would be written under one key, and reading could not tell them apart.
+      consteval bool has_distinct_member_names(std::meta::info type)
+      {
+         if (std::meta::bases_of(type, reflection_access_ctx()).empty()) {
+            return true;
+         }
+         const auto members = reflected_data_members(type);
+         for (size_t i = 0; i < members.size(); ++i) {
+            if (!std::meta::has_identifier(members[i])) {
+               continue;
+            }
+            for (size_t j = i + 1; j < members.size(); ++j) {
+               if (std::meta::has_identifier(members[j]) &&
+                   std::meta::identifier_of(members[i]) == std::meta::identifier_of(members[j])) {
+                  return false;
+               }
+            }
+         }
+         return true;
+      }
+
+      // The keys of a class with a glz::meta or a local glaze struct are shaped by that metadata, which reflecting the
+      // members of a class derived from it would bypass, writing them under their C++ names instead.
+      template <class T>
+      inline constexpr bool has_glaze_metadata = requires { sizeof(meta<T>); } || requires { typename T::glaze; };
+
+      consteval bool has_base_with_glaze_metadata(std::meta::info type)
+      {
+         for (const auto base : std::meta::bases_of(type, reflection_access_ctx())) {
+            const auto base_type = std::meta::dealias(std::meta::type_of(base));
+            const std::vector<std::meta::info> arguments{base_type};
+            const bool has_metadata = std::meta::extract<bool>(std::meta::substitute(^^has_glaze_metadata, arguments));
+            if (has_metadata || has_base_with_glaze_metadata(base_type)) {
+               return true;
+            }
+         }
+         return false;
+      }
+
+      template <class T>
+      struct reflected_members
+      {
+         static_assert(!has_base_with_glaze_metadata(^^T),
+                       "A base class has a glz::meta or a local glaze struct, which reflection cannot apply to a "
+                       "derived class. Give the derived class a glz::meta.");
+         static_assert(has_distinct_member_names(^^T),
+                       "A member of a base class has the same name as another member, so the two would share a key. "
+                       "Rename one, or give the type a glz::meta.");
+
+         static constexpr size_t size = reflected_data_members(^^T).size();
+
+         static consteval std::meta::info at(size_t I) { return reflected_data_members(^^T)[I]; }
+      };
+
+      // Count members using P2996 reflection, inherited members included
       template <class T>
          requires(std::is_class_v<std::remove_cvref_t<T>>)
-      inline constexpr size_t count_members =
-         std::meta::nonstatic_data_members_of(^^std::remove_cvref_t<T>, reflection_access_ctx()).size();
+      inline constexpr size_t count_members = reflected_members<std::remove_cvref_t<T>>::size;
 
       // Helper struct to get member info at a specific index
       template <class T, size_t I>
       struct member_info_at
       {
-         static consteval auto info()
-         {
-            auto members = std::meta::nonstatic_data_members_of(^^T, reflection_access_ctx());
-            return members[I];
-         }
+         static consteval auto info() { return reflected_members<T>::at(I); }
       };
 
       // Access member by index using reflection splice

@@ -406,4 +406,222 @@ suite p2996_reflect_array = [] {
    };
 };
 
+// Inherited members are reflected ahead of the derived class's own, since
+// std::meta::nonstatic_data_members_of lists only the members a class declares itself
+namespace inheritance
+{
+   struct base
+   {
+      int id = 1;
+      std::string name = "base";
+   };
+
+   struct derived : base
+   {
+      double extra = 2.5;
+   };
+
+   struct grandchild : derived
+   {
+      bool flag = true;
+   };
+
+   struct position
+   {
+      int x = 3;
+   };
+
+   struct multiple : base, position
+   {
+      int own = 4;
+   };
+
+   // A stateless mixin contributes no members
+   struct mixin
+   {
+      void touch() {}
+   };
+
+   struct with_mixin : mixin, base
+   {};
+
+   struct shared
+   {
+      int value = 5;
+   };
+   struct left : virtual shared
+   {
+      int l = 6;
+   };
+   struct right : virtual shared
+   {
+      int r = 7;
+   };
+   // The virtual base is one subobject, so its members appear once
+   struct diamond : left, right
+   {
+      int d = 8;
+   };
+
+   // Private bases and members are reflected like private members of the class itself
+   class hidden_base
+   {
+     public:
+      hidden_base() = default;
+      int secret() const { return secret_; }
+
+     private:
+      int secret_ = 9;
+   };
+
+   class constructed : private hidden_base
+   {
+     public:
+      constructed() = default;
+      constructed(int v, std::string s) : value(v), label(std::move(s)) {}
+      int value = 0;
+      std::string label{};
+      int base_secret() const { return secret(); }
+   };
+
+   struct shadowing : base
+   {
+      int id = 10;
+   };
+
+   struct meta_base
+   {
+      int value = 11;
+   };
+
+   struct local_meta_base
+   {
+      int value = 12;
+      struct glaze
+      {
+         static constexpr auto value = glz::object("v", &local_meta_base::value);
+      };
+   };
+
+   struct derived_from_meta : meta_base
+   {
+      int own = 13;
+   };
+
+   struct derived_from_local_meta : local_meta_base
+   {
+      int own = 14;
+   };
+
+   struct indirectly_from_meta : derived_from_meta
+   {};
+}
+
+template <>
+struct glz::meta<inheritance::meta_base>
+{
+   using T = inheritance::meta_base;
+   static constexpr auto value = glz::object("renamed", &T::value);
+};
+
+static_assert(glz::detail::count_members<inheritance::derived> == 3);
+static_assert(glz::detail::count_members<inheritance::grandchild> == 4);
+static_assert(glz::detail::count_members<inheritance::multiple> == 4);
+static_assert(glz::detail::count_members<inheritance::with_mixin> == 2);
+static_assert(glz::detail::count_members<inheritance::diamond> == 4);
+static_assert(glz::detail::count_members<inheritance::constructed> == 3);
+static_assert(glz::member_names<inheritance::grandchild> ==
+              std::array<std::string_view, 4>{"id", "name", "extra", "flag"});
+static_assert(glz::member_names<inheritance::multiple> == std::array<std::string_view, 4>{"id", "name", "x", "own"});
+static_assert(glz::member_names<inheritance::diamond> == std::array<std::string_view, 4>{"value", "l", "r", "d"});
+static_assert(glz::member_names<inheritance::constructed> ==
+              std::array<std::string_view, 3>{"secret_", "value", "label"});
+
+// These would give two members one key, or write a base's members under names its glz::meta does not use, so
+// reflecting them is a compile error
+static_assert(!glz::detail::has_distinct_member_names(^^inheritance::shadowing));
+static_assert(glz::detail::has_distinct_member_names(^^inheritance::diamond));
+static_assert(glz::detail::has_base_with_glaze_metadata(^^inheritance::derived_from_meta));
+static_assert(glz::detail::has_base_with_glaze_metadata(^^inheritance::derived_from_local_meta));
+static_assert(glz::detail::has_base_with_glaze_metadata(^^inheritance::indirectly_from_meta));
+static_assert(!glz::detail::has_base_with_glaze_metadata(^^inheritance::diamond));
+
+suite p2996_inheritance = [] {
+   using namespace inheritance;
+
+   "single inheritance writes base members first"_test = [] {
+      auto json = glz::write_json(derived{}).value_or("error");
+      expect(json == R"({"id":1,"name":"base","extra":2.5})") << json;
+   };
+
+   "multi-level inheritance"_test = [] {
+      auto json = glz::write_json(grandchild{}).value_or("error");
+      expect(json == R"({"id":1,"name":"base","extra":2.5,"flag":true})") << json;
+
+      grandchild value{};
+      expect(not glz::read_json(value, R"({"id":7,"name":"read","extra":1.0,"flag":false})"));
+      expect(value.id == 7);
+      expect(value.name == "read");
+      expect(value.extra == 1.0);
+      expect(not value.flag);
+   };
+
+   "multiple inheritance in base declaration order"_test = [] {
+      auto json = glz::write_json(multiple{}).value_or("error");
+      expect(json == R"({"id":1,"name":"base","x":3,"own":4})") << json;
+
+      multiple value{};
+      expect(not glz::read_json(value, R"({"x":30,"own":40,"id":10})"));
+      expect(value.x == 30);
+      expect(value.own == 40);
+      expect(value.id == 10);
+      expect(value.name == "base");
+   };
+
+   "stateless mixin"_test = [] {
+      auto json = glz::write_json(with_mixin{}).value_or("error");
+      expect(json == R"({"id":1,"name":"base"})") << json;
+   };
+
+   "virtual diamond has one copy of the shared base"_test = [] {
+      auto json = glz::write_json(diamond{}).value_or("error");
+      expect(json == R"({"value":5,"l":6,"r":7,"d":8})") << json;
+
+      diamond value{};
+      expect(not glz::read_json(value, R"({"value":50,"l":60,"r":70,"d":80})"));
+      expect(value.value == 50);
+      expect(value.l == 60);
+      expect(value.r == 70);
+      expect(value.d == 80);
+   };
+
+   "private base of a non-aggregate"_test = [] {
+      auto json = glz::write_json(constructed{3, "c"}).value_or("error");
+      expect(json == R"({"secret_":9,"value":3,"label":"c"})") << json;
+
+      constructed value{};
+      expect(not glz::read_json(value, R"({"secret_":90,"value":30,"label":"read"})"));
+      expect(value.base_secret() == 90);
+      expect(value.value == 30);
+      expect(value.label == "read");
+   };
+
+   "beve round trip"_test = [] {
+      grandchild original{};
+      original.id = 21;
+      original.name = "beve";
+      original.extra = 0.5;
+      original.flag = false;
+      std::string buffer{};
+      expect(not glz::write_beve(original, buffer));
+
+      grandchild value{};
+      expect(not glz::read_beve(value, buffer));
+      expect(value.id == 21);
+      expect(value.name == "beve");
+      expect(value.extra == 0.5);
+      expect(not value.flag);
+   };
+};
+
 int main() {}
