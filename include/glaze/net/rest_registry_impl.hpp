@@ -41,12 +41,13 @@ namespace glz
          return rest_path;
       }
 
-      // Helper to generate JSON schema for a type
+      // Helper to generate JSON schema for a type, using the registry's options (e.g. error_on_missing_keys marks
+      // keys as required)
       template <class T>
       static std::string generate_schema_for_type()
       {
          std::string schema_str;
-         auto ec = write_json_schema<T>(schema_str);
+         auto ec = write_json_schema<T, Opts>(schema_str);
          if (ec) {
             return "{}";
          }
