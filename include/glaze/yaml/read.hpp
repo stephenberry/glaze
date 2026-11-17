@@ -10,6 +10,7 @@
 
 #include "glaze/core/chrono.hpp"
 #include "glaze/core/common.hpp"
+#include "glaze/core/constraint.hpp"
 #include "glaze/core/read.hpp"
 #include "glaze/core/reflect.hpp"
 #include "glaze/file/file_ops.hpp"
@@ -4643,6 +4644,8 @@ namespace glz
             // Block mapping - use indent from context (set by parent parser)
             yaml::parse_block_mapping<Opts, Tag>(value, ctx, it, end, ctx.current_indent());
          }
+
+         check_self_constraint<YAML, Opts>(value, ctx);
 
          yaml::finalize_node_anchor(preamble.node_props, ctx, it);
       }
