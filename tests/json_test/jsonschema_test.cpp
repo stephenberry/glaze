@@ -321,6 +321,11 @@ struct Person
    Address address{};
 };
 
+struct path_holder
+{
+   std::filesystem::path file{};
+};
+
 #if 0
 struct invalid_name
 {
@@ -462,6 +467,15 @@ suite schema_tests = [] {
              R"({"type":"integer","title":"uint64_t","format":"uint64","minimum":0,"maximum":18446744073709551615})");
       expect(glz::write_json_schema<std::int32_t>().value_or("error") ==
              R"({"type":"integer","title":"int32_t","minimum":-2147483648,"maximum":2147483647})");
+   };
+
+   "a filesystem path is described as the string it is written as"_test = [] {
+      const std::string path_name{glz::name_v<std::filesystem::path>};
+      expect(glz::write_json_schema<std::filesystem::path>().value_or("error") ==
+             R"({"type":"string","title":")" + path_name + R"("})");
+      expect(
+         glz::write_json_schema<path_holder>().value_or("error") ==
+         R"({"type":"object","properties":{"file":{"type":"string"}},"additionalProperties":false,"title":"path_holder"})");
    };
 
    "required_key meta is correctly used"_test = [] {
