@@ -3,6 +3,7 @@
 
 #pragma once
 
+#include <algorithm>
 #include <bit>
 #include <cstring>
 
@@ -3719,6 +3720,179 @@ namespace glz
 
    template <is_variant T>
    inline constexpr bool adjacently_tagged_v = variant_tagging_v<T> == variant_tagging_kind::adjacent;
+
+   namespace detail
+   {
+      // Only its address matters: it gives each type an identity that can be compared in a constant
+      // expression, so comparing two alternatives instantiates nothing per pair. Variants can be wide.
+      template <class T>
+      inline constexpr char variant_member_type_id{};
+
+      struct variant_member_shape
+      {
+         sv key{};
+         const void* type{};
+      };
+
+      struct variant_member_shape_key_less
+      {
+         constexpr bool operator()(const variant_member_shape& a, const variant_member_shape& b) const noexcept
+         {
+            return a.key < b.key;
+         }
+      };
+
+      template <class X>
+      inline constexpr auto variant_member_shapes = []<size_t... I>(std::index_sequence<I...>) {
+         std::array<variant_member_shape, sizeof...(I)> shapes{
+            variant_member_shape{reflect<X>::keys[I], &variant_member_type_id<field_t<X, I>>}...};
+         // Sorted by key once per type, so comparing two alternatives is a single linear pass.
+         std::sort(shapes.data(), shapes.data() + shapes.size(), variant_member_shape_key_less{});
+         return shapes;
+      }(std::make_index_sequence<reflect<X>::size>{});
+
+      struct variant_alternative_shape
+      {
+         const variant_member_shape* members{};
+         size_t size{};
+         uint64_t keys_hash{};
+         bool keyed{}; // false for anything without a compile-time key set, which says nothing here
+
+         // Members are sorted by key, so member order in the declaration does not matter. Type identities
+         // are compared first: they are a pointer comparison and reject same-key, different-type pairs at
+         // the first differing member. Keys are compared only for a pair that already matches on types.
+         constexpr bool operator==(const variant_alternative_shape& other) const noexcept
+         {
+            if (not keyed || not other.keyed || size != other.size || keys_hash != other.keys_hash) {
+               return false;
+            }
+            for (size_t i = 0; i < size; ++i) {
+               if (members[i].type != other.members[i].type) {
+                  return false;
+               }
+            }
+            for (size_t i = 0; i < size; ++i) {
+               if (members[i].key != other.members[i].key) {
+                  return false;
+               }
+            }
+            return true;
+         }
+      };
+
+      template <class V>
+      inline constexpr bool variant_alternative_is_keyed =
+         (glaze_object_t<variant_alternative_object_t<V>> || reflectable<variant_alternative_object_t<V>>) &&
+         not custom_read<V> && not custom_read<variant_alternative_object_t<V>>;
+
+      // A commutative hash of an alternative's key set, shared by every variant the alternative is in.
+      template <class V>
+      consteval uint64_t variant_alternative_keys_hash()
+      {
+         uint64_t sum = 0;
+         if constexpr (variant_alternative_is_keyed<V>) {
+            using X = variant_alternative_object_t<V>;
+            for (size_t i = 0; i < reflect<X>::size; ++i) {
+               uint64_t h = 0xCBF29CE484222325ull;
+               for (const char c : sv{reflect<X>::keys[i]}) {
+                  h = (h ^ uint8_t(c)) * 0x100000001B3ull;
+               }
+               sum += h;
+            }
+         }
+         return sum;
+      }
+
+      template <class V>
+      inline constexpr uint64_t variant_alternative_keys_hash_v = variant_alternative_keys_hash<V>();
+
+      template <class V>
+      consteval variant_alternative_shape shape_of_variant_alternative()
+      {
+         if constexpr (variant_alternative_is_keyed<V>) {
+            using X = variant_alternative_object_t<V>;
+            return {variant_member_shapes<X>.data(), variant_member_shapes<X>.size(),
+                    variant_alternative_keys_hash_v<V>, true};
+         }
+         else {
+            return {};
+         }
+      }
+
+      // Whether two alternatives might have the same key set. Almost no variant has such a pair, and
+      // this spares those the member by member comparison.
+      template <is_variant T>
+      consteval bool variant_alternatives_may_share_keys()
+      {
+         constexpr size_t N = std::variant_size_v<T>;
+         return []<size_t... I>(std::index_sequence<I...>) {
+            const std::array<bool, N> keyed{
+               variant_alternative_is_keyed<std::remove_cvref_t<std::variant_alternative_t<I, T>>>...};
+            const std::array<uint64_t, N> hashes{
+               variant_alternative_keys_hash_v<std::remove_cvref_t<std::variant_alternative_t<I, T>>>...};
+            for (size_t i = 0; i < N; ++i) {
+               for (size_t j = i + 1; keyed[i] && j < N; ++j) {
+                  if (keyed[j] && hashes[i] == hashes[j]) {
+                     return true;
+                  }
+               }
+            }
+            return false;
+         }(std::make_index_sequence<N>{});
+      }
+
+      // Instantiated only to fail, so the compiler's instantiation backtrace names the two alternatives.
+      template <class Variant, class First, class Second>
+      struct variant_alternatives_are_indistinguishable : std::false_type
+      {};
+   }
+
+   // The first two alternatives of an undiscriminated variant that have the same keys holding the same
+   // types, if there are any. Nothing in a document can separate such a pair, in any format: every read
+   // lands on the first, whichever of them was written. Alternatives that share keys but not their types
+   // do not count, since their values can still differ, and some readers do try them in turn.
+   template <is_variant T>
+   struct variant_indistinguishable_alternatives
+   {
+      static constexpr size_t size = std::variant_size_v<T>;
+
+      static constexpr auto pair = [] {
+         std::pair<size_t, size_t> result{size, size};
+         // A discriminator tells any alternatives apart, and most variants have nothing to compare.
+         constexpr bool compare = [] {
+            if constexpr (tag_v<T>.empty()) {
+               return detail::variant_alternatives_may_share_keys<T>();
+            }
+            else {
+               return false;
+            }
+         }();
+         if constexpr (compare) {
+            const auto shapes = []<size_t... I>(std::index_sequence<I...>) {
+               return std::array<detail::variant_alternative_shape, size>{
+                  detail::shape_of_variant_alternative<std::remove_cvref_t<std::variant_alternative_t<I, T>>>()...};
+            }(std::make_index_sequence<size>{});
+            for (size_t i = 0; i < size; ++i) {
+               for (size_t j = i + 1; j < size; ++j) {
+                  if (shapes[i] == shapes[j]) {
+                     result = {i, j};
+                     return result;
+                  }
+               }
+            }
+         }
+         return result;
+      }();
+
+      static constexpr bool found = pair.first != size;
+
+      // Clamped so the types below are always nameable; they are only reported when found.
+      using first = std::variant_alternative_t<found ? pair.first : 0, T>;
+      using second = std::variant_alternative_t<found ? pair.second : 0, T>;
+   };
+
+   template <is_variant T>
+   inline constexpr bool has_indistinguishable_alternatives_v = variant_indistinguishable_alternatives<T>::found;
 
    // The kinds of self-describing value a MessagePack or CBOR reader for a type accepts, with
    // conversions allowed. Undeclared variant resolution uses them to find the alternatives that can

@@ -10,6 +10,7 @@
 #include <string>
 #include <string_view>
 #include <tuple>
+#include <utility>
 #include <variant>
 #include <vector>
 
@@ -2599,6 +2600,187 @@ suite ids_bounds_tests = [] {
       v_t unlabeled{c_t{7}};
       std::string arr{};
       expect(bool(glz::write_json(glz::array_variant_wrapper<v_t>{unlabeled}, arr)));
+   };
+};
+
+namespace indistinguishable
+{
+   struct same_a
+   {
+      int i{};
+      std::string s{};
+   };
+   struct same_b
+   {
+      int i{};
+      std::string s{};
+   };
+   struct reversed
+   {
+      std::string s{};
+      int i{};
+   };
+   struct renamed
+   {
+      int number{};
+      std::string text{};
+   };
+   struct other_type
+   {
+      int i{};
+      double s{};
+   };
+   struct fewer_keys
+   {
+      int i{};
+   };
+   struct other_keys
+   {
+      int j{};
+      std::string t{};
+   };
+   struct empty_a
+   {};
+   struct empty_b
+   {};
+
+   using same = std::variant<same_a, same_b>;
+   using ids_only = std::variant<same_b, same_a>;
+   using internally_tagged = std::variant<reversed, same_a>;
+   using adjacently_tagged = std::variant<same_a, reversed>;
+   using same_keys_other_types = std::variant<same_a, other_type>;
+
+   struct holds_same
+   {
+      same v{};
+   };
+
+   // A custom reader decides for itself what it accepts.
+   struct custom_a
+   {
+      int i{};
+      std::string s{};
+   };
+}
+
+template <>
+struct glz::meta<indistinguishable::renamed>
+{
+   using T = indistinguishable::renamed;
+   static constexpr auto value = glz::object("i", &T::number, "s", &T::text);
+};
+
+template <>
+struct glz::meta<indistinguishable::custom_a>
+{
+   static constexpr auto read_fn = [](indistinguishable::custom_a&, const std::string&) {};
+   static constexpr auto write_fn = [](const indistinguishable::custom_a&) { return std::string{}; };
+   static constexpr auto value = glz::custom<read_fn, write_fn>;
+};
+
+template <>
+struct glz::meta<indistinguishable::ids_only>
+{
+   static constexpr auto ids = std::array{"b", "a"}; // says nothing on the wire without `tag`
+};
+
+template <>
+struct glz::meta<indistinguishable::internally_tagged>
+{
+   static constexpr std::string_view tag = "type";
+   static constexpr auto ids = std::array{"r", "a"};
+};
+
+template <>
+struct glz::meta<indistinguishable::adjacently_tagged>
+{
+   static constexpr std::string_view tag = "type";
+   static constexpr std::string_view content = "value";
+   static constexpr auto ids = std::array{"a", "r"};
+};
+
+namespace indistinguishable
+{
+   template <class V>
+   inline constexpr bool flagged = glz::has_indistinguishable_alternatives_v<V>;
+
+   static_assert(flagged<same>);
+   static_assert(flagged<ids_only>);
+   static_assert(flagged<std::variant<same_b, reversed>>); // keyed readers ignore member order
+   static_assert(flagged<std::variant<same_a, renamed>>); // the key counts, not the member's name
+   static_assert(flagged<std::variant<same_a, same_a>>);
+   static_assert(flagged<std::variant<same_a, std::unique_ptr<same_b>>>);
+   static_assert(flagged<std::variant<std::unique_ptr<same_a>, std::shared_ptr<same_b>>>);
+   static_assert(flagged<std::variant<empty_a, empty_b>>);
+   static_assert(flagged<std::variant<int, same_a, std::string, same_b>>);
+
+   using among_others = glz::variant_indistinguishable_alternatives<std::variant<int, fewer_keys, same_a, same_b>>;
+   static_assert(among_others::pair == std::pair<size_t, size_t>{2, 3});
+   static_assert(std::same_as<among_others::first, same_a>);
+   static_assert(std::same_as<among_others::second, same_b>);
+
+   // A discriminator tells them apart.
+   static_assert(not flagged<internally_tagged>);
+   static_assert(not flagged<adjacently_tagged>);
+
+   // The keys or their types differ, so the alternatives are not interchangeable.
+   static_assert(not flagged<same_keys_other_types>);
+   static_assert(not flagged<std::variant<same_a, fewer_keys>>);
+   static_assert(not flagged<std::variant<same_a, other_keys>>);
+
+   // Nothing here has a compile-time key set to compare.
+   static_assert(not flagged<std::variant<int, double>>);
+   static_assert(not flagged<std::variant<std::vector<int>, std::deque<int>>>);
+   static_assert(not flagged<std::variant<std::map<std::string, int>, std::map<std::string, int>>>);
+   static_assert(not flagged<std::variant<std::monostate, std::monostate>>);
+   static_assert(not flagged<std::variant<same_a, custom_a>>);
+
+   // Many alternatives sharing every key, with one member type differing, must not exhaust the
+   // compiler's constant evaluation budget: each pair is compared, and none of them match.
+   template <size_t I>
+   struct envelope
+   {
+      int k0{}, k1{}, k2{}, k3{}, k4{}, k5{}, k6{}, k7{}, k8{};
+      std::array<int, I + 1> payload{};
+   };
+
+   template <size_t... I>
+   auto make_envelopes(std::index_sequence<I...>) -> std::variant<envelope<I>...>;
+
+   static_assert(not flagged<decltype(make_envelopes(std::make_index_sequence<128>{}))>);
+}
+
+suite indistinguishable_alternatives_tests = [] {
+   using namespace indistinguishable;
+
+   // Nothing in this file reads `same`, `ids_only` or `holds_same`. That they compile at all is half
+   // of what is being tested: the assert is in the reader, so code that only writes is unaffected.
+   "a variant that cannot be read back can still be written"_test = [] {
+      expect(glz::write_json(same{same_b{5, "x"}}).value_or("error") == R"({"i":5,"s":"x"})");
+      expect(glz::write_json(ids_only{same_a{5, "x"}}).value_or("error") == R"({"i":5,"s":"x"})");
+      expect(glz::write_json(holds_same{same_b{5, "x"}}).value_or("error") == R"({"v":{"i":5,"s":"x"}})");
+   };
+
+   "a discriminator makes the same alternatives readable"_test = [] {
+      internally_tagged in{same_a{5, "x"}};
+      auto s = glz::write_json(in);
+      expect(s.has_value());
+      internally_tagged out{};
+      expect(not glz::read_json(out, *s));
+      expect(out.index() == 1);
+
+      adjacently_tagged adjacent_in{reversed{"x", 5}};
+      s = glz::write_json(adjacent_in);
+      expect(s.has_value());
+      adjacently_tagged adjacent_out{};
+      expect(not glz::read_json(adjacent_out, *s));
+      expect(adjacent_out.index() == 1);
+   };
+
+   "alternatives sharing keys but not their types still read"_test = [] {
+      same_keys_other_types out{};
+      expect(not glz::read_json(out, R"({"i":1,"s":"x"})"));
+      expect(out.index() == 0);
    };
 };
 
