@@ -94,26 +94,293 @@ namespace glz
 
       inline constexpr size_t max_pure_reflection_count = 128;
 
-      // The initializer counts an aggregate accepts form a contiguous range ending at its member count. The range
-      // starts above zero when a member cannot be initialized from {} (e.g. no default constructor), so skip the
-      // rejected prefix and return the top of the range.
-      template <class T, class... Args>
-         requires(std::is_aggregate_v<std::remove_cvref_t<T>>)
-      inline constexpr auto count_members = [] {
-         using V = std::remove_cvref_t<T>;
-         if constexpr (requires { V{Args{}..., any_t{}}; }) {
-            return count_members<V, Args..., any_t>;
+      // A probe costs compile time linear in its initializers, so giving up beats exhausting the compiler on huge
+      // arrays
+      inline constexpr size_t max_pure_reflection_initializers = 65536;
+
+      inline constexpr size_t no_count = size_t(-1);
+      inline constexpr size_t too_many_initializers = size_t(-2);
+
+      // any_t that can also bind a non-const lvalue reference. The by-value conversion is the better match for an
+      // rvalue probe, so it still wins wherever both apply and move-only members keep working.
+      struct any_lref_t final
+      {
+         template <class T>
+            requires(!std::same_as<T, const char*> && !std::same_as<T, std::nullptr_t>)
+         operator T() const&&;
+         template <class T>
+            requires(!std::same_as<T, const char*> && !std::same_as<T, std::nullptr_t>)
+         operator T&() const&;
+         operator std::string_view() const&&;
+      };
+
+      // Takes any member except a reference, for which the deleted conversion is the direct binding
+      struct any_value_t final
+      {
+         template <class T>
+            requires(!std::same_as<T, const char*> && !std::same_as<T, std::nullptr_t>)
+         operator T() const&&;
+         template <class T>
+            requires(!std::same_as<T, const char*> && !std::same_as<T, std::nullptr_t>)
+         operator T&() const& = delete;
+         operator std::string_view() const&&;
+      };
+
+      template <class Any, size_t>
+      using any_at = Any;
+
+      template <class V, class Any, size_t... I>
+      consteval bool accepts_impl(std::index_sequence<I...>)
+      {
+         return requires { V{any_at<Any, I>{}...}; };
+      }
+
+      // Whether V can be initialized from N probes
+      template <class V, class Any, size_t N>
+      inline constexpr bool accepts = accepts_impl<V, Any>(std::make_index_sequence<N>{});
+
+      template <class V, class Any, size_t... I>
+      consteval bool accepts_each_braced(std::index_sequence<I...>)
+      {
+         return requires { V{{any_at<Any, I>{}}...}; };
+      }
+
+      template <class V, class Any, size_t... L, size_t... K, size_t... R>
+      consteval bool accepts_braced_impl(std::index_sequence<L...>, std::index_sequence<K...>,
+                                         std::index_sequence<R...>)
+      {
+         return requires { V{any_at<Any, L>{}..., {any_at<Any, K>{}...}, any_at<Any, R>{}...}; };
+      }
+
+      // Whether V can be initialized from L probes, then K probes in braces, then R probes
+      template <class V, class Any, size_t L, size_t K, size_t R>
+      inline constexpr bool accepts_braced = accepts_braced_impl<V, Any>(
+         std::make_index_sequence<L>{}, std::make_index_sequence<K>{}, std::make_index_sequence<R>{});
+
+      // Pred<Lo> holds and Pred<Hi> does not, returns the last value in between that holds
+      template <template <size_t> class Pred, size_t Lo, size_t Hi>
+      consteval size_t last_accepted()
+      {
+         if constexpr (Hi - Lo == 1) {
+            return Lo;
          }
-         else if constexpr (requires { V{Args{}...}; }) {
-            return sizeof...(Args);
-         }
-         else if constexpr (sizeof...(Args) < max_pure_reflection_count) {
-            return count_members<V, Args..., any_t>;
+         else if constexpr (Pred<Lo + (Hi - Lo) / 2>::value) {
+            return last_accepted<Pred, Lo + (Hi - Lo) / 2, Hi>();
          }
          else {
-            return size_t{0}; // no initializer count is accepted (e.g. a reference member), so not reflectable
+            return last_accepted<Pred, Lo, Lo + (Hi - Lo) / 2>();
          }
-      }();
+      }
+
+      struct probed_count
+      {
+         size_t members{no_count};
+         size_t initializers{no_count};
+      };
+
+      // The search for large initializer counts and the members that took more than one of them
+      template <class V, class Any>
+      struct member_search
+      {
+         template <size_t N>
+         struct flat : std::bool_constant<accepts<V, Any, N>>
+         {};
+
+         template <size_t N = 0>
+         static consteval size_t min_initializers()
+         {
+            if constexpr (flat<N>::value) {
+               return N;
+            }
+            else {
+               return min_initializers<N + 1>();
+            }
+         }
+
+         // Past the start of its range acceptance is monotonic, so search rather than walk up, as an array of a few
+         // thousand elements would exceed the template instantiation depth
+         template <size_t Lo>
+         static consteval size_t max_initializers()
+         {
+            constexpr size_t Hi = Lo * 2 < max_pure_reflection_initializers ? Lo * 2 : max_pure_reflection_initializers;
+            if constexpr (Lo == max_pure_reflection_initializers) {
+               return no_count;
+            }
+            else if constexpr (flat<Hi>::value) {
+               return max_initializers<Hi>();
+            }
+            else {
+               return last_accepted<flat, Lo, Hi>();
+            }
+         }
+
+         // The number of initializers taken by the member reached after L initializers. V accepts N initializers
+         // and needs at least Min.
+         template <size_t N, size_t Min, size_t L>
+         struct member_at
+         {
+            template <size_t K>
+            struct takes : std::bool_constant<accepts_braced<V, Any, L, K, 0>>
+            {};
+
+            // K initializers leave exactly enough for the members that follow
+            template <size_t K>
+            static consteval size_t find_exact()
+            {
+               if constexpr (K > Min - L) {
+                  return 1;
+               }
+               else if constexpr (accepts_braced<V, Any, L, K, N - L - K> &&
+                                  !accepts_braced<V, Any, L, K, N - L - K + 1>) {
+                  return K;
+               }
+               else {
+                  return find_exact<K + 1>();
+               }
+            }
+
+            static consteval size_t initializers()
+            {
+               if constexpr (accepts_braced<V, Any, L, 1, N - L - 1>) {
+                  return 1;
+               }
+               // What remains is an array, whose elision took more than one initializer, or a class that rejects
+               // {any}, typically over an ambiguous or explicit constructor. Only the array still accepts {any}
+               // when the following members get nothing, provided that they can go without.
+               else if constexpr (L + 1 < Min) {
+                  return find_exact<2>();
+               }
+               else if constexpr (takes<1>::value) {
+                  return last_accepted<takes, 1, N - L + 1>();
+               }
+               else {
+                  return 1;
+               }
+            }
+         };
+
+         template <size_t N, size_t Min, size_t L = 0, size_t Count = 0>
+         static consteval size_t count_elided()
+         {
+            if constexpr (L >= N || Count > max_pure_reflection_count) {
+               return Count;
+            }
+            else {
+               return count_elided<N, Min, L + member_at<N, Min, L>::initializers(), Count + 1>();
+            }
+         }
+
+         // V accepts N initializers, but rejected at least one member taking its own {any}
+         template <size_t N>
+         static consteval probed_count count_with_elision()
+         {
+            return {count_elided<N, min_initializers()>(), N};
+         }
+
+         // V accepts Lo initializers, and small aggregates never get this far
+         template <size_t Lo>
+         static consteval probed_count count_large()
+         {
+            constexpr size_t N = max_initializers<Lo>();
+            if constexpr (N == no_count) {
+               return {too_many_initializers, too_many_initializers};
+            }
+            else if constexpr (accepts_each_braced<V, Any>(std::make_index_sequence<N>{})) {
+               return {N, N};
+            }
+            else {
+               return count_with_elision<N>();
+            }
+         }
+      };
+
+      // The initializer counts an aggregate accepts form a contiguous range. It starts above zero when a member cannot
+      // be initialized from {} (e.g. no default constructor), so skip the rejected prefix. An array member takes one
+      // initializer per element through brace elision, which rules out each initializer in braces. This one check
+      // keeps ordinary structs clear of the search for such members.
+      template <class V, class Any, class... Args>
+      consteval probed_count probe_members()
+      {
+         constexpr size_t N = sizeof...(Args);
+         if constexpr (requires { V{Args{}..., Any{}}; }) {
+            if constexpr (N < 16) {
+               return probe_members<V, Any, Args..., Any>();
+            }
+            else {
+               return member_search<V, Any>::template count_large<N + 1>();
+            }
+         }
+         else if constexpr (requires { V{Args{}...}; }) {
+            if constexpr (N < 2 || requires { V{{Args{}}...}; }) {
+               return {N, N};
+            }
+            else {
+               return member_search<V, Any>::template count_with_elision<N>();
+            }
+         }
+         else if constexpr (N < max_pure_reflection_count) {
+            return probe_members<V, Any, Args..., Any>();
+         }
+         else {
+            return {};
+         }
+      }
+
+      // any_t is rejected at every initializer count by a non-const lvalue reference that needs an initializer, and
+      // already at the first by a leading member that does not take any_t but can go without
+      template <class V>
+      consteval bool any_t_rejected()
+      {
+         constexpr size_t members = probe_members<V, any_t>().members;
+         return members == no_count || (members == 0 && !std::is_empty_v<V>);
+      }
+
+      // A count of 0 for an aggregate nothing can initialize is no error here, as types that are never reflected reach
+      // this too, such as those with their own to and from specializations.
+      template <class V>
+      consteval size_t count_members_impl()
+      {
+         constexpr size_t members = [] {
+            if constexpr (any_t_rejected<V>()) {
+               return probe_members<V, any_lref_t>().members;
+            }
+            else {
+               return probe_members<V, any_t>().members;
+            }
+         }();
+         static_assert(members != too_many_initializers,
+                       "glz: cannot count the members of this aggregate, its raw arrays are too large. Specialize "
+                       "glz::meta for this type");
+         return members == no_count || members == too_many_initializers ? 0 : members;
+      }
+
+      template <class T>
+         requires(std::is_aggregate_v<std::remove_cvref_t<T>>)
+      inline constexpr size_t count_members = count_members_impl<std::remove_cvref_t<T>>();
+
+      // Whether V has a member that cannot be named through its address. Not detected are rvalue references, and on
+      // MSVC lvalue references to const, as any_value_t also takes the deleted conversion for an array member there.
+      template <class V>
+         requires(std::is_aggregate_v<V>)
+      consteval bool has_reference_member()
+      {
+         if constexpr (any_t_rejected<V>()) {
+            constexpr size_t members = probe_members<V, any_lref_t>().members;
+            return members != no_count && members != too_many_initializers && members != 0;
+         }
+#if defined(_MSC_VER) && !defined(__clang__)
+         else {
+            return false;
+         }
+#else
+         else if constexpr (probe_members<V, any_t>().initializers == too_many_initializers) {
+            return false;
+         }
+         else {
+            return !accepts<V, any_value_t, probe_members<V, any_t>().initializers>;
+         }
+#endif
+      }
 #endif
    }
 

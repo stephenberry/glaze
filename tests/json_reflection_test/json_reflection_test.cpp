@@ -1,5 +1,8 @@
+#include <chrono>
 #include <deque>
+#include <functional>
 #include <map>
+#include <memory>
 #include <optional>
 #include <unordered_map>
 #include <vector>
@@ -433,6 +436,380 @@ suite non_default_member_tests = [] {
       const non_default_value_middle obj{1, non_default_value{2}, "three"};
       expect(glz::write_json(obj).value_or("error") == R"({"a":1,"b":2,"c":"three"})");
    };
+};
+
+// A raw array member is one member, although brace elision has it take one initializer per element
+// (https://github.com/stephenberry/glaze/issues/2960)
+struct raw_array_only
+{
+   int arr[2]{};
+};
+static_assert(glz::detail::count_members<raw_array_only> == 1);
+
+struct raw_array_middle
+{
+   int x{};
+   int arr[3]{};
+   std::string s{};
+};
+static_assert(glz::detail::count_members<raw_array_middle> == 3);
+
+struct raw_char_array
+{
+   char name[32]{};
+};
+static_assert(glz::detail::count_members<raw_char_array> == 1);
+
+struct raw_array_two_dimensions
+{
+   int m[2][3]{};
+   double d{};
+};
+static_assert(glz::detail::count_members<raw_array_two_dimensions> == 2);
+
+struct raw_arrays_adjacent
+{
+   int a[2]{};
+   int b[2]{};
+};
+static_assert(glz::detail::count_members<raw_arrays_adjacent> == 2);
+
+struct raw_array_of_strings
+{
+   std::string s[2]{};
+   int i{};
+};
+static_assert(glz::detail::count_members<raw_array_of_strings> == 2);
+
+struct raw_array_one_element
+{
+   int a[1]{};
+   int b{};
+};
+static_assert(glz::detail::count_members<raw_array_one_element> == 2);
+
+struct raw_array_element_t
+{
+   int a{};
+   int b{};
+};
+
+struct raw_array_of_aggregates
+{
+   raw_array_element_t e[2]{};
+   int x{};
+};
+static_assert(glz::detail::count_members<raw_array_of_aggregates> == 2);
+
+// These take any number of initializers in braces, which must not be read as an array
+struct brace_greedy_members
+{
+   raw_array_element_t e{};
+   std::vector<int> v{};
+   std::string s{};
+   int arr[2]{};
+};
+static_assert(glz::detail::count_members<brace_greedy_members> == 4);
+
+// These reject {any_t}, which must not be read as an array either
+struct brace_rejecting_members
+{
+   std::unique_ptr<int> p{};
+   int arr[3]{};
+   std::chrono::seconds s{};
+   std::function<void()> f{};
+   int b{};
+};
+static_assert(glz::detail::count_members<brace_rejecting_members> == 5);
+
+struct brace_rejecting_only
+{
+   std::unique_ptr<int> a{};
+   int b{};
+   std::shared_ptr<int> c{};
+};
+static_assert(glz::detail::count_members<brace_rejecting_only> == 3);
+
+// The members after an array cannot be left without an initializer
+struct raw_array_of_non_default
+{
+   non_default_t arr[2];
+   int b{};
+};
+static_assert(glz::detail::count_members<raw_array_of_non_default> == 2);
+
+struct raw_array_before_non_default
+{
+   int arr[3]{};
+   non_default_t a;
+   int b{};
+};
+static_assert(glz::detail::count_members<raw_array_before_non_default> == 3);
+
+struct brace_rejecting_before_non_default
+{
+   std::unique_ptr<int> p{};
+   non_default_t a;
+   char buf[4]{};
+};
+static_assert(glz::detail::count_members<brace_rejecting_before_non_default> == 3);
+
+// Far above any reasonable instantiation depth for a linear search
+struct raw_array_large
+{
+   int x{};
+   char buf[2048]{};
+   std::string s{};
+};
+static_assert(glz::detail::count_members<raw_array_large> == 3);
+
+#define GLZ_TEST_MEMBERS_8(p) \
+   p##0 {}, p##1 {}, p##2 {}, p##3 {}, p##4 {}, p##5 {}, p##6 {}, p##7 {}
+#define GLZ_TEST_MEMBERS_64(p)                                                                             \
+   GLZ_TEST_MEMBERS_8(p##0), GLZ_TEST_MEMBERS_8(p##1), GLZ_TEST_MEMBERS_8(p##2), GLZ_TEST_MEMBERS_8(p##3), \
+      GLZ_TEST_MEMBERS_8(p##4), GLZ_TEST_MEMBERS_8(p##5), GLZ_TEST_MEMBERS_8(p##6), GLZ_TEST_MEMBERS_8(p##7)
+
+struct members_128
+{
+   int GLZ_TEST_MEMBERS_64(a), GLZ_TEST_MEMBERS_64(b);
+};
+static_assert(glz::detail::count_members<members_128> == 128);
+
+struct members_129
+{
+   int GLZ_TEST_MEMBERS_64(a), GLZ_TEST_MEMBERS_64(b), c{};
+};
+static_assert(glz::detail::count_members<members_129> == 129);
+
+// The limit applies to members, not to the initializers of their elements
+struct members_128_with_array
+{
+   int GLZ_TEST_MEMBERS_64(a), GLZ_TEST_MEMBERS_8(b0), GLZ_TEST_MEMBERS_8(b1), GLZ_TEST_MEMBERS_8(b2),
+      GLZ_TEST_MEMBERS_8(b3), GLZ_TEST_MEMBERS_8(b4), GLZ_TEST_MEMBERS_8(b5),
+      GLZ_TEST_MEMBERS_8(b6), b70{}, b71{}, b72{}, b73{}, b74{}, b75{}, b76{}, arr[16]{};
+};
+static_assert(glz::detail::count_members<members_128_with_array> == 128);
+
+struct members_129_with_array
+{
+   int GLZ_TEST_MEMBERS_64(a), GLZ_TEST_MEMBERS_64(b), arr[3]{};
+};
+// A count above the limit is only ever compared against it, so the search may stop early
+static_assert(glz::detail::count_members<members_129_with_array> > 128);
+
+#undef GLZ_TEST_MEMBERS_64
+#undef GLZ_TEST_MEMBERS_8
+
+#if !GLZ_REFLECTION26
+template <class T>
+concept can_tie = requires(T& t) { glz::to_tie(t); };
+static_assert(can_tie<members_128>);
+static_assert(can_tie<members_128_with_array>);
+static_assert(!can_tie<members_129>);
+static_assert(!can_tie<members_129_with_array>);
+#endif
+
+struct raw_array_modified
+{
+   int values[2]{};
+   int x{};
+};
+
+template <>
+struct glz::meta<raw_array_modified>
+{
+   static constexpr auto modify = glz::object("x", &raw_array_modified::x);
+};
+
+suite raw_array_member_tests = [] {
+   "raw array member round trip"_test = [] {
+      const raw_array_middle obj{1, {2, 3, 4}, "five"};
+      const auto json = glz::write_json(obj).value_or("error");
+      expect(json == R"({"x":1,"arr":[2,3,4],"s":"five"})") << json;
+
+      raw_array_middle out{};
+      expect(!glz::read_json(out, json));
+      expect(out.x == 1);
+      expect(out.arr[0] == 2 && out.arr[1] == 3 && out.arr[2] == 4);
+      expect(out.s == "five");
+   };
+
+   "raw char array round trip"_test = [] {
+      const raw_char_array obj{"hello"};
+      const auto json = glz::write_json(obj).value_or("error");
+      expect(json == R"({"name":"hello"})") << json;
+
+      raw_char_array out{};
+      expect(!glz::read_json(out, json));
+      expect(std::string_view{out.name} == "hello");
+   };
+
+   "two dimensional raw array round trip"_test = [] {
+      const raw_array_two_dimensions obj{{{1, 2, 3}, {4, 5, 6}}, 7.0};
+      const auto json = glz::write_json(obj).value_or("error");
+      expect(json == R"({"m":[[1,2,3],[4,5,6]],"d":7})") << json;
+
+      raw_array_two_dimensions out{};
+      expect(!glz::read_json(out, json));
+      expect(out.m[1][2] == 6);
+      expect(out.d == 7.0);
+   };
+
+   "raw array of aggregates round trip"_test = [] {
+      const raw_array_of_aggregates obj{{{1, 2}, {3, 4}}, 5};
+      const auto json = glz::write_json(obj).value_or("error");
+      expect(json == R"({"e":[{"a":1,"b":2},{"a":3,"b":4}],"x":5})") << json;
+
+      raw_array_of_aggregates out{};
+      expect(!glz::read_json(out, json));
+      expect(out.e[1].b == 4);
+      expect(out.x == 5);
+   };
+
+   "raw array beve round trip"_test = [] {
+      const raw_array_middle obj{1, {2, 3, 4}, "five"};
+      std::string buffer{};
+      expect(!glz::write_beve(obj, buffer));
+
+      raw_array_middle out{};
+      expect(!glz::read_beve(out, buffer));
+      expect(out.arr[2] == 4);
+      expect(out.s == "five");
+   };
+
+   "raw array member with modify"_test = [] {
+      const raw_array_modified obj{{1, 2}, 3};
+      expect(glz::write_json(obj).value_or("error") == R"({"values":[1,2],"x":3})");
+   };
+};
+
+// A non-const lvalue reference used to stop the count at zero, which wrote {} and returned success
+struct lvalue_reference_member
+{
+   int a{};
+   int& r;
+};
+static_assert(glz::detail::count_members<lvalue_reference_member> == 2);
+
+struct lvalue_reference_first
+{
+   int& r;
+   std::string s{};
+   std::vector<int> v{};
+   std::unique_ptr<int> p{};
+};
+static_assert(glz::detail::count_members<lvalue_reference_first> == 4);
+
+struct lvalue_reference_and_array
+{
+   char c[4]{};
+   int& r;
+   double d[2]{};
+};
+static_assert(glz::detail::count_members<lvalue_reference_and_array> == 3);
+
+inline int lvalue_reference_default{};
+
+struct lvalue_reference_with_initializer
+{
+   int& r = lvalue_reference_default;
+   int a{};
+};
+static_assert(glz::detail::count_members<lvalue_reference_with_initializer> == 2);
+
+struct const_reference_member
+{
+   int a{};
+   const int& r;
+};
+static_assert(glz::detail::count_members<const_reference_member> == 2);
+
+struct rvalue_reference_member
+{
+   int a{};
+   int&& r;
+};
+static_assert(glz::detail::count_members<rvalue_reference_member> == 2);
+
+struct reference_wrapper_member
+{
+   int a{};
+   std::reference_wrapper<int> r;
+};
+static_assert(glz::detail::count_members<reference_wrapper_member> == 2);
+
+struct reference_wrapper_and_array
+{
+   std::reference_wrapper<int> r;
+   int arr[2]{};
+};
+static_assert(glz::detail::count_members<reference_wrapper_and_array> == 2);
+
+struct reference_member_positional
+{
+   int a{};
+   int& r;
+   char c[4]{};
+};
+
+template <>
+struct glz::meta<reference_member_positional>
+{
+   static constexpr auto value = glz::reflect_array{};
+};
+
+suite reference_member_tests = [] {
+   "to_tie reaches the referenced object"_test = [] {
+      int x = 1;
+      lvalue_reference_member obj{2, x};
+      auto tie = glz::to_tie(obj);
+      expect(glz::get<0>(tie) == 2);
+      glz::get<1>(tie) = 3;
+      expect(x == 3);
+   };
+
+   "reference member with reflect_array"_test = [] {
+      int x = 42;
+      const reference_member_positional obj{1, x, {'a', 'b', 'c', 0}};
+      const auto json = glz::write_json(obj).value_or("error");
+      expect(json == R"([1,42,"abc"])") << json;
+
+      int y = 0;
+      reference_member_positional out{0, y};
+      expect(!glz::read_json(out, json));
+      expect(out.a == 1);
+      expect(y == 42);
+      expect(std::string_view{out.c} == "abc");
+   };
+
+   "reference_wrapper member round trip"_test = [] {
+      int x = 42;
+      const reference_wrapper_member obj{1, x};
+      const auto json = glz::write_json(obj).value_or("error");
+      expect(json == R"({"a":1,"r":42})") << json;
+
+      int y = 0;
+      reference_wrapper_member out{0, y};
+      expect(!glz::read_json(out, json));
+      expect(out.a == 1);
+      expect(y == 42);
+   };
+
+#if GLZ_REFLECTION26
+   // P2996 can name a reference member, see reference_member_rejection for the other path
+   "reference member round trip"_test = [] {
+      int x = 42;
+      const lvalue_reference_member obj{1, x};
+      const auto json = glz::write_json(obj).value_or("error");
+      expect(json == R"({"a":1,"r":42})") << json;
+
+      int y = 0;
+      lvalue_reference_member out{0, y};
+      expect(!glz::read_json(out, json));
+      expect(out.a == 1);
+      expect(y == 42);
+   };
+#endif
 };
 
 struct nested_t
@@ -1643,6 +2020,97 @@ suite types_without_linkage = [] {
          int count{};
       };
       static_assert(glz::member_names<with_not_literal_t>[0] == "member");
+   };
+};
+
+// Types that pure reflection cannot name or count are still fine with their own to specialization. They reach
+// reflect<T> anyway, through the padding computed for a container of them, and that must not be an error.
+struct custom_writer_reference
+{
+   int a{};
+   int& r;
+};
+
+struct custom_writer_const_reference
+{
+   int a{};
+   const int& r;
+};
+
+struct custom_writer_c_string
+{
+   const char* name{};
+   int a{};
+};
+
+namespace glz
+{
+   template <>
+   struct to<JSON, custom_writer_reference>
+   {
+      template <auto Opts>
+      static void op(const custom_writer_reference& value, is_context auto&& ctx, auto&& b, auto&& ix)
+      {
+         serialize<JSON>::op<Opts>(value.a, ctx, b, ix);
+      }
+   };
+
+   template <>
+   struct to<JSON, custom_writer_const_reference>
+   {
+      template <auto Opts>
+      static void op(const custom_writer_const_reference& value, is_context auto&& ctx, auto&& b, auto&& ix)
+      {
+         serialize<JSON>::op<Opts>(value.a, ctx, b, ix);
+      }
+   };
+
+   template <>
+   struct to<JSON, custom_writer_c_string>
+   {
+      template <auto Opts>
+      static void op(const custom_writer_c_string& value, is_context auto&& ctx, auto&& b, auto&& ix)
+      {
+         serialize<JSON>::op<Opts>(value.a, ctx, b, ix);
+      }
+   };
+}
+
+struct holds_custom_writers
+{
+   std::vector<custom_writer_reference> references{};
+   custom_writer_c_string c_string{};
+};
+
+suite unreflected_custom_types = [] {
+   "containers of custom types that reflection rejects"_test = [] {
+      int x = 1;
+      {
+         std::vector<custom_writer_reference> values{{2, x}, {3, x}};
+         std::string buffer{};
+         expect(not glz::write_json(values, buffer));
+         expect(buffer == "[2,3]") << buffer;
+      }
+      {
+         std::vector<custom_writer_const_reference> values{{4, x}};
+         std::string buffer{};
+         expect(not glz::write_json(values, buffer));
+         expect(buffer == "[4]") << buffer;
+      }
+      {
+         std::vector<custom_writer_c_string> values{{"a", 5}, {"b", 6}};
+         std::string buffer{};
+         expect(not glz::write_json(values, buffer));
+         expect(buffer == "[5,6]") << buffer;
+      }
+   };
+
+   "reflected struct holding custom types that reflection rejects"_test = [] {
+      int x = 1;
+      holds_custom_writers value{{{7, x}}, {"a", 8}};
+      std::string buffer{};
+      expect(not glz::write_json(value, buffer));
+      expect(buffer == R"({"references":[7],"c_string":8})") << buffer;
    };
 };
 

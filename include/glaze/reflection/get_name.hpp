@@ -419,8 +419,37 @@ namespace glz
    }
 
    template <class T>
-   inline constexpr auto member_names =
-      [] { return member_names_impl<T>(std::make_index_sequence<detail::count_members<T>>{}); }();
+   inline constexpr auto member_names = [] {
+#if !GLZ_REFLECTION26
+      if constexpr (detail::has_reference_member<std::remove_cvref_t<T>>()) {
+         static_assert(false_v<T>,
+                       "glz: pure reflection cannot name a reference member, as it has no address of its "
+                       "own. Use std::reference_wrapper, glz::reflect_array or a glz::meta specialization");
+         return std::array<sv, detail::count_members<T>>{};
+      }
+      else
+#endif
+      {
+         return member_names_impl<T>(std::make_index_sequence<detail::count_members<T>>{});
+      }
+   }();
+
+   // Whether a type cannot be reflected as an object because member_names rejects it. Anything that only asks about a
+   // type must check this before touching its names, as the type may never be reflected: it can have its own to and
+   // from specializations.
+   template <class T>
+   consteval bool has_unnameable_members()
+   {
+#if !GLZ_REFLECTION26
+      if constexpr (std::is_aggregate_v<std::remove_cvref_t<T>> && std::is_class_v<std::remove_cvref_t<T>>) {
+         return detail::has_reference_member<std::remove_cvref_t<T>>();
+      }
+      else
+#endif
+      {
+         return false;
+      }
+   }
 
    // Forward declaration of refl_t for member type extraction
    // The actual definition is in glaze/core/reflect.hpp

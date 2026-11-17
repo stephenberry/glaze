@@ -104,6 +104,9 @@ add_subdirectory(streaming_view_rejection)
 add_subdirectory(wrapper_rejection)
 add_subdirectory(custom_getter_rejection)
 add_subdirectory(c_string_rejection)
+if(NOT glaze_ENABLE_REFLECTION26)
+  add_subdirectory(reference_member_rejection)
+endif()
 
 # simple_float_test runs exhaustive tests over all 2^32 float values
 # Disabled by default - run via dedicated CI workflow in Release mode
