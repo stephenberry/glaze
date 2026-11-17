@@ -4980,6 +4980,108 @@ name: works)";
       }
    };
 
+   // A continuation line of a plain scalar may begin with "- ": the node already started as
+   // a scalar, so the line folds into it rather than opening a sequence.
+   "plain_scalar_continuation_starting_with_dash"_test = [] {
+      {
+         std::string yaml = "name: foo\n  - bar\nx: 1";
+         simple_struct data{};
+         auto ec = glz::read_yaml(data, yaml);
+         expect(!ec) << glz::format_error(ec, yaml);
+         expect(data.name == "foo - bar");
+         expect(data.x == 1);
+      }
+      {
+         std::string yaml = "name: foo\n    - bar\n  - baz\ny: 2.5";
+         simple_struct data{};
+         auto ec = glz::read_yaml(data, yaml);
+         expect(!ec) << glz::format_error(ec, yaml);
+         expect(data.name == "foo - bar - baz");
+         expect(data.y == 2.5);
+      }
+      {
+         std::string yaml = "name:\n  foo\n  - bar\nx: 1";
+         simple_struct data{};
+         auto ec = glz::read_yaml(data, yaml);
+         expect(!ec) << glz::format_error(ec, yaml);
+         expect(data.name == "foo - bar");
+         expect(data.x == 1);
+      }
+      {
+         std::string yaml = "title: t\ndata:\n  name: foo\n    - bar\n  x: 1\nnumbers: [2]";
+         nested_struct data{};
+         auto ec = glz::read_yaml(data, yaml);
+         expect(!ec) << glz::format_error(ec, yaml);
+         expect(data.data.name == "foo - bar");
+         expect(data.data.x == 1);
+         expect(data.numbers == std::vector<int>{2});
+      }
+      {
+         std::string yaml = "a: foo\n  - bar\nb: c";
+         std::map<std::string, std::string> data{};
+         auto ec = glz::read_yaml(data, yaml);
+         expect(!ec) << glz::format_error(ec, yaml);
+         expect(data == std::map<std::string, std::string>{{"a", "foo - bar"}, {"b", "c"}});
+      }
+      for (const std::string yaml : {"foo\n- bar", "foo\n  - bar"}) {
+         std::string value{};
+         auto ec = glz::read_yaml(value, yaml);
+         expect(!ec) << glz::format_error(ec, yaml);
+         expect(value == "foo - bar") << yaml;
+      }
+      {
+         std::string yaml = "unknown: foo\n  - bar\nx: 1";
+         simple_struct data{};
+         auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(data, yaml);
+         expect(!ec) << glz::format_error(ec, yaml);
+         expect(data.x == 1);
+      }
+      // Inside a sequence, a dash at the entry's own column still starts the next entry.
+      {
+         std::string yaml = "- foo\n  - bar\n- baz";
+         std::vector<std::string> data{};
+         auto ec = glz::read_yaml(data, yaml);
+         expect(!ec) << glz::format_error(ec, yaml);
+         expect(data == std::vector<std::string>{"foo - bar", "baz"});
+      }
+      {
+         std::string yaml = "- foo\n  - bar\n- baz\n- 3";
+         std::tuple<std::string, std::string, int> data{};
+         auto ec = glz::read_yaml(data, yaml);
+         expect(!ec) << glz::format_error(ec, yaml);
+         expect(data == std::tuple<std::string, std::string, int>{"foo - bar", "baz", 3});
+      }
+   };
+
+   // A "- " line left over after a completed value has no node it can belong to. It must be
+   // rejected rather than ending the read early and dropping the rest of the document.
+   "orphaned_sequence_entry_rejected"_test = [] {
+      for (const std::string yaml :
+           {"name: 'foo'\n  - bar\nx: 1", "name: \"foo\"\n    - bar\nx: 1", "x: 1\n  - 2", "name: foo\n- bar\nx: 1"}) {
+         simple_struct data{};
+         auto ec = glz::read_yaml(data, yaml);
+         expect(ec.ec == glz::error_code::syntax_error) << yaml;
+      }
+      {
+         std::string yaml = "title: t\ndata:\n  name: 'foo'\n    - bar\n  x: 1\nnumbers: [2]";
+         nested_struct data{};
+         auto ec = glz::read_yaml(data, yaml);
+         expect(ec.ec == glz::error_code::syntax_error);
+      }
+      {
+         std::string yaml = "a: 'foo'\n  - bar\nb: c";
+         std::map<std::string, std::string> data{};
+         auto ec = glz::read_yaml(data, yaml);
+         expect(ec.ec == glz::error_code::syntax_error);
+      }
+      {
+         std::string yaml = "- name: 'foo'\n    - bar\n  x: 1\n- name: b";
+         std::vector<simple_struct> data{};
+         auto ec = glz::read_yaml(data, yaml);
+         expect(ec.ec == glz::error_code::syntax_error);
+      }
+   };
+
    "flow_mapping_newline_before_comma"_test = [] {
       // In YAML flow context, newlines are treated as whitespace.
       // A newline between a value and the comma separator should be valid.

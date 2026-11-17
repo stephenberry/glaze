@@ -179,6 +179,14 @@ namespace glz
                      // But a plain "key: value" pattern here indicates malformed
                      // trailing mapping content after a completed root node.
                      const char first = *line;
+                     // A block sequence entry here has nothing it can belong to: every node
+                     // that could own it has returned, so accepting it would drop it and every
+                     // line after it from the document.
+                     if (first == '-' &&
+                         ((line + 1) == end || yaml::whitespace_or_line_end_table[static_cast<uint8_t>(*(line + 1))])) {
+                        ctx.error = error_code::syntax_error;
+                        return;
+                     }
                      const bool explicit_or_structural_start =
                         (first == ':' || first == '?' || first == '!' || first == '&' || first == '*' || first == '[' ||
                          first == '{' || first == '"' || first == '\'' || first == '-');
@@ -1256,14 +1264,15 @@ namespace glz
                   // Terminates the scalar when the dash is at or above the
                   // enclosing sequence's indicator column, meaning it starts
                   // a sibling entry.  A dash deeper than the indicator is
-                  // plain content (yaml-test-suite AB8U).
-                  if (*lookahead == '-') {
+                  // plain content (yaml-test-suite AB8U). Outside a sequence
+                  // the line has already passed the dedent check above, so it
+                  // is a continuation: "k: a\n  - b" reads as "a - b", since a
+                  // node that began as a scalar cannot turn into a sequence.
+                  if (*lookahead == '-' && ctx.sequence_dash_indent >= 0 && line_indent <= ctx.sequence_dash_indent) {
                      auto after_dash = lookahead + 1;
                      if (after_dash == end || *after_dash == ' ' || *after_dash == '\t' || *after_dash == '\n' ||
                          *after_dash == '\r') {
-                        if (ctx.sequence_dash_indent < 0 || line_indent <= ctx.sequence_dash_indent) {
-                           return;
-                        }
+                        return;
                      }
                   }
 
@@ -4361,6 +4370,15 @@ namespace glz
                   break;
                }
 
+               // Published to the element as parse_block_sequence does, so a multi-line plain
+               // scalar element ends at the next "- " entry rather than folding it in.
+               int32_t dash_col = static_cast<int32_t>(it - line_start);
+               if constexpr (std::is_pointer_v<std::decay_t<It>>) {
+                  if (ctx.stream_begin) {
+                     dash_col = ctx.line_prefix_before(&*it).column;
+                  }
+               }
+
                ++it; // Skip '-'
 
                // Check valid sequence indicator
@@ -4370,6 +4388,11 @@ namespace glz
                }
 
                yaml::skip_inline_ws(it, end);
+
+               const bool prev_sequence_item_value_context = ctx.sequence_item_value_context;
+               const int32_t prev_sequence_dash_indent = ctx.sequence_dash_indent;
+               ctx.sequence_item_value_context = true;
+               ctx.sequence_dash_indent = dash_col;
 
                // Parse element at current index
                [&]<size_t... Is>(std::index_sequence<Is...>) {
@@ -4393,6 +4416,9 @@ namespace glz
                      }.template operator()<Is>(),
                      ...);
                }(std::make_index_sequence<N>{});
+
+               ctx.sequence_dash_indent = prev_sequence_dash_indent;
+               ctx.sequence_item_value_context = prev_sequence_item_value_context;
 
                if (bool(ctx.error)) [[unlikely]]
                   return;
