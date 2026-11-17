@@ -18,10 +18,23 @@ namespace glz
    // Register this with an object to allow loading a file when a valid file path is given as a string
    // If the file does not exist, the string is handled as a glz::raw_json
    // This enables file including of unknown structures that will be decoded in the future when state is known
-   struct raw_or_file final
+   //
+   // Deprecated: any string that names an existing file is replaced by that file's contents, so whether a value
+   // stays a string depends on the filesystem at read time, and untrusted input can pull in any readable file.
+   // Use glz::raw_json and load files where the application decides a value is a path.
+   struct [[deprecated("Use glz::raw_json and load files explicitly instead of glz::raw_or_file")]] raw_or_file final
    {
       std::string str = R"("")";
    };
+
+   // The specializations below name the deprecated type; only the user's own uses should warn.
+#if defined(_MSC_VER) && !defined(__clang__)
+#pragma warning(push)
+#pragma warning(disable : 4996)
+#elif defined(__GNUC__)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
+#endif
 
    template <>
    struct from<JSON, raw_or_file>
@@ -87,4 +100,10 @@ namespace glz
          dump_maybe_empty(value.str, b, ix);
       }
    };
+
+#if defined(_MSC_VER) && !defined(__clang__)
+#pragma warning(pop)
+#elif defined(__GNUC__)
+#pragma GCC diagnostic pop
+#endif
 }
