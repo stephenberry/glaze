@@ -36,7 +36,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        clang: [19, 20]
+        clang: [19, 20, 21, 22, 23]
         build_type: [Debug]
         std: [23]
 
