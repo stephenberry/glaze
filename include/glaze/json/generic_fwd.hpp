@@ -317,6 +317,12 @@ namespace glz
          return *this;
       }
 
+      generic_json& operator=(std::string&& value)
+      {
+         data = std::move(value);
+         return *this;
+      }
+
       generic_json& operator=(const std::string_view value)
       {
          data = std::string(value);
@@ -341,9 +347,21 @@ namespace glz
          return *this;
       }
 
+      generic_json& operator=(array_t&& value)
+      {
+         data = std::move(value);
+         return *this;
+      }
+
       generic_json& operator=(const object_t& value)
       {
          data = value;
+         return *this;
+      }
+
+      generic_json& operator=(object_t&& value)
+      {
+         data = std::move(value);
          return *this;
       }
 

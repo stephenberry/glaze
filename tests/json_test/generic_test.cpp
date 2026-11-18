@@ -237,6 +237,28 @@ suite generic_json_tests = [] {
       expect(s == "{}");
    };
 
+   // Assigning an rvalue string, array, or object must move it, not copy it.
+   // A move keeps the source's heap buffer, so its address carries over.
+   "generic move assignment"_test = [] {
+      glz::generic json{};
+
+      std::string str(64, 'x'); // longer than any small-string buffer
+      const auto* str_buffer = str.data();
+      json = std::move(str);
+      expect(json.get_string().data() == str_buffer);
+
+      glz::generic::array_t arr{glz::generic(1.0), glz::generic(2.0)};
+      const auto* arr_buffer = arr.data();
+      json = std::move(arr);
+      expect(json.get_array().data() == arr_buffer);
+
+      glz::generic::object_t obj{{"key1", glz::generic("value1")}, {"key2", glz::generic("value2")}};
+      const auto* obj_value = &obj.begin()->second;
+      json = std::move(obj);
+      expect(&json.get_object().begin()->second == obj_value);
+      expect(json.dump().value() == R"({"key1":"value1","key2":"value2"})");
+   };
+
    "generic is_object"_test = [] {
       glz::generic json{};
       expect(not glz::read_json(json, "{}"));
