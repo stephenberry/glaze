@@ -247,7 +247,7 @@ suite generic_json_tests = [] {
       json = std::move(str);
       expect(json.get_string().data() == str_buffer);
 
-      glz::generic::array_t arr{glz::generic(1.0), glz::generic(2.0)};
+      glz::generic::array_t arr{1.0, 2.0};
       const auto* arr_buffer = arr.data();
       json = std::move(arr);
       expect(json.get_array().data() == arr_buffer);
@@ -257,6 +257,13 @@ suite generic_json_tests = [] {
       json = std::move(obj);
       expect(&json.get_object().begin()->second == obj_value);
       expect(json.dump().value() == R"({"key1":"value1","key2":"value2"})");
+
+      // operator[] moves an rvalue key into a newly inserted member
+      glz::generic object{};
+      std::string key(64, 'k');
+      const auto* key_buffer = key.data();
+      object[std::move(key)] = 1.0;
+      expect(object.get_object().begin()->first.data() == key_buffer);
    };
 
    "generic is_object"_test = [] {

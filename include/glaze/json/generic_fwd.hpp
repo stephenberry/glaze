@@ -250,7 +250,7 @@ namespace glz
          }
          auto iter = object->find(key);
          if (iter == object->end()) {
-            iter = object->insert(std::make_pair(std::string(key), generic_json{})).first;
+            iter = object->insert(std::make_pair(std::string(std::forward<decltype(key)>(key)), generic_json{})).first;
          }
          return iter->second;
       }
