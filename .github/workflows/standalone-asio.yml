@@ -57,7 +57,7 @@ jobs:
           python3
         update-ca-certificates
 
-    - uses: actions/checkout@v6
+    - uses: actions/checkout@v7
 
     - name: Configure CMake
       run: |

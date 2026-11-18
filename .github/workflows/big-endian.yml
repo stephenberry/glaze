@@ -32,7 +32,7 @@ jobs:
     name: GCC s390x (big-endian, cross-compiled)
 
     steps:
-    - uses: actions/checkout@v6
+    - uses: actions/checkout@v7
 
     - name: Install cross-compiler and QEMU
       run: |
