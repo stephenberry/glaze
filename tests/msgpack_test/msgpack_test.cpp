@@ -1752,6 +1752,9 @@ suite msgpack_allocation_limits_tests = [] {
       std::set<int> set_out{};
       expect(glz::read<msgpack_limited_opts{}>(set_out, buffer) == glz::error_code::invalid_length);
 
+      std::array<int, 8> array_out{};
+      expect(glz::read<msgpack_limited_opts{}>(array_out, buffer) == glz::error_code::invalid_length);
+
       expect(not glz::write_msgpack(std::vector<int>{1, 2, 3, 4}, buffer));
       expect(not glz::read<msgpack_limited_opts{}>(out, buffer));
       expect(out.size() == 4);

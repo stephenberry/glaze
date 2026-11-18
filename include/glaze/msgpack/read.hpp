@@ -1032,11 +1032,11 @@ namespace glz
          if (!msgpack::read_array_length(ctx, tag, it, end, len)) {
             return;
          }
+         if (msgpack::detail::exceeds_max_array_size<Opts>(ctx, len)) [[unlikely]] {
+            return;
+         }
 
          if constexpr (emplace_backable<std::decay_t<Value>>) {
-            if (msgpack::detail::exceeds_max_array_size<Opts>(ctx, len)) [[unlikely]] {
-               return;
-            }
             if (exceeds_capacity(value, len, ctx)) [[unlikely]] {
                return;
             }
