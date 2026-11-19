@@ -40,7 +40,7 @@ jobs:
     name: P2996 Reflection Tests
 
     steps:
-    - uses: actions/checkout@v6
+    - uses: actions/checkout@v7
 
     - name: Pull P2996 Docker image
       run: docker pull ${{ env.P2996_IMAGE }}
@@ -66,6 +66,9 @@ jobs:
     # tests/eigen_test takes its find_package branch. Without it that test falls back
     # to cloning gitlab.com, which is a second forge to depend on and the one that
     # refuses unauthenticated clones from CI address ranges.
+    #
+    # The job count is capped at the core count. A bare -j lets make start every compile at
+    # once, and P2996 reflection builds use enough memory that the runner stops responding.
     - name: Build and run tests with CMake
       run: |
         docker run --rm \
@@ -87,6 +90,6 @@ jobs:
               -Dglaze_BUILD_NETWORKING_TESTS=OFF \
               -Dglaze_ENABLE_SANITIZERS=OFF \
               -Dglaze_ENABLE_FUZZING=OFF &&
-            cmake --build build -j &&
-            ctest --test-dir build --output-on-failure -j
+            cmake --build build -j$(nproc) &&
+            ctest --test-dir build --output-on-failure -j$(nproc)
           "

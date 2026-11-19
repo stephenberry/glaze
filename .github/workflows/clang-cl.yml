@@ -40,7 +40,7 @@ jobs:
         cpp_version: [23]
 
     steps:
-    - uses: actions/checkout@v6
+    - uses: actions/checkout@v7
 
     - name: Configure CMake
       run: |
@@ -58,7 +58,7 @@ jobs:
     timeout-minutes: 25
 
     steps:
-    - uses: actions/checkout@v6
+    - uses: actions/checkout@v7
 
     # Ninja and vswhere are both preinstalled on this runner image, and vcvarsall is
     # what hands clang-cl the MSVC headers, libraries and linker, so nothing here has

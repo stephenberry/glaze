@@ -14,7 +14,7 @@ jobs:
     runs-on: ubuntu-24.04
 
     steps:
-    - uses: actions/checkout@v6
+    - uses: actions/checkout@v7
 
     - name: Install Clang 19
       run: |
@@ -47,7 +47,7 @@ jobs:
       run: cmake --build build --config ${{env.BUILD_TYPE}} --target ccov-all -j 2
 
     - name: Archive code coverage results
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v7
       with:
         name: code-coverage-report
         path: ${{github.workspace}}/build/ccov/all-merged
