@@ -3305,13 +3305,24 @@ namespace glz
 
       GLZ_ALWAYS_INLINE static constexpr size_t op(U id) noexcept
       {
+         const auto index = candidate(id);
+         // Verify the id matches: the modular strategies map every integer to some slot, so an id that
+         // is not one of ids_v<T> can land on a declared one
+         if (index < N && ids_v<T>[index] == id) {
+            return index;
+         }
+         return N; // Not found
+      }
+
+      GLZ_ALWAYS_INLINE static constexpr size_t candidate(U id) noexcept
+      {
          using enum int_hash_type;
 
          if constexpr (Info.type == direct) {
             return static_cast<size_t>(id);
          }
          else if constexpr (Info.type == offset) {
-            return static_cast<size_t>(id - Info.min_value);
+            return static_cast<size_t>(static_cast<uint64_t>(id) - static_cast<uint64_t>(Info.min_value));
          }
          else if constexpr (Info.type == two_element) {
             // Compare against first value: if match return 0, else check second
@@ -3337,8 +3348,8 @@ namespace glz
             return Info.table[bit];
          }
          else if constexpr (Info.type == small_range) {
-            const auto idx = static_cast<int64_t>(id) - Info.min_value;
-            if (idx < 0 || static_cast<size_t>(idx) >= Info.table_size) [[unlikely]] {
+            const auto idx = static_cast<uint64_t>(id) - static_cast<uint64_t>(Info.min_value);
+            if (idx >= Info.table_size) [[unlikely]] {
                return N;
             }
             return Info.table[static_cast<size_t>(idx)];

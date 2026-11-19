@@ -967,6 +967,69 @@ struct glz::meta<NumericVariant>
    static constexpr auto ids = std::array{1, 2}; // TypeNumUnknown handles all other values
 };
 
+// Sparse numeric IDs: neither sequential nor within a small range, so they are looked up by a modular hash
+struct TypeSparseStart
+{
+   int type{1000};
+   std::string data{};
+};
+
+struct TypeSparseStop
+{
+   int type{2000};
+   std::string data{};
+};
+
+struct TypeSparseShutdown
+{
+   int type{3000};
+   bool force{};
+};
+
+struct TypeSparseUnknown
+{
+   int type{};
+   std::optional<std::string> data{};
+   std::optional<bool> force{};
+};
+
+using SparseNumericVariant = std::variant<TypeSparseStart, TypeSparseStop, TypeSparseShutdown, TypeSparseUnknown>;
+
+template <>
+struct glz::meta<SparseNumericVariant>
+{
+   static constexpr std::string_view tag = "type";
+   static constexpr auto ids = std::array{1000, 2000, 3000}; // TypeSparseUnknown handles all other values
+};
+
+using StrictSparseNumericVariant = std::variant<TypeSparseStart, TypeSparseStop, TypeSparseShutdown>;
+
+template <>
+struct glz::meta<StrictSparseNumericVariant>
+{
+   static constexpr std::string_view tag = "type";
+   static constexpr auto ids = std::array{1000, 2000, 3000};
+};
+
+// Sequential int64 IDs are looked up by offset, nearby ones by a small table
+using Int64OffsetVariant = std::variant<TypeNumA, TypeNumB, TypeSparseShutdown>;
+
+template <>
+struct glz::meta<Int64OffsetVariant>
+{
+   static constexpr std::string_view tag = "type";
+   static constexpr auto ids = std::array<int64_t, 3>{5, 6, 7};
+};
+
+using Int64SmallRangeVariant = std::variant<TypeNumA, TypeSparseStart, TypeSparseShutdown>;
+
+template <>
+struct glz::meta<Int64SmallRangeVariant>
+{
+   static constexpr std::string_view tag = "type";
+   static constexpr auto ids = std::array<int64_t, 3>{5, 50, 100};
+};
+
 suite variant_default_tests = [] {
    "default variant - known CREATE action"_test = [] {
       std::string_view json = R"({"action":"CREATE","resource":"user","attributes":{"name":"Alice","role":"admin"}})";
@@ -1097,6 +1160,73 @@ suite variant_default_tests = [] {
       expect(unknown.data.value() == "unknown");
       expect(unknown.value.has_value());
       expect(unknown.value.value() == 3.14);
+   };
+
+   "default variant - sparse numeric known types"_test = [] {
+      std::string_view json = R"({"type":3000,"force":true})";
+      SparseNumericVariant nv{};
+      auto ec = glz::read_json(nv, json);
+      expect(!ec) << glz::format_error(ec, json);
+      expect(std::holds_alternative<TypeSparseShutdown>(nv));
+      expect(std::get<TypeSparseShutdown>(nv).force);
+
+      json = R"({"type":2000,"data":"x"})";
+      ec = glz::read_json(nv, json);
+      expect(!ec) << glz::format_error(ec, json);
+      expect(std::holds_alternative<TypeSparseStop>(nv));
+   };
+
+   "default variant - sparse numeric unknown type is not read as a known one"_test = [] {
+      // Each of these ids shares a hash slot with a declared id
+      for (const int id : {1001, 3001, 3007, 4242, -48}) {
+         const std::string json = R"({"type":)" + std::to_string(id) + R"(,"force":true})";
+         SparseNumericVariant nv{};
+         auto ec = glz::read_json(nv, json);
+         expect(!ec) << glz::format_error(ec, json);
+         expect(std::holds_alternative<TypeSparseUnknown>(nv)) << json << " read as alternative " << nv.index();
+         if (std::holds_alternative<TypeSparseUnknown>(nv)) {
+            expect(std::get<TypeSparseUnknown>(nv).type == id);
+         }
+      }
+   };
+
+   "strict variant - sparse numeric unknown type is rejected"_test = [] {
+      for (const int id : {1001, 3001, 4242}) {
+         const std::string json = R"({"type":)" + std::to_string(id) + R"(,"force":true})";
+         StrictSparseNumericVariant nv{};
+         auto ec = glz::read_json(nv, json);
+         expect(ec == glz::error_code::no_matching_variant_type) << json;
+      }
+   };
+
+   "numeric variant id lookup only matches declared ids"_test = [] {
+      using lookup = glz::variant_id_to_index<SparseNumericVariant>;
+      size_t mismatches = 0;
+      for (int id = -4096; id <= 8192; ++id) {
+         const bool declared = id == 1000 || id == 2000 || id == 3000;
+         const size_t expected = declared ? size_t(id / 1000 - 1) : 3u;
+         if (lookup::op(id) != expected) {
+            ++mismatches;
+         }
+      }
+      expect(mismatches == 0u) << mismatches << " ids matched the wrong alternative";
+      expect(lookup::op((std::numeric_limits<int>::min)()) == 3u);
+      expect(lookup::op((std::numeric_limits<int>::max)()) == 3u);
+   };
+
+   "strict variant - int64 ids at the ends of the range are rejected"_test = [] {
+      for (const std::string_view json : {R"({"type":-9223372036854775808})", R"({"type":9223372036854775807})"}) {
+         Int64OffsetVariant offset_ids{};
+         expect(glz::read_json(offset_ids, json) == glz::error_code::no_matching_variant_type) << json;
+         Int64SmallRangeVariant range_ids{};
+         expect(glz::read_json(range_ids, json) == glz::error_code::no_matching_variant_type) << json;
+      }
+
+      Int64SmallRangeVariant known{};
+      std::string_view json = R"({"type":50,"data":"x"})";
+      auto ec = glz::read_json(known, json);
+      expect(!ec) << glz::format_error(ec, json);
+      expect(std::holds_alternative<TypeSparseStart>(known));
    };
 };
 
