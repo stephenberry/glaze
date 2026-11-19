@@ -266,6 +266,62 @@ suite generic_json_tests = [] {
       expect(object.get_object().begin()->first.data() == key_buffer);
    };
 
+   // The assigned value may live inside the target, which replacing the target's value would destroy.
+   "generic assignment from a nested value"_test = [] {
+      constexpr std::string_view object_json =
+         R"({"array":[1,2],"string":"a string too long for a small-string buffer","object":{"k":1}})";
+      constexpr std::string_view array_json = R"([[1,2],{"k":1},"a string too long for a small-string buffer"])";
+      const auto parse = [](std::string_view buffer) {
+         glz::generic json{};
+         expect(not glz::read_json(json, buffer));
+         return json;
+      };
+
+      auto json = parse(object_json);
+      json = std::move(json["array"].get_array());
+      expect(json.dump().value() == "[1,2]");
+
+      json = parse(object_json);
+      json = std::move(json["string"].get_string());
+      expect(json.dump().value() == R"("a string too long for a small-string buffer")");
+
+      json = parse(object_json);
+      json = std::move(json["object"].get_object());
+      expect(json.dump().value() == R"({"k":1})");
+
+      json = parse(object_json);
+      json = std::move(json["object"]);
+      expect(json.dump().value() == R"({"k":1})");
+
+      json = parse(array_json);
+      json = std::move(json[0].get_array());
+      expect(json.dump().value() == "[1,2]");
+
+      json = parse(array_json);
+      json = std::move(json[1].get_object());
+      expect(json.dump().value() == R"({"k":1})");
+
+      json = parse(array_json);
+      json = std::move(json[2].get_string());
+      expect(json.dump().value() == R"("a string too long for a small-string buffer")");
+
+      json = parse(array_json);
+      json = std::move(json[0]);
+      expect(json.dump().value() == "[1,2]");
+
+      json = parse(array_json);
+      json = json[0].get_array();
+      expect(json.dump().value() == "[1,2]");
+
+      json = parse(array_json);
+      json = json[0];
+      expect(json.dump().value() == "[1,2]");
+
+      json = parse(object_json);
+      json = json["object"].get_object();
+      expect(json.dump().value() == R"({"k":1})");
+   };
+
    "generic is_object"_test = [] {
       glz::generic json{};
       expect(not glz::read_json(json, "{}"));

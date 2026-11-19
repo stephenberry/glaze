@@ -311,15 +311,19 @@ namespace glz
          return *this;
       }
 
+      // The assigned string, array, or object may live inside this value, as in
+      // `json = std::move(json["child"].get_array())`. Replacing `data` can destroy it before it is read, so each
+      // overload below builds the new value first and then moves it into `data`.
+
       generic_json& operator=(const std::string& value)
       {
-         data = value;
+         data = std::string(value);
          return *this;
       }
 
       generic_json& operator=(std::string&& value)
       {
-         data = std::move(value);
+         data = std::string(std::move(value));
          return *this;
       }
 
@@ -343,25 +347,25 @@ namespace glz
 
       generic_json& operator=(const array_t& value)
       {
-         data = value;
+         data = array_t(value);
          return *this;
       }
 
       generic_json& operator=(array_t&& value)
       {
-         data = std::move(value);
+         data = array_t(std::move(value));
          return *this;
       }
 
       generic_json& operator=(const object_t& value)
       {
-         data = value;
+         data = object_t(value);
          return *this;
       }
 
       generic_json& operator=(object_t&& value)
       {
-         data = std::move(value);
+         data = object_t(std::move(value));
          return *this;
       }
 
@@ -400,9 +404,23 @@ namespace glz
 
       generic_json() = default;
       generic_json(const generic_json& other) : data(other.data) {}
-      generic_json& operator=(const generic_json&) = default;
       generic_json(generic_json&& other) noexcept : data(std::move(other.data)) {}
-      generic_json& operator=(generic_json&&) = default;
+
+      // `other` may live inside this value, as in `json = json[0]` or `json = std::move(json["child"])`, so its
+      // value is taken out before `data` is replaced.
+      generic_json& operator=(const generic_json& other)
+      {
+         val_t value = other.data;
+         data = std::move(value);
+         return *this;
+      }
+
+      generic_json& operator=(generic_json&& other) noexcept(std::is_nothrow_move_assignable_v<val_t>)
+      {
+         val_t value = std::move(other.data);
+         data = std::move(value);
+         return *this;
+      }
 
       template <class T>
          requires std::convertible_to<T, val_t> && (!std::derived_from<std::decay_t<T>, generic_json>)
