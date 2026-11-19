@@ -55,18 +55,75 @@ struct local_schema_t
 };
 ```
 
-## Keeping Every Definition
+## Keeping Named Type Definitions
 
-`write_json_schema` writes a definition its schema uses only once in the place that uses it, and keeps a definition used more than once in `$defs`. A caller that places several types' schemas in one document, such as an OpenAPI document's `components/schemas`, needs each type to stay a definition it can name. The inheritable option `keep_single_use_definitions` keeps every definition in `$defs`, referred to by `$ref`:
+`write_json_schema` writes a definition its schema uses only once in the place that uses it, and keeps a definition used more than once in `$defs`. A caller that places several types' schemas in one document, such as an OpenAPI document's `components/schemas`, needs each named type to stay a definition it can refer to, so that a generated client has one type per C++ type rather than an anonymous object wherever one is nested. The inheritable option `keep_named_type_definitions` keeps the definition of every object and enum in `$defs`, referred to by `$ref`, even one used once. A container, map, variant or optional used once is still written in place, so a generator writes `phone[]` rather than a wrapper type for `std::vector<phone>`:
 
 ```c++
-struct schema_opts : glz::opts
+struct address
 {
-   bool keep_single_use_definitions = true;
+   std::string city{};
 };
 
-auto schema = glz::write_json_schema<my_struct, schema_opts{}>().value();
+struct phone
+{
+   std::string number{};
+};
+
+struct person
+{
+   address home{};
+   std::vector<phone> phones{};
+};
+
+struct schema_opts : glz::opts
+{
+   bool keep_named_type_definitions = true;
+};
+
+auto schema = glz::write_json_schema<person, schema_opts{}>().value();
 ```
+
+```json
+{
+   "type": "object",
+   "properties": {
+      "home": {
+         "$ref": "#/$defs/address"
+      },
+      "phones": {
+         "type": "array",
+         "items": {
+            "$ref": "#/$defs/phone"
+         }
+      }
+   },
+   "additionalProperties": false,
+   "$defs": {
+      "address": {
+         "type": "object",
+         "properties": {
+            "city": {
+               "type": "string"
+            }
+         },
+         "additionalProperties": false
+      },
+      "phone": {
+         "type": "object",
+         "properties": {
+            "number": {
+               "type": "string"
+            }
+         },
+         "additionalProperties": false
+      }
+   },
+   "title": "person"
+}
+```
+
+Without the option, `address` and `phone` are each written in place and the schema has no `$defs`.
 
 ## Required Fields
 

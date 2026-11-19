@@ -65,7 +65,7 @@ These options are **not** in `glz::opts` by default. Add them to a custom option
 | `size_t max_map_size` | `0` | Maximum map size when reading (0 = no limit). See also [Runtime Constraints](security.md#runtime-limits-via-custom-context). |
 | `bool skip_default_members` | `false` | Skip writing members with default values (empty strings, empty containers, zero numbers, false bools) |
 | `bool allocate_raw_pointers` | `false` | Allocate memory for null raw pointers during deserialization. See also [Runtime Control](security.md#runtime-raw-pointer-allocation-control). |
-| `bool keep_single_use_definitions` | `false` | Keep every definition in a JSON schema's `$defs`, referred to by `$ref`, rather than writing one used once in place. See [JSON Schema](json-schema.md#keeping-every-definition). |
+| `bool keep_named_type_definitions` | `false` | Keep the definition of every object and enum in a JSON schema's `$defs`, referred to by `$ref`, even one used once; a container, map, variant or optional used once is still written in place. See [JSON Schema](json-schema.md#keeping-named-type-definitions). |
 
 ### CSV Options (`glz::opts_csv`)
 

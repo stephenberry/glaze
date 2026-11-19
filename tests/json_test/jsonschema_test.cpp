@@ -336,9 +336,58 @@ struct single_use_outer
    single_use_inner inner{};
 };
 
-struct keep_definitions_opts : glz::opts
+struct named_in_vector
 {
-   bool keep_single_use_definitions = true;
+   std::string text{};
+};
+
+struct named_in_map
+{
+   bool flag{};
+};
+
+struct named_in_variant
+{
+   std::string label{};
+};
+
+struct named_in_optional
+{
+   bool set{};
+};
+
+enum class named_mode { on, off };
+
+template <>
+struct glz::meta<named_mode>
+{
+   using enum named_mode;
+   static constexpr auto value = glz::enumerate(on, off);
+};
+
+// Each named type is used once, and so is each container, map, variant and optional holding one.
+struct named_kinds
+{
+   std::vector<named_in_vector> many{};
+   std::map<std::string, named_in_map> by_key{};
+   std::variant<named_in_variant, std::vector<bool>> either{};
+   std::optional<named_in_optional> maybe{};
+   named_mode mode{};
+};
+
+struct recursive_node
+{
+   std::vector<recursive_node> children{};
+};
+
+struct recursive_root
+{
+   recursive_node root{};
+};
+
+struct keep_named_opts : glz::opts
+{
+   bool keep_named_type_definitions = true;
 };
 
 #if 0
@@ -493,17 +542,34 @@ suite schema_tests = [] {
          R"({"type":"object","properties":{"file":{"type":"string"}},"additionalProperties":false,"title":"path_holder"})");
    };
 
-   "keep_single_use_definitions refers to a type used once by its definition"_test = [] {
+   "keep_named_type_definitions refers to an object used once by its definition"_test = [] {
       expect(
          glz::write_json_schema<single_use_outer>().value_or("error") ==
          R"({"type":"object","properties":{"inner":{"type":"object","properties":{"value":{"$ref":"#/$defs/int32_t"}},"additionalProperties":false}},"additionalProperties":false,"$defs":{"int32_t":{"type":"integer","minimum":-2147483648,"maximum":2147483647}},"title":"single_use_outer"})");
       expect(
-         glz::write_json_schema<single_use_outer, keep_definitions_opts{}>().value_or("error") ==
+         glz::write_json_schema<single_use_outer, keep_named_opts{}>().value_or("error") ==
          R"({"type":"object","properties":{"inner":{"$ref":"#/$defs/single_use_inner"}},"additionalProperties":false,"$defs":{"int32_t":{"type":"integer","minimum":-2147483648,"maximum":2147483647},"single_use_inner":{"type":"object","properties":{"value":{"$ref":"#/$defs/int32_t"}},"additionalProperties":false}},"title":"single_use_outer"})");
    };
 
-   "keep_single_use_definitions writes no $defs for a schema that has none"_test = [] {
-      expect(glz::write_json_schema<std::vector<bool>, keep_definitions_opts{}>().value_or("error") ==
+   "keep_named_type_definitions keeps objects and enums, and writes a container, map, variant or optional in place"_test =
+      [] {
+         const auto schema = glz::write_json_schema<named_kinds, keep_named_opts{}>().value_or("error");
+         expect(
+            schema ==
+            R"({"type":"object","properties":{"by_key":{"type":"object","additionalProperties":{"$ref":"#/$defs/named_in_map"}},"either":{"type":["object","array"],"oneOf":[{"$ref":"#/$defs/named_in_variant","title":"named_in_variant"},{"type":"array","items":{"type":"boolean"},"title":"std::vector<bool>"}]},"many":{"type":"array","items":{"$ref":"#/$defs/named_in_vector"}},"maybe":{"anyOf":[{"$ref":"#/$defs/named_in_optional"},{"type":"null"}]},"mode":{"$ref":"#/$defs/named_mode"}},"additionalProperties":false,"$defs":{"named_in_map":{"type":"object","properties":{"flag":{"type":"boolean"}},"additionalProperties":false},"named_in_optional":{"type":"object","properties":{"set":{"type":"boolean"}},"additionalProperties":false},"named_in_variant":{"type":"object","properties":{"label":{"type":"string"}},"additionalProperties":false},"named_in_vector":{"type":"object","properties":{"text":{"type":"string"}},"additionalProperties":false},"named_mode":{"type":"string","oneOf":[{"title":"on","const":"on"},{"title":"off","const":"off"}]}},"title":"named_kinds"})")
+            << schema;
+      };
+
+   "keep_named_type_definitions keeps a recursive object and writes its container in place"_test = [] {
+      const auto schema = glz::write_json_schema<recursive_root, keep_named_opts{}>().value_or("error");
+      expect(
+         schema ==
+         R"({"type":"object","properties":{"root":{"$ref":"#/$defs/recursive_node"}},"additionalProperties":false,"$defs":{"recursive_node":{"type":"object","properties":{"children":{"type":"array","items":{"$ref":"#/$defs/recursive_node"}}},"additionalProperties":false}},"title":"recursive_root"})")
+         << schema;
+   };
+
+   "keep_named_type_definitions writes no $defs for a schema that has none"_test = [] {
+      expect(glz::write_json_schema<std::vector<bool>, keep_named_opts{}>().value_or("error") ==
              R"({"type":"array","items":{"type":"boolean"},"title":"std::vector<bool>"})");
    };
 
