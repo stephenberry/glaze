@@ -23,7 +23,7 @@ jobs:
 
     steps:
     - name: Checkout code
-      uses: actions/checkout@v6
+      uses: actions/checkout@v7
       with:
         fetch-depth: 0 # Fetch all history for git diff
         token: ${{ secrets.GITHUB_TOKEN }} # Use GITHUB_TOKEN for pushing changes
@@ -42,7 +42,7 @@ jobs:
         git diff --diff-filter=d --name-only origin/main | grep -E "\.cpp$" | xargs -r -t -n 1 -P 8 -- /usr/bin/clang-tidy-19 --fix --checks="-*,misc-include-cleaner" || true
 
     - name: Commit changes
-      uses: EndBug/add-and-commit@v9
+      uses: EndBug/add-and-commit@v11
       with:
         author_name: Clang Tidy Bot
         author_email: actions@github.com

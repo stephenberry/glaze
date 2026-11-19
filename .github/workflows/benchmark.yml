@@ -28,7 +28,7 @@ jobs:
       CXX: g++-14
 
     steps:
-    - uses: actions/checkout@v6
+    - uses: actions/checkout@v7
 
     - name: Verify AVX2 support
       run: grep -q avx2 /proc/cpuinfo && echo "AVX2 is available"
@@ -62,7 +62,7 @@ jobs:
       CXX: g++-14
 
     steps:
-    - uses: actions/checkout@v6
+    - uses: actions/checkout@v7
 
     - name: Verify AVX2 support
       run: grep -q avx2 /proc/cpuinfo && echo "AVX2 is available"
@@ -96,7 +96,7 @@ jobs:
       CXX: g++-14
 
     steps:
-    - uses: actions/checkout@v6
+    - uses: actions/checkout@v7
 
     - name: Configure CMake
       run: |
