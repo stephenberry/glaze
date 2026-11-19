@@ -3,7 +3,12 @@
 
 #include "glaze/json/jmespath.hpp"
 
+#include <list>
+#include <variant>
+#include <vector>
+
 #include "glaze/glaze.hpp"
+#include "speculation_guard.hpp"
 #include "ut/ut.hpp"
 
 using namespace ut;
@@ -679,6 +684,61 @@ suite jmespath_partial_read = [] {
       ec = glz::read_jmespath<opts>(glz::jmespath_expression{"in"}, runtime, buffer);
       expect(not ec) << glz::format_error(ec, buffer);
       expect(runtime.a == 1 && runtime.b == 2);
+   };
+};
+
+// Two array alternatives, so every level of the nest tries both (see json_test's ambiguous nest).
+namespace jmespath_speculation
+{
+   struct node;
+   using two_arrays = std::variant<std::vector<node>, std::list<node>>;
+   struct node
+   {
+      two_arrays child{};
+   };
+
+   inline std::string ambiguous_nest(size_t levels)
+   {
+      std::string b;
+      for (size_t i = 0; i < levels; ++i) b += R"([{"child":)";
+      b += "[{]"; // malformed leaf
+      for (size_t i = 0; i < levels; ++i) b += "}]";
+      return b;
+   }
+}
+
+suite jmespath_speculation_budget = [] {
+   // read_jmespath parses on a context of its own; without the budget this nest takes seconds.
+   "compile time read_jmespath seeds the speculation budget like glz::read"_test = [] {
+      using namespace jmespath_speculation;
+      const auto nest = ambiguous_nest(24);
+      const auto buffer = R"({"a":)" + nest + "}";
+      glz_test::expect_budgeted_like_read(
+         [&] {
+            two_arrays out{};
+            return glz::read_json(out, nest).ec;
+         },
+         [&] {
+            two_arrays out{};
+            return glz::read_jmespath<"a">(out, buffer).ec;
+         },
+         glz::error_code::expected_quote);
+   };
+
+   "runtime read_jmespath seeds the speculation budget like glz::read"_test = [] {
+      using namespace jmespath_speculation;
+      const auto nest = ambiguous_nest(24);
+      const auto buffer = R"({"a":)" + nest + "}";
+      glz_test::expect_budgeted_like_read(
+         [&] {
+            two_arrays out{};
+            return glz::read_json(out, nest).ec;
+         },
+         [&] {
+            two_arrays out{};
+            return glz::read_jmespath(glz::jmespath_expression{"a"}, out, buffer).ec;
+         },
+         glz::error_code::expected_quote);
    };
 };
 

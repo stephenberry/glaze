@@ -1653,6 +1653,140 @@ suite msgpack_partial_read_sentinel_tests = [] {
    };
 };
 
+struct self_constrained_login
+{
+   std::string username{};
+   std::string password{};
+   std::string confirm_password{};
+};
+
+template <>
+struct glz::meta<self_constrained_login>
+{
+   using T = self_constrained_login;
+   static constexpr auto matching = [](const T& v) {
+      return v.password.size() >= 12 && v.password == v.confirm_password;
+   };
+   static constexpr auto value = object(&T::username, &T::password, &T::confirm_password);
+   static constexpr auto self_constraint = glz::self_constraint<matching, "Passwords must match and be 12+ characters">;
+};
+
+struct self_constrained_signup
+{
+   int id{};
+   self_constrained_login login{};
+};
+
+suite msgpack_self_constraint_tests = [] {
+   "self_constraint rejects an object that violates it"_test = [] {
+      const self_constrained_login weak{"eve", "short", "other"};
+      std::string buffer{};
+      expect(not glz::write_msgpack(weak, buffer));
+      self_constrained_login out{};
+      const auto ec = glz::read_msgpack(out, buffer);
+      expect(ec == glz::error_code::constraint_violated);
+      expect(ec.custom_error_message == "Passwords must match and be 12+ characters");
+   };
+
+   "self_constraint is checked on a nested object"_test = [] {
+      const self_constrained_signup weak{7, {"eve", "short", "other"}};
+      std::string buffer{};
+      expect(not glz::write_msgpack(weak, buffer));
+      self_constrained_signup out{};
+      expect(glz::read_msgpack(out, buffer) == glz::error_code::constraint_violated);
+   };
+
+   "self_constraint accepts an object that satisfies it"_test = [] {
+      const self_constrained_signup ok{7, {"alice", "correct horse battery", "correct horse battery"}};
+      std::string buffer{};
+      expect(not glz::write_msgpack(ok, buffer));
+      self_constrained_signup out{};
+      expect(not glz::read_msgpack(out, buffer));
+      expect(out.id == 7);
+      expect(out.login.password == ok.login.password);
+   };
+};
+
+struct msgpack_limited_opts : glz::opts
+{
+   uint32_t format = glz::MSGPACK;
+   size_t max_string_length = 8;
+   size_t max_array_size = 4;
+   size_t max_map_size = 2;
+};
+
+struct msgpack_limited_context : glz::context
+{
+   size_t max_string_length = 8;
+   size_t max_array_size = 4;
+   size_t max_map_size = 2;
+};
+
+suite msgpack_allocation_limits_tests = [] {
+   "msgpack max_string_length rejects oversized strings"_test = [] {
+      std::string buffer{};
+      expect(not glz::write_msgpack(std::string(9, 'x'), buffer));
+
+      std::string out{};
+      expect(glz::read<msgpack_limited_opts{}>(out, buffer) == glz::error_code::invalid_length);
+      msgpack_limited_context ctx{};
+      expect(glz::read<glz::opts{.format = glz::MSGPACK}>(out, buffer, ctx) == glz::error_code::invalid_length);
+
+      std::string_view view{};
+      expect(glz::read<msgpack_limited_opts{}>(view, buffer) == glz::error_code::invalid_length);
+
+      expect(not glz::write_msgpack(std::string(8, 'x'), buffer));
+      expect(not glz::read<msgpack_limited_opts{}>(out, buffer));
+      expect(out == std::string(8, 'x'));
+   };
+
+   "msgpack max_array_size rejects oversized arrays"_test = [] {
+      std::string buffer{};
+      expect(not glz::write_msgpack(std::vector<int>{1, 2, 3, 4, 5}, buffer));
+
+      std::vector<int> out{};
+      expect(glz::read<msgpack_limited_opts{}>(out, buffer) == glz::error_code::invalid_length);
+      msgpack_limited_context ctx{};
+      expect(glz::read<glz::opts{.format = glz::MSGPACK}>(out, buffer, ctx) == glz::error_code::invalid_length);
+
+      std::set<int> set_out{};
+      expect(glz::read<msgpack_limited_opts{}>(set_out, buffer) == glz::error_code::invalid_length);
+
+      std::array<int, 8> array_out{};
+      expect(glz::read<msgpack_limited_opts{}>(array_out, buffer) == glz::error_code::invalid_length);
+
+      expect(not glz::write_msgpack(std::vector<int>{1, 2, 3, 4}, buffer));
+      expect(not glz::read<msgpack_limited_opts{}>(out, buffer));
+      expect(out.size() == 4);
+   };
+
+   "msgpack max_array_size rejects oversized binary payloads"_test = [] {
+      std::string buffer{};
+      expect(not glz::write_msgpack(std::vector<uint8_t>(5, 0xAB), buffer));
+
+      std::vector<uint8_t> out{};
+      expect(glz::read<msgpack_limited_opts{}>(out, buffer) == glz::error_code::invalid_length);
+
+      expect(not glz::write_msgpack(std::vector<uint8_t>(4, 0xAB), buffer));
+      expect(not glz::read<msgpack_limited_opts{}>(out, buffer));
+      expect(out.size() == 4);
+   };
+
+   "msgpack max_map_size rejects oversized maps"_test = [] {
+      std::string buffer{};
+      expect(not glz::write_msgpack(std::map<std::string, int>{{"a", 1}, {"b", 2}, {"c", 3}}, buffer));
+
+      std::map<std::string, int> out{};
+      expect(glz::read<msgpack_limited_opts{}>(out, buffer) == glz::error_code::invalid_length);
+      msgpack_limited_context ctx{};
+      expect(glz::read<glz::opts{.format = glz::MSGPACK}>(out, buffer, ctx) == glz::error_code::invalid_length);
+
+      expect(not glz::write_msgpack(std::map<std::string, int>{{"a", 1}, {"b", 2}}, buffer));
+      expect(not glz::read<msgpack_limited_opts{}>(out, buffer));
+      expect(out.size() == 2);
+   };
+};
+
 int main()
 {
    using namespace local_aggregates;

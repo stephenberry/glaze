@@ -3999,6 +3999,107 @@ y: 2.0)";
       expect(bool(ec));
    };
 
+   "type_mismatch_flow_collection_to_string"_test = [] {
+      for (const std::string yaml : {"name: [1, 2, 3]", "name: []", "name: {}", "name: {a: 5}"}) {
+         simple_struct obj{};
+         auto ec = glz::read_yaml(obj, yaml);
+         expect(bool(ec)) << yaml;
+      }
+   };
+
+   "type_mismatch_block_sequence_to_string"_test = [] {
+      for (const std::string yaml : {"name:\n  - 1\n  - 2", "name: - 1", "name: -"}) {
+         simple_struct obj{};
+         auto ec = glz::read_yaml(obj, yaml);
+         expect(bool(ec)) << yaml;
+      }
+   };
+
+   "type_mismatch_explicit_key_to_string"_test = [] {
+      simple_struct obj{};
+      std::string yaml = "name: ? a";
+      auto ec = glz::read_yaml(obj, yaml);
+      expect(bool(ec));
+   };
+
+   "type_mismatch_collection_to_top_level_string"_test = [] {
+      for (const std::string yaml : {"[1, 2]", "- a\n- b", "--- [1]"}) {
+         std::string value{};
+         auto ec = glz::read_yaml(value, yaml);
+         expect(bool(ec)) << yaml;
+      }
+   };
+
+   "type_mismatch_collection_to_string_element"_test = [] {
+      for (const std::string yaml : {"- [1, 2]\n- x", "- - 1\n- x", "-\n  - 1"}) {
+         std::vector<std::string> vec{};
+         auto ec = glz::read_yaml(vec, yaml);
+         expect(bool(ec)) << yaml;
+      }
+
+      for (const std::string yaml : {"a: [1]", "a:\n  - 1"}) {
+         std::map<std::string, std::string> m{};
+         auto ec = glz::read_yaml(m, yaml);
+         expect(bool(ec)) << yaml;
+      }
+   };
+
+   // "-" and "?" only introduce a collection when whitespace follows, and a bracket or
+   // brace only at the start of the scalar.
+   "plain_string_resembling_collection"_test = [] {
+      for (const std::string text : {"-1", "-x", "?x", "---", "a[1]", "a{b}", "a - b"}) {
+         simple_struct obj{};
+         const std::string yaml = "name: " + text;
+         auto ec = glz::read_yaml(obj, yaml);
+         expect(!ec) << glz::format_error(ec, yaml);
+         expect(obj.name == text) << yaml;
+      }
+   };
+
+   "quoted_string_resembling_collection"_test = [] {
+      for (const std::string text : {"[1, 2, 3]", "{a: 5}", "- 1", "? a", "-"}) {
+         for (const char quote : {'"', '\''}) {
+            simple_struct obj{};
+            const std::string yaml = "name: " + (quote + text + quote);
+            auto ec = glz::read_yaml(obj, yaml);
+            expect(!ec) << glz::format_error(ec, yaml);
+            expect(obj.name == text) << yaml;
+         }
+      }
+   };
+
+   "string_resembling_collection_roundtrip"_test = [] {
+      for (const std::string text : {"[1, 2, 3]", "{}", "- 1", "-", "? a", "- 1\n- 2"}) {
+         std::vector<std::string> original{text, text};
+         std::string yaml{};
+         expect(not glz::write_yaml(original, yaml));
+
+         std::vector<std::string> parsed{};
+         auto ec = glz::read_yaml(parsed, yaml);
+         expect(!ec) << glz::format_error(ec, yaml);
+         expect(parsed == original) << yaml;
+      }
+   };
+
+   "collection_still_selects_variant_alternative"_test = [] {
+      std::variant<std::string, std::vector<int>> value{};
+
+      std::string yaml = "[1, 2, 3]";
+      auto ec = glz::read_yaml(value, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(std::holds_alternative<std::vector<int>>(value));
+
+      yaml = "- 1\n- 2";
+      ec = glz::read_yaml(value, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(std::holds_alternative<std::vector<int>>(value));
+
+      yaml = "-1";
+      ec = glz::read_yaml(value, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(std::holds_alternative<std::string>(value));
+   };
+
    "unclosed_bracket"_test = [] {
       std::vector<int> vec{};
       std::string yaml = "[1, 2, 3";
@@ -4876,6 +4977,108 @@ name: works)";
          expect(data.x == 99);
          expect(data.y == 1.5);
          expect(data.name == "works");
+      }
+   };
+
+   // A continuation line of a plain scalar may begin with "- ": the node already started as
+   // a scalar, so the line folds into it rather than opening a sequence.
+   "plain_scalar_continuation_starting_with_dash"_test = [] {
+      {
+         std::string yaml = "name: foo\n  - bar\nx: 1";
+         simple_struct data{};
+         auto ec = glz::read_yaml(data, yaml);
+         expect(!ec) << glz::format_error(ec, yaml);
+         expect(data.name == "foo - bar");
+         expect(data.x == 1);
+      }
+      {
+         std::string yaml = "name: foo\n    - bar\n  - baz\ny: 2.5";
+         simple_struct data{};
+         auto ec = glz::read_yaml(data, yaml);
+         expect(!ec) << glz::format_error(ec, yaml);
+         expect(data.name == "foo - bar - baz");
+         expect(data.y == 2.5);
+      }
+      {
+         std::string yaml = "name:\n  foo\n  - bar\nx: 1";
+         simple_struct data{};
+         auto ec = glz::read_yaml(data, yaml);
+         expect(!ec) << glz::format_error(ec, yaml);
+         expect(data.name == "foo - bar");
+         expect(data.x == 1);
+      }
+      {
+         std::string yaml = "title: t\ndata:\n  name: foo\n    - bar\n  x: 1\nnumbers: [2]";
+         nested_struct data{};
+         auto ec = glz::read_yaml(data, yaml);
+         expect(!ec) << glz::format_error(ec, yaml);
+         expect(data.data.name == "foo - bar");
+         expect(data.data.x == 1);
+         expect(data.numbers == std::vector<int>{2});
+      }
+      {
+         std::string yaml = "a: foo\n  - bar\nb: c";
+         std::map<std::string, std::string> data{};
+         auto ec = glz::read_yaml(data, yaml);
+         expect(!ec) << glz::format_error(ec, yaml);
+         expect(data == std::map<std::string, std::string>{{"a", "foo - bar"}, {"b", "c"}});
+      }
+      for (const std::string yaml : {"foo\n- bar", "foo\n  - bar"}) {
+         std::string value{};
+         auto ec = glz::read_yaml(value, yaml);
+         expect(!ec) << glz::format_error(ec, yaml);
+         expect(value == "foo - bar") << yaml;
+      }
+      {
+         std::string yaml = "unknown: foo\n  - bar\nx: 1";
+         simple_struct data{};
+         auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(data, yaml);
+         expect(!ec) << glz::format_error(ec, yaml);
+         expect(data.x == 1);
+      }
+      // Inside a sequence, a dash at the entry's own column still starts the next entry.
+      {
+         std::string yaml = "- foo\n  - bar\n- baz";
+         std::vector<std::string> data{};
+         auto ec = glz::read_yaml(data, yaml);
+         expect(!ec) << glz::format_error(ec, yaml);
+         expect(data == std::vector<std::string>{"foo - bar", "baz"});
+      }
+      {
+         std::string yaml = "- foo\n  - bar\n- baz\n- 3";
+         std::tuple<std::string, std::string, int> data{};
+         auto ec = glz::read_yaml(data, yaml);
+         expect(!ec) << glz::format_error(ec, yaml);
+         expect(data == std::tuple<std::string, std::string, int>{"foo - bar", "baz", 3});
+      }
+   };
+
+   // A "- " line left over after a completed value has no node it can belong to. It must be
+   // rejected rather than ending the read early and dropping the rest of the document.
+   "orphaned_sequence_entry_rejected"_test = [] {
+      for (const std::string yaml :
+           {"name: 'foo'\n  - bar\nx: 1", "name: \"foo\"\n    - bar\nx: 1", "x: 1\n  - 2", "name: foo\n- bar\nx: 1"}) {
+         simple_struct data{};
+         auto ec = glz::read_yaml(data, yaml);
+         expect(ec.ec == glz::error_code::syntax_error) << yaml;
+      }
+      {
+         std::string yaml = "title: t\ndata:\n  name: 'foo'\n    - bar\n  x: 1\nnumbers: [2]";
+         nested_struct data{};
+         auto ec = glz::read_yaml(data, yaml);
+         expect(ec.ec == glz::error_code::syntax_error);
+      }
+      {
+         std::string yaml = "a: 'foo'\n  - bar\nb: c";
+         std::map<std::string, std::string> data{};
+         auto ec = glz::read_yaml(data, yaml);
+         expect(ec.ec == glz::error_code::syntax_error);
+      }
+      {
+         std::string yaml = "- name: 'foo'\n    - bar\n  x: 1\n- name: b";
+         std::vector<simple_struct> data{};
+         auto ec = glz::read_yaml(data, yaml);
+         expect(ec.ec == glz::error_code::syntax_error);
       }
    };
 
@@ -13978,6 +14181,60 @@ suite yaml_flow_implicit_null_tests = [] {
       expect(s.x.contains("a"));
       expect(s.x["b"] == "c");
       expect(s.y == std::map<std::string, std::string>{{"k", "v"}, {"l", "w"}});
+   };
+};
+
+struct self_constrained_login
+{
+   std::string username{};
+   std::string password{};
+   std::string confirm_password{};
+};
+
+template <>
+struct glz::meta<self_constrained_login>
+{
+   using T = self_constrained_login;
+   static constexpr auto matching = [](const T& v) {
+      return v.password.size() >= 12 && v.password == v.confirm_password;
+   };
+   static constexpr auto value = object(&T::username, &T::password, &T::confirm_password);
+   static constexpr auto self_constraint = glz::self_constraint<matching, "Passwords must match and be 12+ characters">;
+};
+
+struct self_constrained_signup
+{
+   int id{};
+   self_constrained_login login{};
+};
+
+suite yaml_self_constraint_tests = [] {
+   "self_constraint rejects an object that violates it"_test = [] {
+      const self_constrained_login weak{"eve", "short", "other"};
+      std::string buffer{};
+      expect(not glz::write_yaml(weak, buffer));
+      self_constrained_login out{};
+      const auto ec = glz::read_yaml(out, buffer);
+      expect(ec == glz::error_code::constraint_violated);
+      expect(ec.custom_error_message == "Passwords must match and be 12+ characters");
+   };
+
+   "self_constraint is checked on a nested object"_test = [] {
+      const self_constrained_signup weak{7, {"eve", "short", "other"}};
+      std::string buffer{};
+      expect(not glz::write_yaml(weak, buffer));
+      self_constrained_signup out{};
+      expect(glz::read_yaml(out, buffer) == glz::error_code::constraint_violated);
+   };
+
+   "self_constraint accepts an object that satisfies it"_test = [] {
+      const self_constrained_signup ok{7, {"alice", "correct horse battery", "correct horse battery"}};
+      std::string buffer{};
+      expect(not glz::write_yaml(ok, buffer));
+      self_constrained_signup out{};
+      expect(not glz::read_yaml(out, buffer));
+      expect(out.id == 7);
+      expect(out.login.password == ok.login.password);
    };
 };
 

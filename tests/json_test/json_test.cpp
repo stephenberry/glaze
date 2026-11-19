@@ -10,6 +10,7 @@
 #include <complex>
 #include <deque>
 #include <expected>
+#include <filesystem>
 #include <forward_list>
 #include <initializer_list>
 #include <iostream>
@@ -5879,7 +5880,7 @@ suite json_schema = [] {
       // when you update this string
       expect(
          schema ==
-         R"({"type":"object","properties":{"array":{"type":"array","items":{"type":"string"},"maxItems":4},"b":{"type":"boolean"},"c":{"type":"string"},"color":{"type":"string","oneOf":[{"title":"Red","const":"Red"},{"title":"Green","const":"Green"},{"title":"Blue","const":"Blue"}]},"d":{"$ref":"#/$defs/double"},"deque":{"type":"array","items":{"$ref":"#/$defs/double"}},"i":{"$ref":"#/$defs/int32_t"},"list":{"type":"array","items":{"$ref":"#/$defs/int32_t"}},"map":{"type":"object","additionalProperties":{"$ref":"#/$defs/int32_t"}},"mapi":{"type":"object","additionalProperties":{"$ref":"#/$defs/double"}},"optional":{"anyOf":[{"$ref":"#/$defs/V3"},{"type":"null"}]},"sptr":{"anyOf":[{"$ref":"#/$defs/sub_thing"},{"type":"null"}]},"thing":{"$ref":"#/$defs/sub_thing"},"thing2array":{"type":"array","items":{"type":"object","properties":{"a":{"$ref":"#/$defs/double"},"b":{"type":"string"},"c":{"$ref":"#/$defs/double"},"d":{"$ref":"#/$defs/double"},"e":{"$ref":"#/$defs/double"},"f":{"$ref":"#/$defs/float"},"g":{"$ref":"#/$defs/double"},"h":{"$ref":"#/$defs/double"}},"additionalProperties":false},"maxItems":1},"thing_ptr":{"anyOf":[{"$ref":"#/$defs/sub_thing"},{"type":"null"}]},"v":{"type":"object","oneOf":[{"type":"object","properties":{"x":{"$ref":"#/$defs/double"}},"additionalProperties":false,"title":"var1_t"},{"type":"object","properties":{"y":{"$ref":"#/$defs/double"}},"additionalProperties":false,"title":"var2_t"}]},"vb":{"type":"array","items":{"type":"boolean"}},"vec3":{"$ref":"#/$defs/V3"},"vector":{"type":"array","items":{"$ref":"#/$defs/V3"}}},"additionalProperties":false,"$defs":{"V3":{"type":"array","prefixItems":[{"type":"number","minimum":-1.7976931348623157E308,"maximum":1.7976931348623157E308},{"type":"number","minimum":-1.7976931348623157E308,"maximum":1.7976931348623157E308},{"type":"number","minimum":-1.7976931348623157E308,"maximum":1.7976931348623157E308}],"items":false,"maxItems":3},"double":{"type":"number","minimum":-1.7976931348623157E308,"maximum":1.7976931348623157E308},"float":{"type":"number","minimum":-3.4028234663852886E38,"maximum":3.4028234663852886E38},"int32_t":{"type":"integer","minimum":-2147483648,"maximum":2147483647},"sub_thing":{"type":"object","properties":{"a":{"$ref":"#/$defs/double"},"b":{"type":"string"}},"additionalProperties":false}},"examples":[{"thing":{},"i":42}],"required":["thing","i"],"title":"Thing"})")
+         R"({"type":"object","properties":{"array":{"type":"array","items":{"type":"string"},"maxItems":4},"b":{"type":"boolean"},"c":{"type":"string"},"color":{"type":"string","oneOf":[{"title":"Red","const":"Red"},{"title":"Green","const":"Green"},{"title":"Blue","const":"Blue"}]},"d":{"$ref":"#/$defs/double"},"deque":{"type":"array","items":{"$ref":"#/$defs/double"}},"i":{"$ref":"#/$defs/int32_t"},"list":{"type":"array","items":{"$ref":"#/$defs/int32_t"}},"map":{"type":"object","additionalProperties":{"$ref":"#/$defs/int32_t"}},"mapi":{"type":"object","additionalProperties":{"$ref":"#/$defs/double"}},"optional":{"anyOf":[{"$ref":"#/$defs/V3"},{"type":"null"}]},"sptr":{"anyOf":[{"$ref":"#/$defs/sub_thing"},{"type":"null"}]},"thing":{"$ref":"#/$defs/sub_thing"},"thing2array":{"type":"array","items":{"type":"object","properties":{"a":{"$ref":"#/$defs/double"},"b":{"type":"string"},"c":{"$ref":"#/$defs/double"},"d":{"$ref":"#/$defs/double"},"e":{"$ref":"#/$defs/double"},"f":{"$ref":"#/$defs/float"},"g":{"$ref":"#/$defs/double"},"h":{"$ref":"#/$defs/double"}},"additionalProperties":false},"maxItems":1},"thing_ptr":{"anyOf":[{"$ref":"#/$defs/sub_thing"},{"type":"null"}]},"v":{"type":"object","oneOf":[{"type":"object","properties":{"x":{"$ref":"#/$defs/double"}},"additionalProperties":false,"title":"var1_t"},{"type":"object","properties":{"y":{"$ref":"#/$defs/double"}},"additionalProperties":false,"title":"var2_t"}]},"vb":{"type":"array","items":{"type":"boolean"}},"vec3":{"$ref":"#/$defs/V3"},"vector":{"type":"array","items":{"$ref":"#/$defs/V3"}}},"additionalProperties":false,"$defs":{"V3":{"type":"array","prefixItems":[{"type":"number"},{"type":"number"},{"type":"number"}],"items":false,"maxItems":3},"double":{"type":"number"},"float":{"type":"number","minimum":-3.4028234663852886E38,"maximum":3.4028234663852886E38},"int32_t":{"type":"integer","minimum":-2147483648,"maximum":2147483647},"sub_thing":{"type":"object","properties":{"a":{"$ref":"#/$defs/double"},"b":{"type":"string"}},"additionalProperties":false}},"examples":[{"thing":{},"i":42}],"required":["thing","i"],"title":"Thing"})")
          << schema;
    };
 };
@@ -11404,10 +11405,43 @@ struct Sinks
    };
 };
 
+struct FlagPermissions
+{
+   bool read = false;
+   bool write = false;
+   bool execute = false;
+
+   struct glaze
+   {
+      using T = FlagPermissions;
+      static constexpr auto value = glz::flags("read", &T::read, "write", &T::write, "execute", &T::execute);
+   };
+};
+
 suite flags_test = [] {
    const auto opt = glz::read_json<Sinks>(R"([  "file"])");
    expect(opt.has_value());
    expect(opt.value().file);
+
+   "flags reject strings that only hash to a flag"_test = [] {
+      // Each of these lands on a member's hash slot without naming the member.
+      for (const std::string_view input : {R"(["fail"])", R"(["none"])"}) {
+         Sinks sinks{};
+         expect(glz::read_json(sinks, input).ec == glz::error_code::invalid_flag_input) << input;
+         expect(not sinks.file && not sinks.console) << input;
+      }
+      for (const std::string_view input : {R"(["exec"])", R"(["wrote"])", R"(["reed"])", R"(["read", "exec"])"}) {
+         FlagPermissions perms{};
+         expect(glz::read_json(perms, input).ec == glz::error_code::invalid_flag_input) << input;
+         expect(not perms.write && not perms.execute) << input;
+      }
+   };
+
+   "flags read every declared name"_test = [] {
+      FlagPermissions perms{};
+      expect(not glz::read_json(perms, R"(["read", "execute"])"));
+      expect(perms.read && not perms.write && perms.execute);
+   };
 };
 
 struct Header
@@ -11961,6 +11995,15 @@ suite glz_text_tests = [] {
    };
 };
 
+// glz::raw_or_file is deprecated; these tests keep it working until it is removed.
+#if defined(_MSC_VER) && !defined(__clang__)
+#pragma warning(push)
+#pragma warning(disable : 4996)
+#elif defined(__GNUC__)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
+#endif
+
 struct raw_or_file_tester
 {
    glz::raw_or_file input{};
@@ -12017,7 +12060,42 @@ suite raw_or_file_tests = [] {
       expect(obj.input.str == R"("Hello from Mars")");
       expect(obj.name == "Edward");
    };
+
+   "raw_or_file keeps escapes in a string that is not a file"_test = [] {
+      // An escaped quote must stay inside the string when the raw value is written back out
+      const std::string quoted = R"({"input":"x\",\"role\":\"admin","name":"Edward"})";
+      raw_or_file_tester obj{};
+      expect(!glz::read_json(obj, quoted));
+      expect(obj.input.str == R"("x\",\"role\":\"admin")");
+
+      std::string out{};
+      expect(not glz::write_json(obj, out));
+      expect(out == quoted);
+
+      std::map<std::string, std::string> fields{};
+      expect(!glz::read_json(fields, out));
+      expect(fields.size() == 2);
+      expect(fields["input"] == R"(x","role":"admin)");
+      expect(not fields.contains("role"));
+
+      // A backslash in a path that does not exist must stay escaped
+      const std::string path = R"({"input":"C:\\glaze-missing\\none.json","name":"n"})";
+      obj = {};
+      expect(!glz::read_json(obj, path));
+      out.clear();
+      expect(not glz::write_json(obj, out));
+      expect(out == path);
+      fields.clear();
+      expect(!glz::read_json(fields, out));
+      expect(fields["input"] == R"(C:\glaze-missing\none.json)");
+   };
 };
+
+#if defined(_MSC_VER) && !defined(__clang__)
+#pragma warning(pop)
+#elif defined(__GNUC__)
+#pragma GCC diagnostic pop
+#endif
 
 struct animals_t
 {
@@ -12936,6 +13014,47 @@ suite filesystem_tests = [] {
 
       expect(glz::write_json(p) == R"("C:/123")");
    };
+
+   "non-ASCII path writes UTF-8"_test = [] {
+      const auto latin1 = glz::write_json(std::filesystem::path{u8"C:/Z\u00FCrich.txt"});
+      expect(latin1.has_value());
+      expect(*latin1 == std::string{"\"C:/Z\xC3\xBCrich.txt\""}) << *latin1;
+
+      // U+0105 has no code page 1252 byte, so the writer must not be consulting the ANSI code page
+      const auto not_in_code_page = glz::write_json(std::filesystem::path{u8"C:/\u0105.txt"});
+      expect(not_in_code_page.has_value());
+      expect(*not_in_code_page == std::string{"\"C:/\xC4\x85.txt\""}) << *not_in_code_page;
+
+      const auto supplementary = glz::write_json(std::filesystem::path{u8"C:/\U0001F600.txt"});
+      expect(supplementary.has_value());
+      expect(*supplementary == std::string{"\"C:/\xF0\x9F\x98\x80.txt\""}) << *supplementary;
+   };
+
+   "non-ASCII path reads UTF-8"_test = [] {
+      std::filesystem::path latin1{};
+      expect(!glz::read_json(latin1, "\"C:/Z\xC3\xBCrich.txt\""));
+      expect(latin1 == std::filesystem::path{u8"C:/Z\u00FCrich.txt"});
+
+      std::filesystem::path supplementary{};
+      expect(!glz::read_json(supplementary, "\"C:/\xF0\x9F\x98\x80.txt\""));
+      expect(supplementary == std::filesystem::path{u8"C:/\U0001F600.txt"});
+   };
+
+#ifdef _WIN32
+   "unpaired surrogates write invalid_utf8"_test = [] {
+      const auto write_path = [](wchar_t surrogate) {
+         return glz::write_json(std::filesystem::path{std::wstring{L"C:/bad_"} + surrogate});
+      };
+
+      const auto high = write_path(wchar_t(0xD800));
+      expect(!high.has_value());
+      expect(high.error().ec == glz::error_code::invalid_utf8);
+
+      const auto low = write_path(wchar_t(0xDC00));
+      expect(!low.has_value());
+      expect(low.error().ec == glz::error_code::invalid_utf8);
+   };
+#endif
 
    "path_test_struct"_test = [] {
       path_test_struct obj{};

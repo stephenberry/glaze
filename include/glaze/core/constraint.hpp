@@ -285,6 +285,21 @@ namespace glz
       }
    };
 
+   // Runs the self_constraint declared for T once an object reader has read all of its members.
+   // Every format's object reader calls this at its successful end, so the check does not depend on
+   // the format the object arrived in. A failed or partial read leaves the object incomplete and is
+   // not checked.
+   template <uint32_t Format, auto Opts, class T>
+   void check_self_constraint(T& value, is_context auto& ctx)
+   {
+      if constexpr (has_self_constraint_v<T> && !check_skip_self_constraint(Opts)) {
+         if (ctx.error == error_code::none || ctx.error == error_code::end_reached) {
+            auto wrapper = self_constraint_v<T>(value);
+            from<Format, decltype(wrapper)>::template op<Opts>(wrapper, ctx, nullptr, nullptr);
+         }
+      }
+   }
+
    template <auto Constraint, string_literal Message>
    constexpr auto self_constraint_impl() noexcept
    {

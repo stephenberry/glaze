@@ -869,4 +869,74 @@ suite service_composition_tests = [] {
    };
 };
 
+// Schema generation uses the registry's options (GitHub issue #3080)
+
+struct SchemaPair
+{
+   int first{};
+   int second{};
+};
+
+struct SchemaOrder
+{
+   SchemaPair pair{};
+   std::optional<std::string> note{};
+};
+
+struct SchemaService
+{
+   SchemaOrder echo(SchemaOrder order) { return order; }
+};
+
+template <>
+struct glz::meta<SchemaService>
+{
+   using T = SchemaService;
+   static constexpr auto value = object(&T::echo);
+};
+
+// A custom options type derived from glz::opts, with a field of its own
+struct schema_derived_opts : glz::opts
+{
+   bool custom_flag = true;
+};
+
+// A standalone options type that does not derive from glz::opts
+struct schema_standalone_opts
+{
+   uint32_t format = glz::JSON;
+   bool null_terminated = true;
+   bool comments = false;
+   bool error_on_unknown_keys = true;
+   bool skip_null_members = true;
+   bool prettify = false;
+   bool minified = false;
+   bool error_on_missing_keys = true;
+   bool partial_read = false;
+   uint32_t internal{};
+};
+
+template <auto Opts>
+void expect_registry_schemas_use_opts()
+{
+   SchemaService service;
+   glz::registry<Opts, glz::REST> registry;
+   registry.on(service);
+   const auto& spec = registry.endpoints.normal_routes.routes.at("/echo").at(glz::http_method::POST).spec;
+   const auto expected = glz::write_json_schema<SchemaOrder, Opts>().value();
+   expect(expected != glz::write_json_schema<SchemaOrder>().value()); // the options change the schema
+   expect(spec.request_body_schema == expected);
+   expect(spec.response_schema == expected);
+}
+
+suite rest_schema_options_tests = [] {
+   "rest_schemas_use_derived_registry_opts"_test = [] {
+      expect_registry_schemas_use_opts<schema_derived_opts{{.error_on_missing_keys = true}}>();
+   };
+
+   "rest_schemas_use_standalone_registry_opts"_test = [] {
+      expect_registry_schemas_use_opts<schema_standalone_opts{}>();
+   };
+};
+
 int main() {}

@@ -15,6 +15,7 @@
 
 #include "glaze/core/chrono.hpp"
 #include "glaze/core/common.hpp"
+#include "glaze/core/constraint.hpp"
 #include "glaze/core/meta.hpp"
 #include "glaze/core/opts.hpp"
 #include "glaze/core/read.hpp"
@@ -163,6 +164,62 @@ namespace glz::msgpack::detail
       out = std::string_view{it, len};
       it += len;
       return true;
+   }
+
+   // User-configured allocation limits (docs/security.md): the compile-time max_string_length,
+   // max_array_size and max_map_size options and their runtime glz::context counterparts.
+   template <auto Opts>
+   GLZ_ALWAYS_INLINE bool exceeds_max_string_length(is_context auto& ctx, size_t n) noexcept
+   {
+      if constexpr (check_max_string_length(Opts) > 0) {
+         if (n > check_max_string_length(Opts)) [[unlikely]] {
+            ctx.error = error_code::invalid_length;
+            return true;
+         }
+      }
+      if constexpr (has_runtime_max_string_length<std::decay_t<decltype(ctx)>>) {
+         if (ctx.max_string_length > 0 && n > ctx.max_string_length) [[unlikely]] {
+            ctx.error = error_code::invalid_length;
+            return true;
+         }
+      }
+      return false;
+   }
+
+   template <auto Opts>
+   GLZ_ALWAYS_INLINE bool exceeds_max_array_size(is_context auto& ctx, size_t n) noexcept
+   {
+      if constexpr (check_max_array_size(Opts) > 0) {
+         if (n > check_max_array_size(Opts)) [[unlikely]] {
+            ctx.error = error_code::invalid_length;
+            return true;
+         }
+      }
+      if constexpr (has_runtime_max_array_size<std::decay_t<decltype(ctx)>>) {
+         if (ctx.max_array_size > 0 && n > ctx.max_array_size) [[unlikely]] {
+            ctx.error = error_code::invalid_length;
+            return true;
+         }
+      }
+      return false;
+   }
+
+   template <auto Opts>
+   GLZ_ALWAYS_INLINE bool exceeds_max_map_size(is_context auto& ctx, size_t n) noexcept
+   {
+      if constexpr (check_max_map_size(Opts) > 0) {
+         if (n > check_max_map_size(Opts)) [[unlikely]] {
+            ctx.error = error_code::invalid_length;
+            return true;
+         }
+      }
+      if constexpr (has_runtime_max_map_size<std::decay_t<decltype(ctx)>>) {
+         if (ctx.max_map_size > 0 && n > ctx.max_map_size) [[unlikely]] {
+            ctx.error = error_code::invalid_length;
+            return true;
+         }
+      }
+      return false;
    }
 
    template <class T>
@@ -579,6 +636,9 @@ namespace glz
          if (!msgpack::detail::read_string_view(ctx, tag, it, end, sv)) {
             return;
          }
+         if (msgpack::detail::exceeds_max_string_length<Opts>(ctx, sv.size())) [[unlikely]] {
+            return;
+         }
          value.assign(sv.data(), sv.size());
       }
    };
@@ -591,6 +651,9 @@ namespace glz
       {
          std::string_view sv{};
          if (!msgpack::detail::read_string_view(ctx, tag, it, end, sv)) {
+            return;
+         }
+         if (msgpack::detail::exceeds_max_string_length<Opts>(ctx, sv.size())) [[unlikely]] {
             return;
          }
          if (sv.size() > value.max_size()) {
@@ -611,6 +674,9 @@ namespace glz
          if (!msgpack::detail::read_string_view(ctx, tag, it, end, sv)) {
             return;
          }
+         if (msgpack::detail::exceeds_max_string_length<Opts>(ctx, sv.size())) [[unlikely]] {
+            return;
+         }
          value = sv;
       }
    };
@@ -625,6 +691,9 @@ namespace glz
       {
          std::string_view sv{};
          if (!msgpack::detail::read_string_view(ctx, tag, it, end, sv)) {
+            return;
+         }
+         if (msgpack::detail::exceeds_max_string_length<Opts>(ctx, sv.size())) [[unlikely]] {
             return;
          }
          if (sv.size() > value.size()) [[unlikely]] {
@@ -804,6 +873,8 @@ namespace glz
                   return;
                }
             }
+
+            check_self_constraint<MSGPACK, Opts>(value, ctx);
          }
       }
    };
@@ -825,6 +896,9 @@ namespace glz
          }
 
          if constexpr (!Opts.partial_read) {
+            if (msgpack::detail::exceeds_max_map_size<Opts>(ctx, len)) [[unlikely]] {
+               return;
+            }
             value.clear();
             if constexpr (has_reserve<std::decay_t<Value>>) {
                // Each map entry is a key plus a value, so it occupies at least two bytes on the
@@ -881,6 +955,9 @@ namespace glz
          if (!msgpack::read_array_length(ctx, tag, it, end, len)) {
             return;
          }
+         if (msgpack::detail::exceeds_max_array_size<Opts>(ctx, len)) [[unlikely]] {
+            return;
+         }
 
          value.clear();
          for (size_t i = 0; i < len && ctx.error == error_code::none; ++i) {
@@ -913,6 +990,9 @@ namespace glz
                      return;
                   }
                   const size_t len = payload.size();
+                  if (msgpack::detail::exceeds_max_array_size<Opts>(ctx, len)) [[unlikely]] {
+                     return;
+                  }
                   if constexpr (resizable<std::remove_cvref_t<Range>>) {
                      if (exceeds_capacity(value, len, ctx)) [[unlikely]] {
                         return;
@@ -950,6 +1030,9 @@ namespace glz
 
          size_t len{};
          if (!msgpack::read_array_length(ctx, tag, it, end, len)) {
+            return;
+         }
+         if (msgpack::detail::exceeds_max_array_size<Opts>(ctx, len)) [[unlikely]] {
             return;
          }
 
