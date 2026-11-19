@@ -311,15 +311,17 @@ namespace glz
          return *this;
       }
 
-      // The assigned string, array, or object may live inside this value, as in
-      // `json = std::move(json["child"].get_array())`. Replacing `data` can destroy it before it is read, so each
-      // overload below builds the new value first and then moves it into `data`.
-
+      // Plain assignment is safe here: std::variant copies a string into a temporary before replacing a different
+      // alternative, and a string held by `data` cannot contain `value`. It also reuses the existing buffer.
       generic_json& operator=(const std::string& value)
       {
-         data = std::string(value);
+         data = value;
          return *this;
       }
+
+      // A moved string, array, or object, or a copied array or object, may live inside this value, as in
+      // `json = std::move(json["child"].get_array())`. Replacing `data` can destroy it before it is read, so these
+      // overloads build the new value first and then move it into `data`.
 
       generic_json& operator=(std::string&& value)
       {
