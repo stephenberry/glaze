@@ -28,12 +28,12 @@ concurrency:
 
 jobs:
   build:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
 
     strategy:
       fail-fast: false
       matrix:
-        clang: [19]
+        clang: [21]
         build_type: [Debug]
         std: [23]
 
@@ -47,7 +47,7 @@ jobs:
     - name: Install dependencies
       run: |
         wget -qO- https://apt.llvm.org/llvm-snapshot.gpg.key | sudo gpg --dearmor --yes -o /etc/apt/keyrings/llvm.gpg
-        echo "deb [signed-by=/etc/apt/keyrings/llvm.gpg] http://apt.llvm.org/noble/ llvm-toolchain-noble-${{matrix.clang}} main" | sudo tee /etc/apt/sources.list.d/llvm.list
+        echo "deb [signed-by=/etc/apt/keyrings/llvm.gpg] http://apt.llvm.org/resolute/ llvm-toolchain-resolute-${{matrix.clang}} main" | sudo tee /etc/apt/sources.list.d/llvm.list
         sudo apt-get update
         sudo apt-get install -y --fix-missing clang-${{matrix.clang}} libc++-${{matrix.clang}}-dev libc++abi-${{matrix.clang}}-dev
         echo "PATH=/usr/lib/llvm-${{matrix.clang}}/bin:$PATH" >> $GITHUB_ENV

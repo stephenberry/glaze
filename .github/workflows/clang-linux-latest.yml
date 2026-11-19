@@ -31,12 +31,12 @@ concurrency:
 
 jobs:
   build:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
 
     strategy:
       fail-fast: false
       matrix:
-        clang: [19, 20, 21, 22, 23]
+        clang: [21, 22, 23]
         build_type: [Debug]
         std: [23]
 
@@ -51,8 +51,8 @@ jobs:
     - name: Install latest clang
       run: |
         wget -qO- https://apt.llvm.org/llvm-snapshot.gpg.key | sudo gpg --dearmor --yes -o /etc/apt/keyrings/llvm.gpg
-        # Use the 'noble' repository for Ubuntu 24.04
-        echo "deb [signed-by=/etc/apt/keyrings/llvm.gpg] http://apt.llvm.org/noble/ llvm-toolchain-noble-${{matrix.clang}} main" | sudo tee /etc/apt/sources.list.d/llvm.list
+        # Use the 'resolute' repository for Ubuntu 26.04
+        echo "deb [signed-by=/etc/apt/keyrings/llvm.gpg] http://apt.llvm.org/resolute/ llvm-toolchain-resolute-${{matrix.clang}} main" | sudo tee /etc/apt/sources.list.d/llvm.list
         # Clean apt cache and update before installing
         sudo apt-get clean
         sudo apt-get update

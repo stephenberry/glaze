@@ -6,7 +6,7 @@ This guide covers some of the ways to install and integrate the Glaze JSON libra
 
 ### Compiler Support
 - **C++23** standard required
-- **Clang 19+**
+- **Clang 21+**
 - **GCC 13+** 
 - **MSVC (Visual Studio 2026, Build Tools 14.50+)**
 - **Apple Clang (latest Xcode)**
