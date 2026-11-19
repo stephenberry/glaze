@@ -319,6 +319,14 @@ namespace glz
    // Useful for binary formats or when field names add unnecessary overhead.
    // Order of fields is determined by the glz::meta definition.
 
+   // ---
+   // bool keep_named_type_definitions = false;
+   // When true, write_json_schema keeps the definition of every object and enum in $defs and refers to
+   // it by $ref, where by default one used once is written in the place that uses it. A container,
+   // map, variant or optional used once is still written in place. For a caller that places several
+   // schemas in one document, such as an OpenAPI document's components, where each named type must
+   // stay a definition the document can refer to.
+
    struct append_arrays_opt_tag
    {};
 
@@ -896,6 +904,16 @@ namespace glz
    {
       if constexpr (requires { Opts.aligned_arrays; }) {
          return Opts.aligned_arrays;
+      }
+      else {
+         return false;
+      }
+   }
+
+   consteval bool check_keep_named_type_definitions(auto&& Opts)
+   {
+      if constexpr (requires { Opts.keep_named_type_definitions; }) {
+         return Opts.keep_named_type_definitions;
       }
       else {
          return false;
