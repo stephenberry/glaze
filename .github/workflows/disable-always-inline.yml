@@ -28,7 +28,7 @@ concurrency:
 
 jobs:
   gcc15:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     container:
       image: gcc:15
 
@@ -85,8 +85,8 @@ jobs:
     - name: Test
       run: ctest --output-on-failure --test-dir "$GITHUB_WORKSPACE/build"
 
-  clang19:
-    runs-on: ubuntu-24.04
+  clang21:
+    runs-on: ubuntu-26.04
 
     strategy:
       fail-fast: false
@@ -95,26 +95,26 @@ jobs:
         std: [23]
 
     env:
-      CC: clang-19
-      CXX: clang++-19
-      LLVM_VERSION: 19
+      CC: clang-21
+      CXX: clang++-21
+      LLVM_VERSION: 21
 
     steps:
     - uses: actions/checkout@v7
 
-    - name: Install Clang 19
+    - name: Install Clang 21
       run: |
         wget -qO- https://apt.llvm.org/llvm-snapshot.gpg.key | sudo gpg --dearmor --yes -o /etc/apt/keyrings/llvm.gpg
-        echo "deb [signed-by=/etc/apt/keyrings/llvm.gpg] http://apt.llvm.org/noble/ llvm-toolchain-noble-19 main" | sudo tee /etc/apt/sources.list.d/llvm.list
+        echo "deb [signed-by=/etc/apt/keyrings/llvm.gpg] http://apt.llvm.org/resolute/ llvm-toolchain-resolute-21 main" | sudo tee /etc/apt/sources.list.d/llvm.list
         sudo apt-get clean
         sudo apt-get update
-        sudo apt-get install -y --fix-missing clang-19 libc++-19-dev libc++abi-19-dev
+        sudo apt-get install -y --fix-missing clang-21 libc++-21-dev libc++abi-21-dev
 
     - name: Set path for clang
       run: |
-        echo "PATH=/usr/lib/llvm-19/bin:$PATH" >> $GITHUB_ENV
-        clang-19 --version
-        clang++-19 --version
+        echo "PATH=/usr/lib/llvm-21/bin:$PATH" >> $GITHUB_ENV
+        clang-21 --version
+        clang++-21 --version
 
     - name: Configure CMake
       run: |
