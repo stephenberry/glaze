@@ -26,6 +26,9 @@ namespace glz
 
       /**
        * @brief Optional callback to dynamically validate origins
+       *
+       * When set, an origin is allowed if the callback accepts it or it is listed exactly in
+       * allowed_origins; a "*" entry no longer grants every origin.
        */
       std::function<bool(std::string_view)> allowed_origins_validator{};
 
@@ -101,10 +104,12 @@ namespace glz
       // wildcard there would echo any origin back next to
       // Access-Control-Allow-Credentials: true and let any site read authenticated
       // responses. With credentials enabled, fall through to the exact-match check.
+      // A validator also turns the wildcard off: allowed_origins defaults to {"*"}, so a
+      // config that only sets the validator would otherwise grant the origins it rejects.
       const bool wildcard =
          std::find(config.allowed_origins.begin(), config.allowed_origins.end(), "*") != config.allowed_origins.end();
-      if (!config.allow_credentials &&
-          ((config.allowed_origins.empty() && !config.allowed_origins_validator) || wildcard)) {
+      if (!config.allow_credentials && !config.allowed_origins_validator &&
+          (config.allowed_origins.empty() || wildcard)) {
          return true;
       }
 

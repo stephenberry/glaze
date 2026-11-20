@@ -72,6 +72,30 @@ suite cors_origin_tests = [] {
       expect(glz::is_origin_allowed(config, "https://trusted.example"));
       expect(not glz::is_origin_allowed(config, "https://evil.example"));
    };
+
+   // allowed_origins defaults to {"*"}, so a config that only sets the validator used to
+   // allow (and echo back) every origin the validator rejected.
+   "validator_with_default_origins_rejects_unvalidated_origin"_test = [] {
+      glz::cors_config config{
+         .allowed_origins_validator = [](std::string_view o) { return o.ends_with(".partner.example"); }};
+      expect(glz::is_origin_allowed(config, "https://app.partner.example"));
+      expect(not glz::is_origin_allowed(config, "https://evil.example"));
+
+      auto res = run_cors(config, "https://evil.example");
+      expect(!res.response_headers.contains("access-control-allow-origin"));
+
+      res = run_cors(config, "https://app.partner.example");
+      expect(res.response_headers.first_value("access-control-allow-origin") == "https://app.partner.example");
+   };
+
+   "validator_keeps_exact_listed_origins"_test = [] {
+      glz::cors_config config;
+      config.allowed_origins = {"https://app.example", "*"};
+      config.allowed_origins_validator = [](std::string_view o) { return o == "https://trusted.example"; };
+      expect(glz::is_origin_allowed(config, "https://app.example"));
+      expect(glz::is_origin_allowed(config, "https://trusted.example"));
+      expect(not glz::is_origin_allowed(config, "https://evil.example"));
+   };
 };
 
 namespace
