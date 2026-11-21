@@ -17,6 +17,7 @@
 #include "glaze/json/json_ptr.hpp"
 #include "glaze/json/ptr.hpp"
 #include "glaze/json/read.hpp"
+#include "glaze/json/schema.hpp"
 #include "glaze/json/write.hpp"
 #include "ut/ut.hpp"
 
@@ -248,6 +249,123 @@ suite additional_eigen_tests = [] {
       Eigen::Matrix<double, 3, 3, Eigen::RowMajor> expected;
       expected << 9, 8, 7, 6, 5, 4, 3, 2, 1;
       expect(m == expected);
+   };
+};
+
+// Every Eigen type Glaze serializes needs a glz::meta name. Without one, glz::name_v falls back to a
+// compiler-specific spelling and JSON schema $defs keys differ between compilers for the same type.
+struct schema_holder
+{
+   Eigen::Matrix3d m{};
+   Eigen::MatrixXd dynamic{};
+   Eigen::Isometry3d pose{};
+   Eigen::ArrayXXd array{};
+};
+
+suite eigen_type_names = [] {
+   "matrix names"_test = [] {
+      static_assert(glz::name_v<Eigen::Matrix3d> == "Eigen::Matrix<double,3,3>");
+      static_assert(glz::name_v<Eigen::Vector3d> == "Eigen::Matrix<double,3,1>");
+      static_assert(glz::name_v<Eigen::RowVector3d> == "Eigen::Matrix<double,1,3>");
+      // float, not int: name_v<int> is "int32_t" only when glaze/api/type_support.hpp is in the TU
+      static_assert(glz::name_v<Eigen::Matrix<float, 100, 250>> == "Eigen::Matrix<float,100,250>");
+      // Eigen::Dynamic is -1, which an unsigned spelling cannot represent
+      static_assert(glz::name_v<Eigen::MatrixXd> == "Eigen::Matrix<double,-1,-1>");
+      static_assert(glz::name_v<Eigen::VectorXf> == "Eigen::Matrix<float,-1,1>");
+      // Non-default storage order and maximum extents are distinct types, so they get distinct names
+      static_assert(glz::name_v<Eigen::Matrix<double, 3, 3, Eigen::RowMajor>> == "Eigen::Matrix<double,3,3,1,3,3>");
+      static_assert(glz::name_v<Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic, 0, 4, 4>> ==
+                    "Eigen::Matrix<double,-1,-1,0,4,4>");
+      static_assert(glz::name_v<Eigen::Matrix3d> != glz::name_v<Eigen::Matrix<double, 3, 3, Eigen::RowMajor>>);
+   };
+
+   "array names"_test = [] {
+      static_assert(glz::name_v<Eigen::Array3d> == "Eigen::Array<double,3,1>");
+      static_assert(glz::name_v<Eigen::ArrayXXf> == "Eigen::Array<float,-1,-1>");
+      static_assert(glz::name_v<Eigen::Array<double, 2, 2, Eigen::RowMajor>> == "Eigen::Array<double,2,2,1,2,2>");
+      static_assert(glz::name_v<Eigen::Array3d> != glz::name_v<Eigen::Vector3d>);
+      // Keeps P2996 reflection from serializing an Array as an object of its members
+      static_assert(glz::is_specified<Eigen::Array3d>);
+      static_assert(glz::is_specified<Eigen::ArrayXXd>);
+   };
+
+   "array round trip"_test = [] {
+      Eigen::Array3d a{1, 2, 3};
+      std::string json;
+      expect(not glz::write_json(a, json));
+      expect(json == "[1,2,3]") << json;
+      Eigen::Array3d parsed{};
+      expect(not glz::read_json(parsed, json));
+      expect((a == parsed).all());
+
+      Eigen::ArrayXXd dynamic(2, 2);
+      dynamic << 1, 2, 3, 4;
+      expect(not glz::write_json(dynamic, json));
+      expect(json == "[[2,2],[1,3,2,4]]") << json;
+      Eigen::ArrayXXd dynamic_parsed;
+      expect(not glz::read_json(dynamic_parsed, json));
+      expect((dynamic == dynamic_parsed).all());
+   };
+
+   "transform names"_test = [] {
+      static_assert(glz::name_v<Eigen::Isometry3d> == "Eigen::Transform<double,3,Eigen::Isometry>");
+      static_assert(glz::name_v<Eigen::Affine3d> == "Eigen::Transform<double,3,Eigen::Affine>");
+      static_assert(glz::name_v<Eigen::AffineCompact2d> == "Eigen::Transform<double,2,Eigen::AffineCompact>");
+      static_assert(glz::name_v<Eigen::Projective3f> == "Eigen::Transform<float,3,Eigen::Projective>");
+      static_assert(glz::name_v<Eigen::Transform<float, 3, Eigen::Affine, Eigen::DontAlign>> ==
+                    "Eigen::Transform<float,3,Eigen::Affine,2>");
+   };
+
+   // Options only selects alignment, so a DontAlign transform serializes like any other
+   "transform alignment round trip"_test = [] {
+      Eigen::Transform<double, 3, Eigen::Isometry, Eigen::DontAlign> pose;
+      pose.setIdentity();
+      pose.translation() << 1.0, 2.0, 3.0;
+      std::string json;
+      expect(not glz::write_json(pose, json));
+      expect(json == "[1,0,0,0,0,1,0,0,0,0,1,0,1,2,3,1]") << json;
+
+      Eigen::Transform<double, 3, Eigen::Isometry, Eigen::DontAlign> parsed;
+      expect(not glz::read_json(parsed, json));
+      expect(pose.matrix() == parsed.matrix());
+   };
+
+   "map and ref names"_test = [] {
+      static_assert(glz::name_v<Eigen::Map<Eigen::MatrixXd>> == "Eigen::Map<Eigen::Matrix<double,-1,-1>>");
+      static_assert(glz::name_v<Eigen::Map<const Eigen::Vector3d>> == "Eigen::Map<const Eigen::Matrix<double,3,1>>");
+      static_assert(glz::name_v<Eigen::Ref<Eigen::Matrix3d>> == "Eigen::Ref<Eigen::Matrix<double,3,3>>");
+      static_assert(glz::name_v<Eigen::Ref<const Eigen::VectorXd>> == "Eigen::Ref<const Eigen::Matrix<double,-1,1>>");
+      static_assert(glz::name_v<Eigen::Ref<Eigen::MatrixXd, 0, Eigen::Stride<8, 2>>> ==
+                    "Eigen::Ref<Eigen::Matrix<double,-1,-1>,0,Eigen::Stride<8,2>>");
+      static_assert(glz::name_v<Eigen::Ref<Eigen::VectorXd, 0, Eigen::InnerStride<2>>> ==
+                    "Eigen::Ref<Eigen::Matrix<double,-1,1>,0,Eigen::InnerStride<2>>");
+      // OuterStride is the default stride for a Ref over a matrix, so it only surfaces in a full form
+      static_assert(glz::name_v<Eigen::OuterStride<>> == "Eigen::OuterStride<-1>");
+      static_assert(glz::name_v<Eigen::Ref<Eigen::MatrixXd, Eigen::Aligned16>> ==
+                    "Eigen::Ref<Eigen::Matrix<double,-1,-1>,16,Eigen::OuterStride<-1>>");
+   };
+
+   "map round trip"_test = [] {
+      std::array<double, 4> storage{1, 2, 3, 4};
+      Eigen::Map<Eigen::Matrix2d> m(storage.data());
+      std::string json;
+      expect(not glz::write_json(m, json));
+      expect(json == "[1,2,3,4]") << json;
+
+      Eigen::Matrix2d parsed;
+      expect(not glz::read_json(parsed, json));
+      expect(m == parsed);
+   };
+
+   "schema definitions use stable names"_test = [] {
+      const auto schema = glz::write_json_schema<schema_holder>().value();
+      expect(schema.find(R"("#/$defs/Eigen::Matrix<double,3,3>")") != std::string::npos) << schema;
+      expect(schema.find(R"("#/$defs/Eigen::Matrix<double,-1,-1>")") != std::string::npos) << schema;
+      expect(schema.find(R"("#/$defs/Eigen::Transform<double,3,Eigen::Isometry>")") != std::string::npos) << schema;
+      expect(schema.find(R"("#/$defs/Eigen::Array<double,-1,-1>")") != std::string::npos) << schema;
+      // A compiler-derived name would carry spaces after the commas
+      expect(schema.find("Eigen::Matrix<double, ") == std::string::npos) << schema;
+      expect(schema.find("Eigen::Transform<double, ") == std::string::npos) << schema;
    };
 };
 
