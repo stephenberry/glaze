@@ -116,7 +116,11 @@ namespace glz
             PUT, rest_path,
             [&value](const request& req, response& res) {
                // Parse the JSON request body
-               auto ec = read<Opts>(value, req.body);
+               error_ctx ec{};
+               detail::read_and_commit(value, [&](auto& target) {
+                  ec = read<Opts>(target, req.body);
+                  return !ec;
+               });
                if (ec) {
                   res.status(400).body("Invalid request body: " + format_error(ec, req.body));
                   return;
@@ -196,7 +200,11 @@ namespace glz
             PUT, rest_path,
             [&obj](const request& req, response& res) {
                // Parse the JSON request body
-               auto ec = read<Opts>(obj, req.body);
+               error_ctx ec{};
+               detail::read_and_commit(obj, [&](auto& target) {
+                  ec = read<Opts>(target, req.body);
+                  return !ec;
+               });
                if (ec) {
                   res.status(400).body("Invalid request body: " + format_error(ec, req.body));
                   return;
@@ -223,7 +231,11 @@ namespace glz
             PUT, rest_path,
             [&value](const request& req, response& res) {
                // Parse the JSON request body
-               auto ec = read<Opts>(value, req.body);
+               error_ctx ec{};
+               detail::read_and_commit(value, [&](auto& target) {
+                  ec = read<Opts>(target, req.body);
+                  return !ec;
+               });
                if (ec) {
                   res.status(400).body("Invalid request body: " + format_error(ec, req.body));
                   return;
@@ -250,7 +262,11 @@ namespace glz
             PUT, rest_path,
             [&var](const request& req, response& res) {
                // Parse the JSON request body
-               auto ec = read<Opts>(var, req.body);
+               error_ctx ec{};
+               detail::read_and_commit(var, [&](auto& target) {
+                  ec = read<Opts>(target, req.body);
+                  return !ec;
+               });
                if (ec) {
                   res.status(400).body("Invalid request body: " + format_error(ec, req.body));
                   return;
