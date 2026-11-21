@@ -252,6 +252,32 @@ namespace glz
          return glz::write_base64(std::string_view{reinterpret_cast<char*>(hash), sizeof(hash)});
       }
 
+      // RFC 6455 4.1 and 5.3 both require these bytes to come from a strong source of entropy:
+      // the handshake nonce has to be unpredictable for the accept value to prove anything about
+      // the peer, and a predictable masking key lets a frame's author choose the bytes an
+      // intermediary sees on the wire. A std::mt19937 seeded from a single 32-bit draw is a
+      // deterministic function of that draw, so it cannot carry more entropy than the draw
+      // however many bytes are taken from it. std::random_device is the standard entropy source,
+      // so the bytes come straight from it. One per thread, because constructing it opens the
+      // platform's entropy source.
+      inline void fill_random_bytes(uint8_t* out, size_t n)
+      {
+         static thread_local std::random_device rd;
+         std::uniform_int_distribution<unsigned int> dist(0, 255);
+         for (size_t i = 0; i < n; ++i) {
+            out[i] = static_cast<uint8_t>(dist(rd));
+         }
+      }
+
+      // RFC 6455 4.1: Sec-WebSocket-Key carries a freshly chosen, randomly selected 16-byte
+      // value, base64 encoded.
+      inline std::string generate_websocket_key()
+      {
+         std::array<uint8_t, 16> nonce{};
+         fill_random_bytes(nonce.data(), nonce.size());
+         return glz::write_base64(std::string_view{reinterpret_cast<const char*>(nonce.data()), nonce.size()});
+      }
+
    }
 
    // Forward declarations
@@ -1341,13 +1367,9 @@ namespace glz
 
          // Write masking key if needed (client mode)
          if (use_masking) {
-            // Generate random masking key
-            std::random_device rd;
-            std::mt19937 gen(rd());
-            std::uniform_int_distribution<unsigned int> dist(0, 255);
-            for (int i = 0; i < 4; ++i) {
-               header[header_offset + i] = static_cast<uint8_t>(dist(gen));
-            }
+            // RFC 6455 5.3: a fresh key per frame, from a strong source of entropy, that does
+            // not make the next frame's key simple to predict.
+            ws_util::fill_random_bytes(header + header_offset, 4);
             // Mask the payload (done in-place in the frame buffer after this header)
             // Note: Actual masking of payload should be done by caller if needed
          }
