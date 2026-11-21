@@ -47,21 +47,38 @@ namespace glz
          }
          else {
             const std::string_view text{reinterpret_cast<const char*>(buffer.data()), buffer.size()};
-            if (index >= text.size()) {
+            if (index > text.size()) {
                return {.context = "", .index = index};
+            }
+
+            // An error at the end of the input (a truncated document, a missing closing bracket)
+            // has no character of its own. Point just past the last character that is not
+            // trailing whitespace, so the message still shows the line where the input stops.
+            // The reported index is left unchanged.
+            size_t pos = index;
+            if (pos == text.size()) {
+               while (pos > 0 && (text[pos - 1] == ' ' || text[pos - 1] == '\t' || text[pos - 1] == '\n' ||
+                                  text[pos - 1] == '\r')) {
+                  --pos;
+               }
+               if (pos == 0) {
+                  return {.context = "", .index = index};
+               }
             }
 
             // The line the error sits on starts just after the newline before it, or at the
             // beginning when there is none. Both the column and the context start from that one
-            // position. Searching from index - 1 leaves index itself out, so a newline *at* the
+            // position. Searching from pos - 1 leaves pos itself out, so a newline *at* the
             // error belongs to the line it ends rather than the one it opens.
-            const size_t prev_newline = index ? text.rfind('\n', index - 1) : text.npos;
+            const size_t prev_newline = pos ? text.rfind('\n', pos - 1) : text.npos;
             const size_t offset = (prev_newline == text.npos) ? 0 : prev_newline + 1;
-            const size_t column = index - offset + 1;
-            const size_t line = size_t(std::count(text.begin(), text.begin() + index, '\n') + 1);
+            const size_t column = pos - offset + 1;
+            const size_t line = size_t(std::count(text.begin(), text.begin() + pos, '\n') + 1);
 
+            // The context runs to the end of the line. Searching from pos itself means that a
+            // newline at the error ends the context, instead of pulling in the line after it.
             size_t context_begin = offset;
-            size_t context_end = (std::min)(text.find('\n', index + 1), text.size());
+            size_t context_end = (std::min)(text.find('\n', pos), text.size());
 
             size_t front_truncation = 0;
             size_t rear_truncation = 0;
