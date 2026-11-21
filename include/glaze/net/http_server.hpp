@@ -3083,11 +3083,18 @@ namespace glz
                middleware(request, response);
             }
 
-            if (wrapping_middlewares_.empty()) {
-               handle(request, response);
-            }
-            else {
-               execute_middleware_chain(0, request, response, handle);
+            // A middleware that answers with an error status (an authentication check's 401,
+            // a rate limiter's 429) has rejected the request, so the route handler must not
+            // run: it would act on the request and overwrite the rejection's body. Wrapping
+            // middleware wraps the handler only and is skipped with it, as for an unrouted
+            // request.
+            if (response.status_code < 400) {
+               if (wrapping_middlewares_.empty()) {
+                  handle(request, response);
+               }
+               else {
+                  execute_middleware_chain(0, request, response, handle);
+               }
             }
 
             run_response_hooks(request, response);

@@ -373,6 +373,8 @@ server.use([](const glz::request& req, glz::response& res) {
 server.enable_cors();
 ```
 
+A middleware rejects a request by setting an error status (400 or above). Every middleware still runs, so headers such as CORS reach the rejection, but the route handler and wrapping middleware are skipped and the error response is sent as the middleware left it.
+
 ### Custom Middleware
 
 ```cpp

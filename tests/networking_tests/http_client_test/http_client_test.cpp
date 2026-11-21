@@ -2338,6 +2338,99 @@ suite unrouted_request_tests = [] {
    };
 };
 
+// A use() middleware that answers with an error status (the documented authentication and
+// rate limiting pattern) ends the request: the route handler and wrapping middleware do not run.
+suite middleware_rejection_tests = [] {
+   struct guarded_server
+   {
+      std::shared_ptr<asio::io_context> io_ctx = std::make_shared<asio::io_context>();
+      glz::http_server<> server{io_ctx};
+      std::thread thread;
+      std::atomic<int> handler_calls{0};
+      std::atomic<int> wrap_calls{0};
+      std::atomic<int> last_hooked_status{0};
+
+      guarded_server()
+      {
+         server.use([](const request& req, response& res) {
+            if (req.headers.first_value("authorization") != "Bearer good") {
+               res.status(401).body("unauthorized");
+               return;
+            }
+         });
+         server.use([](const request&, response& res) { res.header("X-Middleware", "ran"); });
+         server.wrap([this](const request&, response&, const auto& next) {
+            wrap_calls.fetch_add(1);
+            next();
+         });
+         server.on_response([this](const request&, const response& res) { last_hooked_status.store(res.status_code); });
+
+         server.get("/profile", [this](const request&, response& res) {
+            handler_calls.fetch_add(1);
+            res.body("secret profile");
+         });
+         server.post("/admin/delete", [this](const request&, response& res) {
+            handler_calls.fetch_add(1);
+            res.body("deleted");
+         });
+
+         server.bind("127.0.0.1", 0);
+         server.start(0);
+         thread = std::thread([this] { io_ctx->run(); });
+      }
+
+      ~guarded_server()
+      {
+         server.stop();
+         io_ctx->stop();
+         if (thread.joinable()) thread.join();
+      }
+
+      std::string url(std::string_view path) const
+      {
+         return "http://127.0.0.1:" + std::to_string(server.port()) + std::string(path);
+      }
+   };
+
+   "rejecting_middleware_skips_the_handler"_test = [] {
+      guarded_server s;
+      glz::http_client client;
+
+      auto profile = client.get(s.url("/profile"));
+      expect(profile.has_value()) << "Request should yield a response";
+      if (profile) {
+         expect(profile->status_code == 401) << "got " << profile->status_code;
+         expect(profile->response_body == "unauthorized") << "got " << profile->response_body;
+         expect(profile->response_headers.first_value("x-middleware").value_or("") == "ran")
+            << "later middleware still runs";
+      }
+
+      auto removed = client.post(s.url("/admin/delete"), "");
+      expect(removed.has_value() && removed->status_code == 401);
+
+      expect(s.handler_calls.load() == 0) << "the handler must not run for a rejected request";
+      expect(s.wrap_calls.load() == 0) << "wrapping middleware wraps the handler only";
+      expect(s.last_hooked_status.load() == 401) << "response hooks see the rejection";
+   };
+
+   "accepted_request_runs_the_handler"_test = [] {
+      guarded_server s;
+      glz::http_client client;
+
+      auto rejected = client.get(s.url("/profile"));
+      expect(rejected.has_value() && rejected->status_code == 401);
+
+      auto profile = client.get(s.url("/profile"), {{"Authorization", "Bearer good"}});
+      expect(profile.has_value()) << "Request should yield a response";
+      if (profile) {
+         expect(profile->status_code == 200) << "got " << profile->status_code;
+         expect(profile->response_body == "secret profile");
+      }
+      expect(s.handler_calls.load() == 1);
+      expect(s.wrap_calls.load() == 1);
+   };
+};
+
 int main()
 {
    std::cout << "Running HTTP Client Tests...\n";
