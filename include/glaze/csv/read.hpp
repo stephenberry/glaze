@@ -372,7 +372,7 @@ namespace glz
                value = get<0>(reflect<T>::values);
             }
             else {
-               ctx.error = error_code::unexpected_enum;
+               read_unknown_enum<T>(value, ctx, key);
             }
          }
          else {
@@ -381,7 +381,7 @@ namespace glz
                key.data(), key.data() + key.size(), key.size());
 
             if (index >= N || reflect<T>::keys[index] != key) [[unlikely]] {
-               ctx.error = error_code::unexpected_enum;
+               read_unknown_enum<T>(value, ctx, key);
                return;
             }
 

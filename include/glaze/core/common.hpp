@@ -571,6 +571,67 @@ namespace glz
    template <class T>
    concept is_named_enum = ((glaze_enum_t<T> || (meta_keys<T> && std::is_enum_v<T>)) && !custom_read<T>);
 
+   // `key` matched no enumerator of T. An enum without meta<T>::enum_unknown_read gets the error and
+   // nothing else, so this costs it no more than the assignment it replaces.
+   template <class T>
+   GLZ_ALWAYS_INLINE void read_unknown_enum(auto& value, is_context auto&& ctx, const std::string_view key) noexcept
+   {
+      if constexpr (has_enum_unknown_reader<T>) {
+         static_assert(
+            std::is_invocable_r_v<std::optional<T>, decltype((meta<T>::enum_unknown_read)), std::string_view>,
+            "enum_unknown_read must take a std::string_view and return a std::optional of the enum");
+         if (std::optional<T> match = meta<T>::enum_unknown_read(key)) {
+            value = *match;
+            return;
+         }
+      }
+      ctx.error = error_code::unexpected_enum;
+   }
+
+   // The same, for a reader that compared the name in place and has not extracted it. `quote` is the
+   // name's opening quote.
+   //
+   // Going back through the format's string reader finds the real closing quote and decodes escapes,
+   // so the trait gets the name itself, as it does from the formats that decode before matching. It
+   // also fails on a string with no closing quote, which under a streaming read is a name cut off by
+   // the edge of the window: the trait must not be shown a prefix. `quote` is still good by then,
+   // since refills happen between values (see refill_window) and this is inside of one.
+   //
+   // `it` moves only if the trait accepts the name, so that a failure is reported where it would be
+   // for an enum with no trait, and is the same error whatever was wrong with the string.
+   //
+   // Out of line because a reader reaches this from code instantiated per enumerator.
+   template <uint32_t Format, auto Opts, class T>
+   void reread_enum_name(auto& value, is_context auto&& ctx, auto&& it, auto quote, auto end) noexcept
+   {
+      std::string key{};
+      from<Format, std::string>::template op<ws_handled<Opts>()>(key, ctx, quote, end);
+      // end_reached is a whole string that finished with the buffer, which the caller still needs to hear
+      const auto string_status = ctx.error;
+      if (parse_failed(string_status)) [[unlikely]] {
+         ctx.error = error_code::unexpected_enum;
+         return;
+      }
+      ctx.error = error_code::none;
+      read_unknown_enum<T>(value, ctx, key);
+      if (not bool(ctx.error)) {
+         it = quote;
+         ctx.error = string_status;
+      }
+   }
+
+   template <uint32_t Format, auto Opts, class T>
+   GLZ_ALWAYS_INLINE void reread_unknown_enum(auto& value, is_context auto&& ctx, auto&& it, auto quote,
+                                              auto end) noexcept
+   {
+      if constexpr (has_enum_unknown_reader<T>) {
+         reread_enum_name<Format, Opts, T>(value, ctx, it, quote, end);
+      }
+      else {
+         ctx.error = error_code::unexpected_enum;
+      }
+   }
+
    template <class T>
    concept glaze_flags_t = glaze_t<T> && is_specialization_v<meta_wrapper_t<T>, detail::Flags>;
 

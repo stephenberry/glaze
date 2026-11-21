@@ -335,6 +335,8 @@ struct glz::meta<Status> {
 
 Writing a value with no enumerated name (e.g. `static_cast<Status>(7)`) fails with `glz::error_code::unexpected_enum`, since readers accept only enumerated names. This applies to JSON, TOML, YAML, and MessagePack. BEVE, CBOR, JSONB, and BSON write enums as numbers.
 
+To keep reading the old names of renamed enumerators, see [Reading Old Names](enum-reflection.md#reading-old-names).
+
 > [!TIP]
 >
 > For automatic enum-to-string serialization without writing metadata for each enum, see [Automatic Enum Strings](enum-reflection.md).

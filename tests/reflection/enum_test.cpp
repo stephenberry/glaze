@@ -2,8 +2,22 @@
 // For the license information refer to glaze.hpp
 
 #include <array>
+#include <map>
+#include <optional>
+#include <sstream>
+#include <string>
+#include <string_view>
+#include <variant>
+#include <vector>
 
+#include "glaze/bson.hpp"
+#include "glaze/cbor.hpp"
+#include "glaze/core/istream_buffer.hpp"
 #include "glaze/glaze.hpp"
+#include "glaze/jsonb.hpp"
+#include "glaze/msgpack.hpp"
+#include "glaze/toml.hpp"
+#include "glaze/yaml.hpp"
 #include "ut/ut.hpp"
 
 using namespace ut;
@@ -1154,6 +1168,619 @@ suite random_enum_hash_tests = [] {
    "RandomU32Enum3_roundtrip"_test = [] { test_enum_roundtrip<RandomU32Enum3>(); };
    "RandomI64Enum1_roundtrip"_test = [] { test_enum_roundtrip<RandomI64Enum1>(); };
    "RandomI64Enum2_roundtrip"_test = [] { test_enum_roundtrip<RandomI64Enum2>(); };
+};
+
+// ============================================================================
+// meta<E>::enum_unknown_read (Issue #2376)
+// ============================================================================
+
+namespace unknown_read_test
+{
+   // Every key the trait below is asked about, so a test can assert it was asked nothing, or was
+   // asked only about complete names.
+   inline std::vector<std::string> seen{};
+
+   inline std::string long_alias() { return std::string(100'000, 'x'); }
+
+   // Fits a 512 byte window, though not what is left of one that has already been partly read
+   inline std::string window_sized_alias() { return std::string(300, 'z'); }
+}
+
+enum class RenamedColor { Red, Green, Blue };
+
+template <>
+struct glz::meta<RenamedColor>
+{
+   using enum RenamedColor;
+   static constexpr auto value = enumerate(Red, Green, Blue);
+   static constexpr auto enum_unknown_read = +[](std::string_view key) -> std::optional<RenamedColor> {
+      unknown_read_test::seen.emplace_back(key);
+      if (key == "Crimson") return Red;
+      if (key == "Cyan") return Blue;
+      if (key == "Redder") return Red; // a known name is a prefix of this one
+      if (key == "Gre") return Green; // this one is a prefix of a known name
+      if (key == "") return Green;
+      if (key == "Old\"Name") return Blue;
+      if (key == "Old\\Name") return Green;
+      if (key == unknown_read_test::long_alias()) return Blue;
+      if (key == unknown_read_test::window_sized_alias()) return Green;
+      return std::nullopt;
+   };
+};
+
+// The same enum with no trait, for comparing what the two report
+enum class PlainColor { Red, Green, Blue };
+
+template <>
+struct glz::meta<PlainColor>
+{
+   using enum PlainColor;
+   static constexpr auto value = enumerate(Red, Green, Blue);
+};
+
+// Aliases built from the enumerator names so they land on each way a lookup can miss: past the end
+// of a known name, on a name of the same length that the hash sends to a real index, and short of
+// a known name. `I` keeps them distinct for enumerators that differ only in the mangled character.
+inline std::vector<std::string> manglings_of(std::string_view name, size_t I)
+{
+   const std::string base{name};
+   const char tag = char('A' + I);
+   std::string last = base;
+   last.back() = tag;
+   std::string first = base;
+   first.front() = tag;
+   return {base + "_old", base + tag, last, first, base.substr(0, base.size() - 2) + tag};
+}
+
+template <class E>
+std::optional<E> mangled_alias(std::string_view key)
+{
+   std::optional<E> found{};
+   glz::for_each<glz::reflect<E>::size>([&]<size_t I>() {
+      for (const auto& alias : manglings_of(glz::get<I>(glz::reflect<E>::keys), I)) {
+         if (key == alias) {
+            found = E(glz::get<I>(glz::reflect<E>::values));
+         }
+      }
+   });
+   return found;
+}
+
+// Between them these select each hash_type the enum reader can see
+enum class Aliased1 { Only };
+enum class Aliased2 { Alpha, Beta };
+enum class AliasedMod4 { dog, ant, bee, cat };
+enum class AliasedXorMod4 { bird, cat, dog, emu };
+enum class AliasedTrio { Spring, Summer, Autumn };
+enum class AliasedPerLength { xa, xaa, xaaa, xaaaa, xab, xabc };
+enum class AliasedFullFlat { xaa, xab, xba, xbb, xa, xb, xc };
+enum class Aliased2Late { SharedPrefixA, SharedPrefixB };
+enum class Aliased3 { Apple, Banana, Cherry };
+enum class Aliased4 { North, South, East, West };
+enum class Aliased5 { Low, Medium, High, Urgent, Critical };
+enum class Aliased8 { One, Two, Three, Four, Five, Six, Seven, Eight };
+enum class AliasedSameLength { aaaa1, aaaa2, aaaa3, aaaa4, aaaa5, aaaa6, aaaa7, aaaa8, aaaa9 };
+enum class AliasedWide {
+   Hydrogen,
+   Helium,
+   Lithium,
+   Beryllium,
+   Boron,
+   Carbon,
+   Nitrogen,
+   Oxygen,
+   Fluorine,
+   Neon,
+   Sodium,
+   Magnesium,
+   Aluminium,
+   Silicon,
+   Phosphorus,
+   Sulfur,
+   Chlorine,
+   Argon,
+   Potassium,
+   Calcium,
+   Rutherfordium
+};
+
+#define ALIASED_META(E, ...)                                       \
+   template <>                                                     \
+   struct glz::meta<E>                                             \
+   {                                                               \
+      using enum E;                                                \
+      static constexpr auto value = enumerate(__VA_ARGS__);        \
+      static constexpr auto enum_unknown_read = &mangled_alias<E>; \
+   }
+
+ALIASED_META(Aliased1, Only);
+ALIASED_META(Aliased2, Alpha, Beta);
+ALIASED_META(AliasedMod4, dog, ant, bee, cat);
+ALIASED_META(AliasedXorMod4, bird, cat, dog, emu);
+ALIASED_META(AliasedTrio, Spring, Summer, Autumn);
+ALIASED_META(AliasedPerLength, xa, xaa, xaaa, xaaaa, xab, xabc);
+ALIASED_META(AliasedFullFlat, xaa, xab, xba, xbb, xa, xb, xc);
+ALIASED_META(Aliased2Late, SharedPrefixA, SharedPrefixB);
+ALIASED_META(Aliased3, Apple, Banana, Cherry);
+ALIASED_META(Aliased4, North, South, East, West);
+ALIASED_META(Aliased5, Low, Medium, High, Urgent, Critical);
+ALIASED_META(Aliased8, One, Two, Three, Four, Five, Six, Seven, Eight);
+ALIASED_META(AliasedSameLength, aaaa1, aaaa2, aaaa3, aaaa4, aaaa5, aaaa6, aaaa7, aaaa8, aaaa9);
+ALIASED_META(AliasedWide, Hydrogen, Helium, Lithium, Beryllium, Boron, Carbon, Nitrogen, Oxygen, Fluorine, Neon, Sodium,
+             Magnesium, Aluminium, Silicon, Phosphorus, Sulfur, Chlorine, Argon, Potassium, Calcium, Rutherfordium);
+#undef ALIASED_META
+
+// The trait as a plain static function, with the enum described by keys and value arrays
+enum class KeyedColor { Red, Green };
+
+template <>
+struct glz::meta<KeyedColor>
+{
+   static constexpr std::array<std::string_view, 2> keys{"Red", "Green"};
+   static constexpr std::array<KeyedColor, 2> value{KeyedColor::Red, KeyedColor::Green};
+   static std::optional<KeyedColor> enum_unknown_read(std::string_view key)
+   {
+      if (key == "Vermilion") return KeyedColor::Red;
+      return std::nullopt;
+   }
+};
+
+struct RenamedColorHolder
+{
+   RenamedColor color{};
+   int n{};
+};
+
+struct RenamedColorPairHolder
+{
+   RenamedColor first{};
+   RenamedColor second{};
+};
+
+struct RenamedColorColumn
+{
+   std::vector<RenamedColor> colors{};
+};
+
+struct linear_enum_opts : glz::opts
+{
+   bool linear_search = true;
+};
+
+// Reads every enumerator and every alias of E through `read(E&, name)`
+template <class E>
+void check_aliases(auto&& read)
+{
+   glz::for_each<glz::reflect<E>::size>([&]<size_t I>() {
+      const auto canonical = E(glz::get<I>(glz::reflect<E>::values));
+      const std::string_view name = glz::get<I>(glz::reflect<E>::keys);
+
+      E known = static_cast<E>(99);
+      expect(not read(known, std::string{name})) << name;
+      expect(known == canonical) << name;
+
+      for (const auto& alias : manglings_of(name, I)) {
+         E parsed = static_cast<E>(99);
+         const auto ec = read(parsed, alias);
+         expect(not ec) << alias;
+         expect(parsed == canonical) << alias;
+      }
+
+      E rejected = canonical;
+      const auto ec = read(rejected, std::string{name} + "_unrelated");
+      expect(ec.ec == glz::error_code::unexpected_enum) << name;
+      expect(rejected == canonical) << name;
+   });
+}
+
+template <class E>
+void check_every_format_and_path()
+{
+   const auto quoted = [](const std::string& s) { return "\"" + s + "\""; };
+
+   check_aliases<E>([&](E& v, const std::string& s) { return glz::read_json(v, quoted(s)); });
+   check_aliases<E>([&](E& v, const std::string& s) { return glz::read<linear_enum_opts{}>(v, quoted(s)); });
+   check_aliases<E>([&](E& v, const std::string& s) {
+      return glz::read<glz::opts{.null_terminated = false}>(v, std::string_view{quoted(s)});
+   });
+   // Inside a document, so that the alias is not at the very end of the buffer
+   check_aliases<E>([&](E& v, const std::string& s) {
+      std::vector<E> out{};
+      const auto ec = glz::read_json(out, "[" + quoted(s) + "]");
+      if (not ec) v = out.at(0);
+      return ec;
+   });
+   check_aliases<E>([&](E& v, const std::string& s) { return glz::read_toml(v, quoted(s)); });
+   check_aliases<E>([&](E& v, const std::string& s) { return glz::read_yaml(v, s); });
+   check_aliases<E>([&](E& v, const std::string& s) {
+      std::string buffer{};
+      expect(not glz::write_msgpack(s, buffer));
+      return glz::read_msgpack(v, buffer);
+   });
+}
+
+static_assert(glz::hash_info<Aliased1>.type == glz::hash_type::single_element);
+static_assert(glz::hash_info<Aliased2>.type == glz::hash_type::unique_index);
+static_assert(glz::hash_info<AliasedMod4>.type == glz::hash_type::mod4);
+static_assert(glz::hash_info<AliasedXorMod4>.type == glz::hash_type::xor_mod4);
+static_assert(glz::hash_info<Aliased3>.type == glz::hash_type::minus_mod4);
+static_assert(glz::hash_info<AliasedTrio>.type == glz::hash_type::three_element_unique_index);
+static_assert(glz::hash_info<Aliased8>.type == glz::hash_type::front_hash);
+static_assert(glz::hash_info<AliasedPerLength>.type == glz::hash_type::unique_per_length);
+static_assert(glz::hash_info<AliasedFullFlat>.type == glz::hash_type::full_flat);
+
+suite enum_unknown_read_tests = [] {
+   using unknown_read_test::seen;
+
+   "known names do not reach the trait"_test = [] {
+      seen.clear();
+      RenamedColor c{};
+      expect(not glz::read_json(c, R"("Green")"));
+      expect(c == RenamedColor::Green);
+      expect(not glz::read_json(c, R"("Blue")"));
+      expect(c == RenamedColor::Blue);
+      expect(not glz::read_json(c, R"("Red")"));
+      expect(c == RenamedColor::Red);
+      expect(seen.empty());
+   };
+
+   "alias reads as the canonical value"_test = [] {
+      RenamedColor c = RenamedColor::Green;
+      expect(not glz::read_json(c, R"("Crimson")"));
+      expect(c == RenamedColor::Red);
+      expect(not glz::read_json(c, R"("Cyan")"));
+      expect(c == RenamedColor::Blue);
+   };
+
+   "alias sharing a prefix with a known name"_test = [] {
+      RenamedColor c = RenamedColor::Green;
+      expect(not glz::read_json(c, R"("Redder")"));
+      expect(c == RenamedColor::Red);
+      c = RenamedColor::Blue;
+      expect(not glz::read_json(c, R"("Gre")"));
+      expect(c == RenamedColor::Green);
+   };
+
+   "empty string reaches the trait"_test = [] {
+      RenamedColor c = RenamedColor::Red;
+      expect(not glz::read_json(c, R"("")"));
+      expect(c == RenamedColor::Green);
+   };
+
+   "trait returning nullopt keeps unexpected_enum"_test = [] {
+      seen.clear();
+      RenamedColor c = RenamedColor::Blue;
+      expect(glz::read_json(c, R"("Silver")").ec == glz::error_code::unexpected_enum);
+      expect(c == RenamedColor::Blue);
+      expect(seen == std::vector<std::string>{"Silver"});
+   };
+
+   "a failed lookup reports what an enum with no trait reports"_test = [] {
+      for (const std::string_view input : {R"("Silver")", R"("Redd")", R"("Re")", R"("Silver)", R"("Bad\qEscape")",
+                                           "\"R\\u0065d\"", R"(["Silver"])"}) {
+         RenamedColor with_trait{};
+         PlainColor without{};
+         const auto a = glz::read_json(with_trait, input);
+         const auto b = glz::read_json(without, input);
+         expect(a.ec == b.ec) << input;
+         expect(a.count == b.count) << input;
+      }
+   };
+
+   "writes keep the canonical name"_test = [] {
+      RenamedColor c{};
+      expect(not glz::read_json(c, R"("Crimson")"));
+      std::string json{};
+      expect(not glz::write_json(c, json));
+      expect(json == R"("Red")");
+      std::string toml{};
+      expect(not glz::write_toml(c, toml));
+      expect(toml == R"("Red")");
+   };
+
+   "alias with escapes is decoded before the trait sees it"_test = [] {
+      RenamedColor c = RenamedColor::Red;
+      expect(not glz::read_json(c, R"("Old\"Name")"));
+      expect(c == RenamedColor::Blue);
+      expect(not glz::read_json(c, R"("Old\\Name")"));
+      expect(c == RenamedColor::Green);
+      expect(not glz::read_json(c, std::string_view{"\"Cr\\u0069mson\""}));
+      expect(c == RenamedColor::Red);
+   };
+
+   "an escaped quote does not end the name"_test = [] {
+      std::vector<RenamedColor> out{};
+      expect(not glz::read_json(out, R"(["Old\"Name","Green"])"));
+      expect(out == std::vector{RenamedColor::Blue, RenamedColor::Green});
+   };
+
+   "malformed names do not reach the trait"_test = [] {
+      seen.clear();
+      RenamedColor c = RenamedColor::Blue;
+      expect(glz::read_json(c, R"("Bad\qEscape")").ec == glz::error_code::unexpected_enum);
+      expect(glz::read_json(c, R"("Crimson)").ec == glz::error_code::unexpected_enum);
+      expect(glz::read<glz::opts{.null_terminated = false}>(c, std::string_view{R"("Crimson)"}).ec ==
+             glz::error_code::unexpected_enum);
+      expect(seen.empty());
+      expect(c == RenamedColor::Blue);
+   };
+
+   "an escaped spelling of a known name is still not that name"_test = [] {
+      RenamedColor c = RenamedColor::Blue;
+      expect(glz::read_json(c, std::string_view{"\"R\\u0065d\""}).ec == glz::error_code::unexpected_enum);
+      expect(c == RenamedColor::Blue);
+   };
+
+   "very long names"_test = [] {
+      const std::string alias = "\"" + unknown_read_test::long_alias() + "\"";
+      const std::string unknown = "\"" + std::string(100'000, 'y') + "\"";
+
+      RenamedColor c = RenamedColor::Red;
+      expect(not glz::read_json(c, alias));
+      expect(c == RenamedColor::Blue);
+      c = RenamedColor::Red;
+      expect(not glz::read<linear_enum_opts{}>(c, alias));
+      expect(c == RenamedColor::Blue);
+      c = RenamedColor::Red;
+      expect(not glz::read<glz::opts{.null_terminated = false}>(c, std::string_view{alias}));
+      expect(c == RenamedColor::Blue);
+
+      c = RenamedColor::Red;
+      expect(glz::read_json(c, unknown).ec == glz::error_code::unexpected_enum);
+      expect(glz::read<linear_enum_opts{}>(c, unknown).ec == glz::error_code::unexpected_enum);
+      expect(glz::read<glz::opts{.null_terminated = false}>(c, std::string_view{unknown}).ec ==
+             glz::error_code::unexpected_enum);
+      expect(c == RenamedColor::Red);
+   };
+
+   "the read continues after an alias"_test = [] {
+      RenamedColorHolder holder{};
+      expect(not glz::read_json(holder, R"({"color" : "Cyan" , "n":7})"));
+      expect(holder.color == RenamedColor::Blue);
+      expect(holder.n == 7);
+
+      std::vector<RenamedColor> list{};
+      expect(not glz::read_json(list, R"(["Crimson", "Green" ,"Cyan","Redder"])"));
+      expect(list == std::vector{RenamedColor::Red, RenamedColor::Green, RenamedColor::Blue, RenamedColor::Red});
+   };
+
+   "alias as a map key"_test = [] {
+      std::map<RenamedColor, int> m{};
+      expect(not glz::read_json(m, R"({"Crimson":1,"Cyan":2})"));
+      expect(m == std::map<RenamedColor, int>{{RenamedColor::Red, 1}, {RenamedColor::Blue, 2}});
+
+      std::string json{};
+      expect(not glz::write_json(m, json));
+      expect(json == R"({"Red":1,"Blue":2})");
+   };
+
+   "alias inside a variant"_test = [] {
+      std::variant<int, RenamedColor> v{};
+      expect(not glz::read_json(v, R"("Crimson")"));
+      expect(std::holds_alternative<RenamedColor>(v));
+      expect(std::get<RenamedColor>(v) == RenamedColor::Red);
+   };
+
+   "jsonc and ndjson go through the same reader"_test = [] {
+      RenamedColor c = RenamedColor::Green;
+      expect(not glz::read_jsonc(c, std::string{"/* old name */ \"Crimson\""}));
+      expect(c == RenamedColor::Red);
+
+      std::vector<RenamedColor> lines{};
+      expect(not glz::read_ndjson(lines, std::string{"\"Crimson\"\n\"Green\"\n\"Cyan\""}));
+      expect(lines == std::vector{RenamedColor::Red, RenamedColor::Green, RenamedColor::Blue});
+   };
+
+   "trait as a static function on a keys and value enum"_test = [] {
+      KeyedColor c = KeyedColor::Green;
+      expect(not glz::read_json(c, R"("Vermilion")"));
+      expect(c == KeyedColor::Red);
+      expect(glz::read_json(c, R"("Silver")").ec == glz::error_code::unexpected_enum);
+   };
+
+   "every hash shape and format"_test = [] {
+      check_every_format_and_path<Aliased1>();
+      check_every_format_and_path<Aliased2>();
+      check_every_format_and_path<AliasedMod4>();
+      check_every_format_and_path<AliasedXorMod4>();
+      check_every_format_and_path<AliasedTrio>();
+      check_every_format_and_path<AliasedPerLength>();
+      check_every_format_and_path<AliasedFullFlat>();
+      check_every_format_and_path<Aliased2Late>();
+      check_every_format_and_path<Aliased3>();
+      check_every_format_and_path<Aliased4>();
+      check_every_format_and_path<Aliased5>();
+      check_every_format_and_path<Aliased8>();
+      check_every_format_and_path<AliasedSameLength>();
+      check_every_format_and_path<AliasedWide>();
+   };
+};
+
+suite enum_unknown_read_streaming_tests = [] {
+   using unknown_read_test::seen;
+
+   "aliases across refills"_test = [] {
+      std::string json = "[";
+      std::vector<RenamedColor> expected{};
+      for (size_t i = 0; i < 2000; ++i) {
+         json += (i ? "," : "");
+         switch (i % 4) {
+         case 0:
+            json += R"("Crimson")";
+            expected.push_back(RenamedColor::Red);
+            break;
+         case 1:
+            json += R"("Green")";
+            expected.push_back(RenamedColor::Green);
+            break;
+         case 2:
+            json += R"("Old\"Name")";
+            expected.push_back(RenamedColor::Blue);
+            break;
+         default:
+            json += R"("Cyan")";
+            expected.push_back(RenamedColor::Blue);
+            break;
+         }
+      }
+      json += "]";
+
+      std::istringstream stream{json};
+      glz::istream_buffer<512> buffer{stream};
+      std::vector<RenamedColor> out{};
+      const auto ec = glz::read_json(out, buffer);
+      expect(not ec) << glz::format_error(ec, json);
+      expect(out == expected);
+   };
+
+   "a name cut off by the window never reaches the trait"_test = [] {
+      seen.clear();
+      // No closing quote inside the window. Were the bytes it does hold handed over, the trait would
+      // be asked about a prefix of the name.
+      std::istringstream stream{"\"" + std::string(2000, 'x') + "\""};
+      glz::istream_buffer<512> buffer{stream};
+      RenamedColor c = RenamedColor::Green;
+      expect(glz::read_json(c, buffer).ec == glz::error_code::unexpected_enum);
+      expect(seen.empty());
+      expect(c == RenamedColor::Green);
+   };
+
+   "aliases long enough to fill most of the window"_test = [] {
+      const std::string alias = "\"" + unknown_read_test::window_sized_alias() + "\"";
+      std::string json = "[";
+      for (size_t i = 0; i < 50; ++i) {
+         json += (i ? "," : "") + alias;
+      }
+      json += "]";
+
+      std::istringstream stream{json};
+      glz::istream_buffer<512> buffer{stream};
+      std::vector<RenamedColor> out{};
+      const auto ec = glz::read_json(out, buffer);
+      expect(not ec) << glz::format_error(ec, json);
+      expect(out == std::vector<RenamedColor>(50, RenamedColor::Green));
+   };
+
+   "an alias straddling the window edge is an error, not a prefix"_test = [] {
+      seen.clear();
+      // The window is refilled before an element only once half of it is used up, so stopping just short
+      // of that leaves less than the long alias needs. It would fit a fresh window, and a std::string
+      // element would fail at the same spot.
+      std::string json = "[";
+      for (size_t i = 0; i < 24; ++i) {
+         json += R"("Crimson",)";
+      }
+      json += "\"" + unknown_read_test::window_sized_alias() + "\"]";
+
+      std::istringstream stream{json};
+      glz::istream_buffer<512> buffer{stream};
+      std::vector<RenamedColor> out{};
+      expect(glz::read_json(out, buffer).ec == glz::error_code::unexpected_enum);
+      expect(out.size() == 25u); // the failed element was emplaced before it was read
+      expect(seen == std::vector<std::string>(24, "Crimson"));
+   };
+};
+
+suite enum_unknown_read_other_format_tests = [] {
+   using unknown_read_test::seen;
+
+   "toml"_test = [] {
+      RenamedColorHolder holder{};
+      expect(not glz::read_toml(holder, "color = \"Cyan\"\nn = 7\n"));
+      expect(holder.color == RenamedColor::Blue);
+      expect(holder.n == 7);
+
+      expect(glz::read_toml(holder, "color = \"Silver\"\n").ec == glz::error_code::unexpected_enum);
+      expect(holder.color == RenamedColor::Blue);
+
+      seen.clear();
+      expect(not glz::read_toml(holder, "color = \"Green\"\n"));
+      expect(seen.empty());
+   };
+
+   "toml alias with escapes"_test = [] {
+      RenamedColorHolder holder{};
+      expect(not glz::read_toml(holder, "color = \"Old\\\"Name\"\nn = 7\n"));
+      expect(holder.color == RenamedColor::Blue);
+      expect(holder.n == 7);
+      expect(not glz::read_toml(holder, "color = \"Cr\\u0069mson\"\n"));
+      expect(holder.color == RenamedColor::Red);
+   };
+
+   "yaml"_test = [] {
+      RenamedColorHolder holder{};
+      expect(not glz::read_yaml(holder, std::string{"color: Cyan\nn: 7\n"}));
+      expect(holder.color == RenamedColor::Blue);
+      expect(holder.n == 7);
+      expect(not glz::read_yaml(holder, std::string{"color: \"Old\\\"Name\"\n"}));
+      expect(holder.color == RenamedColor::Blue);
+      expect(not glz::read_yaml(holder, std::string{"color: 'Crimson'\n"}));
+      expect(holder.color == RenamedColor::Red);
+
+      expect(glz::read_yaml(holder, std::string{"color: Silver\n"}).ec == glz::error_code::unexpected_enum);
+      expect(holder.color == RenamedColor::Red);
+   };
+
+   "yaml anchor on an alias"_test = [] {
+      RenamedColorPairHolder holder{};
+      const std::string input = "first: &c Cyan\nsecond: *c\n";
+      const auto ec = glz::read_yaml(holder, input);
+      expect(not ec) << glz::format_error(ec, input);
+      expect(holder.first == RenamedColor::Blue);
+      expect(holder.second == RenamedColor::Blue);
+   };
+
+   "csv"_test = [] {
+      RenamedColorColumn column{};
+      const std::string input = "colors\nCrimson\nGreen\nCyan\n";
+      expect(not glz::read_csv<glz::colwise>(column, input));
+      expect(column.colors == std::vector{RenamedColor::Red, RenamedColor::Green, RenamedColor::Blue});
+
+      const std::string unknown = "colors\nSilver\n";
+      expect(glz::read_csv<glz::colwise>(column, unknown).ec == glz::error_code::unexpected_enum);
+   };
+
+   "msgpack"_test = [] {
+      std::string buffer{};
+      expect(not glz::write_msgpack(std::string{"Cyan"}, buffer));
+      RenamedColor c = RenamedColor::Red;
+      expect(not glz::read_msgpack(c, buffer));
+      expect(c == RenamedColor::Blue);
+
+      buffer.clear();
+      expect(not glz::write_msgpack(std::string{"Silver"}, buffer));
+      expect(glz::read_msgpack(c, buffer).ec == glz::error_code::unexpected_enum);
+      expect(c == RenamedColor::Blue);
+
+      // The name a write produces stays the canonical one
+      buffer.clear();
+      expect(not glz::write_msgpack(c, buffer));
+      std::string name{};
+      expect(not glz::read_msgpack(name, buffer));
+      expect(name == "Blue");
+   };
+
+   "formats that carry the value never reach the trait"_test = [] {
+      seen.clear();
+      const auto round_trips = [](auto&& write, auto&& read) {
+         RenamedColorHolder in{RenamedColor::Blue, 3};
+         std::string buffer{};
+         expect(not write(in, buffer));
+         RenamedColorHolder out{};
+         expect(not read(out, buffer));
+         expect(out.color == RenamedColor::Blue);
+         expect(out.n == 3);
+      };
+      round_trips([](auto& v, auto& b) { return glz::write_beve(v, b); },
+                  [](auto& v, auto& b) { return glz::read_beve(v, b); });
+      round_trips([](auto& v, auto& b) { return glz::write_cbor(v, b); },
+                  [](auto& v, auto& b) { return glz::read_cbor(v, b); });
+      round_trips([](auto& v, auto& b) { return glz::write_bson(v, b); },
+                  [](auto& v, auto& b) { return glz::read_bson(v, b); });
+      round_trips([](auto& v, auto& b) { return glz::write_jsonb(v, b); },
+                  [](auto& v, auto& b) { return glz::read_jsonb(v, b); });
+      expect(seen.empty());
+   };
 };
 
 int main() { return 0; }

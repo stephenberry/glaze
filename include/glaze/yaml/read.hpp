@@ -2568,7 +2568,7 @@ namespace glz
                value = glz::get<0>(reflect<T>::values);
             }
             else {
-               ctx.error = error_code::unexpected_enum;
+               read_unknown_enum<T>(value, ctx, str);
             }
          }
          else {
@@ -2577,7 +2577,11 @@ namespace glz
                str.data(), str.data() + str.size(), str.size());
 
             if (index >= N) [[unlikely]] {
-               ctx.error = error_code::unexpected_enum;
+               read_unknown_enum<T>(value, ctx, str);
+               if (bool(ctx.error)) {
+                  return;
+               }
+               yaml::finalize_node_anchor(preamble.node_props, ctx, it);
                return;
             }
 
@@ -2588,7 +2592,7 @@ namespace glz
                      value = glz::get<I>(reflect<T>::values);
                   }
                   else {
-                     ctx.error = error_code::unexpected_enum;
+                     read_unknown_enum<T>(value, ctx, str);
                   }
                },
                index);
