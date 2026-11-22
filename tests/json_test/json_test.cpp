@@ -4339,7 +4339,9 @@ suite error_outputs = [] {
       auto pe = glz::read_json(m, s);
       expect(pe.count == s.size());
       auto err = glz::format_error(pe, s);
-      expect(err == "1:17: expected_comma\n   {\"Hello\":\"World\"\n                   ^") << err;
+      // The error code depends on GLZ_NULL_TERMINATED, so only the location is checked.
+      expect(err.starts_with("1:17: ")) << err;
+      expect(err.ends_with("\n   {\"Hello\":\"World\"\n                   ^")) << err;
    };
 
    "error at the end of the input with trailing whitespace"_test = [] {
@@ -4348,8 +4350,10 @@ suite error_outputs = [] {
       auto pe = glz::read_json(m, s);
       expect(pe.count == s.size());
       auto err = glz::format_error(pe, s);
-      // The caret goes after the last character of the last line with content.
-      expect(err == "3:13: expected_bracket\n     \"b\": [3, 4\n               ^") << err;
+      // The caret goes after the last character of the last line with content. The error code
+      // depends on GLZ_NULL_TERMINATED, so only the location is checked.
+      expect(err.starts_with("3:13: ")) << err;
+      expect(err.ends_with("\n     \"b\": [3, 4\n               ^")) << err;
    };
 
    "error at a newline"_test = [] {
