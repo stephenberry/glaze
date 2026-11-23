@@ -21,7 +21,7 @@ concurrency:
 
 jobs:
   skip_ws_benchmark:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
 
     env:
       CC: gcc-14
@@ -55,7 +55,7 @@ jobs:
         fi
 
   string_write_benchmark:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
 
     env:
       CC: gcc-14
@@ -89,7 +89,7 @@ jobs:
         fi
 
   beve_variant_depth_benchmark:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
 
     env:
       CC: gcc-14

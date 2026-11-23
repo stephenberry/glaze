@@ -44,7 +44,7 @@ concurrency:
 
 jobs:
   x86-backends:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     # force_sde targets the AVX-512 job, so skip the jobs a dispatch run would only repeat.
     if: ${{ !inputs.force_sde }}
     name: ${{ matrix.name }}
@@ -97,7 +97,7 @@ jobs:
         run: ctest --test-dir build --output-on-failure --no-tests=error -R "$UTF8_TESTS"
 
   arm-backends:
-    runs-on: ubuntu-24.04-arm
+    runs-on: ubuntu-26.04-arm
     # force_sde targets the AVX-512 job, so skip the jobs a dispatch run would only repeat.
     if: ${{ !inputs.force_sde }}
     name: AArch64 NEON64
@@ -127,7 +127,7 @@ jobs:
         run: ctest --test-dir build --output-on-failure --no-tests=error -R "$UTF8_TESTS"
 
   avx512:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     name: x86-64 AVX-512BW
     steps:
       - uses: actions/checkout@v7
@@ -199,7 +199,7 @@ jobs:
           done
 
   wasm:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     # force_sde targets the AVX-512 job, so skip the jobs a dispatch run would only repeat.
     if: ${{ !inputs.force_sde }}
     name: WebAssembly SIMD128
@@ -236,7 +236,7 @@ jobs:
           done
 
   generic-widths:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     # force_sde targets the AVX-512 job, so skip the jobs a dispatch run would only repeat.
     if: ${{ !inputs.force_sde }}
     name: Portable backend (widths 16/32/64)

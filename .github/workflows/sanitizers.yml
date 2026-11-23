@@ -28,7 +28,7 @@ concurrency:
 
 jobs:
   asan:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     container:
       image: gcc:15
 
