@@ -259,13 +259,19 @@ namespace glz
       // deterministic function of that draw, so it cannot carry more entropy than the draw
       // however many bytes are taken from it. std::random_device is the standard entropy source,
       // so the bytes come straight from it. One per thread, because constructing it opens the
-      // platform's entropy source.
+      // platform's entropy source. Each draw is a uniform 32-bit value, so it supplies four bytes:
+      // a draw can be a system call, and taking one byte per draw would discard three quarters of it.
       inline void fill_random_bytes(uint8_t* out, size_t n)
       {
+         static_assert(std::random_device::min() == 0 && std::random_device::max() == 0xFFFFFFFFu,
+                       "fill_random_bytes takes four uniform bytes from each std::random_device draw");
          static thread_local std::random_device rd;
-         std::uniform_int_distribution<unsigned int> dist(0, 255);
-         for (size_t i = 0; i < n; ++i) {
-            out[i] = static_cast<uint8_t>(dist(rd));
+         while (n > 0) {
+            const uint32_t word = static_cast<uint32_t>(rd());
+            const size_t count = n < sizeof(word) ? n : sizeof(word);
+            std::memcpy(out, &word, count);
+            out += count;
+            n -= count;
          }
       }
 
