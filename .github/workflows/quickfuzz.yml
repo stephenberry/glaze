@@ -33,7 +33,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        clang: [21]
+        clang: [19]
         build_type: [Debug]
         std: [23]
 
@@ -47,7 +47,7 @@ jobs:
     - name: Install dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y clang-21
+        sudo apt-get install -y clang-19
 
     - name: Configure CMake
       run: |

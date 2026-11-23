@@ -85,7 +85,7 @@ jobs:
     - name: Test
       run: ctest --output-on-failure --test-dir "$GITHUB_WORKSPACE/build"
 
-  clang21:
+  clang19:
     runs-on: ubuntu-26.04
 
     strategy:
@@ -95,26 +95,17 @@ jobs:
         std: [23]
 
     env:
-      CC: clang-21
-      CXX: clang++-21
-      LLVM_VERSION: 21
+      CC: clang-19
+      CXX: clang++-19
+      LLVM_VERSION: 19
 
     steps:
     - uses: actions/checkout@v7
 
-    - name: Install Clang 21
-      run: |
-        wget -qO- https://apt.llvm.org/llvm-snapshot.gpg.key | sudo gpg --dearmor --yes -o /etc/apt/keyrings/llvm.gpg
-        echo "deb [signed-by=/etc/apt/keyrings/llvm.gpg] http://apt.llvm.org/resolute/ llvm-toolchain-resolute-21 main" | sudo tee /etc/apt/sources.list.d/llvm.list
-        sudo apt-get clean
-        sudo apt-get update
-        sudo apt-get install -y --fix-missing clang-21 libc++-21-dev libc++abi-21-dev
-
-    - name: Set path for clang
-      run: |
-        echo "PATH=/usr/lib/llvm-21/bin:$PATH" >> $GITHUB_ENV
-        clang-21 --version
-        clang++-21 --version
+    - name: Install Clang
+      uses: ./.github/actions/install-clang
+      with:
+        version: 19
 
     - name: Configure CMake
       run: |

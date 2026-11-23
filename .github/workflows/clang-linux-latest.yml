@@ -1,7 +1,5 @@
 name: clang-linux-latest
-# This is for the latest version of Clang that aren't yet
-# supported by default in the Github Action runners
-# and instead need to be installed
+# Tests the supported Clang releases, installed with libc++ by the install-clang action
 
 on:
   push:
@@ -36,7 +34,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        clang: [21, 22, 23]
+        clang: [19, 20, 21, 22, 23]
         build_type: [Debug]
         std: [23]
 
@@ -48,21 +46,10 @@ jobs:
     steps:
     - uses: actions/checkout@v7
 
-    - name: Install latest clang
-      run: |
-        wget -qO- https://apt.llvm.org/llvm-snapshot.gpg.key | sudo gpg --dearmor --yes -o /etc/apt/keyrings/llvm.gpg
-        # Use the 'resolute' repository for Ubuntu 26.04
-        echo "deb [signed-by=/etc/apt/keyrings/llvm.gpg] http://apt.llvm.org/resolute/ llvm-toolchain-resolute-${{matrix.clang}} main" | sudo tee /etc/apt/sources.list.d/llvm.list
-        # Clean apt cache and update before installing
-        sudo apt-get clean
-        sudo apt-get update
-        sudo apt-get install -y --fix-missing clang-${{matrix.clang}} libc++-${{matrix.clang}}-dev libc++abi-${{matrix.clang}}-dev
-
-    - name: Set path for clang
-      run: |
-        echo "PATH=/usr/lib/llvm-${{matrix.clang}}/bin:$PATH" >> $GITHUB_ENV
-        clang-${{matrix.clang}} --version
-        clang++-${{matrix.clang}} --version
+    - name: Install Clang
+      uses: ./.github/actions/install-clang
+      with:
+        version: ${{matrix.clang}}
 
     - name: Configure CMake
       run: |
