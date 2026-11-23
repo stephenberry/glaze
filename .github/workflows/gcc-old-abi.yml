@@ -28,7 +28,7 @@ concurrency:
 
 jobs:
   build:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
 
     strategy:
       fail-fast: false
@@ -55,7 +55,7 @@ jobs:
       run: ctest --output-on-failure --test-dir "$GITHUB_WORKSPACE/build"
 
   build-gcc15:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     container:
       image: gcc:15
 
