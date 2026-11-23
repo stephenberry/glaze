@@ -28,7 +28,7 @@ concurrency:
 
 jobs:
   build:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     
     strategy:
       fail-fast: false
@@ -55,7 +55,7 @@ jobs:
       run: ctest --output-on-failure --test-dir "$GITHUB_WORKSPACE/build"
 
   build-gcc15:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     container:
       image: gcc:15
 
@@ -99,7 +99,7 @@ jobs:
       run: ctest --output-on-failure --test-dir "$GITHUB_WORKSPACE/build"
 
   build-gcc16:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     container:
       image: gcc:16.1
 
@@ -146,7 +146,7 @@ jobs:
     # C++26 P2996 reflection coverage on GCC 16.1.
     # Replaces the standalone gcc-p2996-reflection.yml workflow which used
     # ubuntu:26.04 + apt-installed gcc-16; gcc:16.1 is the official image.
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     container:
       image: gcc:16.1
 

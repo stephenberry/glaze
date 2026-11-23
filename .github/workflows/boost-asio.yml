@@ -28,7 +28,7 @@ concurrency:
 
 jobs:
   build:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     strategy:
       fail-fast: false
       matrix:
@@ -45,14 +45,11 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - name: Install clang
+      - name: Install Clang
         if: matrix.compiler.name == 'clang'
-        run: |
-          wget -qO- https://apt.llvm.org/llvm-snapshot.gpg.key | sudo gpg --dearmor --yes -o /etc/apt/keyrings/llvm.gpg
-          echo "deb [signed-by=/etc/apt/keyrings/llvm.gpg] http://apt.llvm.org/noble/ llvm-toolchain-noble-${{ matrix.compiler.version }} main" | sudo tee /etc/apt/sources.list.d/llvm.list
-          sudo apt-get update
-          sudo apt-get install -y --fix-missing clang-${{ matrix.compiler.version }} libc++-${{ matrix.compiler.version }}-dev libc++abi-${{ matrix.compiler.version }}-dev
-          echo "PATH=/usr/lib/llvm-${{ matrix.compiler.version }}/bin:$PATH" >> $GITHUB_ENV
+        uses: ./.github/actions/install-clang
+        with:
+          version: ${{ matrix.compiler.version }}
 
       - name: Install Boost
         id: install-boost

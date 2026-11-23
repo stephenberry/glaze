@@ -29,7 +29,7 @@ concurrency:
 jobs:
   build:
     name: Standalone ASIO 1.36 + SSL
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     container:
       image: gcc:15
 

@@ -11,17 +11,16 @@ env:
 
 jobs:
   build:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
 
     steps:
     - uses: actions/checkout@v7
 
-    - name: Install Clang 19
-      run: |
-        wget -qO- https://apt.llvm.org/llvm-snapshot.gpg.key | sudo gpg --dearmor --yes -o /etc/apt/keyrings/llvm.gpg
-        echo "deb [signed-by=/etc/apt/keyrings/llvm.gpg] http://apt.llvm.org/noble/ llvm-toolchain-noble-19 main" | sudo tee /etc/apt/sources.list.d/llvm.list
-        sudo apt-get update
-        sudo apt-get install -y --fix-missing clang-19 llvm-19
+    - name: Install Clang
+      uses: ./.github/actions/install-clang
+      with:
+        version: 19
+        packages: clang-19 llvm-19
 
     - name: Set up environment
       run: |

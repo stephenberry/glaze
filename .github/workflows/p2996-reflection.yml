@@ -36,7 +36,7 @@ concurrency:
 
 jobs:
   test-p2996:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     name: P2996 Reflection Tests
 
     steps:
