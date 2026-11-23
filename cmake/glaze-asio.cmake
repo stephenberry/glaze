@@ -41,9 +41,11 @@ function(glaze_setup_asio)
     add_library(glaze::asio ALIAS glaze_asio)
 
     # Asio requests Winsock via `#pragma comment(lib, ...)`, which only MSVC honors.
-    # mswsock provides AcceptEx and GetAcceptExSockaddrs.
+    # mswsock provides AcceptEx and GetAcceptExSockaddrs. bcrypt provides BCryptGenRandom,
+    # which websocket_connection.hpp requests the same way for its handshake nonce and
+    # masking keys.
     if(MINGW)
-        target_link_libraries(glaze_asio INTERFACE ws2_32 mswsock)
+        target_link_libraries(glaze_asio INTERFACE ws2_32 mswsock bcrypt)
     endif()
 
     # 1. Boost.Asio
