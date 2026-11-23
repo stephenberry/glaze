@@ -240,6 +240,15 @@ suite generic_json_tests = [] {
    // Assigning an rvalue string, array, or object must move it, not copy it.
    // A move keeps the source's heap buffer, so its address carries over.
    "generic move assignment"_test = [] {
+      static_assert(std::is_nothrow_assignable_v<glz::generic&, std::string&&>);
+      static_assert(std::is_nothrow_assignable_v<glz::generic&, glz::generic::array_t&&>);
+      static_assert(std::is_nothrow_assignable_v<glz::generic&, glz::generic::object_t&&>);
+      // std::map may allocate when moved (MSVC), so object assignment is noexcept only when its move is
+      static_assert(std::is_nothrow_assignable_v<glz::generic_sorted&, std::string&&>);
+      static_assert(std::is_nothrow_assignable_v<glz::generic_sorted&, glz::generic_sorted::array_t&&>);
+      static_assert(std::is_nothrow_assignable_v<glz::generic_sorted&, glz::generic_sorted::object_t&&> ==
+                    std::is_nothrow_move_constructible_v<glz::generic_sorted::object_t>);
+
       glz::generic json{};
 
       std::string str(64, 'x'); // longer than any small-string buffer

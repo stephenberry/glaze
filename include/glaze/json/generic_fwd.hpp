@@ -321,9 +321,11 @@ namespace glz
 
       // A moved string, array, or object, or a copied array or object, may live inside this value, as in
       // `json = std::move(json["child"].get_array())`. Replacing `data` can destroy it before it is read, so these
-      // overloads build the new value first and then move it into `data`.
+      // overloads build the new value first and then move it into `data`. They are noexcept when that move is, which
+      // depends on the map type for objects (std::map can allocate when moved on MSVC).
 
-      generic_json& operator=(std::string&& value)
+      generic_json& operator=(std::string&& value) noexcept(std::is_nothrow_move_constructible_v<std::string> &&
+                                                  std::is_nothrow_assignable_v<val_t&, std::string>)
       {
          data = std::string(std::move(value));
          return *this;
@@ -353,7 +355,8 @@ namespace glz
          return *this;
       }
 
-      generic_json& operator=(array_t&& value)
+      generic_json& operator=(array_t&& value) noexcept(std::is_nothrow_move_constructible_v<array_t> &&
+                                                  std::is_nothrow_assignable_v<val_t&, array_t>)
       {
          data = array_t(std::move(value));
          return *this;
@@ -365,7 +368,8 @@ namespace glz
          return *this;
       }
 
-      generic_json& operator=(object_t&& value)
+      generic_json& operator=(object_t&& value) noexcept(std::is_nothrow_move_constructible_v<object_t> &&
+                                                  std::is_nothrow_assignable_v<val_t&, object_t>)
       {
          data = object_t(std::move(value));
          return *this;
