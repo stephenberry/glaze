@@ -2349,6 +2349,10 @@ suite middleware_rejection_tests = [] {
       std::atomic<int> handler_calls{0};
       std::atomic<int> wrap_calls{0};
       std::atomic<int> last_hooked_status{0};
+      std::atomic<int> request_hook_calls{0};
+      std::atomic<int> stream_calls{0};
+      std::atomic<int> ws_opens{0};
+      std::shared_ptr<glz::websocket_server> ws = std::make_shared<glz::websocket_server>();
 
       guarded_server()
       {
@@ -2358,7 +2362,11 @@ suite middleware_rejection_tests = [] {
                return;
             }
          });
-         server.use([](const request&, response& res) { res.header("X-Middleware", "ran"); });
+         server.use([](const request&, response& res) {
+            res.header("X-Middleware", "ran");
+            res.header("X-Shared", "middleware");
+         });
+         server.on_request([this](const request&, response&) { request_hook_calls.fetch_add(1); });
          server.wrap([this](const request&, response&, const auto& next) {
             wrap_calls.fetch_add(1);
             next();
@@ -2373,6 +2381,14 @@ suite middleware_rejection_tests = [] {
             handler_calls.fetch_add(1);
             res.body("deleted");
          });
+         server.stream_get("/events", [this](request&, streaming_response& res) {
+            stream_calls.fetch_add(1);
+            res.start_stream(200, {{"Content-Type", "text/plain"}, {"X-Shared", "handler"}});
+            res.send("stream data");
+            res.close();
+         });
+         ws->on_open([this](auto, const request&) { ws_opens.fetch_add(1); });
+         server.websocket("/ws", ws);
 
          server.bind("127.0.0.1", 0);
          server.start(0);
@@ -2428,6 +2444,88 @@ suite middleware_rejection_tests = [] {
       }
       expect(s.handler_calls.load() == 1);
       expect(s.wrap_calls.load() == 1);
+   };
+
+   // Sends a raw request and reads the reply: up to the end of its header section when
+   // `headers_only`, else until the server closes the connection. A reply that does not
+   // finish within the deadline is returned as far as it got, so the checks fail rather
+   // than the test hanging.
+   const auto exchange = [](uint16_t port, std::string_view raw, bool headers_only = false) {
+      std::string reply;
+      asio::io_context io;
+      asio::ip::tcp::socket socket(io);
+      socket.connect({asio::ip::make_address("127.0.0.1"), port});
+      asio::write(socket, asio::buffer(raw));
+      const auto done = [](asio::error_code, std::size_t) {};
+      if (headers_only) {
+         asio::async_read_until(socket, asio::dynamic_buffer(reply), "\r\n\r\n", done);
+      }
+      else {
+         asio::async_read(socket, asio::dynamic_buffer(reply), done);
+      }
+      io.run_for(std::chrono::seconds(5));
+      // Let a read still pending finish as cancelled before `reply` is handed back.
+      socket.close();
+      io.restart();
+      io.run();
+      return reply;
+   };
+
+   // Streaming handlers take the socket over, so the request hooks and use() middleware
+   // run before they do, and a rejection is answered as for a normal route.
+   "rejecting_middleware_skips_a_streaming_handler"_test = [&] {
+      guarded_server s;
+
+      const auto reply = exchange(s.server.port(), "GET /events HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n");
+      expect(reply.starts_with("HTTP/1.1 401")) << reply;
+      expect(reply.ends_with("\r\n\r\nunauthorized")) << reply;
+      expect(reply.find("X-Middleware: ran") != std::string::npos) << "later middleware still runs";
+
+      expect(s.stream_calls.load() == 0) << "the streaming handler must not run for a rejected request";
+      expect(s.wrap_calls.load() == 0);
+      expect(s.request_hook_calls.load() == 1) << "request hooks see a streaming request";
+      expect(s.last_hooked_status.load() == 401) << "response hooks see the rejection";
+   };
+
+   "accepted_stream_carries_middleware_headers"_test = [&] {
+      guarded_server s;
+
+      const auto reply = exchange(s.server.port(),
+                                  "GET /events HTTP/1.1\r\nHost: localhost\r\nAuthorization: Bearer good\r\n\r\n");
+      expect(reply.starts_with("HTTP/1.1 200")) << reply;
+      expect(reply.find("stream data") != std::string::npos) << reply;
+      expect(reply.find("X-Middleware: ran") != std::string::npos) << "middleware headers reach the stream";
+      expect(reply.find("X-Shared: handler") != std::string::npos) << "the handler's field wins";
+      expect(reply.find("X-Shared: middleware") == std::string::npos) << "and replaces the middleware's";
+      expect(s.stream_calls.load() == 1);
+   };
+
+   "rejecting_middleware_refuses_a_websocket_upgrade"_test = [&] {
+      guarded_server s;
+
+      constexpr std::string_view upgrade = "GET /ws HTTP/1.1\r\nHost: localhost\r\nUpgrade: websocket\r\n"
+                                           "Connection: Upgrade\r\nSec-WebSocket-Version: 13\r\n"
+                                           "Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\n";
+
+      // RFC 6455 4.1: the client fails the connection on anything but 101, so the server
+      // closes it after the rejection, which this read waits for.
+      const auto rejected = exchange(s.server.port(), std::string(upgrade) + "\r\n");
+      expect(rejected.starts_with("HTTP/1.1 401")) << rejected;
+      expect(rejected.ends_with("\r\n\r\nunauthorized")) << rejected;
+      expect(rejected.find("Connection: close") != std::string::npos) << rejected;
+      expect(s.last_hooked_status.load() == 401) << "response hooks see the rejection";
+
+      const auto accepted =
+         exchange(s.server.port(), std::string(upgrade) + "Authorization: Bearer good\r\n\r\n", true);
+      expect(accepted.starts_with("HTTP/1.1 101")) << accepted;
+      expect(accepted.find("Sec-WebSocket-Accept: s3pPLMBiTxaQ9kYGzzhZRbK+xOo=") != std::string::npos) << accepted;
+
+      // on_open runs once the 101 is written, after the reply above was read.
+      for (int i = 0; i < 200 && s.ws_opens.load() == 0; ++i) {
+         std::this_thread::sleep_for(std::chrono::milliseconds(5));
+      }
+      expect(s.ws_opens.load() == 1) << "only the accepted upgrade opens a WebSocket";
+      expect(s.request_hook_calls.load() == 2) << "request hooks see both upgrades";
    };
 };
 
