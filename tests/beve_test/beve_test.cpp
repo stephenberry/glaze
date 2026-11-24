@@ -10353,6 +10353,92 @@ suite beve_self_constraint_tests = [] {
    };
 };
 
+// Arrays whose elements have a typed-array form also read the generic-array form
+// (https://github.com/stephenberry/glaze/issues/3120)
+// A tuple is written as a generic array of individually tagged values
+template <class... Ts>
+std::string write_generic_array(const std::tuple<Ts...>& tuple)
+{
+   std::string buffer{};
+   expect(not glz::write_beve(tuple, buffer));
+   expect(uint8_t(buffer[0]) == glz::tag::generic_array);
+   return buffer;
+}
+
+suite generic_array_into_typed_array_elements = [] {
+
+   "empty generic array"_test = [] {
+      const std::string empty("\x05\x00", 2);
+
+      std::vector<double> d{1.0, 2.0};
+      expect(not glz::read_beve(d, empty));
+      expect(d.empty());
+
+      std::vector<std::complex<double>> c{{1.0, 2.0}};
+      expect(not glz::read_beve(c, empty));
+      expect(c.empty());
+
+      std::vector<bool> b{true};
+      expect(not glz::read_beve(b, empty));
+      expect(b.empty());
+
+      std::vector<std::string> s{"x"};
+      expect(not glz::read_beve(s, empty));
+      expect(s.empty());
+
+      std::set<int32_t> set{1};
+      expect(not glz::read_beve(set, empty));
+      expect(set.empty());
+   };
+
+   "numbers"_test = [] {
+      std::vector<double> v{};
+      expect(not glz::read_beve(v, write_generic_array(std::tuple{1.5, -2.25})));
+      expect(v == std::vector<double>{1.5, -2.25});
+
+      std::array<int32_t, 2> a{};
+      expect(not glz::read_beve(a, write_generic_array(std::tuple{int32_t{7}, int32_t{-8}})));
+      expect(a == std::array<int32_t, 2>{7, -8});
+
+      std::set<uint16_t> set{};
+      expect(not glz::read_beve(set, write_generic_array(std::tuple{uint16_t{3}, uint16_t{1}})));
+      expect(set == std::set<uint16_t>{1, 3});
+   };
+
+   "complex"_test = [] {
+      std::vector<std::complex<double>> v{};
+      expect(not glz::read_beve(v, write_generic_array(std::tuple{std::complex<double>{1.0, -1.0}, std::complex<double>{0.5, 2.0}})));
+      expect(v == std::vector<std::complex<double>>{{1.0, -1.0}, {0.5, 2.0}});
+   };
+
+   "booleans and strings"_test = [] {
+      std::vector<bool> b{};
+      expect(not glz::read_beve(b, write_generic_array(std::tuple{true, false, true})));
+      expect(b == std::vector<bool>{true, false, true});
+
+      std::vector<std::string> s{};
+      expect(not glz::read_beve(s, write_generic_array(std::tuple{std::string{"ab"}, std::string{""}})));
+      expect(s == std::vector<std::string>{"ab", ""});
+
+      std::set<std::string> set{};
+      expect(not glz::read_beve(set, write_generic_array(std::tuple{std::string{"b"}, std::string{"a"}})));
+      expect(set == std::set<std::string>{"a", "b"});
+   };
+
+   "elements must match the element type"_test = [] {
+      std::vector<double> v{};
+      expect(glz::read_beve(v, write_generic_array(std::tuple{1.5, std::string{"x"}})) == glz::error_code::syntax_error);
+
+      std::vector<std::string> s{};
+      expect(bool(glz::read_beve(s, write_generic_array(std::tuple{std::string{"x"}, 1.5}))));
+   };
+
+   "fixed-size array rejects too many elements"_test = [] {
+      std::array<double, 1> a{};
+      expect(bool(glz::read_beve(a, write_generic_array(std::tuple{1.0, 2.0}))));
+   };
+};
+
 int main()
 {
    trace.begin("binary_test");
