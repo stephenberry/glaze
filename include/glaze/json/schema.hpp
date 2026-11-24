@@ -1140,12 +1140,16 @@ namespace glz
                         }
                      }
                      // For modify types, try matching by original C++ member name
-                     if constexpr (modify_t<std::decay_t<T>> && I < count_members<std::decay_t<T>>) {
-                        constexpr sv original_name = member_names<std::decay_t<T>>[I];
-                        if constexpr (original_name != key) {
-                           for (size_t i = 0; i < json_schema_size; ++i) {
-                              if (schema_keys[i] == original_name) {
-                                 return i;
+                     // Nested rather than joined with &&, because naming count_members is ill-formed for a
+                     // non-aggregate T even when modify_t<T> is false.
+                     if constexpr (modify_t<std::decay_t<T>>) {
+                        if constexpr (I < count_members<std::decay_t<T>>) {
+                           constexpr sv original_name = member_names<std::decay_t<T>>[I];
+                           if constexpr (original_name != key) {
+                              for (size_t i = 0; i < json_schema_size; ++i) {
+                                 if (schema_keys[i] == original_name) {
+                                    return i;
+                                 }
                               }
                            }
                         }
