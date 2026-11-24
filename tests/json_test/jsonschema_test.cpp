@@ -1232,4 +1232,36 @@ suite schema_round_trip_test = [] {
    };
 };
 
+// A non-aggregate type with glz::meta and glz::json_schema (https://github.com/stephenberry/glaze/issues/3126)
+struct non_aggregate_schema_vec2
+{
+   double x{};
+   double y{};
+   non_aggregate_schema_vec2() = default;
+   non_aggregate_schema_vec2(double x, double y) : x(x), y(y) {}
+};
+static_assert(!std::is_aggregate_v<non_aggregate_schema_vec2>);
+
+template <>
+struct glz::meta<non_aggregate_schema_vec2>
+{
+   static constexpr auto value = object("x", &non_aggregate_schema_vec2::x, "y", &non_aggregate_schema_vec2::y);
+};
+
+template <>
+struct glz::json_schema<non_aggregate_schema_vec2>
+{
+   schema x{.description = "x component"};
+};
+
+suite non_aggregate_schema_test = [] {
+   "non-aggregate meta type with json_schema"_test = [] {
+      const auto schema = glz::write_json_schema<non_aggregate_schema_vec2>().value_or("error");
+      expect(
+         schema ==
+         R"({"type":"object","properties":{"x":{"$ref":"#/$defs/double","description":"x component"},"y":{"$ref":"#/$defs/double"}},"additionalProperties":false,"$defs":{"double":{"type":"number"}},"title":"non_aggregate_schema_vec2"})")
+         << schema;
+   };
+};
+
 int main() { return 0; }
