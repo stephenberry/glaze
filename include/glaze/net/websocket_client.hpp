@@ -7,7 +7,6 @@
 #include <expected>
 #include <memory>
 #include <mutex>
-#include <random>
 #include <string>
 #include <string_view>
 #include <system_error>
@@ -328,12 +327,8 @@ namespace glz
          template <typename SocketType>
          void perform_handshake(std::shared_ptr<SocketType> socket, const url_parts& url)
          {
-            // Generate random Sec-WebSocket-Key
-            std::string key_bytes(16, '\0');
-            std::mt19937 rng(std::random_device{}());
-            std::uniform_int_distribution<uint16_t> dist(0, 255);
-            for (auto& b : key_bytes) b = static_cast<char>(dist(rng));
-            std::string key = glz::write_base64(key_bytes);
+            // Generate random Sec-WebSocket-Key (RFC 6455 4.1)
+            std::string key = ws_util::generate_websocket_key();
 
             std::string host_str = url.host;
             if ((url.protocol == "ws" && url.port != 80) || (url.protocol == "wss" && url.port != 443)) {

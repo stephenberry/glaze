@@ -252,6 +252,57 @@ namespace glz
          return glz::write_base64(std::string_view{reinterpret_cast<char*>(hash), sizeof(hash)});
       }
 
+      // RFC 6455 4.1 and 5.3 both require these bytes to come from a strong source of entropy:
+      // the handshake nonce has to be unpredictable for the accept value to prove anything about
+      // the peer, and a predictable masking key lets a frame's author choose the bytes an
+      // intermediary sees on the wire. A std::mt19937 seeded from a single 32-bit draw is a
+      // deterministic function of that draw, so it cannot carry more entropy than the draw
+      // however many bytes are taken from it. The bytes come straight from std::random_device.
+      //
+      // Its source is implementation-defined. MSVC's STL, libc++ and libstdc++ on Windows read the
+      // operating system's CSPRNG, but libstdc++ on x86 defaults to the CPU's RDSEED or RDRAND
+      // output unconditioned, and processors have shipped with errata where those instructions
+      // report success while returning a constant. libstdc++ is therefore asked for an OS source
+      // by name: arc4random or getentropy where its configuration found them, as neither holds a
+      // file descriptor, and /dev/urandom otherwise. The other libraries keep their default.
+      //
+      // One device per thread, because constructing it can open the entropy source. Each draw is a
+      // uniform 32-bit value, so it supplies four bytes: a draw can be a system call, and taking
+      // one byte per draw would discard three quarters of it.
+      inline void fill_random_bytes(uint8_t* out, size_t n)
+      {
+         // Parenthesized so that the min and max macros of <windows.h> cannot expand here.
+         static_assert((std::random_device::min)() == 0 && (std::random_device::max)() == 0xFFFFFFFFu,
+                       "fill_random_bytes takes four uniform bytes from each std::random_device draw");
+#if defined(__GLIBCXX__) && !defined(_WIN32)
+#if defined(_GLIBCXX_HAVE_ARC4RANDOM)
+         static thread_local std::random_device rd{"arc4random"};
+#elif defined(_GLIBCXX_HAVE_GETENTROPY)
+         static thread_local std::random_device rd{"getentropy"};
+#else
+         static thread_local std::random_device rd{"/dev/urandom"};
+#endif
+#else
+         static thread_local std::random_device rd;
+#endif
+         while (n > 0) {
+            const uint32_t word = static_cast<uint32_t>(rd());
+            const size_t count = n < sizeof(word) ? n : sizeof(word);
+            std::memcpy(out, &word, count);
+            out += count;
+            n -= count;
+         }
+      }
+
+      // RFC 6455 4.1: Sec-WebSocket-Key carries a freshly chosen, randomly selected 16-byte
+      // value, base64 encoded.
+      inline std::string generate_websocket_key()
+      {
+         std::array<uint8_t, 16> nonce{};
+         fill_random_bytes(nonce.data(), nonce.size());
+         return glz::write_base64(std::string_view{reinterpret_cast<const char*>(nonce.data()), nonce.size()});
+      }
+
    }
 
    // Forward declarations
@@ -1341,13 +1392,9 @@ namespace glz
 
          // Write masking key if needed (client mode)
          if (use_masking) {
-            // Generate random masking key
-            std::random_device rd;
-            std::mt19937 gen(rd());
-            std::uniform_int_distribution<unsigned int> dist(0, 255);
-            for (int i = 0; i < 4; ++i) {
-               header[header_offset + i] = static_cast<uint8_t>(dist(gen));
-            }
+            // RFC 6455 5.3: a fresh key per frame, from a strong source of entropy, that does
+            // not make the next frame's key simple to predict.
+            ws_util::fill_random_bytes(header + header_offset, 4);
             // Mask the payload (done in-place in the frame buffer after this header)
             // Note: Actual masking of payload should be done by caller if needed
          }
