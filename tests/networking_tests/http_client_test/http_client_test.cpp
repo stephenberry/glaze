@@ -2476,7 +2476,8 @@ suite middleware_rejection_tests = [] {
    "rejecting_middleware_skips_a_streaming_handler"_test = [&] {
       guarded_server s;
 
-      const auto reply = exchange(s.server.port(), "GET /events HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n");
+      const auto reply =
+         exchange(s.server.port(), "GET /events HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n");
       expect(reply.starts_with("HTTP/1.1 401")) << reply;
       expect(reply.ends_with("\r\n\r\nunauthorized")) << reply;
       expect(reply.find("X-Middleware: ran") != std::string::npos) << "later middleware still runs";
@@ -2490,8 +2491,8 @@ suite middleware_rejection_tests = [] {
    "accepted_stream_carries_middleware_headers"_test = [&] {
       guarded_server s;
 
-      const auto reply = exchange(s.server.port(),
-                                  "GET /events HTTP/1.1\r\nHost: localhost\r\nAuthorization: Bearer good\r\n\r\n");
+      const auto reply =
+         exchange(s.server.port(), "GET /events HTTP/1.1\r\nHost: localhost\r\nAuthorization: Bearer good\r\n\r\n");
       expect(reply.starts_with("HTTP/1.1 200")) << reply;
       expect(reply.find("stream data") != std::string::npos) << reply;
       expect(reply.find("X-Middleware: ran") != std::string::npos) << "middleware headers reach the stream";
@@ -2503,9 +2504,10 @@ suite middleware_rejection_tests = [] {
    "rejecting_middleware_refuses_a_websocket_upgrade"_test = [&] {
       guarded_server s;
 
-      constexpr std::string_view upgrade = "GET /ws HTTP/1.1\r\nHost: localhost\r\nUpgrade: websocket\r\n"
-                                           "Connection: Upgrade\r\nSec-WebSocket-Version: 13\r\n"
-                                           "Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\n";
+      constexpr std::string_view upgrade =
+         "GET /ws HTTP/1.1\r\nHost: localhost\r\nUpgrade: websocket\r\n"
+         "Connection: Upgrade\r\nSec-WebSocket-Version: 13\r\n"
+         "Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\n";
 
       // RFC 6455 4.1: the client fails the connection on anything but 101, so the server
       // closes it after the rejection, which this read waits for.
