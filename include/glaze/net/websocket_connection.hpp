@@ -6,16 +6,14 @@
 #include <algorithm>
 #include <array>
 #include <atomic>
-#include <cerrno>
 #include <cstring>
 #include <deque>
 #include <functional>
 #include <memory>
 #include <mutex>
-#include <stdexcept>
+#include <random>
 #include <string>
 #include <string_view>
-#include <system_error>
 #include <unordered_map>
 #include <utility>
 #include <vector>
@@ -35,28 +33,6 @@
 
 #include "glaze/base64/base64.hpp"
 #include "glaze/ext/glaze_asio.hpp"
-
-// The operating system's CSPRNG, for ws_util::fill_random_bytes. On Windows this sits after
-// Asio, whose <winsock2.h> has already brought in <windows.h> in the order Winsock requires,
-// and before http_router.hpp, which undefines the DELETE macro <windows.h> defines.
-// bcrypt.h relies on the <windows.h> types, so clang-format must not sort it first.
-// MSVC and clang-cl link bcrypt through the pragma; MinGW ignores it, so Glaze's CMake names
-// bcrypt for MinGW alongside Asio's Winsock libraries.
-// clang-format off
-#if defined(_WIN32)
-#include <windows.h>
-#include <bcrypt.h>
-#ifdef _MSC_VER
-#pragma comment(lib, "bcrypt.lib")
-#endif
-#else
-#include <unistd.h>
-#if defined(__APPLE__)
-#include <sys/random.h>
-#endif
-#endif
-// clang-format on
-
 #include "glaze/net/http_router.hpp"
 #include "glaze/util/parse.hpp"
 
@@ -281,34 +257,34 @@ namespace glz
       // the peer, and a predictable masking key lets a frame's author choose the bytes an
       // intermediary sees on the wire. A std::mt19937 seeded from a single 32-bit draw is a
       // deterministic function of that draw, so it cannot carry more entropy than the draw
-      // however many bytes are taken from it.
+      // however many bytes are taken from it. The bytes come straight from std::random_device.
       //
-      // The bytes come from the operating system's CSPRNG rather than std::random_device, whose
-      // source is implementation-defined: libstdc++ on x86 returns the CPU's RDSEED or RDRAND
-      // output directly, and processors have shipped with errata where those instructions report
-      // success while returning a constant (some CI runners repeated masking keys this way). The
-      // OS generator only mixes hardware output into a seeded CSPRNG, so a faulty instruction
-      // cannot reach the wire.
+      // Its source is implementation-defined. MSVC's STL, libc++ and libstdc++ on Windows read the
+      // operating system's CSPRNG, but libstdc++ elsewhere defaults to the CPU's RDSEED or RDRAND
+      // output unconditioned, and processors have shipped with errata where those instructions
+      // report success while returning a constant (some CI runners repeated masking keys this
+      // way). libstdc++ is therefore asked for /dev/urandom, the kernel's CSPRNG, which only mixes
+      // hardware output into its seeded state. The other libraries are left on their default.
+      //
+      // One device per thread, because constructing it can open the entropy source. Each draw is a
+      // uniform 32-bit value, so it supplies four bytes: a draw can be a system call, and taking
+      // one byte per draw would discard three quarters of it.
       inline void fill_random_bytes(uint8_t* out, size_t n)
       {
-#if defined(_WIN32)
-         const NTSTATUS status =
-            ::BCryptGenRandom(nullptr, out, static_cast<ULONG>(n), BCRYPT_USE_SYSTEM_PREFERRED_RNG);
-         if (!BCRYPT_SUCCESS(status)) {
-            throw std::runtime_error("BCryptGenRandom failed");
-         }
+         static_assert(std::random_device::min() == 0 && std::random_device::max() == 0xFFFFFFFFu,
+                       "fill_random_bytes takes four uniform bytes from each std::random_device draw");
+#if defined(__GLIBCXX__) && !defined(_WIN32)
+         static thread_local std::random_device rd{"/dev/urandom"};
 #else
-         // getentropy fills at most 256 bytes per call.
-         constexpr size_t max_getentropy = 256;
+         static thread_local std::random_device rd;
+#endif
          while (n > 0) {
-            const size_t count = n < max_getentropy ? n : max_getentropy;
-            if (::getentropy(out, count) != 0) {
-               throw std::system_error(errno, std::generic_category(), "getentropy");
-            }
+            const uint32_t word = static_cast<uint32_t>(rd());
+            const size_t count = n < sizeof(word) ? n : sizeof(word);
+            std::memcpy(out, &word, count);
             out += count;
             n -= count;
          }
-#endif
       }
 
       // RFC 6455 4.1: Sec-WebSocket-Key carries a freshly chosen, randomly selected 16-byte
