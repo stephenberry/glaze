@@ -373,6 +373,10 @@ server.use([](const glz::request& req, glz::response& res) {
 server.enable_cors();
 ```
 
+A middleware rejects a request by setting an error status (400 or above). Every middleware still runs, so headers such as CORS reach the rejection, but the route handler and wrapping middleware are skipped and the error response is sent as the middleware left it.
+
+Streaming and WebSocket routes run request hooks and middleware too, before their handler takes the connection, so the same middleware guards them. A rejected request gets the middleware's response, which response hooks see; a rejected WebSocket upgrade also closes the connection, as the client fails it on any reply but `101` (RFC 6455 4.1). An accepted stream sends the headers middleware set along with its own, and a header the handler passes to `start_stream` replaces the middleware's of the same name. An accepted upgrade's `101` does not carry middleware headers. Wrapping middleware and response hooks run only for responses the server sends itself, not for streams or WebSocket connections.
+
 ### Custom Middleware
 
 ```cpp

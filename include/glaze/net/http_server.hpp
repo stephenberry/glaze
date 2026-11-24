@@ -1005,9 +1005,16 @@ namespace glz
       {}
 
       // Send initial headers for streaming response
-      void send_headers(int status_code, const glz::http_headers& headers = {}, data_sent_handler handler = {}) override
+      void send_headers(int status_code, const glz::http_headers& handler_headers = {},
+                        data_sent_handler handler = {}) override
       {
          if (is_headers_sent_.exchange(true)) return;
+
+         glz::http_headers headers = std::move(middleware_headers_);
+         for (const auto& field : handler_headers) {
+            headers.erase(field.name);
+         }
+         headers.append(handler_headers);
 
          std::string response_str;
          response_str.reserve(512);
@@ -1239,8 +1246,15 @@ namespace glz
 
       std::shared_ptr<SocketType> socket_;
 
+      // Header fields the use() middleware set on the request's response (CORS, request IDs),
+      // sent in the stream's header section alongside the handler's. Set before the handler
+      // runs; a field the handler passes to send_headers replaces the middleware's fields of
+      // the same name.
+      void set_middleware_headers(glz::http_headers headers) { middleware_headers_ = std::move(headers); }
+
      private:
       http_method request_method_;
+      glz::http_headers middleware_headers_;
       disconnect_handler disconnect_handler_;
       disconnect_handler close_handler_;
       // Read by the sending threads, set by them and by the io threads
@@ -3083,11 +3097,16 @@ namespace glz
                middleware(request, response);
             }
 
-            if (wrapping_middlewares_.empty()) {
-               handle(request, response);
-            }
-            else {
-               execute_middleware_chain(0, request, response, handle);
+            // The route handler must not run for a rejected request: it would act on the
+            // request and overwrite the rejection's body. Wrapping middleware wraps the
+            // handler only and is skipped with it, as for an unrouted request.
+            if (!rejected_by_middleware(response)) {
+               if (wrapping_middlewares_.empty()) {
+                  handle(request, response);
+               }
+               else {
+                  execute_middleware_chain(0, request, response, handle);
+               }
             }
 
             run_response_hooks(request, response);
@@ -3097,6 +3116,44 @@ namespace glz
             error_handler(std::make_error_code(std::errc::invalid_argument), std::source_location::current());
             send_error_response_with_close(conn, 500, "Internal Server Error");
          }
+      }
+
+      // A use() middleware rejects a request by leaving an error status on the response (an
+      // authentication check's 401, a rate limiter's 429), and the route's handler then does
+      // not run.
+      static bool rejected_by_middleware(const response& response) { return response.status_code >= 400; }
+
+      // Streaming and WebSocket handlers take the socket over, so before they do, the request
+      // runs through the request hooks and use() middleware as a normal route's does, on the
+      // connection's response. Returns whether the handler may take the request. Otherwise
+      // the request has been answered: with the response a middleware left when it rejected
+      // the request, after the response hooks (which see every response the pipeline sends),
+      // or with a 500 when a hook or middleware threw.
+      inline bool admit_handover_request(const std::shared_ptr<connection_state>& conn)
+      {
+         request& request = conn->request_;
+         response& response = conn->response_;
+
+         try {
+            for (const auto& hook : request_hooks_) {
+               hook(request, response);
+            }
+            for (const auto& middleware : root_router.middlewares) {
+               middleware(request, response);
+            }
+         }
+         catch (const std::exception&) {
+            error_handler(std::make_error_code(std::errc::invalid_argument), std::source_location::current());
+            send_error_response_with_close(conn, 500, "Internal Server Error");
+            return false;
+         }
+
+         if (rejected_by_middleware(response)) {
+            run_response_hooks(request, response);
+            send_response_with_conn(conn, response);
+            return false;
+         }
+         return true;
       }
 
       // Hands the connection to the streaming route for `method` on the request's path, if
@@ -3114,8 +3171,10 @@ namespace glz
             return false;
          }
          conn->request_.params = std::move(stream_params);
-         // Streaming handlers take over the connection (no keep-alive loop)
-         handle_streaming_request_with_conn(conn, stream_handle);
+         if (admit_handover_request(conn)) {
+            // Streaming handlers take over the connection (no keep-alive loop)
+            handle_streaming_request_with_conn(conn, stream_handle);
+         }
          return true;
       }
 
@@ -3456,6 +3515,15 @@ namespace glz
          }
          request.params = std::move(ws_params);
 
+         // RFC 6455 4.1: a client fails the WebSocket connection on any answer but 101, so
+         // a rejected upgrade closes the connection rather than waiting for another request.
+         // The upgrade's 101 is written by the WebSocket connection, so headers middleware
+         // set on an accepted upgrade are not sent.
+         conn->should_close = true;
+         if (!admit_handover_request(conn)) {
+            return;
+         }
+
          // Copy request for WebSocket handler (request body is typically empty for upgrades)
          glz::request req{request};
 
@@ -3472,6 +3540,7 @@ namespace glz
          // Create streaming connection (works for both HTTP and HTTPS via interface)
          auto socket_ptr = std::make_shared<socket_type>(std::move(conn->socket));
          auto stream_conn = std::make_shared<streaming_connection<socket_type>>(socket_ptr, conn->request_.method);
+         stream_conn->set_middleware_headers(std::move(conn->response_.response_headers));
          streaming_response stream_res(stream_conn);
 
          try {
