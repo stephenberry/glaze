@@ -84,7 +84,7 @@ jobs:
 
     - uses: actions/checkout@v7
 
-    - uses: lukka/get-cmake@4latest
+    - uses: lukka/get-cmake@latest
 
     - name: Prepare build directory
       run: cmake -E make_directory "$GITHUB_WORKSPACE/build"
