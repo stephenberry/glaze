@@ -4370,7 +4370,7 @@ suite error_outputs = [] {
    };
 
    "error at the end of a CRLF line"_test = [] {
-      // The carriage return of a CRLF line ending is not part of the context.
+      // The carriage return of a CRLF line ending is shown as a space.
       std::string s = "{\r\n  \"b\": [3, 4\r\n";
       std::map<std::string, std::vector<int>> m;
       auto pe = glz::read_json(m, s);
@@ -4378,7 +4378,25 @@ suite error_outputs = [] {
       auto err = glz::format_error(pe, s);
       // The error code depends on GLZ_NULL_TERMINATED, so only the location is checked.
       expect(err.starts_with("2:13: ")) << err;
-      expect(err.ends_with("\n     \"b\": [3, 4\n               ^")) << err;
+      expect(err.ends_with("\n     \"b\": [3, 4 \n               ^")) << err;
+   };
+
+   "error with CR line endings"_test = [] {
+      // Lone carriage returns do not end a line, and are shown as spaces so they cannot move the
+      // terminal's cursor.
+      std::string s = "a\rbb\rccc\r";
+      auto err = glz::format_error(glz::error_ctx{s.size(), glz::error_code::unexpected_end}, s);
+      expect(err == "1:9: unexpected_end\n   a bb ccc \n           ^") << err;
+   };
+
+   "error on an empty line"_test = [] {
+      // An empty line has an empty context, but the error still has a line and column.
+      std::string s = "a\n\nb";
+      auto err = glz::format_error(glz::error_ctx{2, glz::error_code::syntax_error}, s);
+      expect(err == "2:1: syntax_error\n   \n   ^") << err;
+      s = "\nabc";
+      err = glz::format_error(glz::error_ctx{0, glz::error_code::syntax_error}, s);
+      expect(err == "1:1: syntax_error\n   \n   ^") << err;
    };
 
    "control character at the error is shown as a space"_test = [] {
