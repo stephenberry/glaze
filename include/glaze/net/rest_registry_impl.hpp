@@ -7,6 +7,7 @@
 #include "glaze/glaze.hpp"
 #include "glaze/json/schema.hpp"
 #include "glaze/net/http_router.hpp"
+#include "glaze/rpc/read_and_commit.hpp"
 #include "glaze/rpc/repe/repe.hpp" // For protocol_storage template
 
 namespace glz

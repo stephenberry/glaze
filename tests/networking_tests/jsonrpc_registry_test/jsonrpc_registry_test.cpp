@@ -2,6 +2,7 @@
 // For the license information refer to glaze.hpp
 
 #include <string_view>
+#include <memory>
 #include <vector>
 
 #include "glaze/glaze.hpp"
@@ -793,6 +794,31 @@ suite rejected_write_tests = [] {
       expect(response.find("error") == std::string::npos) << response;
       expect(service.account.username == "bob");
       expect(service.account.age == 40);
+   };
+};
+
+// A member that cannot really be copied (a container of std::unique_ptr) is read in place rather than failing to
+// compile.
+struct move_only_store
+{
+   std::vector<std::unique_ptr<int>> items{};
+   int count{};
+};
+
+struct move_only_service
+{
+   move_only_store store{};
+};
+
+suite move_only_tests = [] {
+   "move_only_members_register"_test = [] {
+      glz::registry<glz::opts{}, glz::JSONRPC> server{};
+      move_only_service service{};
+      server.on(service);
+
+      auto response = server.call(R"({"jsonrpc":"2.0","method":"store","params":{"count":8},"id":1})");
+      expect(response.find("error") == std::string::npos) << response;
+      expect(service.store.count == 8);
    };
 };
 

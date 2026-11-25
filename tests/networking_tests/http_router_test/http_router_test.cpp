@@ -4,7 +4,9 @@
 #include "glaze/net/http_router.hpp"
 
 #include <cassert>
+#include <memory>
 #include <regex>
+#include <vector>
 
 #include "glaze/rpc/registry.hpp"
 #include "ut/ut.hpp"
@@ -995,6 +997,38 @@ suite rest_rejected_write_tests = [] {
       expect(put(R"({"username":"bob","age":40})") == 204);
       expect(service.account.username == "bob");
       expect(service.account.age == 40);
+   };
+};
+
+// A member that cannot really be copied (a container of std::unique_ptr) is read in place rather than failing to
+// compile.
+struct move_only_store
+{
+   std::vector<std::unique_ptr<int>> items{};
+   int count{};
+};
+
+struct move_only_service
+{
+   move_only_store store{};
+};
+
+suite rest_move_only_tests = [] {
+   "move_only_members_register"_test = [] {
+      glz::registry<glz::opts{}, glz::REST> registry;
+      move_only_service service{};
+      registry.on(service);
+
+      auto [handler, params] = registry.endpoints.match(glz::http_method::PUT, "/store");
+      expect(handler != nullptr);
+      glz::request req{};
+      req.method = glz::http_method::PUT;
+      req.target = "/store";
+      req.body = R"({"count":8})";
+      glz::response res{};
+      handler(req, res);
+      expect(res.status_code == 204);
+      expect(service.store.count == 8);
    };
 };
 

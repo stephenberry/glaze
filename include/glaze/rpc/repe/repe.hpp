@@ -27,27 +27,6 @@ namespace glz::detail
       [[nodiscard]] size_t operator()(std::string_view txt) const { return std::hash<std::string_view>{}(txt); }
       [[nodiscard]] size_t operator()(const std::string& txt) const { return std::hash<std::string>{}(txt); }
    };
-
-   // A registry write reads the request into the registered value, and a read that fails part way
-   // (a parse error, a read_constraint, a self_constraint) has already assigned every member read
-   // before the failure. The caller is told the write was rejected, so none of it may stick: read
-   // into a copy and commit it only on success. A value that cannot be copied (std::atomic, a type
-   // holding a mutex) is read in place as before.
-   template <class T, class ReadInto>
-   bool read_and_commit(T& value, ReadInto&& read_into)
-   {
-      if constexpr (std::is_copy_constructible_v<T> && std::is_move_assignable_v<T>) {
-         T staged = value;
-         if (!read_into(staged)) {
-            return false;
-         }
-         value = std::move(staged);
-         return true;
-      }
-      else {
-         return read_into(value);
-      }
-   }
 }
 
 namespace glz::repe

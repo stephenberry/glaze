@@ -207,6 +207,10 @@ The registry returns standard JSON-RPC 2.0 error codes:
 | -32603 | Internal error | Internal JSON-RPC error |
 | -32000 | Server error | Batch response exceeded `max_batch_response_size` |
 
+### Rejected Writes
+
+A rejected write (a call on a data member answered with `-32602 Invalid params`) leaves the registered value unchanged. See [Rejected writes](repe-rpc.md#rejected-writes) for how this works and its limits.
+
 ### Examples
 
 ```cpp

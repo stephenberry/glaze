@@ -4,6 +4,7 @@
 #pragma once
 
 #include "glaze/glaze.hpp"
+#include "glaze/rpc/read_and_commit.hpp"
 #include "glaze/rpc/repe/repe.hpp"
 
 namespace glz

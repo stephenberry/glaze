@@ -3,8 +3,14 @@
 
 #include <cstring>
 #include <latch>
+#include <map>
+#include <memory>
+#include <optional>
 #include <span>
 #include <thread>
+#include <tuple>
+#include <variant>
+#include <vector>
 
 #include "glaze/glaze.hpp"
 #include "glaze/rpc/registry.hpp"
@@ -1310,6 +1316,72 @@ suite rejected_write_tests = [] {
       expect(response.header.ec == glz::error_code::none) << response.body;
       expect(service.account.username == "bob");
       expect(service.account.age == 40);
+   };
+};
+
+// std::is_copy_constructible_v is true for a container of move-only elements, so staging must look inside a type
+// before copying it. A type that cannot really be copied is read in place, and a recursive type is still staged.
+struct move_only_store
+{
+   std::vector<std::unique_ptr<int>> items{};
+   int count{};
+};
+
+struct tree_node
+{
+   int value{};
+   std::vector<tree_node> children{};
+};
+
+struct staging_service
+{
+   move_only_store store{};
+   tree_node tree{};
+};
+
+static_assert(glz::detail::stageable_v<guarded_account>);
+static_assert(glz::detail::stageable_v<tree_node>);
+static_assert(glz::detail::stageable_v<std::shared_ptr<move_only_store>>);
+static_assert(!glz::detail::stageable_v<move_only_store>);
+static_assert(!glz::detail::stageable_v<staging_service>);
+static_assert(!glz::detail::stageable_v<std::map<std::string, std::unique_ptr<int>>>);
+static_assert(!glz::detail::stageable_v<std::optional<std::vector<std::unique_ptr<int>>>>);
+static_assert(!glz::detail::stageable_v<std::variant<int, std::vector<std::unique_ptr<int>>>>);
+static_assert(!glz::detail::stageable_v<std::pair<int, std::vector<std::unique_ptr<int>>>>);
+static_assert(!glz::detail::stageable_v<std::tuple<int, std::vector<std::unique_ptr<int>>>>);
+
+suite staging_type_tests = [] {
+   using namespace test_helpers;
+
+   "move_only_members_register"_test = [] {
+      glz::registry server{};
+      staging_service service{};
+      server.on(service);
+
+      auto response = call_json(server, {"/store/count"}, 7);
+      expect(response.header.ec == glz::error_code::none) << response.body;
+      expect(service.store.count == 7);
+
+      response = call_json(server, {"/store"}, glz::generic{{"count", 8}});
+      expect(response.header.ec == glz::error_code::none) << response.body;
+      expect(service.store.count == 8);
+   };
+
+   "recursive_type_rejected_write_keeps_value"_test = [] {
+      glz::registry server{};
+      staging_service service{};
+      service.tree = {1, {{2, {}}}};
+      server.on(service);
+
+      auto response = call_json(server, {"/tree"}, glz::generic{{"value", 5}, {"children", "bad"}});
+      expect(response.header.ec != glz::error_code::none) << response.body;
+      expect(service.tree.value == 1);
+      expect(service.tree.children.size() == 1u);
+
+      response = call_json(server, {"/tree"}, glz::generic{{"value", 5}});
+      expect(response.header.ec == glz::error_code::none) << response.body;
+      expect(service.tree.value == 5);
+      expect(service.tree.children.size() == 1u);
    };
 };
 

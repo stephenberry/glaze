@@ -224,6 +224,10 @@ private:
 };
 ```
 
+### Rejected Writes
+
+A rejected write (a `PUT` answered with `400`) leaves the registered value unchanged. See [Rejected writes](../rpc/repe-rpc.md#rejected-writes) for how this works and its limits.
+
 ## Multiple Services
 
 ### Service Composition

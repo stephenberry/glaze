@@ -6,6 +6,7 @@
 #include "glaze/core/opts.hpp"
 #include "glaze/ext/jsonrpc.hpp"
 #include "glaze/glaze.hpp"
+#include "glaze/rpc/read_and_commit.hpp"
 
 namespace glz
 {
