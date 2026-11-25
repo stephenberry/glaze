@@ -3,8 +3,14 @@
 
 #include <cstring>
 #include <latch>
+#include <map>
+#include <memory>
+#include <optional>
 #include <span>
 #include <thread>
+#include <tuple>
+#include <variant>
+#include <vector>
 
 #include "glaze/glaze.hpp"
 #include "glaze/rpc/registry.hpp"
@@ -1255,6 +1261,127 @@ suite stale_optional_regression = [] {
 
       call_json(server, {"/handler"}, command_with_optional{.action = "second"});
       expect(!captured_time.has_value()) << "time should be nullopt in free function path";
+   };
+};
+
+// A write the registry rejects must leave the registered value as it was. The read assigns each
+// member as it goes, so before this was staged a failing read_constraint or self_constraint
+// answered with an error yet kept every member read ahead of the failure.
+struct guarded_account
+{
+   std::string username = "alice";
+   std::string password = "correct horse battery";
+   std::string confirm_password = "correct horse battery";
+   int age = 30;
+};
+
+template <>
+struct glz::meta<guarded_account>
+{
+   using T = guarded_account;
+   static constexpr auto limit_age = [](const T&, int age) { return age >= 0 && age <= 120; };
+   static constexpr auto strong = [](const T& v) {
+      return v.password.size() >= 12 && v.password == v.confirm_password;
+   };
+   static constexpr auto value = object(&T::username, &T::password, &T::confirm_password, "age",
+                                        read_constraint<&T::age, limit_age, "Age out of range">);
+   static constexpr auto self_constraint = glz::self_constraint<strong, "Weak or mismatched password">;
+};
+
+struct guarded_service
+{
+   guarded_account account{};
+};
+
+suite rejected_write_tests = [] {
+   using namespace test_helpers;
+
+   "rejected_write_keeps_value"_test = [] {
+      glz::registry server{};
+      guarded_service service{};
+      server.on(service);
+
+      std::map<std::string, std::string> weak{{"password", "short"}, {"confirm_password", "other"}};
+      auto response = call_json(server, {"/account"}, weak);
+      expect(response.header.ec == glz::error_code::constraint_violated) << response.body;
+      expect(service.account.password == "correct horse battery") << service.account.password;
+      expect(service.account.confirm_password == "correct horse battery") << service.account.confirm_password;
+
+      response = call_json(server, {"/account"}, glz::generic{{"username", "mallory"}, {"age", 500}});
+      expect(response.header.ec == glz::error_code::constraint_violated) << response.body;
+      expect(service.account.username == "alice") << service.account.username;
+
+      // A valid write still lands
+      response = call_json(server, {"/account"}, glz::generic{{"username", "bob"}, {"age", 40}});
+      expect(response.header.ec == glz::error_code::none) << response.body;
+      expect(service.account.username == "bob");
+      expect(service.account.age == 40);
+   };
+};
+
+// std::is_copy_constructible_v is true for a container of move-only elements, so staging must look inside a type
+// before copying it. A type that cannot really be copied is read in place, and a recursive type is still staged.
+struct move_only_store
+{
+   std::vector<std::unique_ptr<int>> items{};
+   int count{};
+};
+
+struct tree_node
+{
+   int value{};
+   std::vector<tree_node> children{};
+};
+
+struct staging_service
+{
+   move_only_store store{};
+   tree_node tree{};
+};
+
+static_assert(glz::detail::stageable_v<guarded_account>);
+static_assert(glz::detail::stageable_v<tree_node>);
+static_assert(glz::detail::stageable_v<std::shared_ptr<move_only_store>>);
+static_assert(!glz::detail::stageable_v<move_only_store>);
+static_assert(!glz::detail::stageable_v<staging_service>);
+static_assert(!glz::detail::stageable_v<std::map<std::string, std::unique_ptr<int>>>);
+static_assert(!glz::detail::stageable_v<std::optional<std::vector<std::unique_ptr<int>>>>);
+static_assert(!glz::detail::stageable_v<std::variant<int, std::vector<std::unique_ptr<int>>>>);
+static_assert(!glz::detail::stageable_v<std::pair<int, std::vector<std::unique_ptr<int>>>>);
+static_assert(!glz::detail::stageable_v<std::tuple<int, std::vector<std::unique_ptr<int>>>>);
+
+suite staging_type_tests = [] {
+   using namespace test_helpers;
+
+   "move_only_members_register"_test = [] {
+      glz::registry server{};
+      staging_service service{};
+      server.on(service);
+
+      auto response = call_json(server, {"/store/count"}, 7);
+      expect(response.header.ec == glz::error_code::none) << response.body;
+      expect(service.store.count == 7);
+
+      response = call_json(server, {"/store"}, glz::generic{{"count", 8}});
+      expect(response.header.ec == glz::error_code::none) << response.body;
+      expect(service.store.count == 8);
+   };
+
+   "recursive_type_rejected_write_keeps_value"_test = [] {
+      glz::registry server{};
+      staging_service service{};
+      service.tree = {1, {{2, {}}}};
+      server.on(service);
+
+      auto response = call_json(server, {"/tree"}, glz::generic{{"value", 5}, {"children", "bad"}});
+      expect(response.header.ec != glz::error_code::none) << response.body;
+      expect(service.tree.value == 1);
+      expect(service.tree.children.size() == 1u);
+
+      response = call_json(server, {"/tree"}, glz::generic{{"value", 5}});
+      expect(response.header.ec == glz::error_code::none) << response.body;
+      expect(service.tree.value == 5);
+      expect(service.tree.children.size() == 1u);
    };
 };
 

@@ -16,6 +16,15 @@ The `glz::repe::registry` produces an API for function invocation and variable a
 
 > The registry does not currently support adding methods from RPC calls or adding methods once RPC calls can be made.
 
+## Rejected writes
+
+A write to a registered value (a REPE call with a body, a REST `PUT`, or a JSON-RPC call on a data member) is all or nothing. The registry reads the request into a copy of the value and moves the copy back only if the whole read succeeds, so a parse error, a `read_constraint`, or a `self_constraint` that rejects the write leaves the registered value unchanged.
+
+- Because a successful write moves the copy back, every member of the written value gets new storage, including members the request did not mention. Pointers, references, and views into the value do not survive a write.
+- Each write copies the value it targets, so a write to the root endpoint copies the whole registered object.
+- A value that cannot be copied (for example one holding a `std::mutex`, a `std::atomic`, or a container of `std::unique_ptr`) is read in place, and a rejected write can leave it partly updated. The same applies to `glz::custom` and `glz::manage` endpoints.
+- The copy is shallow through pointers: a write through a `std::shared_ptr` or raw pointer member reaches the shared object even if the write is later rejected.
+
 ## REPE registry locking and thread safety
 
 The `glz::repe::registry` allows users to expose C++ classes directly to the registry as an interface for network RPC calls and POST/GET calls.

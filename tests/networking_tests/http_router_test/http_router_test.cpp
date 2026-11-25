@@ -4,7 +4,9 @@
 #include "glaze/net/http_router.hpp"
 
 #include <cassert>
+#include <memory>
 #include <regex>
+#include <vector>
 
 #include "glaze/rpc/registry.hpp"
 #include "ut/ut.hpp"
@@ -936,6 +938,97 @@ suite rest_schema_options_tests = [] {
 
    "rest_schemas_use_standalone_registry_opts"_test = [] {
       expect_registry_schemas_use_opts<schema_standalone_opts{}>();
+   };
+};
+
+// A write the registry rejects must leave the registered value as it was. The read assigns each
+// member as it goes, so before this was staged a failing self_constraint or a parse error
+// answered with an error yet kept every member read ahead of the failure.
+struct guarded_account
+{
+   std::string username = "alice";
+   std::string password = "correct horse battery";
+   std::string confirm_password = "correct horse battery";
+   int age = 30;
+};
+
+template <>
+struct glz::meta<guarded_account>
+{
+   using T = guarded_account;
+   static constexpr auto strong = [](const T& v) {
+      return v.password.size() >= 12 && v.password == v.confirm_password;
+   };
+   static constexpr auto value = object(&T::username, &T::password, &T::confirm_password, &T::age);
+   static constexpr auto self_constraint = glz::self_constraint<strong, "Weak or mismatched password">;
+};
+
+struct guarded_service
+{
+   guarded_account account{};
+};
+
+suite rest_rejected_write_tests = [] {
+   "rejected_put_keeps_value"_test = [] {
+      glz::registry<glz::opts{}, glz::REST> registry;
+      guarded_service service{};
+      registry.on(service);
+
+      auto put = [&](std::string body) {
+         auto [handler, params] = registry.endpoints.match(glz::http_method::PUT, "/account");
+         expect(handler != nullptr);
+         glz::request req{};
+         req.method = glz::http_method::PUT;
+         req.target = "/account";
+         req.body = std::move(body);
+         glz::response res{};
+         handler(req, res);
+         return res.status_code;
+      };
+
+      expect(put(R"({"password":"short","confirm_password":"other"})") == 400);
+      expect(service.account.password == "correct horse battery") << service.account.password;
+      expect(service.account.confirm_password == "correct horse battery") << service.account.confirm_password;
+
+      expect(put(R"({"username":"mallory","age":"old"})") == 400);
+      expect(service.account.username == "alice") << service.account.username;
+
+      // A valid write still lands
+      expect(put(R"({"username":"bob","age":40})") == 204);
+      expect(service.account.username == "bob");
+      expect(service.account.age == 40);
+   };
+};
+
+// A member that cannot really be copied (a container of std::unique_ptr) is read in place rather than failing to
+// compile.
+struct move_only_store
+{
+   std::vector<std::unique_ptr<int>> items{};
+   int count{};
+};
+
+struct move_only_service
+{
+   move_only_store store{};
+};
+
+suite rest_move_only_tests = [] {
+   "move_only_members_register"_test = [] {
+      glz::registry<glz::opts{}, glz::REST> registry;
+      move_only_service service{};
+      registry.on(service);
+
+      auto [handler, params] = registry.endpoints.match(glz::http_method::PUT, "/store");
+      expect(handler != nullptr);
+      glz::request req{};
+      req.method = glz::http_method::PUT;
+      req.target = "/store";
+      req.body = R"({"count":8})";
+      glz::response res{};
+      handler(req, res);
+      expect(res.status_code == 204);
+      expect(service.store.count == 8);
    };
 };
 
