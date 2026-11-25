@@ -33,9 +33,9 @@ jobs:
       fail-fast: false
       matrix:
         compiler:
-          - { name: clang, version: 19 }
-          - { name: clang, version: 20 }
-          - { name: gcc, version: 14 }
+          - { name: clang, version: 22 }
+          - { name: clang, version: 23 }
+          - { name: gcc, version: 15 }
         boost_version: [1.88.0, 1.86.0]
 
     env:
@@ -65,7 +65,7 @@ jobs:
             CMAKE_CXX_FLAGS="-stdlib=libc++"
             CMAKE_EXE_LINKER_FLAGS="-stdlib=libc++ -lc++abi"
           fi
-          cmake -B ${{github.workspace}}/build \
+          cmake -G Ninja -B ${{github.workspace}}/build \
             -DCMAKE_BUILD_TYPE=Debug \
             -DCMAKE_CXX_STANDARD=23 \
             -DCMAKE_CXX_FLAGS="$CMAKE_CXX_FLAGS" \

@@ -61,7 +61,7 @@ jobs:
 
     - name: Configure CMake
       run: |
-        cmake -S "$GITHUB_WORKSPACE" -B "$GITHUB_WORKSPACE/build" \
+        cmake -G Ninja -S "$GITHUB_WORKSPACE" -B "$GITHUB_WORKSPACE/build" \
           -DCMAKE_BUILD_TYPE=${{matrix.build_type}} \
           -DCMAKE_CXX_STANDARD=${{matrix.std}}
 

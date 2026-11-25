@@ -31,8 +31,8 @@ jobs:
     runs-on: ubuntu-26.04
 
     env:
-      CC: gcc-14
-      CXX: g++-14
+      CC: gcc-15
+      CXX: g++-15
       AUTOBAHN_AGENT: glaze-websocket-client
       AUTOBAHN_CASE_COUNT_FILE: ${{ github.workspace }}/autobahn-case-count.txt
       AUTOBAHN_IMAGE: crossbario/autobahn-testsuite
@@ -43,11 +43,11 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y g++-14 ninja-build
+          sudo apt-get install -y g++-15 ninja-build
 
       - name: Configure CMake
         run: |
-          cmake -B ${{github.workspace}}/build \
+          cmake -G Ninja -B ${{github.workspace}}/build \
             -DCMAKE_BUILD_TYPE=Debug \
             -DCMAKE_CXX_STANDARD=23 \
             -DCMAKE_C_COMPILER=${{env.CC}} \

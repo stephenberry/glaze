@@ -25,7 +25,7 @@ env:
   # requires. Install an official Kitware build instead of apt's.
   # Downloaded to a file rather than piped into tar: a retry restarts the transfer
   # from the first byte, which would corrupt a stream tar is already reading.
-  CMAKE_TARBALL: https://github.com/Kitware/CMake/releases/download/v4.4.2/cmake-4.4.2-linux-x86_64.tar.gz
+  CMAKE_TARBALL: https://github.com/Kitware/CMake/releases/download/v4.5.0/cmake-4.5.0-linux-x86_64.tar.gz
 
 concurrency:
   # Supersede an in-flight run when a branch is pushed again, so a fixup commit
@@ -80,7 +80,7 @@ jobs:
             curl -fsSL --retry 5 --retry-delay 2 --retry-all-errors -o /tmp/cmake.tar.gz ${{ env.CMAKE_TARBALL }} &&
             tar xzf /tmp/cmake.tar.gz --strip-components=1 -C /usr/local &&
             cmake --version &&
-            cmake -B build \
+            cmake -G Ninja -B build \
               -DCMAKE_CXX_COMPILER=clang++ \
               -DCMAKE_CXX_FLAGS='-std=c++26 -freflection -fexpansion-statements -stdlib=libc++' \
               -DCMAKE_EXE_LINKER_FLAGS='-Wl,-rpath,${{ env.P2996_LIB_PATH }}' \

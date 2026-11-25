@@ -4,21 +4,13 @@ get_target_property(glaze_library_modules glaze_glaze CXX_MODULE_SET)
 include(FetchContent)
 
 FetchContent_Declare(
-  ut
+  glaze_test_ut
   GIT_REPOSITORY https://github.com/openalgz/ut
   GIT_TAG v1.2.1
   GIT_SHALLOW TRUE
+  SOURCE_SUBDIR modules 
 )
-
-set (UT_ENABLE_MODULES ON)
-
-message(STATUS "Fetching dependencies...")
-set_directory_properties(PROPERTIES EXCLUDE_FROM_ALL TRUE)
-set(CMAKE_SKIP_INSTALL_RULES ON CACHE BOOL "" FORCE)
-FetchContent_MakeAvailable(ut)
-set(CMAKE_SKIP_INSTALL_RULES OFF CACHE BOOL "" FORCE)
-set_directory_properties(PROPERTIES EXCLUDE_FROM_ALL FALSE)
-message(STATUS "...finished fetching dependencies.")
+FetchContent_MakeAvailable(glaze_test_ut)
 
 # Setup the Asio backend (Boost / standalone / bundled) used by networking tests.
 # Selection plus the GLZ_USE_BOOST_ASIO bridge live in cmake/glaze-asio.cmake, the
@@ -38,7 +30,11 @@ option(glaze_ENABLE_SANITIZERS "Enable AddressSanitizer and UndefinedBehaviorSan
 
 add_library(glz_test_modules STATIC)
 target_compile_features(glz_test_modules PUBLIC cxx_std_23)
-target_link_libraries(glz_test_modules PUBLIC glaze::glaze ut::ut)
+target_link_libraries(glz_test_modules PUBLIC glaze::glaze)
+option(UT_COMPILE_TIME "Enable UT compile-time tests" OFF)
+if(UT_COMPILE_TIME)
+    target_compile_definitions(glz_test_modules PUBLIC UT_COMPILE_TIME)
+endif()
 target_sources(
     glz_test_modules
     PUBLIC
@@ -48,12 +44,16 @@ target_sources(
             scratch_directory.ixx
             speculation_guard.ixx
             wide_variant_types.ixx
+    PUBLIC
+        FILE_SET ut_module TYPE CXX_MODULES
+        BASE_DIRS "${glaze_test_ut_SOURCE_DIR}/modules"
+        FILES "${glaze_test_ut_SOURCE_DIR}/modules/ut.ixx"
 )
 
 add_library(glz_test_common INTERFACE)
 target_include_directories(glz_test_common INTERFACE ${CMAKE_CURRENT_SOURCE_DIR})
 target_compile_features(glz_test_common INTERFACE cxx_std_23)
-target_link_libraries(glz_test_common INTERFACE ut::ut glaze::glaze glaze::asio glz_test_modules)
+target_link_libraries(glz_test_common INTERFACE glaze::glaze glaze::asio glz_test_modules)
 
 if(MSVC)
     target_compile_options(glz_test_common INTERFACE /bigobj)
@@ -90,7 +90,7 @@ endif()
 add_library(glz_test_exceptions INTERFACE)
 target_include_directories(glz_test_exceptions INTERFACE ${CMAKE_CURRENT_SOURCE_DIR})
 target_compile_features(glz_test_exceptions INTERFACE cxx_std_23)
-target_link_libraries(glz_test_exceptions INTERFACE ut::ut glaze::glaze glaze::asio glz_test_modules)
+target_link_libraries(glz_test_exceptions INTERFACE glaze::glaze glaze::asio glz_test_modules)
 if(MSVC)
     target_compile_options(glz_test_exceptions INTERFACE /bigobj)
     target_compile_options(glz_test_exceptions INTERFACE /W4 /wd4459 /wd4805)
@@ -102,7 +102,6 @@ foreach(glz_test_support IN ITEMS glz_test_common glz_test_exceptions)
     set_property(
         TARGET ${glz_test_support}
         PROPERTY INTERFACE_LINK_LIBRARIES_DIRECT
-            "$<$<STREQUAL:$<TARGET_PROPERTY:TYPE>,EXECUTABLE>:ut::ut>"
             "$<$<STREQUAL:$<TARGET_PROPERTY:TYPE>,EXECUTABLE>:glaze::glaze>"
             "$<$<STREQUAL:$<TARGET_PROPERTY:TYPE>,EXECUTABLE>:glz_test_modules>"
     )

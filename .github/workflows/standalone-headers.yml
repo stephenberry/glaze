@@ -46,8 +46,8 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - name: gcc-14 libstdc++
-            cxx: g++-14
+          - name: gcc-15 libstdc++
+            cxx: g++-15
             cxx_flags: ''
           - name: clang-19 libc++
             cxx: clang++-19

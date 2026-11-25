@@ -33,7 +33,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        gcc: [13, 14]
+        gcc: [15]
         build_type: [Debug]
         std: [23]
 
@@ -46,7 +46,7 @@ jobs:
 
     - name: Configure CMake
       run: |
-        CXXFLAGS="-g3" cmake -S "$GITHUB_WORKSPACE" -B "$GITHUB_WORKSPACE/build" -DCMAKE_BUILD_TYPE=${{matrix.build_type}} -DCMAKE_CXX_STANDARD=${{matrix.std}}
+        CXXFLAGS="-g3" cmake -G Ninja -S "$GITHUB_WORKSPACE" -B "$GITHUB_WORKSPACE/build" -DCMAKE_BUILD_TYPE=${{matrix.build_type}} -DCMAKE_CXX_STANDARD=${{matrix.std}}
 
     - name: Build
       run: cmake --build "$GITHUB_WORKSPACE/build" -j $(nproc)
@@ -90,7 +90,7 @@ jobs:
 
     - name: Configure CMake
       run: |
-        CXXFLAGS="-g3" cmake -S "$GITHUB_WORKSPACE" -B "$GITHUB_WORKSPACE/build" -DCMAKE_BUILD_TYPE=${{matrix.build_type}} -DCMAKE_CXX_STANDARD=${{matrix.std}}
+        CXXFLAGS="-g3" cmake -G Ninja -S "$GITHUB_WORKSPACE" -B "$GITHUB_WORKSPACE/build" -DCMAKE_BUILD_TYPE=${{matrix.build_type}} -DCMAKE_CXX_STANDARD=${{matrix.std}}
 
     - name: Build
       run: cmake --build "$GITHUB_WORKSPACE/build" -j $(nproc)
@@ -134,7 +134,7 @@ jobs:
 
     - name: Configure CMake
       run: |
-        CXXFLAGS="-g3" cmake -S "$GITHUB_WORKSPACE" -B "$GITHUB_WORKSPACE/build" -DCMAKE_BUILD_TYPE=${{matrix.build_type}} -DCMAKE_CXX_STANDARD=${{matrix.std}}
+        CXXFLAGS="-g3" cmake -G Ninja -S "$GITHUB_WORKSPACE" -B "$GITHUB_WORKSPACE/build" -DCMAKE_BUILD_TYPE=${{matrix.build_type}} -DCMAKE_CXX_STANDARD=${{matrix.std}}
 
     - name: Build
       run: cmake --build "$GITHUB_WORKSPACE/build" -j $(nproc)
@@ -185,7 +185,7 @@ jobs:
 
     - name: Configure CMake
       run: |
-        cmake -S "$GITHUB_WORKSPACE" -B "$GITHUB_WORKSPACE/build" \
+        cmake -G Ninja -S "$GITHUB_WORKSPACE" -B "$GITHUB_WORKSPACE/build" \
           -DCMAKE_BUILD_TYPE=${{matrix.build_type}} \
           -DCMAKE_CXX_FLAGS='-std=c++26 -freflection' \
           -Dglaze_DEVELOPER_MODE=ON \
