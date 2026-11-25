@@ -1,8 +1,8 @@
 // Glaze Library
 // For the license information refer to glaze.hpp
 
-#include <string_view>
 #include <memory>
+#include <string_view>
 #include <vector>
 
 #include "glaze/glaze.hpp"
