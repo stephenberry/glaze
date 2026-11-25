@@ -250,7 +250,7 @@ namespace glz
          }
          auto iter = object->find(key);
          if (iter == object->end()) {
-            iter = object->insert(std::make_pair(std::string(key), generic_json{})).first;
+            iter = object->insert(std::make_pair(std::string(std::forward<decltype(key)>(key)), generic_json{})).first;
          }
          return iter->second;
       }
@@ -311,9 +311,23 @@ namespace glz
          return *this;
       }
 
+      // Plain assignment is safe here: std::variant copies a string into a temporary before replacing a different
+      // alternative, and a string held by `data` cannot contain `value`. It also reuses the existing buffer.
       generic_json& operator=(const std::string& value)
       {
          data = value;
+         return *this;
+      }
+
+      // A moved string, array, or object, or a copied array or object, may live inside this value, as in
+      // `json = std::move(json["child"].get_array())`. Replacing `data` can destroy it before it is read, so these
+      // overloads build the new value first and then move it into `data`. They are noexcept when that move is, which
+      // depends on the map type for objects (std::map can allocate when moved on MSVC).
+
+      generic_json& operator=(std::string&& value) noexcept(std::is_nothrow_move_constructible_v<std::string> &&
+                                                  std::is_nothrow_assignable_v<val_t&, std::string>)
+      {
+         data = std::string(std::move(value));
          return *this;
       }
 
@@ -337,13 +351,27 @@ namespace glz
 
       generic_json& operator=(const array_t& value)
       {
-         data = value;
+         data = array_t(value);
+         return *this;
+      }
+
+      generic_json& operator=(array_t&& value) noexcept(std::is_nothrow_move_constructible_v<array_t> &&
+                                                  std::is_nothrow_assignable_v<val_t&, array_t>)
+      {
+         data = array_t(std::move(value));
          return *this;
       }
 
       generic_json& operator=(const object_t& value)
       {
-         data = value;
+         data = object_t(value);
+         return *this;
+      }
+
+      generic_json& operator=(object_t&& value) noexcept(std::is_nothrow_move_constructible_v<object_t> &&
+                                                  std::is_nothrow_assignable_v<val_t&, object_t>)
+      {
+         data = object_t(std::move(value));
          return *this;
       }
 
@@ -382,9 +410,23 @@ namespace glz
 
       generic_json() = default;
       generic_json(const generic_json& other) : data(other.data) {}
-      generic_json& operator=(const generic_json&) = default;
       generic_json(generic_json&& other) noexcept : data(std::move(other.data)) {}
-      generic_json& operator=(generic_json&&) = default;
+
+      // `other` may live inside this value, as in `json = json[0]` or `json = std::move(json["child"])`, so its
+      // value is taken out before `data` is replaced.
+      generic_json& operator=(const generic_json& other)
+      {
+         val_t value = other.data;
+         data = std::move(value);
+         return *this;
+      }
+
+      generic_json& operator=(generic_json&& other) noexcept(std::is_nothrow_move_assignable_v<val_t>)
+      {
+         val_t value = std::move(other.data);
+         data = std::move(value);
+         return *this;
+      }
 
       template <class T>
          requires std::convertible_to<T, val_t> && (!std::derived_from<std::decay_t<T>, generic_json>)
