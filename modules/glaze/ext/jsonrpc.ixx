@@ -72,6 +72,13 @@ export namespace glz::rpc
    using id_t = std::variant<glz::generic::null_t, std::string_view, int64_t>;
    inline constexpr std::string_view supported_version{"2.0"};
 
+   // Ceiling on what one batch may answer with. A batch response past this is already outside what
+   // a JSON RPC service does in normal operation -- it is roughly sixteen thousand kilobyte
+   // responses -- while still being small enough that a request built to be answered expensively is
+   // stopped while it is cheap. A service whose legitimate batches are larger raises it; both
+   // servers expose it as a per-instance setting.
+   inline constexpr size_t default_max_batch_response_size{16u * 1024u * 1024u};
+
    struct error final
    {
       error_e code{error_e::no_error};
@@ -108,6 +115,11 @@ export namespace glz::rpc
          return {error_e::method_not_found, "Method: '" + std::string(presumed_method) + "' not found",
                  std::string(code_as_sv(error_e::method_not_found))};
       }
+      static error missing_member(std::string_view member)
+      {
+         return {error_e::invalid_request, "Missing '" + std::string(member) + "' member",
+                 std::string(code_as_sv(error_e::invalid_request))};
+      }
 
       operator bool() const noexcept { return code != rpc::error_e::no_error; }
 
@@ -142,6 +154,32 @@ export namespace glz::rpc
    request_t(id_t&&, std::string_view, Params&&) -> request_t<std::decay_t<Params>>;
 
    using generic_request_t = request_t<glz::raw_json_view>;
+
+   // The request as received, for validating the envelope before any default stands in for a member
+   // that was never sent.
+   //
+   // request_t defaults `jsonrpc` to "2.0" and `method` to "", so a request that omits either reads
+   // back indistinguishable from one that sent the default: a missing version passes for 2.0, and a
+   // missing method names "" -- which is a live endpoint in the registry, where it addresses the
+   // root object. JSON RPC 2.0 requires both members, so absence has to stay separable from
+   // present-and-empty. Params are left raw; they are read against the target's own type once the
+   // envelope is known to be well formed.
+   struct request_envelope_t
+   {
+      id_t id{};
+      std::optional<std::string_view> method{};
+      glz::raw_json_view params{};
+      std::optional<std::string_view> version{};
+
+      struct glaze
+      {
+         using T = request_envelope_t;
+         static constexpr auto value = glz::object("jsonrpc", &T::version, //
+                                                   &T::method, //
+                                                   &T::params, //
+                                                   &T::id);
+      };
+   };
 
    template <class Result>
    struct response_t
@@ -304,6 +342,10 @@ export namespace glz::rpc
 
       glz::tuple<server_method_t<Method>...> methods{};
 
+      // See rpc::default_max_batch_response_size. A batch answers every element it holds, so a
+      // bounded request can ask for an unbounded answer; only the server can cap that.
+      size_t max_batch_response_size{rpc::default_max_batch_response_size};
+
       template <string_literal name>
       constexpr void on(const auto& callback) // std::function<expected<result_t, rpc::error>(params_t const&)>
       {
@@ -355,7 +397,7 @@ export namespace glz::rpc
      private:
       auto per_request(std::string_view json_request) -> std::optional<response_t<glz::raw_json>>
       {
-         expected<generic_request_t, glz::error_ctx> request{glz::read_json<generic_request_t>(json_request)};
+         expected<request_envelope_t, glz::error_ctx> request{glz::read_json<request_envelope_t>(json_request)};
 
          if (!request.has_value()) {
             // Failed, but let's try to extract the `id`
@@ -367,14 +409,24 @@ export namespace glz::rpc
          }
 
          auto& req{request.value()};
-         if (req.version != rpc::supported_version) {
-            return raw_response_t{std::move(req.id), rpc::error::version(req.version)};
+         // `jsonrpc` and `method` are both required. Neither may fall through to a default: an
+         // absent version would pass for 2.0, and an absent method would be matched against the
+         // registered names as if the caller had asked for "".
+         if (!req.version) {
+            return raw_response_t{std::move(req.id), rpc::error::missing_member("jsonrpc")};
          }
+         if (*req.version != rpc::supported_version) {
+            return raw_response_t{std::move(req.id), rpc::error::version(*req.version)};
+         }
+         if (!req.method) {
+            return raw_response_t{std::move(req.id), rpc::error::missing_member("method")};
+         }
+         const std::string_view method_name{*req.method};
 
          std::optional<response_t<glz::raw_json>> return_v{};
-         bool method_found = methods.any([&json_request, &req, &return_v](auto&& method) -> bool {
+         bool method_found = methods.any([&json_request, &req, method_name, &return_v](auto&& method) -> bool {
             using meth_t = std::remove_reference_t<decltype(method)>;
-            if (req.method != meth_t::name_v) {
+            if (method_name != meth_t::name_v) {
                return false;
             }
             const auto& params_request{glz::read_json<typename meth_t::request_t>(json_request)};
@@ -407,18 +459,56 @@ export namespace glz::rpc
             return true;
          });
          if (!method_found) {
-            return raw_response_t{std::move(req.id), rpc::error::method(req.method)};
+            return raw_response_t{std::move(req.id), rpc::error::method(method_name)};
          }
          return return_v;
       };
+
+      // What a response will cost once written. The registry can sum finished strings; here the
+      // responses are still structured, so this has to account for every part the caller can grow.
+      // Three of them can: the result body, the error text, and -- the one that is easy to miss --
+      // the id, which is echoed back verbatim from the request and is not otherwise bounded.
+      //
+      // Escaping is not modelled. A result body is raw JSON and is written as-is, but error text and
+      // a string id are escaped on the way out, which can double them at worst: glaze rejects raw
+      // control bytes, so the only escapes reachable from a legal request are the two-byte kind. The
+      // limit therefore bounds the written response within a small constant factor rather than
+      // exactly, which is what it is for.
+      static size_t response_cost(const raw_response_t& response)
+      {
+         size_t cost = 64; // envelope: version and the surrounding punctuation
+         if (auto* id = std::get_if<std::string_view>(&response.id)) {
+            cost += id->size();
+         }
+         if (response.result) {
+            cost += response.result->str.size();
+         }
+         if (response.error) {
+            cost += response.error->message.size();
+            if (response.error->data) {
+               cost += response.error->data->size();
+            }
+         }
+         return cost;
+      }
 
       auto batch_request(const std::vector<glz::raw_json_view>& batch_requests)
       {
          std::vector<response_t<glz::raw_json>> return_vec;
          return_vec.reserve(batch_requests.size());
+         size_t total_size{2}; // []
          for (auto&& request : batch_requests) {
             auto response{per_request(request.str)};
             if (response.has_value()) {
+               total_size += response_cost(response.value()) + 1; // +1 for comma
+               // Checked as the batch is walked, so the memory the limit bounds is never allocated.
+               // The batch is abandoned rather than truncated -- a caller must not mistake a partial
+               // array for a complete one.
+               if (total_size > max_batch_response_size) {
+                  return std::vector<response_t<glz::raw_json>>{raw_response_t{rpc::error{error_e::server_error_lower,
+                                                                                          "Batch response exceeds "
+                                                                                          "max_batch_response_size"}}};
+               }
                return_vec.emplace_back(std::move(response.value()));
             }
          }

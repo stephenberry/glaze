@@ -32,6 +32,13 @@ env:
   # Suites that exercise UTF-8 validation. Kept narrow so the emulated job stays quick.
   UTF8_TESTS: "^(utf8_validation_test|json_conformance|json_test)$"
 
+concurrency:
+  # Supersede an in-flight run when a branch is pushed again, so a fixup commit
+  # does not leave the previous run competing for the same runners. Pushes to main
+  # are exempt: every merged commit keeps a completed CI record.
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
 jobs:
   x86-backends:
     runs-on: ubuntu-24.04
@@ -42,48 +49,38 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          # The three expectations differ on purpose, which is the point of pinning all of them:
+          # SSE2 has no byte-granular shuffle so the validator falls back to scalar, and there is no
+          # SSSE3 escape helper so SSSE3 escapes with SSE2.
+          #
+          # `expect` is appended to the same CMAKE_CXX_FLAGS as `flags`, so the assertion is
+          # compiled into the suite by the very flags under test. Dropping the flags cannot leave a
+          # green job testing the host default: the expectation goes with them.
           - name: x86-64 SSE2 baseline (scalar fallback)
             flags: "-mno-ssse3"
-            expect: scalar
+            expect: "-DGLZ_EXPECT_DETECTED=SSE2 -DGLZ_EXPECT_UTF8_VALIDATION=scalar -DGLZ_EXPECT_STRING_ESCAPE=SSE2"
           - name: x86-64 SSSE3
             flags: "-mssse3 -mno-avx"
-            expect: SSSE3
+            expect: "-DGLZ_EXPECT_DETECTED=SSSE3 -DGLZ_EXPECT_UTF8_VALIDATION=SSSE3 -DGLZ_EXPECT_STRING_ESCAPE=SSE2"
           - name: x86-64 AVX2
             flags: "-mavx2"
-            expect: AVX2
+            expect: "-DGLZ_EXPECT_DETECTED=AVX2 -DGLZ_EXPECT_UTF8_VALIDATION=AVX2 -DGLZ_EXPECT_STRING_ESCAPE=AVX2"
+          # Not a backend, but the one build where all four fields must agree that nothing is
+          # vectorized -- including float_write, which otherwise ignores Glaze's detection entirely.
+          # utf8_validation_test asserts that spanning promise, and this is what compiles it.
+          - name: No SIMD (GLZ_DISABLE_SIMD)
+            flags: "-DGLZ_DISABLE_SIMD"
+            expect: "-DGLZ_EXPECT_DETECTED=scalar -DGLZ_EXPECT_UTF8_VALIDATION=scalar -DGLZ_EXPECT_STRING_ESCAPE=SWAR"
 
     steps:
       - uses: actions/checkout@v6
-
-      - name: Confirm the intended backend was selected
-        run: |
-          cat > /tmp/backend.cpp << 'EOF'
-          #include "glaze/simd/utf8_validation.hpp"
-          #include <cstdio>
-          int main() {
-          #if defined(GLZ_USE_AVX512BW)
-            std::puts("AVX512BW");
-          #elif defined(GLZ_USE_AVX2)
-            std::puts("AVX2");
-          #elif defined(GLZ_USE_SSSE3)
-            std::puts("SSSE3");
-          #else
-            std::puts("scalar");
-          #endif
-            return 0;
-          }
-          EOF
-          g++ -std=c++23 ${{ matrix.flags }} -I include /tmp/backend.cpp -o /tmp/backend
-          got=$(/tmp/backend)
-          echo "selected backend: $got (expected ${{ matrix.expect }})"
-          test "$got" = "${{ matrix.expect }}"
 
       - name: Configure
         run: |
           cmake -B build \
             -DCMAKE_BUILD_TYPE=Release \
             -DCMAKE_CXX_STANDARD=23 \
-            -DCMAKE_CXX_FLAGS="${{ matrix.flags }}" \
+            -DCMAKE_CXX_FLAGS="${{ matrix.flags }} ${{ matrix.expect }}" \
             -Dglaze_BUILD_NETWORKING_TESTS=OFF \
             -Dglaze_BUILD_PERFORMANCE_TESTS=OFF \
             -Dglaze_ENABLE_FUZZING=OFF
@@ -92,7 +89,39 @@ jobs:
         run: cmake --build build -j"$(nproc)" --target utf8_validation_test json_conformance json_test
 
       - name: Test
-        run: ctest --test-dir build --output-on-failure -R "$UTF8_TESTS"
+        # --no-tests=error: ctest exits 0 when -R matches nothing, so without it a renamed test
+        # leaves this step green while running none of the suites the job exists to run.
+        run: ctest --test-dir build --output-on-failure --no-tests=error -R "$UTF8_TESTS"
+
+  arm-backends:
+    runs-on: ubuntu-24.04-arm
+    # force_sde targets the AVX-512 job, so skip the jobs a dispatch run would only repeat.
+    if: ${{ !inputs.force_sde }}
+    name: AArch64 NEON64
+    # The NEON64 backend was previously reached only incidentally, by the one macos-latest job in
+    # clang.yml. Native AArch64 runners are free for public repositories, so the backend that every
+    # Apple Silicon and most server ARM users actually run gets a job of its own here.
+    #
+    # 32 bit NEON is a different backend -- no vqtbl1q_u8, so the validator falls back to scalar --
+    # and is covered by armv7.yml under QEMU.
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Configure
+        run: |
+          cmake -B build \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_CXX_STANDARD=23 \
+            -DCMAKE_CXX_FLAGS="-DGLZ_EXPECT_DETECTED=NEON64 -DGLZ_EXPECT_UTF8_VALIDATION=NEON64 -DGLZ_EXPECT_STRING_ESCAPE=NEON" \
+            -Dglaze_BUILD_NETWORKING_TESTS=OFF \
+            -Dglaze_BUILD_PERFORMANCE_TESTS=OFF \
+            -Dglaze_ENABLE_FUZZING=OFF
+
+      - name: Build
+        run: cmake --build build -j"$(nproc)" --target utf8_validation_test json_conformance json_test
+
+      - name: Test
+        run: ctest --test-dir build --output-on-failure --no-tests=error -R "$UTF8_TESTS"
 
   avx512:
     runs-on: ubuntu-24.04
@@ -133,32 +162,14 @@ jobs:
           /tmp/sde/sde64 -version | head -3
           echo "SDE=/tmp/sde/sde64" >> "$GITHUB_ENV"
 
-      - name: Confirm AVX-512BW backend was selected
-        run: |
-          cat > /tmp/backend.cpp << 'EOF'
-          #include "glaze/simd/utf8_validation.hpp"
-          #include <cstdio>
-          int main() {
-          #if defined(GLZ_USE_AVX512BW)
-            std::printf("AVX512BW width=%zu\n", glz::detail::utf8_simd::width);
-            return 0;
-          #else
-            std::puts("WRONG BACKEND");
-            return 1;
-          #endif
-          }
-          EOF
-          g++ -std=c++23 -mavx512f -mavx512bw -mavx512vl -I include /tmp/backend.cpp -o /tmp/backend
-          # Compiled for AVX-512 but only the preprocessor result matters, so run it under SDE when
-          # the runner cannot execute AVX-512 itself.
-          if [ -n "${SDE:-}" ]; then "$SDE" -future -- /tmp/backend; else /tmp/backend; fi
-
       - name: Configure
+        # Escaping stays AVX2: Glaze has no AVX-512 escape helper. That divergence is the reason
+        # this job pins all three rather than just the validator.
         run: |
           cmake -B build \
             -DCMAKE_BUILD_TYPE=Release \
             -DCMAKE_CXX_STANDARD=23 \
-            -DCMAKE_CXX_FLAGS="-mavx512f -mavx512bw -mavx512vl" \
+            -DCMAKE_CXX_FLAGS="-mavx512f -mavx512bw -mavx512vl -DGLZ_EXPECT_DETECTED=AVX512BW -DGLZ_EXPECT_UTF8_VALIDATION=AVX512BW -DGLZ_EXPECT_STRING_ESCAPE=AVX2" \
             -Dglaze_BUILD_NETWORKING_TESTS=OFF \
             -Dglaze_BUILD_PERFORMANCE_TESTS=OFF \
             -Dglaze_ENABLE_FUZZING=OFF
@@ -168,7 +179,7 @@ jobs:
 
       - name: Test (native)
         if: steps.mode.outputs.emulator == ''
-        run: ctest --test-dir build --output-on-failure -R "$UTF8_TESTS"
+        run: ctest --test-dir build --output-on-failure --no-tests=error -R "$UTF8_TESTS"
 
       - name: Test (Intel SDE)
         if: steps.mode.outputs.emulator == 'sde'
@@ -205,29 +216,16 @@ jobs:
         run: |
           set -euo pipefail
           source /tmp/emsdk/emsdk_env.sh
-          git clone --depth 1 --branch v1.1.0 https://github.com/openalgz/ut /tmp/ut
-          cat > /tmp/backend.cpp << 'EOF'
-          #include "glaze/simd/utf8_validation.hpp"
-          #include <cstdio>
-          int main() {
-          #if defined(GLZ_USE_WASM_SIMD128)
-            std::puts("SIMD128");
-          #else
-            std::puts("scalar");
-          #endif
-            return 0;
-          }
-          EOF
-          for cfg in "-msimd128:SIMD128" ":scalar"; do
+          git clone --depth 1 --branch v1.2.1 https://github.com/openalgz/ut /tmp/ut
+          # Both configurations escape with SWAR: Glaze has no WASM escape helper. Pinning the
+          # backend in the same compile that builds the suite means a toolchain change that quietly
+          # drops SIMD128 fails to build, rather than running the scalar path twice and passing.
+          for cfg in "-msimd128:WASM_SIMD128" ":scalar"; do
             flags="${cfg%%:*}"; label="${cfg##*:}"
-            echo "::group::WASM $label"
-            # Assert the backend before testing it, so a toolchain change that quietly drops SIMD128
-            # fails here instead of running the scalar path twice and reporting success.
-            em++ -std=c++23 $flags -I include /tmp/backend.cpp -o /tmp/backend.js -sEXIT_RUNTIME=1
-            got=$(node /tmp/backend.js | tr -d '\r')
-            echo "selected backend: $got (expected $label)"
-            test "$got" = "$label"
+            echo "::group::wasm ${label}"
             em++ -std=c++23 -O2 $flags \
+              -DGLZ_EXPECT_DETECTED=$label -DGLZ_EXPECT_UTF8_VALIDATION=$label \
+              -DGLZ_EXPECT_STRING_ESCAPE=SWAR \
               -I include -I /tmp/ut/include \
               tests/json_test/utf8_validation_test.cpp \
               -o /tmp/utf8_wasm.js -sALLOW_MEMORY_GROWTH=1 -sEXIT_RUNTIME=1 -sTOTAL_STACK=8MB
@@ -248,31 +246,18 @@ jobs:
       - name: Build and run at each width
         run: |
           set -euo pipefail
-          git clone --depth 1 --branch v1.1.0 https://github.com/openalgz/ut /tmp/ut
-          cat > /tmp/backend.cpp << 'EOF'
-          #include "glaze/simd/utf8_validation.hpp"
-          #include <cstdio>
-          int main() {
-          #if defined(GLZ_UTF8_SIMD)
-            std::printf("%zu\n", glz::detail::utf8_simd::width);
-            return 0;
-          #else
-            std::puts("scalar");
-            return 1;
-          #endif
-          }
-          EOF
+          git clone --depth 1 --branch v1.2.1 https://github.com/openalgz/ut /tmp/ut
           for w in 16 32 64; do
             echo "::group::generic width $w"
-            # This runner is x86-64 with no -m flags, so the baseline is SSE2 and no native backend
-            # is selected. Assert the portable backend really is active at the requested width:
-            # otherwise the vector path compiles away and all three widths silently test the scalar
-            # validator against itself.
-            g++ -std=c++23 -DGLZ_UTF8_GENERIC_WIDTH=$w -I include /tmp/backend.cpp -o /tmp/backend
-            got=$(/tmp/backend)
-            echo "active width: $got (expected $w)"
-            test "$got" = "$w"
-            g++ -std=c++23 -O2 -DGLZ_UTF8_GENERIC_WIDTH=$w \
+            # Pin the portable backend, or the vector path could compile away and all three widths
+            # would silently test the scalar validator against itself. Naming the backend rather
+            # than reading back the width also survives a future reordering of the selection chain,
+            # which currently puts the generic branch first and so would make a width-only check
+            # pass no matter which backend won.
+            #
+            # Only the validator is pinned here: what the runner detects underneath the hook is not
+            # this job's to promise.
+            g++ -std=c++23 -O2 -DGLZ_UTF8_GENERIC_WIDTH=$w -DGLZ_EXPECT_UTF8_VALIDATION=generic$w \
               -I include -I /tmp/ut/include \
               tests/json_test/utf8_validation_test.cpp -o /tmp/utf8_generic_$w
             /tmp/utf8_generic_$w

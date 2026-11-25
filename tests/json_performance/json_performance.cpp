@@ -3,6 +3,7 @@
 
 import std;
 import glaze;
+import glaze.tests.scratch_directory;
 import ut;
 
 using std::int32_t;
@@ -53,6 +54,11 @@ inline std::string generate_basic_string()
    }
    return result;
 }
+
+// Relative scratch paths in this file resolve inside a private directory rather than
+// wherever the binary was launched from. This must precede the first suite: ut runs a
+// suite from its constructor, during static initialization.
+const glz_test::scratch_directory scratch{"json_performance"};
 
 suite string_performance = [] {
    "string_performance"_test = [] {

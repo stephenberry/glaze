@@ -10,7 +10,7 @@ License:        MIT
 URL:            https://github.com/stephenberry/glaze
 Source0:        %{url}/archive/v%{version}/%{name}-%{version}.tar.gz
 
-BuildRequires:  cmake
+BuildRequires:  cmake >= 3.31
 BuildRequires:  gcc-c++
 BuildRequires:  xxhashct-static
 BuildRequires:  fast_float-devel

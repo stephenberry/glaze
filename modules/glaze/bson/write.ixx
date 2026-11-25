@@ -459,14 +459,7 @@ namespace glz
       template <auto Opts>
       static void op(auto&& value, is_context auto&& ctx, auto&& b, auto& ix) noexcept
       {
-         const std::string_view str = [&]() -> std::string_view {
-            if constexpr (!char_array_t<T> && std::is_pointer_v<std::decay_t<decltype(value)>>) {
-               return value ? std::string_view{value} : std::string_view{};
-            }
-            else {
-               return std::string_view{value};
-            }
-         }();
+         const std::string_view str = str_view<T>(value);
          (void)bson_detail::dump_string_value(ctx, str, b, ix);
       }
    };
@@ -832,7 +825,7 @@ namespace glz
             if constexpr (may_skip) {
                if (skip_member<Opts>(v)) continue;
             }
-            const std::string_view key_sv{k};
+            const std::string_view key_sv = str_view<std::remove_cvref_t<decltype(k)>>(k);
             bson_detail::write_member_element<Opts>(key_sv, v, ctx, b, ix);
          }
 

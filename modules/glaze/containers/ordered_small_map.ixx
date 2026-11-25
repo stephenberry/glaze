@@ -12,6 +12,7 @@
 // glz:header std=<limits>
 // glz:header std=<memory>
 // glz:header std=<new>
+// glz:header std=<optional>
 // glz:header std=<stdexcept>
 // glz:header std=<string>
 // glz:header std=<string_view>
@@ -976,6 +977,24 @@ namespace glz
          }
          return it->second;
       }
+
+#if GLZ_HAS_OPTIONAL_REF
+      template <class K>
+      std::optional<mapped_type&> lookup(const K& key)
+      {
+         auto it = find(key);
+         if (it == end()) return std::nullopt;
+         return it->second;
+      }
+
+      template <class K>
+      std::optional<const mapped_type&> lookup(const K& key) const
+      {
+         auto it = find(key);
+         if (it == end()) return std::nullopt;
+         return it->second;
+      }
+#endif
 
       // Direct access to underlying data
       value_type* data() noexcept { return data_; }

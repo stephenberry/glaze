@@ -556,6 +556,64 @@ suite utf8_validation = [] {
    };
 };
 
+struct opts_validate_skipped : glz::opts
+{
+   bool error_on_unknown_keys = false;
+   bool validate_skipped = true;
+};
+
+// RFC 8259 section 6: number = [ minus ] int [ frac ] [ exp ], where int = zero / (digit1-9 *DIGIT).
+// The exponent may follow the integer part directly, so "0e4" is valid despite having no fractional
+// part. The validating skip path used to reject a leading zero followed by anything but '.'.
+suite number_grammar = [] {
+   static constexpr sv valid[]{"0",     "-0",   "1",    "-1",    "123",  "0.0",    "-0.0",
+                               "1.5",   "0.5",  "-0.5", "1e4",   "1E4",  "1e+4",   "1e-4",
+                               "0e4",   "0E4",  "0e+4", "0e-4",  "-0e4", "-0E+4",  "0e0",
+                               "-0e-0", "0e00", "1e00", "0.0e4", "10e4", "1.5e10", "123456789012345678901234567890"};
+
+   static constexpr sv invalid[]{"00",  "01",  "00e4", "-00",  "-01",   "0x1",   "0X1",  ".5",  "5.",
+                                 "0.",  "-.5", "+1",   "1e",   "1e+",   "1e-",   "0e",   "0E",  "0e+",
+                                 "0e-", "-",   "1..2", "0..1", "1.2.3", "0e4e5", "0ee4", "1_0", "0b1"};
+
+   // Every context that routes through the validating number scanner.
+   auto check = [](const sv num, const bool is_valid) {
+      const std::string scalar{num};
+      const std::string array = "[" + scalar + "]";
+      const std::string object = R"({"a":)" + scalar + "}";
+      const std::string skipped = R"({"unknown":)" + scalar + R"(,"i":1})";
+
+      expect(bool(glz::validate_json(scalar)) != is_valid) << "scalar " << scalar;
+      expect(bool(glz::validate_json(array)) != is_valid) << "array " << array;
+      expect(bool(glz::validate_json(object)) != is_valid) << "object " << object;
+
+      // A skipped unknown value is scanned by the same routine when validate_skipped is on.
+      int_object obj{};
+      expect(bool(glz::read<opts_validate_skipped{}>(obj, skipped)) != is_valid) << "skipped " << skipped;
+
+      // Validation must agree with the real number parser. The array form is used because a bare
+      // scalar read stops at the first non-number byte and ignores the rest by default.
+      std::vector<double> v{};
+      expect(bool(glz::read_json(v, array)) != is_valid) << "parse " << array;
+   };
+
+   "valid numbers"_test = [check] {
+      for (const auto num : valid) check(num, true);
+   };
+
+   "invalid numbers"_test = [check] {
+      for (const auto num : invalid) check(num, false);
+   };
+
+   // The scanner is also used on buffers without a trailing null, where it must stay inside `end`.
+   "exponent at end of non-null-terminated buffer"_test = [] {
+      static constexpr char accepted[]{'[', '0', 'e', '4', ']'};
+      expect(!glz::validate_json(sv{accepted, sizeof(accepted)}));
+
+      static constexpr char truncated[]{'[', '0', 'e', ']'};
+      expect(bool(glz::validate_json(sv{truncated, sizeof(truncated)})));
+   };
+};
+
 suite json_conformance = [] {
    "error_on_unknown_keys = true"_test = [] {
       should_fail<glz::opts{}>();

@@ -14,7 +14,6 @@
 // glz:header std=<utility>
 // glz:header std=<variant>
 // glz:header std=<vector>
-// glz:header include="glaze/forward.hpp"
 export module glaze.json.generic:fwd;
 
 import std;

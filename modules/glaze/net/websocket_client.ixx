@@ -1,5 +1,24 @@
 // Glaze Library
 // For the license information refer to glaze.ixx
+// glz:header path="glaze/net/websocket_client.hpp"
+// glz:header std=<algorithm>
+// glz:header std=<atomic>
+// glz:header std=<cctype>
+// glz:header std=<cstddef>
+// glz:header std=<cstdint>
+// glz:header std=<expected>
+// glz:header std=<functional>
+// glz:header std=<istream>
+// glz:header std=<memory>
+// glz:header std=<mutex>
+// glz:header std=<random>
+// glz:header std=<string>
+// glz:header std=<string_view>
+// glz:header std=<system_error>
+// glz:header std=<type_traits>
+// glz:header std=<utility>
+// glz:header std=<variant>
+// glz:header std=<vector>
 module;
 #include "glaze/ext/asio_include.hpp"
 
@@ -9,9 +28,11 @@ import std;
 
 import glaze.net.http;
 import glaze.net.http_client;
+import glaze.net.ssl;
 import glaze.net.websocket_connection;
 
 import glaze.util.atoi;
+import glaze.util.compare;
 import glaze.util.itoa;
 
 using std::uint16_t;
@@ -66,36 +87,40 @@ namespace glz
          std::shared_ptr<ssl_socket> ssl_socket_;
 #endif
          mutable std::mutex request_headers_mutex_;
-         std::vector<std::pair<std::string, std::string>> request_headers_;
+         glz::http_headers request_headers_;
          std::atomic<header_validation_error> last_header_validation_error_{header_validation_error::none};
 
          size_t max_message_size{1024 * 1024 * 16}; // 16 MB limit
 #ifdef GLZ_ENABLE_SSL
+         mutable std::mutex ssl_ctx_mutex_; // Guards ssl_ctx_ creation and trust-anchor mutation
          asio::ssl::verify_mode ssl_verify_mode_{asio::ssl::verify_peer}; // Default to verify peer
 #endif
 
          explicit impl(std::shared_ptr<asio::io_context> context) : ctx(std::move(context)) {}
 
-         static bool header_name_equal(std::string_view lhs, std::string_view rhs)
+#ifdef GLZ_ENABLE_SSL
+         // Create the client TLS context on first use and seed it with the platform's
+         // trust anchors. Callers must hold ssl_ctx_mutex_.
+         asio::ssl::context& ensure_ssl_context_locked()
          {
-            if (lhs.size() != rhs.size()) return false;
-            return std::equal(lhs.begin(), lhs.end(), rhs.begin(), [](char a, char b) {
-               return std::tolower(static_cast<unsigned char>(a)) == std::tolower(static_cast<unsigned char>(b));
-            });
+            if (!ssl_ctx_) {
+               ssl_ctx_ = std::make_shared<asio::ssl::context>(asio::ssl::context::tls_client);
+               detail::seed_platform_trust_anchors(*ssl_ctx_);
+            }
+            return *ssl_ctx_;
          }
+#endif
 
          static bool header_name_starts_with(std::string_view value, std::string_view prefix)
          {
             if (value.size() < prefix.size()) return false;
-            return std::equal(prefix.begin(), prefix.end(), value.begin(), [](char a, char b) {
-               return std::tolower(static_cast<unsigned char>(a)) == std::tolower(static_cast<unsigned char>(b));
-            });
+            return glz::striequal(value.substr(0, prefix.size()), prefix);
          }
 
          static bool is_reserved_handshake_header(std::string_view name)
          {
-            return header_name_equal(name, "Host") || header_name_equal(name, "Upgrade") ||
-                   header_name_equal(name, "Connection") || header_name_starts_with(name, "Sec-WebSocket-");
+            return glz::striequal(name, "Host") || glz::striequal(name, "Upgrade") ||
+                   glz::striequal(name, "Connection") || header_name_starts_with(name, "Sec-WebSocket-");
          }
 
          // Field-name and field-value validity (tchar names, no CR/LF/CTL/DEL
@@ -130,7 +155,7 @@ namespace glz
             return true;
          }
 
-         std::vector<std::pair<std::string, std::string>> request_headers_snapshot() const
+         glz::http_headers request_headers_snapshot() const
          {
             std::lock_guard<std::mutex> lock(request_headers_mutex_);
             return request_headers_;
@@ -145,14 +170,7 @@ namespace glz
             }
 
             std::lock_guard<std::mutex> lock(request_headers_mutex_);
-            for (auto& [existing_name, existing_value] : request_headers_) {
-               if (header_name_equal(existing_name, name)) {
-                  existing_value = std::string(value);
-                  last_header_validation_error_.store(header_validation_error::none, std::memory_order_relaxed);
-                  return true;
-               }
-            }
-            request_headers_.emplace_back(std::string(name), std::string(value));
+            request_headers_.set(std::string(name), std::string(value));
             last_header_validation_error_.store(header_validation_error::none, std::memory_order_relaxed);
             return true;
          }
@@ -236,12 +254,15 @@ namespace glz
 
             if (url.protocol == "wss") {
 #ifdef GLZ_ENABLE_SSL
-               if (!ssl_ctx_) {
-                  ssl_ctx_ = std::make_shared<asio::ssl::context>(asio::ssl::context::tls_client);
-                  ssl_ctx_->set_default_verify_paths();
-                  ssl_ctx_->set_verify_mode(ssl_verify_mode_);
+               {
+                  std::lock_guard<std::mutex> ssl_lock(ssl_ctx_mutex_);
+                  // Apply the verify mode on every connect, not just when the context is
+                  // first created: the context may already exist because trust anchors were
+                  // added before connecting, and a set_ssl_verify_mode() call must not be
+                  // silently dropped in that case.
+                  ensure_ssl_context_locked().set_verify_mode(ssl_verify_mode_);
+                  ssl_socket_ = std::make_shared<asio::ssl::stream<asio::ip::tcp::socket>>(*ctx, *ssl_ctx_);
                }
-               ssl_socket_ = std::make_shared<asio::ssl::stream<asio::ip::tcp::socket>>(*ctx, *ssl_ctx_);
 
                if (!detail::configure_ssl_client_hostname(*ssl_socket_, url.host)) {
                   if (on_error && *on_error) (*on_error)(make_error_code(ssl_error::sni_hostname_failed));
@@ -366,95 +387,86 @@ namespace glz
             auto response_buf = std::make_shared<asio::streambuf>(max_handshake_size);
             std::weak_ptr<impl> weak_self = weak_from_this();
 
-            asio::async_read_until(*socket, *response_buf, "\r\n\r\n",
-                                   [weak_self, socket, response_buf, expected_key](std::error_code ec, size_t) {
-                                      auto self = weak_self.lock();
-                                      if (!self) return; // Client was destroyed
+            asio::async_read_until(
+               *socket, *response_buf, "\r\n\r\n",
+               [weak_self, socket, response_buf, expected_key](std::error_code ec, std::size_t) {
+                  auto self = weak_self.lock();
+                  if (!self) return; // Client was destroyed
 
-                                      if (ec) {
-                                         if (self->on_error && *self->on_error) (*self->on_error)(ec);
-                                         return;
-                                      }
+                  if (ec) {
+                     if (self->on_error && *self->on_error) (*self->on_error)(ec);
+                     return;
+                  }
 
-                                      std::istream response_stream(response_buf.get());
-                                      std::string http_version;
-                                      unsigned int status_code;
-                                      std::string status_message;
+                  std::istream response_stream(response_buf.get());
+                  std::string http_version;
+                  unsigned int status_code;
+                  std::string status_message;
 
-                                      response_stream >> http_version >> status_code;
-                                      std::getline(response_stream, status_message);
+                  response_stream >> http_version >> status_code;
+                  std::getline(response_stream, status_message);
 
-                                      if (!response_stream || status_code != 101) {
-                                         if (self->on_error && *self->on_error)
-                                            (*self->on_error)(std::make_error_code(std::errc::protocol_error));
-                                         return;
-                                      }
+                  if (!response_stream || status_code != 101) {
+                     if (self->on_error && *self->on_error)
+                        (*self->on_error)(std::make_error_code(std::errc::protocol_error));
+                     return;
+                  }
 
-                                      // Parse headers to verify upgrade and accept key
-                                      std::string header;
-                                      bool upgrade_websocket = false;
-                                      bool connection_upgrade = false;
-                                      bool accept_key_valid = false;
+                  // Parse headers to verify upgrade and accept key
+                  std::string header;
+                  glz::http_headers response_headers;
 
-                                      std::string expected_accept = ws_util::generate_accept_key(expected_key);
+                  std::string expected_accept = ws_util::generate_accept_key(expected_key);
 
-                                      while (std::getline(response_stream, header) && header != "\r") {
-                                         if (!header.empty() && header.back() == '\r') header.pop_back();
+                  while (std::getline(response_stream, header) && header != "\r") {
+                     if (!header.empty() && header.back() == '\r') header.pop_back();
 
-                                         auto colon = header.find(':');
-                                         if (colon != std::string::npos) {
-                                            std::string name = header.substr(0, colon);
-                                            std::string value = header.substr(colon + 1);
+                     auto colon = header.find(':');
+                     if (colon != std::string::npos) {
+                        std::string name = header.substr(0, colon);
+                        std::string value = header.substr(colon + 1);
 
-                                            while (!value.empty() && (value.front() == ' ' || value.front() == '\t'))
-                                               value.erase(0, 1);
-                                            while (!value.empty() && (value.back() == ' ' || value.back() == '\t'))
-                                               value.pop_back();
+                        while (!value.empty() && (value.front() == ' ' || value.front() == '\t')) value.erase(0, 1);
+                        while (!value.empty() && (value.back() == ' ' || value.back() == '\t')) value.pop_back();
 
-                                            if (strncasecmp(name.c_str(), "Upgrade", 7) == 0 &&
-                                                ws_util::header_contains(value, "websocket")) {
-                                               upgrade_websocket = true;
-                                            }
-                                            else if (strncasecmp(name.c_str(), "Connection", 10) == 0 &&
-                                                     ws_util::header_contains(value, "upgrade")) {
-                                               connection_upgrade = true;
-                                            }
-                                            else if (strncasecmp(name.c_str(), "Sec-WebSocket-Accept", 20) == 0) {
-                                               if (value == expected_accept) accept_key_valid = true;
-                                            }
-                                         }
-                                      }
+                        response_headers.add(std::move(name), std::move(value));
+                     }
+                  }
 
-                                      if (!upgrade_websocket || !connection_upgrade || !accept_key_valid) {
-                                         if (self->on_error && *self->on_error)
-                                            (*self->on_error)(std::make_error_code(std::errc::protocol_error));
-                                         return;
-                                      }
+                  const bool upgrade_websocket = response_headers.contains_token("Upgrade", "websocket");
+                  const bool connection_upgrade = response_headers.contains_token("Connection", "upgrade");
+                  const bool accept_key_valid = response_headers.first_value("Sec-WebSocket-Accept") == expected_accept;
 
-                                      // Handshake successful. Transfer socket to websocket_connection.
-                                      auto ws_conn = std::make_shared<websocket_connection<SocketType>>(socket);
-                                      ws_conn->set_client_mode(true);
-                                      ws_conn->set_max_message_size(self->max_message_size);
+                  if (!upgrade_websocket || !connection_upgrade || !accept_key_valid) {
+                     if (self->on_error && *self->on_error)
+                        (*self->on_error)(std::make_error_code(std::errc::protocol_error));
+                     return;
+                  }
 
-                                      if (self->on_message && *self->on_message) ws_conn->on_message(*self->on_message);
-                                      if (self->on_close && *self->on_close) ws_conn->on_close(*self->on_close);
-                                      if (self->on_error && *self->on_error) ws_conn->on_error(*self->on_error);
+                  // Handshake successful. Transfer socket to websocket_connection.
+                  auto ws_conn = std::make_shared<websocket_connection<SocketType>>(socket);
+                  ws_conn->set_client_mode(true);
+                  ws_conn->set_max_message_size(self->max_message_size);
 
-                                      {
-                                         std::lock_guard<std::mutex> lock(self->connection_mutex);
-                                         self->connection = ws_conn;
-                                      }
+                  if (self->on_message && *self->on_message) ws_conn->on_message(*self->on_message);
+                  if (self->on_close && *self->on_close) ws_conn->on_close(*self->on_close);
+                  if (self->on_error && *self->on_error) ws_conn->on_error(*self->on_error);
 
-                                      if (self->on_open && *self->on_open) (*self->on_open)();
+                  {
+                     std::lock_guard<std::mutex> lock(self->connection_mutex);
+                     self->connection = ws_conn;
+                  }
 
-                                      if (response_buf->size() > 0) {
-                                         std::vector<uint8_t> initial_data(response_buf->size());
-                                         asio::buffer_copy(asio::buffer(initial_data), response_buf->data());
-                                         ws_conn->set_initial_data(std::move(initial_data));
-                                      }
+                  if (self->on_open && *self->on_open) (*self->on_open)();
 
-                                      ws_conn->start_read();
-                                   });
+                  if (response_buf->size() > 0) {
+                     std::vector<uint8_t> initial_data(response_buf->size());
+                     asio::buffer_copy(asio::buffer(initial_data), response_buf->data());
+                     ws_conn->set_initial_data(std::move(initial_data));
+                  }
+
+                  ws_conn->start_read();
+               });
          }
 
          void send_text(std::string_view msg)
@@ -536,7 +548,57 @@ namespace glz
       // Set SSL verification mode before calling connect()
       // Use asio::ssl::verify_none to disable certificate verification
       // (useful for self-signed certificates in testing)
-      void set_ssl_verify_mode(asio::ssl::verify_mode mode) { impl_->ssl_verify_mode_ = mode; }
+      //
+      // Takes ssl_ctx_mutex_ because connect() reads this under the same lock; without it
+      // a setter racing a connect on another thread would be a data race.
+      void set_ssl_verify_mode(asio::ssl::verify_mode mode)
+      {
+         std::lock_guard<std::mutex> lock(impl_->ssl_ctx_mutex_);
+         impl_->ssl_verify_mode_ = mode;
+      }
+
+      // Trust-anchor configuration, all callable before connect() and all additive: the
+      // platform's own anchors are loaded when the TLS context is created and are kept.
+      // Prefer these over set_ssl_verify_mode(verify_none), which disables verification
+      // entirely and exposes the connection to man-in-the-middle attacks.
+
+      // Add the certificates in a PEM bundle file to the set of trusted CAs.
+      std::expected<void, std::error_code> add_ca_certificate_file(std::string_view path)
+      {
+         std::lock_guard<std::mutex> lock(impl_->ssl_ctx_mutex_);
+         return detail::add_ca_file(impl_->ensure_ssl_context_locked(), path);
+      }
+
+      // Add an OpenSSL-style hashed certificate directory to the set of trusted CAs.
+      // The directory must be indexed with c_rehash/`openssl rehash`. A bad path is not
+      // reported here: OpenSSL reads the directory lazily during the handshake, so it
+      // surfaces as a verification failure instead. Call this before connect(): OpenSSL
+      // mutates and reads its lookup list without locking, so adding a directory during a
+      // handshake races inside OpenSSL regardless of the lock held here.
+      std::expected<void, std::error_code> add_ca_certificate_directory(std::string_view path)
+      {
+         std::lock_guard<std::mutex> lock(impl_->ssl_ctx_mutex_);
+         return detail::add_ca_directory(impl_->ensure_ssl_context_locked(), path);
+      }
+
+      // Add trusted CAs from an in-memory PEM bundle. Accepts any number of concatenated
+      // PEM certificates, so a trust bundle can be embedded in the binary. Empty input is
+      // reported as an error rather than silently adding nothing.
+      std::expected<void, std::error_code> add_ca_certificates_pem(std::string_view pem)
+      {
+         std::lock_guard<std::mutex> lock(impl_->ssl_ctx_mutex_);
+         return detail::add_ca_pem(impl_->ensure_ssl_context_locked(), pem);
+      }
+
+      // Add the operating system's native trust anchors, returning how many were added.
+      // Windows only; returns 0 on platforms where OpenSSL's default verify paths already
+      // resolve to the system bundle. Done once when the TLS context is created, so this
+      // is only needed to restore OS trust after replacing the context's anchors.
+      std::expected<size_t, std::error_code> add_os_ca_certificates()
+      {
+         std::lock_guard<std::mutex> lock(impl_->ssl_ctx_mutex_);
+         return detail::load_os_ca_certificates(impl_->ensure_ssl_context_locked());
+      }
 #endif
 
       // Set an additional HTTP header for the opening WebSocket handshake.

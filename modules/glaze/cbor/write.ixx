@@ -398,14 +398,7 @@ namespace glz
       template <auto Opts>
       GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&& b, auto& ix)
       {
-         const sv str = [&]() -> const sv {
-            if constexpr (!char_array_t<T> && std::is_pointer_v<std::decay_t<T>>) {
-               return value ? value : "";
-            }
-            else {
-               return sv{value};
-            }
-         }();
+         const sv str = str_view<T>(value);
 
          if (!cbor_detail::encode_arg(ctx, cbor::major::tstr, str.size(), b, ix)) [[unlikely]] {
             return;
@@ -461,8 +454,10 @@ namespace glz
       {
          using V = range_value_t<std::remove_cvref_t<T>>;
 
-         // Use RFC 8746 typed arrays for numeric types (bulk memcpy)
-         if constexpr (num_t<V> && !std::same_as<V, bool> && contiguous<T>) {
+         // Use RFC 8746 typed arrays for numeric types (bulk memcpy). A numeric type RFC 8746 has no
+         // tag for -- long double, where it is an extended format -- falls through to the generic
+         // array below and is written element by element.
+         if constexpr (num_t<V> && !std::same_as<V, bool> && contiguous<T> && cbor::typed_array::taggable<V>) {
             // Write the tag for this type using native endianness
             constexpr uint64_t tag = cbor::typed_array::native_tag<V>();
             if (!cbor_detail::encode_arg(ctx, cbor::major::tag, tag, b, ix)) [[unlikely]] {
@@ -486,7 +481,7 @@ namespace glz
                ix += byte_len;
             }
          }
-         else if constexpr (complex_t<V> && contiguous<T>) {
+         else if constexpr (complex_t<V> && contiguous<T> && cbor::typed_array::taggable_scalar<V>) {
             // Complex array: tag 43001 with interleaved typed array [r0, i0, r1, i1, ...]
             // std::complex<T> stores data as [real, imag] pairs contiguously
             using Scalar = typename V::value_type;
@@ -962,26 +957,27 @@ namespace glz
       template <auto Opts>
       static void op(auto&& value, is_context auto&& ctx, auto&& b, auto& ix)
       {
-         using Variant = std::decay_t<decltype(value)>;
+         // The active alternative is taken from the variant itself rather than recovered by matching
+         // the visited type against the alternative list: the index is what the reader consumes, and a
+         // type match is ambiguous for a variant that repeats an alternative type.
+         const size_t index = value.index();
 
-         std::visit(
-            [&](auto&& v) {
-               using V = std::decay_t<decltype(v)>;
+         // A valueless variant has no alternative to name, and variant_npos is not an index any
+         // reader could resolve. Reject it here rather than emitting an unreadable array.
+         if (index >= std::variant_size_v<std::remove_cvref_t<decltype(value)>>) [[unlikely]] {
+            ctx.error = error_code::no_matching_variant_type;
+            return;
+         }
 
-               static constexpr uint64_t index = []<size_t... I>(std::index_sequence<I...>) {
-                  return ((std::is_same_v<V, std::variant_alternative_t<I, Variant>> * I) + ...);
-               }(std::make_index_sequence<std::variant_size_v<Variant>>{});
+         // Encode variant as array [index, value]
+         if (!cbor_detail::encode_arg_cx<2>(ctx, cbor::major::array, b, ix)) [[unlikely]] {
+            return;
+         }
+         if (!cbor_detail::encode_arg(ctx, cbor::major::uint, index, b, ix)) [[unlikely]] {
+            return;
+         }
 
-               // Encode variant as array [index, value]
-               if (!cbor_detail::encode_arg_cx<2>(ctx, cbor::major::array, b, ix)) [[unlikely]] {
-                  return;
-               }
-               if (!cbor_detail::encode_arg(ctx, cbor::major::uint, index, b, ix)) [[unlikely]] {
-                  return;
-               }
-               serialize<CBOR>::op<Opts>(v, ctx, b, ix);
-            },
-            value);
+         std::visit([&](auto&& v) { serialize<CBOR>::op<Opts>(v, ctx, b, ix); }, value);
       }
    };
 

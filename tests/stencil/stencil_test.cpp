@@ -174,6 +174,16 @@ suite stencil_tests = [] {
       expect(result.error() == glz::error_code::unexpected_end);
    };
 
+   "section_opening_tag_not_closed"_test = [] {
+      // The opening tag "{{#employed " is never closed by "}}"; the closing tag follows directly.
+      std::string_view layout = R"({{#employed {{/employed}})";
+
+      person p{"Alice", "Johnson", 28, false, true}; // employed is true
+      auto result = glz::stencil(layout, p);
+      expect(not result.has_value());
+      expect(result.error() == glz::error_code::syntax_error);
+   };
+
    // **Inverted Section Tests**
 
    "inverted_section_true"_test = [] {
@@ -246,6 +256,16 @@ suite stencil_tests = [] {
       auto result = glz::stencil(layout, p);
       expect(not result.has_value());
       expect(result.error() == glz::error_code::unexpected_end);
+   };
+
+   "inverted_section_opening_tag_not_closed"_test = [] {
+      // The opening tag "{{^hungry " is never closed by "}}"; the closing tag follows directly.
+      std::string_view layout = R"({{^hungry {{/hungry}})";
+
+      person p{"Henry", "Foster", 34, false}; // hungry is false, so the inverted body would render
+      auto result = glz::stencil(layout, p);
+      expect(not result.has_value());
+      expect(result.error() == glz::error_code::syntax_error);
    };
 };
 

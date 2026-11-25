@@ -7,7 +7,7 @@ module;
 #if defined(__SSE2__) || defined(_M_X64) || defined(_M_IX86) || defined(__x86_64__) || defined(__i386)
 #include <emmintrin.h>
 #endif
-#include "glaze/simd/simd.hpp"
+#include "glaze/simd/simd_config.hpp"
 export module glaze.simd.sse;
 
 #include "glaze/util/inline.hpp"

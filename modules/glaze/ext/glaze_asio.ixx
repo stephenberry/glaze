@@ -1,5 +1,28 @@
 // Glaze Library
 // For the license information refer to glaze.ixx
+// glz:header path="glaze/ext/glaze_asio.hpp"
+// glz:header std=<algorithm>
+// glz:header std=<array>
+// glz:header std=<atomic>
+// glz:header std=<cassert>
+// glz:header std=<coroutine>
+// glz:header std=<cstddef>
+// glz:header std=<cstdint>
+// glz:header std=<cstdio>
+// glz:header std=<cstring>
+// glz:header std=<exception>
+// glz:header std=<functional>
+// glz:header std=<memory>
+// glz:header std=<mutex>
+// glz:header std=<span>
+// glz:header std=<stdexcept>
+// glz:header std=<string>
+// glz:header std=<string_view>
+// glz:header std=<system_error>
+// glz:header std=<thread>
+// glz:header std=<tuple>
+// glz:header std=<utility>
+// glz:header std=<vector>
 module;
 #include "glaze/ext/asio_include.hpp"
 

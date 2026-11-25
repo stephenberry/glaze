@@ -10,6 +10,8 @@ import glaze.core.meta_fwd;
 import glaze.core.opts;
 import glaze.core.reflect;
 
+import glaze.json.read;
+
 import ut;
 
 using std::int8_t;
@@ -389,6 +391,11 @@ using namespace bson_test;
 
 namespace
 {
+   struct bson_escape_opts : glz::opts
+   {
+      bool escape_control_characters = true;
+   };
+
    suite bson_interop_tests = [] {
       "spec-canonical-hello-world"_test = [] {
          // {"hello": "world"} — the canonical example from bsonspec.org.
@@ -1447,6 +1454,50 @@ namespace
          auto json = glz::bson_to_json(bson.value());
          expect(json.has_value());
          expect(json.value() == R"({"a":1,"b":9000000000,"c":1.5,"d":true,"e":"hi"})");
+      };
+
+      "convert-rejects-control-characters-by-default"_test = [] {
+         // A control byte is legal in a BSON string but cannot be written as JSON without
+         // \uXXXX, so the default refuses it rather than emitting output that will not re-parse.
+         std::map<std::string, std::string> v{{"k", std::string("a\001b")}};
+         auto bson = glz::write_bson(v);
+         expect(bson.has_value());
+         auto json = glz::bson_to_json(bson.value());
+         expect(not json.has_value());
+         expect(json.error().ec == glz::error_code::invalid_control_character);
+      };
+
+      "convert-escapes-control-characters-when-asked"_test = [] {
+         std::map<std::string, std::string> v{{"k", std::string("a\001b")}};
+         auto bson = glz::write_bson(v);
+         expect(bson.has_value());
+         auto json = glz::bson_to_json<bson_escape_opts{}>(bson.value());
+         expect(json.has_value());
+         expect(json.value() == "{\"k\":\"a\\u0001b\"}") << json.value();
+         std::map<std::string, std::string> round_trip{};
+         expect(!glz::read_json(round_trip, json.value())) << json.value();
+         expect(round_trip == v);
+      };
+
+      "convert-passes-through-short-escape-control-characters"_test = [] {
+         // The default refuses only control characters with no two-character JSON escape.
+         // Backspace, tab, newline, form feed and carriage return have one, so they keep
+         // converting normally. The reject sits in the else of the escape table lookup and
+         // cannot see them. The long value puts the run past the scalar tail and into the
+         // writer's block scan, which rejects at a separate site.
+         const std::string shorts = "\b\t\n\f\r";
+         std::map<std::string, std::string> v{{"k" + shorts, shorts},
+                                              {"long", std::string(64, 'a') + shorts + std::string(64, 'b')}};
+         auto bson = glz::write_bson(v);
+         expect(bson.has_value());
+         auto json = glz::bson_to_json(bson.value());
+         expect(json.has_value());
+         expect(json.value().find("\\b\\t\\n\\f\\r") != std::string::npos) << json.value();
+         expect(json.value().find_first_of(shorts) == std::string::npos) << json.value();
+
+         std::map<std::string, std::string> round_trip{};
+         expect(!glz::read_json(round_trip, json.value())) << json.value();
+         expect(round_trip == v);
       };
 
       "convert-nested-document"_test = [] {

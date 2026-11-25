@@ -99,6 +99,7 @@
 // glz:header std=<bit>
 // glz:header std=<cassert>
 // glz:header std=<charconv>
+// glz:header std=<cfloat>
 // glz:header std=<climits>
 // glz:header std=<cmath>
 // glz:header std=<cstddef>

@@ -20,6 +20,66 @@ using namespace ut;
 
 namespace
 {
+   // Minimal fixed-capacity string, enough to satisfy glz::static_string_t
+   struct fixed_string_t
+   {
+      static constexpr auto glaze_static_string = true;
+
+      using value_type = char;
+      using size_type = size_t;
+
+      operator std::string_view() const { return {buffer, length}; }
+
+      const char* data() const { return buffer; }
+      size_t size() const { return length; }
+      static constexpr size_t max_size() { return sizeof(buffer); }
+
+      void assign(const char* v, size_t n)
+      {
+         length = (std::min)(max_size(), n);
+         std::memcpy(buffer, v, length);
+      }
+
+      void resize(size_t n) { length = (std::min)(max_size(), n); }
+
+      size_t length{};
+      char buffer[8]{};
+   };
+
+   static_assert(glz::static_string_t<fixed_string_t>);
+   static_assert(not glz::string_t<fixed_string_t>);
+
+   // A legacy-style buffer string that reaches str_t through `operator const char*` rather than a
+   // string_view conversion. Its bounds are authoritative; the conversion stops at the first null.
+   struct legacy_string_t
+   {
+      using value_type = char;
+      using size_type = size_t;
+
+      operator const char*() const { return buffer; }
+
+      const char* data() const { return buffer; }
+      size_t size() const { return length; }
+
+      void assign(const char* v, size_t n)
+      {
+         length = (std::min)(sizeof(buffer), n);
+         std::memcpy(buffer, v, length);
+      }
+
+      void resize(size_t n) { length = (std::min)(sizeof(buffer), n); }
+
+      bool operator==(const legacy_string_t& other) const
+      {
+         return length == other.length && std::memcmp(buffer, other.buffer, length) == 0;
+      }
+
+      size_t length{};
+      char buffer[16]{};
+   };
+
+   static_assert(glz::string_t<legacy_string_t>);
+
    template <class T>
    void expect_roundtrip_equal(const T& original)
    {
@@ -679,6 +739,92 @@ int main()
       auto ec = glz::read_msgpack(decoded, std::string_view{buffer});
       expect(!ec);
       expect(decoded == original);
+   };
+
+   "msgpack embedded null string roundtrip"_test = [] {
+      // msgpack strings are length prefixed rather than terminated, so a null byte is ordinary
+      // payload. This is what the msgpack_roundtrip_string fuzzer generates.
+      const std::string original("a\0b", 3);
+      expect_roundtrip_equal(original);
+
+      auto encoded = glz::write_msgpack(original);
+      expect(encoded.has_value());
+      expect(encoded.value() == std::string("\xa3"
+                                            "a\0b",
+                                            4));
+
+      expect_roundtrip_equal(std::string_view{original});
+   };
+
+   "msgpack string length boundaries"_test = [] {
+      // fixstr holds up to 31 bytes, then str8, str16, and str32 take over
+      for (size_t size : {size_t(0), size_t(31), size_t(32), size_t(255), size_t(256), size_t(65535), size_t(65536)}) {
+         const std::string original(size, 'x');
+         expect_roundtrip_equal(original);
+
+         auto encoded = glz::write_msgpack(original);
+         expect(encoded.has_value());
+
+         // header width: fixstr 1, str8 2, str16 3, str32 5
+         const size_t header = size < 32 ? 1 : (size < 256 ? 2 : (size < 65536 ? 3 : 5));
+         expect(encoded.value().size() == header + size) << "unexpected header width for size " << size;
+      }
+   };
+
+   "msgpack string bounds beat conversion"_test = [] {
+      // Writing must use the type's own bounds, not its `operator const char*`, or an embedded null
+      // truncates the payload while reading still restores the full length recorded in the header.
+      legacy_string_t original{};
+      original.assign("a\0b", 3);
+
+      auto encoded = glz::write_msgpack(original);
+      expect(encoded.has_value());
+      expect(encoded.value() == std::string("\xa3"
+                                            "a\0b",
+                                            4));
+
+      expect_roundtrip_equal(original);
+   };
+
+   "msgpack static string roundtrip"_test = [] {
+      fixed_string_t original{};
+      original.assign("static", 6);
+
+      auto encoded = glz::write_msgpack(original);
+      expect(encoded.has_value());
+      expect(encoded.value() == std::string("\xa6"
+                                            "static"));
+
+      fixed_string_t decoded{};
+      auto ec = glz::read_msgpack(decoded, std::string_view{encoded.value()});
+      expect(!ec);
+      expect(std::string_view{decoded} == "static");
+   };
+
+   "msgpack char pointer write"_test = [] {
+      const char* text = "pointer";
+      auto encoded = glz::write_msgpack(text);
+      expect(encoded.has_value());
+      expect(encoded.value() == std::string("\xa7"
+                                            "pointer"));
+
+      // A null pointer must serialize as an empty string rather than dereferencing null
+      const char* empty = nullptr;
+      auto null_encoded = glz::write_msgpack(empty);
+      expect(null_encoded.has_value());
+      expect(null_encoded.value() == std::string("\xa0"));
+   };
+
+   "msgpack char array write"_test = [] {
+      auto encoded = glz::write_msgpack("array");
+      expect(encoded.has_value());
+      expect(encoded.value() == std::string("\xa5"
+                                            "array"));
+
+      auto array_encoded = glz::write_msgpack(std::array<char, 5>{'a', 'r', 'r', 'a', 'y'});
+      expect(array_encoded.has_value());
+      expect(array_encoded.value() == std::string("\xa5"
+                                                  "array"));
    };
 
    "msgpack container roundtrip"_test = [] {

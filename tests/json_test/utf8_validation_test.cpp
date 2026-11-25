@@ -124,6 +124,145 @@ namespace
 }
 
 // -------------------------------------------------------------------------------------------
+// Backend identification
+//
+// glz::simd_info names what each accelerated subsystem compiled to. The assertions live here
+// because this is the file the simd-backends workflow runs against every target, so each one is
+// checked on every backend Glaze can select rather than only on the host.
+// -------------------------------------------------------------------------------------------
+
+namespace
+{
+   // Every value simd_info.detected can take, paired with what the other subsystems must report on
+   // a build that detected it.
+   //
+   // float_write is absent on purpose -- zmij runs its own detection off __SSE2__ / __ARM_NEON, so
+   // it is not a function of what Glaze detected. It is checked separately below.
+   struct build_shape
+   {
+      std::string_view detected{};
+      std::string_view utf8{}; // validator: needs a byte-granular shuffle, else falls back
+      std::string_view escape{}; // string escaping: no AVX-512 or WASM helper exists
+   };
+
+   inline constexpr build_shape known_builds[]{
+      {"AVX512BW", "AVX512BW", "AVX2"}, // no AVX-512 escape helper
+      {"AVX2", "AVX2", "AVX2"}, //
+      {"SSSE3", "SSSE3", "SSE2"}, // no SSSE3 escape helper
+      {"SSE2", "scalar", "SSE2"}, // SSE2 has no byte-granular shuffle
+      {"NEON64", "NEON64", "NEON"}, //
+      {"NEON", "scalar", "NEON"}, // 32 bit NEON has no vqtbl1q_u8
+      {"WASM_SIMD128", "WASM_SIMD128", "SWAR"}, // no WASM escape helper
+      {"scalar", "scalar", "SWAR"}, //
+   };
+
+   constexpr const build_shape* shape_for(std::string_view detected) noexcept
+   {
+      for (const auto& b : known_builds) {
+         if (b.detected == detected) return &b;
+      }
+      return nullptr;
+   }
+
+   inline constexpr size_t unknown_width = size_t(-1);
+
+   struct utf8_backend_name
+   {
+      std::string_view name{};
+      size_t width{}; // register width the validator uses under this name; 0 for the scalar fallback
+   };
+
+   inline constexpr utf8_backend_name known_utf8_backends[]{
+      {"AVX512BW", 64},  {"AVX2", 32},      {"SSSE3", 16},     {"NEON64", 16}, {"WASM_SIMD128", 16},
+      {"generic16", 16}, {"generic32", 32}, {"generic64", 64}, {"scalar", 0},
+   };
+
+   constexpr size_t width_for(std::string_view backend) noexcept
+   {
+      for (const auto& b : known_utf8_backends) {
+         if (b.name == backend) return b.width;
+      }
+      return unknown_width;
+   }
+
+}
+
+// These spellings are public API, so a new one should be added here and to
+// docs/optimizing-performance.md deliberately rather than arriving as a side effect of adding a
+// backend.
+static_assert(shape_for(glz::simd_info.detected) != nullptr,
+              "simd_info.detected reports a value this test does not know");
+static_assert(width_for(glz::simd_info.utf8_validation) != unknown_width,
+              "simd_info.utf8_validation reports a value this test does not know");
+// Registration only. Which of these zmij picks is not checkable here: any mapping would have to
+// read the same ZMIJ_USE_* macros float_write_simd() reads, and so would agree with it by
+// construction. This catches a new spelling entering public API without the docs following.
+static_assert(glz::simd_info.float_write == "NEON" || glz::simd_info.float_write == "SSE4.1" ||
+                 glz::simd_info.float_write == "SSE2" || glz::simd_info.float_write == "scalar",
+              "simd_info.float_write reports a value this test does not know");
+
+// String escaping is a pure function of what was detected, with no testing hook to fence against.
+static_assert(shape_for(glz::simd_info.detected)->escape == glz::simd_info.string_escape,
+              "string escaping does not match the helper this build's instruction set selects");
+
+#if !defined(GLZ_UTF8_GENERIC_WIDTH)
+// GLZ_UTF8_GENERIC_WIDTH overrides the validator with the portable path, so the mapping only holds
+// when that hook is off. Without this fence the row for a target with no vector path (s390x, armv7
+// without NEON) would fire, since it expects "scalar" and would get "generic64".
+static_assert(shape_for(glz::simd_info.detected)->utf8 == glz::simd_info.utf8_validation,
+              "the UTF-8 validator does not match what this build's instruction set selects");
+#endif
+
+// Everything above checks that the reported names agree with each other. None of it can say which
+// backend this build was supposed to select: a job whose flags quietly stopped taking effect gets a
+// different backend that is just as self-consistent, and every assert above stays green.
+//
+// So the simd-backends workflow pins the answer, passing e.g. -DGLZ_EXPECT_DETECTED=SSSE3 through
+// the same flags that compile this file. Compiling it here rather than in a standalone probe is the
+// point: a probe is a second compilation that can drift from the one that builds the suite, and
+// then it confirms its own flags while the tests run on whatever the build actually used.
+//
+// Each is optional, because not every job can pin every field. The generic-width job pins only the
+// validator; what the host detects underneath it is not the runner's to promise.
+#define GLZ_EXPECTED_NAME_2(x) #x
+#define GLZ_EXPECTED_NAME(x) GLZ_EXPECTED_NAME_2(x)
+
+#if defined(GLZ_EXPECT_DETECTED)
+static_assert(glz::simd_info.detected == GLZ_EXPECTED_NAME(GLZ_EXPECT_DETECTED),
+              "detected is not the instruction set this build was configured to select");
+#endif
+#if defined(GLZ_EXPECT_UTF8_VALIDATION)
+static_assert(glz::simd_info.utf8_validation == GLZ_EXPECTED_NAME(GLZ_EXPECT_UTF8_VALIDATION),
+              "utf8_validation is not the backend this build was configured to select");
+#endif
+#if defined(GLZ_EXPECT_STRING_ESCAPE)
+static_assert(glz::simd_info.string_escape == GLZ_EXPECTED_NAME(GLZ_EXPECT_STRING_ESCAPE),
+              "string_escape is not the helper this build was configured to select");
+#endif
+
+#undef GLZ_EXPECTED_NAME
+#undef GLZ_EXPECTED_NAME_2
+
+#if defined(GLZ_DISABLE_SIMD)
+// The one promise that spans all four fields: asking for no vector path gets none anywhere,
+// including from zmij, which otherwise ignores Glaze's detection entirely.
+static_assert(glz::simd_info.detected == "scalar" && glz::simd_info.utf8_validation == "scalar" &&
+                 glz::simd_info.string_escape == "SWAR" && glz::simd_info.float_write == "scalar",
+              "GLZ_DISABLE_SIMD left a vector path enabled");
+#endif
+
+suite backend_identification = [] {
+   // Echoed so a failing run in any of the backend jobs says which build it was, without needing a
+   // separate probe program to establish it. Written as JSON because that is the form a benchmark
+   // report wants, and it exercises the reflection users will actually use.
+   "reports what this build compiled"_test = [] {
+      std::string report;
+      expect(not glz::write_json(glz::simd_info, report));
+      std::cout << report << '\n';
+   };
+};
+
+// -------------------------------------------------------------------------------------------
 // The validator itself
 // -------------------------------------------------------------------------------------------
 
@@ -466,6 +605,329 @@ suite json_integration = [] {
       const auto ec = glz::read_json(v, doc);
       expect(ec == glz::error_code::invalid_utf8);
       expect(!glz::format_error(ec, doc).empty());
+   };
+};
+
+// The `validate_utf8` option turns the checker off. Validation is on by default because RFC 8259
+// requires it, so every test here has to prove both halves: that the default still rejects the
+// input, and that the same read with the option off accepts it and hands back the original bytes.
+
+// A named namespace rather than an anonymous one, because reflected types need linkage.
+namespace utf8_option_test
+{
+   struct unchecked_opts : glz::opts
+   {
+      bool validate_utf8 = false;
+   };
+
+   // Options compose by inheritance, so a struct derived from another custom options struct has to
+   // keep carrying the flag.
+   struct unchecked_validate_skipped_opts : unchecked_opts
+   {
+      bool validate_skipped = true;
+   };
+
+   // Fields that glz::opts already declares are set on an instance rather than redeclared in a
+   // derived struct. Redeclaring shadows the base member, which still reads correctly through
+   // check_* but silently defeats opt_true/opt_false on &glz::opts::that_member.
+   template <class Opts>
+   consteval Opts with_unknown_keys_allowed()
+   {
+      Opts o{};
+      o.error_on_unknown_keys = false;
+      return o;
+   }
+
+   consteval unchecked_opts unchecked_unterminated()
+   {
+      unchecked_opts o{};
+      o.null_terminated = false;
+      return o;
+   }
+
+   consteval unchecked_opts unchecked_comments()
+   {
+      unchecked_opts o{};
+      o.comments = true;
+      o.error_on_unknown_keys = false;
+      return o;
+   }
+
+   consteval glz::opts checked_comments()
+   {
+      glz::opts o{};
+      o.comments = true;
+      o.error_on_unknown_keys = false;
+      return o;
+   }
+
+   struct unchecked_raw_string_opts : unchecked_opts
+   {
+      bool raw_string = true;
+   };
+
+   struct nested
+   {
+      std::string name{};
+   };
+
+   struct outer
+   {
+      nested nested_value{};
+      std::vector<std::string> tags{};
+      int id{};
+   };
+
+   struct partial
+   {
+      int id{};
+   };
+
+   struct matched_key
+   {
+      int a{};
+      int b{};
+   };
+}
+
+template <>
+struct glz::meta<utf8_option_test::matched_key>
+{
+   using T = utf8_option_test::matched_key;
+   // A key that is itself malformed UTF-8, so a read that matches it never materializes a string.
+   static constexpr auto value = object("k\xFF!", &T::a, "b", &T::b);
+};
+
+suite validate_utf8_option = [] {
+   using namespace utf8_option_test;
+
+   "disabled accepts every malformed case"_test = [] {
+      for (const auto& c : malformed()) {
+         const std::string doc = "[\"" + c.data + "\"]";
+         std::vector<std::string> v;
+         expect(bool(glz::read_json(v, doc))) << c.name;
+         expect(!glz::read<unchecked_opts{}>(v, doc)) << c.name;
+         expect(v.size() == 1u) << c.name;
+         expect(v[0] == c.data) << c.name;
+      }
+   };
+
+   "disabled accepts across string target types"_test = [] {
+      const std::string doc = "[\"a\xFF!b\"]";
+      {
+         std::vector<std::string> v;
+         expect(!glz::read<unchecked_opts{}>(v, doc));
+         expect(v[0] == "a\xFF!b");
+      }
+      {
+         std::vector<std::string_view> v;
+         expect(!glz::read<unchecked_opts{}>(v, doc));
+         expect(v[0] == "a\xFF!b");
+      }
+      {
+         std::vector<std::u8string> v;
+         // Spelled out as code units rather than u8"a\xFF!b": MSVC treats a hex escape in a UTF-8
+         // literal as a code point and encodes it (0xFF becomes 0xC3 0xBF), while GCC and Clang
+         // emit the single byte. Only the byte sequence below is the same on all three.
+         const std::u8string expected{char8_t{'a'}, char8_t{0xFF}, char8_t{'!'}, char8_t{'b'}};
+         expect(glz::read_json(v, doc) == glz::error_code::invalid_utf8);
+         expect(!glz::read<unchecked_opts{}>(v, doc));
+         expect(v[0] == expected);
+      }
+      {
+         glz::generic g;
+         expect(glz::read_json(g, doc) == glz::error_code::invalid_utf8);
+         expect(!glz::read<unchecked_opts{}>(g, doc));
+         expect(g[0].get_string() == "a\xFF!b");
+      }
+   };
+
+   "disabled accepts malformed object keys"_test = [] {
+      const std::string doc = "{\"k\xFF!\":1}";
+      {
+         std::map<std::string, int> m;
+         expect(glz::read_json(m, doc) == glz::error_code::invalid_utf8);
+         expect(!glz::read<unchecked_opts{}>(m, doc));
+         expect(m.begin()->first == "k\xFF!");
+      }
+      {
+         glz::generic g;
+         expect(glz::read_json(g, doc) == glz::error_code::invalid_utf8);
+         expect(!glz::read<unchecked_opts{}>(g, doc));
+      }
+   };
+
+   "a key matching a member name is never materialized"_test = [] {
+      // Documented behavior, pinned here so it cannot drift silently: matching compares input bytes
+      // against the program's own literal, so a matched key is checked by neither setting of the
+      // option. Only keys that get materialized -- map keys, keys matching nothing -- are validated.
+      matched_key v{};
+      expect(!glz::read_json(v, std::string("{\"k\xFF!\":5,\"b\":6}")));
+      expect(v.a == 5);
+      expect(v.b == 6);
+   };
+
+   "disabled accepts malformed bytes in skipped values"_test = [] {
+      // A malformed byte in a field the target does not model is the likeliest reason to reach for
+      // this option, and skipped strings run through a different reader than modelled ones.
+      const std::string doc = "{\"other\":\"\xC0\x80\",\"id\":3}";
+      partial v{};
+      expect(glz::read<glz::opts{.error_on_unknown_keys = false}>(v, doc) == glz::error_code::invalid_utf8);
+      expect(!glz::read<with_unknown_keys_allowed<unchecked_opts>()>(v, doc));
+      expect(v.id == 3);
+
+      // The same field with full validation of skipped values enabled.
+      partial v2{};
+      expect(!glz::read<with_unknown_keys_allowed<unchecked_validate_skipped_opts>()>(v2, doc));
+      expect(v2.id == 3);
+   };
+
+   "disabled accepts malformed bytes in skipped values under JSONC"_test = [] {
+      // The comment-aware skip_until_closed overloads are separate instantiations from the ones
+      // above, and they reach skip_string through their own skip_string_opts constructions.
+      const std::string doc = "{/*c*/\"other\":{\"x\":\"a\xFF!b\"},\"id\":7}";
+      partial v{};
+      expect(glz::read<checked_comments()>(v, doc) == glz::error_code::invalid_utf8);
+      expect(!glz::read<unchecked_comments()>(v, doc));
+      expect(v.id == 7);
+
+      // A malformed byte inside a comment is skipped without validation either way, since comment
+      // bytes never reach the program.
+      partial v2{};
+      const std::string commented = "{/* \xFF */\"id\":9}";
+      expect(!glz::read<checked_comments()>(v2, commented));
+      expect(v2.id == 9);
+   };
+
+   "disabled propagates into nested values"_test = [] {
+      const std::string doc = R"({"nested_value":{"name":"a)"
+                              "\xFF"
+                              R"(b"},"tags":["c)"
+                              "\xFE"
+                              R"(d"],"id":5})";
+      outer v{};
+      expect(glz::read_json(v, doc) == glz::error_code::invalid_utf8);
+      expect(!glz::read<unchecked_opts{}>(v, doc));
+      expect(v.nested_value.name ==
+             "a\xFF"
+             "b");
+      expect(v.tags.size() == 1u);
+      expect(v.tags[0] ==
+             "c\xFE"
+             "d");
+      expect(v.id == 5);
+   };
+
+   "disabled on the non null terminated paths"_test = [] {
+      // A heap buffer with no terminator, so the reader really has to stop on `end`. Reading out of
+      // a std::string would not stress this: its data() is NUL terminated regardless.
+      const std::string_view source = "[\"a\xFF!b\"]";
+      std::vector<char> raw(source.begin(), source.end());
+      const std::string_view sv{raw.data(), raw.size()};
+      std::vector<std::string> v;
+      expect(glz::read<glz::opts{.null_terminated = false}>(v, sv) == glz::error_code::invalid_utf8);
+      expect(!glz::read<unchecked_unterminated()>(v, sv));
+      expect(v[0] == "a\xFF!b");
+   };
+
+   "disabled on the raw_string path"_test = [] {
+      const std::string doc = "[\"a\xFF!b\"]";
+      std::vector<std::string> v;
+      struct raw_opts : glz::opts
+      {
+         bool raw_string = true;
+      };
+      expect(glz::read<raw_opts{}>(v, doc) == glz::error_code::invalid_utf8);
+      expect(!glz::read<unchecked_raw_string_opts{}>(v, doc));
+      expect(v[0] == "a\xFF!b");
+   };
+
+   "disabled at many string lengths"_test = [] {
+      for (size_t n = 1; n <= 100; ++n) {
+         for (size_t pos = 0; pos < n; pos += 7) {
+            std::string payload(n, 'a');
+            payload[pos] = char(0xFF);
+            const std::string doc = "[\"" + payload + "\"]";
+            std::vector<std::string> v;
+            expect(glz::read_json(v, doc) == glz::error_code::invalid_utf8) << n << "@" << pos;
+            expect(!glz::read<unchecked_opts{}>(v, doc)) << n << "@" << pos;
+            expect(v[0] == payload) << n << "@" << pos;
+         }
+      }
+   };
+
+   "disabled in lazy JSON"_test = [] {
+      const std::string doc = "{\"s\":\"a\xFF!b\"}";
+      {
+         auto d = glz::lazy_json(doc);
+         expect(d.has_value());
+         const auto s = (*d)["s"].get<std::string>();
+         expect(!s.has_value());
+         expect(s.error() == glz::error_code::invalid_utf8);
+      }
+      {
+         auto d = glz::lazy_json<unchecked_opts{}>(doc);
+         expect(d.has_value());
+         const auto s = (*d)["s"].get<std::string>();
+         expect(s.has_value());
+         expect(s.value() == "a\xFF!b");
+      }
+   };
+
+   "disabled still decodes well formed input"_test = [] {
+      // Turning the check off must not change what a conforming document parses to.
+      for (const auto& c : well_formed()) {
+         if (c.data.find('\0') != std::string::npos) continue; // control chars need escaping
+         const std::string doc = "[\"" + c.data + "\"]";
+         std::vector<std::string> v;
+         expect(!glz::read<unchecked_opts{}>(v, doc)) << c.name;
+         expect(v.size() == 1u) << c.name;
+         expect(v[0] == c.data) << c.name;
+      }
+   };
+
+   "disabled still decodes escapes to multibyte sequences"_test = [] {
+      // \uXXXX escapes are ASCII on the wire and decode through a separate path, so the option
+      // must not disturb them.
+      for (const uint32_t cp : {0xE9u, 0x20ACu, 0x1F600u}) {
+         std::vector<std::string> escaped;
+         char buf[32];
+         if (cp > 0xFFFF) {
+            const uint32_t u = cp - 0x10000;
+            std::snprintf(buf, sizeof(buf), R"(["\u%04X\u%04X"])", 0xD800 + (u >> 10), 0xDC00 + (u & 0x3FF));
+         }
+         else {
+            std::snprintf(buf, sizeof(buf), R"(["\u%04X"])", cp);
+         }
+         expect(!glz::read<unchecked_opts{}>(escaped, std::string(buf))) << cp;
+         expect(escaped[0] == utf8(cp)) << cp;
+      }
+   };
+
+   "disabled still rejects other errors"_test = [] {
+      // Turning off the encoding check must not turn off anything else.
+      std::vector<std::string> v;
+      expect(bool(glz::read<unchecked_opts{}>(v, std::string(R"(["a\ud800b"])")))); // lone surrogate escape
+      expect(bool(glz::read<unchecked_opts{}>(v, std::string("[\"a\x01\x62\"]")))); // raw control character
+      expect(bool(glz::read<unchecked_opts{}>(v, std::string("[\"abc]")))); // unterminated string
+   };
+
+   "validate_json validates regardless of the caller"_test = [] {
+      // validate_json takes no options, so there is no way to hand it a disabled check. This pins
+      // that, because the documented conformance guarantee depends on it.
+      static_assert(glz::check_validate_utf8(glz::opts_validate{}));
+      expect(glz::validate_json(std::string("[\"a\xFF!b\"]")) == glz::error_code::invalid_utf8);
+   };
+
+   "enabled by default for opts without the field"_test = [] {
+      static_assert(glz::check_validate_utf8(glz::opts{}));
+      static_assert(glz::check_validate_utf8(glz::opts_validate{}));
+      static_assert(glz::check_validate_utf8(glz::opts_csv{}));
+      static_assert(!glz::check_validate_utf8(unchecked_opts{}));
+      static_assert(!glz::check_validate_utf8(unchecked_validate_skipped_opts{}));
+      static_assert(!glz::check_validate_utf8(with_unknown_keys_allowed<unchecked_opts>()));
+      static_assert(!glz::check_validate_utf8(unchecked_comments()));
+      static_assert(!glz::check_validate_utf8(unchecked_raw_string_opts{}));
    };
 };
 

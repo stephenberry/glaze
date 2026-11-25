@@ -102,6 +102,9 @@ namespace glz
       }
 
       template <auto Opts, class Buffer>
+      inline void cbor_to_json_key(auto&& ctx, auto&& it, auto&& end, Buffer& out, auto&& ix, uint32_t recursive_depth);
+
+      template <auto Opts, class Buffer>
       inline void cbor_to_json_value(auto&& ctx, auto&& it, auto&& end, Buffer& out, auto&& ix,
                                      uint32_t recursive_depth)
       {
@@ -263,7 +266,7 @@ namespace glz
                   str.append(reinterpret_cast<const char*>(it), chunk_len);
                   it += chunk_len;
                }
-               to<JSON, std::string_view>::template op<Opts>(str, ctx, out, ix);
+               detail::emit_untrusted_string<Opts>(ctx, str, out, ix);
             }
             else {
                const uint64_t length = cbor_to_json_decode_arg(ctx, it, end, additional_info);
@@ -276,7 +279,7 @@ namespace glz
                }
 
                const sv value{reinterpret_cast<const char*>(it), static_cast<size_t>(length)};
-               to<JSON, sv>::template op<Opts>(value, ctx, out, ix);
+               detail::emit_untrusted_string<Opts>(ctx, value, out, ix);
                it += length;
             }
             break;
@@ -342,9 +345,12 @@ namespace glz
                ctx.depth += check_indentation_width(Opts);
             }
 
+            // A prettified map only breaks the line before its '}' when it holds at least one
+            // pair, so an empty map stays "{}" whether its length was definite or indefinite.
+            bool wrote_pair = false;
+
             if (additional_info == info::indefinite) {
                // Indefinite-length map
-               bool first = true;
                while (true) {
                   if (it >= end) [[unlikely]] {
                      ctx.error = error_code::unexpected_end;
@@ -358,17 +364,17 @@ namespace glz
                      break;
                   }
 
-                  if (!first) {
+                  if (wrote_pair) {
                      dump(',', out, ix);
                   }
                   if constexpr (Opts.prettify) {
                      dump('\n', out, ix);
                      dumpn(check_indentation_char(Opts), ctx.depth, out, ix);
                   }
-                  first = false;
+                  wrote_pair = true;
 
                   // Key (must be string for JSON compatibility)
-                  cbor_to_json_value<Opts>(ctx, it, end, out, ix, recursive_depth + 1);
+                  cbor_to_json_key<Opts>(ctx, it, end, out, ix, recursive_depth + 1);
                   if (bool(ctx.error)) [[unlikely]]
                      return;
 
@@ -390,6 +396,8 @@ namespace glz
                if (bool(ctx.error)) [[unlikely]]
                   return;
 
+               wrote_pair = count > 0;
+
                for (uint64_t i = 0; i < count; ++i) {
                   if (i > 0) {
                      dump(',', out, ix);
@@ -400,7 +408,7 @@ namespace glz
                   }
 
                   // Key
-                  cbor_to_json_value<Opts>(ctx, it, end, out, ix, recursive_depth + 1);
+                  cbor_to_json_key<Opts>(ctx, it, end, out, ix, recursive_depth + 1);
                   if (bool(ctx.error)) [[unlikely]]
                      return;
 
@@ -420,7 +428,7 @@ namespace glz
 
             if constexpr (Opts.prettify) {
                ctx.depth -= check_indentation_width(Opts);
-               if (additional_info != 0 || additional_info == info::indefinite) {
+               if (wrote_pair) {
                   dump('\n', out, ix);
                   dumpn(check_indentation_char(Opts), ctx.depth, out, ix);
                }
@@ -681,6 +689,82 @@ namespace glz
          default:
             ctx.error = error_code::syntax_error;
             break;
+         }
+      }
+
+      // A JSON object key must be a string. Integer keys (pervasive in
+      // COSE/CWT/WebAuthn) become quoted decimal strings, one of the string
+      // forms RFC 8949 section 6.1 allows a converter to choose. Emitting them
+      // bare produced structurally invalid JSON while reporting success. Text
+      // and byte-string keys already emit as JSON strings via the value path,
+      // a tag on a key is unwrapped and the tagged content re-checked, and key
+      // types with no JSON string form (array, map, float, simple) are rejected.
+      // Mirrors the string/integer key handling in beve_to_json_value's object case.
+      template <auto Opts, class Buffer>
+      inline void cbor_to_json_key(auto&& ctx, auto&& it, auto&& end, Buffer& out, auto&& ix, uint32_t recursive_depth)
+      {
+         using namespace cbor;
+
+         if (recursive_depth >= max_recursive_depth_limit) [[unlikely]] {
+            ctx.error = error_code::exceeded_max_recursive_depth;
+            return;
+         }
+
+         if (it >= end) [[unlikely]] {
+            ctx.error = error_code::unexpected_end;
+            return;
+         }
+
+         uint8_t initial;
+         std::memcpy(&initial, it, 1);
+         const uint8_t major_type = get_major_type(initial);
+         const uint8_t additional_info = get_additional_info(initial);
+
+         switch (major_type) {
+         case major::tstr:
+         case major::bstr:
+            // Both already emit as a JSON string (tstr escaped, bstr hex-quoted).
+            cbor_to_json_value<Opts>(ctx, it, end, out, ix, recursive_depth);
+            return;
+         case major::tag: {
+            // Unwrap the tag and key-check the tagged content, so e.g. a tag-0
+            // datetime text key still emits as a string. Typed-array tags
+            // (RFC 8746) decode to a JSON array and are rejected below.
+            ++it;
+            const uint64_t tag_num = cbor_to_json_decode_arg(ctx, it, end, additional_info);
+            if (bool(ctx.error)) [[unlikely]]
+               return;
+            if (typed_array::get_info(tag_num).valid) [[unlikely]] {
+               ctx.error = error_code::syntax_error;
+               return;
+            }
+            cbor_to_json_key<Opts>(ctx, it, end, out, ix, recursive_depth + 1);
+            return;
+         }
+         case major::uint: {
+            ++it;
+            const uint64_t value = cbor_to_json_decode_arg(ctx, it, end, additional_info);
+            if (bool(ctx.error)) [[unlikely]]
+               return;
+            dump('"', out, ix);
+            to<JSON, uint64_t>::template op<Opts>(value, ctx, out, ix);
+            dump('"', out, ix);
+            return;
+         }
+         case major::nint: {
+            ++it;
+            const uint64_t n = cbor_to_json_decode_arg(ctx, it, end, additional_info);
+            if (bool(ctx.error)) [[unlikely]]
+               return;
+            const int64_t value = static_cast<int64_t>(~n);
+            dump('"', out, ix);
+            to<JSON, int64_t>::template op<Opts>(value, ctx, out, ix);
+            dump('"', out, ix);
+            return;
+         }
+         default:
+            ctx.error = error_code::syntax_error;
+            return;
          }
       }
    }

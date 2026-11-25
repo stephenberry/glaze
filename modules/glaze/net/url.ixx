@@ -1,5 +1,10 @@
 // Glaze Library
 // For the license information refer to glaze.ixx
+// glz:header path="glaze/net/url.hpp"
+// glz:header std=<cstddef>
+// glz:header std=<string>
+// glz:header std=<string_view>
+// glz:header std=<unordered_map>
 export module glaze.net.url;
 
 import std;

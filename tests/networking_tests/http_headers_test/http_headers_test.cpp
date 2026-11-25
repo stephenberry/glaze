@@ -16,6 +16,15 @@ std::vector<std::string> values_of(const glz::http_headers& fields, std::string_
    return values;
 }
 
+std::vector<std::string> reversed_values_of(auto&& headers, std::string_view name)
+{
+   std::vector<std::string> values{};
+   for (auto&& field : headers.fields(name) | std::views::reverse) {
+      values.emplace_back(field.value);
+   }
+   return values;
+}
+
 bool contains_value(const glz::http_headers& fields, std::string_view name, std::string_view expected_value)
 {
    auto values = fields.values(name);
@@ -320,6 +329,106 @@ suite http_headers = [] {
 
       expect(std::ranges::empty(range));
       expect(std::ranges::distance(range) == 0);
+   };
+
+   "fields view iterates matching pairs in reverse order"_test = [] {
+      glz::http_headers fields{};
+      fields.add("Set-Cookie", "a=1");
+      fields.add("X", "x");
+      fields.add("set-cookie", "b=2");
+      fields.add("Y", "y");
+      fields.add("SET-COOKIE", "c=3");
+
+      auto collected_values = reversed_values_of(fields, "set-cookie");
+
+      expect(collected_values.size() == 3U);
+      if (collected_values.size() == 3U) {
+         expect(collected_values[0] == "c=3");
+         expect(collected_values[1] == "b=2");
+         expect(collected_values[2] == "a=1");
+      }
+   };
+
+   "fields view on const iterates in reverse order"_test = [] {
+      glz::http_headers mutable_fields{};
+      mutable_fields.add("Set-Cookie", "a=1");
+      mutable_fields.add("X", "x");
+      mutable_fields.add("set-cookie", "b=2");
+
+      const auto& fields = mutable_fields;
+
+      auto collected_values = reversed_values_of(fields, "SET-COOKIE");
+
+      expect(collected_values.size() == 2U);
+      if (collected_values.size() == 2U) {
+         expect(collected_values[0] == "b=2");
+         expect(collected_values[1] == "a=1");
+      }
+   };
+
+   "fields iterator decrements from end to the last match"_test = [] {
+      glz::http_headers fields{};
+      fields.add("A", "1");
+      fields.add("Set-Cookie", "a=1");
+      fields.add("B", "2");
+      fields.add("set-cookie", "b=2");
+      fields.add("C", "3");
+
+      auto range = fields.fields("set-cookie");
+      auto iterator = range.end();
+
+      --iterator;
+      expect(iterator->value == "b=2");
+
+      --iterator;
+      expect(iterator->value == "a=1");
+      expect(iterator == range.begin());
+   };
+
+   "fields iterator round-trips between increment and decrement"_test = [] {
+      glz::http_headers fields{};
+      fields.add("Set-Cookie", "a=1");
+      fields.add("X", "x");
+      fields.add("set-cookie", "b=2");
+
+      auto range = fields.fields("set-cookie");
+      auto iterator = range.begin();
+
+      ++iterator;
+      expect(iterator->value == "b=2");
+
+      --iterator;
+      expect(iterator->value == "a=1");
+      expect(iterator == range.begin());
+   };
+
+   "fields view with a single match reverses to the same element"_test = [] {
+      glz::http_headers fields{};
+      fields.add("X", "x");
+      fields.add("Set-Cookie", "a=1");
+      fields.add("Y", "y");
+
+      auto collected_values = reversed_values_of(fields, "set-cookie");
+
+      expect(collected_values.size() == 1U);
+      if (collected_values.size() == 1U) {
+         expect(collected_values[0] == "a=1");
+      }
+   };
+
+   "values view iterates matching values in reverse order"_test = [] {
+      glz::http_headers fields{{"Set-Cookie", "a=1"}, {"X", "x"}, {"set-cookie", "b=2"}};
+
+      std::vector<std::string> collected_values;
+      for (std::string_view value : fields.values("SET-COOKIE") | std::views::reverse) {
+         collected_values.emplace_back(value);
+      }
+
+      expect(collected_values.size() == 2U);
+      if (collected_values.size() == 2U) {
+         expect(collected_values[0] == "b=2");
+         expect(collected_values[1] == "a=1");
+      }
    };
 
    "names view returns every name in insertion order"_test = [] {

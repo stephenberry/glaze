@@ -1,5 +1,12 @@
 // Glaze Library
 // For the license information refer to glaze.ixx
+// glz:header path="glaze/net/cors.hpp"
+// glz:header std=<algorithm>
+// glz:header std=<cstddef>
+// glz:header std=<functional>
+// glz:header std=<string>
+// glz:header std=<string_view>
+// glz:header std=<vector>
 export module glaze.net.cors;
 
 import std;
@@ -144,7 +151,7 @@ namespace glz
          std::string origin;
          auto origin_it = req.headers.find("origin");
          if (origin_it != req.headers.end()) {
-            origin = origin_it->second;
+            origin = origin_it->value;
          }
 
          // Check if this is a preflight request (OPTIONS method with specific headers)
@@ -189,7 +196,7 @@ namespace glz
                }
                else if (auto requested_headers = req.headers.find("access-control-request-headers");
                         requested_headers != req.headers.end()) {
-                  res.header("Access-Control-Allow-Headers", requested_headers->second);
+                  res.header("Access-Control-Allow-Headers", requested_headers->value);
                }
 
                // Add max age

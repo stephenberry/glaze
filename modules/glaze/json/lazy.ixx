@@ -1,6 +1,7 @@
 // Glaze Library
 // For the license information refer to glaze.ixx
 // glz:header path="glaze/json/lazy.hpp"
+// glz:header std=<array>
 // glz:header std=<charconv>
 // glz:header std=<cstddef>
 // glz:header std=<cstdint>
@@ -20,6 +21,7 @@ import glaze.json.write;
 import glaze.core.common;
 import glaze.core.context;
 import glaze.core.opts;
+import glaze.core.read;
 
 import glaze.util.expected;
 import glaze.util.dump;
@@ -69,6 +71,22 @@ export namespace glz
 
    namespace detail
    {
+      // lazy_json_view::get<std::string> unescapes its raw span by re-reading it through the JSON
+      // reader. That read is independent of the document's options except for UTF-8 validation,
+      // which the caller can turn off and must not be silently reinstated here.
+      struct lazy_string_opts : opts
+      {
+         bool validate_utf8 = true;
+      };
+
+      template <auto Opts>
+      consteval lazy_string_opts lazy_string_opts_for()
+      {
+         lazy_string_opts o{};
+         o.validate_utf8 = check_validate_utf8(Opts);
+         return o;
+      }
+
       // Skip string - returns position after closing quote
       template <auto Opts>
       GLZ_ALWAYS_INLINE const char* skip_string_fast(const char* p, const char* end) noexcept
@@ -1458,8 +1476,15 @@ export namespace glz
             return unexpected(error_ctx{0, ctx.error});
          }
          std::string_view raw{data_, static_cast<size_t>(it - data_)};
-         return glz::read_json<std::string>(raw);
-         // read_json validates UTF-8, so the returned string is guaranteed well formed.
+         // The read validates UTF-8 unless the document's options turned it off, so the returned
+         // string is well formed whenever validation is enabled.
+         static constexpr auto string_opts = detail::lazy_string_opts_for<Opts>();
+         std::string unescaped{};
+         context read_ctx{};
+         if (const error_ctx ec = glz::read<string_opts>(unescaped, raw, read_ctx)) {
+            return unexpected(ec);
+         }
+         return unescaped;
       }
       else if constexpr (std::is_same_v<T, std::string_view>) {
          if (!is_string()) {

@@ -24,11 +24,8 @@
 #endif
 
 // C++26 P2988 std::optional<T&> support.
-// Pre-P2988 stdlibs report __cpp_lib_optional == 202110L (the C++23 monadic-ops value);
-// any post-C++23 bump indicates optional<T&> is available. Used by glz::inplace_vector to
-// match the C++26 P3981 try_emplace_back / try_push_back return type.
 #ifndef GLZ_HAS_OPTIONAL_REF
-#if defined(__cpp_lib_optional) && __cpp_lib_optional > 202110L
+#if defined(__cpp_lib_optional) && __cpp_lib_optional >= 202506L
 #define GLZ_HAS_OPTIONAL_REF 1
 #else
 #define GLZ_HAS_OPTIONAL_REF 0

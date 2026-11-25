@@ -67,6 +67,7 @@ if(OpenSSL_FOUND AND (NOT GLAZE_ENABLE_MODULES OR glaze_ENABLE_SSL OR glaze_BUIL
         )
 
         target_compile_definitions(${PROJECT_NAME} PRIVATE GLZ_ENABLE_SSL)
+        glz_link_windows_cert_store(${PROJECT_NAME})
 
         add_test(NAME ${PROJECT_NAME} COMMAND ${PROJECT_NAME})
 

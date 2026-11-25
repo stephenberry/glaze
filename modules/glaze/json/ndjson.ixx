@@ -2,6 +2,7 @@
 // For the license information refer to glaze.ixx
 // glz:header path="glaze/json/ndjson.hpp"
 // glz:header std=<cstddef>
+// glz:header std=<cstring>
 // glz:header std=<string>
 // glz:header std=<tuple>
 // glz:header std=<type_traits>

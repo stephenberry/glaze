@@ -14,7 +14,9 @@
 #include "glaze/eetf/read.hpp"
 #include "glaze/eetf/wrappers.hpp"
 #include "glaze/eetf/write.hpp"
+#include "glaze/json/read.hpp"
 #include "glaze/trace/trace.hpp"
+#include "scratch_directory.hpp"
 #include "ut/ut.hpp"
 
 using std::uint8_t;
@@ -25,6 +27,12 @@ using namespace glz::eetf;
 using namespace ut;
 
 glz::trace trace{};
+
+// Relative scratch paths in this file resolve inside a private directory rather than
+// wherever the binary was launched from. This must precede the first suite: ut runs a
+// suite from its constructor, during static initialization.
+const glz_test::scratch_directory scratch{"eetf_test"};
+
 suite start_trace = [] { trace.begin("eetf_test", "Full test suite duration."); };
 
 /*
@@ -98,6 +106,17 @@ struct glz::meta<atom_rw>
 
 static_assert(glz::write_supported<my_struct_meta, glz::EETF>);
 static_assert(glz::read_supported<my_struct_meta, glz::EETF>);
+
+namespace
+{
+
+   auto expect_unexpected_end = [](const auto& buffer) {
+      std::string json{};
+      const auto ec = glz::eetf_to_json(buffer, json);
+      expect(ec.ec == glz::error_code::unexpected_end);
+   };
+
+}
 
 suite etf_tests = [] {
    "read_map_term"_test = [] {
@@ -308,6 +327,11 @@ suite etf_tests = [] {
    };
 };
 
+struct eetf_escape_opts : glz::eetf::eetf_opts
+{
+   bool escape_control_characters = true;
+};
+
 suite eetf_to_json_tests = [] {
    "eetf_to_json true"_test = [] {
       bool b = true;
@@ -439,12 +463,6 @@ suite eetf_to_json_tests = [] {
    };
 
    "eetf_to_json truncated small big integer"_test = [] {
-      auto expect_unexpected_end = [](const auto& buffer) {
-         std::string json{};
-         const auto ec = glz::eetf_to_json(buffer, json);
-         expect(ec.ec == glz::error_code::unexpected_end);
-      };
-
       const std::array<std::uint8_t, 2> missing_size{uint8_t(glz::eetf_magic_version), uint8_t(ERL_SMALL_BIG_EXT)};
       const std::array<std::uint8_t, 3> missing_sign{uint8_t(glz::eetf_magic_version), uint8_t(ERL_SMALL_BIG_EXT), 1};
       const std::array<std::uint8_t, 4> missing_digits{uint8_t(glz::eetf_magic_version), uint8_t(ERL_SMALL_BIG_EXT), 8,
@@ -467,12 +485,6 @@ suite eetf_to_json_tests = [] {
    };
 
    "eetf_to_json truncated map"_test = [] {
-      auto expect_unexpected_end = [](const auto& buffer) {
-         std::string json{};
-         const auto ec = glz::eetf_to_json(buffer, json);
-         expect(ec.ec == glz::error_code::unexpected_end);
-      };
-
       // ERL_MAP_EXT declares arity 1 but the buffer ends before any key/value entry.
       const std::array<std::uint8_t, 6> missing_entries{
          uint8_t(glz::eetf_magic_version), uint8_t(ERL_MAP_EXT), 0, 0, 0, 1};
@@ -527,12 +539,6 @@ suite eetf_to_json_tests = [] {
    };
 
    "eetf_to_json truncated scalar"_test = [] {
-      auto expect_unexpected_end = [](const auto& buffer) {
-         std::string json{};
-         const auto ec = glz::eetf_to_json(buffer, json);
-         expect(ec.ec == glz::error_code::unexpected_end);
-      };
-
       // Numeric tags whose fixed payload is cut off after the tag: ei_decode_long/double must not
       // read it off the raw pointer before the bounds check.
       const std::array<std::uint8_t, 2> small_int{uint8_t(glz::eetf_magic_version), uint8_t(ERL_SMALL_INTEGER_EXT)};
@@ -550,12 +556,6 @@ suite eetf_to_json_tests = [] {
    };
 
    "eetf_to_json truncated container header"_test = [] {
-      auto expect_unexpected_end = [](const auto& buffer) {
-         std::string json{};
-         const auto ec = glz::eetf_to_json(buffer, json);
-         expect(ec.ec == glz::error_code::unexpected_end);
-      };
-
       // Container tags whose 1- or 4-byte arity is cut off after the tag: decode_*_header must not
       // read it off the raw pointer before the bounds check.
       const std::array<std::uint8_t, 2> list{uint8_t(glz::eetf_magic_version), uint8_t(ERL_LIST_EXT)};
@@ -619,6 +619,192 @@ suite eetf_to_json_tests = [] {
             std::string_view{buffer.data() + curr, static_cast<size_t>(index - curr)}, json));
          expect(json == std::format(R"({{"a":{}}})", idx));
       }
+   };
+
+   "eetf_to_json empty binary"_test = [] {
+      const std::array<std::uint8_t, 6> buffer{
+         uint8_t(glz::eetf_magic_version), uint8_t(ERL_BINARY_EXT), 0x0, 0x0, 0x0, 0x0};
+
+      std::string json{};
+      expect(!glz::eetf_to_json(buffer, json));
+      expect(json == "\"\"") << json;
+   };
+
+   "eetf_to_json 1-byte binary"_test = [] {
+      std::array<std::uint8_t, 7> buffer{
+         uint8_t(glz::eetf_magic_version), uint8_t(ERL_BINARY_EXT), 0x0, 0x0, 0x0, 0x1, 0};
+
+      std::string json{};
+      expect(!glz::eetf_to_json<glz::eetf::eetf_opts{.binary_as_base64 = true}>(buffer, json));
+      expect(json == "\"AA==\"") << json;
+
+      buffer[6] = '0';
+      expect(!glz::eetf_to_json<glz::eetf::eetf_opts{.binary_as_base64 = true}>(buffer, json));
+      expect(json == "\"MA==\"") << json;
+   };
+
+   "eetf_to_json check big-endian size"_test = [] {
+      // 0x03E8 == 1000, and the payload is 1000 zero bytes.
+      constexpr std::array<std::uint8_t, 1006> buffer{
+         uint8_t(glz::eetf_magic_version), uint8_t(ERL_BINARY_EXT), 0, 0, 0x03, 0xE8};
+
+      // A binary of NULs is the case the default exists for. Before, this converted "successfully"
+      // to 1995 bytes of which 1993 were NUL: not JSON, and reported as a success.
+      std::string rejected{};
+      expect(glz::eetf_to_json(buffer, rejected).ec == glz::error_code::invalid_control_character);
+
+      // The length decode is what this test is about, so escape and check the result is a
+      // well formed string of 1000 escaped NULs.
+      std::string json{};
+      expect(!glz::eetf_to_json<eetf_escape_opts{}>(buffer, json));
+      expect(json.size() == 2 + 1000 * 6) << json.size();
+
+      std::string round_trip{};
+      expect(!glz::read_json(round_trip, json));
+      expect(round_trip == std::string(1000, '\0'));
+   };
+
+   "eetf_to_json truncated binary"_test = [] {
+      constexpr std::array<std::uint8_t, 2> no_size{uint8_t(glz::eetf_magic_version), uint8_t(ERL_BINARY_EXT)};
+      constexpr std::array<std::uint8_t, 3> truncated_size{uint8_t(glz::eetf_magic_version), uint8_t(ERL_BINARY_EXT),
+                                                           0x1};
+      constexpr std::array<std::uint8_t, 6> truncated_body{
+         uint8_t(glz::eetf_magic_version), uint8_t(ERL_BINARY_EXT), 0x0, 0x0, 0x0, 0x1};
+
+      expect_unexpected_end(no_size);
+      expect_unexpected_end(truncated_size);
+      expect_unexpected_end(truncated_body);
+   };
+
+   "eetf_to_json binary key map"_test = [] {
+      constexpr std::array<std::uint8_t, 18> buffer{uint8_t(glz::eetf_magic_version),
+                                                    uint8_t(ERL_MAP_EXT),
+                                                    0,
+                                                    0,
+                                                    0,
+                                                    1,
+                                                    uint8_t(ERL_BINARY_EXT),
+                                                    0,
+                                                    0,
+                                                    0,
+                                                    1,
+                                                    'a',
+                                                    uint8_t(ERL_BINARY_EXT),
+                                                    0,
+                                                    0,
+                                                    0,
+                                                    1,
+                                                    '1'};
+
+      std::string json{};
+      expect(!glz::eetf_to_json(buffer, json));
+      expect(json == R"({"a":"1"})") << json;
+   };
+
+   "eetf_to_json binary key map explicit convert"_test = [] {
+      constexpr std::array<std::uint8_t, 18> buffer{uint8_t(glz::eetf_magic_version),
+                                                    uint8_t(ERL_MAP_EXT),
+                                                    0,
+                                                    0,
+                                                    0,
+                                                    1,
+                                                    uint8_t(ERL_BINARY_EXT),
+                                                    0,
+                                                    0,
+                                                    0,
+                                                    1,
+                                                    '0',
+                                                    uint8_t(ERL_BINARY_EXT),
+                                                    0,
+                                                    0,
+                                                    0,
+                                                    1,
+                                                    1};
+
+      // The subject here is the binary map key. The value byte is a control character, which the
+      // converter refuses by default, so this opts into escaping to keep exercising the key path.
+      std::string json{};
+      expect(!glz::eetf_to_json<eetf_escape_opts{}>(buffer, json));
+      expect(json == "{\"0\":\"\\u0001\"}") << json;
+
+      std::string rejected{};
+      expect(glz::eetf_to_json(buffer, rejected).ec == glz::error_code::invalid_control_character);
+   };
+
+   "eetf_to_json quotes an atom object key"_test = [] {
+      // A JSON object key must be a string. The true/false atoms emit as bare literals in value
+      // position, which is right, but as a key that produced `{true:1}` and reported success.
+      constexpr std::array<std::uint8_t, 14> buffer{uint8_t(glz::eetf_magic_version),
+                                                    ERL_MAP_EXT,
+                                                    0,
+                                                    0,
+                                                    0,
+                                                    1,
+                                                    uint8_t(ERL_SMALL_ATOM_UTF8_EXT),
+                                                    4,
+                                                    't',
+                                                    'r',
+                                                    'u',
+                                                    'e',
+                                                    uint8_t(ERL_SMALL_INTEGER_EXT),
+                                                    1};
+
+      std::string json{};
+      expect(!glz::eetf_to_json(buffer, json));
+      expect(json == R"({"true":1})") << json;
+
+      std::map<std::string, int> round_trip{};
+      expect(!glz::read_json(round_trip, json)) << json;
+      expect(round_trip == std::map<std::string, int>{{"true", 1}});
+   };
+
+   "eetf_to_json binary rejects control characters by default"_test = [] {
+      // binary_as_base64 is off by default, so an ERL_BINARY_EXT payload is emitted as a JSON
+      // string. Its bytes are arbitrary, so a control byte among them is entirely possible, and
+      // it cannot be written as JSON without \uXXXX. Refused rather than mangled.
+      constexpr std::array<std::uint8_t, 9> buffer{
+         uint8_t(glz::eetf_magic_version), uint8_t(ERL_BINARY_EXT), 0, 0, 0, 3, 'a', 1, 'b'};
+
+      std::string json{};
+      expect(glz::eetf_to_json(buffer, json).ec == glz::error_code::invalid_control_character);
+
+      // Two ways across: escape the byte, or carry the binary as base64.
+      std::string escaped{};
+      expect(!glz::eetf_to_json<eetf_escape_opts{}>(buffer, escaped));
+      expect(escaped == "\"a\\u0001b\"") << escaped;
+
+      std::string round_trip{};
+      expect(!glz::read_json(round_trip, escaped)) << escaped;
+      expect(round_trip == std::string("a\001b"));
+   };
+   "eetf_to_json binary passes through control characters that have a short escape"_test = [] {
+      // The default refuses only control characters with no two-character JSON escape. Backspace,
+      // tab, newline, form feed and carriage return have one, so they keep converting normally.
+      // The reject sits in the else of the escape table lookup and cannot see them.
+      constexpr std::array<std::uint8_t, 11> tail{
+         uint8_t(glz::eetf_magic_version), uint8_t(ERL_BINARY_EXT), 0, 0, 0, 5, '\b', '\t', '\n', '\f', '\r'};
+
+      std::string tail_json{};
+      expect(!glz::eetf_to_json(tail, tail_json)) << tail_json;
+      expect(tail_json == R"("\b\t\n\f\r")") << tail_json;
+
+      // Long enough that the run lands past the scalar tail, in the writer's block scan, which
+      // rejects at a separate site.
+      const std::string payload = std::string(64, 'a') + "\b\t\n\f\r" + std::string(64, 'b');
+      std::string buffer{};
+      buffer.push_back(char(glz::eetf_magic_version));
+      buffer.push_back(char(ERL_BINARY_EXT));
+      for (int shift = 24; shift >= 0; shift -= 8) {
+         buffer.push_back(char(uint8_t(payload.size() >> shift)));
+      }
+      buffer += payload;
+
+      std::string json{};
+      expect(!glz::eetf_to_json(buffer, json)) << json;
+
+      std::string round_trip{};
+      expect(!glz::read_json(round_trip, json)) << json;
+      expect(round_trip == payload);
    };
 };
 

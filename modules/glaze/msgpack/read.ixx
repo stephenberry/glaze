@@ -558,6 +558,12 @@ namespace glz
       }
    };
 
+   // The four string specializations below are mutually exclusive, which matters beyond avoiding an
+   // ambiguity: leaving two of them viable for one type forces the compiler to partially order
+   // constrained partial specializations, and normalizing these concepts for that subsumption check
+   // is costly enough to exhaust clang 22's stack (see issue #2742, and the note in write.hpp).
+   // `string_t` stays disjoint from the other three via its `!string_view_t` and `!is_static_string`
+   // clauses, so keep any new string specialization here exclusive as well.
    template <string_t T>
    struct from<MSGPACK, T>
    {
@@ -881,6 +887,9 @@ namespace glz
                   }
                   const size_t len = payload.size();
                   if constexpr (resizable<std::remove_cvref_t<Range>>) {
+                     if (exceeds_capacity(value, len, ctx)) [[unlikely]] {
+                        return;
+                     }
                      value.clear();
                      if constexpr (has_reserve<std::remove_cvref_t<Range>>) {
                         value.reserve(len);
@@ -918,6 +927,9 @@ namespace glz
          }
 
          if constexpr (emplace_backable<std::decay_t<Value>>) {
+            if (exceeds_capacity(value, len, ctx)) [[unlikely]] {
+               return;
+            }
             value.clear();
             if constexpr (has_reserve<std::decay_t<Value>>) {
                // Each element occupies at least one byte on the wire, so a valid len can never
@@ -964,6 +976,9 @@ namespace glz
             return;
          }
          value.type = type;
+         if (exceeds_capacity(value.data, len, ctx)) [[unlikely]] {
+            return;
+         }
          value.data.resize(len);
          if (len > 0) {
             std::memcpy(value.data.data(), it, len);

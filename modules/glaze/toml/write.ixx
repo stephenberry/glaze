@@ -447,11 +447,8 @@ namespace glz
                if constexpr (char_t<T>) {
                   return sv{&value, 1};
                }
-               else if constexpr (!char_array_t<T> && std::is_pointer_v<std::decay_t<T>>) {
-                  return value ? value : "";
-               }
                else {
-                  return sv{value};
+                  return str_view<T>(value);
                }
             }();
             if (!ensure_space(ctx, b, ix + str.size() + write_padding_bytes)) [[unlikely]] {
@@ -490,14 +487,7 @@ namespace glz
          }
          else {
             if constexpr (check_raw_string(Opts)) {
-               const sv str = [&]() -> const sv {
-                  if constexpr (!char_array_t<T> && std::is_pointer_v<std::decay_t<T>>) {
-                     return value ? value : "";
-                  }
-                  else {
-                     return sv{value};
-                  }
-               }();
+               const sv str = str_view<T>(value);
 
                if (!ensure_space(ctx, b, ix + 8 + str.size() + write_padding_bytes)) [[unlikely]] {
                   return;
@@ -515,14 +505,11 @@ namespace glz
             }
             else {
                const sv str = [&]() -> const sv {
-                  if constexpr (!char_array_t<T> && std::is_pointer_v<std::decay_t<T>>) {
-                     return value ? value : "";
-                  }
-                  else if constexpr (array_char_t<T>) {
+                  if constexpr (array_char_t<T>) {
                      return sv{value.data(), value.size()};
                   }
                   else {
-                     return sv{value};
+                     return str_view<T>(value);
                   }
                }();
                const auto n = str.size();

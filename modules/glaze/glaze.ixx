@@ -60,5 +60,7 @@ export import glaze.json;
 
 export import glaze.msgpack;
 
+export import glaze.simd.backends;
+
 export import glaze.util.for_each;
 export import glaze.util.parse;

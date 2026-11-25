@@ -88,7 +88,7 @@ namespace glz
       template <auto Opts, class B>
       GLZ_ALWAYS_INLINE void emit_json_string(is_context auto& ctx, std::string_view s, B& out, size_t& ix) noexcept
       {
-         to<JSON, std::string_view>::template op<Opts>(s, ctx, out, ix);
+         detail::emit_untrusted_string<Opts>(ctx, s, out, ix);
       }
 
       // Emit `n` payload bytes as a lowercase hex literal (no quotes, no prefix).

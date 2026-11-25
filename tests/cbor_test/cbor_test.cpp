@@ -2109,6 +2109,143 @@ void rfc8949_appendix_a_tests()
 }
 
 // Typed array tests (RFC 8746)
+// tag(n) then a byte string holding the payload, which is what an RFC 8746 typed array looks like on
+// the wire. The payload is written in this platform's byte order, so pick a tag that says so.
+inline std::string cbor_typed_array(uint8_t tag, const void* payload, size_t bytes)
+{
+   std::string buffer{};
+   buffer.push_back(char(0xD8)); // tag, one byte follows
+   buffer.push_back(char(tag));
+   buffer.push_back(char(0x58)); // byte string, one-byte length
+   buffer.push_back(char(bytes));
+   buffer.append(static_cast<const char*>(payload), bytes);
+   return buffer;
+}
+
+// A typed array is copied straight into its target, so a tag matched on element width alone
+// reinterprets the payload of a differently-typed array instead of converting it. Reading a value of
+// one kind into a target of another is an error everywhere else in this reader, and is here too.
+void typed_array_kind_tests()
+{
+   // The payloads below are copied in this platform's byte order, so the tags have to say so: 71/79/86
+   // on a little-endian host, 67/75/82 on a big-endian one. Naming a fixed byte order here instead
+   // would tell the reader to byteswap a payload that was never swapped.
+   constexpr uint8_t uint64_native = glz::cbor::typed_array::native_tag<uint64_t>();
+   constexpr uint8_t sint64_native = glz::cbor::typed_array::native_tag<int64_t>();
+   constexpr uint8_t float64_native = glz::cbor::typed_array::native_tag<double>();
+
+   "typed array kind must match the target"_test = [] {
+      const uint64_t payload[]{1, 2};
+      const auto buffer = cbor_typed_array(uint64_native, payload, sizeof(payload));
+
+      std::vector<uint64_t> matching{};
+      expect(not glz::read_cbor(matching, buffer));
+      expect(matching == std::vector<uint64_t>{1, 2});
+
+      // Same width, different kind: reinterpreting these bytes would read 1 as 4.94e-324.
+      std::vector<double> as_double{};
+      expect(glz::read_cbor(as_double, buffer).ec == glz::error_code::syntax_error);
+
+      std::vector<int64_t> as_signed{};
+      expect(glz::read_cbor(as_signed, buffer).ec == glz::error_code::syntax_error);
+   };
+
+   "float typed array does not read into an integer target"_test = [] {
+      const double payload[]{1.5, 2.5};
+      const auto buffer = cbor_typed_array(float64_native, payload, sizeof(payload));
+
+      std::vector<double> matching{};
+      expect(not glz::read_cbor(matching, buffer));
+      expect(matching == std::vector<double>{1.5, 2.5});
+
+      std::vector<int64_t> as_signed{};
+      expect(glz::read_cbor(as_signed, buffer).ec == glz::error_code::syntax_error);
+
+      std::vector<uint64_t> as_unsigned{};
+      expect(glz::read_cbor(as_unsigned, buffer).ec == glz::error_code::syntax_error);
+   };
+
+   "integer typed array does not read into a float target"_test = [] {
+      const int64_t payload[]{-1, 2};
+      const auto buffer = cbor_typed_array(sint64_native, payload, sizeof(payload));
+
+      std::vector<int64_t> matching{};
+      expect(not glz::read_cbor(matching, buffer));
+      expect(matching == std::vector<int64_t>{-1, 2});
+
+      std::vector<double> as_double{};
+      expect(glz::read_cbor(as_double, buffer).ec == glz::error_code::syntax_error);
+   };
+
+   // Tags 83 and 87 are IEEE binary128. Where long double is the 80-bit x86 type it shares that
+   // 16-byte width without sharing the format, so width alone used to accept it -- and there is no
+   // 16-byte byteswap either, so a big-endian binary128 array was read through unswapped.
+   // Neither byte order is a match, so both are named rather than just the host's.
+   "binary128 typed array is rejected"_test = [] {
+      const unsigned char payload[32]{};
+      for (const uint8_t tag : {uint8_t(83), uint8_t(87)}) {
+         const auto buffer = cbor_typed_array(tag, payload, sizeof(payload));
+
+         std::vector<long double> as_long_double{};
+         expect(glz::read_cbor(as_long_double, buffer).ec == glz::error_code::syntax_error);
+      }
+   };
+
+   // Non-contiguous targets take the element-wise decode rather than the bulk copy, and validate the
+   // same way.
+   "kind is checked for non-contiguous targets too"_test = [] {
+      const uint64_t payload[]{1, 2};
+      const auto buffer = cbor_typed_array(uint64_native, payload, sizeof(payload));
+
+      std::list<uint64_t> matching{};
+      expect(not glz::read_cbor(matching, buffer));
+      expect(matching == std::list<uint64_t>{1, 2});
+
+      std::list<double> as_double{};
+      expect(glz::read_cbor(as_double, buffer).ec == glz::error_code::syntax_error);
+
+      std::set<double> as_set{};
+      expect(glz::read_cbor(as_set, buffer).ec == glz::error_code::syntax_error);
+   };
+
+   "every numeric round-trip still matches its own tag"_test = [] {
+      const auto round_trip = [](auto source) {
+         std::string buffer{};
+         expect(not glz::write_cbor(source, buffer));
+         decltype(source) result{};
+         expect(not glz::read_cbor(result, buffer));
+         expect(result == source);
+      };
+
+      round_trip(std::vector<uint8_t>{1, 2});
+      round_trip(std::vector<uint16_t>{1, 2});
+      round_trip(std::vector<uint32_t>{1, 2});
+      round_trip(std::vector<uint64_t>{1, 2});
+      round_trip(std::vector<std::int8_t>{-1, 2});
+      round_trip(std::vector<std::int16_t>{-1, 2});
+      round_trip(std::vector<int32_t>{-1, 2});
+      round_trip(std::vector<int64_t>{-1, 2});
+      round_trip(std::vector<float>{1.5f, -2.5f});
+      round_trip(std::vector<double>{1.5, -2.5});
+      round_trip(std::vector<std::complex<float>>{{1.0f, 2.0f}});
+      round_trip(std::vector<std::complex<double>>{{1.0, 2.0}, {3.0, 4.0}});
+   };
+
+   // The nested scalar tag of a complex array (tag 43001) is validated the same way.
+   "complex array scalar kind must match"_test = [] {
+      const std::vector<std::complex<double>> source{{1.0, 2.0}};
+      std::string buffer{};
+      expect(not glz::write_cbor(source, buffer));
+
+      std::vector<std::complex<double>> matching{};
+      expect(not glz::read_cbor(matching, buffer));
+      expect(matching == source);
+
+      std::vector<std::complex<float>> as_float{};
+      expect(glz::read_cbor(as_float, buffer).ec == glz::error_code::syntax_error);
+   };
+}
+
 void typed_array_tests()
 {
    "typed_array_uint8"_test = [] {
@@ -2166,6 +2303,11 @@ void typed_array_tests()
 }
 
 // CBOR-to-JSON conversion tests
+struct cbor_escape_opts : glz::opts
+{
+   bool escape_control_characters = true;
+};
+
 void cbor_to_json_tests()
 {
    "cbor_to_json_integer"_test = [] {
@@ -2203,6 +2345,53 @@ void cbor_to_json_tests()
       expect(json == "\"hello\"");
    };
 
+   "cbor_to_json_rejects_control_characters_by_default"_test = [] {
+      // A control byte is legal in a CBOR text string but cannot be written as JSON without
+      // \uXXXX, so the default refuses it rather than emitting output that will not re-parse.
+      std::map<std::string, std::string> v{{std::string("k\001"), std::string("a\001b")}};
+      std::string cbor_buffer;
+      expect(not glz::write_cbor(v, cbor_buffer));
+
+      std::string json;
+      expect(glz::cbor_to_json(cbor_buffer, json).ec == glz::error_code::invalid_control_character);
+   };
+
+   "cbor_to_json_escapes_control_characters_when_asked"_test = [] {
+      // escape_control_characters opts into carrying them across. Covers a value and a map key.
+      std::map<std::string, std::string> v{{std::string("k\001"), std::string("a\001b")}};
+      std::string cbor_buffer;
+      expect(not glz::write_cbor(v, cbor_buffer));
+
+      std::string json;
+      expect(not glz::cbor_to_json<cbor_escape_opts{}>(cbor_buffer, json));
+      expect(json == "{\"k\\u0001\":\"a\\u0001b\"}") << json;
+      std::map<std::string, std::string> round_trip{};
+      expect(not glz::read_json(round_trip, json)) << json;
+      expect(round_trip == v);
+   };
+
+   "cbor_to_json_passes_through_short_escape_control_characters"_test = [] {
+      // The default refuses only control characters with no two-character JSON escape. Backspace,
+      // tab, newline, form feed and carriage return have one, so they keep converting normally.
+      // The reject sits in the else of the escape table lookup and cannot see them. The long
+      // value puts the run past the scalar tail and into the writer's block scan, which rejects
+      // at a separate site.
+      const std::string shorts = "\b\t\n\f\r";
+      std::map<std::string, std::string> v{{"k" + shorts, shorts},
+                                           {"long", std::string(64, 'a') + shorts + std::string(64, 'b')}};
+      std::string cbor_buffer;
+      expect(not glz::write_cbor(v, cbor_buffer));
+
+      std::string json;
+      expect(not glz::cbor_to_json(cbor_buffer, json)) << json;
+      expect(json.find("\\b\\t\\n\\f\\r") != std::string::npos) << json;
+      expect(json.find_first_of(shorts) == std::string::npos) << json;
+
+      std::map<std::string, std::string> round_trip{};
+      expect(not glz::read_json(round_trip, json)) << json;
+      expect(round_trip == v);
+   };
+
    "cbor_to_json_array"_test = [] {
       std::vector<int> v = {1, 2, 3};
       std::string cbor_buffer;
@@ -2222,6 +2411,76 @@ void cbor_to_json_tests()
       expect(not glz::cbor_to_json(cbor_buffer, json));
       // Map iteration order may vary, check both possibilities
       expect(json == "{\"a\":1,\"b\":2}" || json == "{\"b\":2,\"a\":1}");
+   };
+
+   "cbor_to_json_integer_keys"_test = [] {
+      // COSE/CWT and many CBOR profiles key maps by integers. A JSON object key
+      // must be a string, so the integer key is emitted as a quoted decimal.
+      std::map<int, int> m = {{1, 2}, {500, 3}};
+      std::string cbor_buffer;
+      expect(not glz::write_cbor(m, cbor_buffer));
+
+      std::string json;
+      expect(not glz::cbor_to_json(cbor_buffer, json));
+      // Bare integer keys ("{1:2,...}") are not valid JSON; they must be quoted.
+      expect(json == "{\"1\":2,\"500\":3}");
+   };
+
+   "cbor_to_json_negative_key"_test = [] {
+      std::map<int, int> m = {{-1, 7}};
+      std::string cbor_buffer;
+      expect(not glz::write_cbor(m, cbor_buffer));
+
+      std::string json;
+      expect(not glz::cbor_to_json(cbor_buffer, json));
+      expect(json == "{\"-1\":7}");
+   };
+
+   "cbor_to_json_non_string_key_rejected"_test = [] {
+      // map(1){ [1]: 2 } -- an array key has no JSON string form.
+      const std::array<uint8_t, 4> cbor_buffer{0xa1, 0x81, 0x01, 0x02};
+      std::string json;
+      expect(bool(glz::cbor_to_json(cbor_buffer, json)));
+   };
+
+   "cbor_to_json_byte_string_key"_test = [] {
+      // map(1){ h'01ff': 2 } -- a byte-string key emits as a quoted hex string,
+      // same as the value path.
+      const std::array<uint8_t, 5> cbor_buffer{0xa1, 0x42, 0x01, 0xff, 0x02};
+      std::string json;
+      expect(not glz::cbor_to_json(cbor_buffer, json));
+      expect(json == "{\"01ff\":2}");
+   };
+
+   "cbor_to_json_tagged_text_key"_test = [] {
+      // map(1){ 0("2013-03-21T20:04:00Z"): 1 } -- the tag is unwrapped and the
+      // tagged text key emits as a plain string.
+      const std::array<uint8_t, 24> cbor_buffer{0xa1, 0xc0, 0x74, '2', '0', '1', '3', '-', '0', '3', '-', '2',
+                                                '1',  'T',  '2',  '0', ':', '0', '4', ':', '0', '0', 'Z', 0x01};
+      std::string json;
+      expect(not glz::cbor_to_json(cbor_buffer, json));
+      expect(json == "{\"2013-03-21T20:04:00Z\":1}");
+   };
+
+   "cbor_to_json_typed_array_tag_key_rejected"_test = [] {
+      // map(1){ 64(h'01'): 2 } -- an RFC 8746 typed-array tag decodes to a JSON
+      // array, which has no string form as a key.
+      const std::array<uint8_t, 6> cbor_buffer{0xa1, 0xd8, 0x40, 0x41, 0x01, 0x02};
+      std::string json;
+      expect(bool(glz::cbor_to_json(cbor_buffer, json)));
+   };
+
+   "cbor_to_json_tag_chain_key_depth_limited"_test = [] {
+      // map(1){ 0(0(0(...(1)))): 2 } -- a long tag chain on a key must hit the
+      // recursion depth limit instead of recursing unboundedly.
+      std::vector<uint8_t> cbor_buffer{0xa1};
+      cbor_buffer.insert(cbor_buffer.end(), 300, 0xc0);
+      cbor_buffer.push_back(0x01);
+      cbor_buffer.push_back(0x02);
+      std::string json;
+      const auto ec = glz::cbor_to_json(cbor_buffer, json);
+      expect(bool(ec));
+      expect(ec.ec == glz::error_code::exceeded_max_recursive_depth);
    };
 
    "cbor_to_json_bool"_test = [] {
@@ -2251,6 +2510,36 @@ void cbor_to_json_tests()
       std::string json;
       expect(not glz::cbor_to_json(cbor_buffer, json));
       expect(json == "[100,200,300]");
+   };
+
+   // Prettified output breaks the line before '}' only when the map holds pairs. The emptiness of
+   // a map is not decided by its additional info: an indefinite map ends at the break code, and a
+   // definite one may carry a zero count in a following byte.
+   "cbor_to_json_prettify_empty_map"_test = [] {
+      constexpr glz::opts pretty{.prettify = true};
+
+      const std::array<uint8_t, 1> definite{0xa0}; // map(0)
+      expect(glz::cbor_to_json<pretty>(definite).value() == "{}");
+
+      const std::array<uint8_t, 2> indefinite{0xbf, 0xff}; // map(*) with an immediate break
+      expect(glz::cbor_to_json<pretty>(indefinite).value() == "{}");
+
+      const std::array<uint8_t, 2> definite_wide{0xb8, 0x00}; // map(0) with a 1-byte count
+      expect(glz::cbor_to_json<pretty>(definite_wide).value() == "{}");
+   };
+
+   "cbor_to_json_prettify_non_empty_map"_test = [] {
+      constexpr glz::opts pretty{.prettify = true};
+
+      const std::array<uint8_t, 4> definite{0xa1, 0x61, 'a', 0x01}; // map(1){ "a": 1 }
+      expect(glz::cbor_to_json<pretty>(definite).value() == "{\n   \"a\": 1\n}");
+
+      const std::array<uint8_t, 5> indefinite{0xbf, 0x61, 'a', 0x01, 0xff}; // map(*){ "a": 1 }
+      expect(glz::cbor_to_json<pretty>(indefinite).value() == "{\n   \"a\": 1\n}");
+
+      // An empty nested map must not disturb the indentation of the map holding it.
+      const std::array<uint8_t, 5> nested{0xa1, 0x61, 'a', 0xbf, 0xff}; // map(1){ "a": map(*){} }
+      expect(glz::cbor_to_json<pretty>(nested).value() == "{\n   \"a\": {}\n}");
    };
 }
 
@@ -3358,6 +3647,60 @@ void cbor_skip_marker_tests_run()
    };
 }
 
+namespace cbor_skip_wellformed_tests
+{
+   struct one_member
+   {
+      int a{};
+   };
+
+   inline constexpr glz::opts skip_opts{.format = glz::CBOR, .error_on_unknown_keys = false};
+
+   // A one-pair map whose key "zz" is not a member, so its value goes through skip_value<CBOR>.
+   template <class... Bytes>
+   std::vector<uint8_t> unknown_value(Bytes... value_bytes)
+   {
+      return {0xA1, 0x62, 'z', 'z', static_cast<uint8_t>(value_bytes)...};
+   }
+}
+
+suite cbor_skip_wellformed = [] {
+   using namespace cbor_skip_wellformed_tests;
+
+   // additional_info 31 marks indefinite length, which is only well-formed for byte/text
+   // strings, arrays, and maps. On major type 0 (uint), 1 (nint), or 6 (tag) it is not
+   // well-formed (RFC 8949 Appendix C). The reader's decode_arg already rejects it; the
+   // skip path must agree instead of consuming the item and reporting success.
+   "skip rejects indefinite marker on uint"_test = [] {
+      one_member v{};
+      expect(glz::read<skip_opts>(v, unknown_value(0x1F)).ec == glz::error_code::syntax_error);
+   };
+
+   "skip rejects indefinite marker on nint"_test = [] {
+      one_member v{};
+      expect(glz::read<skip_opts>(v, unknown_value(0x3F)).ec == glz::error_code::syntax_error);
+   };
+
+   "skip rejects indefinite marker on tag"_test = [] {
+      one_member v{};
+      // Tag (0xDF) followed by a well-formed uint so the failure is the marker, not a short read.
+      expect(glz::read<skip_opts>(v, unknown_value(0xDF, 0x05)).ec == glz::error_code::syntax_error);
+   };
+
+   "skip accepts well-formed unknown values"_test = [] {
+      one_member a{};
+      expect(not glz::read<skip_opts>(a, unknown_value(0x05))); // uint 5
+      one_member b{};
+      expect(not glz::read<skip_opts>(b, unknown_value(0x19, 0x01, 0x2C))); // uint 300
+      one_member c{};
+      expect(not glz::read<skip_opts>(c, unknown_value(0x7F, 0x61, 'a', 0x61, 'b', 0xFF))); // indefinite text
+      one_member d{};
+      expect(not glz::read<skip_opts>(d, unknown_value(0x5F, 0x41, 0x01, 0x41, 0x02, 0xFF))); // indefinite bytes
+      one_member e{};
+      expect(not glz::read<skip_opts>(e, unknown_value(0x9F, 0x01, 0x02, 0xFF))); // indefinite array
+   };
+};
+
 // A std::variant whose own meta opts into custom_read/custom_write (with full from/to
 // specializations) must not be ambiguous with the built-in CBOR variant handlers.
 // Parity with the JSON fix in #2591.
@@ -3554,13 +3897,676 @@ suite cbor_byte_uint8_unify_tests = [] {
    };
 };
 
+struct cbor_stl_members
+{
+   std::set<int> items{};
+   std::list<std::string> names{};
+};
+
+// Contiguous byte ranges that are deliberately not indexable. A contiguous range owes the reader
+// size() and data(); nothing obliges it to carry a subscript operator as well, and the array form of
+// the byte sequence reader used to reach its elements through one.
+struct cbor_resizable_byte_range_no_subscript
+{
+   using value_type = uint8_t;
+   std::vector<uint8_t> storage{};
+   auto begin() { return storage.begin(); }
+   auto end() { return storage.end(); }
+   auto begin() const { return storage.begin(); }
+   auto end() const { return storage.end(); }
+   size_t size() const { return storage.size(); }
+   uint8_t* data() { return storage.data(); }
+   const uint8_t* data() const { return storage.data(); }
+   void resize(size_t n) { storage.resize(n); }
+   void clear() { storage.clear(); }
+   bool operator==(const cbor_resizable_byte_range_no_subscript&) const = default;
+};
+
+struct cbor_fixed_byte_range_no_subscript
+{
+   using value_type = uint8_t;
+   std::array<uint8_t, 5> storage{};
+   auto begin() { return storage.begin(); }
+   auto end() { return storage.end(); }
+   auto begin() const { return storage.begin(); }
+   auto end() const { return storage.end(); }
+   size_t size() const { return storage.size(); }
+   uint8_t* data() { return storage.data(); }
+   const uint8_t* data() const { return storage.data(); }
+   bool operator==(const cbor_fixed_byte_range_no_subscript&) const = default;
+};
+
+// A sequence of bytes has two legitimate CBOR encodings: a byte string (major type 2), which the
+// contiguous byte ranges write, and a plain array of small unsigned integers (major type 4), which
+// the others write. Each reader used to accept only its own, so Glaze could not read back its own
+// output whenever the container type differed.
+suite cbor_byte_sequence_encoding_tests = [] {
+   "byte string reads into non-contiguous byte ranges"_test = [] {
+      const std::vector<uint8_t> src{1, 2, 3};
+      std::string buffer{};
+      expect(not glz::write_cbor(src, buffer));
+      expect(buffer == std::string("\x43\x01\x02\x03", 4)) << "expected a byte string";
+
+      std::list<uint8_t> lst{9, 9, 9, 9, 9};
+      expect(not glz::read_cbor(lst, buffer));
+      expect(lst == std::list<uint8_t>{1, 2, 3});
+
+      std::deque<uint8_t> deq{};
+      expect(not glz::read_cbor(deq, buffer));
+      expect(deq == std::deque<uint8_t>{1, 2, 3});
+
+      std::set<uint8_t> st{7};
+      expect(not glz::read_cbor(st, buffer));
+      expect(st == std::set<uint8_t>{1, 2, 3});
+
+      std::list<std::byte> bytes{};
+      expect(not glz::read_cbor(bytes, buffer));
+      expect(bytes == std::list<std::byte>{std::byte{1}, std::byte{2}, std::byte{3}});
+   };
+
+   "array reads into contiguous byte ranges"_test = [] {
+      const std::list<uint8_t> src{1, 2, 3};
+      std::string buffer{};
+      expect(not glz::write_cbor(src, buffer));
+      expect(buffer == std::string("\x83\x01\x02\x03", 4)) << "expected a plain array";
+
+      std::vector<uint8_t> vec{9, 9};
+      expect(not glz::read_cbor(vec, buffer));
+      expect(vec == std::vector<uint8_t>{1, 2, 3});
+
+      std::vector<std::byte> bytes{};
+      expect(not glz::read_cbor(bytes, buffer));
+      expect(bytes == std::vector<std::byte>{std::byte{1}, std::byte{2}, std::byte{3}});
+
+      // A fixed-size target zero-fills its tail, as it does for a byte string.
+      std::array<uint8_t, 5> arr{9, 9, 9, 9, 9};
+      expect(not glz::read_cbor(arr, buffer));
+      expect(arr == std::array<uint8_t, 5>{1, 2, 3, 0, 0});
+
+      std::array<uint8_t, 2> too_small{};
+      expect(glz::read_cbor(too_small, buffer).ec == glz::error_code::exceeded_static_array_size);
+   };
+
+   "indefinite length forms of both encodings"_test = [] {
+      const std::string chunked_byte_string{"\x5F\x42\x01\x02\x41\x03\xFF", 7};
+
+      std::vector<uint8_t> vec{};
+      expect(not glz::read_cbor(vec, chunked_byte_string));
+      expect(vec == std::vector<uint8_t>{1, 2, 3});
+
+      std::list<uint8_t> lst{};
+      expect(not glz::read_cbor(lst, chunked_byte_string));
+      expect(lst == std::list<uint8_t>{1, 2, 3});
+
+      const std::string indefinite_array{"\x9F\x01\x02\x03\xFF", 5};
+
+      std::vector<uint8_t> vec2{};
+      expect(not glz::read_cbor(vec2, indefinite_array));
+      expect(vec2 == std::vector<uint8_t>{1, 2, 3});
+
+      std::array<uint8_t, 4> arr{9, 9, 9, 9};
+      expect(not glz::read_cbor(arr, indefinite_array));
+      expect(arr == std::array<uint8_t, 4>{1, 2, 3, 0});
+   };
+
+   // The array form fills its target one element at a time, which is where a subscript used to be
+   // assumed. Both framings and both kinds of target are covered because they take different paths:
+   // the definite one sizes the target once up front, the indefinite one grows it per element.
+   "array reads into contiguous byte ranges that are not indexable"_test = [] {
+      const std::string definite_array{"\x83\x01\x02\x03", 4};
+      const std::string indefinite_array{"\x9F\x01\x02\x03\xFF", 5};
+
+      for (const auto& buffer : {definite_array, indefinite_array}) {
+         cbor_resizable_byte_range_no_subscript resizable{{9, 9}};
+         expect(not glz::read_cbor(resizable, buffer));
+         expect(resizable.storage == std::vector<uint8_t>{1, 2, 3});
+
+         // A fixed-size target zero-fills its tail rather than growing.
+         cbor_fixed_byte_range_no_subscript fixed{{9, 9, 9, 9, 9}};
+         expect(not glz::read_cbor(fixed, buffer));
+         expect(fixed.storage == std::array<uint8_t, 5>{1, 2, 3, 0, 0});
+      }
+
+      // A byte string reaches the same targets through the bulk copy, which never indexed.
+      const std::string byte_string{"\x43\x01\x02\x03", 4};
+      cbor_resizable_byte_range_no_subscript resizable{};
+      expect(not glz::read_cbor(resizable, byte_string));
+      expect(resizable.storage == std::vector<uint8_t>{1, 2, 3});
+   };
+
+   "every byte container still round-trips"_test = [] {
+      const auto round_trip = [](auto source) {
+         std::string buffer{};
+         expect(not glz::write_cbor(source, buffer));
+         decltype(source) result{};
+         expect(not glz::read_cbor(result, buffer));
+         expect(result == source);
+      };
+
+      round_trip(std::vector<uint8_t>{1, 2, 3});
+      round_trip(std::vector<std::byte>{std::byte{1}, std::byte{2}});
+      round_trip(std::list<uint8_t>{1, 2, 3});
+      round_trip(std::deque<uint8_t>{1, 2, 3});
+      round_trip(std::set<uint8_t>{1, 2, 3});
+      round_trip(std::array<uint8_t, 3>{1, 2, 3});
+   };
+
+   "max_array_size applies to both encodings"_test = [] {
+      struct limited_opts : glz::opts
+      {
+         uint32_t format = glz::CBOR;
+         size_t max_array_size = 4;
+      };
+
+      std::string byte_string{};
+      expect(not glz::write_cbor(std::vector<uint8_t>(10, 1), byte_string));
+
+      std::vector<uint8_t> vec{};
+      expect(glz::read<limited_opts{}>(vec, byte_string).ec == glz::error_code::invalid_length);
+      std::list<uint8_t> lst{};
+      expect(glz::read<limited_opts{}>(lst, byte_string).ec == glz::error_code::invalid_length);
+
+      // Six bytes spread over three chunks: no single header exceeds the limit, the total does.
+      const std::string chunked{"\x5F\x42\x01\x02\x42\x03\x04\x42\x05\x06\xFF", 11};
+      std::vector<uint8_t> vec2{};
+      expect(glz::read<limited_opts{}>(vec2, chunked).ec == glz::error_code::invalid_length);
+      std::list<uint8_t> lst2{};
+      expect(glz::read<limited_opts{}>(lst2, chunked).ec == glz::error_code::invalid_length);
+
+      const std::string indefinite_array{"\x9F\x01\x02\x03\x04\x05\xFF", 7};
+      std::vector<uint8_t> vec3{};
+      expect(glz::read<limited_opts{}>(vec3, indefinite_array).ec == glz::error_code::invalid_length);
+   };
+
+   "truncated input is still rejected"_test = [] {
+      const std::string truncated_byte_string{"\x43\x01", 2};
+      std::vector<uint8_t> vec{};
+      expect(bool(glz::read_cbor(vec, truncated_byte_string)));
+      std::list<uint8_t> lst{};
+      expect(bool(glz::read_cbor(lst, truncated_byte_string)));
+
+      const std::string truncated_array{"\x83\x01", 2};
+      std::vector<uint8_t> vec2{};
+      expect(bool(glz::read_cbor(vec2, truncated_array)));
+   };
+
+   "non-byte element types are unaffected"_test = [] {
+      std::string buffer{};
+      expect(not glz::write_cbor(std::vector<std::string>{"a"}, buffer));
+
+      std::vector<uint8_t> vec{};
+      expect(bool(glz::read_cbor(vec, buffer)));
+   };
+};
+
+// RFC 8746 has no tag for an extended-precision float, so a container of them is written as a plain
+// array of numbers rather than failing to compile in the typed-array tag lookup.
+suite cbor_long_double_tests = [] {
+   "vector of long double round-trips"_test = [] {
+      const std::vector<long double> src{1.5L, 2.5L, -3.25L};
+      std::string buffer{};
+      expect(not glz::write_cbor(src, buffer));
+
+      std::vector<long double> dst{};
+      expect(not glz::read_cbor(dst, buffer));
+      expect(dst == src);
+
+      std::list<long double> lst{};
+      expect(not glz::read_cbor(lst, buffer));
+      expect(lst == std::list<long double>{1.5L, 2.5L, -3.25L});
+   };
+};
+
+struct cbor_flags_holder
+{
+   std::vector<bool> flags{};
+   int count{};
+};
+
+// std::vector<bool> packs its elements, so one is reached only through a proxy the container returns
+// by value. The reader used to bind its target as an lvalue reference, which no proxy can satisfy, so
+// reading one was a compile error while std::deque<bool> and std::list<bool> read fine.
+suite cbor_vector_bool_tests = [] {
+   "roundtrip"_test = [] {
+      const std::vector<bool> src{true, false, true, true, false};
+      std::string buffer{};
+      expect(not glz::write_cbor(src, buffer));
+
+      std::vector<bool> dst{};
+      expect(not glz::read_cbor(dst, buffer));
+      expect(dst == src);
+
+      // A longer prior value must be replaced, not merely overwritten in part.
+      std::vector<bool> stale(20, true);
+      expect(not glz::read_cbor(stale, buffer));
+      expect(stale == src);
+   };
+
+   "indefinite length"_test = [] {
+      const std::string buffer{"\x9F\xF5\xF4\xF5\xFF", 5};
+
+      std::vector<bool> dst{};
+      expect(not glz::read_cbor(dst, buffer));
+      expect(dst == std::vector<bool>{true, false, true});
+   };
+
+   "struct member and nesting"_test = [] {
+      const cbor_flags_holder src{{true, false}, 7};
+      std::string buffer{};
+      expect(not glz::write_cbor(src, buffer));
+
+      cbor_flags_holder dst{};
+      expect(not glz::read_cbor(dst, buffer));
+      expect(dst.flags == src.flags);
+      expect(dst.count == 7);
+
+      const std::vector<std::vector<bool>> nested{{true}, {false, true}};
+      buffer.clear();
+      expect(not glz::write_cbor(nested, buffer));
+
+      std::vector<std::vector<bool>> nested_dst{};
+      expect(not glz::read_cbor(nested_dst, buffer));
+      expect(nested_dst == nested);
+   };
+
+   "other bool containers still read"_test = [] {
+      const std::vector<bool> src{true, false, true};
+      std::string buffer{};
+      expect(not glz::write_cbor(src, buffer));
+
+      std::deque<bool> deq{};
+      expect(not glz::read_cbor(deq, buffer));
+      expect(deq == std::deque<bool>{true, false, true});
+
+      std::list<bool> lst{};
+      expect(not glz::read_cbor(lst, buffer));
+      expect(lst == std::list<bool>{true, false, true});
+
+      std::array<bool, 3> arr{};
+      expect(not glz::read_cbor(arr, buffer));
+      expect(arr == std::array<bool, 3>{true, false, true});
+   };
+
+   // Accepting the proxy must not also start accepting non-boolean input.
+   "non-boolean element is still an error"_test = [] {
+      const std::string buffer{"\x82\xF5\x01", 3};
+
+      std::vector<bool> dst{};
+      expect(glz::read_cbor(dst, buffer).ec == glz::error_code::syntax_error);
+   };
+};
+
+// Containers that grow by back-insertion or by emplacement rather than by subscript. The reader used
+// to index its target unconditionally, so these were a hard compile error rather than a bad read.
+suite cbor_non_indexable_container_tests = [] {
+   "list roundtrip"_test = [] {
+      const std::list<int> src{1, 2, 3};
+      std::string buffer{};
+      expect(not glz::write_cbor(src, buffer));
+
+      std::list<int> dst{9, 9, 9, 9, 9};
+      expect(not glz::read_cbor(dst, buffer));
+      expect(dst == src);
+   };
+
+   "list of strings roundtrip"_test = [] {
+      const std::list<std::string> src{"a", "bb", "ccc"};
+      std::string buffer{};
+      expect(not glz::write_cbor(src, buffer));
+
+      std::list<std::string> dst{};
+      expect(not glz::read_cbor(dst, buffer));
+      expect(dst == src);
+   };
+
+   "set roundtrip"_test = [] {
+      const std::set<int> src{3, 1, 2};
+      std::string buffer{};
+      expect(not glz::write_cbor(src, buffer));
+
+      std::set<int> dst{99};
+      expect(not glz::read_cbor(dst, buffer));
+      expect(dst == src);
+   };
+
+   "unordered_set roundtrip"_test = [] {
+      const std::unordered_set<std::string> src{"x", "y", "z"};
+      std::string buffer{};
+      expect(not glz::write_cbor(src, buffer));
+
+      std::unordered_set<std::string> dst{"stale"};
+      expect(not glz::read_cbor(dst, buffer));
+      expect(dst == src);
+   };
+
+   // 0x9F starts an indefinite-length array, terminated by the 0xFF break code.
+   "indefinite length array"_test = [] {
+      const std::string buffer{"\x9F\x01\x02\x03\xFF", 5};
+
+      std::list<int> lst{};
+      expect(not glz::read_cbor(lst, buffer));
+      expect(lst == std::list<int>{1, 2, 3});
+
+      std::set<int> st{9};
+      expect(not glz::read_cbor(st, buffer));
+      expect(st == std::set<int>{1, 2, 3});
+   };
+
+   // A vector of numbers is written as an RFC 8746 typed array, which these containers cannot bulk
+   // read into, so the reader decodes it one element at a time.
+   "typed array into non-contiguous containers"_test = [] {
+      const std::vector<int32_t> src{1, 2, 3};
+      std::string buffer{};
+      expect(not glz::write_cbor(src, buffer));
+
+      std::list<int32_t> lst{};
+      expect(not glz::read_cbor(lst, buffer));
+      expect(lst == std::list<int32_t>{1, 2, 3});
+
+      std::set<int32_t> st{99};
+      expect(not glz::read_cbor(st, buffer));
+      expect(st == std::set<int32_t>{1, 2, 3});
+
+      std::deque<int32_t> deq{};
+      expect(not glz::read_cbor(deq, buffer));
+      expect(deq == std::deque<int32_t>{1, 2, 3});
+   };
+
+   // Tag 66 is a big-endian uint32 typed array, so every element needs a byteswap on a little-endian
+   // platform. The swap is per-element here rather than over one contiguous block.
+   "byteswapped typed array into non-contiguous containers"_test = [] {
+      std::string buffer{};
+      buffer.push_back(char(0xD8)); // tag, one byte follows
+      buffer.push_back(char(66)); // uint32, big endian
+      buffer.push_back(char(0x48)); // byte string of 8
+      const unsigned char payload[] = {0, 0, 0, 1, 0, 0, 0, 2};
+      buffer.append(reinterpret_cast<const char*>(payload), sizeof(payload));
+
+      std::list<uint32_t> lst{};
+      expect(not glz::read_cbor(lst, buffer));
+      expect(lst == std::list<uint32_t>{1, 2});
+
+      std::set<uint32_t> st{};
+      expect(not glz::read_cbor(st, buffer));
+      expect(st == std::set<uint32_t>{1, 2});
+
+      std::vector<uint32_t> vec{};
+      expect(not glz::read_cbor(vec, buffer));
+      expect(vec == std::vector<uint32_t>{1, 2});
+   };
+
+   "struct member containers"_test = [] {
+      cbor_stl_members src{};
+      src.items = {1, 2, 3};
+      src.names = {"a", "b"};
+      std::string buffer{};
+      expect(not glz::write_cbor(src, buffer));
+
+      cbor_stl_members dst{};
+      expect(not glz::read_cbor(dst, buffer));
+      expect(dst.items == src.items);
+      expect(dst.names == src.names);
+   };
+
+   // A vector of std::complex is written under tag 43001 as an interleaved [real, imag] typed array,
+   // which these containers cannot bulk read into either.
+   "complex array into non-contiguous containers"_test = [] {
+      const std::vector<std::complex<double>> src{{1.0, 2.0}, {3.0, 4.0}};
+      std::string buffer{};
+      expect(not glz::write_cbor(src, buffer));
+
+      std::list<std::complex<double>> lst{};
+      expect(not glz::read_cbor(lst, buffer));
+      expect(lst == std::list<std::complex<double>>{{1.0, 2.0}, {3.0, 4.0}});
+
+      std::deque<std::complex<double>> deq{};
+      expect(not glz::read_cbor(deq, buffer));
+      expect(deq == std::deque<std::complex<double>>{{1.0, 2.0}, {3.0, 4.0}});
+   };
+};
+
+// Resizable but without back-insertion, and back-insertable but without resize. No standard container
+// is either, yet both reach the array reader, and the definite- and indefinite-length branches take
+// different routes for them: this pins the two framings to the same result.
+struct cbor_resize_only
+{
+   using value_type = int;
+   std::vector<int> data{};
+
+   auto begin() { return data.begin(); }
+   auto end() { return data.end(); }
+   auto begin() const { return data.begin(); }
+   auto end() const { return data.end(); }
+   size_t size() const { return data.size(); }
+   void resize(size_t n) { data.resize(n); }
+};
+
+struct cbor_append_only
+{
+   using value_type = int;
+   using reference = int&;
+   std::vector<int> data{};
+
+   auto begin() { return data.begin(); }
+   auto end() { return data.end(); }
+   auto begin() const { return data.begin(); }
+   auto end() const { return data.end(); }
+   size_t size() const { return data.size(); }
+   void clear() { data.clear(); }
+   int& emplace_back() { return data.emplace_back(); }
+};
+
+// Append-only and contiguous: the typed-array reader sizes it through emplace_back but fills it in
+// bulk through data(), so the elements have to exist before the fill.
+struct cbor_append_only_contiguous
+{
+   using value_type = int32_t;
+   using reference = int32_t&;
+   std::vector<int32_t> storage{};
+
+   auto begin() { return storage.begin(); }
+   auto end() { return storage.end(); }
+   auto begin() const { return storage.begin(); }
+   auto end() const { return storage.end(); }
+   size_t size() const { return storage.size(); }
+   int32_t* data() { return storage.data(); }
+   const int32_t* data() const { return storage.data(); }
+   void clear() { storage.clear(); }
+   int32_t& emplace_back() { return storage.emplace_back(); }
+};
+
+struct cbor_append_only_complex
+{
+   using value_type = std::complex<double>;
+   using reference = std::complex<double>&;
+   std::vector<std::complex<double>> data{};
+
+   auto begin() { return data.begin(); }
+   auto end() { return data.end(); }
+   auto begin() const { return data.begin(); }
+   auto end() const { return data.end(); }
+   size_t size() const { return data.size(); }
+   void clear() { data.clear(); }
+   std::complex<double>& emplace_back() { return data.emplace_back(); }
+};
+
+suite cbor_array_framing_agreement_tests = [] {
+   "definite and indefinite agree"_test = [] {
+      const std::string definite{"\x83\x01\x02\x03", 4};
+      const std::string indefinite{"\x9F\x01\x02\x03\xFF", 5};
+      const std::vector<int> expected{1, 2, 3};
+
+      cbor_resize_only a{};
+      expect(not glz::read_cbor(a, definite));
+      expect(a.data == expected);
+
+      cbor_resize_only b{};
+      expect(not glz::read_cbor(b, indefinite));
+      expect(b.data == expected);
+
+      cbor_append_only c{};
+      expect(not glz::read_cbor(c, definite));
+      expect(c.data == expected);
+
+      cbor_append_only d{};
+      expect(not glz::read_cbor(d, indefinite));
+      expect(d.data == expected);
+   };
+
+   // A prior read must not leave elements behind when the next one is shorter.
+   "growable targets are reset"_test = [] {
+      const std::string three{"\x83\x01\x02\x03", 4};
+      const std::string one{"\x9F\x07\xFF", 3};
+
+      cbor_resize_only a{};
+      expect(not glz::read_cbor(a, three));
+      expect(not glz::read_cbor(a, one));
+      expect(a.data == std::vector<int>{7});
+
+      cbor_append_only b{};
+      expect(not glz::read_cbor(b, three));
+      expect(not glz::read_cbor(b, one));
+      expect(b.data == std::vector<int>{7});
+   };
+
+   // The third framing: a numeric array is written as an RFC 8746 typed array, so this is the shape
+   // Glaze itself produces for the equivalent vector. It has to agree with the two generic framings.
+   "typed array framing agrees"_test = [] {
+      std::string typed{};
+      expect(not glz::write_cbor(std::vector<int32_t>{1, 2, 3}, typed));
+      const std::vector<int> expected{1, 2, 3};
+
+      cbor_append_only a{};
+      expect(not glz::read_cbor(a, typed));
+      expect(a.data == expected);
+
+      cbor_resize_only b{};
+      expect(not glz::read_cbor(b, typed));
+      expect(b.data == expected);
+
+      cbor_append_only_contiguous c{};
+      expect(not glz::read_cbor(c, typed));
+      expect(c.storage == std::vector<int32_t>{1, 2, 3});
+   };
+
+   // Complex arrays travel under tag 43001 as interleaved [real, imag] pairs, on the same path.
+   "complex typed array framing agrees"_test = [] {
+      const std::vector<std::complex<double>> src{{1.0, 2.0}, {3.0, 4.0}};
+      std::string typed{};
+      expect(not glz::write_cbor(src, typed));
+
+      cbor_append_only_complex a{};
+      expect(not glz::read_cbor(a, typed));
+      expect(a.data == src);
+   };
+
+   // A shorter typed array must not leave the previous read's elements behind either.
+   "typed arrays reset append-only targets"_test = [] {
+      std::string three{};
+      expect(not glz::write_cbor(std::vector<int32_t>{1, 2, 3}, three));
+      std::string one{};
+      expect(not glz::write_cbor(std::vector<int32_t>{7}, one));
+
+      cbor_append_only a{};
+      expect(not glz::read_cbor(a, three));
+      expect(not glz::read_cbor(a, one));
+      expect(a.data == std::vector<int>{7});
+
+      cbor_append_only_contiguous b{};
+      expect(not glz::read_cbor(b, three));
+      expect(not glz::read_cbor(b, one));
+      expect(b.storage == std::vector<int32_t>{7});
+   };
+};
+
+// An indefinite-length array is ended by a break code rather than a count, so the caller's limit has
+// to be enforced as it grows. It used to be checked only on the definite-length form, which left the
+// limit trivially bypassable by reframing the same array.
+suite cbor_indefinite_array_limit_tests = [] {
+   struct limited_opts : glz::opts
+   {
+      uint32_t format = glz::CBOR;
+      size_t max_array_size = 2;
+   };
+
+   "indefinite arrays honor max_array_size"_test = [] {
+      const std::string oversized{"\x9F\x01\x02\x03\x04\x05\xFF", 7};
+
+      std::vector<int> vec{};
+      expect(glz::read<limited_opts{}>(vec, oversized).ec == glz::error_code::invalid_length);
+
+      std::list<int> lst{};
+      expect(glz::read<limited_opts{}>(lst, oversized).ec == glz::error_code::invalid_length);
+
+      std::set<int> st{};
+      expect(glz::read<limited_opts{}>(st, oversized).ec == glz::error_code::invalid_length);
+   };
+
+   "indefinite arrays within max_array_size are accepted"_test = [] {
+      const std::string within{"\x9F\x01\x02\xFF", 4};
+
+      std::vector<int> vec{};
+      expect(not glz::read<limited_opts{}>(vec, within));
+      expect(vec == std::vector<int>{1, 2});
+   };
+};
+
+#if __cpp_exceptions
+// Assigning from this leaves the variant valueless, which has no alternative index to write. The
+// user-declared constructors make it a non-aggregate, so it needs a meta to be serializable at all.
+struct cbor_throws_on_copy
+{
+   int x{};
+   cbor_throws_on_copy() = default;
+   cbor_throws_on_copy(const cbor_throws_on_copy&) { throw std::runtime_error("copy"); }
+   cbor_throws_on_copy& operator=(const cbor_throws_on_copy&) { throw std::runtime_error("assign"); }
+};
+
+template <>
+struct glz::meta<cbor_throws_on_copy>
+{
+   using T = cbor_throws_on_copy;
+   static constexpr auto value = object(&T::x);
+};
+#endif
+
+// A variant that repeats an alternative type: the written index must be the active one, not the first
+// alternative that happens to match by type.
+suite cbor_variant_index_tests = [] {
+   "duplicate alternative types"_test = [] {
+      std::variant<int, int, double> src{std::in_place_index<1>, 7};
+      std::string buffer{};
+      expect(not glz::write_cbor(src, buffer));
+
+      std::variant<int, int, double> dst{};
+      expect(not glz::read_cbor(dst, buffer));
+      expect(dst.index() == 1);
+      expect(std::get<1>(dst) == 7);
+   };
+
+#if __cpp_exceptions
+   "valueless variant is rejected"_test = [] {
+      std::variant<int, cbor_throws_on_copy> v{};
+      try {
+         const cbor_throws_on_copy thrower{};
+         v = thrower;
+      }
+      catch (const std::runtime_error&) {
+      }
+      expect(v.valueless_by_exception());
+
+      std::string buffer{};
+      expect(glz::write_cbor(v, buffer).ec == glz::error_code::no_matching_variant_type);
+   };
+#endif
+};
+
 struct cbor_shrink_opts : glz::opts
 {
    bool shrink_to_fit = true;
 };
 
 // Resizable but deliberately without a shrink_to_fit member, like std::list.
-// std::list itself can't be used here: CBOR's array reader subscripts its target.
 // String elements keep this on the generic array path rather than the typed-array path.
 struct no_shrink_strings
 {
@@ -3689,6 +4695,7 @@ int main()
    large_data_tests();
    rfc8949_appendix_a_tests();
    typed_array_tests();
+   typed_array_kind_tests();
    cbor_to_json_tests();
    past_fuzzing_issues();
    error_tests();

@@ -1,7 +1,11 @@
 // Glaze Library
 // For the license information refer to glaze.ixx
 
+#include <ctime>
+
 import std;
+
+import glaze.tests.scratch_directory;
 
 import glaze.api.impl;
 
@@ -1448,6 +1452,11 @@ void bench()
 
 using namespace ut;
 
+// Relative scratch paths in this file resolve inside a private directory rather than
+// wherever the binary was launched from. This must precede the first suite: ut runs a
+// suite from its constructor, during static initialization.
+const glz_test::scratch_directory scratch{"beve_test"};
+
 suite beve_helpers = [] {
    "beve_helpers"_test = [] {
       my_struct v{22, 5.76, "ufo", {9, 5, 1}};
@@ -2099,6 +2108,22 @@ struct nothing
    };
 };
 
+struct parse_skipped_t
+{
+   int a{};
+   double skipped_on_parse{};
+   std::string s{};
+};
+
+template <>
+struct glz::meta<parse_skipped_t>
+{
+   static constexpr bool skip(const std::string_view key, const meta_context& ctx)
+   {
+      return key == "skipped_on_parse" && ctx.op == operation::parse;
+   }
+};
+
 suite skip_test = [] {
    "skip"_test = [] {
       full f{};
@@ -2118,6 +2143,24 @@ suite skip_test = [] {
 
       nothing obj{};
       expect(!glz::read<glz::opts{.format = glz::BEVE, .error_on_unknown_keys = false}>(obj, s));
+   };
+
+   // A skip() that only fires on parse excludes nothing from serialization, so the object writes all
+   // three members and the member count in the header has to say three. The count and the members
+   // themselves are decided by separate code, and this is what catches them disagreeing.
+   //
+   // meta::skip is a JSON/YAML customization point; BEVE does not consult it in either direction, so
+   // the skipped member also survives the read here.
+   "a parse-only meta::skip writes every member"_test = [] {
+      parse_skipped_t obj{7, 2.5, "written"};
+      std::string s{};
+      expect(not glz::write_beve(obj, s));
+
+      parse_skipped_t restored{};
+      expect(!glz::read_beve(restored, s));
+      expect(restored.a == 7);
+      expect(restored.skipped_on_parse == 2.5);
+      expect(restored.s == "written");
    };
 };
 
@@ -2782,6 +2825,11 @@ suite beve_custom_key_tests = [] {
    "vector pair CastModuleID"_test = [] { verify_vector_pair_roundtrip<CastModuleID>(); };
 };
 
+struct beve_escape_opts : glz::opts
+{
+   bool escape_control_characters = true;
+};
+
 suite beve_to_json_tests = [] {
    "beve_to_json bool"_test = [] {
       bool b = true;
@@ -2814,6 +2862,54 @@ suite beve_to_json_tests = [] {
       std::string json{};
       expect(!glz::beve_to_json(buffer, json));
       expect(json == R"("Hello World")") << json;
+   };
+
+   "beve_to_json rejects control characters by default"_test = [] {
+      // A control byte is legal in a BEVE string but cannot be written as JSON without \uXXXX.
+      // The default refuses it rather than emitting bytes that will not re-parse, so the caller
+      // gets a signal instead of a malformed document.
+      std::map<std::string, std::string> v = {{std::string("k\001"), std::string("a\001b")}};
+      std::string buffer{};
+      expect(not glz::write_beve(v, buffer));
+
+      std::string json{};
+      expect(glz::beve_to_json(buffer, json).ec == glz::error_code::invalid_control_character);
+   };
+
+   "beve_to_json escapes control characters when asked"_test = [] {
+      // escape_control_characters opts into carrying them across. Covers a value and a map key.
+      std::map<std::string, std::string> v = {{std::string("k\001"), std::string("a\001b")}};
+      std::string buffer{};
+      expect(not glz::write_beve(v, buffer));
+
+      std::string json{};
+      expect(!glz::beve_to_json<beve_escape_opts{}>(buffer, json));
+      expect(json == "{\"k\\u0001\":\"a\\u0001b\"}") << json;
+      std::map<std::string, std::string> round_trip{};
+      expect(!glz::read_json(round_trip, json)) << json;
+      expect(round_trip == v);
+   };
+
+   "beve_to_json passes through control characters that have a short escape"_test = [] {
+      // The default refuses only control characters with no two-character JSON escape. Backspace,
+      // tab, newline, form feed and carriage return have one, so they keep converting normally.
+      // The reject sits in the else of the escape table lookup and cannot see them. The long
+      // value puts the run past the scalar tail and into the writer's block scan, which rejects
+      // at a separate site.
+      const std::string shorts = "\b\t\n\f\r";
+      std::map<std::string, std::string> v = {{"k" + shorts, shorts},
+                                              {"long", std::string(64, 'a') + shorts + std::string(64, 'b')}};
+      std::string buffer{};
+      expect(not glz::write_beve(v, buffer));
+
+      std::string json{};
+      expect(!glz::beve_to_json(buffer, json)) << json;
+      expect(json.find("\\b\\t\\n\\f\\r") != std::string::npos) << json;
+      expect(json.find_first_of(shorts) == std::string::npos) << json;
+
+      std::map<std::string, std::string> round_trip{};
+      expect(!glz::read_json(round_trip, json)) << json;
+      expect(round_trip == v);
    };
 
    "beve_to_json std::map"_test = [] {
@@ -4777,14 +4873,19 @@ suite beve_v2_variant_resolution = [] {
       // (256), one level per nested object. Each buffer is read many times so the ratio does not
       // rest on a single sub-millisecond sample.
       //
-      // The growth is then measured as the median of several rounds rather than from one sample of
-      // each depth. Timing each depth once put the ratio at 8.6x on a busy CI runner, close enough
-      // to the 8x threshold to fail a build that had not touched this code path. Both depths are
-      // timed back-to-back within a round so that interference lands on numerator and denominator
-      // together and largely divides out; the median then discards whichever rounds it skewed
-      // anyway. Note that taking the fastest round of each depth separately does not work here --
-      // the shallow loop is a quarter of the work and finds a clean window far more easily than
-      // the deep one, so independent minima bias the ratio apart instead of converging it.
+      // The clock is process CPU time rather than wall time, because ctest runs this binary
+      // alongside two others and a loaded machine deschedules the loops. Wall time counts that
+      // waiting and the ratio stops describing the code: a three-way run on a macOS CI runner read
+      // 12.0x on a commit that touched only write paths, which is indistinguishable from the ~13x
+      // of a genuinely quadratic reader. CPU time excludes the waiting, and holds 3.1-4.9x against
+      // the quadratic reader's 10.5-13.9x even when the machine is oversubscribed six to one.
+      //
+      // The growth is then the median of several rounds rather than one sample of each depth. Both
+      // depths are timed back-to-back within a round so that whatever interference remains lands on
+      // numerator and denominator together and largely divides out; the median then discards
+      // whichever rounds it skewed anyway. The median and not the minimum: noise inflates a
+      // denominator as readily as a numerator, and a low outlier is how a real regression would
+      // slip through. On wall time the quadratic reader's cheapest loaded round already read 8.0x.
       auto build = [](int depth) {
          deep_v v{deep_leaf{1}};
          for (int i = 0; i < depth; ++i) {
@@ -4797,13 +4898,13 @@ suite beve_v2_variant_resolution = [] {
       };
       constexpr int reps = 200;
       constexpr int rounds = 5; // odd, so the median is the middle element
-      auto bench_ms = [](const std::string& buf, int n) {
-         const auto t0 = std::chrono::steady_clock::now();
+      auto bench_cpu_ms = [](const std::string& buf, int n) {
+         const auto c0 = std::clock();
          for (int i = 0; i < n; ++i) {
             deep_v out{};
             (void)glz::read_beve(out, buf);
          }
-         return std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
+         return 1000.0 * double(std::clock() - c0) / double(CLOCKS_PER_SEC);
       };
       const auto shallow = build(50);
       const auto deep = build(200); // 4x the depth
@@ -4812,17 +4913,17 @@ suite beve_v2_variant_resolution = [] {
          deep_v out{};
          expect(not glz::read_beve(out, deep));
       }
-      bench_ms(shallow, reps / 4); // warm both paths before timing
-      bench_ms(deep, reps / 4);
+      bench_cpu_ms(shallow, reps / 4); // warm both paths before timing
+      bench_cpu_ms(deep, reps / 4);
       std::array<double, rounds> growth{};
       for (auto& g : growth) {
-         const auto t_shallow = bench_ms(shallow, reps);
-         const auto t_deep = bench_ms(deep, reps);
+         const auto t_shallow = bench_cpu_ms(shallow, reps);
+         const auto t_deep = bench_cpu_ms(deep, reps);
          g = t_deep / t_shallow;
       }
       std::ranges::sort(growth);
       const auto median_growth = growth[rounds / 2];
-      // Measured 3.9-4.1x linear against 13.3-14.2x quadratic, so 8x separates them with margin.
+      // Measured 3.9-4.1x linear against 12.5-12.8x quadratic, so 8x separates them with margin.
       expect(median_growth < 8.0) << "read time grew " << median_growth << "x for 4x the depth";
 
       // Past the limit, every level fails identically. Each of the variant reader's recovery paths
@@ -6166,6 +6267,26 @@ suite beve_bounded_buffer_overflow_tests = [] {
       auto ec = glz::read_beve(decoded, std::string_view{buffer.data(), result.count});
       expect(!ec) << "read should succeed";
       expect(decoded == obj) << "decoded map should match";
+   };
+
+   "beve_to_json into a bounded buffer reserves what the strings escape to"_test = [] {
+      // Under escape_control_characters the worst-case reservation is 6 bytes per character.
+      // A fixed buffer cannot grow, so it is sized by what the string actually escapes to and
+      // a payload that fits is not rejected.
+      std::map<std::string, std::string> v{{"k", std::string("a\001b") + std::string(200, 'c')}};
+      std::string beve{};
+      expect(not glz::write_beve(v, beve));
+
+      std::string reference{};
+      expect(not glz::beve_to_json<beve_escape_opts{}>(beve, reference));
+      expect(reference.size() == 216) << reference.size(); // 1222 of worst case
+
+      std::array<char, 512> buffer{};
+      expect(not glz::beve_to_json<beve_escape_opts{}>(beve, buffer)) << "216 bytes should fit in 512";
+      expect(std::string_view(buffer.data(), reference.size()) == reference);
+
+      std::array<char, 16> tiny{};
+      expect(glz::beve_to_json<beve_escape_opts{}>(beve, tiny).ec == glz::error_code::buffer_overflow);
    };
 };
 

@@ -36,6 +36,44 @@ using std::uint64_t;
 
 namespace glz
 {
+   namespace eigen_detail
+   {
+      // Validates the [rows, cols] header of a dynamic matrix against what the matrix can
+      // actually store, before it is handed to resize().
+      //
+      // A negative extent is not a dimension, and Eigen's resize() has no defined behavior for
+      // one. Worse, two negatives multiply back to a positive size(), so a header like [-2, -3]
+      // would otherwise produce a 6-element data span over a matrix that holds nothing.
+      //
+      // A dynamic matrix with a fixed maximum (Matrix<T, -1, -1, 0, MaxRows, MaxCols>) carries
+      // MaxRows * MaxCols scalars of inline storage, and its resize() only records the new
+      // extents in that fixed buffer -- it cannot grow. size() therefore reports the wire
+      // product rather than the capacity, so nothing downstream would catch a header that
+      // exceeds the buffer. Reject it here, mirroring the fixed-extent check in from<CBOR, T>.
+      template <class T>
+      [[nodiscard]] GLZ_ALWAYS_INLINE bool invalid_extents(const std::array<Eigen::Index, 2>& extents,
+                                                           is_context auto& ctx) noexcept
+      {
+         if (extents[0] < 0 || extents[1] < 0) [[unlikely]] {
+            ctx.error = error_code::syntax_error;
+            return true;
+         }
+         if constexpr (T::MaxRowsAtCompileTime >= 0) {
+            if (extents[0] > T::MaxRowsAtCompileTime) [[unlikely]] {
+               ctx.error = error_code::exceeded_static_array_size;
+               return true;
+            }
+         }
+         if constexpr (T::MaxColsAtCompileTime >= 0) {
+            if (extents[1] > T::MaxColsAtCompileTime) [[unlikely]] {
+               ctx.error = error_code::exceeded_static_array_size;
+               return true;
+            }
+         }
+         return false;
+      }
+   }
+
    template <matrix_t T>
       requires(T::RowsAtCompileTime >= 0 && T::ColsAtCompileTime >= 0)
    struct from<BEVE, T>
@@ -80,11 +118,19 @@ namespace glz
             return;
          }
          ++it;
-         std::array<Eigen::Index, 2> extents;
+         std::array<Eigen::Index, 2> extents{};
          parse<BEVE>::op<Opts>(extents, ctx, it, end);
+         if (bool(ctx.error)) [[unlikely]] {
+            return;
+         }
+         if (eigen_detail::invalid_extents<T>(extents, ctx)) [[unlikely]] {
+            return;
+         }
 
          value.resize(extents[0], extents[1]);
-         std::span<typename T::Scalar> view(value.data(), extents[0] * extents[1]);
+         // The extents were validated against the matrix's storage above, so size the data
+         // span from size() rather than the wire product, matching from<CBOR, T>.
+         std::span<typename T::Scalar> view(value.data(), static_cast<size_t>(value.size()));
          parse<BEVE>::op<Opts>(view, ctx, it, end);
       }
    };
@@ -336,9 +382,21 @@ namespace glz
          if (match_invalid_end<'[', Opts>(ctx, it, end)) {
             return;
          }
-         std::array<Eigen::Index, 2> extents; // NOLINT
+         std::array<Eigen::Index, 2> extents{};
          parse<JSON>::op<Opts>(extents, ctx, it, end);
+         if (bool(ctx.error)) [[unlikely]] {
+            return;
+         }
+         if (eigen_detail::invalid_extents<T>(extents, ctx)) [[unlikely]] {
+            return;
+         }
          value.resize(extents[0], extents[1]);
+         if constexpr (not Opts.null_terminated) {
+            if (it == end) [[unlikely]] {
+               ctx.error = error_code::unexpected_end;
+               return;
+            }
+         }
          if (*it == ',') {
             // we have data
             ++it;
@@ -348,8 +406,19 @@ namespace glz
                   return;
                }
             }
-            std::span<typename T::Scalar> view(value.data(), extents[0] * extents[1]);
+            // The extents were validated against the matrix's storage above, so size the data
+            // span from size() rather than the wire product, matching from<CBOR, T>.
+            std::span<typename T::Scalar> view(value.data(), static_cast<size_t>(value.size()));
             parse<JSON>::op<Opts>(view, ctx, it, end);
+            if (bool(ctx.error)) [[unlikely]] {
+               return;
+            }
+            if constexpr (not Opts.null_terminated) {
+               if (it == end) [[unlikely]] {
+                  ctx.error = error_code::unexpected_end;
+                  return;
+               }
+            }
          }
          match<']'>(ctx, it);
       }

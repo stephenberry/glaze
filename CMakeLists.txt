@@ -6,7 +6,7 @@ include(cmake/prelude.cmake)
 
 project(
     glaze
-    VERSION 7.9.1
+    VERSION 8.1.0
     LANGUAGES CXX
 )
 
@@ -25,6 +25,7 @@ endif()
 
 if(GLAZE_ENABLE_MODULES)
   add_library(glaze_glaze STATIC)
+  target_compile_definitions(glaze_glaze PRIVATE GLZ_BUILDING_MODULES)
   if (PROJECT_IS_TOP_LEVEL)
     set_target_properties(glaze_glaze PROPERTIES POSITION_INDEPENDENT_CODE ON)
   endif()
@@ -40,8 +41,16 @@ if (MSVC)
   if (matched_cl)
     # for a C++ standards compliant preprocessor, not needed for clang-cl
     target_compile_options(glaze_glaze INTERFACE "/Zc:preprocessor" /permissive- /Zc:lambda)
-
-    if(PROJECT_IS_TOP_LEVEL)
+    # Whole-program optimization changes codegen quality, never correctness, and the
+    # top-level build is glaze's own test suite -- correctness checks that gain nothing
+    # from it. Because glaze is header-only, every test executable pays a full link-time
+    # code generation pass, and there are ~70 of them: /GL /LTCG more than doubled the
+    # MSVC Release CI build (32 min of compiling versus 13 min without). The benchmarks
+    # in benchmarks/ configure as their own top-level project, so they never saw these
+    # flags anyway, and published numbers are measured on GCC. Opt in when profiling
+    # glaze itself on MSVC.
+    option(glaze_ENABLE_LTCG "Build with MSVC whole-program optimization (/GL /LTCG)" OFF)
+    if(PROJECT_IS_TOP_LEVEL AND glaze_ENABLE_LTCG)
       target_compile_options(glaze_glaze INTERFACE
         $<$<CONFIG:Release>:/GL>
         $<$<CONFIG:MinSizeRel>:/GL>)
@@ -123,6 +132,24 @@ if(glaze_ENABLE_SSL)
       OpenSSL::Crypto
   )
   target_compile_definitions(glaze_glaze ${GLAZE_LIB_TYPE} GLZ_ENABLE_SSL)
+
+  # crypt32 is needed to read the Windows ROOT certificate store; see
+  # detail::load_os_ca_certificates in include/glaze/net/ssl.hpp for why that is necessary.
+  #
+  # This is the MinGW half of the requirement. MSVC and clang-cl get crypt32 from the
+  # #pragma comment(lib) in ssl.hpp, which reaches consumers that define GLZ_ENABLE_SSL
+  # without going through this option; MinGW ignores that pragma, so the option names the
+  # library too. Consumers who set the macro by hand under MinGW must do the same.
+  #
+  # Consumers that supply their own trust bundle can define GLZ_DISABLE_WINDOWS_CERT_STORE
+  # to compile that code out; crypt32 (a Windows system library) stays on the link line
+  # either way, since a consumer-defined macro is not visible here.
+  #
+  # No ${warning_guard} here: it expands to SYSTEM, which target_link_libraries rejects on
+  # an INTERFACE library.
+  if(WIN32)
+    target_link_libraries(glaze_glaze INTERFACE crypt32)
+  endif()
 endif(glaze_ENABLE_SSL)
 
 option(glaze_ENABLE_REFLECTION26 "Enable C++26 P2996 reflection (requires Bloomberg clang-p2996 or compatible compiler)" OFF)

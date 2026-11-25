@@ -3,7 +3,10 @@
 // glz:header path="glaze/simd/avx.hpp"
 module;
 
-#include "glaze/simd/simd.hpp"
+#if defined(__x86_64__) || defined(_M_X64)
+#include <immintrin.h>
+#endif
+#include "glaze/simd/simd_config.hpp"
 
 export module glaze.simd.avx;
 
@@ -55,4 +58,3 @@ namespace glz::detail
 }
 
 #endif
-

@@ -184,18 +184,41 @@ namespace glz::repe
    }
 
    // Convert JSON-RPC request to REPE message
+   //
+   // A request that omits `jsonrpc` or `method` is rejected rather than converted. Both are required
+   // by JSON-RPC 2.0, and neither can be allowed to fall through to a default here: rpc::request_t
+   // defaults the version to "2.0", so an absent one would pass for a version that was never sent,
+   // and an absent method would name "", producing the REPE query "/" as though the caller had asked
+   // for it. Nothing downstream can recover the distinction -- the emitted message is well formed,
+   // and a REPE server has no way to tell it apart from a query the client really wrote. Rejecting
+   // costs callers nothing new: the failure channel is the one they already check.
+   //
+   // An explicit `"method":""` is still converted, to the query "/". Only absence is an error.
    export inline expected<message, std::string> from_jsonrpc_request(std::string_view json_request)
    {
-      auto req = read_json<rpc::generic_request_t>(json_request);
+      auto req = read_json<rpc::request_envelope_t>(json_request);
       if (!req) {
          return unexpected<std::string>("Failed to parse JSON-RPC request");
+      }
+
+      if (!req->version) {
+         return unexpected<std::string>("Missing 'jsonrpc' member");
+      }
+      if (*req->version != rpc::supported_version) {
+         // Written as a JSON string rather than spliced in raw: the version is attacker-controlled,
+         // and this message is the sort of thing a bridge forwards into an error response.
+         return unexpected<std::string>("Unsupported 'jsonrpc' version: " +
+                                        glz::write_json(*req->version).value_or(R"("")"));
+      }
+      if (!req->method) {
+         return unexpected<std::string>("Missing 'method' member");
       }
 
       message msg{};
 
       // Set query as method name with leading slash
       msg.query = "/";
-      msg.query += req->method;
+      msg.query += *req->method;
 
       // Set body as params (if not empty)
       if (!req->params.str.empty() && req->params.str != "null") {

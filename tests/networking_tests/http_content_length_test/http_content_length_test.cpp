@@ -85,6 +85,62 @@ static const std::string truncated_response =
    "\r\n"
    "ABC";
 
+// Two Content-Length fields that disagree. Framing by either one leaves the
+// remainder of the segment on the socket for the next read to pick up as a
+// response the server never sent - here a 200 carrying "INJECTED". RFC 9112 §6.3
+// leaves no correct choice between them, so the message has to be rejected.
+static const std::string conflicting_content_length_response =
+   "HTTP/1.1 200 OK\r\n"
+   "Content-Length: 3\r\n"
+   "Content-Length: 47\r\n"
+   "Connection: keep-alive\r\n"
+   "\r\n"
+   "ABCHTTP/1.1 200 OK\r\nContent-Length: 8\r\n\r\nINJECTED";
+
+// Repeated but identical, which resolves to one unambiguous length. RFC 9112 §6.3
+// permits collapsing these, and the server does the same for a request, so the
+// client must not reject the response.
+static const std::string agreeing_content_length_response =
+   "HTTP/1.1 200 OK\r\n"
+   "Content-Length: 3\r\n"
+   "Content-Length: 3\r\n"
+   "Connection: keep-alive\r\n"
+   "\r\n"
+   "ABC";
+
+// A Content-Length that is not a bare decimal resolves to no length at all.
+// Defaulting it to zero would leave the body on the socket to be read as the head
+// of the next response.
+static const std::string malformed_content_length_response =
+   "HTTP/1.1 200 OK\r\n"
+   "Content-Length: 3, 3\r\n"
+   "Connection: keep-alive\r\n"
+   "\r\n"
+   "ABC";
+
+// Chunked framing plus a Content-Length that would be rejected on its own. RFC 9112
+// 6.3 has Transfer-Encoding override Content-Length, so the body comes from the chunk
+// sizes and the unusable field is simply never read.
+static const std::string chunked_with_malformed_content_length_response =
+   "HTTP/1.1 200 OK\r\n"
+   "Transfer-Encoding: chunked\r\n"
+   "Content-Length: abc\r\n"
+   "Connection: keep-alive\r\n"
+   "\r\n"
+   "3\r\nABC\r\n0\r\n\r\n";
+
+// RFC 9112 5 admits OWS on both sides of a field value, and RFC 9110 5.5 requires a
+// recipient to strip it. These fields are conformant, so a client that frames the
+// body by a strict parse of Content-Length has to trim before parsing rather than
+// reject the response.
+static const std::string padded_content_length_response =
+   "HTTP/1.1 200 OK\r\n"
+   "Content-Length: 3 \r\n"
+   "X-Padded: \tspaced out\t \r\n"
+   "Connection: keep-alive\r\n"
+   "\r\n"
+   "ABC";
+
 suite content_length_framing = [] {
    "async_body_clamped_to_content_length"_test = [] {
       uint16_t port = 0;
@@ -144,6 +200,269 @@ suite content_length_framing = [] {
       server.join();
 
       expect(!result.has_value()) << "sync: a truncated Content-Length response must be an error, not a short body";
+   };
+};
+
+// A response the client cannot frame to a single body length must fail the request
+// outright. Accepting one of two disagreeing lengths is the client half of the
+// smuggling desync the server already rejects on a request (CL.CL, 400 + close).
+suite conflicting_content_length = [] {
+   "async_conflicting_content_length_is_error"_test = [] {
+      uint16_t port = 0;
+      auto server = start_raw_server(port, conflicting_content_length_response);
+
+      glz::http_client client;
+      auto result = client.get_async("http://127.0.0.1:" + std::to_string(port) + "/", {}).get();
+
+      server.join();
+
+      expect(!result.has_value()) << "async: disagreeing Content-Length fields must fail the request";
+      if (!result.has_value()) {
+         expect(result.error() == glz::make_error_code(glz::http_client_error::unframed_response));
+      }
+      else {
+         expect(result->response_body.find("INJECTED") == std::string::npos)
+            << "a smuggled response must never surface as body data";
+      }
+   };
+
+   "sync_conflicting_content_length_is_error"_test = [] {
+      uint16_t port = 0;
+      auto server = start_raw_server(port, conflicting_content_length_response);
+
+      glz::http_client client;
+      auto result = client.get("http://127.0.0.1:" + std::to_string(port) + "/");
+
+      server.join();
+
+      expect(!result.has_value()) << "sync: disagreeing Content-Length fields must fail the request";
+      if (!result.has_value()) {
+         expect(result.error() == glz::make_error_code(glz::http_client_error::unframed_response));
+      }
+      else {
+         expect(result->response_body.find("INJECTED") == std::string::npos)
+            << "a smuggled response must never surface as body data";
+      }
+   };
+
+   "async_repeated_agreeing_content_length_is_accepted"_test = [] {
+      uint16_t port = 0;
+      auto server = start_raw_server(port, agreeing_content_length_response);
+
+      glz::http_client client;
+      auto result = client.get_async("http://127.0.0.1:" + std::to_string(port) + "/", {}).get();
+
+      server.join();
+
+      expect(result.has_value()) << "async: identical repeats resolve to one length and must be accepted";
+      if (result) {
+         expect(result->response_body == "ABC");
+      }
+   };
+
+   "sync_repeated_agreeing_content_length_is_accepted"_test = [] {
+      uint16_t port = 0;
+      auto server = start_raw_server(port, agreeing_content_length_response);
+
+      glz::http_client client;
+      auto result = client.get("http://127.0.0.1:" + std::to_string(port) + "/");
+
+      server.join();
+
+      expect(result.has_value()) << "sync: identical repeats resolve to one length and must be accepted";
+      if (result) {
+         expect(result->response_body == "ABC");
+      }
+   };
+
+   "sync_malformed_content_length_is_error"_test = [] {
+      uint16_t port = 0;
+      auto server = start_raw_server(port, malformed_content_length_response);
+
+      glz::http_client client;
+      auto result = client.get("http://127.0.0.1:" + std::to_string(port) + "/");
+
+      server.join();
+
+      expect(!result.has_value()) << "sync: a Content-Length that is not a bare decimal must fail the request";
+      if (!result.has_value()) {
+         expect(result.error() == glz::make_error_code(glz::http_client_error::unframed_response));
+      }
+   };
+
+   "async_malformed_content_length_is_error"_test = [] {
+      uint16_t port = 0;
+      auto server = start_raw_server(port, malformed_content_length_response);
+
+      glz::http_client client;
+      auto result = client.get_async("http://127.0.0.1:" + std::to_string(port) + "/", {}).get();
+
+      server.join();
+
+      expect(!result.has_value()) << "async: a Content-Length that is not a bare decimal must fail the request";
+      if (!result.has_value()) {
+         expect(result.error() == glz::make_error_code(glz::http_client_error::unframed_response));
+      }
+   };
+};
+
+// Trailing OWS is legal and must be stripped before the value is evaluated, not
+// treated as part of it. The server already does this; the client parsers must
+// agree, or a conformant response fails the strict Content-Length parse.
+suite optional_whitespace_around_field_values = [] {
+   "sync_trailing_whitespace_is_stripped"_test = [] {
+      uint16_t port = 0;
+      auto server = start_raw_server(port, padded_content_length_response);
+
+      glz::http_client client;
+      auto result = client.get("http://127.0.0.1:" + std::to_string(port) + "/");
+
+      server.join();
+
+      expect(result.has_value()) << "sync: 'Content-Length: 3 ' is conformant and must not fail the request";
+      if (result) {
+         expect(result->response_body == "ABC");
+         expect(result->response_headers.first_value("Content-Length") == "3") << "trailing OWS must not be stored";
+         expect(result->response_headers.first_value("X-Padded") == "spaced out")
+            << "OWS must be stripped from both ends of every field, not just Content-Length";
+      }
+   };
+
+   "async_trailing_whitespace_is_stripped"_test = [] {
+      uint16_t port = 0;
+      auto server = start_raw_server(port, padded_content_length_response);
+
+      glz::http_client client;
+      auto result = client.get_async("http://127.0.0.1:" + std::to_string(port) + "/", {}).get();
+
+      server.join();
+
+      expect(result.has_value()) << "async: 'Content-Length: 3 ' is conformant and must not fail the request";
+      if (result) {
+         expect(result->response_body == "ABC");
+         expect(result->response_headers.first_value("Content-Length") == "3") << "trailing OWS must not be stored";
+         expect(result->response_headers.first_value("X-Padded") == "spaced out")
+            << "OWS must be stripped from both ends of every field, not just Content-Length";
+      }
+   };
+};
+
+// A chunked response is framed by its chunk sizes, so a Content-Length the client
+// never consults must not decide whether the request succeeds.
+suite chunked_overrides_content_length = [] {
+   "sync_chunked_ignores_an_unusable_content_length"_test = [] {
+      uint16_t port = 0;
+      auto server = start_raw_server(port, chunked_with_malformed_content_length_response);
+
+      glz::http_client client;
+      auto result = client.get("http://127.0.0.1:" + std::to_string(port) + "/");
+
+      server.join();
+
+      expect(result.has_value()) << "sync: chunked framing must win over an unusable Content-Length";
+      if (result) {
+         expect(result->response_body == "ABC") << "body must come from the chunk sizes";
+      }
+   };
+
+   "async_chunked_ignores_an_unusable_content_length"_test = [] {
+      uint16_t port = 0;
+      auto server = start_raw_server(port, chunked_with_malformed_content_length_response);
+
+      glz::http_client client;
+      auto result = client.get_async("http://127.0.0.1:" + std::to_string(port) + "/", {}).get();
+
+      server.join();
+
+      expect(result.has_value()) << "async: chunked framing must win over an unusable Content-Length";
+      if (result) {
+         expect(result->response_body == "ABC") << "body must come from the chunk sizes";
+      }
+   };
+};
+
+// read_content_length is the single decision point both client paths share, so pin
+// its behavior directly rather than only through the socket harness.
+suite read_content_length_unit = [] {
+   "absent_when_no_field"_test = [] {
+      const auto parsed = glz::detail::read_content_length(glz::http_headers{{"Connection", "keep-alive"}});
+      expect(parsed.state == glz::detail::content_length_state::absent);
+   };
+
+   "present_for_a_single_decimal"_test = [] {
+      const auto parsed = glz::detail::read_content_length(glz::http_headers{{"Content-Length", "42"}});
+      expect(parsed.state == glz::detail::content_length_state::present);
+      expect(parsed.value == 42u);
+   };
+
+   "name_case_is_ignored"_test = [] {
+      const auto parsed = glz::detail::read_content_length(glz::http_headers{{"content-length", "7"}});
+      expect(parsed.state == glz::detail::content_length_state::present);
+      expect(parsed.value == 7u);
+   };
+
+   "identical_repeats_collapse"_test = [] {
+      const auto parsed =
+         glz::detail::read_content_length(glz::http_headers{{"Content-Length", "3"}, {"Content-Length", "3"}});
+      expect(parsed.state == glz::detail::content_length_state::present);
+      expect(parsed.value == 3u);
+   };
+
+   "disagreeing_repeats_are_unframed"_test = [] {
+      const auto parsed =
+         glz::detail::read_content_length(glz::http_headers{{"Content-Length", "3"}, {"Content-Length", "47"}});
+      expect(parsed.state == glz::detail::content_length_state::unframed);
+   };
+
+   "a_trailing_list_is_unframed"_test = [] {
+      const auto parsed = glz::detail::read_content_length(glz::http_headers{{"Content-Length", "3, 3"}});
+      expect(parsed.state == glz::detail::content_length_state::unframed);
+   };
+
+   "non_digits_are_unframed"_test = [] {
+      expect(glz::detail::read_content_length(glz::http_headers{{"Content-Length", "abc"}}).state ==
+             glz::detail::content_length_state::unframed);
+      expect(glz::detail::read_content_length(glz::http_headers{{"Content-Length", ""}}).state ==
+             glz::detail::content_length_state::unframed);
+      expect(glz::detail::read_content_length(glz::http_headers{{"Content-Length", "-1"}}).state ==
+             glz::detail::content_length_state::unframed);
+      expect(glz::detail::read_content_length(glz::http_headers{{"Content-Length", "+1"}}).state ==
+             glz::detail::content_length_state::unframed);
+   };
+
+   // Transfer-Encoding overrides Content-Length (RFC 9112 6.3), so a chunked
+   // response reports no Content-Length framing to apply and a field that would
+   // otherwise be rejected cannot fail the request. Without this the outcome would
+   // hinge on whether a value we never read happens to parse.
+   "chunked_ignores_content_length_entirely"_test = [] {
+      const auto well_formed =
+         glz::detail::read_content_length(glz::http_headers{{"Transfer-Encoding", "chunked"}, {"Content-Length", "5"}});
+      expect(well_formed.state == glz::detail::content_length_state::absent);
+
+      const auto malformed = glz::detail::read_content_length(
+         glz::http_headers{{"Transfer-Encoding", "chunked"}, {"Content-Length", "abc"}});
+      expect(malformed.state == glz::detail::content_length_state::absent)
+         << "a Content-Length that is never consulted must not fail the request";
+
+      const auto conflicting = glz::detail::read_content_length(
+         glz::http_headers{{"Transfer-Encoding", "chunked"}, {"Content-Length", "3"}, {"Content-Length", "47"}});
+      expect(conflicting.state == glz::detail::content_length_state::absent)
+         << "chunked framing resolves the ambiguity the two lengths would otherwise create";
+
+      // The override only applies to chunked. Another transfer coding leaves the
+      // Content-Length as the body framing.
+      const auto gzip_only =
+         glz::detail::read_content_length(glz::http_headers{{"Transfer-Encoding", "gzip"}, {"Content-Length", "3"}});
+      expect(gzip_only.state == glz::detail::content_length_state::present);
+      expect(gzip_only.value == 3u);
+   };
+
+   "an_overflowing_length_is_unframed"_test = [] {
+      // Silently truncating this to a small number would frame the body short and
+      // leave the remainder to be read as the next response.
+      const auto parsed =
+         glz::detail::read_content_length(glz::http_headers{{"Content-Length", "99999999999999999999999"}});
+      expect(parsed.state == glz::detail::content_length_state::unframed);
    };
 };
 

@@ -211,6 +211,63 @@ suite jsonrpc_to_repe_request_tests = [] {
       expect(msg->header.id == 999);
       expect(msg->header.notify == false);
    };
+
+   "missing_version_is_rejected"_test = [] {
+      std::string jsonrpc = R"({"method":"test","params":[],"id":1})";
+
+      auto msg = repe::from_jsonrpc_request(jsonrpc);
+      expect(!msg.has_value());
+      expect(msg.error() == "Missing 'jsonrpc' member") << msg.error();
+   };
+
+   "unsupported_version_is_rejected"_test = [] {
+      std::string jsonrpc = R"({"jsonrpc":"1.0","method":"test","params":[],"id":1})";
+
+      auto msg = repe::from_jsonrpc_request(jsonrpc);
+      expect(!msg.has_value());
+      expect(msg.error() == R"(Unsupported 'jsonrpc' version: "1.0")") << msg.error();
+   };
+
+   "unsupported_version_is_escaped"_test = [] {
+      // The version is echoed into the error, and a bridge is liable to forward that error into a
+      // JSON-RPC response, so it must not be able to close the string it lands in.
+      //
+      // The version is read as a string_view, so it views the buffer's raw bytes rather than the
+      // decoded value: `a\"b`, four characters. Writing that back escapes both the backslash and
+      // the quote, which is why the expected form is doubled.
+      std::string jsonrpc = R"({"jsonrpc":"a\"b","method":"test","id":1})";
+
+      auto msg = repe::from_jsonrpc_request(jsonrpc);
+      expect(!msg.has_value());
+      expect(msg.error() == R"(Unsupported 'jsonrpc' version: "a\\\"b")") << msg.error();
+      // The point of the escaping: no bare quote survives to terminate the string it is spliced into.
+      expect(msg.error().find(R"(\")") != std::string::npos) << msg.error();
+   };
+
+   "missing_method_is_rejected"_test = [] {
+      // Without this the absent method would name "", and the caller would be handed a well formed
+      // REPE message querying "/" that it cannot tell apart from one the client actually wrote.
+      std::string jsonrpc = R"({"jsonrpc":"2.0","params":[],"id":1})";
+
+      auto msg = repe::from_jsonrpc_request(jsonrpc);
+      expect(!msg.has_value());
+      expect(msg.error() == "Missing 'method' member") << msg.error();
+   };
+
+   "bare_id_is_not_a_request"_test = [] {
+      auto msg = repe::from_jsonrpc_request(R"({"id":1})");
+      expect(!msg.has_value());
+      expect(msg.error() == "Missing 'jsonrpc' member") << msg.error();
+   };
+
+   "explicit_empty_method_is_converted"_test = [] {
+      // Absence is the error, not emptiness: an explicitly empty method still converts.
+      std::string jsonrpc = R"({"jsonrpc":"2.0","method":"","params":[],"id":1})";
+
+      auto msg = repe::from_jsonrpc_request(jsonrpc);
+      expect(msg.has_value());
+      expect(msg->query == "/") << msg->query;
+   };
 };
 
 suite jsonrpc_to_repe_response_tests = [] {

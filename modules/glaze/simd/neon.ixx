@@ -1,9 +1,14 @@
 // Glaze Library
 // For the license information refer to glaze.ixx
 // glz:header path="glaze/simd/neon.hpp"
+// glz:header std=<cstddef>
+// glz:header std=<cstdint>
 module;
 
-#include "glaze/simd/simd.hpp"
+#if defined(__aarch64__) || defined(_M_ARM64) || defined(__ARM_NEON)
+#include <arm_neon.h>
+#endif
+#include "glaze/simd/simd_config.hpp"
 #include "glaze/util/inline.hpp"
 
 export module glaze.simd.neon;

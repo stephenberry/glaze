@@ -1,5 +1,23 @@
 // Glaze Library
 // For the license information refer to glaze.ixx
+// glz:header path="glaze/net/websocket_connection.hpp"
+// glz:header std=<algorithm>
+// glz:header std=<array>
+// glz:header std=<atomic>
+// glz:header std=<cstddef>
+// glz:header std=<cstdint>
+// glz:header std=<cstring>
+// glz:header std=<deque>
+// glz:header std=<functional>
+// glz:header std=<memory>
+// glz:header std=<mutex>
+// glz:header std=<random>
+// glz:header std=<string>
+// glz:header std=<string_view>
+// glz:header std=<system_error>
+// glz:header std=<unordered_map>
+// glz:header std=<utility>
+// glz:header std=<vector>
 module;
 #include "glaze/ext/asio_include.hpp"
 
@@ -246,40 +264,6 @@ namespace glz
          return glz::write_base64(std::string_view{reinterpret_cast<char*>(hash), sizeof(hash)});
       }
 
-      // Check if a string contains a value (case-insensitive, comma-separated)
-      export inline bool header_contains(std::string_view header, std::string_view value)
-      {
-         while (!header.empty()) {
-            // Skip whitespace
-            while (!header.empty() && (header.front() == ' ' || header.front() == '\t')) {
-               header.remove_prefix(1);
-            }
-
-            if (header.empty()) break;
-
-            // Find the end of this token
-            auto comma_pos = header.find(',');
-            std::string_view token = header.substr(0, comma_pos);
-
-            // Remove trailing whitespace from token
-            while (!token.empty() && (token.back() == ' ' || token.back() == '\t')) {
-               token.remove_suffix(1);
-            }
-
-            // Case-insensitive comparison
-            if (token.size() == value.size() &&
-                std::equal(token.begin(), token.end(), value.begin(), value.end(), [](char a, char b) {
-                   return std::tolower(static_cast<unsigned char>(a)) == std::tolower(static_cast<unsigned char>(b));
-                })) {
-               return true;
-            }
-
-            if (comma_pos == std::string_view::npos) break;
-            header.remove_prefix(comma_pos + 1);
-         }
-
-         return false;
-      }
    }
 
    // Forward declarations
@@ -608,25 +592,18 @@ namespace glz
       inline void perform_handshake(const request& req)
       {
          // Validate WebSocket upgrade request
-         auto it = req.headers.find("upgrade");
-         constexpr std::string_view websocket_str = "websocket";
-         if (it == req.headers.end() || !std::equal(it->second.begin(), it->second.end(), websocket_str.begin(),
-                                                    websocket_str.end(), [](char a, char b) {
-                                                       return std::tolower(static_cast<unsigned char>(a)) ==
-                                                              std::tolower(static_cast<unsigned char>(b));
-                                                    })) {
+         if (!req.headers.contains_token("upgrade", "websocket")) {
             do_close();
             return;
          }
 
-         it = req.headers.find("connection");
-         if (it == req.headers.end() || !ws_util::header_contains(it->second, "upgrade")) {
+         if (!req.headers.contains_token("connection", "upgrade")) {
             do_close();
             return;
          }
 
-         it = req.headers.find("sec-websocket-version");
-         if (it == req.headers.end() || it->second != "13") {
+         auto it = req.headers.find("sec-websocket-version");
+         if (it == req.headers.end() || it->value != "13") {
             do_close();
             return;
          }
@@ -645,8 +622,9 @@ namespace glz
             }
          }
 
-         // Generate accept key
-         std::string accept_key = ws_util::generate_accept_key(it->second);
+         std::string_view sec_websocket_key = it->value;
+
+         std::string accept_key = ws_util::generate_accept_key(sec_websocket_key);
 
          // Send handshake response
          std::string response_str =

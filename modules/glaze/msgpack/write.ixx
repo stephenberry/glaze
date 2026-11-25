@@ -611,41 +611,19 @@ namespace glz
       }
    };
 
-   template <string_t T>
-   struct to<MSGPACK, T>
-   {
-      template <auto Opts, class Value, is_context Ctx, class B, class IX>
-      GLZ_ALWAYS_INLINE static void op(Value&& value, Ctx&& ctx, B&& b, IX&& ix)
-      {
-         const std::string_view str{value.data(), value.size()};
-         if (!msgpack::detail::write_str_header(ctx, str.size(), b, ix)) [[unlikely]] {
-            return;
-         }
-         msgpack::detail::dump_raw_bytes(ctx, str.data(), str.size(), b, ix);
-      }
-   };
-
-   template <static_string_t T>
-   struct to<MSGPACK, T>
-   {
-      template <auto Opts, class Value, is_context Ctx, class B, class IX>
-      GLZ_ALWAYS_INLINE static void op(Value&& value, Ctx&& ctx, B&& b, IX&& ix)
-      {
-         const std::string_view str{value.data(), value.size()};
-         if (!msgpack::detail::write_str_header(ctx, str.size(), b, ix)) [[unlikely]] {
-            return;
-         }
-         msgpack::detail::dump_raw_bytes(ctx, str.data(), str.size(), b, ix);
-      }
-   };
-
+   // Every string-like type shares this one specialization, using the same idiom as BEVE and CBOR.
+   // Splitting `string_t` and `static_string_t` out into their own specializations makes several
+   // of them viable for the same type, which forces the compiler to partially order constrained
+   // partial specializations. Normalizing these disjunction-heavy concepts for that subsumption
+   // check is costly enough that clang 22 exhausts its stack on it (see issue #2742).
    template <str_t T>
    struct to<MSGPACK, T>
    {
       template <auto Opts, class Value, is_context Ctx, class B, class IX>
       GLZ_ALWAYS_INLINE static void op(Value&& value, Ctx&& ctx, B&& b, IX&& ix)
       {
-         const std::string_view str{value};
+         const sv str = str_view<T>(value);
+
          if (!msgpack::detail::write_str_header(ctx, str.size(), b, ix)) [[unlikely]] {
             return;
          }

@@ -2,6 +2,7 @@
 // For the license information refer to glaze.ixx
 
 import glaze;
+import glaze.tests.scratch_directory;
 
 import glaze.exceptions;
 
@@ -44,6 +45,11 @@ struct glz::meta<my_struct>
       "arr", &T::arr //
    );
 };
+
+// Relative scratch paths in this file resolve inside a private directory rather than
+// wherever the binary was launched from. This must precede the first suite: ut runs a
+// suite from its constructor, during static initialization.
+const glz_test::scratch_directory scratch{"exceptions_test"};
 
 suite starter = [] {
    "example"_test = [] {

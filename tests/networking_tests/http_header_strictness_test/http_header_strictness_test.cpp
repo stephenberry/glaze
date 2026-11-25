@@ -165,6 +165,53 @@ suite http_header_strictness_suite = [] {
       expect(smuggled_hits.load(std::memory_order_relaxed) == 0) << "Smuggled request reached a route handler";
    };
 
+   "bare LF inside a header value is rejected, not desynced"_test = [&] {
+      // A bare LF splits the line for an LF-tolerant proxy but not for glaze's
+      // CRLF split, so the smuggled Content-Length rides inside X-Test's value.
+      const std::string payload =
+         "POST /front HTTP/1.1\r\n"
+         "Host: localhost\r\n"
+         "X-Test: 1\nContent-Length: 44\r\n"
+         "Connection: keep-alive\r\n"
+         "\r\n" +
+         smuggled_tail;
+
+      const std::string response = send_raw_timed(port, payload);
+      expect(response.find("400") != std::string::npos) << "Expected 400 for bare LF in header value";
+      std::this_thread::sleep_for(std::chrono::milliseconds(100));
+      expect(smuggled_hits.load(std::memory_order_relaxed) == 0) << "Smuggled request reached a route handler";
+   };
+
+   "bare CR inside a header value is rejected, not desynced"_test = [&] {
+      const std::string payload =
+         "POST /front HTTP/1.1\r\n"
+         "Host: localhost\r\n"
+         "X-Test: 1\rContent-Length: 44\r\n"
+         "Connection: keep-alive\r\n"
+         "\r\n" +
+         smuggled_tail;
+
+      const std::string response = send_raw_timed(port, payload);
+      expect(response.find("400") != std::string::npos) << "Expected 400 for bare CR in header value";
+      std::this_thread::sleep_for(std::chrono::milliseconds(100));
+      expect(smuggled_hits.load(std::memory_order_relaxed) == 0) << "Smuggled request reached a route handler";
+   };
+
+   "bare LF inside a header name is rejected, not desynced"_test = [&] {
+      const std::string payload =
+         "POST /front HTTP/1.1\r\n"
+         "Host: localhost\r\n"
+         "X-Test\nContent-Length: 44: v\r\n"
+         "Connection: keep-alive\r\n"
+         "\r\n" +
+         smuggled_tail;
+
+      const std::string response = send_raw_timed(port, payload);
+      expect(response.find("400") != std::string::npos) << "Expected 400 for bare LF in header name";
+      std::this_thread::sleep_for(std::chrono::milliseconds(100));
+      expect(smuggled_hits.load(std::memory_order_relaxed) == 0) << "Smuggled request reached a route handler";
+   };
+
    "well-formed headers still parse and route"_test = [&] {
       // Positive control: ordinary header names, and values that contain spaces
       // and colons, must continue to parse normally (no over-rejection).

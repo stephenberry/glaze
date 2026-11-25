@@ -102,7 +102,11 @@ export namespace glz
          1 << 4, // whether to turn off writing unknown fields for a glz::meta specialized for unknown writing
       is_padded = 1 << 5, // whether or not the read buffer is padded
       disable_padding = 1 << 6, // to explicitly disable padding for contexts like includers
-      write_unchecked = 1 << 7 // the write buffer has sufficient space and does not need to be checked
+      write_unchecked = 1 << 7, // the write buffer has sufficient space and does not need to be checked
+      // Error rather than write a control character that has no two-character JSON escape. Set by
+      // the binary-to-JSON converters, which are emitting someone else's bytes and would rather
+      // refuse one than mangle it. Only consulted when escape_control_characters is off.
+      reject_control_characters = 1 << 8
    };
 
    // NOTE TO USER:
@@ -177,6 +181,14 @@ export namespace glz
    // ---
    // bool validate_trailing_whitespace = false;
    // If, after parsing a value, we want to validate the trailing whitespace
+
+   // ---
+   // bool validate_utf8 = true;
+   // Validate that strings encountered while reading are well formed UTF-8, as RFC 8259 section 8.1
+   // requires. Malformed input fails with error_code::invalid_utf8. On by default: read input is by
+   // definition someone else's data, and accepting malformed encodings propagates them into your
+   // program. Turn it off only when the encoding is guaranteed by some earlier stage, or when the
+   // bytes are deliberately not UTF-8 and you accept what that means for your strings.
 
    // ---
    // bool concatenate = true;
@@ -482,6 +494,16 @@ export namespace glz
       }
       else {
          return false;
+      }
+   }
+
+   consteval bool check_validate_utf8(auto&& Opts)
+   {
+      if constexpr (requires { Opts.validate_utf8; }) {
+         return Opts.validate_utf8;
+      }
+      else {
+         return true;
       }
    }
 
@@ -958,6 +980,19 @@ export namespace glz
    }
 
    consteval bool check_write_unchecked(auto&& o) { return o.internal & uint32_t(opts_internal::write_unchecked); }
+
+   consteval bool check_reject_control_characters(auto&& o)
+   {
+      return o.internal & uint32_t(opts_internal::reject_control_characters);
+   }
+
+   template <auto Opts>
+   constexpr auto reject_control_characters()
+   {
+      auto ret = Opts;
+      ret.internal |= uint32_t(opts_internal::reject_control_characters);
+      return ret;
+   }
 
    template <auto Opts>
    constexpr auto opening_handled()

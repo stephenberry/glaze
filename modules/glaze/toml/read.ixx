@@ -2,6 +2,7 @@
 // For the license information refer to glaze.ixx
 // glz:header path="glaze/toml/read.hpp"
 // glz:header std=<array>
+// glz:header std=<cctype>
 // glz:header std=<charconv>
 // glz:header std=<chrono>
 // glz:header std=<concepts>

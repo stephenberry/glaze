@@ -398,6 +398,137 @@ auto ec = glz::read_json(obj, buffer);
 
 The buffer refills automatically during parsing, enabling reading of arbitrarily large inputs with fixed memory. See [Streaming I/O](https://stephenberry.github.io/glaze/streaming/) for NDJSON processing and other streaming patterns.
 
+## Compiler/System Support
+
+- Requires C++23
+- Tested for both 64bit and 32bit
+- Supports both little-endian and big-endian systems
+
+[Actions](https://github.com/stephenberry/glaze/actions) build and test with [Clang](https://clang.llvm.org) (18+), [MSVC](https://visualstudio.microsoft.com/vs/features/cplusplus/) (Visual Studio 2026 MSVC Build Tools 14.50), and [GCC](https://gcc.gnu.org) (13+) on apple, windows, and linux. Big-endian is tested via QEMU emulation on s390x.
+
+![clang build](https://github.com/stephenberry/glaze/actions/workflows/clang.yml/badge.svg) ![gcc build](https://github.com/stephenberry/glaze/actions/workflows/gcc.yml/badge.svg) ![msvc build](https://github.com/stephenberry/glaze/actions/workflows/msvc.yml/badge.svg) 
+
+> Glaze seeks to maintain compatibility with the latest three versions of GCC and Clang, as well as the latest version of MSVC and Apple Clang (Xcode). And, we aim to only drop old versions with major releases.
+
+### MSVC Compiler Flags
+
+Glaze requires a C++ standard conformant pre-processor, which requires the `/Zc:preprocessor` flag when building with MSVC.
+
+### SIMD Architecture Detection
+
+Glaze automatically detects the target architecture and enables platform-specific SIMD optimizations using compiler-predefined macros, covering SSE2 through AVX-512BW on x86-64, NEON on ARM, and SIMD128 on WebAssembly. Since these are target-architecture macros set by the compiler, cross-compilation works automatically (e.g., an x86 host cross-compiling for ARM will not enable x86 SIMD paths). See [Optimizing Performance](./docs/optimizing-performance.md#simd-architecture-flags) for the full table.
+
+To report what a build actually compiled, read `glz::simd_info`:
+
+```c++
+std::string report;
+std::ignore = glz::write_json(glz::simd_info, report);
+// {"detected":"AVX512BW","utf8_validation":"AVX512BW","string_escape":"AVX2","float_write":"SSE4.1"}
+```
+
+To disable SIMD optimizations:
+
+```cmake
+set(glaze_DISABLE_SIMD_WHEN_SUPPORTED ON)
+```
+
+This sets `GLZ_DISABLE_SIMD` as an INTERFACE compile definition, propagated to all targets linking against `glaze::glaze`. Without CMake, define `GLZ_DISABLE_SIMD` before including Glaze headers.
+
+### Disable Forced Inlining
+
+For faster compilation and reduced binary size at the cost of peak performance, use `glaze_DISABLE_ALWAYS_INLINE`:
+
+```cmake
+set(glaze_DISABLE_ALWAYS_INLINE ON)
+```
+
+> **Note:** This reduces compilation time and binary size, which can be useful for embedded systems where size is critical. For additional binary size reduction, see Optimization Levels below.
+
+### C++26 P2996 Reflection
+
+Glaze supports [C++26 P2996 reflection](https://wg21.link/P2996) as an alternative backend for struct reflection. This replaces traditional `__PRETTY_FUNCTION__` parsing with standardized reflection primitives.
+
+```cmake
+set(glaze_ENABLE_REFLECTION26 ON)
+```
+
+Requires [GCC 16+](https://gcc.gnu.org/gcc-16/changes.html) or [Bloomberg clang-p2996](https://github.com/bloomberg/clang-p2996) with flags:
+
+**GCC 16+:**
+```bash
+-std=c++26 -freflection
+```
+
+**Bloomberg clang-p2996:**
+```bash
+-std=c++26 -freflection -fexpansion-statements -stdlib=libc++
+```
+
+Benefits include unlimited struct members (vs 128 with traditional reflection), cleaner type names, and future C++ standards compliance. See [P2996 Reflection](https://stephenberry.github.io/glaze/p2996-reflection/) for details.
+
+### Optimization Levels (Embedded/Size Optimization)
+
+Glaze provides optimization levels to control the trade-off between binary size and runtime performance. This is useful for embedded systems:
+
+```cpp
+auto json = glz::write<glz::opts_size{}>(obj);
+auto ec = glz::read<glz::opts_size{}>(obj, buffer);
+```
+
+| Level | Preset | Description |
+|-------|--------|-------------|
+| `normal` | (default) | Maximum performance (~278KB lookup tables for integers and floats) |
+| `size` | `opts_size` | Minimal binary (~400B integer tables, `std::to_chars` for floats, linear search) |
+
+See [Optimization Levels](https://stephenberry.github.io/glaze/optimization-levels/) for full details.
+
+## How To Use Glaze
+
+### [FetchContent](https://cmake.org/cmake/help/latest/module/FetchContent.html)
+```cmake
+include(FetchContent)
+
+FetchContent_Declare(
+  glaze
+  GIT_REPOSITORY https://github.com/stephenberry/glaze.git
+  GIT_TAG main
+  GIT_SHALLOW TRUE
+)
+
+FetchContent_MakeAvailable(glaze)
+
+target_link_libraries(${PROJECT_NAME} PRIVATE glaze::glaze)
+```
+
+### [Conan](https://conan.io)
+
+- Included in [Conan Center](https://conan.io/center/) ![Conan Center](https://img.shields.io/conan/v/glaze)
+
+```
+find_package(glaze REQUIRED)
+
+target_link_libraries(main PRIVATE glaze::glaze)
+```
+
+### [build2](https://build2.org)
+
+- Available on [cppget](https://cppget.org/libglaze)
+
+```
+import libs = libglaze%lib{glaze}
+```
+
+### Arch Linux
+
+- [Official Arch repository](https://archlinux.org/packages/extra/any/glaze/)
+- AUR git package: [glaze-git](https://aur.archlinux.org/packages/glaze-git)
+
+### See this [Example Repository](https://github.com/stephenberry/glaze_example) for how to use Glaze in a new project
+
+---
+
+## See [FAQ](https://stephenberry.github.io/glaze/FAQ/) for Frequently Asked Questions
+
 # Explicit Metadata
 
 If you want to specialize your reflection then you can **optionally** write the code below:
@@ -1230,6 +1361,8 @@ By default Glaze is strictly conformant with the latest JSON standard except in 
   This option does full JSON validation for skipped values when parsing. This is not set by default because values are typically skipped when the user is unconcerned with them, and Glaze still validates for major issues. But, this makes skipping faster by not caring if the skipped values are exactly JSON conformant. For example, by default Glaze will ensure skipped numbers have all valid numerical characters, but it will not validate for issues like leading zeros in skipped numbers unless `validate_skipped` is on. Wherever Glaze parses a value to be used it is fully validated.
 - `validate_trailing_whitespace`
   This option validates the trailing whitespace in a parsed document. Because Glaze parses C++ structs, there is typically no need to continue parsing after the object of interest has been read. Turn on this option if you want to ensure that the rest of the document has valid whitespace, otherwise Glaze will just ignore the content after the content of interest has been parsed.
+
+UTF-8 encoding is validated on read, as RFC 8259 section 8.1 requires. The `validate_utf8` option turns this off for input whose encoding is already guaranteed, at the cost of conformance. See [UTF-8 Validation](https://stephenberry.github.io/glaze/json/#utf-8-validation).
 
 > [!NOTE]
 >

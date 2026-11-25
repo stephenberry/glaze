@@ -1,15 +1,37 @@
 // Glaze Library
 // For the license information refer to glaze.ixx
+// glz:header path="glaze/net/http_router.hpp"
+// glz:header std=<algorithm>
+// glz:header std=<concepts>
+// glz:header std=<cstddef>
+// glz:header std=<cstdint>
+// glz:header std=<exception>
+// glz:header std=<functional>
+// glz:header std=<future>
+// glz:header std=<iostream>
+// glz:header std=<memory>
+// glz:header std=<optional>
+// glz:header std=<source_location>
+// glz:header std=<stdexcept>
+// glz:header std=<string>
+// glz:header std=<string_view>
+// glz:header std=<system_error>
+// glz:header std=<type_traits>
+// glz:header std=<unordered_map>
+// glz:header std=<utility>
+// glz:header std=<vector>
 export module glaze.net.http_router;
 
 import std;
 
 export import glaze.net.http;
+export import glaze.net.http_headers;
 export import glaze.net.http_streaming;
 import glaze.net.url;
 export import glaze.net.websocket_connection;
 
 import glaze.json.generic;
+import glaze.util.compare;
 import glaze.util.key_transformers;
 
 import glaze.core.opts;
@@ -51,7 +73,7 @@ namespace glz
       };
 
       int status_code = 200;
-      std::unordered_map<std::string, std::string> response_headers{};
+      glz::http_headers response_headers{};
       std::string response_body{};
       uint8_t user_headers_set{};
 
@@ -61,35 +83,43 @@ namespace glz
          return *this;
       }
 
+      // Replaces any existing field with this name.
+      //
+      // A field-name or field-value carrying CR or LF would terminate the field on
+      // the wire, letting attacker-influenced data inject extra headers or a body
+      // (CWE-113); header_field_has_crlf carries the full rationale. Rejecting it
+      // here keeps it out of the container and, crucially, skips the
+      // mark_user_supplied bookkeeping below - see that function for why the order
+      // of these two lines is load-bearing. The wire serializers keep an
+      // independent drop as a backstop for fields that bypass this setter.
       inline response& header(std::string_view name, std::string_view value)
       {
-         // RFC 7230 3.2: a field-name or field-value carrying CR or LF would
-         // terminate the field on the wire, letting attacker-influenced data
-         // inject extra headers or a body (CWE-113). Reject such a field where it
-         // is set so it never enters the map and, crucially, the default-header
-         // bookkeeping below is skipped: otherwise a dropped Content-Length or
-         // Connection would still suppress its auto-generated counterpart and
-         // leave the message unframed. The wire serializers keep an independent
-         // drop as a backstop for headers that bypass this setter.
          if (header_field_has_crlf(name, value)) [[unlikely]] {
             return *this;
          }
 
-         // Convert header name to lowercase for case-insensitive lookups (RFC 7230)
-         std::string key(name);
-         for (auto& c : key) c = ascii_tolower(c);
+         mark_user_supplied(name);
+         response_headers.set(std::string(name), std::string(value));
+         return *this;
+      }
 
-         // Track which default headers the user has set
-         if (key == "content-length")
-            user_headers_set |= has_content_length;
-         else if (key == "date")
-            user_headers_set |= has_date;
-         else if (key == "server")
-            user_headers_set |= has_server;
-         else if (key == "connection")
-            user_headers_set |= has_connection;
+      // Appends instead of replacing, for names that can repeat like Set-Cookie.
+      // Content-Length and Transfer-Encoding are replaced regardless: a second one leaves
+      // the body length ambiguous and opens response smuggling (RFC 9112 6.3).
+      inline response& add_header(std::string_view name, std::string_view value)
+      {
+         if (header_field_has_crlf(name, value)) [[unlikely]] {
+            return *this;
+         }
 
-         response_headers[std::move(key)] = std::string(value);
+         mark_user_supplied(name);
+
+         if (header_field_frames_body(name)) [[unlikely]] {
+            response_headers.set(std::string(name), std::string(value));
+         }
+         else {
+            response_headers.add(std::string(name), std::string(value));
+         }
          return *this;
       }
 
@@ -144,7 +174,7 @@ namespace glz
          user_headers_set = 0;
       }
 
-      inline response& content_type(std::string_view type) { return header("content-type", type); }
+      inline response& content_type(std::string_view type) { return header("Content-Type", type); }
 
       // JSON response helper using Glaze
       template <class T = glz::generic>
@@ -156,6 +186,24 @@ namespace glz
             response_body = R"({"error":"glz::write_json error"})"; // rare that this would ever happen
          }
          return *this;
+      }
+
+     private:
+      // Records that the handler supplied one of the headers the wire serializer
+      // would otherwise generate, so the serializer leaves it alone. Only reached
+      // once the field has passed the CR/LF check: a field dropped there must not
+      // set its flag, or a rejected Content-Length or Connection would suppress
+      // the auto-generated counterpart and leave the response unframed.
+      void mark_user_supplied(std::string_view name) noexcept
+      {
+         if (glz::striequal(name, "content-length"))
+            user_headers_set |= has_content_length;
+         else if (glz::striequal(name, "date"))
+            user_headers_set |= has_date;
+         else if (glz::striequal(name, "server"))
+            user_headers_set |= has_server;
+         else if (glz::striequal(name, "connection"))
+            user_headers_set |= has_connection;
       }
    };
 

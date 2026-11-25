@@ -51,6 +51,8 @@ To maximize performance, `lazy_json` does no validation during initial parsing o
 
 If you need validated UTF-8 strings and unescaping, use `get<std::string>()`. Otherwise `get<std::string_view>()` is faster, but the bytes it returns are unchecked. To validate a whole document up front, run `glz::validate_json` over the buffer. See [Reading](./json.md#utf-8-validation).
 
+`get<std::string>()` honors the document's `validate_utf8` option, so a `lazy_json` opened with that option set to `false` returns the raw bytes rather than an error.
+
 > glz::lazy_json will ensure that any instantiated C++ values are valid JSON (except for std::string_view), but it doesn't validate the entire document, because this is often not a requirement for lazy parsing. If you want high performance full validation it is best to use C++ structs. Or, use glz::validate_json for pure validation passes.
 
 ## Nested Object Access
@@ -754,6 +756,28 @@ See [Partial Read](./partial-read.md) for detailed documentation.
 | Best for | Full deser. | Known subset | Few accesses | Many accesses | Unknown structure |
 
 *k = bytes to skip to reach field
+
+## Keys Containing Escapes
+
+Key lookup matches the raw bytes in the document, so a key that is stored escaped must be looked up in its escaped form. `glz::escape_unicode` generates that form at compile time:
+
+```cpp
+std::string buffer = R"({"he said \"hi\"":1})";
+auto doc = glz::lazy_json(buffer).value();
+
+doc[glz::escape_unicode<R"(he said "hi")">].get<int64_t>();  // 1
+doc[R"(he said "hi")"].get<int64_t>();                       // error - no such key
+```
+
+Non-ASCII keys need no special handling as long as the document stores them as raw UTF-8, which is what Glaze writes by default:
+
+```cpp
+std::string buffer = R"({"€uro":2})";
+auto doc = glz::lazy_json(buffer).value();
+doc["€uro"].get<int64_t>();  // 2
+```
+
+If the document instead stores them escaped, `glz::escape_unicode<"€uro">` produces the matching `\u20ACuro` form.
 
 ## See Also
 

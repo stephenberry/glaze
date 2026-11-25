@@ -142,7 +142,14 @@ namespace glz::jsonb_detail
          const int hi = hex(static_cast<char>(it[0]));
          const int lo = hex(static_cast<char>(it[1]));
          if (hi < 0 || lo < 0) return false;
-         out.push_back(static_cast<char>((hi << 4) | lo));
+         // JSON5 `\xNN` denotes the code point U+00NN, not the byte 0xNN, so anything above
+         // U+007F has to be UTF-8 encoded rather than pushed raw — a raw 0x80..0xFF byte is
+         // not valid UTF-8 on its own and would make the decoded string ill-formed. SQLite
+         // reads it the same way: it renders JSON5 "\xFF" as the escape "\u00FF".
+         char utf8[4];
+         const uint32_t n = glz::code_point_to_utf8(static_cast<uint32_t>((hi << 4) | lo), utf8);
+         if (n == 0) return false;
+         out.append(utf8, n);
          it += 2;
          return true;
       }

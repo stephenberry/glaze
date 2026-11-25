@@ -17,7 +17,7 @@ namespace
       auto middleware = glz::create_cors_middleware(config);
       glz::request req{};
       req.method = glz::http_method::GET;
-      req.headers["origin"] = std::string(origin);
+      req.headers.set("origin", std::string(origin));
       glz::response res{};
       middleware(req, res);
       return res;
@@ -32,8 +32,8 @@ suite cors_origin_tests = [] {
       expect(glz::is_origin_allowed(config, "https://evil.example"));
 
       auto res = run_cors(config, "https://evil.example");
-      expect(res.response_headers["access-control-allow-origin"] == "*");
-      expect(res.response_headers.count("access-control-allow-credentials") == 0);
+      expect(res.response_headers.first_value("access-control-allow-origin") == "*");
+      expect(!res.response_headers.contains("access-control-allow-credentials"));
    };
 
    "wildcard_with_credentials_rejects_unlisted_origin"_test = [] {
@@ -43,8 +43,8 @@ suite cors_origin_tests = [] {
       expect(not glz::is_origin_allowed(config, "https://evil.example"));
 
       auto res = run_cors(config, "https://evil.example");
-      expect(res.response_headers.count("access-control-allow-origin") == 0);
-      expect(res.response_headers.count("access-control-allow-credentials") == 0);
+      expect(!res.response_headers.contains("access-control-allow-origin"));
+      expect(!res.response_headers.contains("access-control-allow-credentials"));
    };
 
    "credentials_allow_exact_listed_origin"_test = [] {
@@ -55,8 +55,8 @@ suite cors_origin_tests = [] {
       expect(not glz::is_origin_allowed(config, "https://evil.example"));
 
       auto res = run_cors(config, "https://app.example");
-      expect(res.response_headers["access-control-allow-origin"] == "https://app.example");
-      expect(res.response_headers["access-control-allow-credentials"] == "true");
+      expect(res.response_headers.first_value("access-control-allow-origin") == "https://app.example");
+      expect(res.response_headers.first_value("access-control-allow-credentials") == "true");
    };
 
    "empty_origins_with_credentials_rejects"_test = [] {

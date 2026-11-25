@@ -1,5 +1,9 @@
 // Glaze Library
 // For the license information refer to glaze.ixx
+// glz:header path="glaze/util/env.hpp"
+// glz:header std=<cstdlib>
+// glz:header std=<optional>
+// glz:header std=<string>
 export module glaze.util.env;
 
 import std;

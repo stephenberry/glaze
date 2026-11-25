@@ -1,20 +1,48 @@
 // Glaze Library
 // For the license information refer to glaze.ixx
+// glz:header path="glaze/net/http_client.hpp"
+// glz:header std=<algorithm>
+// glz:header std=<atomic>
+// glz:header std=<cctype>
+// glz:header std=<charconv>
+// glz:header std=<chrono>
+// glz:header std=<concepts>
+// glz:header std=<cstddef>
+// glz:header std=<cstdint>
+// glz:header std=<cstdlib>
+// glz:header std=<expected>
+// glz:header std=<exception>
+// glz:header std=<functional>
+// glz:header std=<future>
+// glz:header std=<iostream>
+// glz:header std=<limits>
+// glz:header std=<memory>
+// glz:header std=<mutex>
+// glz:header std=<optional>
+// glz:header std=<shared_mutex>
+// glz:header std=<source_location>
+// glz:header std=<string>
+// glz:header std=<string_view>
+// glz:header std=<system_error>
+// glz:header std=<thread>
+// glz:header std=<type_traits>
+// glz:header std=<unordered_map>
+// glz:header std=<utility>
+// glz:header std=<variant>
+// glz:header std=<vector>
 module;
 #include "glaze/ext/asio_include.hpp"
-
-#ifdef GLZ_ENABLE_SSL
-#include <openssl/ssl.h> // For SSL_set_tlsext_host_name
-#endif
 export module glaze.net.http_client;
 
 import std;
 
 import glaze.net.http;
 import glaze.net.http_router;
+import glaze.net.ssl;
 
 import glaze.json.write;
 
+import glaze.util.compare;
 import glaze.util.env;
 import glaze.util.itoa;
 import glaze.util.key_transformers;
@@ -57,71 +85,16 @@ namespace glz
    // Socket type aliases for HTTP client
    using tcp_socket = asio::ip::tcp::socket;
 #ifdef GLZ_ENABLE_SSL
-   using ssl_socket = asio::ssl::stream<asio::ip::tcp::socket>;
    using socket_variant = std::variant<std::shared_ptr<tcp_socket>, std::shared_ptr<ssl_socket>>;
 #else
    using socket_variant = std::variant<std::shared_ptr<tcp_socket>>;
 #endif
 
-   // SSL error codes for detailed error reporting
-   export enum class ssl_error {
-      success = 0,
-      ssl_not_supported, // HTTPS requested but SSL support not compiled in
-      sni_hostname_failed // Failed to set SNI hostname (SSL_set_tlsext_host_name)
-      // Note: Handshake and certificate errors propagate as native ASIO/OpenSSL error codes
-      // for more detailed error information
-   };
-
-   // SSL error category for std::error_code integration
-   class ssl_error_category : public std::error_category
-   {
-     public:
-      const char* name() const noexcept override { return "glaze.ssl"; }
-
-      std::string message(int ev) const override
-      {
-         switch (static_cast<ssl_error>(ev)) {
-         case ssl_error::success:
-            return "Success";
-         case ssl_error::ssl_not_supported:
-            return "SSL/TLS not supported: GLZ_ENABLE_SSL not defined";
-         case ssl_error::sni_hostname_failed:
-            return "Failed to set SNI hostname for TLS connection";
-         default:
-            return "Unknown SSL error";
-         }
-      }
-
-      // Map to equivalent standard error conditions where applicable
-      std::error_condition default_error_condition(int ev) const noexcept override
-      {
-         switch (static_cast<ssl_error>(ev)) {
-         case ssl_error::ssl_not_supported:
-            return std::errc::protocol_not_supported;
-         case ssl_error::sni_hostname_failed:
-            return std::errc::protocol_error;
-         default:
-            return std::error_condition(ev, *this);
-         }
-      }
-   };
-
-   // Get the singleton instance of the SSL error category
-   inline const ssl_error_category& get_ssl_error_category() noexcept
-   {
-      static ssl_error_category instance;
-      return instance;
-   }
-
-   // Create std::error_code from ssl_error
-   export inline std::error_code make_error_code(ssl_error e) noexcept
-   {
-      return {static_cast<int>(e), get_ssl_error_category()};
-   }
    // HTTP client error codes
-   enum class http_client_error {
+   export enum class http_client_error {
       success = 0,
       response_too_large, // Response body exceeds max_response_body_size
+      unframed_response, // Response Content-Length is malformed or repeats with conflicting values
    };
 
    // HTTP client error category for std::error_code integration
@@ -137,6 +110,8 @@ namespace glz
             return "Success";
          case http_client_error::response_too_large:
             return "Response body size exceeds configured maximum";
+         case http_client_error::unframed_response:
+            return "Response Content-Length is malformed or repeats with conflicting values";
          default:
             return "Unknown HTTP client error";
          }
@@ -149,20 +124,18 @@ namespace glz
       return instance;
    }
 
-   inline std::error_code make_error_code(http_client_error e) noexcept
+   export inline std::error_code make_error_code(http_client_error e) noexcept
    {
       return {static_cast<int>(e), get_http_client_error_category()};
    }
 } // namespace glz
 
-// Enable automatic conversion from glz::ssl_error to std::error_code
-template <>
-struct std::is_error_code_enum<glz::ssl_error> : std::true_type
-{};
-
-template <>
-struct std::is_error_code_enum<glz::http_client_error> : std::true_type
-{};
+export namespace std
+{
+   template <>
+   struct is_error_code_enum<glz::http_client_error> : true_type
+   {};
+}
 
 namespace glz
 {
@@ -250,10 +223,41 @@ namespace glz
       // body or re-iterating the headers map. For large idempotent PUT bodies this is
       // the difference between O(1) and O(N) body copies per request through the chain.
       export inline std::string build_http_request_bytes(const std::string& method, const url_parts& url, bool use_https,
-                                                  const std::string& body,
-                                                  const std::unordered_map<std::string, std::string>& headers)
+                                                  const std::string& body, const glz::http_headers& headers)
       {
          const bool is_default_port = (!use_https && url.port == 80) || (use_https && url.port == 443);
+
+         // This builder owns the single Host and Connection field on the wire, the
+         // same way it owns the body framing below. A caller's value replaces the
+         // writer's default instead of riding alongside it, and only the first
+         // usable one is kept: RFC 9112 3.2 admits exactly one Host, and a second
+         // one lets an intermediary and the origin resolve the same request to
+         // different authorities (request smuggling) - glaze's own server answers a
+         // repeat with 400. Connection is likewise reduced to one field, since a
+         // "close" and a "keep-alive" on the same message leave each hop to pick a
+         // different connection lifetime. glz::http_headers keeps repeats, so a
+         // single lookup would not have caught the second one.
+         //
+         // A field carrying CR or LF is not usable, because the loop below drops it
+         // rather than write a split message. Taking one here would suppress the
+         // writer's default and send an HTTP/1.1 request with no Host at all.
+         const std::string* caller_host = nullptr;
+         const std::string* caller_connection = nullptr;
+         for (const auto& [name, value] : headers) {
+            if (header_field_has_crlf(name, value)) [[unlikely]] {
+               continue;
+            }
+            if (glz::striequal(name, "host")) {
+               if (!caller_host) {
+                  caller_host = &value;
+               }
+            }
+            else if (glz::striequal(name, "connection")) {
+               if (!caller_connection) {
+                  caller_connection = &value;
+               }
+            }
+         }
 
          std::string request_str;
          request_str.reserve(512 + body.size());
@@ -261,24 +265,60 @@ namespace glz
          request_str.append(" ");
          request_str.append(url.path);
          request_str.append(" HTTP/1.1\r\n");
+         // RFC 9112 5: a user agent SHOULD generate Host as the first field after
+         // the request-line, so a caller's value is written in this slot rather
+         // than wherever it happened to sit among their headers.
          request_str.append("Host: ");
-         request_str.append(url.host);
-         if (!is_default_port) {
-            char
-               port_buf[8]; // a uint16_t port is at most 5 digits; pad so the sizing does not depend on itoa internals
-            auto* end = glz::to_chars(port_buf, url.port);
-            request_str.push_back(':');
-            request_str.append(port_buf, static_cast<size_t>(end - port_buf));
+         if (caller_host) {
+            request_str.append(*caller_host);
+         }
+         else {
+            request_str.append(url.host);
+            if (!is_default_port) {
+               // A uint16_t port is at most 5 digits; pad so the sizing does not depend on itoa internals
+               char port_buf[8];
+               auto* end = glz::to_chars(port_buf, url.port);
+               request_str.push_back(':');
+               request_str.append(port_buf, static_cast<size_t>(end - port_buf));
+            }
          }
          request_str.append("\r\n");
-         request_str.append("Connection: keep-alive\r\n");
-         if (!body.empty()) {
+         request_str.append("Connection: ");
+         request_str.append(caller_connection ? std::string_view{*caller_connection} : "keep-alive");
+         request_str.append("\r\n");
+         // RFC 9110 8.6: a user agent SHOULD send Content-Length when the method
+         // anticipates content, even for an empty body - origin servers and proxies
+         // commonly answer a bodyless POST with 411 Length Required. Since a caller's
+         // own Content-Length is dropped below, omitting it here would leave them no
+         // way to frame an empty POST at all. For a method that anticipates no
+         // content, no field is the unambiguous encoding of an empty body
+         // (RFC 9112 6), so adding one would only invite a body where none belongs.
+         const bool anticipates_content = method == "POST" || method == "PUT" || method == "PATCH";
+         if (!body.empty() || anticipates_content) {
             request_str.append("Content-Length: ");
             request_str.append(std::to_string(body.size()));
             request_str.append("\r\n");
          }
          for (const auto& [name, value] : headers) {
             if (header_field_has_crlf(name, value)) [[unlikely]] {
+               continue;
+            }
+            // This builder owns the body framing: it has already written the
+            // Content-Length that matches the body it is about to append. A
+            // caller-supplied Content-Length or Transfer-Encoding would ride
+            // alongside it as a second, contradicting frame - and unlike the
+            // response side there is no correct value to keep, because the body
+            // length is whatever this function writes. Drop them rather than
+            // emit a request no two recipients would parse the same way
+            // (RFC 9112 6.3, request smuggling). glz::http_headers keeps
+            // repeats, so a single lookup would not have caught the second one.
+            if (header_field_frames_body(name)) [[unlikely]] {
+               continue;
+            }
+            // Host and Connection were resolved above and written once; whatever
+            // the caller supplied is already on the wire (or was rejected there),
+            // so every field of either name is skipped here.
+            if (glz::striequal(name, "host") || glz::striequal(name, "connection")) {
                continue;
             }
             request_str.append(name);
@@ -291,98 +331,79 @@ namespace glz
          return request_str;
       }
 
-#ifdef GLZ_ENABLE_SSL
-      // Configure SNI and hostname verification for client TLS connections.
-      export inline bool configure_ssl_client_hostname(ssl_socket& sock, const std::string& host)
+      // Outcome of reading the Content-Length of a response. `absent` and
+      // `unframed` are distinct because they lead to different reads: no
+      // Content-Length at all is a legitimate response whose body runs to the end
+      // of the connection, whereas one we cannot resolve to a single length has to
+      // fail the request.
+      export enum struct content_length_state { absent, present, unframed };
+
+      export struct parsed_content_length
       {
-         if (!SSL_set_tlsext_host_name(sock.native_handle(), host.c_str())) {
-            return false;
-         }
-
-         sock.set_verify_callback(asio::ssl::host_name_verification(host));
-         return true;
-      }
-
-      export enum class ssl_ca_source { explicit_file, env_ssl_cert_file, env_ssl_cert_dir, default_verify_paths };
-
-      inline std::optional<std::string_view> non_empty_path(std::optional<std::string_view> value)
-      {
-         if (value && !value->empty()) {
-            return value;
-         }
-         return std::nullopt;
-      }
-
-      inline std::optional<std::string> env_path(const char* name) { return getenv_nonempty(name); }
-
-      inline std::optional<std::string_view> to_sv_opt(const std::optional<std::string>& value)
-      {
-         if (value && !value->empty()) {
-            return std::string_view{*value};
-         }
-         return std::nullopt;
-      }
-
-      std::optional<std::string_view> to_sv_opt(std::optional<std::string>&&) = delete;
-
-      template <typename Loader>
-      concept ssl_ca_path_loader = requires(Loader&& loader, std::string_view path) {
-         { std::forward<Loader>(loader)(path) } -> std::convertible_to<std::error_code>;
+         content_length_state state{content_length_state::absent};
+         size_t value{};
       };
 
-      template <typename Loader>
-      concept ssl_ca_default_loader = requires(Loader&& loader) {
-         { std::forward<Loader>(loader)() } -> std::convertible_to<std::error_code>;
-      };
-
-      export template <ssl_ca_path_loader LoadFile, ssl_ca_path_loader LoadDir, ssl_ca_default_loader LoadDefault>
-      inline std::expected<ssl_ca_source, std::error_code> configure_ssl_ca_fallback(
-         std::optional<std::string_view> explicit_file, std::optional<std::string_view> env_cert_file,
-         std::optional<std::string_view> env_cert_dir, LoadFile&& load_file, LoadDir&& load_dir,
-         LoadDefault&& load_default)
+      // RFC 9112 6.3: a response whose Content-Length fields disagree has no
+      // recoverable body length. Picking one - first or last - lets a proxy that
+      // picked the other resume framing at a different offset, so the bytes this
+      // client reads as the start of the next response are chosen by whoever
+      // supplied the second field (response smuggling). Repeats that resolve to the
+      // same length are unambiguous and tolerated, in the same spirit as the
+      // server's rule for a request - though the server compares the raw field
+      // text, so it rejects the "3" and "03" pair this accepts. Both readings frame
+      // the body identically; only the strictness differs.
+      //
+      // A value that is not a bare decimal is rejected for the same reason: it
+      // resolves to no length at all, and defaulting it to zero would leave a real
+      // body sitting in the socket to be read as the next response.
+      export [[nodiscard]] inline parsed_content_length read_content_length(const glz::http_headers& headers)
       {
-         std::optional<std::error_code> last_error{};
-
-         const auto try_file = [&](std::optional<std::string_view> path,
-                                   ssl_ca_source source) -> std::optional<ssl_ca_source> {
-            if (auto non_empty = non_empty_path(path)) {
-               if (const std::error_code ec = load_file(*non_empty); ec) {
-                  last_error = ec;
-               }
-               else {
-                  return source;
-               }
-            }
-            return std::nullopt;
-         };
-
-         if (auto source = try_file(explicit_file, ssl_ca_source::explicit_file)) {
-            return *source;
+         // RFC 9112 6.3: Transfer-Encoding overrides Content-Length, so a chunked
+         // response is framed by the chunk sizes and its Content-Length is never
+         // consulted. A field this client will not use must not be able to fail the
+         // request either - the framing is already unambiguous without it. Reporting
+         // `absent` says exactly that: there is no Content-Length framing to apply,
+         // whether or not such a field was sent.
+         //
+         // This also keeps the two framings from ever being weighed against each
+         // other. Whether a Content-Length parses cannot change how a chunked body
+         // is read, so the order these are evaluated in stops mattering.
+         if (headers.contains_token("Transfer-Encoding", "chunked")) {
+            return {content_length_state::absent, 0};
          }
 
-         if (auto source = try_file(env_cert_file, ssl_ca_source::env_ssl_cert_file)) {
-            return *source;
+         parsed_content_length result{};
+
+         for (const auto field_value : headers.values("Content-Length")) {
+            size_t length{};
+            const char* const first = field_value.data();
+            const char* const last = first + field_value.size();
+            const auto [stopped_at, ec] = std::from_chars(first, last, length);
+            if (ec != std::errc{} || stopped_at != last) {
+               return {content_length_state::unframed, 0};
+            }
+
+            if (result.state == content_length_state::absent) {
+               result = {content_length_state::present, length};
+            }
+            else if (result.value != length) {
+               return {content_length_state::unframed, 0};
+            }
          }
 
-         if (auto non_empty = non_empty_path(env_cert_dir)) {
-            if (const std::error_code ec = load_dir(*non_empty); ec) {
-               last_error = ec;
-            }
-            else {
-               return ssl_ca_source::env_ssl_cert_dir;
-            }
-         }
-
-         if (const std::error_code ec = load_default(); ec) {
-            if (last_error) {
-               return std::unexpected(*last_error);
-            }
-            return std::unexpected(ec);
-         }
-
-         return ssl_ca_source::default_verify_paths;
+         return result;
       }
-#endif
+
+      // Sets the Content-Type header to application/json if the Content-Type
+      // header is not already set.
+      export inline glz::http_headers with_json_content_type(glz::http_headers headers)
+      {
+         if (!headers.contains("Content-Type")) {
+            headers.add("Content-Type", "application/json");
+         }
+         return headers;
+      }
 
       // Helper to close a socket variant with optional SSL shutdown
       // graceful_shutdown: if true, performs SSL shutdown before closing (recommended for proper TLS termination)
@@ -636,10 +657,7 @@ namespace glz
          // Use tls_client to allow negotiation of TLS 1.2/1.3 (highest mutually supported version)
          // This automatically disables insecure protocols (SSLv3, TLS 1.0, TLS 1.1)
          ssl_context = std::make_shared<asio::ssl::context>(asio::ssl::context::tls_client);
-         // Best effort: if default trust paths are not available on this platform,
-         // callers can still configure explicit trust roots later.
-         asio::error_code ec;
-         ssl_context->set_default_verify_paths(ec);
+         detail::seed_platform_trust_anchors(*ssl_context);
          ssl_context->set_verify_mode(asio::ssl::verify_peer);
 #endif
       }
@@ -815,6 +833,32 @@ namespace glz
          func(*ssl_context);
       }
 
+      // Trust-anchor configuration. See the http_client methods of the same names for the
+      // documented behavior; these are the locking wrappers around it.
+      std::expected<void, std::error_code> add_ca_certificate_file(std::string_view path)
+      {
+         std::unique_lock<std::shared_mutex> lock(ssl_mtx);
+         return detail::add_ca_file(*ssl_context, path);
+      }
+
+      std::expected<void, std::error_code> add_ca_certificate_directory(std::string_view path)
+      {
+         std::unique_lock<std::shared_mutex> lock(ssl_mtx);
+         return detail::add_ca_directory(*ssl_context, path);
+      }
+
+      std::expected<void, std::error_code> add_ca_certificates_pem(std::string_view pem)
+      {
+         std::unique_lock<std::shared_mutex> lock(ssl_mtx);
+         return detail::add_ca_pem(*ssl_context, pem);
+      }
+
+      std::expected<size_t, std::error_code> add_os_ca_certificates()
+      {
+         std::unique_lock<std::shared_mutex> lock(ssl_mtx);
+         return detail::load_os_ca_certificates(*ssl_context);
+      }
+
       // Configure CA trust roots for server certificate verification.
       // Fallback order:
       // 1) explicit cert bundle path (if provided)
@@ -826,8 +870,8 @@ namespace glz
       {
          std::unique_lock<std::shared_mutex> lock(ssl_mtx);
 
-         const auto env_cert_file = detail::env_path("SSL_CERT_FILE");
-         const auto env_cert_dir = detail::env_path("SSL_CERT_DIR");
+         const auto env_cert_file = getenv_nonempty("SSL_CERT_FILE");
+         const auto env_cert_dir = getenv_nonempty("SSL_CERT_DIR");
 
          auto result = detail::configure_ssl_ca_fallback(
             cert_bundle_file, detail::to_sv_opt(env_cert_file), detail::to_sv_opt(env_cert_dir),
@@ -927,7 +971,7 @@ namespace glz
       http_error_handler on_error;
       std::string method{"GET"};
       std::string body{};
-      std::unordered_map<std::string, std::string> headers{};
+      glz::http_headers headers{};
       http_connect_handler on_connect{};
       http_disconnect_handler on_disconnect{};
       std::chrono::seconds timeout{std::chrono::seconds{30}};
@@ -945,7 +989,7 @@ namespace glz
       stream_read_strategy strategy{stream_read_strategy::bulk_transfer};
       size_t max_buffer_size{1024 * 1024};
       std::string body;
-      std::unordered_map<std::string, std::string> headers;
+      glz::http_headers headers;
       http_connect_handler on_connect;
       http_disconnect_handler on_disconnect;
       http_data_handler on_data;
@@ -1029,6 +1073,48 @@ namespace glz
          connection_pool->configure_ssl_context(std::forward<Func>(func));
       }
 
+      // Add the certificates in a PEM bundle file to the set of trusted CAs (thread-safe).
+      // Additive: existing trust anchors, including those loaded at construction, are kept.
+      // Example: client.add_ca_certificate_file("cacert.pem");
+      std::expected<void, std::error_code> add_ca_certificate_file(std::string_view path)
+      {
+         return connection_pool->add_ca_certificate_file(path);
+      }
+
+      // Add an OpenSSL-style hashed certificate directory to the set of trusted CAs.
+      // The directory must be indexed with c_rehash/`openssl rehash`.
+      //
+      // A bad path is not reported here: OpenSSL reads the directory lazily during the
+      // handshake, so it surfaces as a verification failure instead. Prefer
+      // add_ca_certificate_file() when you want the path validated up front.
+      //
+      // Unlike the other adders, call this before issuing any request. OpenSSL appends to
+      // the lookup list without a lock and reads that list unlocked during verification,
+      // so adding a directory while a handshake is in flight is a race inside OpenSSL that
+      // no lock on this side can close.
+      std::expected<void, std::error_code> add_ca_certificate_directory(std::string_view path)
+      {
+         return connection_pool->add_ca_certificate_directory(path);
+      }
+
+      // Add trusted CAs from an in-memory PEM bundle (thread-safe). Accepts any number of
+      // concatenated PEM certificates, so a trust bundle can be embedded in the binary
+      // instead of shipped as a file next to it.
+      // Example: client.add_ca_certificates_pem(embedded_cacert_pem);
+      std::expected<void, std::error_code> add_ca_certificates_pem(std::string_view pem)
+      {
+         return connection_pool->add_ca_certificates_pem(pem);
+      }
+
+      // Add the operating system's native trust anchors, returning how many were added
+      // (thread-safe). Windows only; returns 0 on platforms where OpenSSL's default verify
+      // paths already resolve to the system bundle. The constructor already does this, so
+      // it is only needed to restore OS trust after replacing the context's anchors.
+      std::expected<size_t, std::error_code> add_os_ca_certificates()
+      {
+         return connection_pool->add_os_ca_certificates();
+      }
+
       // Configure CA trust roots with explicit/env/default fallback order.
       std::expected<void, std::error_code> configure_system_ca_certificates(
          std::optional<std::string_view> cert_bundle_file = std::nullopt)
@@ -1087,8 +1173,7 @@ namespace glz
       void clear_connection_pool() { connection_pool->clear(); }
 
       // Synchronous GET request - truly synchronous, no promises/futures
-      std::expected<response, std::error_code> get(std::string_view url,
-                                                   const std::unordered_map<std::string, std::string>& headers = {})
+      std::expected<response, std::error_code> get(std::string_view url, const glz::http_headers& headers = {})
       {
          auto url_result = parse_url(url);
          if (!url_result) {
@@ -1100,7 +1185,7 @@ namespace glz
 
       // Synchronous POST request - truly synchronous, no promises/futures
       std::expected<response, std::error_code> post(std::string_view url, const std::string& body,
-                                                    const std::unordered_map<std::string, std::string>& headers = {})
+                                                    const glz::http_headers& headers = {})
       {
          auto url_result = parse_url(url);
          if (!url_result) {
@@ -1112,7 +1197,7 @@ namespace glz
 
       // Synchronous PUT request - truly synchronous, no promises/futures
       std::expected<response, std::error_code> put(std::string_view url, const std::string& body,
-                                                   const std::unordered_map<std::string, std::string>& headers = {})
+                                                   const glz::http_headers& headers = {})
       {
          auto url_result = parse_url(url);
          if (!url_result) {
@@ -1124,8 +1209,8 @@ namespace glz
 
       // Synchronous JSON POST request
       template <class T>
-      std::expected<response, std::error_code> post_json(
-         std::string_view url, const T& data, const std::unordered_map<std::string, std::string>& headers = {})
+      std::expected<response, std::error_code> post_json(std::string_view url, const T& data,
+                                                         const glz::http_headers& headers = {})
       {
          std::string json_str;
          auto ec = glz::write_json(data, json_str);
@@ -1133,16 +1218,13 @@ namespace glz
             return std::unexpected(std::make_error_code(std::errc::invalid_argument));
          }
 
-         auto merged_headers = headers;
-         merged_headers["content-type"] = "application/json";
-
-         return post(url, json_str, merged_headers);
+         return post(url, json_str, detail::with_json_content_type(headers));
       }
 
       // Synchronous JSON PUT request
       template <class T>
-      std::expected<response, std::error_code> put_json(
-         std::string_view url, const T& data, const std::unordered_map<std::string, std::string>& headers = {})
+      std::expected<response, std::error_code> put_json(std::string_view url, const T& data,
+                                                        const glz::http_headers& headers = {})
       {
          std::string json_str;
          auto ec = glz::write_json(data, json_str);
@@ -1150,10 +1232,7 @@ namespace glz
             return std::unexpected(std::make_error_code(std::errc::invalid_argument));
          }
 
-         auto merged_headers = headers;
-         merged_headers["content-type"] = "application/json";
-
-         return put(url, json_str, merged_headers);
+         return put(url, json_str, detail::with_json_content_type(headers));
       }
 
       [[deprecated("use stream_request_v2 instead")]]
@@ -1185,8 +1264,7 @@ namespace glz
 
       // Asynchronous GET request
       template <typename CompletionHandler>
-      void get_async(std::string_view url, const std::unordered_map<std::string, std::string>& headers,
-                     CompletionHandler&& handler)
+      void get_async(std::string_view url, const glz::http_headers& headers, CompletionHandler&& handler)
       {
          auto url_result = parse_url(url);
          if (!url_result) {
@@ -1199,8 +1277,8 @@ namespace glz
       }
 
       // Overload for get_async without completion handler (returns future)
-      std::future<std::expected<response, std::error_code>> get_async(
-         std::string_view url, const std::unordered_map<std::string, std::string>& headers = {})
+      std::future<std::expected<response, std::error_code>> get_async(std::string_view url,
+                                                                      const glz::http_headers& headers = {})
       {
          std::promise<std::expected<response, std::error_code>> promise;
          auto future = promise.get_future();
@@ -1215,8 +1293,8 @@ namespace glz
 
       // Asynchronous POST request
       template <typename CompletionHandler>
-      void post_async(std::string_view url, const std::string& body,
-                      const std::unordered_map<std::string, std::string>& headers, CompletionHandler&& handler)
+      void post_async(std::string_view url, const std::string& body, const glz::http_headers& headers,
+                      CompletionHandler&& handler)
       {
          auto url_result = parse_url(url);
          if (!url_result) {
@@ -1229,9 +1307,8 @@ namespace glz
       }
 
       // Overload for post_async without completion handler (returns future)
-      std::future<std::expected<response, std::error_code>> post_async(
-         std::string_view url, const std::string& body,
-         const std::unordered_map<std::string, std::string>& headers = {})
+      std::future<std::expected<response, std::error_code>> post_async(std::string_view url, const std::string& body,
+                                                                       const glz::http_headers& headers = {})
       {
          std::promise<std::expected<response, std::error_code>> promise;
          auto future = promise.get_future();
@@ -1246,8 +1323,8 @@ namespace glz
 
       // Async JSON POST request
       template <class T, typename CompletionHandler>
-      void post_json_async(std::string_view url, const T& data,
-                           const std::unordered_map<std::string, std::string>& headers, CompletionHandler&& handler)
+      void post_json_async(std::string_view url, const T& data, const glz::http_headers& headers,
+                           CompletionHandler&& handler)
       {
          std::string json_str;
          auto ec = glz::write_json(data, json_str);
@@ -1258,16 +1335,13 @@ namespace glz
             return;
          }
 
-         auto merged_headers = headers;
-         merged_headers["content-type"] = "application/json";
-
-         post_async(url, json_str, merged_headers, std::forward<CompletionHandler>(handler));
+         post_async(url, json_str, detail::with_json_content_type(headers), std::forward<CompletionHandler>(handler));
       }
 
       // Overload for post_json_async without completion handler (returns future)
       template <class T>
-      std::future<std::expected<response, std::error_code>> post_json_async(
-         std::string_view url, const T& data, const std::unordered_map<std::string, std::string>& headers = {})
+      std::future<std::expected<response, std::error_code>> post_json_async(std::string_view url, const T& data,
+                                                                            const glz::http_headers& headers = {})
       {
          std::promise<std::expected<response, std::error_code>> promise;
          auto future = promise.get_future();
@@ -1344,9 +1418,9 @@ namespace glz
 
       std::shared_ptr<http_stream_connection> perform_stream_request(
          const std::string& method, const url_parts& url, const std::string& body, size_t max_buffer_size,
-         const std::unordered_map<std::string, std::string>& headers, std::chrono::seconds timeout,
-         stream_read_strategy strategy, std::function<bool(int)> status_is_error, http_data_handler on_data,
-         http_error_handler on_error, http_connect_handler on_connect, http_disconnect_handler on_disconnect)
+         const glz::http_headers& headers, std::chrono::seconds timeout, stream_read_strategy strategy,
+         std::function<bool(int)> status_is_error, http_data_handler on_data, http_error_handler on_error,
+         http_connect_handler on_connect, http_disconnect_handler on_disconnect)
       {
          const bool use_https = (url.protocol == "https");
 
@@ -1467,7 +1541,7 @@ namespace glz
 
 #ifdef GLZ_ENABLE_SSL
       void perform_stream_ssl_handshake(const url_parts& url, const std::string& method, const std::string& body,
-                                        const std::unordered_map<std::string, std::string>& headers,
+                                        const glz::http_headers& headers,
                                         std::shared_ptr<http_stream_connection> connection, http_data_handler on_data,
                                         http_error_handler on_error, http_connect_handler on_connect,
                                         http_disconnect_handler on_disconnect)
@@ -1499,9 +1573,8 @@ namespace glz
 
       // Needs to take the wrapped disconnect handler and use keep-alive
       void send_stream_request(const url_parts& url, const std::string& method, const std::string& body,
-                               const std::unordered_map<std::string, std::string>& headers,
-                               std::shared_ptr<http_stream_connection> connection, http_data_handler on_data,
-                               http_error_handler on_error, http_connect_handler on_connect,
+                               const glz::http_headers& headers, std::shared_ptr<http_stream_connection> connection,
+                               http_data_handler on_data, http_error_handler on_error, http_connect_handler on_connect,
                                http_disconnect_handler on_disconnect)
       {
          const bool use_https = url.protocol == "https";
@@ -1585,13 +1658,11 @@ namespace glz
                         auto colon_pos = header_line.find(':');
                         if (colon_pos != std::string::npos) {
                            std::string_view name = header_line.substr(0, colon_pos);
-                           // Skip past ':' and any whitespace
-                           size_t value_start = header_line.find_first_not_of(" \t", colon_pos + 1);
-                           std::string_view value =
-                              (value_start != std::string::npos) ? header_line.substr(value_start) : "";
+                           // RFC 9110 5.5 / RFC 9112 5: strip both leading and trailing OWS,
+                           // so a value reaches the caller as the field value proper.
+                           std::string_view value = detail::trim_optional_whitespace(header_line.substr(colon_pos + 1));
 
-                           // Convert header name to lowercase for case-insensitive lookups (RFC 7230)
-                           response_headers.response_headers[to_lower_case(name)] = std::string(value);
+                           response_headers.response_headers.add(std::string(name), std::string(value));
                         }
                      }
 
@@ -1616,15 +1687,7 @@ namespace glz
                         return;
                      }
 
-                     bool is_chunked = false;
-                     auto it = response_headers.response_headers.find("transfer-encoding");
-                     if (it != response_headers.response_headers.end()) {
-                        if (it->second.find("chunked") != std::string::npos) {
-                           is_chunked = true;
-                        }
-                     }
-
-                     if (is_chunked) {
+                     if (response_headers.response_headers.contains_token("transfer-encoding", "chunked")) {
                         start_chunked_reading(connection, std::move(on_data), std::move(on_error),
                                               std::move(on_disconnect));
                      }
@@ -1855,9 +1918,9 @@ namespace glz
             *connection->socket);
       }
 
-      std::expected<response, std::error_code> perform_sync_request(
-         const std::string& method, const url_parts& url, const std::string& body,
-         const std::unordered_map<std::string, std::string>& headers)
+      std::expected<response, std::error_code> perform_sync_request(const std::string& method, const url_parts& url,
+                                                                    const std::string& body,
+                                                                    const glz::http_headers& headers)
       {
          const bool use_https = (url.protocol == "https");
 
@@ -1977,11 +2040,7 @@ namespace glz
             }
 
             // Parse headers from the view
-            std::unordered_map<std::string, std::string> response_headers;
-            size_t content_length = 0;
-            bool has_content_length = false;
-            bool connection_close = false;
-            bool is_chunked = false;
+            glz::http_headers response_headers;
 
             while (!header_data.starts_with("\r\n")) {
                line_end = header_data.find("\r\n");
@@ -1995,28 +2054,29 @@ namespace glz
                auto colon_pos = header_line.find(':');
                if (colon_pos != std::string::npos) {
                   std::string_view name = header_line.substr(0, colon_pos);
-                  size_t value_start = header_line.find_first_not_of(" \t", colon_pos + 1);
-                  std::string_view value = (value_start != std::string::npos) ? header_line.substr(value_start) : "";
+                  // RFC 9110 5.5 / RFC 9112 5: a field value excludes both leading and
+                  // trailing OWS, and a recipient MUST strip them before evaluating it.
+                  // "Content-Length: 3 " is legal, so keeping the trailing space would
+                  // leave a value no strict parse of the field can accept.
+                  std::string_view value = detail::trim_optional_whitespace(header_line.substr(colon_pos + 1));
 
-                  if (name.length() == 14 && glz::strncasecmp(name.data(), "Content-Length", 14) == 0) {
-                     std::from_chars(value.data(), value.data() + value.size(), content_length);
-                     has_content_length = true;
-                  }
-                  else if (name.length() == 17 && glz::strncasecmp(name.data(), "Transfer-Encoding", 17) == 0) {
-                     if (value.find("chunked") != std::string_view::npos) {
-                        is_chunked = true;
-                     }
-                  }
-                  else if (name.length() == 10 && glz::strncasecmp(name.data(), "Connection", 10) == 0) {
-                     if (value.find("close") != std::string_view::npos) {
-                        connection_close = true;
-                     }
-                  }
-
-                  // Convert header name to lowercase for case-insensitive lookups (RFC 7230)
-                  response_headers.emplace(to_lower_case(name), value);
+                  response_headers.add(std::string(name), std::string(value));
                }
             }
+
+            const auto content_length_field = detail::read_content_length(response_headers);
+            if (content_length_field.state == detail::content_length_state::unframed) [[unlikely]] {
+               // The body boundary is unknowable, so the socket cannot be handed
+               // back to the pool: whatever is left on it would be read as the
+               // head of an unrelated response.
+               detail::close_socket(socket_var, connection_pool->graceful_ssl_shutdown());
+               r.outcome = std::unexpected(make_error_code(http_client_error::unframed_response));
+               return r;
+            }
+            const size_t content_length = content_length_field.value;
+            const bool has_content_length = content_length_field.state == detail::content_length_state::present;
+            const bool is_chunked = response_headers.contains_token("Transfer-Encoding", "chunked");
+            bool connection_close = response_headers.contains_token("Connection", "close");
 
             // Consume header data, leaving only the over-read body part.
             response_buffer.consume(header_bytes);
@@ -2202,8 +2262,7 @@ namespace glz
 
       template <typename CompletionHandler>
       void perform_request_async(const std::string& method, const url_parts& url, const std::string& body,
-                                 const std::unordered_map<std::string, std::string>& headers,
-                                 CompletionHandler&& handler)
+                                 const glz::http_headers& headers, CompletionHandler&& handler)
       {
          const bool use_https = (url.protocol == "https");
 
@@ -2414,8 +2473,7 @@ namespace glz
       template <typename CompletionHandler>
       void async_consume_trailers(std::shared_ptr<socket_variant> socket_var, std::shared_ptr<asio::streambuf> buffer,
                                   std::shared_ptr<std::string> body, const url_parts& url, bool use_https,
-                                  int status_code, std::unordered_map<std::string, std::string> response_headers,
-                                  CompletionHandler&& handler)
+                                  int status_code, glz::http_headers response_headers, CompletionHandler&& handler)
       {
          std::visit(
             [&, this](auto& sock) {
@@ -2444,9 +2502,7 @@ namespace glz
                         resp.response_headers = std::move(response_headers);
                         resp.response_body = std::move(*body);
 
-                        auto connection_header = resp.response_headers.find("connection");
-                        if (connection_header == resp.response_headers.end() ||
-                            connection_header->second.find("close") == std::string::npos) {
+                        if (!resp.response_headers.contains_token("connection", "close")) {
                            connection_pool->return_connection(url.host, url.port, use_https, std::move(*socket_var));
                         }
 
@@ -2466,8 +2522,7 @@ namespace glz
       template <typename CompletionHandler>
       void async_read_chunked_body(std::shared_ptr<socket_variant> socket_var, std::shared_ptr<asio::streambuf> buffer,
                                    std::shared_ptr<std::string> body, const url_parts& url, bool use_https,
-                                   int status_code, std::unordered_map<std::string, std::string> response_headers,
-                                   CompletionHandler&& handler)
+                                   int status_code, glz::http_headers response_headers, CompletionHandler&& handler)
       {
          // Read until we have the chunk size line
          std::visit(
@@ -2522,8 +2577,7 @@ namespace glz
       template <typename CompletionHandler>
       void async_read_chunk_data(std::shared_ptr<socket_variant> socket_var, std::shared_ptr<asio::streambuf> buffer,
                                  std::shared_ptr<std::string> body, size_t chunk_size, const url_parts& url,
-                                 bool use_https, int status_code,
-                                 std::unordered_map<std::string, std::string> response_headers,
+                                 bool use_https, int status_code, glz::http_headers response_headers,
                                  CompletionHandler&& handler)
       {
          // Check accumulated body size against limit before reading chunk data
@@ -2585,8 +2639,7 @@ namespace glz
       template <typename CompletionHandler>
       void async_read_eof_body(std::shared_ptr<socket_variant> socket_var, std::shared_ptr<asio::streambuf> buffer,
                                const url_parts& url, bool use_https, int status_code,
-                               std::unordered_map<std::string, std::string> response_headers,
-                               CompletionHandler&& handler)
+                               glz::http_headers response_headers, CompletionHandler&& handler)
       {
          std::visit(
             [&, this](auto& sock) {
@@ -2649,11 +2702,7 @@ namespace glz
          }
 
          // Parse all header fields from the view.
-         std::unordered_map<std::string, std::string> response_headers;
-         size_t content_length = 0;
-         bool has_content_length = false;
-         bool connection_close = false;
-         bool is_chunked = false;
+         glz::http_headers response_headers;
          // The header section ends with an empty line ("\r\n"), which means our view will start with it.
          while (!header_section.starts_with("\r\n")) {
             line_end = header_section.find("\r\n");
@@ -2667,32 +2716,29 @@ namespace glz
             auto colon_pos = header_line.find(':');
             if (colon_pos != std::string::npos) {
                std::string_view name = header_line.substr(0, colon_pos);
-               // Skip past ':' and any leading whitespace on the value.
-               size_t value_start = header_line.find_first_not_of(" \t", colon_pos + 1);
-               std::string_view value = (value_start != std::string::npos) ? header_line.substr(value_start) : "";
+               // RFC 9110 5.5 / RFC 9112 5: a field value excludes both leading and
+               // trailing OWS, and a recipient MUST strip them before evaluating it.
+               // "Content-Length: 3 " is legal, so keeping the trailing space would
+               // leave a value no strict parse of the field can accept.
+               std::string_view value = detail::trim_optional_whitespace(header_line.substr(colon_pos + 1));
 
-               // A case-insensitive comparison is more robust for header names.
-               if (name.size() == 14 && (name[0] == 'C' || name[0] == 'c') &&
-                   glz::strncasecmp(name.data(), "Content-Length", 14) == 0) {
-                  std::from_chars(value.data(), value.data() + value.size(), content_length);
-                  has_content_length = true;
-               }
-               else if (name.size() == 17 && (name[0] == 'T' || name[0] == 't') &&
-                        glz::strncasecmp(name.data(), "Transfer-Encoding", 17) == 0) {
-                  if (value.find("chunked") != std::string_view::npos) {
-                     is_chunked = true;
-                  }
-               }
-               else if (name.size() == 10 && (name[0] == 'C' || name[0] == 'c') &&
-                        glz::strncasecmp(name.data(), "Connection", 10) == 0) {
-                  if (value.find("close") != std::string_view::npos) {
-                     connection_close = true;
-                  }
-               }
-               // Convert header name to lowercase for case-insensitive lookups (RFC 7230)
-               response_headers.emplace(to_lower_case(name), value);
+               response_headers.add(std::string(name), std::string(value));
             }
          }
+
+         const auto content_length_field = detail::read_content_length(response_headers);
+         if (content_length_field.state == detail::content_length_state::unframed) [[unlikely]] {
+            // The body boundary is unknowable, so the socket cannot be handed back
+            // to the pool: whatever is left on it would be read as the head of an
+            // unrelated response.
+            detail::close_socket(*socket_var, connection_pool->graceful_ssl_shutdown());
+            handler(std::unexpected(make_error_code(http_client_error::unframed_response)));
+            return;
+         }
+         const size_t content_length = content_length_field.value;
+         const bool has_content_length = content_length_field.state == detail::content_length_state::present;
+         const bool is_chunked = response_headers.contains_token("Transfer-Encoding", "chunked");
+         const bool connection_close = response_headers.contains_token("Connection", "close");
 
          // Consume the entire header block from the streambuf.
          // This efficiently discards the header data we've just parsed, leaving only body data.
@@ -2754,10 +2800,7 @@ namespace glz
                         // Pool the connection unless the server asked to close it. A truncated or
                         // peer-closed connection already returned above, so anything reaching here
                         // is a complete response on a still-open socket.
-                        auto connection_header = resp.response_headers.find("connection");
-                        const bool server_wants_close = connection_header != resp.response_headers.end() &&
-                                                        connection_header->second.find("close") != std::string::npos;
-                        if (server_wants_close) {
+                        if (resp.response_headers.contains_token("connection", "close")) {
                            detail::close_socket(*socket_var, connection_pool->graceful_ssl_shutdown());
                         }
                         else {

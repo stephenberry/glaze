@@ -9,6 +9,7 @@
 #include <string>
 #include <string_view>
 #include <unordered_map>
+#include <utility>
 #include <vector>
 
 #include "glaze/core/common.hpp"
@@ -22,6 +23,36 @@ using std::size_t;
 
 namespace glz::yaml
 {
+   // How many times over the input an alias may replay before the read gives up. Deliberately
+   // looser than the speculative-parse factor: re-parsing the same bytes to resolve a variant is
+   // waste to be capped, while replaying an anchor is the feature working as intended, and a
+   // generated config that references a large anchor from thousands of entries is ordinary. What
+   // this stops is growth that does not track the input at all, and that case is caught by the
+   // floor below rather than by this factor.
+   inline constexpr size_t max_alias_expansion_factor = 64;
+
+   // ...plus a floor, since the factor alone is meaningless for the small inputs where the
+   // exponential shape lives: a 306 byte document expands 60000x, so any multiple of its own
+   // size stops it. The floor is what every ordinary document actually reads against, and it is
+   // set where the exponential case costs a bounded ~40 MB and a tenth of a second instead of
+   // gigabytes and minutes -- while staying far above what a hand-written document replays.
+   inline constexpr size_t min_alias_expansion_bytes = 8 << 20;
+
+   // How many times over the input a read may materialize complex-key text, and the floor it
+   // reads against. A mapping key that is not a scalar is stored by its JSON form, and JSON
+   // escaping is multiplicative under nesting: every level that carries the previous one as its
+   // key doubles that level's backslashes, so each `? ` in `? ? ? ...` doubles the key while
+   // adding two bytes to the input. 52 bytes of input reach a 134 MB key, 72 bytes reach more
+   // memory than a machine has, and nothing about the shape looks unusual on the way down --
+   // nesting is linear in the input, so the recursion guard is no help: by its 84-level limit the
+   // key would be 2^84 bytes.
+   // Bounding materialized bytes is what the memory and the time both track. The constants match
+   // the alias budget for the same reason it chose them: a complex key's JSON form is comparable
+   // to the YAML that produced it, so any multiple of the document stops growth that does not
+   // track the document at all, and the floor is what ordinary documents actually read against.
+   inline constexpr size_t max_key_expansion_factor = 64;
+   inline constexpr size_t min_key_expansion_bytes = 8 << 20;
+
    // YAML-specific context extending the base context
    // Adds indent tracking needed for block-style parsing
    struct yaml_context : context
@@ -78,6 +109,66 @@ namespace glz::yaml
 
       std::unordered_map<std::string, anchor_span, transparent_string_hash, transparent_string_equal> anchors{};
 
+      // Anchor spans an alias is currently replaying, innermost last. An anchor is invisible to
+      // itself while it expands: a mapping key's anchor is registered over the key text before
+      // that text is parsed, so the span can hold an alias back to the name being defined, and
+      // replaying it would expand forever. Spans point into the input buffer, which outlives the
+      // read, so they stay valid even though `anchors` itself is replaced during speculation.
+      std::vector<std::pair<const char*, const char*>> active_alias_spans{};
+
+      bool alias_span_is_replaying(const char* begin, const char* end) const noexcept
+      {
+         for (const auto& [b, e] : active_alias_spans) {
+            if (b == begin && e == end) return true;
+         }
+         return false;
+      }
+
+      // Source bytes an alias may still replay. Resolving one re-parses the anchor's text, so
+      // anchors that each reference the previous one several times expand exponentially without
+      // nesting: eight levels of eightfold reuse turn 348 bytes of input into gigabytes of nodes,
+      // and neither the depth guard nor the indent stack sees anything unusual. The bound is on
+      // total replayed bytes rather than on how often a name is reused or how deeply anchors
+      // nest, because replayed bytes are what the time and the memory both track.
+      // Seeded per read from the input; 0 means unbudgeted (a nested or hand-rolled parse).
+      size_t alias_expansion_budget = 0;
+
+      // Charge `bytes` of alias replay. Returns false once the budget is spent, at which point
+      // the caller must stop expanding. A spent budget latches at 1 rather than reaching 0,
+      // which would read as "unbudgeted" and hand the document a fresh allowance.
+      [[nodiscard]] bool charge_alias_expansion(const size_t bytes) noexcept
+      {
+         if (alias_expansion_budget == 0) {
+            return true; // unbudgeted
+         }
+         if (bytes >= alias_expansion_budget) {
+            alias_expansion_budget = 1; // latch: spent, and still not "unbudgeted"
+            return false;
+         }
+         alias_expansion_budget -= bytes;
+         return true;
+      }
+
+      // Bytes of complex-key text this read may still materialize. Seeded per read from the
+      // input; 0 means unbudgeted (a nested or hand-rolled parse), matching the alias budget.
+      size_t key_expansion_budget = 0;
+
+      // Charge `bytes` of materialized key text. Returns false once the budget is spent, at which
+      // point the caller must stop and report exceeded_max_expansion. Latches at 1 rather than
+      // 0, which would read as "unbudgeted" and hand the document a fresh allowance.
+      [[nodiscard]] bool charge_key_expansion(const size_t bytes) noexcept
+      {
+         if (key_expansion_budget == 0) {
+            return true; // unbudgeted
+         }
+         if (bytes >= key_expansion_budget) {
+            key_expansion_budget = 1; // latch: spent, and still not "unbudgeted"
+            return false;
+         }
+         key_expansion_budget -= bytes;
+         return true;
+      }
+
       // True while parsing the value payload of a "- item" block-sequence entry.
       // Used to distinguish indentless-sequence continuation from next sibling items.
       bool sequence_item_value_context = false;
@@ -117,6 +208,13 @@ namespace glz::yaml
          yaml_context c{};
          c.indent_stack = indent_stack;
          c.anchors = anchors;
+         c.active_alias_spans = active_alias_spans;
+         // Speculative work is real work: a probe that expands aliases spends the same budget,
+         // and the sites that adopt a probe's anchors adopt what it spent along with them.
+         c.alias_expansion_budget = alias_expansion_budget;
+         // Likewise for key text: a probe that built a complex key did the work whether or not
+         // its alternative is adopted, and an attempt that is never billed can be repeated free.
+         c.key_expansion_budget = key_expansion_budget;
          c.sequence_item_value_context = sequence_item_value_context;
          c.sequence_dash_indent = sequence_dash_indent;
          c.explicit_mapping_key_context = explicit_mapping_key_context;

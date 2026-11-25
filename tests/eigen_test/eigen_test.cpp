@@ -658,4 +658,94 @@ int main()
       expect(bool(glz::read_cbor(e, b)));
       expect(e == (Eigen::Matrix<double, 2, 2>::Zero()));
    };
+
+   // A dynamic matrix read from JSON that ends right after the [rows,cols] header
+   // used to read one byte past a non-null-terminated buffer while probing for the
+   // ',' that introduces the data. Over an exact-size view it must error, not read
+   // past the end.
+   "json dynamic matrix truncated after dimensions"_test = [] {
+      std::vector<char> storage{'[', '[', '2', ',', '3', ']'};
+      std::string_view src{storage.data(), storage.size()};
+      Eigen::MatrixXd m;
+      const auto ec = glz::read<glz::opts{.format = glz::JSON, .null_terminated = false}>(m, src);
+      expect(bool(ec));
+   };
+
+   "json dynamic matrix non null terminated roundtrip"_test = [] {
+      std::vector<char> storage{'[', '[', '1', ',', '1', ']', ',', '[', '7', ']', ']'};
+      std::string_view src{storage.data(), storage.size()};
+      Eigen::MatrixXd m;
+      expect(not glz::read<glz::opts{.format = glz::JSON, .null_terminated = false}>(m, src));
+      expect(m.rows() == 1);
+      expect(m.cols() == 1);
+      expect(m(0, 0) == 7);
+   };
+
+   // A dynamic matrix read from BEVE whose dimension header is truncated left the
+   // extents uninitialized and resized the matrix to those bytes. It must error.
+   "beve dynamic matrix truncated header"_test = [] {
+      Eigen::MatrixXd m(2, 2);
+      m << 1, 2, 3, 4;
+      std::string b;
+      expect(not glz::write_beve(m, b));
+
+      std::vector<char> storage{b.begin(), b.begin() + 2};
+      std::string_view src{storage.data(), storage.size()};
+      Eigen::MatrixXd e;
+      expect(bool(glz::read<glz::opts{.format = glz::BEVE, .null_terminated = false}>(e, src)));
+   };
+
+   // The data array can be well formed and the buffer still end before the ']' that closes
+   // the matrix. Matching it used to dereference the end of a non-null-terminated buffer.
+   "json dynamic matrix truncated after data"_test = [] {
+      std::vector<char> storage{'[', '[', '1', ',', '1', ']', ',', '[', '7', ']'};
+      std::string_view src{storage.data(), storage.size()};
+      Eigen::MatrixXd m;
+      const auto ec = glz::read<glz::opts{.format = glz::JSON, .null_terminated = false}>(m, src);
+      expect(bool(ec));
+   };
+
+   // A dynamic matrix with a fixed maximum holds MaxRows * MaxCols scalars inline, and its
+   // resize() only records the new extents in that fixed buffer rather than growing it. So
+   // size() reports the wire product rather than the capacity, and wire dimensions beyond the
+   // maximum have to be rejected before the resize or the data read runs past the storage.
+   // Eigen only asserts on the oversized resize when EIGEN_NO_DEBUG is off, so a release build
+   // would otherwise take the overflow silently.
+   "dynamic matrix exceeding fixed maximum storage"_test = [] {
+      using bounded_t = Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic, 0, 2, 2>;
+
+      bounded_t m;
+      expect(glz::read_json(m, R"([[4,4],[1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16]])").ec ==
+             glz::error_code::exceeded_static_array_size);
+
+      // The same header over BEVE, produced by writing a matrix too large to fit.
+      Eigen::MatrixXd oversized(4, 4);
+      oversized.setZero();
+      std::string b;
+      expect(not glz::write_beve(oversized, b));
+      bounded_t from_beve;
+      expect(glz::read_beve(from_beve, b).ec == glz::error_code::exceeded_static_array_size);
+
+      // Dimensions within the maximum still read normally.
+      bounded_t ok;
+      expect(not glz::read_json(ok, R"([[2,2],[1,2,3,4]])"));
+      expect(ok.rows() == 2);
+      expect(ok.cols() == 2);
+      expect(ok(1, 1) == 4);
+
+      Eigen::MatrixXd fits(2, 2);
+      fits << 1, 2, 3, 4;
+      std::string fits_beve;
+      expect(not glz::write_beve(fits, fits_beve));
+      bounded_t ok_beve;
+      expect(not glz::read_beve(ok_beve, fits_beve));
+      expect(ok_beve == fits);
+   };
+
+   // Two negative extents multiply back to a positive size(), so a negative header would
+   // otherwise produce a data span over a matrix that holds nothing.
+   "json dynamic matrix negative dimensions"_test = [] {
+      Eigen::MatrixXd m;
+      expect(glz::read_json(m, R"([[-2,-3],[1,2,3,4,5,6]])").ec == glz::error_code::syntax_error);
+   };
 }

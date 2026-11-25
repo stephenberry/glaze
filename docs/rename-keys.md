@@ -355,3 +355,44 @@ std::string json = glz::write_json(p).value();
 - All transformation logic is evaluated at compile time
 - The indexed variant is mutually exclusive with the string-based variant
 - You can only define one `rename_key` variant per type
+
+## Keys Requiring JSON Escapes
+
+Keys are written to the output verbatim, so a renamed key must already be in its JSON-escaped form. A key containing `"`, `\`, or a control character (0x00-0x1F) has no valid unescaped representation, and returning it raw produces malformed JSON:
+
+```cpp
+static constexpr std::string_view rename_key(const std::string_view key) {
+    if (key == "x") return R"(he said "hi")";  // writes {"he said "hi"":0}, which is invalid JSON
+    return key;
+}
+```
+
+Return the escaped form instead, either by writing it out directly or by generating it at compile time with `glz::escape_unicode`:
+
+```cpp
+static constexpr std::string_view rename_key(const std::string_view key) {
+    if (key == "x") return glz::escape_unicode<R"(he said "hi")">;
+    return key;
+}
+// Writes: {"he said \"hi\"":0}
+```
+
+The same applies to keys registered directly in `glz::meta`:
+
+```cpp
+template <>
+struct glz::meta<my_struct> {
+    using T = my_struct;
+    static constexpr auto value = object(escape_unicode<R"(he said "hi")">, &T::x);
+};
+```
+
+This is not needed for non-ASCII keys. Raw UTF-8 is valid in JSON keys, and Glaze reads and writes it correctly:
+
+```cpp
+static constexpr auto value = object("€uro", &T::x);  // writes {"€uro":0}, valid JSON
+```
+
+`escape_unicode` does also escape non-ASCII to `\uXXXX`, so `glz::escape_unicode<"€uro">` writes `{"\u20ACuro":0}`. That is an equivalent string but a different sequence of bytes. Because JSON does not require escaped keys to match unescaped UTF-8, reach for `escape_unicode` on a non-ASCII key only when you need to match input that arrives in escaped form.
+
+> `glz::escape_unicode` requires constexpr `std::string` support and is therefore unavailable when compiling with `_GLIBCXX_USE_CXX11_ABI=0`. See the `GLZ_HAS_CONSTEXPR_STRING` macro and `glz::has_constexpr_string`.

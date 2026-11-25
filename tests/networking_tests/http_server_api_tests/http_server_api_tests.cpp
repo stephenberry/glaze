@@ -14,6 +14,7 @@ import glaze.net.cors;
 import glaze.net.http_client;
 import glaze.net.http_router;
 import glaze.net.http_server;
+import glaze.util.compare;
 
 import ut;
 
@@ -739,8 +740,8 @@ suite response_building_tests = [] {
 
       expect(&chained_res == &res) << "Response methods should return reference for chaining\n";
       expect(res.status_code == 201) << "Status should be set correctly\n";
-      expect(res.response_headers.at("x-custom") == "value") << "Custom header should be set\n";
-      expect(res.response_headers.at("content-type") == "application/json") << "Content-Type should be set\n";
+      expect(res.response_headers.first_value("x-custom") == "value") << "Custom header should be set\n";
+      expect(res.response_headers.first_value("content-type") == "application/json") << "Content-Type should be set\n";
       expect(res.response_body == "test body") << "Body should be set correctly\n";
    };
 
@@ -751,7 +752,8 @@ suite response_building_tests = [] {
       res.json(data);
 
       expect(!res.response_body.empty()) << "JSON serialization should produce content\n";
-      expect(res.response_headers.at("content-type") == "application/json") << "Should set JSON content type\n";
+      expect(res.response_headers.first_value("content-type") == "application/json")
+         << "Should set JSON content type\n";
 
       // Verify serialization worked
       TestData deserialized;
@@ -886,7 +888,7 @@ suite response_middleware_tests = [] {
       auto response_hook = [&captured_content_type](const glz::request&, const glz::response& res) {
          auto it = res.response_headers.find("content-type");
          if (it != res.response_headers.end()) {
-            captured_content_type = it->second;
+            captured_content_type = it->value;
          }
       };
 
@@ -1157,7 +1159,7 @@ struct raw_http_client
    struct http_response
    {
       int status_code = 0;
-      std::unordered_map<std::string, std::string> headers;
+      glz::http_headers headers;
       std::string body;
    };
 
@@ -1222,11 +1224,10 @@ struct raw_http_client
             value.erase(0, value.find_first_not_of(" \t"));
             value.erase(value.find_last_not_of(" \t") + 1);
 
-            // Convert name to lowercase for easier lookup
-            std::transform(name.begin(), name.end(), name.begin(), [](unsigned char c) { return std::tolower(c); });
-            resp.headers[name] = value;
+            const bool is_content_length = glz::striequal(name, "content-length");
+            resp.headers.add(std::move(name), value);
 
-            if (name == "content-length") {
+            if (is_content_length) {
                content_length = std::stoul(value);
             }
          }
@@ -1326,11 +1327,17 @@ struct keepalive_test_server
       server_.get("/echo-connection", [](const glz::request& req, glz::response& res) {
          auto conn_it = req.headers.find("connection");
          if (conn_it != req.headers.end()) {
-            res.body("Connection: " + conn_it->second);
+            res.body("Connection: " + conn_it->value);
          }
          else {
             res.body("Connection: (none)");
          }
+      });
+
+      server_.get("/set-cookies", [](const glz::request&, glz::response& res) {
+         res.add_header("Set-Cookie", "session=abc; Path=/; HttpOnly")
+            .add_header("Set-Cookie", "theme=dark; Path=/")
+            .body("OK");
       });
    }
 };
@@ -1381,13 +1388,13 @@ suite keepalive_behavior_tests = [] {
          auto conn_header = resp->headers.find("connection");
          expect(conn_header != resp->headers.end()) << "Connection header should be present\n";
          if (conn_header != resp->headers.end()) {
-            expect(conn_header->second == "keep-alive") << "Connection should be keep-alive\n";
+            expect(conn_header->value == "keep-alive") << "Connection should be keep-alive\n";
          }
 
          auto ka_header = resp->headers.find("keep-alive");
          expect(ka_header != resp->headers.end()) << "Keep-Alive header should be present\n";
          if (ka_header != resp->headers.end()) {
-            expect(ka_header->second.find("timeout=30") != std::string::npos) << "Should contain timeout value\n";
+            expect(ka_header->value.find("timeout=30") != std::string::npos) << "Should contain timeout value\n";
          }
       }
 
@@ -1410,7 +1417,7 @@ suite keepalive_behavior_tests = [] {
          auto conn_header = resp->headers.find("connection");
          expect(conn_header != resp->headers.end()) << "Connection header should be present\n";
          if (conn_header != resp->headers.end()) {
-            expect(conn_header->second == "close") << "Connection should be close\n";
+            expect(conn_header->value == "close") << "Connection should be close\n";
          }
       }
 
@@ -1435,7 +1442,7 @@ suite keepalive_behavior_tests = [] {
          auto conn_header = resp->headers.find("connection");
          expect(conn_header != resp->headers.end()) << "Connection header should be present\n";
          if (conn_header != resp->headers.end()) {
-            expect(conn_header->second == "close") << "Server should respect client's close request\n";
+            expect(conn_header->value == "close") << "Server should respect client's close request\n";
          }
       }
 
@@ -1481,7 +1488,7 @@ suite keepalive_behavior_tests = [] {
       if (resp1.has_value()) {
          auto conn_header = resp1->headers.find("connection");
          if (conn_header != resp1->headers.end()) {
-            expect(conn_header->second == "keep-alive") << "First request should keep alive\n";
+            expect(conn_header->value == "keep-alive") << "First request should keep alive\n";
          }
       }
 
@@ -1491,7 +1498,7 @@ suite keepalive_behavior_tests = [] {
       if (resp2.has_value()) {
          auto conn_header = resp2->headers.find("connection");
          if (conn_header != resp2->headers.end()) {
-            expect(conn_header->second == "close") << "Second request should close (at limit)\n";
+            expect(conn_header->value == "close") << "Second request should close (at limit)\n";
          }
       }
 
@@ -1514,8 +1521,40 @@ suite keepalive_behavior_tests = [] {
          auto ka_header = resp->headers.find("keep-alive");
          expect(ka_header != resp->headers.end()) << "Keep-Alive header should be present\n";
          if (ka_header != resp->headers.end()) {
-            expect(ka_header->second.find("timeout=45") != std::string::npos) << "Should contain timeout\n";
-            expect(ka_header->second.find("max=100") != std::string::npos) << "Should contain max\n";
+            expect(ka_header->value.find("timeout=45") != std::string::npos) << "Should contain timeout\n";
+            expect(ka_header->value.find("max=100") != std::string::npos) << "Should contain max\n";
+         }
+      }
+
+      client.close();
+      server.stop();
+   };
+};
+
+suite repeated_response_header_tests = [] {
+   "server_sends_repeated_set_cookie_fields"_test = [] {
+      keepalive_test_server server;
+      expect(server.start()) << "Server should start\n";
+
+      raw_http_client client;
+      expect(client.connect("127.0.0.1", server.port())) << "Client should connect\n";
+
+      auto resp = client.send_request("GET", "/set-cookies", "127.0.0.1:" + std::to_string(server.port()));
+      expect(resp.has_value()) << "Should receive response\n";
+
+      if (resp.has_value()) {
+         expect(resp->status_code == 200) << "Status should be 200\n";
+         expect(resp->headers.count("Set-Cookie") == 2) << "Both Set-Cookie fields should reach the wire\n";
+
+         std::vector<std::string> cookies;
+         for (auto value : resp->headers.values("Set-Cookie")) {
+            cookies.emplace_back(value);
+         }
+
+         expect(cookies.size() == 2);
+         if (cookies.size() == 2) {
+            expect(cookies[0] == "session=abc; Path=/; HttpOnly") << "First cookie should keep its position\n";
+            expect(cookies[1] == "theme=dark; Path=/") << "Second cookie should keep its position\n";
          }
       }
 

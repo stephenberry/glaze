@@ -184,6 +184,17 @@ namespace glz
 
       typename protocol_storage<Proto>::type endpoints{};
 
+      // A batch answers every element it holds, so the response grows with the product of the batch
+      // length and the size of what each element reads -- a bounded request can ask for an unbounded
+      // answer. Nothing in the request caps that, so the server has to. Raise it for a service whose
+      // legitimate batches are larger than this, or lower it to keep a hostile one cheap; a batch
+      // that would exceed it is abandoned rather than truncated, so a client never mistakes a
+      // partial answer for a complete one. Single requests are not subject to it, because one
+      // request yields one response -- note that this bounds a response by the size of the
+      // registered data, which a caller can itself grow where writable members are registered, and
+      // not by the size of the request.
+      size_t max_batch_response_size{rpc::default_max_batch_response_size};
+
       void clear() { endpoints.clear(); }
 
      private:
@@ -557,7 +568,7 @@ namespace glz
       std::optional<std::string> process_single_request(std::string_view json_request)
          requires(Proto == JSONRPC)
       {
-         rpc::generic_request_t request{};
+         rpc::request_envelope_t request{};
          if (const auto read_ec = glz::read<read_opts>(request, json_request); read_ec) {
             // Check if it's a JSON syntax error vs schema error
             static constexpr registry_validate_opts<read_opts> validate_opts{{read_opts}};
@@ -577,32 +588,45 @@ namespace glz
 
          auto& req = request;
 
-         // Validate version
-         if (req.version != rpc::supported_version) {
+         const auto invalid_request = [&req](const std::string& data) {
             std::string id_json = glz::write_json(req.id).value_or("null");
             return R"({"jsonrpc":"2.0","error":{"code":-32600,"message":"Invalid Request","data":)" +
-                   write_json("Invalid version: " + std::string(req.version)).value_or("null") + R"(},"id":)" +
-                   id_json + "}";
+                   write_json(data).value_or("null") + R"(},"id":)" + id_json + "}";
+         };
+
+         // `jsonrpc` and `method` are both required members, and an absent one cannot be allowed to
+         // fall through to a default: an absent version would pass for 2.0, and an absent method
+         // names "", which is the root endpoint -- so `{"id":1}` would answer with the whole
+         // registered object rather than being rejected.
+         if (!req.version) {
+            return invalid_request("Missing 'jsonrpc' member");
          }
+         if (*req.version != rpc::supported_version) {
+            return invalid_request("Invalid version: " + std::string(*req.version));
+         }
+         if (!req.method) {
+            return invalid_request("Missing 'method' member");
+         }
+         const std::string_view method_name = *req.method;
 
          // Check if this is a notification (id is null)
          bool is_notification = std::holds_alternative<glz::generic::null_t>(req.id);
 
          // Look up the endpoint - try direct lookup first (handles methods that already start with /)
-         auto it = endpoints.find(req.method);
+         auto it = endpoints.find(method_name);
          if (it == endpoints.end()) {
-            if (!req.method.empty()) {
+            if (!method_name.empty()) {
                // Try with leading slash using stack buffer for common case
                char buf[256];
-               if (req.method.size() < sizeof(buf) - 1) {
+               if (method_name.size() < sizeof(buf) - 1) {
                   buf[0] = '/';
-                  std::memcpy(buf + 1, req.method.data(), req.method.size());
-                  it = endpoints.find(std::string_view{buf, req.method.size() + 1});
+                  std::memcpy(buf + 1, method_name.data(), method_name.size());
+                  it = endpoints.find(std::string_view{buf, method_name.size() + 1});
                }
                else {
                   // Fallback for very long method names
                   std::string method_path = "/";
-                  method_path += req.method;
+                  method_path += method_name;
                   it = endpoints.find(method_path);
                }
             }
@@ -616,7 +640,7 @@ namespace glz
                }
                std::string id_json = glz::write_json(req.id).value_or("null");
                return R"({"jsonrpc":"2.0","error":{"code":-32601,"message":"Method not found","data":)" +
-                      write_json(req.method).value_or("null") + R"(},"id":)" + id_json + "}";
+                      write_json(method_name).value_or("null") + R"(},"id":)" + id_json + "}";
             }
          }
 
@@ -656,6 +680,16 @@ namespace glz
             auto response = process_single_request(req.str);
             if (response.has_value()) {
                total_size += response->size() + 1; // +1 for comma
+               // Checked as the batch is walked rather than after it, so the elements past the
+               // limit are never run and what they would have answered with is never built. The
+               // element that trips it has already been built, so the peak is the limit plus one
+               // response rather than the limit exactly. The elements already run keep their
+               // effects -- a JSON RPC batch is not a transaction -- but the caller is told the
+               // batch failed rather than handed a partial array it cannot distinguish from a
+               // complete one.
+               if (total_size > max_batch_response_size) {
+                  return R"({"jsonrpc":"2.0","error":{"code":-32000,"message":"Server error","data":"Batch response exceeds max_batch_response_size"},"id":null})";
+               }
                responses.push_back(std::move(*response));
             }
          }

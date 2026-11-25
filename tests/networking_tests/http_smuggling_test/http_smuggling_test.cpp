@@ -4,6 +4,7 @@ import std;
 
 import glaze.net.http_router;
 import glaze.net.http_server;
+import glaze.util.compare;
 
 import ut;
 
@@ -68,6 +69,15 @@ suite http_smuggling_suite = [] {
       smuggled_hits.fetch_add(1, std::memory_order_relaxed);
       res.status(200);
       res.body("smuggled");
+   });
+   // A handler that announces a transfer coding the buffered response writer never
+   // applies. The body below is deliberately shaped like a valid chunked stream, so
+   // a recipient that believed the Transfer-Encoding would decode "smuggled!" as a
+   // chunk while a recipient that believed the Content-Length would not.
+   server.get("/handler-sets-te", [&](const glz::request&, glz::response& res) {
+      res.header("Transfer-Encoding", "chunked");
+      res.status(200);
+      res.body("9\r\nsmuggled!\r\n0\r\n\r\n");
    });
    server.bind(test_host, 0);
    const uint16_t test_port = server.port();
@@ -195,6 +205,49 @@ suite http_smuggling_suite = [] {
          << "Expected 400 for case-varied conflicting Content-Length";
       std::this_thread::sleep_for(std::chrono::milliseconds(100));
       expect(smuggled_hits.load(std::memory_order_relaxed) == 0) << "Smuggled request reached a route handler";
+   };
+
+   // The buffered response writer always frames with Content-Length, so it must not
+   // let a handler advertise a transfer coding it does not apply. Emitting both
+   // fields is the response-side twin of the CL.TE request desync the cases above
+   // cover: two recipients read two different body boundaries from one response.
+   "Handler-set Transfer-Encoding is dropped, not emitted alongside Content-Length"_test = [&] {
+      const std::string payload =
+         "GET /handler-sets-te HTTP/1.1\r\n"
+         "Host: localhost\r\n"
+         "Connection: close\r\n"
+         "\r\n";
+
+      std::future<std::string> f = std::async(std::launch::async, [&] { return send_raw(test_port, payload); });
+
+      auto future_timeout = std::chrono::system_clock::now() + std::chrono::seconds(5);
+      std::string response;
+      if (std::future_status::ready == f.wait_until(future_timeout)) {
+         response = f.get();
+      }
+
+      // Field names are matched case-insensitively: response::header() lowercases
+      // today but is not required to, and a case-sensitive search would silently
+      // stop testing anything the day that changes.
+      const auto count_fields = [](std::string_view haystack, std::string_view field) {
+         size_t found = 0;
+         for (size_t i = 0; i + field.size() <= haystack.size(); ++i) {
+            if (glz::striequal(haystack.substr(i, field.size()), field)) {
+               ++found;
+            }
+         }
+         return found;
+      };
+
+      expect(response.find("HTTP/1.1 200") != std::string::npos) << "The response itself should still be served";
+      expect(count_fields(response, "Transfer-Encoding") == 0)
+         << "A transfer coding this writer never applies must not reach the wire, got: " << response;
+
+      // Exactly one framing field, and it must describe the bytes actually sent.
+      const size_t content_length_fields = count_fields(response, "Content-Length");
+      expect(content_length_fields == 1) << "Expected exactly one Content-Length, found " << content_length_fields;
+      expect(count_fields(response, "Content-Length: 19") == 1)
+         << "Content-Length must match the unencoded body length, got: " << response;
    };
 
    server.stop();

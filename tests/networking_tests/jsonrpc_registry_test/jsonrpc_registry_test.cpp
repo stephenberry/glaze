@@ -4,9 +4,12 @@
 import std;
 
 import glaze;
+import glaze.ext.jsonrpc;
 import glaze.rpc.registry;
 
 import ut;
+
+using std::size_t;
 
 using namespace ut;
 
@@ -43,6 +46,25 @@ struct my_nested_functions_t
       return in + " awesome!";
    };
    std::string my_string{};
+};
+
+// Counts how many elements of a batch actually ran, which is how the limit is shown to be enforced
+// as the batch is walked rather than after it has been built.
+struct counting_functions_t
+{
+   size_t calls{};
+   std::string blob = std::string(4096, 'x');
+   std::string fetch()
+   {
+      ++calls;
+      return blob;
+   }
+
+   struct glaze
+   {
+      using T = counting_functions_t;
+      static constexpr auto value = glz::object(&T::calls, &T::blob, &T::fetch);
+   };
 };
 
 struct example_functions_t
@@ -207,6 +229,76 @@ suite jsonrpc_batch_tests = [] {
       expect(obj.i == 99) << "Value should have been updated by notification";
    };
 
+   // A batch answers every element it holds, so a request of a fixed size can ask for an answer of
+   // any size. Only the server can bound that.
+   "batch_response_limit"_test = [] {
+      glz::registry<glz::opts{}, glz::JSONRPC> server{};
+
+      my_functions_t obj{};
+      server.on(obj);
+
+      std::string request = "[";
+      for (size_t i = 0; i < 512; ++i) {
+         if (i) {
+            request += ',';
+         }
+         request += R"({"jsonrpc":"2.0","method":"","id":)";
+         request += std::to_string(i);
+         request += '}';
+      }
+      request += ']';
+
+      // Every element reads the root endpoint, which answers with the whole object, so the batch is
+      // well over a kilobyte of response.
+      server.max_batch_response_size = 1024;
+      auto response = server.call(request);
+      expect(response.find(R"(-32000)") != std::string::npos) << response;
+      expect(response.find(R"("result")") == std::string::npos) << response;
+      expect(response[0] == '{') << "the batch is abandoned, not truncated to a partial array";
+      expect(response.size() < 4096u) << response.size();
+
+      // The same batch is answered in full once the limit allows it.
+      server.max_batch_response_size = glz::rpc::default_max_batch_response_size;
+      response = server.call(request);
+      expect(response[0] == '[') << response.substr(0, 64);
+      expect(response.find(R"(-32000)") == std::string::npos) << response.substr(0, 200);
+      expect(response.size() > 1024u) << response.size();
+   };
+
+   // The limit is checked as the batch is walked, so the elements past it are never run. A check
+   // that ran only after the loop would answer with the same error while still having built the
+   // whole oversized response first, which is the case this pins.
+   "batch_response_limit_stops_early"_test = [] {
+      glz::registry<glz::opts{}, glz::JSONRPC> server{};
+
+      counting_functions_t obj{};
+      server.on(obj);
+
+      std::string request = "[";
+      for (size_t i = 0; i < 512; ++i) {
+         if (i) {
+            request += ',';
+         }
+         request += R"({"jsonrpc":"2.0","method":"fetch","id":)";
+         request += std::to_string(i);
+         request += '}';
+      }
+      request += ']';
+
+      // Each element answers with the 4 KB blob, so the limit is reached within the first few.
+      server.max_batch_response_size = 8 * 1024;
+      auto response = server.call(request);
+      expect(response.find(R"(-32000)") != std::string::npos) << response;
+      expect(obj.calls > 0u) << "the batch should have started";
+      expect(obj.calls < 8u) << "elements past the limit must never run, ran " << obj.calls;
+
+      obj.calls = 0;
+      server.max_batch_response_size = glz::rpc::default_max_batch_response_size;
+      response = server.call(request);
+      expect(response[0] == '[') << response.substr(0, 64);
+      expect(obj.calls == 512u) << obj.calls;
+   };
+
    "empty_batch_error"_test = [] {
       glz::registry<glz::opts{}, glz::JSONRPC> server{};
 
@@ -264,6 +356,85 @@ suite jsonrpc_error_tests = [] {
       auto response = server.call(R"({"jsonrpc":"1.0","method":"hello","id":1})");
       expect(response.find(R"("error")") != std::string::npos) << response;
       expect(response.find(R"(-32600)") != std::string::npos) << response; // Invalid Request
+   };
+
+   // `jsonrpc` and `method` are both required members. An absent one used to read back as the
+   // default the request type carries, which made `{"id":1}` a version 2.0 call on the empty method
+   // -- and the empty method is the root endpoint, so it answered with the whole registered object.
+   "missing_version"_test = [] {
+      glz::registry<glz::opts{}, glz::JSONRPC> server{};
+
+      my_functions_t obj{};
+      server.on(obj);
+
+      auto response = server.call(R"({"method":"hello","id":1})");
+      expect(response.find(R"(-32600)") != std::string::npos) << response; // Invalid Request
+      expect(response.find(R"("result")") == std::string::npos) << response;
+      expect(response.find(R"("id":1)") != std::string::npos) << response;
+   };
+
+   "missing_method"_test = [] {
+      glz::registry<glz::opts{}, glz::JSONRPC> server{};
+
+      my_functions_t obj{};
+      obj.i = 55;
+      server.on(obj);
+
+      auto response = server.call(R"({"jsonrpc":"2.0","id":1})");
+      expect(response.find(R"(-32600)") != std::string::npos) << response; // Invalid Request
+      expect(response.find(R"("result")") == std::string::npos) << response;
+      // The root endpoint answers with the whole object, so its members must not appear.
+      expect(response.find(R"("i":)") == std::string::npos) << "must not dispatch to the root endpoint: " << response;
+   };
+
+   "bare_id_is_not_a_request"_test = [] {
+      glz::registry<glz::opts{}, glz::JSONRPC> server{};
+
+      my_functions_t obj{};
+      obj.i = 55;
+      server.on(obj);
+
+      auto response = server.call(R"({"id":1})");
+      expect(response.find(R"(-32600)") != std::string::npos) << response; // Invalid Request
+      expect(response.find(R"("result")") == std::string::npos) << response;
+      // The root endpoint answers with the whole object, so its members must not appear.
+      expect(response.find(R"("i":)") == std::string::npos) << "must not dispatch to the root endpoint: " << response;
+   };
+
+   // Every element of a batch is validated on its own. A bare id used to reach the root endpoint,
+   // which answers with the whole registered object -- so a batch of them returned one whole-object
+   // response per element, and the response grew with the product of the batch length and the size
+   // of the registered object rather than with the length of the request.
+   "batch_of_bare_ids_is_not_amplified"_test = [] {
+      glz::registry<glz::opts{}, glz::JSONRPC> server{};
+
+      my_functions_t obj{};
+      server.on(obj);
+
+      std::string request = "[";
+      for (size_t i = 0; i < 256; ++i) {
+         if (i) {
+            request += ',';
+         }
+         request += R"({"id":)";
+         request += std::to_string(i);
+         request += '}';
+      }
+      request += ']';
+
+      auto response = server.call(request);
+      expect(response[0] == '[') << response;
+      expect(response.find(R"("result")") == std::string::npos) << response;
+
+      size_t errors = 0;
+      for (size_t pos = response.find("-32600"); pos != std::string::npos; pos = response.find("-32600", pos + 1)) {
+         ++errors;
+      }
+      expect(errors == 256u) << errors;
+
+      // Each element answers with a fixed-size error rather than a copy of the registered object,
+      // so the response stays a constant multiple of the request no matter what is registered.
+      expect(response.size() < 16 * request.size()) << response.size() << " vs " << request.size();
    };
 };
 

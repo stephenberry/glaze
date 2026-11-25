@@ -1,5 +1,13 @@
 // Glaze Library
 // For the license information refer to glaze.ixx
+// glz:header path="glaze/util/memory_pool.hpp"
+// glz:header std=<cstddef>
+// glz:header std=<cstdint>
+// glz:header std=<deque>
+// glz:header std=<memory>
+// glz:header std=<mutex>
+// glz:header std=<type_traits>
+// glz:header std=<vector>
 export module glaze.util.memory_pool;
 
 import std;

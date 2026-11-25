@@ -37,6 +37,7 @@ These options are **not** in `glz::opts` by default. Add them to a custom option
 | `bool structs_as_arrays` | `false` | Handle structs without keys (as arrays) |
 | `bool validate_skipped` | `false` | Perform full validation on skipped values |
 | `bool validate_trailing_whitespace` | `false` | Validate whitespace after parsing completes |
+| `bool validate_utf8` | `true` | Validate that strings read are well formed UTF-8 |
 | `bool bools_as_numbers` | `false` | Read/write booleans as `1` and `0` |
 | `bool write_function_pointers` | `false` | Serialize function pointers (both member and non-member) in `glz::meta` as their type name (off by default) |
 | `bool concatenate` | `true` | Concatenate ranges of `std::pair` into single objects |
@@ -173,6 +174,19 @@ Performs full JSON validation on values that are skipped (unknown keys). Without
 #### `validate_trailing_whitespace`
 Validates that content after the parsed value contains only valid whitespace.
 
+#### `validate_utf8`
+On by default, because RFC 8259 section 8.1 requires JSON text to be UTF-8. Every string the reader materializes is checked, including map keys, unknown keys, and values that are skipped; malformed input fails with `error_code::invalid_utf8`. Of the binary-to-JSON converters, only `jsonb_to_json` checks UTF-8; see [String Escaping](binary.md#string-escaping).
+
+```cpp
+struct unchecked_opts : glz::opts {
+   bool validate_utf8 = false;
+};
+
+auto ec = glz::read<unchecked_opts{}>(obj, json_data); // malformed encodings accepted
+```
+
+Turn it off only when the encoding is guaranteed by an earlier stage, or when the bytes are deliberately not UTF-8 and you accept that the resulting `std::string` may hold anything. See [UTF-8 Validation](json.md#utf-8-validation) for what the check covers and what it costs.
+
 #### `skip_read_constraint`
 Skips `read_constraint` validation during deserialization. Useful for performance when data is known to be valid.
 
@@ -270,6 +284,9 @@ Control string quoting and escape sequence handling. Useful for embedding pre-fo
 
 #### `escape_control_characters`
 When `true`, control characters (0x00-0x1F) are escaped as `\uXXXX` sequences. The default (`false`) does not escape these characters for performance and safety (embedding nulls can cause issues, especially with C APIs). Glaze will error when parsing non-escaped control characters per the JSON spec—this option allows writing them as escaped unicode to avoid such errors on re-read.
+
+The binary-to-JSON converters use this option to decide what to do with control characters in a converted value. Off, they fail with `error_code::invalid_control_character`. On, the bytes are escaped. They ignore `raw_string` and `unquoted` either way. See [String Escaping](binary.md#string-escaping).
+
 
 ### Performance Options
 

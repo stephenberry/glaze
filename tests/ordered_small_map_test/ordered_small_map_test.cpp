@@ -1127,6 +1127,100 @@ suite ordered_small_map_tests = [] {
          ++expected;
       }
    };
+#if GLZ_HAS_OPTIONAL_REF
+   "optional_lookup_present_and_absent"_test = [] {
+      glz::ordered_small_map<int> map;
+      map["a"] = 1;
+      map["b"] = 2;
+
+      const auto a = map.lookup("a");
+      expect(a.has_value());
+      expect(*a == 1);
+
+      expect(map.lookup("z") == std::nullopt);
+   };
+
+   "optional_lookup_on_empty_map"_test = [] {
+      glz::ordered_small_map<int> map;
+
+      expect(!map.lookup("a").has_value());
+   };
+
+   "optional_lookup_yields_reference_into_map"_test = [] {
+      glz::ordered_small_map<int> map;
+      map["a"] = 1;
+      map["b"] = 2;
+
+      if (auto a = map.lookup("a")) {
+         *a = 42;
+      }
+
+      expect(map.at("a") == 42);
+      expect(map.at("b") == 2);
+      expect(&*map.lookup("a") == &map.at("a")) << "lookup must alias the stored value, not a copy\n";
+   };
+
+   "optional_lookup_result_types"_test = [] {
+      glz::ordered_small_map<int> map;
+      map["a"] = 1;
+      const auto& const_map = map;
+
+      static_assert(std::is_same_v<decltype(map.lookup("a")), std::optional<int&>>);
+      static_assert(std::is_same_v<decltype(const_map.lookup("a")), std::optional<const int&>>);
+
+      expect(&*const_map.lookup("a") == &map.at("a"));
+   };
+
+   "optional_lookup_reflects_erase_and_insert"_test = [] {
+      glz::ordered_small_map<int> map;
+      map["a"] = 1;
+
+      map.erase("a");
+      expect(!map.lookup("a").has_value());
+
+      map["a"] = 7;
+      const auto a = map.lookup("a");
+      expect(a.has_value());
+      expect(*a == 7);
+   };
+
+   "optional_lookup_above_linear_search_threshold"_test = [] {
+      glz::ordered_small_map<int> map;
+      for (int i = 0; i < 20; ++i) {
+         map[std::to_string(i)] = i;
+      }
+
+      expect(*map.lookup("0") == 0);
+      expect(*map.lookup("19") == 19) << "lookup must reach entries served by the hash index\n";
+      expect(!map.lookup("20").has_value());
+   };
+
+   "optional_lookup_heterogeneous_key"_test = [] {
+      glz::ordered_small_map<int> map;
+      map["alpha"] = 1;
+
+      expect(map.lookup(std::string_view{"alpha"}).has_value());
+      expect(map.lookup(std::string{"alpha"}).has_value());
+      expect(!map.lookup(std::string_view{"beta"}).has_value());
+   };
+
+   "optional_lookup_composes_with_monadic_operations"_test = [] {
+      glz::ordered_small_map<int> map;
+      map["a"] = 1;
+
+      expect(map.lookup("a").transform([](int v) { return v * 2; }) == 2);
+      expect(map.lookup("z").value_or(-1) == -1);
+   };
+
+   "optional_lookup_with_move_only_mapped_type"_test = [] {
+      glz::ordered_small_map<std::unique_ptr<int>> map;
+      map["a"] = std::make_unique<int>(1);
+
+      const auto a = map.lookup("a");
+      expect(a.has_value());
+      expect(**a == 1);
+   };
+#endif
 };
 
 int main() { return 0; }

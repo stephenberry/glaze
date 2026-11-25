@@ -255,14 +255,7 @@ namespace glz
       template <auto Opts>
       static void op(auto&& value, is_context auto&& ctx, auto&& b, auto& ix)
       {
-         const sv str = [&]() -> const sv {
-            if constexpr (!char_array_t<T> && std::is_pointer_v<std::decay_t<T>>) {
-               return value ? value : "";
-            }
-            else {
-               return sv{value};
-            }
-         }();
+         const sv str = str_view<T>(value);
 
          const uint8_t tc =
             jsonb_detail::string_needs_json_escape(str.data(), str.size()) ? jsonb::type::textraw : jsonb::type::text;
@@ -340,6 +333,14 @@ namespace glz
 
          using map_t = std::remove_cvref_t<decltype(value)>;
          using val_t = std::remove_cvref_t<detail::iterator_second_type<map_t>>;
+         // A JSONB object key must be one of the text types (7-10). Serializing a non-string
+         // key through the generic value writer would emit an INT (or worse) in the key slot,
+         // producing a blob that neither `read_jsonb` nor `jsonb_to_json` will accept and that
+         // SQLite renders as unquoted nonsense like `{1:2}`. Reject it here, matching the
+         // identical assertion in `from<JSONB, T>`.
+         using key_t = std::remove_cvref_t<detail::iterator_first_type<map_t>>;
+         static_assert(str_t<key_t> || std::same_as<key_t, std::string>,
+                       "JSONB objects only support string keys (types 7-10).");
          constexpr bool may_skip = null_t<val_t> && Opts.skip_null_members;
 
          for (auto&& [k, v] : value) {
@@ -366,6 +367,12 @@ namespace glz
       template <auto Opts>
       static void op(auto&& value, is_context auto&& ctx, auto&& b, auto& ix)
       {
+         // A pair becomes a single-entry object, so its first element lands in a key slot and
+         // is subject to the same text-type requirement as a map key.
+         using key_t = std::remove_cvref_t<typename std::remove_cvref_t<T>::first_type>;
+         static_assert(str_t<key_t> || std::same_as<key_t, std::string>,
+                       "JSONB objects only support string keys (types 7-10).");
+
          size_t header_pos{};
          if (!jsonb_detail::reserve_container_header(ctx, b, ix, header_pos)) [[unlikely]] {
             return;

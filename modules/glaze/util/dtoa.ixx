@@ -5,6 +5,7 @@
 // glz:header std=<concepts>
 // glz:header std=<cstddef>
 // glz:header std=<cstdint>
+// glz:header std=<cstdlib>
 // glz:header std=<cstring>
 // glz:header std=<limits>
 // glz:header std=<type_traits>

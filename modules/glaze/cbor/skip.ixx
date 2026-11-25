@@ -86,7 +86,11 @@ namespace glz
             return val;
          }
          case info::indefinite:
-            return 0; // Caller handles indefinite specially
+            // Indefinite length is only well-formed for byte/text strings, arrays, and maps,
+            // and those callers intercept additional_info == 31 before reaching here. Any other
+            // major type (uint, nint, tag) carrying it is not well-formed per RFC 8949 Appendix C.
+            ctx.error = error_code::syntax_error;
+            return 0;
          default:
             ctx.error = error_code::syntax_error; // Reserved (28-30)
             return 0;

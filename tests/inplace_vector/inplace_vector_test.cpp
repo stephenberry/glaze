@@ -134,6 +134,74 @@ suite json_test = [] {
    };
 };
 
+// An inplace_vector reports being full only through try_emplace_back. Its resize(), reserve() and
+// emplace_back() throw std::bad_alloc past capacity -- and abort() with exceptions disabled, which is
+// how this file's second build runs -- so a reader that sizes one from a wire count has to check the
+// capacity first. Untrusted input picks these counts, so the failure has to stay inside the error
+// code. MessagePack's reader is additionally marked noexcept, where a throw terminates outright.
+template <class IV, class Src>
+constexpr auto test_binary_overflow = [](auto write, auto read) {
+   const Src oversized(100, typename Src::value_type{});
+   std::string buffer{};
+   expect(not write(oversized, buffer));
+
+   IV vec{};
+   expect(read(vec, buffer) == glz::error_code::exceeded_static_array_size);
+
+   // The same value within capacity still round-trips.
+   const Src fits(3, typename Src::value_type{});
+   buffer.clear();
+   expect(not write(fits, buffer));
+   expect(not read(vec, buffer));
+   expect(vec.size() == 3);
+};
+
+suite binary_format_overflow_tests = [] {
+   "cbor"_test = [] {
+      const auto write = [](auto& v, auto& b) { return glz::write_cbor(v, b); };
+      const auto read = [](auto& v, auto& b) { return glz::read_cbor(v, b); };
+      // Numbers take the RFC 8746 typed-array path, strings the generic one, bytes the byte string.
+      test_binary_overflow<inplace_vector<int, 4>, std::vector<int>>(write, read);
+      test_binary_overflow<inplace_vector<std::string, 4>, std::vector<std::string>>(write, read);
+      test_binary_overflow<inplace_vector<std::byte, 4>, std::vector<std::byte>>(write, read);
+   };
+
+   "cbor indefinite length"_test = [] {
+      std::string array{"\x9F", 1};
+      for (int i = 0; i < 100; ++i) array.push_back('\x01');
+      array.push_back('\xFF');
+
+      inplace_vector<int, 4> vec{};
+      expect(glz::read_cbor(vec, array) == glz::error_code::exceeded_static_array_size);
+
+      std::string byte_string{"\x5F", 1};
+      for (int i = 0; i < 10; ++i) {
+         byte_string.push_back('\x4A');
+         byte_string.append(10, 'z');
+      }
+      byte_string.push_back('\xFF');
+
+      inplace_vector<std::byte, 4> bytes{};
+      expect(glz::read_cbor(bytes, byte_string) == glz::error_code::exceeded_static_array_size);
+   };
+
+   "beve"_test = [] {
+      const auto write = [](auto& v, auto& b) { return glz::write_beve(v, b); };
+      const auto read = [](auto& v, auto& b) { return glz::read_beve(v, b); };
+      test_binary_overflow<inplace_vector<int, 4>, std::vector<int>>(write, read);
+      test_binary_overflow<inplace_vector<std::string, 4>, std::vector<std::string>>(write, read);
+      test_binary_overflow<inplace_vector<std::byte, 4>, std::vector<std::byte>>(write, read);
+   };
+
+   "msgpack"_test = [] {
+      const auto write = [](auto& v, auto& b) { return glz::write_msgpack(v, b); };
+      const auto read = [](auto& v, auto& b) { return glz::read_msgpack(v, b); };
+      test_binary_overflow<inplace_vector<int, 4>, std::vector<int>>(write, read);
+      test_binary_overflow<inplace_vector<std::string, 4>, std::vector<std::string>>(write, read);
+      test_binary_overflow<inplace_vector<std::byte, 4>, std::vector<std::byte>>(write, read);
+   };
+};
+
 suite construction_tests = [] {
    "default_constructor"_test = [] {
       inplace_vector<int, 10> v;

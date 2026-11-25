@@ -14,6 +14,10 @@
 // glz:header std=<span>
 // glz:header std=<string_view>
 // glz:header std=<type_traits>
+module;
+
+#include "glaze/simd/utf8_validation_includes.hpp"
+
 export module glaze.util.parse;
 
 import std;
@@ -29,8 +33,6 @@ import glaze.util.convert;
 import glaze.util.expected;
 import glaze.util.string_literal;
 
-#include "glaze/util/inline.hpp"
-
 using std::uint8_t;
 using std::uint16_t;
 using std::uint32_t;
@@ -39,6 +41,11 @@ using std::size_t;
 
 export namespace glz
 {
+   namespace detail::utf8_simd
+   {
+      bool validate(const uint8_t* it, const uint8_t* end) noexcept;
+   }
+
    inline constexpr std::array<bool, 256> numeric_table = [] {
       std::array<bool, 256> t{};
       t['0'] = true;
@@ -830,9 +837,10 @@ export namespace glz
    }
 
    // Validates the raw bytes of a JSON string. RFC 8259 section 8.1 requires JSON text to be UTF-8,
-   // and read input is by definition someone else's, so this is unconditional rather than opt-in.
-   // Only the raw span needs checking: escape sequences are ASCII, and handle_unicode_code_point
-   // independently rejects unpaired surrogates in \uXXXX escapes.
+   // and read input is by definition someone else's, so this is on by default; the inheritable
+   // `validate_utf8` option turns it off. Only the raw span needs checking: escape sequences are
+   // ASCII, and handle_unicode_code_point independently rejects unpaired surrogates in \uXXXX
+   // escapes.
    //
    // ascii_acc lets a caller skip the pass entirely for pure ASCII strings, which is the common
    // case. Scan loops already load the string in 8 byte chunks to find the closing quote, so they
@@ -840,17 +848,26 @@ export namespace glz
    // bytes than the string itself (a chunk can overrun the closing quote); that only costs a
    // needless validation pass, it never skips one. Callers with no accumulator take the default
    // and always validate.
+   template <auto Opts>
    GLZ_ALWAYS_INLINE bool validate_utf8_span(is_context auto&& ctx, const auto* start, const auto* fin,
                                              const uint64_t ascii_acc = repeat_byte8(0b10000000)) noexcept
    {
-      if ((ascii_acc & repeat_byte8(0b10000000)) == 0) {
-         return false; // pure ASCII is trivially well formed UTF-8
+      if constexpr (not check_validate_utf8(Opts)) {
+         // Everything the caller computed for us is dead, which lets its scan loop drop the
+         // accumulator entirely.
+         (void)ctx, (void)start, (void)fin, (void)ascii_acc;
+         return false;
       }
-      if (!validate_utf8(start, size_t(fin - start))) [[unlikely]] {
-         ctx.error = error_code::invalid_utf8;
-         return true;
+      else {
+         if ((ascii_acc & repeat_byte8(0b10000000)) == 0) {
+            return false; // pure ASCII is trivially well formed UTF-8
+         }
+         if (!validate_utf8(start, size_t(fin - start))) [[unlikely]] {
+            ctx.error = error_code::invalid_utf8;
+            return true;
+         }
+         return false;
       }
-      return false;
    }
 
    GLZ_ALWAYS_INLINE void skip_till_quote(is_context auto&& ctx, auto&& it, auto end) noexcept
@@ -893,6 +910,7 @@ export namespace glz
       bool padded;
       bool opening_handled;
       bool validate_skipped;
+      bool validate_utf8;
       bool null_terminated;
 
       // Convert from any opts-like type (consteval because check_* functions are consteval)
@@ -901,17 +919,20 @@ export namespace glz
          : padded{check_is_padded(opts)},
            opening_handled{check_opening_handled(opts)},
            validate_skipped{check_validate_skipped(opts)},
+           validate_utf8{check_validate_utf8(opts)},
            null_terminated{check_null_terminated(opts)}
       {}
 
-      // Direct construction - null_terminated defaults to true for the structural (non-validating)
-      // skip_until_closed call sites, which route through the end-bounded skip_string_view path
-      // and so are independent of this flag.
-      consteval skip_string_opts(bool padded_, bool opening_handled_, bool validate_skipped_,
-                                 bool null_terminated_ = true) noexcept
+      // Direct construction - all values required. No defaults on purpose: a caller that forgets
+      // validate_utf8_ would silently validate against the user's explicit choice to turn it off,
+      // and a caller that forgets null_terminated_ would silently read past the end of a bounded
+      // buffer. Both are invisible at the call site, so make omission a compile error instead.
+      consteval skip_string_opts(bool padded_, bool opening_handled_, bool validate_skipped_, bool validate_utf8_,
+                                 bool null_terminated_) noexcept
          : padded{padded_},
            opening_handled{opening_handled_},
            validate_skipped{validate_skipped_},
+           validate_utf8{validate_utf8_},
            null_terminated{null_terminated_}
       {}
    };
@@ -969,7 +990,7 @@ export namespace glz
                }
                if ((backslash_count & 1) == 0) {
                   // Even number of backslashes => not escaped => closing quote found
-                  validate_utf8_span(ctx, utf8_start, it);
+                  validate_utf8_span<Opts>(ctx, utf8_start, it);
                   ++it;
                   return;
                }
@@ -1008,7 +1029,7 @@ export namespace glz
          if (bool(ctx.error)) [[unlikely]] {
             return;
          }
-         if (validate_utf8_span(ctx, utf8_start, it)) [[unlikely]] {
+         if (validate_utf8_span<Opts>(ctx, utf8_start, it)) [[unlikely]] {
             return;
          }
          ++it; // skip the quote
@@ -1043,7 +1064,7 @@ export namespace glz
 
             switch (*it) {
             case '"': {
-               validate_utf8_span(ctx, utf8_start, it);
+               validate_utf8_span<Opts>(ctx, utf8_start, it);
                ++it;
                return;
             }
@@ -1081,7 +1102,7 @@ export namespace glz
          if (bool(ctx.error)) [[unlikely]] {
             return;
          }
-         if (validate_utf8_span(ctx, utf8_start, it)) [[unlikely]] {
+         if (validate_utf8_span<Opts>(ctx, utf8_start, it)) [[unlikely]] {
             return;
          }
          ++it; // skip the quote
@@ -1093,14 +1114,18 @@ export namespace glz
    {
       bool padded;
       bool comments;
+      bool validate_utf8;
 
       // Convert from any opts-like type (consteval because check_is_padded is consteval)
       template <typename T>
-      consteval skip_until_closed_opts(const T& opts) noexcept : padded{check_is_padded(opts)}, comments{opts.comments}
+      consteval skip_until_closed_opts(const T& opts) noexcept
+         : padded{check_is_padded(opts)}, comments{opts.comments}, validate_utf8{check_validate_utf8(opts)}
       {}
 
       // Direct construction - all values required
-      consteval skip_until_closed_opts(bool padded_, bool comments_) noexcept : padded{padded_}, comments{comments_} {}
+      consteval skip_until_closed_opts(bool padded_, bool comments_, bool validate_utf8_) noexcept
+         : padded{padded_}, comments{comments_}, validate_utf8{validate_utf8_}
+      {}
    };
 
    template <skip_until_closed_opts Opts, char open, char close, size_t Depth = 1>
@@ -1109,6 +1134,9 @@ export namespace glz
    {
       static constexpr bool opening_not_handled = false;
       static constexpr bool skip_validation = false;
+      // skip_validation routes skip_string through the end-bounded skip_string_view path, which
+      // stops on `end` rather than on a sentinel, so this flag has no effect from here.
+      static constexpr bool null_terminated_unused = true;
 
       size_t depth = Depth;
 
@@ -1124,7 +1152,8 @@ export namespace glz
 
             switch (*it) {
             case '"': {
-               skip_string<skip_string_opts{Opts.padded, opening_not_handled, skip_validation}>(ctx, it, end);
+               skip_string<skip_string_opts{Opts.padded, opening_not_handled, skip_validation, Opts.validate_utf8,
+                                            null_terminated_unused}>(ctx, it, end);
                if (bool(ctx.error)) [[unlikely]] {
                   return;
                }
@@ -1163,6 +1192,9 @@ export namespace glz
    {
       static constexpr bool opening_not_handled = false;
       static constexpr bool skip_validation = false;
+      // skip_validation routes skip_string through the end-bounded skip_string_view path, which
+      // stops on `end` rather than on a sentinel, so this flag has no effect from here.
+      static constexpr bool null_terminated_unused = true;
 
       size_t depth = Depth;
 
@@ -1178,7 +1210,8 @@ export namespace glz
 
             switch (*it) {
             case '"': {
-               skip_string<skip_string_opts{Opts.padded, opening_not_handled, skip_validation}>(ctx, it, end);
+               skip_string<skip_string_opts{Opts.padded, opening_not_handled, skip_validation, Opts.validate_utf8,
+                                            null_terminated_unused}>(ctx, it, end);
                if (bool(ctx.error)) [[unlikely]] {
                   return;
                }
@@ -1224,6 +1257,9 @@ export namespace glz
    {
       static constexpr bool opening_not_handled = false;
       static constexpr bool skip_validation = false;
+      // skip_validation routes skip_string through the end-bounded skip_string_view path, which
+      // stops on `end` rather than on a sentinel, so this flag has no effect from here.
+      static constexpr bool null_terminated_unused = true;
 
       size_t depth = Depth;
 
@@ -1239,7 +1275,8 @@ export namespace glz
 
             switch (*it) {
             case '"': {
-               skip_string<skip_string_opts{Opts.padded, opening_not_handled, skip_validation}>(ctx, it, end);
+               skip_string<skip_string_opts{Opts.padded, opening_not_handled, skip_validation, Opts.validate_utf8,
+                                            null_terminated_unused}>(ctx, it, end);
                if (bool(ctx.error)) [[unlikely]] {
                   return;
                }
@@ -1273,7 +1310,8 @@ export namespace glz
       while (it < end) {
          switch (*it) {
          case '"': {
-            skip_string<skip_string_opts{Opts.padded, opening_not_handled, skip_validation}>(ctx, it, end);
+            skip_string<skip_string_opts{Opts.padded, opening_not_handled, skip_validation, Opts.validate_utf8,
+                                         null_terminated_unused}>(ctx, it, end);
             if (bool(ctx.error)) [[unlikely]] {
                return;
             }
@@ -1314,6 +1352,9 @@ export namespace glz
    {
       static constexpr bool opening_not_handled = false;
       static constexpr bool skip_validation = false;
+      // skip_validation routes skip_string through the end-bounded skip_string_view path, which
+      // stops on `end` rather than on a sentinel, so this flag has no effect from here.
+      static constexpr bool null_terminated_unused = true;
 
       size_t depth = Depth;
 
@@ -1329,7 +1370,8 @@ export namespace glz
 
             switch (*it) {
             case '"': {
-               skip_string<skip_string_opts{Opts.padded, opening_not_handled, skip_validation}>(ctx, it, end);
+               skip_string<skip_string_opts{Opts.padded, opening_not_handled, skip_validation, Opts.validate_utf8,
+                                            null_terminated_unused}>(ctx, it, end);
                if (bool(ctx.error)) [[unlikely]] {
                   return;
                }
@@ -1370,7 +1412,8 @@ export namespace glz
       while (it < end) {
          switch (*it) {
          case '"': {
-            skip_string<skip_string_opts{Opts.padded, opening_not_handled, skip_validation}>(ctx, it, end);
+            skip_string<skip_string_opts{Opts.padded, opening_not_handled, skip_validation, Opts.validate_utf8,
+                                         null_terminated_unused}>(ctx, it, end);
             if (bool(ctx.error)) [[unlikely]] {
                return;
             }
@@ -1440,6 +1483,12 @@ export namespace glz
       auto frac_start_it = end;
       if (it != end && *it == '0') {
          ++it;
+         // RFC 8259 section 6: number = [ minus ] int [ frac ] [ exp ]. The exponent may follow
+         // the integer part directly, with no fractional part in between (e.g. "0e4").
+         if (it != end && (*it | ('E' ^ 'e')) == 'e') {
+            ++it;
+            goto exp_start;
+         }
          if (it == end || *it != '.') {
             return;
          }
@@ -1972,3 +2021,10 @@ export namespace glz
    };
 
 }
+
+// The dependency prelude was included in the global module fragment, so only the implementation
+// definitions enter this private fragment. The generated header removes the private-fragment marker
+// and receives the inline definition instead.
+module :private;
+
+#include "glaze/simd/utf8_validation.hpp"

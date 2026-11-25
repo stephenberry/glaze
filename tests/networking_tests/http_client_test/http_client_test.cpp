@@ -162,20 +162,22 @@ class working_test_server
          response_body.append(req.body);
          if (auto it = req.headers.find("x-test-header"); it != req.headers.end()) {
             response_body.append(":");
-            response_body.append(it->second);
+            response_body.append(it->value);
          }
          res.status(200).content_type("text/plain").body(response_body);
       });
 
       server_.put("/json", [](const request& req, response& res) {
-         auto content_type = req.headers.find("content-type");
-         if (content_type == req.headers.end()) {
+         auto content_type = req.headers.first_value("content-type");
+         if (!content_type) {
             res.status(415).body("missing content-type");
             return;
          }
 
          std::string response_body = "CT=";
-         response_body.append(content_type->second);
+         response_body.append(*content_type);
+         response_body.append(";CT_COUNT=");
+         response_body.append(std::to_string(req.headers.count("content-type")));
          response_body.append(";BODY=");
          response_body.append(req.body);
          res.status(200).content_type("text/plain").body(response_body);
@@ -326,8 +328,7 @@ class simple_test_client
       return perform_request("POST", *url_parts, body);
    }
 
-   std::expected<response, std::error_code> options(
-      const std::string& url, const std::vector<std::pair<std::string, std::string>>& extra_headers)
+   std::expected<response, std::error_code> options(const std::string& url, const glz::http_headers& extra_headers)
    {
       auto url_parts = parse_url(url);
       if (!url_parts) {
@@ -341,9 +342,9 @@ class simple_test_client
    asio::io_context io_context_;
    std::thread worker_thread_;
 
-   std::expected<response, std::error_code> perform_request(
-      const std::string& method, const url_parts& url, const std::string& body,
-      std::vector<std::pair<std::string, std::string>> extra_headers = {})
+   std::expected<response, std::error_code> perform_request(const std::string& method, const url_parts& url,
+                                                            const std::string& body,
+                                                            glz::http_headers extra_headers = {})
    {
       std::promise<std::expected<response, std::error_code>> promise;
       auto future = promise.get_future();
@@ -414,8 +415,7 @@ class simple_test_client
                   std::find_if(value.rbegin(), value.rend(), [](unsigned char ch) { return !std::isspace(ch); }).base(),
                   value.end());
 
-               auto lower_name = glz::to_lower_case(name);
-               resp.response_headers[lower_name] = value;
+               resp.response_headers.add(std::move(name), std::move(value));
             }
 
             // Read body
@@ -483,7 +483,7 @@ suite working_http_tests = [] {
       expect(server.start()) << "Server should start\n";
 
       simple_test_client client;
-      std::vector<std::pair<std::string, std::string>> headers = {
+      glz::http_headers headers = {
          {"Origin", "http://localhost"},
          {"Access-Control-Request-Method", "GET"},
          {"Access-Control-Request-Headers", "X-Test-Header"},
@@ -513,7 +513,7 @@ suite working_http_tests = [] {
       expect(server.start()) << "Server should start\n";
 
       simple_test_client client;
-      std::vector<std::pair<std::string, std::string>> headers = {
+      glz::http_headers headers = {
          {"Origin", "http://app.allowed.local"},
          {"Access-Control-Request-Method", "GET"},
       };
@@ -524,19 +524,19 @@ suite working_http_tests = [] {
          auto origin_header = allowed->response_headers.find("access-control-allow-origin");
          expect(origin_header != allowed->response_headers.end()) << "Allow-Origin header should be present\n";
          if (origin_header != allowed->response_headers.end()) {
-            expect(origin_header->second == "http://app.allowed.local")
+            expect(origin_header->value == "http://app.allowed.local")
                << "Origin should be echoed for allowed pattern\n";
          }
       }
 
-      headers[0].second = "http://special.local";
+      headers.set("Origin", "http://special.local");
       auto allowed_callback = client.options(server.base_url() + "/hello", headers);
       expect(allowed_callback.has_value()) << "Dynamic callback origin should succeed\n";
       if (allowed_callback.has_value()) {
          expect(allowed_callback->status_code == 204);
       }
 
-      headers[0].second = "http://denied.local";
+      headers.set("Origin", "http://denied.local");
       auto denied = client.options(server.base_url() + "/hello", headers);
       expect(denied.has_value()) << "Request should return a response even when denied\n";
       if (denied.has_value()) {
@@ -572,19 +572,19 @@ suite working_http_tests = [] {
          auto methods_it = result->response_headers.find("access-control-allow-methods");
          expect(methods_it != result->response_headers.end()) << "Allow-Methods header missing\n";
          if (methods_it != result->response_headers.end()) {
-            expect(methods_it->second == "GET, HEAD, POST, PUT, DELETE, PATCH");
+            expect(methods_it->value == "GET, HEAD, POST, PUT, DELETE, PATCH");
          }
 
          auto headers_it = result->response_headers.find("access-control-allow-headers");
          expect(headers_it != result->response_headers.end());
          if (headers_it != result->response_headers.end()) {
-            expect(headers_it->second == "X-Test-Header");
+            expect(headers_it->value == "X-Test-Header");
          }
 
          auto max_age_it = result->response_headers.find("access-control-max-age");
          expect(max_age_it != result->response_headers.end());
          if (max_age_it != result->response_headers.end()) {
-            expect(max_age_it->second == "123");
+            expect(max_age_it->value == "123");
          }
       }
 
@@ -612,7 +612,7 @@ suite working_http_tests = [] {
          auto headers_it = result->response_headers.find("access-control-allow-headers");
          expect(headers_it != result->response_headers.end());
          if (headers_it != result->response_headers.end()) {
-            expect(headers_it->second == "*") << "Expected * but got " << headers_it->second << "\n";
+            expect(headers_it->value == "*") << "Expected * but got " << headers_it->value << "\n";
          }
       }
 
@@ -637,7 +637,7 @@ suite working_http_tests = [] {
          auto allow_it = result->response_headers.find("allow");
          expect(allow_it != result->response_headers.end()) << "Allow header must be present\n";
          if (allow_it != result->response_headers.end()) {
-            expect(allow_it->second.find("GET") != std::string::npos)
+            expect(allow_it->value.find("GET") != std::string::npos)
                << "Allow header should list the implemented method\n";
          }
       }
@@ -725,7 +725,7 @@ suite working_http_tests = [] {
          auto allow_it = put_result->response_headers.find("allow");
          expect(allow_it != put_result->response_headers.end()) << "Allow header should be present\n";
          if (allow_it != put_result->response_headers.end()) {
-            expect(allow_it->second.find("PUT") != std::string::npos) << "Allow should advertise PUT\n";
+            expect(allow_it->value.find("PUT") != std::string::npos) << "Allow should advertise PUT\n";
          }
       }
 
@@ -783,26 +783,26 @@ suite working_http_tests = [] {
          auto origin_it = result->response_headers.find("access-control-allow-origin");
          expect(origin_it != result->response_headers.end()) << "Allow-Origin header missing\n";
          if (origin_it != result->response_headers.end()) {
-            expect(origin_it->second == "https://app.local")
+            expect(origin_it->value == "https://app.local")
                << "Allow-Origin should echo the specific origin, not '*', when credentials are allowed\n";
          }
 
          auto credentials_it = result->response_headers.find("access-control-allow-credentials");
          expect(credentials_it != result->response_headers.end()) << "Allow-Credentials should be present\n";
          if (credentials_it != result->response_headers.end()) {
-            expect(credentials_it->second == "true");
+            expect(credentials_it->value == "true");
          }
 
          auto methods_it = result->response_headers.find("access-control-allow-methods");
          expect(methods_it != result->response_headers.end()) << "Allow-Methods should be present\n";
          if (methods_it != result->response_headers.end()) {
-            expect(methods_it->second == "GET, POST");
+            expect(methods_it->value == "GET, POST");
          }
 
          auto max_age_it = result->response_headers.find("access-control-max-age");
          expect(max_age_it != result->response_headers.end()) << "Max-Age should be present\n";
          if (max_age_it != result->response_headers.end()) {
-            expect(max_age_it->second == "7200");
+            expect(max_age_it->value == "7200");
          }
       }
 
@@ -974,7 +974,7 @@ suite glz_http_client_tests = [] {
 
       glz::http_client client;
 
-      std::unordered_map<std::string, std::string> headers{{"x-test-header", "header-value"}};
+      glz::http_headers headers{{"x-test-header", "header-value"}};
       auto result = client.put(server.base_url() + "/update", "payload", headers);
 
       expect(result.has_value()) << "PUT request should succeed";
@@ -998,7 +998,7 @@ suite glz_http_client_tests = [] {
       auto ec = glz::write_json(payload, expected_json);
       expect(!ec) << "Serializing payload should succeed";
 
-      std::unordered_map<std::string, std::string> extra_headers{{"x-extra", "value"}};
+      glz::http_headers extra_headers{{"x-extra", "value"}};
       auto result = client.put_json(server.base_url() + "/json", payload, extra_headers);
 
       expect(result.has_value()) << "PUT JSON request should succeed";
@@ -1006,8 +1006,54 @@ suite glz_http_client_tests = [] {
          expect(result->status_code == 200) << "PUT JSON status should be 200";
          expect(result->response_body.find("CT=application/json") != std::string::npos)
             << "Content-Type header should be forwarded";
+         expect(result->response_body.find("CT_COUNT=1") != std::string::npos)
+            << "Content-Type should reach the wire exactly once";
          expect(result->response_body.find("BODY=" + expected_json) != std::string::npos)
             << "JSON body should be forwarded";
+      }
+
+      server.stop();
+   };
+
+   "put_json_keeps_caller_content_type"_test = [] {
+      working_test_server server;
+      expect(server.start());
+
+      glz::http_client client;
+
+      test_http_client::put_payload payload{.value = 7, .message = "vendor"};
+
+      glz::http_headers vendor_headers{{"Content-Type", "application/vnd.api+json"}};
+      auto result = client.put_json(server.base_url() + "/json", payload, vendor_headers);
+
+      expect(result.has_value()) << "PUT JSON request should succeed";
+      if (result.has_value()) {
+         expect(result->response_body.find("CT=application/vnd.api+json") != std::string::npos)
+            << "A caller-supplied Content-Type must not be replaced by application/json";
+         expect(result->response_body.find("CT_COUNT=1") != std::string::npos)
+            << "The default must not be appended alongside the caller's field";
+      }
+
+      server.stop();
+   };
+
+   "put_json_matches_lowercase_content_type"_test = [] {
+      working_test_server server;
+      expect(server.start());
+
+      glz::http_client client;
+
+      test_http_client::put_payload payload{.value = 9, .message = "charset"};
+
+      glz::http_headers lowercase_headers{{"content-type", "application/json; charset=utf-8"}};
+      auto result = client.put_json(server.base_url() + "/json", payload, lowercase_headers);
+
+      expect(result.has_value()) << "PUT JSON request should succeed";
+      if (result.has_value()) {
+         expect(result->response_body.find("CT=application/json; charset=utf-8") != std::string::npos)
+            << "The charset parameter must survive";
+         expect(result->response_body.find("CT_COUNT=1") != std::string::npos)
+            << "A lowercase field name must be recognized as already present";
       }
 
       server.stop();
@@ -1563,6 +1609,39 @@ suite host_header_tests = [] {
 
       const std::string expected_host = "127.0.0.1:" + std::to_string(server.port());
       expect(server.host_header() == expected_host) << "Host header should include authority port";
+   };
+};
+
+suite with_json_content_type_tests = [] {
+   "with_json_content_type_sets_default"_test = [] {
+      auto headers = glz::detail::with_json_content_type(glz::http_headers{{"X-Extra", "value"}});
+
+      expect(headers.count("Content-Type") == 1);
+      expect(headers.first_value("Content-Type") == "application/json");
+      expect(headers.first_value("X-Extra") == "value") << "Caller headers should be carried through";
+   };
+
+   "with_json_content_type_keeps_caller_value"_test = [] {
+      auto headers =
+         glz::detail::with_json_content_type(glz::http_headers{{"Content-Type", "application/vnd.api+json"}});
+
+      expect(headers.count("Content-Type") == 1);
+      expect(headers.first_value("Content-Type") == "application/vnd.api+json");
+   };
+
+   "with_json_content_type_ignores_name_case"_test = [] {
+      auto headers = glz::detail::with_json_content_type(glz::http_headers{{"content-type", "text/plain"}});
+
+      expect(headers.count("Content-Type") == 1) << "A lowercase name must not yield a second field";
+      expect(headers.first_value("Content-Type") == "text/plain");
+   };
+
+   "with_json_content_type_copies_caller_headers"_test = [] {
+      glz::http_headers original{{"X-Extra", "value"}};
+      auto headers = glz::detail::with_json_content_type(original);
+
+      expect(!original.contains("Content-Type")) << "The caller's container is taken by value";
+      expect(headers.contains("Content-Type"));
    };
 };
 

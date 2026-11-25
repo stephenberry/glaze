@@ -27,6 +27,23 @@ namespace
 
       static void reset() { constructions = 0; }
    };
+
+   struct transparent_string_hash
+   {
+      using is_transparent = void;
+      size_t operator()(std::string_view sv) const { return std::hash<std::string_view>{}(sv); }
+   };
+
+   struct transparent_string_equal
+   {
+      using is_transparent = void;
+      bool operator()(std::string_view a, std::string_view b) const { return a == b; }
+   };
+
+#if GLZ_HAS_OPTIONAL_REF
+   template <class Map, class K>
+   concept has_lookup = requires(Map& m, const K& key) { m.lookup(key); };
+#endif
 }
 
 suite ordered_map_tests = [] {
@@ -655,20 +672,7 @@ suite ordered_map_tests = [] {
       expect(vals[1].first == "b");
    };
    "heterogeneous_lookup"_test = [] {
-      // Transparent hash and comparator for string_view lookup without allocation
-      struct string_hash
-      {
-         using is_transparent = void;
-         size_t operator()(std::string_view sv) const { return std::hash<std::string_view>{}(sv); }
-      };
-
-      struct string_equal
-      {
-         using is_transparent = void;
-         bool operator()(std::string_view a, std::string_view b) const { return a == b; }
-      };
-
-      glz::ordered_map<std::string, int, string_hash, string_equal> d;
+      glz::ordered_map<std::string, int, transparent_string_hash, transparent_string_equal> d;
       d["alpha"] = 1;
       d["beta"] = 2;
       d["gamma"] = 3;
@@ -715,6 +719,116 @@ suite ordered_map_tests = [] {
       expect(d.contains("hello"));
       expect(d.at("hello") == 42);
    };
+
+#if GLZ_HAS_OPTIONAL_REF
+   "lookup_present_and_absent"_test = [] {
+      glz::ordered_map<std::string, int> d;
+      d["a"] = 1;
+      d["b"] = 2;
+
+      const auto a = d.lookup("a");
+      expect(a.has_value());
+      expect(*a == 1);
+
+      expect(d.lookup("z") == std::nullopt);
+   };
+
+   "lookup_on_empty_map"_test = [] {
+      glz::ordered_map<std::string, int> d;
+
+      expect(!d.lookup("a").has_value());
+   };
+
+   "lookup_yields_reference_into_map"_test = [] {
+      glz::ordered_map<std::string, int> d;
+      d["a"] = 1;
+      d["b"] = 2;
+
+      if (auto a = d.lookup("a")) {
+         *a = 42;
+      }
+
+      expect(d.at("a") == 42);
+      expect(d.at("b") == 2);
+      expect(&*d.lookup("a") == &d.at("a")) << "lookup must alias the stored value, not a copy\n";
+   };
+
+   "lookup_result_types"_test = [] {
+      glz::ordered_map<std::string, int> d;
+      d["a"] = 1;
+      const auto& cd = d;
+
+      static_assert(std::is_same_v<decltype(d.lookup("a")), std::optional<int&>>);
+      static_assert(std::is_same_v<decltype(cd.lookup("a")), std::optional<const int&>>);
+
+      expect(&*cd.lookup("a") == &d.at("a"));
+   };
+
+   "lookup_reflects_erase_and_insert"_test = [] {
+      glz::ordered_map<std::string, int> d;
+      d["a"] = 1;
+
+      expect(d.erase("a") == 1);
+      expect(!d.lookup("a").has_value());
+
+      d["a"] = 7;
+      const auto a = d.lookup("a");
+      expect(a.has_value());
+      expect(*a == 7);
+   };
+
+   "lookup_survives_unordered_erase"_test = [] {
+      glz::ordered_map<std::string, int> d;
+      d["a"] = 1;
+      d["b"] = 2;
+      d["c"] = 3;
+
+      expect(d.unordered_erase("a") == 1);
+      expect(!d.lookup("a").has_value());
+      expect(*d.lookup("b") == 2) << "unordered_erase must not disturb the surviving entries\n";
+      expect(*d.lookup("c") == 3);
+   };
+
+   "lookup_composes_with_monadic_operations"_test = [] {
+      glz::ordered_map<std::string, int> d;
+      d["a"] = 1;
+
+      expect(d.lookup("a").transform([](int v) { return v * 2; }) == 2);
+      expect(d.lookup("z").value_or(-1) == -1);
+   };
+
+   "lookup_heterogeneous_key"_test = [] {
+      glz::ordered_map<std::string, int, transparent_string_hash, transparent_string_equal> d;
+      d["alpha"] = 1;
+      d["beta"] = 2;
+
+      const std::string_view sv = "beta";
+      const auto b = d.lookup(sv);
+      expect(b.has_value());
+      expect(*b == 2);
+      expect(&*b == &d.at(sv));
+
+      expect(!d.lookup(std::string_view{"gamma"}).has_value());
+   };
+
+   "lookup_rejects_heterogeneous_key_without_transparency"_test = [] {
+      using plain = glz::ordered_map<std::string, int>;
+      using transparent = glz::ordered_map<std::string, int, transparent_string_hash, transparent_string_equal>;
+
+      static_assert(has_lookup<transparent, std::string_view>);
+      static_assert(!has_lookup<plain, std::string_view>);
+      static_assert(has_lookup<plain, std::string>);
+   };
+
+   "lookup_with_move_only_mapped_type"_test = [] {
+      glz::ordered_map<std::string, std::unique_ptr<int>> d;
+      d.emplace("a", std::make_unique<int>(1));
+
+      const auto a = d.lookup("a");
+      expect(a.has_value());
+      expect(**a == 1);
+   };
+#endif
 };
 
 int main() { return 0; }

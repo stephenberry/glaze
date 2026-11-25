@@ -4661,6 +4661,22 @@ struct glz::meta<formatted_date_t>
    static constexpr auto value = object("when", glz::date_format(&T::when, "%Y-%m-%d %H:%M:%S"));
 };
 
+// meta::skip decides at compile time that a field is not part of the parse, so its reader must never
+// be instantiated -- otherwise the guard fires on a field the user has already opted out of, and the
+// only way to stream the type is to change a member the read does not touch (issue #2780).
+struct skipped_view_t
+{
+   int idx{};
+   std::string_view name{};
+   std::string tail{};
+};
+
+template <>
+struct glz::meta<skipped_view_t>
+{
+   static constexpr bool skip(const std::string_view key, const glz::meta_context&) { return key == "name"; }
+};
+
 // A refill moves the window, so a view handed out before one points at bytes that have since been
 // overwritten, while the read still reports success. There is no runtime signal to check, so the
 // readers that alias the buffer refuse at compile time instead.
@@ -4734,6 +4750,30 @@ suite streaming_view_rejection_tests = [] {
       const auto expected = std::chrono::sys_days{std::chrono::year{2024} / std::chrono::March / std::chrono::day{4}} +
                             std::chrono::hours{5} + std::chrono::minutes{6} + std::chrono::seconds{7};
       expect(value.when == expected);
+   };
+
+   "a view excluded by meta::skip still streams"_test = [] {
+      std::istringstream in{R"({"idx":1337,"name":"Hello, World!","tail":"end"})"};
+      glz::basic_istream_buffer<std::istringstream, 512> buffer{in};
+      skipped_view_t value{.name = "untouched"};
+      expect(!glz::read_json(value, buffer));
+      expect(value.idx == 1337);
+      expect(value.name == "untouched");
+      expect(value.tail == "end");
+   };
+
+   // The skipped value is stepped over by the same window the rest of the parse reads through, so it
+   // has to survive a value larger than that window: a skip that mishandled a refill would swallow
+   // the fields behind it.
+   "a skipped value wider than the window still streams"_test = [] {
+      const std::string doc = R"({"idx":5,"name":")" + std::string(4096, 'x') + R"(","tail":"end"})";
+      std::istringstream in{doc};
+      glz::basic_istream_buffer<std::istringstream, 512> buffer{in};
+      skipped_view_t value{};
+      expect(!glz::read_json(value, buffer));
+      expect(value.idx == 5);
+      expect(value.name.empty());
+      expect(value.tail == "end");
    };
 
    // The guard only applies to streaming. A buffered read owns its whole document for the duration

@@ -167,13 +167,9 @@ Since Glaze is header-only, you can simply:
 
 Glaze automatically detects the target architecture and enables platform-specific SIMD optimizations:
 
-| Flag | Detected When | Architecture |
-|------|--------------|--------------|
-| `GLZ_USE_SSE2` | `__x86_64__` or `_M_X64` | x86-64 (always has SSE2) |
-| `GLZ_USE_AVX2` | `__AVX2__` (in addition to x86-64) | x86-64 with AVX2 |
-| `GLZ_USE_NEON` | `__aarch64__`, `_M_ARM64`, or `__ARM_NEON` | ARM64 / AArch64 |
+Detection covers SSE2 through AVX-512BW on x86-64, NEON on ARM, and SIMD128 on WebAssembly, using compiler-predefined macros that reflect the target architecture, so cross-compilation works correctly without any manual configuration. The full table of `GLZ_USE_*` flags and their conditions is in [Optimizing Performance](./optimizing-performance.md#simd-architecture-flags).
 
-Detection uses compiler-predefined macros that reflect the target architecture, so cross-compilation works correctly without any manual configuration.
+To check what a build actually compiled, read `glz::simd_info`. See [Querying the Selected Backend](./optimizing-performance.md#querying-the-selected-backend).
 
 ### Disable SIMD
 
@@ -251,7 +247,7 @@ See the **[ASIO Setup Guide](networking/asio-setup.md)** for detailed instructio
 
 ### Complete CMakeLists.txt Example
 ```cmake
-cmake_minimum_required(VERSION 3.20)
+cmake_minimum_required(VERSION 3.31)
 project(MyGlazeProject LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 23)

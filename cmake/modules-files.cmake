@@ -7,7 +7,9 @@ target_sources(glaze_glaze
     FILES
       modules/glaze/ext/asio_include.hpp
       modules/glaze/core/feature_test.hpp
-      modules/glaze/simd/simd.hpp
+      modules/glaze/simd/simd_config.hpp
+      modules/glaze/simd/utf8_validation.hpp
+      modules/glaze/simd/utf8_validation_includes.hpp
       modules/glaze/util/attributes.hpp
       modules/glaze/util/inline.hpp
 )
@@ -215,6 +217,7 @@ target_sources(glaze_glaze
   PUBLIC
     FILE_SET CXX_MODULES
     FILES
+    modules/glaze/simd/backends.ixx
     modules/glaze/simd/avx.ixx
     modules/glaze/simd/neon.ixx
     modules/glaze/simd/sse.ixx
@@ -478,6 +481,7 @@ target_sources(glaze_glaze
     modules/glaze/net/http.ixx
     modules/glaze/net/openapi.ixx
     modules/glaze/net/rest_registry_impl.ixx
+    modules/glaze/net/ssl.ixx
     modules/glaze/net/url.ixx
     modules/glaze/net/websocket_client.ixx
     modules/glaze/net/websocket_connection.ixx

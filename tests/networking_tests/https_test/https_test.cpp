@@ -97,7 +97,7 @@ class CertificateGenerator
       X509_set_pubkey(x509, pkey);
 
       // Set subject name
-      X509_NAME* name = X509_get_subject_name(x509);
+      X509_NAME* name = X509_NAME_new();
       X509_NAME_add_entry_by_txt(name, "C", MBSTRING_ASC, reinterpret_cast<const unsigned char*>("US"), -1, -1, 0);
       X509_NAME_add_entry_by_txt(name, "ST", MBSTRING_ASC, reinterpret_cast<const unsigned char*>("Test"), -1, -1, 0);
       X509_NAME_add_entry_by_txt(name, "L", MBSTRING_ASC, reinterpret_cast<const unsigned char*>("Test"), -1, -1, 0);
@@ -105,8 +105,10 @@ class CertificateGenerator
       X509_NAME_add_entry_by_txt(name, "CN", MBSTRING_ASC, reinterpret_cast<const unsigned char*>(subject.c_str()), -1,
                                  -1, 0);
 
+      X509_set_subject_name(x509, name);
       // Set issuer name (same as subject for self-signed)
       X509_set_issuer_name(x509, name);
+      X509_NAME_free(name);
 
       // Add extensions for server certificate
       if (subject == "localhost") {

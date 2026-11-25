@@ -156,9 +156,14 @@ namespace glz
                         return {size_t(it - outer_start), ctx.error, "Closing tag not found for section"};
                      }
 
-                     if (it + 1 < end) {
-                        it += 2; // Skip '}}'
+                     // The opening tag must close with '}}' before the section body. Without this
+                     // check a tag left open (e.g. "{{#key {{/key}}") advances past closing_pos and
+                     // std::string_view(it, closing_pos) becomes a reversed range of length (size_t)-2.
+                     if (it + 1 >= end || *it != '}' || *(it + 1) != '}') [[unlikely]] {
+                        ctx.error = error_code::syntax_error;
+                        return {size_t(it - outer_start), ctx.error, "Expected '}}' to close section tag"};
                      }
+                     it += 2; // Skip '}}'
 
                      // Extract inner template between current position and closing tag
                      std::string_view inner_template(it, closing_pos);

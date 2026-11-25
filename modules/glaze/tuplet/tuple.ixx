@@ -15,6 +15,7 @@ export module glaze.tuplet;
 
 import std;
 
+#include "glaze/util/attributes.hpp"
 #include "glaze/util/inline.hpp"
 
 #if (__has_cpp_attribute(no_unique_address))

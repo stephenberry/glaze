@@ -1,5 +1,9 @@
 // Glaze Library
 // For the license information refer to glaze.ixx
+// glz:header path="glaze/core/format_str.hpp"
+// glz:header std=<algorithm>
+// glz:header std=<cstddef>
+// glz:header std=<string_view>
 export module glaze.core.format_str;
 
 import std;

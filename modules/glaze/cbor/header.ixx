@@ -251,6 +251,21 @@ export namespace glz::cbor
    // RFC 8746 Typed Array helpers
    namespace typed_array
    {
+      // Whether RFC 8746 has a tag for T at all. The tags cover the fixed-width integers and IEEE
+      // binary32/binary64; a numeric type outside that set -- long double, where it is the 80-bit
+      // x86 type or any other extended format -- has no typed array representation and is written
+      // as a plain CBOR array of numbers instead.
+      template <class T>
+      concept taggable =
+         std::same_as<T, uint8_t> || std::same_as<T, uint16_t> || std::same_as<T, uint32_t> ||
+         std::same_as<T, uint64_t> || std::same_as<T, int8_t> || std::same_as<T, int16_t> || std::same_as<T, int32_t> ||
+         std::same_as<T, int64_t> || std::same_as<T, float> || std::same_as<T, double>;
+
+      // The same question for a std::complex, whose interleaved form is tagged by its scalar. The
+      // nested requires-clause guards the substitution, so this is valid to ask of any type.
+      template <class T>
+      concept taggable_scalar = requires { typename T::value_type; } && taggable<typename T::value_type>;
+
       // Select the appropriate tag for a type based on native endianness
       template <class T>
       [[nodiscard]] consteval uint64_t native_tag() noexcept
@@ -383,6 +398,33 @@ export namespace glz::cbor
          }
 
          return info;
+      }
+
+      // Whether a typed array tag describes exactly the element type T.
+      //
+      // RFC 8746 encodes the element kind in the tag, not just its width, and a typed array is read
+      // by copying its payload straight into the target. Matching on width alone therefore
+      // reinterprets the bytes of a differently-typed array rather than converting them: a uint64
+      // array read into double yields 4.94e-324 rather than 1.
+      //
+      // Reading a CBOR value of one kind into a target of another is already an error everywhere
+      // else in this reader -- a uint does not read into a double, nor a float into an int -- so the
+      // typed-array fast path was the one place a kind mismatch was accepted, and it accepted it by
+      // reinterpreting the bytes. A mismatch is a syntax error here too.
+      template <class T>
+      [[nodiscard]] constexpr bool matches(const typed_array_info info) noexcept
+      {
+         if (!info.valid || info.element_size != sizeof(T)) {
+            return false;
+         }
+         if constexpr (std::floating_point<T>) {
+            // Tags 83 and 87 are IEEE binary128, which is not the 80-bit extended long double that
+            // shares its 16-byte storage on x86-64, so no float Glaze can write or read matches them.
+            return info.is_float && info.element_size <= 8;
+         }
+         else {
+            return !info.is_float && info.is_signed == std::is_signed_v<T>;
+         }
       }
 
       // Check if we need to byteswap when reading a typed array

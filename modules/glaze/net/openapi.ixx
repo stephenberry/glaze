@@ -1,4 +1,9 @@
 // Glaze Library - For the license information refer to glaze.ixx
+// glz:header path="glaze/net/openapi.hpp"
+// glz:header std=<optional>
+// glz:header std=<string>
+// glz:header std=<unordered_map>
+// glz:header std=<vector>
 export module glaze.net.openapi;
 
 import std;

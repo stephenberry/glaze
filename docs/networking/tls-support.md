@@ -14,7 +14,7 @@ The `http_server` has been enhanced with a template parameter `<bool EnableTLS>`
 ### Prerequisites
 
 - OpenSSL development libraries
-- CMake 3.21 or later
+- CMake 3.31 or later
 - C++23 compatible compiler
 
 ### CMake Configuration

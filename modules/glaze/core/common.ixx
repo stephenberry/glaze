@@ -282,6 +282,30 @@ namespace glz
    export template <class T>
    concept char_array_t = str_t<T> && std::is_array_v<std::remove_pointer_t<std::remove_reference_t<T>>>;
 
+   // Views a `str_t` value as a string_view for writing. Every format writes strings through this
+   // so the rules stay in one place.
+   //
+   // A type reaches `str_t` as long as a string_view is constructible from it, which an implicit
+   // `operator const char*` satisfies. Converting through that operator stops at the first embedded
+   // null and discards the type's own size(), so prefer the type's bounds whenever it reports them.
+   // Standard string types agree either way. Null pointers become empty rather than dereferencing.
+   export template <class T>
+   [[nodiscard]] GLZ_ALWAYS_INLINE constexpr std::string_view str_view(auto&& value) noexcept
+   {
+      if constexpr (std::same_as<std::decay_t<T>, std::string_view>) {
+         return value; // already the answer; rebuilding it from data() and size() costs instructions
+      }
+      else if constexpr (!char_array_t<T> && std::is_pointer_v<std::decay_t<T>>) {
+         return value ? std::string_view{value} : std::string_view{};
+      }
+      else if constexpr (has_data<T> && has_size<T>) {
+         return std::string_view{value.data(), value.size()};
+      }
+      else {
+         return std::string_view{value};
+      }
+   }
+
    // Concept: does T's mimic type satisfy str_t?
    // This allows checking if a custom type mimics string behavior.
    // Prevents double-quoting when used as a map key.

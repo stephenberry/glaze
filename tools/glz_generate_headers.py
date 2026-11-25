@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate checked-in Glaze headers from native module interface files."""
+"""Generate Glaze headers from native module files."""
 
 from __future__ import annotations
 
@@ -13,7 +13,7 @@ from pathlib import Path
 
 
 HEADER_META_RE = re.compile(r"^\s*//\s*glz:header(?:\s+(?P<body>.*))?$")
-MODULE_RE = re.compile(r"^\s*(?:export\s+)?module(?:\s+[A-Za-z_][\w.:]*)?\s*;\s*(?://.*)?$")
+MODULE_RE = re.compile(r"^\s*(?:export\s+)?module(?:\s+(?:[A-Za-z_][\w.:]*|:private))?\s*;\s*(?://.*)?$")
 IMPORT_RE = re.compile(r"^\s*(?:export\s+)?import\s+(?P<target>[^;]+?)\s*;\s*(?://.*)?$")
 IDENT_CHARS = set("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_")
 

@@ -27,6 +27,41 @@ using std::uint8_t;
 using std::int32_t;
 using std::uint32_t;
 using std::size_t;
+namespace glz::yaml
+{
+   // Store `key_node` as the string form of a mapping key: scalars keep their own text, everything
+   // else is canonicalized to JSON. That JSON is charged against the read's key budget, because a
+   // structured key nested as the key of another has its escapes doubled at every level and grows
+   // multiplicatively in the input. Every site that turns a parsed node into a key goes through
+   // here so the budget cannot be bypassed by adding one more.
+   // `empty_on_null` distinguishes the callers that spell a null key as the empty string (an
+   // explicit "? " with no key node) from the alias-replay sites, where the replayed span always
+   // names a node and a null one is written out as "null" like any other non-scalar.
+   template <bool empty_on_null = true, class Ctx>
+   [[nodiscard]] bool materialize_key(std::string& key, glz::generic& key_node, Ctx& ctx)
+   {
+      if constexpr (empty_on_null) {
+         if (key_node.is_null()) {
+            key.clear();
+            return true;
+         }
+      }
+      if (auto* s = key_node.template get_if<std::string>()) {
+         key = *s;
+         return true;
+      }
+      key.clear();
+      (void)glz::write_json(key_node, key);
+      if constexpr (requires { ctx.charge_key_expansion(size_t{}); }) {
+         if (!ctx.charge_key_expansion(key.size())) [[unlikely]] {
+            ctx.error = error_code::exceeded_max_expansion;
+            ctx.custom_error_message = "complex key expansion";
+            return false;
+         }
+      }
+      return true;
+   }
+}
 
 namespace glz
 {
@@ -39,6 +74,21 @@ namespace glz
          if constexpr (requires { ctx.stream_begin; }) {
             if (!ctx.stream_begin && it != end) {
                ctx.stream_begin = &*it;
+               // Seed the alias replay budget from the document this read was handed. Done here
+               // rather than in glz::read so every YAML entry point is covered, and only on the
+               // outermost parse so a nested document does not hand itself a fresh budget.
+               if constexpr (requires { ctx.alias_expansion_budget; } && requires { size_t(end - it); }) {
+                  const size_t scaled = size_t(end - it) * yaml::max_alias_expansion_factor;
+                  ctx.alias_expansion_budget =
+                     scaled > yaml::min_alias_expansion_bytes ? scaled : yaml::min_alias_expansion_bytes;
+               }
+               // Same treatment for the text complex keys materialize, seeded on its own budget so
+               // exhausting one reports which of the two ran away.
+               if constexpr (requires { ctx.key_expansion_budget; } && requires { size_t(end - it); }) {
+                  const size_t scaled = size_t(end - it) * yaml::max_key_expansion_factor;
+                  ctx.key_expansion_budget =
+                     scaled > yaml::min_key_expansion_bytes ? scaled : yaml::min_key_expansion_bytes;
+               }
             }
          }
          // Skip YAML directives and document start marker (---) if present
@@ -244,10 +294,34 @@ namespace glz
             return true;
          }
 
-         auto& span = anchor_it->second;
+         // Copied rather than referenced: the replay below can replace ctx.anchors wholesale
+         // (a speculative parse hands its own map back), which would dangle a reference here.
+         const auto span = anchor_it->second;
 
          // Empty anchor span (anchor on null/empty node) — leave value as default
          if (span.begin == span.end) {
+            return true;
+         }
+
+         // An anchor is invisible to itself while it expands. A span that aliases the name it
+         // defines -- reachable because a mapping key's anchor is registered over the key text
+         // before that text is parsed -- would otherwise replay itself forever.
+         if (ctx.alias_span_is_replaying(span.begin, span.end)) [[unlikely]] {
+            ctx.error = error_code::syntax_error; // cyclic alias
+            return true;
+         }
+
+         // Replaying an anchor re-enters the reader directly, bypassing the variant reader's
+         // depth guard, so this is the only depth accounting a chain of aliases into a
+         // non-variant target gets. The cycle check above stops the unbounded case; this bounds
+         // a legitimate but deeply chained one.
+         depth_guard guard{ctx};
+         if (!guard) [[unlikely]]
+            return true;
+
+         if (!ctx.charge_alias_expansion(static_cast<size_t>(span.end - span.begin))) [[unlikely]] {
+            ctx.error = error_code::exceeded_max_expansion;
+            ctx.custom_error_message = "alias expansion";
             return true;
          }
 
@@ -261,8 +335,12 @@ namespace glz
             ctx.push_indent(span.base_indent - 1);
          }
 
+         ctx.active_alias_spans.emplace_back(span.begin, span.end);
+
          using V = std::remove_cvref_t<T>;
          from<YAML, V>::template op<Opts>(std::forward<T>(value), ctx, replay_it, replay_end);
+
+         ctx.active_alias_spans.pop_back();
 
          // Restore indent context
          ctx.indent_stack = std::move(saved_indent_stack);
@@ -989,6 +1067,55 @@ namespace glz
          }
       }
 
+      // Is the plain scalar that just ended at `it` a mapping key rather than a scalar node?
+      // A trailing ": " (or ':' at a line end) means the node being read is the mapping that
+      // starts with this key, so "null: 1" is a mapping, not the null scalar.
+      template <class It, class End>
+      inline bool plain_scalar_is_mapping_key(It it, End end) noexcept
+      {
+         skip_inline_ws(it, end);
+         if (it == end || *it != ':') return false;
+         const auto after = it + 1;
+         return after == end || whitespace_or_line_end_table[static_cast<uint8_t>(*after)];
+      }
+
+      // Does a block node's content start on a line after `it`? Content indented past the
+      // enclosing block belongs to the node that begins at this line break, so an empty plain
+      // scalar there means "not started yet", not "empty". This is the shape an alias to a
+      // block node replays as: the recorded anchor span begins at the line break following
+      // the anchor name, since the content's own indentation is part of the span.
+      template <class Ctx, class It, class End>
+      inline bool block_node_content_follows(Ctx& ctx, It it, End end) noexcept
+      {
+         while (it != end) {
+            if (*it == '\n' || *it == '\r') {
+               skip_newline(it, end);
+               continue;
+            }
+
+            int32_t line_indent = 0;
+            auto line = it;
+            while (line != end && (*line == ' ' || *line == '\t')) {
+               ++line_indent;
+               ++line;
+            }
+
+            if (line == end) return false;
+            if (*line == '\n' || *line == '\r') { // blank line
+               it = line;
+               continue;
+            }
+            if (*line == '#') { // comment line
+               skip_comment(line, end);
+               it = line;
+               continue;
+            }
+
+            return line_indent > ctx.current_indent();
+         }
+         return false;
+      }
+
       // Parse a multiline plain scalar with folding (for block context)
       // This handles plain scalars that span multiple lines, where continuation
       // lines are indented more than the base indent level.
@@ -1424,6 +1551,13 @@ namespace glz
             if (span.begin == span.end) {
                key.clear(); // empty anchor
             }
+            else if (!ctx.charge_alias_expansion(static_cast<size_t>(span.end - span.begin))) [[unlikely]] {
+               // A key alias replays its anchor the same way a value alias does, and a complex
+               // key hands the span to the full reader, so it is charged the same way.
+               ctx.error = error_code::exceeded_max_expansion;
+               ctx.custom_error_message = "alias expansion";
+               return false;
+            }
             else {
                // Replay the anchor span to extract the key string
                auto replay_it = span.begin;
@@ -1440,17 +1574,17 @@ namespace glz
                   auto temp_ctx = ctx.make_speculative();
                   from<YAML, glz::generic>::template op<flow_context_on<opts{.error_on_unknown_keys = false}>()>(
                      key_node, temp_ctx, replay_it, replay_end);
+                  ctx.alias_expansion_budget = temp_ctx.alias_expansion_budget; // charged even if rejected
+                  ctx.key_expansion_budget = temp_ctx.key_expansion_budget;
                   if (bool(temp_ctx.error)) [[unlikely]] {
                      ctx.error = temp_ctx.error;
+                     ctx.custom_error_message = temp_ctx.custom_error_message;
                      return false;
                   }
                   ctx.anchors = std::move(temp_ctx.anchors);
 
-                  if (auto* s = key_node.template get_if<std::string>()) {
-                     key = *s;
-                  }
-                  else {
-                     (void)glz::write_json(key_node, key);
+                  if (!yaml::materialize_key<false>(key, key_node, ctx)) [[unlikely]] {
+                     return false;
                   }
                }
                else {
@@ -1491,17 +1625,17 @@ namespace glz
                      auto temp_ctx = ctx.make_speculative();
                      from<YAML, glz::generic>::template op<opts{.error_on_unknown_keys = false}>(key_node, temp_ctx,
                                                                                                  replay_it, replay_end);
+                     ctx.alias_expansion_budget = temp_ctx.alias_expansion_budget; // charged even if rejected
+                     ctx.key_expansion_budget = temp_ctx.key_expansion_budget;
                      if (bool(temp_ctx.error)) [[unlikely]] {
                         ctx.error = temp_ctx.error;
+                        ctx.custom_error_message = temp_ctx.custom_error_message;
                         return false;
                      }
                      ctx.anchors = std::move(temp_ctx.anchors);
 
-                     if (auto* s = key_node.template get_if<std::string>()) {
-                        key = *s;
-                     }
-                     else {
-                        (void)glz::write_json(key_node, key);
+                     if (!yaml::materialize_key<false>(key, key_node, ctx)) [[unlikely]] {
+                        return false;
                      }
                   }
                   else {
@@ -2192,12 +2326,30 @@ namespace glz
          if (yaml::handle_alias<Opts>(value, ctx, it, end)) return;
          // Anchors (&name) pass through to the inner type handler
 
-         // Check for null value (without tag)
+         // Check for null value (without tag). The probe runs on a copy: a null-looking
+         // token only settles the node when the token really is this node's scalar, and
+         // otherwise the inner parser has to start from where this began.
          if (tag == yaml::yaml_tag::none) {
             std::string str;
-            yaml::parse_plain_scalar(str, ctx, it, end, yaml::check_flow_context(Opts));
+            auto probe = it;
+            yaml::parse_plain_scalar(str, ctx, probe, end, yaml::check_flow_context(Opts));
 
-            if (yaml::is_yaml_null(str)) {
+            bool is_null = yaml::is_yaml_null(str);
+            if (is_null) {
+               if (yaml::plain_scalar_is_mapping_key(probe, end)) {
+                  // "null: 1" is a mapping whose first key happens to look null.
+                  is_null = false;
+               }
+               else if (str.empty() && !yaml::check_flow_context(Opts) &&
+                        yaml::block_node_content_follows(ctx, probe, end)) {
+                  // A block node whose content begins on a following line reads as an
+                  // empty scalar here. In flow context an empty node really is null.
+                  is_null = false;
+               }
+            }
+
+            if (is_null) {
+               it = probe;
                value = {};
                return;
             }
@@ -2341,6 +2493,61 @@ namespace glz
 
    namespace yaml
    {
+      // A parent that hands a block-style value the lines below it pushes an indent for the
+      // value to judge itself against. What that indent must be depends on how the value
+      // reads a block mapping, so the two predicates below classify the value type. Both
+      // treat wrappers as transparent: glaze_value_t and nullable types (std::optional,
+      // smart/raw pointers) delegate the block parse to what they hold, unchanged.
+
+      // Maps -- and variants, which may resolve to one -- run parse_block_mapping_loop in
+      // discover mode: they find their own key column and judge dedent against the pushed
+      // indent as a strict parent. The parent must therefore push the column *outside* the
+      // value (nested_indent - 1).
+      template <class T>
+      constexpr bool discovers_own_block_mapping_indent()
+      {
+         using V = std::remove_cvref_t<T>;
+         if constexpr (readable_map_t<V> || is_variant<V>) {
+            return true;
+         }
+         else if constexpr (glaze_value_t<V>) {
+            return discovers_own_block_mapping_indent<
+               std::decay_t<decltype(get_member(std::declval<V&>(), meta_wrapper_v<V>))>>();
+         }
+         else if constexpr (nullable_like<V>) {
+            return discovers_own_block_mapping_indent<std::remove_cvref_t<decltype(*std::declval<V&>())>>();
+         }
+         else {
+            return false;
+         }
+      }
+
+      // Structs read the pushed indent as their own key column: from<YAML, T> for objects
+      // passes ctx.current_indent() straight through as parse_block_mapping's mapping_indent.
+      // The parent must push the column *of* the value (nested_indent), otherwise a key one
+      // column short of its siblings still clears the dedent check and is folded in.
+      //
+      // Every other value type (scalars, sequences) reads the pushed indent as an enclosing
+      // baseline and is not covered by either predicate.
+      template <class T>
+      constexpr bool receives_block_mapping_column()
+      {
+         using V = std::remove_cvref_t<T>;
+         if constexpr (glaze_object_t<V> || reflectable<V>) {
+            return true;
+         }
+         else if constexpr (glaze_value_t<V>) {
+            return receives_block_mapping_column<
+               std::decay_t<decltype(get_member(std::declval<V&>(), meta_wrapper_v<V>))>>();
+         }
+         else if constexpr (nullable_like<V>) {
+            return receives_block_mapping_column<std::remove_cvref_t<decltype(*std::declval<V&>())>>();
+         }
+         else {
+            return false;
+         }
+      }
+
       // Reading a YAML sequence node into a container OVERWRITES its previous
       // contents rather than appending to them, matching the JSON parser
       // (see json/read.hpp). Growable containers are cleared up front so that
@@ -2492,15 +2699,8 @@ namespace glz
                         return;
 
                      std::string key;
-                     if (key_node.is_null()) {
-                        key.clear();
-                     }
-                     else if (auto* s = key_node.template get_if<std::string>()) {
-                        key = *s;
-                     }
-                     else {
-                        (void)glz::write_json(key_node, key);
-                     }
+                     if (!yaml::materialize_key(key, key_node, ctx)) [[unlikely]]
+                        return;
 
                      glz::generic pair{};
                      pair[key] = std::move(mapped);
@@ -3114,10 +3314,13 @@ namespace glz
                   // This prevents content at column 0 from being treated as nested.
                   const int32_t effective_line_indent = (line_indent < 0) ? 0 : line_indent;
                   if (nested_indent > effective_line_indent) {
-                     // Save and set indent for nested parsing
-                     // Set parent indent to one less than content indent so items at
-                     // content indent pass the "indent > parent" check and continue parsing
-                     if (!ctx.push_indent(nested_indent - 1)) [[unlikely]]
+                     // Save and set indent for nested parsing.
+                     // A struct element reads the pushed indent as its own key column; every
+                     // other element type reads it as the enclosing baseline, so it gets one
+                     // less than the content indent and its content passes "indent > parent".
+                     const int32_t element_indent =
+                        receives_block_mapping_column<value_type>() ? nested_indent : nested_indent - 1;
+                     if (!ctx.push_indent(element_indent)) [[unlikely]]
                         return;
                      const bool prev_sequence_item_value_context = ctx.sequence_item_value_context;
                      const int32_t prev_sequence_dash_indent = ctx.sequence_dash_indent;
@@ -3711,22 +3914,7 @@ namespace glz
                               int32_t nested_indent = detect_nested_value_indent(ctx, it, end, line_indent);
                               if (nested_indent >= 0) {
                                  skip_to_content(it, end);
-                                 constexpr bool uses_discovered_block_mapping_indent = [] {
-                                    if constexpr (readable_map_t<member_type> || is_variant<member_type>) {
-                                       return true;
-                                    }
-                                    else if constexpr (glaze_value_t<member_type>) {
-                                       using unwrapped_member_type = std::decay_t<decltype(get_member(
-                                          std::declval<member_type&>(), meta_wrapper_v<member_type>))>;
-                                       return readable_map_t<unwrapped_member_type> ||
-                                              is_variant<unwrapped_member_type>;
-                                    }
-                                    else {
-                                       return false;
-                                    }
-                                 }();
-
-                                 if constexpr (uses_discovered_block_mapping_indent) {
+                                 if constexpr (discovers_own_block_mapping_indent<member_type>()) {
                                     if (!ctx.push_indent(nested_indent - 1)) [[unlikely]]
                                        return false;
                                  }
@@ -4344,17 +4532,8 @@ namespace glz
                         from<YAML, glz::generic>::template op<yaml::flow_context_on<Opts>()>(key_node, ctx, it, end);
                         if (bool(ctx.error)) [[unlikely]]
                            return;
-                        if (key_node.is_null()) {
-                           key.clear();
-                        }
-                        else if (auto* s = key_node.template get_if<std::string>()) {
-                           key = *s;
-                        }
-                        else {
-                           std::string key_json;
-                           (void)glz::write_json(key_node, key_json);
-                           key = std::move(key_json);
-                        }
+                        if (!yaml::materialize_key(key, key_node, ctx)) [[unlikely]]
+                           return;
                      }
                      else {
                         if (!yaml::parse_yaml_key(key, ctx, it, end, true)) {
@@ -4565,7 +4744,11 @@ namespace glz
                               ctx.error = error_code::syntax_error;
                               return false;
                            }
-                           if (!ctx.push_indent(nested_indent - 1)) [[unlikely]]
+                           // A struct value reads the pushed indent as its own key column;
+                           // every other value type reads it as the enclosing baseline.
+                           const int32_t value_indent =
+                              yaml::receives_block_mapping_column<val_t>() ? nested_indent : nested_indent - 1;
+                           if (!ctx.push_indent(value_indent)) [[unlikely]]
                               return false;
                            from<YAML, val_t>::template op<Opts>(val, ctx, it, end);
                            ctx.pop_indent();
@@ -4591,17 +4774,7 @@ namespace glz
                      key_t key{};
                      if constexpr (std::same_as<std::remove_cvref_t<key_t>, std::string>) {
                         auto to_string_key = [&](glz::generic& key_node) {
-                           if (key_node.is_null()) {
-                              key.clear();
-                           }
-                           else if (auto* s = key_node.template get_if<std::string>()) {
-                              key = *s;
-                           }
-                           else {
-                              std::string key_json;
-                              (void)glz::write_json(key_node, key_json);
-                              key = std::move(key_json);
-                           }
+                           return yaml::materialize_key(key, key_node, ctx);
                         };
 
                         auto key_it = it;
@@ -4722,7 +4895,8 @@ namespace glz
                            if (bool(ctx.error)) [[unlikely]]
                               return false;
                            it = key_node_it;
-                           to_string_key(key_node);
+                           if (!to_string_key(key_node)) [[unlikely]]
+                              return false;
                         }
                      }
                      else {
@@ -4805,17 +4979,8 @@ namespace glz
                         from<YAML, glz::generic>::template op<yaml::flow_context_on<Opts>()>(key_node, ctx, it, end);
                         if (bool(ctx.error)) [[unlikely]]
                            return false;
-                        if (key_node.is_null()) {
-                           key.clear();
-                        }
-                        else if (auto* s = key_node.template get_if<std::string>()) {
-                           key = *s;
-                        }
-                        else {
-                           std::string key_json;
-                           (void)glz::write_json(key_node, key_json);
-                           key = std::move(key_json);
-                        }
+                        if (!yaml::materialize_key(key, key_node, ctx)) [[unlikely]]
+                           return false;
                      }
                      else {
                         if (!yaml::parse_yaml_key(key, ctx, it, end, false)) {
@@ -4973,6 +5138,14 @@ namespace glz
             constexpr auto N = std::variant_size_v<Variant>;
             bool found_match{};
             size_t match_idx = 0;
+            // Only the last alternative propagates its error, so an alternative that exhausted an
+            // expansion budget would otherwise be reported as no_matching_variant_type -- a wrong
+            // diagnosis for a document that is hostile rather than merely the wrong shape. Held
+            // aside and used only if nothing matched, so an alternative that does succeed later
+            // (one that materializes no key text can still parse under a latched budget) is
+            // unaffected.
+            error_code expansion_error{};
+            std::string_view expansion_message{};
 
             for_each<N>([&]<size_t I>() {
                if (found_match) {
@@ -4988,18 +5161,29 @@ namespace glz
                   auto temp_ctx = ctx.make_speculative();
                   from<YAML, V>::template op<Opts>(std::get<V>(value), temp_ctx, it, end);
 
+                  // Charged whether or not the alternative fit: a rejected probe still replayed
+                  // whatever aliases it reached, and an attempt that is never billed is an
+                  // attempt that can be repeated for free.
+                  ctx.alias_expansion_budget = temp_ctx.alias_expansion_budget;
+                  ctx.key_expansion_budget = temp_ctx.key_expansion_budget;
+
                   if (!bool(temp_ctx.error)) {
                      found_match = true;
                      ctx.anchors = std::move(temp_ctx.anchors);
                   }
                   else {
                      it = copy_it;
+                     if (temp_ctx.error == error_code::exceeded_max_expansion && expansion_error == error_code::none) {
+                        expansion_error = temp_ctx.error;
+                        expansion_message = temp_ctx.custom_error_message;
+                     }
                      if (match_idx + 1 < category_count) {
                         // Not the last type, continue trying
                      }
                      else {
                         // Last type failed, propagate error
                         ctx.error = temp_ctx.error;
+                        ctx.custom_error_message = temp_ctx.custom_error_message;
                      }
                   }
                   ++match_idx;
@@ -5007,7 +5191,13 @@ namespace glz
             });
 
             if (!found_match && !bool(ctx.error)) {
-               ctx.error = error_code::no_matching_variant_type;
+               if (expansion_error != error_code::none) {
+                  ctx.error = expansion_error;
+                  ctx.custom_error_message = expansion_message;
+               }
+               else {
+                  ctx.error = error_code::no_matching_variant_type;
+               }
             }
          }
       }
@@ -5123,6 +5313,8 @@ namespace glz
          auto temp_ctx = ctx.make_speculative();
          process_yaml_variant_alternatives<Variant, is_yaml_variant_object>::template op<Opts>(value, temp_ctx, it,
                                                                                                end);
+         ctx.alias_expansion_budget = temp_ctx.alias_expansion_budget; // charged even if rejected
+         ctx.key_expansion_budget = temp_ctx.key_expansion_budget;
          if (!bool(temp_ctx.error)) {
             ctx.anchors = std::move(temp_ctx.anchors);
             return true;
@@ -5131,6 +5323,7 @@ namespace glz
          // This indicates malformed content (e.g., unclosed flow collection),
          // so propagate the error rather than silently falling back to string.
          ctx.error = temp_ctx.error;
+         ctx.custom_error_message = temp_ctx.custom_error_message;
          return false;
       }
    }
@@ -5309,11 +5502,13 @@ namespace glz
    }
 
    // Resolve a tagged variant's alternative index by scanning the mapping for the discriminator
-   // key (tag_v<V>). Operates on copies of the context and iterator so the caller's parse
-   // position is left untouched. Returns ids_v<V>.size() (the not-found sentinel) when the tag
-   // key is absent or its value matches no known id.
+   // key (tag_v<V>). Operates on a speculative context and a copy of the iterator so the caller's
+   // parse position is left untouched -- the context is the caller's to own, because what the
+   // scan spends of the alias budget is real work the caller has to account for. Returns
+   // ids_v<V>.size() (the not-found sentinel) when the tag key is absent or its value matches no
+   // known id.
    template <class V, auto Opts, class Ctx, class It, class End>
-   inline size_t scan_variant_tag_index(Ctx ctx, It it, End end, int32_t mapping_indent)
+   inline size_t scan_variant_tag_index(Ctx& ctx, It it, End end, int32_t mapping_indent)
    {
       using id_type = std::decay_t<decltype(ids_v<V>[0])>;
       size_t resolved = ids_v<V>.size();
@@ -5398,7 +5593,10 @@ namespace glz
                // item, etc. each push a different offset), not this mapping's true column (see helper).
                const int32_t mapping_column =
                   tagged_mapping_visual_indent(it, ctx.stream_begin, ctx.current_indent() + 1);
-               const size_t index = scan_variant_tag_index<V, Opts>(ctx.make_speculative(), it, end, mapping_column);
+               auto tag_ctx = ctx.make_speculative();
+               const size_t index = scan_variant_tag_index<V, Opts>(tag_ctx, it, end, mapping_column);
+               ctx.alias_expansion_budget = tag_ctx.alias_expansion_budget; // charged even if no tag matched
+               ctx.key_expansion_budget = tag_ctx.key_expansion_budget;
                if (index < ids_v<V>.size()) {
                   static constexpr auto tag_literal = string_literal_from_view<tag_v<V>.size()>(tag_v<V>);
                   emplace_runtime_variant(value, index);
@@ -5701,6 +5899,15 @@ namespace glz
                            return;
                         }
                         if (*key_start == '\n' || *key_start == '\r') {
+                           ctx.error = error_code::syntax_error;
+                           return;
+                        }
+
+                        // Re-apply the anchor-on-alias rule now that the tag is consumed. The
+                        // check above ran before the tag, so "&anchor !tag *alias" reached the
+                        // key-span registration below while the untagged spelling was rejected;
+                        // an alias node carries no other properties either way.
+                        if (*key_start == '*' && !yaml::alias_token_is_mapping_key(key_start, end)) {
                            ctx.error = error_code::syntax_error;
                            return;
                         }
@@ -6215,6 +6422,8 @@ namespace glz
                   auto temp_ctx = ctx.make_speculative();
                   process_yaml_variant_alternatives<V, is_yaml_variant_num>::template op<Opts>(value, temp_ctx, it,
                                                                                                end);
+                  ctx.alias_expansion_budget = temp_ctx.alias_expansion_budget; // charged even if rejected
+                  ctx.key_expansion_budget = temp_ctx.key_expansion_budget;
                   if (!bool(temp_ctx.error)) {
                      ctx.anchors = std::move(temp_ctx.anchors);
                      return; // Successfully parsed as number
@@ -6236,6 +6445,8 @@ namespace glz
                      auto temp_ctx = ctx.make_speculative();
                      process_yaml_variant_alternatives<V, is_yaml_variant_num>::template op<Opts>(value, temp_ctx, it,
                                                                                                   end);
+                     ctx.alias_expansion_budget = temp_ctx.alias_expansion_budget; // charged even if rejected
+                     ctx.key_expansion_budget = temp_ctx.key_expansion_budget;
                      if (!bool(temp_ctx.error)) {
                         ctx.anchors = std::move(temp_ctx.anchors);
                         return; // Successfully parsed as number
@@ -6255,6 +6466,13 @@ namespace glz
          // For non-auto-deducible variants or fallback, try each type until one succeeds
          constexpr auto N = std::variant_size_v<std::remove_cvref_t<T>>;
 
+         // This fold discards each alternative's error and reports only that nothing fit, which
+         // misdiagnoses a document that exhausted an expansion budget as merely the wrong shape.
+         // Kept aside and used only if no alternative parsed, so a later one that does parse
+         // (possible under a latched budget if it materializes no key text) is unaffected.
+         error_code expansion_error{};
+         std::string_view expansion_message{};
+
          auto try_parse = [&]<size_t I>() -> bool {
             using V = std::variant_alternative_t<I, std::remove_cvref_t<T>>;
             auto start = it;
@@ -6262,6 +6480,8 @@ namespace glz
             V v{};
             auto temp_ctx = ctx.make_speculative();
             from<YAML, V>::template op<Opts>(v, temp_ctx, it, end);
+            ctx.alias_expansion_budget = temp_ctx.alias_expansion_budget; // charged even if rejected
+            ctx.key_expansion_budget = temp_ctx.key_expansion_budget;
 
             if (!bool(temp_ctx.error)) {
                value = std::move(v);
@@ -6269,6 +6489,10 @@ namespace glz
                return true;
             }
 
+            if (temp_ctx.error == error_code::exceeded_max_expansion && expansion_error == error_code::none) {
+               expansion_error = temp_ctx.error;
+               expansion_message = temp_ctx.custom_error_message;
+            }
             it = start;
             return false;
          };
@@ -6279,7 +6503,13 @@ namespace glz
          }(std::make_index_sequence<N>{});
 
          if (!parsed) {
-            ctx.error = error_code::no_matching_variant_type;
+            if (expansion_error != error_code::none) {
+               ctx.error = expansion_error;
+               ctx.custom_error_message = expansion_message;
+            }
+            else {
+               ctx.error = error_code::no_matching_variant_type;
+            }
          }
       }
 #ifdef _MSC_VER
