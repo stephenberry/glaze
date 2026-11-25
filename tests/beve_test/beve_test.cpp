@@ -10366,7 +10366,6 @@ std::string write_generic_array(const std::tuple<Ts...>& tuple)
 }
 
 suite generic_array_into_typed_array_elements = [] {
-
    "empty generic array"_test = [] {
       const std::string empty("\x05\x00", 2);
 
@@ -10407,7 +10406,8 @@ suite generic_array_into_typed_array_elements = [] {
 
    "complex"_test = [] {
       std::vector<std::complex<double>> v{};
-      expect(not glz::read_beve(v, write_generic_array(std::tuple{std::complex<double>{1.0, -1.0}, std::complex<double>{0.5, 2.0}})));
+      expect(not glz::read_beve(
+         v, write_generic_array(std::tuple{std::complex<double>{1.0, -1.0}, std::complex<double>{0.5, 2.0}})));
       expect(v == std::vector<std::complex<double>>{{1.0, -1.0}, {0.5, 2.0}});
    };
 
@@ -10427,7 +10427,8 @@ suite generic_array_into_typed_array_elements = [] {
 
    "elements must match the element type"_test = [] {
       std::vector<double> v{};
-      expect(glz::read_beve(v, write_generic_array(std::tuple{1.5, std::string{"x"}})) == glz::error_code::syntax_error);
+      expect(glz::read_beve(v, write_generic_array(std::tuple{1.5, std::string{"x"}})) ==
+             glz::error_code::syntax_error);
 
       std::vector<std::string> s{};
       expect(bool(glz::read_beve(s, write_generic_array(std::tuple{std::string{"x"}, 1.5}))));
