@@ -3,6 +3,7 @@
 // P2996 Reflection Test - Verifies C++26 P2996 reflection works with Glaze
 
 #include <cstdint>
+#include <memory>
 
 #include "glaze/glaze.hpp"
 #include "ut/ut.hpp"
@@ -463,7 +464,7 @@ namespace inheritance
       int d = 8;
    };
 
-   // Private bases and members are reflected like private members of the class itself
+   // A private base is an implementation detail and is not reflected
    class hidden_base
    {
      public:
@@ -482,6 +483,27 @@ namespace inheritance
       int value = 0;
       std::string label{};
       int base_secret() const { return secret(); }
+   };
+
+   // A public base contributes its public members only
+   struct public_base_with_private_member
+   {
+      int visible = 15;
+
+     private:
+      int hidden = 16;
+   };
+
+   struct derived_public_base_private_member : public_base_with_private_member
+   {
+      int own = 17;
+   };
+
+   // The private weak_ptr inside the base must not enter the serialized form
+   struct shared_from_this_node : std::enable_shared_from_this<shared_from_this_node>
+   {
+      shared_from_this_node() = default;
+      int value = 18;
    };
 
    struct shadowing : base
@@ -529,13 +551,18 @@ static_assert(glz::detail::count_members<inheritance::grandchild> == 4);
 static_assert(glz::detail::count_members<inheritance::multiple> == 4);
 static_assert(glz::detail::count_members<inheritance::with_mixin> == 2);
 static_assert(glz::detail::count_members<inheritance::diamond> == 4);
-static_assert(glz::detail::count_members<inheritance::constructed> == 3);
+static_assert(glz::detail::count_members<inheritance::constructed> == 2);
+static_assert(glz::detail::count_members<inheritance::derived_public_base_private_member> == 2);
+static_assert(glz::detail::count_members<inheritance::shared_from_this_node> == 1);
 static_assert(glz::member_names<inheritance::grandchild> ==
               std::array<std::string_view, 4>{"id", "name", "extra", "flag"});
 static_assert(glz::member_names<inheritance::multiple> == std::array<std::string_view, 4>{"id", "name", "x", "own"});
 static_assert(glz::member_names<inheritance::diamond> == std::array<std::string_view, 4>{"value", "l", "r", "d"});
-static_assert(glz::member_names<inheritance::constructed> ==
-              std::array<std::string_view, 3>{"secret_", "value", "label"});
+static_assert(glz::member_names<inheritance::constructed> == std::array<std::string_view, 2>{"value", "label"});
+static_assert(glz::member_names<inheritance::derived_public_base_private_member> ==
+              std::array<std::string_view, 2>{"visible", "own"});
+static_assert(glz::member_names<inheritance::shared_from_this_node> ==
+              std::array<std::string_view, 1>{"value"});
 
 // These would give two members one key, or write a base's members under names its glz::meta does not use, so
 // reflecting them is a compile error
@@ -595,15 +622,26 @@ suite p2996_inheritance = [] {
       expect(value.d == 80);
    };
 
-   "private base of a non-aggregate"_test = [] {
+   "private base of a non-aggregate is not reflected"_test = [] {
       auto json = glz::write_json(constructed{3, "c"}).value_or("error");
-      expect(json == R"({"secret_":9,"value":3,"label":"c"})") << json;
+      expect(json == R"({"value":3,"label":"c"})") << json;
 
       constructed value{};
-      expect(not glz::read_json(value, R"({"secret_":90,"value":30,"label":"read"})"));
-      expect(value.base_secret() == 90);
+      expect(not glz::read_json(value, R"({"value":30,"label":"read"})"));
+      expect(value.base_secret() == 9); // the base was not part of the payload
       expect(value.value == 30);
       expect(value.label == "read");
+   };
+
+   "public base contributes public members only"_test = [] {
+      auto json = glz::write_json(derived_public_base_private_member{}).value_or("error");
+      expect(json == R"({"visible":15,"own":17})") << json;
+   };
+
+   "enable_shared_from_this stays out of the payload"_test = [] {
+      auto node = std::make_shared<shared_from_this_node>();
+      auto json = glz::write_json(*node).value_or("error");
+      expect(json == R"({"value":18})") << json;
    };
 
    "beve round trip"_test = [] {

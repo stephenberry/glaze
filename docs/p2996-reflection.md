@@ -222,12 +222,14 @@ constexpr auto count = glz::detail::count_members<Derived>;
 // count == 3 (2 from Base + 1 from Derived)
 ```
 
-The members of each base come before the derived class's own, with bases taken in declaration order and each one walked recursively. A virtual base is a single subobject, so a virtual diamond lists its members once. Private bases are reflected like private members.
+The members of each base come before the derived class's own, with bases taken in declaration order and each one walked recursively. A virtual base is a single subobject, so a virtual diamond lists its members once. Only public bases and their public members are reflected: a private base is an implementation detail, and a base's private members are reached through the derived type's API. This keeps implementation bases such as `std::enable_shared_from_this`, whose private `weak_ptr` would otherwise become a member, out of the serialized form. The type's own private members are still reflected.
 
 Two cases are compile errors, because reflecting them would silently produce the wrong keys:
 
 - A base class has a `glz::meta` or a local `glaze` struct. Reflection cannot apply that metadata to the derived class, so the base's members would be written under their C++ names. Give the derived class its own `glz::meta`.
 - A base class declares a member with the same name as another member, so the two would share a key. Rename one, or give the derived class a `glz::meta`.
+
+> **Upgrading:** derived types now serialize the public members of their public bases. Payloads written by earlier versions with `structs_as_arrays` or `glz::reflect_array` have fewer elements and fail to read. Keyed payloads still read; the missing base members keep their current values.
 
 ### Automatic Enum String Serialization
 
