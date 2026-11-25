@@ -1,8 +1,6 @@
 // Glaze Library
 // For the license information refer to glaze.ixx
 
-#include <ctime>
-
 import std;
 
 import glaze.tests.scratch_directory;
@@ -43,6 +41,9 @@ import glaze.trace;
 import glaze.tuplet;
 import glaze.util.for_each;
 
+import glaze.tests.minimal_buffer;
+import glaze.tests.speculation_guard;
+
 import ut;
 
 using std::int8_t;
@@ -53,6 +54,7 @@ using std::int32_t;
 using std::uint32_t;
 using std::int64_t;
 using std::uint64_t;
+using std::uintptr_t;
 using std::size_t;
 
 using namespace ut;
@@ -3198,6 +3200,45 @@ suite filesystem_tests = [] {
       expect(!glz::read_beve(obj, buffer));
       expect(obj.p == "./my_path");
    };
+
+   "non-ASCII path round-trips as UTF-8"_test = [] {
+      const std::filesystem::path latin1{u8"C:/Z\u00FCrich.txt"};
+      const auto latin1_buffer = glz::write_beve(latin1).value_or("error");
+      expect(latin1_buffer.find("\xC3\xBC") != std::string::npos);
+
+      std::filesystem::path latin1_out{};
+      expect(!glz::read_beve(latin1_out, latin1_buffer));
+      expect(latin1_out == latin1);
+
+      const std::filesystem::path supplementary{u8"C:/\U0001F600.txt"};
+      const auto supplementary_buffer = glz::write_beve(supplementary).value_or("error");
+
+      std::filesystem::path supplementary_out{};
+      expect(!glz::read_beve(supplementary_out, supplementary_buffer));
+      expect(supplementary_out == supplementary);
+   };
+
+#ifdef _WIN32
+   "invalid UTF-8 paths report invalid_utf8"_test = [] {
+      const auto make_unpaired = [](wchar_t surrogate) {
+         return std::filesystem::path{std::wstring{L"C:/bad_"} + surrogate};
+      };
+
+      const auto high = glz::write_beve(make_unpaired(wchar_t(0xD800)));
+      expect(!high.has_value());
+      expect(high.error().ec == glz::error_code::invalid_utf8);
+
+      const auto low = glz::write_beve(make_unpaired(wchar_t(0xDC00)));
+      expect(!low.has_value());
+      expect(low.error().ec == glz::error_code::invalid_utf8);
+
+      // the BEVE reader takes the string payload straight from the wire, so the path assignment is
+      // the only thing standing between malformed input and a path built from it
+      const auto malformed = glz::write_beve(std::string{"C:/\xFF.txt"}).value_or("error");
+      std::filesystem::path out{};
+      expect(glz::read_beve(out, malformed) == glz::error_code::invalid_utf8);
+   };
+#endif
 };
 
 struct struct_c_arrays
@@ -3466,6 +3507,12 @@ suite skip_tests = [] {
    };
 };
 
+struct beve_char_member
+{
+   char c{};
+   int x{};
+};
+
 suite type_conversions = [] {
    "double -> float"_test = [] {
       constexpr double pi64 = std::numbers::pi_v<double>;
@@ -3523,6 +3570,58 @@ suite type_conversions = [] {
       std::map<uint32_t, float> v{};
       expect(!glz::read_beve(v, b));
       expect(v == std::map<uint32_t, float>{{1, 1.1f}, {2, 2.2f}, {3, 3.3f}});
+   };
+
+   "map<uint16_t, int> -> map<uint64_t, int>"_test = [] {
+      std::map<uint16_t, int> input{{1, 2}, {3, 4}};
+      auto b = glz::write_beve(input).value_or("error");
+      std::map<uint64_t, int> v{};
+      expect(!glz::read_beve(v, b));
+      expect(v == std::map<uint64_t, int>{{1, 2}, {3, 4}});
+   };
+
+   "map<int64_t, int> -> map<int8_t, int>"_test = [] {
+      std::map<int64_t, int> input{{-5, 6}, {7, 8}};
+      auto b = glz::write_beve(input).value_or("error");
+      std::map<int8_t, int> v{};
+      expect(!glz::read_beve(v, b));
+      expect(v == std::map<int8_t, int>{{-5, 6}, {7, 8}});
+   };
+
+   "numeric map keys are read at the width the header declares"_test = [] {
+      // Each key of a map<uint8_t, ...> is one byte. Reading four bytes per key took the first three
+      // bytes of the value as the rest of the key and left "evil" as the value.
+      const std::string value = std::string("\0\x02\x10", 3) + "evil";
+      auto b = glz::write_beve(std::map<uint8_t, std::string>{{1, value}}).value_or("error");
+
+      std::map<int32_t, std::string> m{};
+      expect(!glz::read_beve(m, b));
+      expect(m == std::map<int32_t, std::string>{{1, value}});
+
+      std::vector<std::pair<int32_t, std::string>> pairs{};
+      expect(!glz::read_beve(pairs, b));
+      expect(pairs == std::vector<std::pair<int32_t, std::string>>{{1, value}});
+
+      std::map<char, std::string> c{};
+      expect(!glz::read_beve(c, glz::write_beve(std::map<int64_t, std::string>{{65, value}}).value_or("error")));
+      expect(c == std::map<char, std::string>{{'A', value}});
+   };
+
+   "char and enum reads honor the width of a converted tag"_test = [] {
+      // "c" is an i64 whose eight payload bytes hold another entry, "x": 42, ahead of the real "x": 1.
+      // Reading one byte for c parsed the hidden entry as the next key.
+      std::string b{char(glz::tag::object), char(2 << 2)};
+      b += {char(1 << 2), 'c', char(glz::tag::i64)};
+      b += {'A', char(1 << 2), 'x', char(glz::tag::i32), 42, 0, 0, 0}; // the eight bytes of c
+      b += {char(1 << 2), 'x', char(glz::tag::i32), 1, 0, 0, 0};
+      beve_char_member out{};
+      expect(!glz::read_beve(out, b));
+      expect(out.c == 'A');
+      expect(out.x == 1);
+
+      Color color{};
+      expect(!glz::read_beve(color, glz::write_beve(int8_t{2}).value_or("error")));
+      expect(color == Color::Blue);
    };
 };
 
@@ -5522,6 +5621,14 @@ suite delimited_beve_tests = [] {
       expect(!ec);
       expect(result.size() == size_t(5));
       expect(result == values);
+   };
+
+   "write_beve_delimited into a C array"_test = [] {
+      std::vector<int> values{1, 2, 3};
+      char buffer[512]{};
+      const auto ec = glz::write_beve_delimited(values, buffer);
+      expect(not ec);
+      expect(std::string_view(buffer, ec.count) == glz::write_beve_delimited(values).value());
    };
 
    "write_beve_delimited returning string"_test = [] {
@@ -9399,7 +9506,7 @@ suite beve_recursion_depth_limit = [] {
       // rejected one is rewound and the next tried. Nest that and the re-parses multiply -- measured
       // at ~4.3x per level, so 189 bytes took 55 seconds and 256 levels would never return. The
       // speculation budget caps the total re-parsed bytes, so the cost stops growing with depth;
-      // see speculation_guard.hpp for what is timed.
+      // see speculation_guard.ixx for what is timed.
       glz_test::expect_bounded_by_speculation_budget(
          ambiguous_nest,
          [](const std::string& buffer, glz::context& ctx) {
@@ -10211,6 +10318,60 @@ suite beve_packed_bool_tests = [] {
       buffer.pop_back();
       std::bitset<16> truncated{};
       expect(glz::read_beve(truncated, buffer).ec == glz::error_code::unexpected_end);
+   };
+};
+
+struct self_constrained_login
+{
+   std::string username{};
+   std::string password{};
+   std::string confirm_password{};
+};
+
+template <>
+struct glz::meta<self_constrained_login>
+{
+   using T = self_constrained_login;
+   static constexpr auto matching = [](const T& v) {
+      return v.password.size() >= 12 && v.password == v.confirm_password;
+   };
+   static constexpr auto value = object(&T::username, &T::password, &T::confirm_password);
+   static constexpr auto self_constraint = glz::self_constraint<matching, "Passwords must match and be 12+ characters">;
+};
+
+struct self_constrained_signup
+{
+   int id{};
+   self_constrained_login login{};
+};
+
+suite beve_self_constraint_tests = [] {
+   "self_constraint rejects an object that violates it"_test = [] {
+      const self_constrained_login weak{"eve", "short", "other"};
+      std::string buffer{};
+      expect(not glz::write_beve(weak, buffer));
+      self_constrained_login out{};
+      const auto ec = glz::read_beve(out, buffer);
+      expect(ec == glz::error_code::constraint_violated);
+      expect(ec.custom_error_message == "Passwords must match and be 12+ characters");
+   };
+
+   "self_constraint is checked on a nested object"_test = [] {
+      const self_constrained_signup weak{7, {"eve", "short", "other"}};
+      std::string buffer{};
+      expect(not glz::write_beve(weak, buffer));
+      self_constrained_signup out{};
+      expect(glz::read_beve(out, buffer) == glz::error_code::constraint_violated);
+   };
+
+   "self_constraint accepts an object that satisfies it"_test = [] {
+      const self_constrained_signup ok{7, {"alice", "correct horse battery", "correct horse battery"}};
+      std::string buffer{};
+      expect(not glz::write_beve(ok, buffer));
+      self_constrained_signup out{};
+      expect(not glz::read_beve(out, buffer));
+      expect(out.id == 7);
+      expect(out.login.password == ok.login.password);
    };
 };
 

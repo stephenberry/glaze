@@ -92,7 +92,9 @@ For CSV format, use `glz::opts_csv` which provides CSV-specific defaults.
 
 ## How to Use Inheritable Options
 
-Glaze uses C++20 concepts to detect if an option exists. If an option is not present in your options struct, a default value is used. This allows you to create custom option structs with only the options you need.
+Glaze uses C++20 concepts to detect if an inheritable option exists. If an inheritable option is not present in your options struct, its default value is used, so a custom options struct only needs the inheritable options you want to set.
+
+The core options are different: the built-in formats other than CSV read them directly, so a custom options struct must provide all of them. Inheriting from `glz::opts` does this. A struct that leaves some core options out compiles only where nothing reads the missing ones, which depends on the format and the types involved.
 
 ### Creating a Custom Options Struct
 
@@ -472,6 +474,7 @@ This option works with JSON, BEVE, CBOR, and MSGPACK formats. See [Nullable Type
 
 #### `float_max_write_precision`
 Limits the precision used when writing floating-point numbers. Options: `full`, `float32`, `float64`, `float128`.
+To set this option, define a custom options struct that inherits from `glz::opts` and includes a `float_max_write_precision` member.
 
 #### `float_format`
 Formats all floating-point numbers using `std::format` syntax (C++23). This provides control over decimal places, scientific notation, and other formatting options.

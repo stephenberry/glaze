@@ -2,10 +2,15 @@
 // For the license information refer to glaze.ixx
 
 import std;
+
 import glaze;
 import ut;
 
 import glaze.util.string_literal;
+
+using std::int32_t;
+using std::int64_t;
+using std::uint64_t;
 
 using namespace ut;
 

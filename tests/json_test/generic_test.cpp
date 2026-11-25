@@ -4,7 +4,6 @@
 import std;
 
 import glaze.json;
-import glaze.core.seek;
 import glaze.containers.ordered_map;
 
 import ut;
@@ -669,7 +668,6 @@ suite json_pointer_extraction_tests = [] {
    };
 };
 
-// Define structs at namespace level for linkage requirements
 struct Thing
 {
    int value1;

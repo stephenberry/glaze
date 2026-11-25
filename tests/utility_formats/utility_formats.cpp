@@ -3,6 +3,14 @@
 
 import std;
 
+import glaze.util.bit_array;
+
+using std::size_t;
+using std::uint8_t;
+using std::uint32_t;
+using std::uint64_t;
+
+
 import glaze.base64;
 import glaze.util.progress_bar;
 

@@ -1,7 +1,9 @@
 # Project is configured with no languages, so tell GNUInstallDirs the lib dir
 set(CMAKE_INSTALL_LIBDIR lib CACHE PATH "")
 
-set(CMAKE_INSTALL_INCLUDEDIR "modules" CACHE PATH "")
+if(NOT GLAZE_GENERATE_HEADERS)
+  set(CMAKE_INSTALL_INCLUDEDIR "modules" CACHE PATH "")
+endif()
 
 include(CMakePackageConfigHelpers)
 include(GNUInstallDirs)
@@ -13,6 +15,7 @@ install(
     TARGETS glaze_glaze
     EXPORT glazeTargets
     COMPONENT glaze_Development
+    FILE_SET generated_headers DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}"
     FILE_SET CXX_MODULES DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}"
     FILE_SET module_support_headers DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}"
     FILE_SET rpc_c_headers DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}"

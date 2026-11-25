@@ -15,6 +15,7 @@ import std;
 import glaze.json.read;
 import glaze.json.write;
 
+import glaze.core.buffer_traits;
 import glaze.core.meta;
 import glaze.core.format_str;
 import glaze.core.opts;

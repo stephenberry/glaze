@@ -1,6 +1,7 @@
 // Glaze Library
 // For the license information refer to glaze.ixx
 // glz:header path="glaze/yaml/opts.hpp"
+// glz:header std=<cstdint>
 export module glaze.yaml.opts;
 
 import std;

@@ -5,7 +5,7 @@ add_executable(${PROJECT_NAME} ${PROJECT_NAME}.cpp)
 target_link_libraries(${PROJECT_NAME} PRIVATE glz_test_exceptions)
 
 # Conditionally enable SSL support if OpenSSL is available. 
-if(NOT GLAZE_ENABLE_MODULES OR glaze_ENABLE_SSL OR glaze_BUILD_SSL_TESTS)
+if(GLAZE_GENERATE_HEADERS OR glaze_ENABLE_SSL OR glaze_BUILD_SSL_TESTS)
   find_package(OpenSSL QUIET)
   if(OpenSSL_FOUND)
     include(CheckCXXSourceCompiles)

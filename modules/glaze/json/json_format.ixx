@@ -11,6 +11,7 @@ export module glaze.json.json_format;
 import glaze.core.common;
 import glaze.core.opts;
 
+import glaze.util.compare;
 import glaze.util.dump;
 import glaze.util.parse;
 import glaze.util.string_literal;

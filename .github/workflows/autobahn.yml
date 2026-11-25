@@ -28,7 +28,7 @@ concurrency:
 
 jobs:
   build:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
 
     env:
       CC: gcc-14
@@ -38,7 +38,7 @@ jobs:
       AUTOBAHN_IMAGE: crossbario/autobahn-testsuite
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Install dependencies
         run: |
@@ -160,7 +160,7 @@ jobs:
         if: ${{ always() }}
         run: docker rm -f autobahn || true
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: ${{ failure() }}
         with:
           name: autobahn-reports

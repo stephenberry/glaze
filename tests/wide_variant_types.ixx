@@ -1,16 +1,21 @@
-import std;
 // Glaze Library
-// For the license information refer to glaze.hpp
+// For the license information refer to glaze.ixx
 
-#pragma once
+export module glaze.tests.wide_variant_types;
 
+import std;
 
 import glaze.core.common;
+import glaze.core.meta_fwd;
+
+import glaze.util.variant;
+
+using std::size_t;
 
 // Variants with more alternatives than fit in one 64-bit word, for exercising the readers' per-alternative
 // candidate bit sets beyond their first word. Alternative I is an object whose single key "k<I>" belongs to
 // no other alternative, so each document names exactly one alternative.
-namespace wide_variant
+export namespace wide_variant
 {
    constexpr size_t n_digits(size_t v)
    {

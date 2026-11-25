@@ -249,7 +249,9 @@ export namespace glz
                unescaped_key.reserve(key.size());
 
                for (size_t i = 0; i < key.size(); ++i) {
-                  if (key[i] == '~' && i + 1 < key.size()) {
+                  if (key[i] == '~') {
+                     // RFC 6901 3: a trailing '~' is an invalid escape, not a literal '~'
+                     if (i + 1 == key.size()) return nullptr;
                      if (key[i + 1] == '0')
                         unescaped_key += '~';
                      else if (key[i + 1] == '1')

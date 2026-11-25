@@ -3,7 +3,9 @@
 // glz:header path="glaze/json/minify.hpp"
 // glz:header std=<cstddef>
 // glz:header std=<cstdint>
+// glz:header std=<span>
 // glz:header std=<string>
+// glz:header std=<utility>
 export module glaze.json.minify;
 
 import std;
@@ -241,7 +243,7 @@ namespace glz
       // Returns the number of bytes written, which is what a bounded output has no other way to
       // learn: it has no size to be shrunk to the result the way a resizable one does.
       template <auto Opts, class In, output_buffer Out>
-         requires(contiguous<In> && resizable<In>)
+         requires(contiguous<In> && resizable<In> && not byte_array_buffer<Out>)
       inline size_t minify_json(is_context auto&& ctx, In&& in, Out&& out)
       {
          if (in.size() == 0) {
@@ -273,6 +275,15 @@ namespace glz
             out.resize(ix);
          }
          return ix;
+      }
+
+      // A C array has no members to serialize through; a span over it keeps the extent as the capacity.
+      template <auto Opts, class In, byte_array_buffer Out>
+         requires(contiguous<In> && resizable<In>)
+      inline size_t minify_json(is_context auto&& ctx, In&& in, Out& out)
+      {
+         auto view = std::span{out};
+         return minify_json<Opts>(ctx, std::forward<In>(in), view);
       }
    }
 

@@ -1,4 +1,8 @@
 import std;
+
+using std::uint32_t;
+using std::uint64_t;
+
 // Issue #2786: glz::custom<Read, Write> support for TOML.
 //
 // This lives in its own translation unit that includes only "glaze/toml.hpp". The custom

@@ -6,7 +6,7 @@ option(glaze_BUILD_WEBSOCKET_AUTOBAHN_TEST "Build Autobahn WebSocket compliance 
 
 # Named modules are compiled once, so SSL must be enabled on the module target,
 # not only on the individual SSL test translation units.
-if(GLAZE_ENABLE_MODULES AND glaze_BUILD_SSL_TESTS AND NOT glaze_ENABLE_SSL)
+if(NOT GLAZE_GENERATE_HEADERS AND glaze_BUILD_SSL_TESTS AND NOT glaze_ENABLE_SSL)
     find_package(OpenSSL REQUIRED)
     target_link_libraries(glaze_glaze PUBLIC OpenSSL::SSL OpenSSL::Crypto)
     target_compile_definitions(glaze_glaze PUBLIC GLZ_ENABLE_SSL)
@@ -40,12 +40,13 @@ add_subdirectory(http_router_test)
 add_subdirectory(url_test)
 add_subdirectory(cors_test)
 add_subdirectory(http_chunked_test)
+add_subdirectory(http_stream_write_queue_test)
 add_subdirectory(http_content_length_test)
 add_subdirectory(http_client_test)
 add_subdirectory(http_client_pool_test)
 add_subdirectory(http_client_progress_test)
 add_subdirectory(http_client_redirect_test)
-if(NOT GLAZE_ENABLE_MODULES OR (NOT glaze_ENABLE_SSL AND NOT glaze_BUILD_SSL_TESTS))
+if(GLAZE_GENERATE_HEADERS OR (NOT glaze_ENABLE_SSL AND NOT glaze_BUILD_SSL_TESTS))
     add_subdirectory(http_client_no_ssl_executor_test)
 endif()
 if(glaze_BUILD_SSL_TESTS)

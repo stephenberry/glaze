@@ -2,9 +2,13 @@
 // For the license information refer to glaze.ixx
 
 import glaze;
+
 import glaze.core.context;
 import glaze.stencil.stencilcount;
+
 import glaze.stencil;
+
+import glaze.tests.minimal_buffer;
 
 import std;
 import ut;

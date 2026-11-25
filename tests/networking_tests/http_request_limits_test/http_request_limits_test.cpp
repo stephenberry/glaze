@@ -1,4 +1,10 @@
+#include "glaze/ext/asio_include.hpp"
+import glaze.net.http;
 import std;
+
+using std::size_t;
+using std::uint16_t;
+
 // Verifies that glz::http_server bounds what one connection can make it hold before
 // a request's headers are complete:
 //   1. A header section that does not end within max_request_header_size is answered
@@ -9,6 +15,7 @@ import std;
 //      completes after the deadline never reaches a handler.
 import ut;
 
+import glaze.net.http_router;
 import glaze.net.http_server;
 
 #if defined(GLZ_USING_BOOST_ASIO)

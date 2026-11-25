@@ -12,6 +12,8 @@
 // glz:header std=<string_view>
 // glz:header std=<type_traits>
 // glz:header std=<vector>
+module;
+#include <cassert>
 export module glaze.util.dump;
 import glaze.core.buffer_traits;
 

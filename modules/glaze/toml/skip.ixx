@@ -11,6 +11,8 @@ import glaze.toml.common;
 import glaze.core.context;
 import glaze.core.opts;
 
+using std::uint8_t;
+
 #include "glaze/util/inline.hpp"
 
 using std::size_t;

@@ -9,6 +9,7 @@ import glaze.tuplet;
 import glaze.util.tuple;
 import glaze.util.string_literal;
 
+import glaze.tests.speculation_guard;
 import ut;
 
 using std::uint16_t;
@@ -293,6 +294,28 @@ suite jmespath_negative_slice_tests = [] {
       int v{};
       expect(glz::read_jmespath(glz::jmespath_expression{"[9999999999]"}, v, buffer));
    };
+
+   "slice step larger than the remaining range does not overflow"_test = [] {
+      // A step that fits int32 but exceeds the elements left after the first one stepped the
+      // index past INT32_MAX (signed overflow), which wrapped to a negative index and read
+      // outside the array. The slice holds the single element the start index names.
+      std::vector<int> data{1, 2, 3};
+      std::string buffer{};
+      expect(not glz::write_json(data, buffer));
+
+      std::vector<int> out{};
+      expect(not glz::read_jmespath(glz::jmespath_expression{"[1::2147483647]"}, out, buffer));
+      expect(out == (std::vector<int>{2}));
+
+      expect(not glz::read_jmespath(glz::jmespath_expression{"[1::-2147483648]"}, out, buffer));
+      expect(out == (std::vector<int>{2}));
+
+      expect(not glz::read_jmespath<"[1::2147483647]">(out, buffer));
+      expect(out == (std::vector<int>{2}));
+
+      expect(not glz::read_jmespath<"[2::-2147483648]">(out, buffer));
+      expect(out == (std::vector<int>{3}));
+   };
 };
 
 suite jmespath_negative_index_tests = [] {
@@ -430,6 +453,26 @@ suite tuple_slice_tests = [] {
 
       expect(glz::get<0>(target) == 1);
       expect(glz::get<1>(target) == "a");
+   };
+
+   "tuple slice start near INT32_MAX does not wrap"_test = [] {
+      // start + I wrapped to a negative index for I >= 1, so the first array element was read
+      // into the second tuple slot and the read reported success.
+      std::string buffer = R"([10,20,30])";
+
+      std::tuple<int, int> target{-1, -1};
+      expect(glz::read_jmespath<"[2147483647:]">(target, buffer) == glz::error_code::array_element_not_found);
+      expect(std::get<1>(target) == -1);
+
+      target = {-1, -1};
+      expect(glz::read_jmespath(glz::jmespath_expression{"[2147483647:]"}, target, buffer) ==
+             glz::error_code::array_element_not_found);
+      expect(std::get<1>(target) == -1);
+
+      // An explicit end bounds the slice, so the same start selects nothing.
+      target = {-1, -1};
+      expect(not glz::read_jmespath<"[2147483647:2147483647]">(target, buffer));
+      expect(target == std::tuple{-1, -1});
    };
 };
 
@@ -645,6 +688,61 @@ suite jmespath_partial_read = [] {
       ec = glz::read_jmespath<opts>(glz::jmespath_expression{"in"}, runtime, buffer);
       expect(not ec) << glz::format_error(ec, buffer);
       expect(runtime.a == 1 && runtime.b == 2);
+   };
+};
+
+// Two array alternatives, so every level of the nest tries both (see json_test's ambiguous nest).
+namespace jmespath_speculation
+{
+   struct node;
+   using two_arrays = std::variant<std::vector<node>, std::list<node>>;
+   struct node
+   {
+      two_arrays child{};
+   };
+
+   inline std::string ambiguous_nest(size_t levels)
+   {
+      std::string b;
+      for (size_t i = 0; i < levels; ++i) b += R"([{"child":)";
+      b += "[{]"; // malformed leaf
+      for (size_t i = 0; i < levels; ++i) b += "}]";
+      return b;
+   }
+}
+
+suite jmespath_speculation_budget = [] {
+   // read_jmespath parses on a context of its own; without the budget this nest takes seconds.
+   "compile time read_jmespath seeds the speculation budget like glz::read"_test = [] {
+      using namespace jmespath_speculation;
+      const auto nest = ambiguous_nest(24);
+      const auto buffer = R"({"a":)" + nest + "}";
+      glz_test::expect_budgeted_like_read(
+         [&] {
+            two_arrays out{};
+            return glz::read_json(out, nest).ec;
+         },
+         [&] {
+            two_arrays out{};
+            return glz::read_jmespath<"a">(out, buffer).ec;
+         },
+         glz::error_code::expected_quote);
+   };
+
+   "runtime read_jmespath seeds the speculation budget like glz::read"_test = [] {
+      using namespace jmespath_speculation;
+      const auto nest = ambiguous_nest(24);
+      const auto buffer = R"({"a":)" + nest + "}";
+      glz_test::expect_budgeted_like_read(
+         [&] {
+            two_arrays out{};
+            return glz::read_json(out, nest).ec;
+         },
+         [&] {
+            two_arrays out{};
+            return glz::read_jmespath(glz::jmespath_expression{"a"}, out, buffer).ec;
+         },
+         glz::error_code::expected_quote);
    };
 };
 

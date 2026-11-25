@@ -128,7 +128,7 @@ int main() {
 |---------|-------------|-------|
 | Max struct members | 128 | Unlimited |
 | Non-aggregate types | Not supported | Full support |
-| Inheritance | Requires explicit `glz::meta` | Automatic (via `nonstatic_data_members_of`) |
+| Inheritance | Requires explicit `glz::meta` | Automatic, base members first (via `bases_of`) |
 | Member name extraction | `__PRETTY_FUNCTION__` parsing | `std::meta::identifier_of` |
 | Member count | Structured binding probe | `nonstatic_data_members_of().size()` |
 | Private member access | Limited | Full (with `access_context::unchecked()`) |
@@ -221,6 +221,13 @@ constexpr auto names = glz::member_names<Derived>;
 constexpr auto count = glz::detail::count_members<Derived>;
 // count == 3 (2 from Base + 1 from Derived)
 ```
+
+The members of each base come before the derived class's own, with bases taken in declaration order and each one walked recursively. A virtual base is a single subobject, so a virtual diamond lists its members once. Private bases are reflected like private members.
+
+Two cases are compile errors, because reflecting them would silently produce the wrong keys:
+
+- A base class has a `glz::meta` or a local `glaze` struct. Reflection cannot apply that metadata to the derived class, so the base's members would be written under their C++ names. Give the derived class its own `glz::meta`.
+- A base class declares a member with the same name as another member, so the two would share a key. Rename one, or give the derived class a `glz::meta`.
 
 ### Automatic Enum String Serialization
 

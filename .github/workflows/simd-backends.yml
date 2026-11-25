@@ -44,7 +44,7 @@ concurrency:
 
 jobs:
   x86-backends:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     # force_sde targets the AVX-512 job, so skip the jobs a dispatch run would only repeat.
     if: ${{ !inputs.force_sde }}
     name: ${{ matrix.name }}
@@ -76,7 +76,7 @@ jobs:
             expect: "-DGLZ_EXPECT_DETECTED=scalar -DGLZ_EXPECT_UTF8_VALIDATION=scalar -DGLZ_EXPECT_STRING_ESCAPE=SWAR"
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Configure
         run: |
@@ -97,7 +97,7 @@ jobs:
         run: ctest --test-dir build --output-on-failure --no-tests=error -R "$UTF8_TESTS"
 
   arm-backends:
-    runs-on: ubuntu-24.04-arm
+    runs-on: ubuntu-26.04-arm
     # force_sde targets the AVX-512 job, so skip the jobs a dispatch run would only repeat.
     if: ${{ !inputs.force_sde }}
     name: AArch64 NEON64
@@ -108,7 +108,7 @@ jobs:
     # 32 bit NEON is a different backend -- no vqtbl1q_u8, so the validator falls back to scalar --
     # and is covered by armv7.yml under QEMU.
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Configure
         run: |
@@ -127,10 +127,10 @@ jobs:
         run: ctest --test-dir build --output-on-failure --no-tests=error -R "$UTF8_TESTS"
 
   avx512:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     name: x86-64 AVX-512BW
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Decide between native AVX-512 and Intel SDE
         id: mode
@@ -199,12 +199,12 @@ jobs:
           done
 
   wasm:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     # force_sde targets the AVX-512 job, so skip the jobs a dispatch run would only repeat.
     if: ${{ !inputs.force_sde }}
     name: WebAssembly SIMD128
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       # Installed directly rather than through a third-party action, so the toolchain version is
       # pinned here and nothing else is trusted. Node ships with the runner image.
@@ -236,14 +236,14 @@ jobs:
           done
 
   generic-widths:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     # force_sde targets the AVX-512 job, so skip the jobs a dispatch run would only repeat.
     if: ${{ !inputs.force_sde }}
     name: Portable backend (widths 16/32/64)
     # Runs the width-generic algorithm at every register size in plain C++. This is what makes a
     # 64 byte backend testable on hosts that cannot execute AVX-512 at all.
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Build and run at each width
         run: |

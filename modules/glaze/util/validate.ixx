@@ -105,8 +105,9 @@ namespace glz
       // say where the error was. This overload keeps format_error callable for any sized buffer, so
       // a failed read is always reportable rather than failing to compile inside format_error
       // itself.
-      export inline source_info get_source_info(const has_size auto& buffer, const size_t index)
-         requires(!contiguous<std::remove_cvref_t<decltype(buffer)>>)
+      export template <has_size Buffer>
+         requires(!contiguous<Buffer>)
+      inline source_info get_source_info(const Buffer&, const size_t index)
       {
          return {.context = "", .index = index};
       }

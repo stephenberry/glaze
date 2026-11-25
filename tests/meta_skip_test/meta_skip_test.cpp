@@ -1,4 +1,7 @@
 import std;
+
+using std::uint32_t;
+
 // Glaze Library
 // For the license information refer to glaze.hpp
 

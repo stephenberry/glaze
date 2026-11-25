@@ -55,7 +55,7 @@ void tests()
    "vector type name"_test = [] {
       {
          std::string_view v = glz::name_v<std::vector<std::vector<int>*>>;
-         expect(v == "std::vector<std::vector<int32_t>*>");
+         expect(v == "std::vector<std::vector<std::int32_t>*>");
       }
       {
          std::string_view v = glz::name_v<std::vector<float>>;
@@ -107,7 +107,7 @@ void tests()
 
    "function type name"_test = [] {
       std::string_view f = glz::name_v<std::function<double(const int&, const double&)>>;
-      expect(f == "std::function<double(const int32_t&,const double&)>");
+      expect(f == "std::function<double(const std::int32_t&,const double&)>");
    };
 
    "function type io"_test = [&] {

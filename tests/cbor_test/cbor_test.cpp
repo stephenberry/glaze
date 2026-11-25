@@ -4,8 +4,11 @@
 import std;
 
 import glaze;
+
 import glaze.base64;
 import glaze.exceptions;
+
+import glaze.tests.speculation_guard;
 
 import ut;
 
@@ -2989,6 +2992,61 @@ void allocation_limits_tests()
       expect(result == short_string);
    };
 
+   // An indefinite-length text string carries no total length in its header, only per-chunk
+   // lengths, so the limit has to hold against the sum of the chunks.
+   "cbor max_string_length rejects oversized indefinite strings"_test = [] {
+      std::string buffer{char(0x7F)};
+      for (int i = 0; i < 5; ++i) {
+         buffer.push_back(char(0x74)); // text(20)
+         buffer.append(20, 'x');
+      }
+      buffer.push_back(char(0xFF));
+
+      struct limited_opts : glz::opts
+      {
+         uint32_t format = glz::CBOR;
+         size_t max_string_length = 50;
+      };
+
+      std::string result;
+      auto ec = glz::read<limited_opts{}>(result, buffer);
+      expect(ec.ec == glz::error_code::invalid_length) << "should reject oversized indefinite string";
+
+      std::array<char, 128> fixed{};
+      ec = glz::read<limited_opts{}>(fixed, buffer);
+      expect(ec.ec == glz::error_code::invalid_length) << "should reject into a fixed-size buffer too";
+
+      struct limited_context : glz::context
+      {
+         size_t max_string_length = 50;
+      };
+      limited_context ctx{};
+      result.clear();
+      ec = glz::read<glz::opts{.format = glz::CBOR}>(result, buffer, ctx);
+      expect(ec.ec == glz::error_code::invalid_length) << "should reject with a runtime limit";
+
+      ctx.max_string_length = 100;
+      ec = glz::read<glz::opts{.format = glz::CBOR}>(result, buffer, ctx);
+      expect(!ec) << "should accept an indefinite string within the runtime limit";
+      expect(result == std::string(100, 'x'));
+   };
+
+   "cbor max_string_length accepts indefinite strings within limit"_test = [] {
+      // text(*) "abc" "de" break
+      const std::string buffer{char(0x7F), char(0x63), 'a', 'b', 'c', char(0x62), 'd', 'e', char(0xFF)};
+
+      struct limited_opts : glz::opts
+      {
+         uint32_t format = glz::CBOR;
+         size_t max_string_length = 5;
+      };
+
+      std::string result;
+      auto ec = glz::read<limited_opts{}>(result, buffer);
+      expect(!ec) << "should accept indefinite string within limit";
+      expect(result == "abcde");
+   };
+
    "cbor max_array_size rejects oversized arrays"_test = [] {
       std::vector<int> large_array(100, 42);
       std::string buffer;
@@ -3162,6 +3220,27 @@ void max_length_wrapper_cbor_tests()
       CborMaxLengthStringStruct result{};
       auto ec = glz::read_cbor(result, buffer);
       expect(ec.ec == glz::error_code::invalid_length) << "should reject oversized name";
+   };
+
+   "cbor max_length wrapper rejects oversized indefinite string field"_test = [] {
+      // {"name": text(*) "this is wa" "y too long" break, "description": "ok"}
+      std::string buffer{char(0xA2), char(0x64)};
+      buffer.append("name");
+      buffer.push_back(char(0x7F));
+      buffer.push_back(char(0x6A));
+      buffer.append("this is wa");
+      buffer.push_back(char(0x6A));
+      buffer.append("y too long");
+      buffer.push_back(char(0xFF));
+      buffer.push_back(char(0x6B));
+      buffer.append("description");
+      buffer.push_back(char(0x62));
+      buffer.append("ok");
+
+      CborMaxLengthStringStruct result{};
+      auto ec = glz::read_cbor(result, buffer);
+      expect(ec.ec == glz::error_code::invalid_length) << "should reject oversized indefinite name";
+      expect(result.name.size() <= 10);
    };
 
    "cbor max_length wrapper limits array field"_test = [] {
@@ -5065,7 +5144,7 @@ suite cbor_variant_tagging = [] {
    };
 
    // Untagged resolution is speculative, so an ambiguous nest re-parses each subtree per alternative
-   // at every level. The speculation budget caps that; see speculation_guard.hpp for what is timed.
+   // at every level. The speculation budget caps that; see speculation_guard.ixx for what is timed.
    "an ambiguous nest is bounded rather than exponential"_test = [] {
       const auto build = [](size_t levels) {
          std::string buffer;
@@ -5441,6 +5520,89 @@ suite cbor_file_io_tests = [] {
       const auto path = (std::filesystem::temp_directory_path() / "glaze_cbor_missing_dir" / "out.cbor").string();
       std::string buffer;
       expect(glz::write_file_cbor(reflectable_t{}, path, buffer) == glz::error_code::file_open_failure);
+   };
+};
+
+suite cbor_filesystem_path_tests = [] {
+   "non-ASCII paths round-trip as UTF-8"_test = [] {
+      const std::filesystem::path latin1{u8"C:/Z\u00FCrich.txt"};
+      const auto latin1_buffer = glz::write_cbor(latin1).value_or("error");
+      expect(latin1_buffer.find("\xC3\xBC") != std::string::npos);
+
+      std::filesystem::path latin1_out{};
+      expect(!glz::read_cbor(latin1_out, latin1_buffer));
+      expect(latin1_out == latin1);
+
+      const std::filesystem::path supplementary{u8"C:/\U0001F600.txt"};
+      const auto supplementary_buffer = glz::write_cbor(supplementary).value_or("error");
+
+      std::filesystem::path supplementary_out{};
+      expect(!glz::read_cbor(supplementary_out, supplementary_buffer));
+      expect(supplementary_out == supplementary);
+   };
+
+#ifdef _WIN32
+   "invalid UTF-8 paths report invalid_utf8"_test = [] {
+      // the CBOR reader copies the text string payload verbatim, so the path assignment is what
+      // has to reject malformed input
+      const auto malformed = glz::write_cbor(std::string{"C:/\xFF.txt"}).value_or("error");
+      std::filesystem::path out{};
+      expect(glz::read_cbor(out, malformed) == glz::error_code::invalid_utf8);
+   };
+#endif
+};
+
+struct self_constrained_login
+{
+   std::string username{};
+   std::string password{};
+   std::string confirm_password{};
+};
+
+template <>
+struct glz::meta<self_constrained_login>
+{
+   using T = self_constrained_login;
+   static constexpr auto matching = [](const T& v) {
+      return v.password.size() >= 12 && v.password == v.confirm_password;
+   };
+   static constexpr auto value = object(&T::username, &T::password, &T::confirm_password);
+   static constexpr auto self_constraint = glz::self_constraint<matching, "Passwords must match and be 12+ characters">;
+};
+
+struct self_constrained_signup
+{
+   int id{};
+   self_constrained_login login{};
+};
+
+suite cbor_self_constraint_tests = [] {
+   "self_constraint rejects an object that violates it"_test = [] {
+      const self_constrained_login weak{"eve", "short", "other"};
+      std::string buffer{};
+      expect(not glz::write_cbor(weak, buffer));
+      self_constrained_login out{};
+      const auto ec = glz::read_cbor(out, buffer);
+      expect(ec == glz::error_code::constraint_violated);
+      expect(ec.custom_error_message == "Passwords must match and be 12+ characters");
+   };
+
+   "self_constraint is checked on a nested object"_test = [] {
+      const self_constrained_signup weak{7, {"eve", "short", "other"}};
+      std::string buffer{};
+      expect(not glz::write_cbor(weak, buffer));
+      self_constrained_signup out{};
+      expect(glz::read_cbor(out, buffer) == glz::error_code::constraint_violated);
+   };
+
+   "self_constraint accepts an object that satisfies it"_test = [] {
+      const self_constrained_signup ok{7, {"alice", "correct horse battery", "correct horse battery"}};
+      std::string buffer{};
+      expect(not glz::write_cbor(ok, buffer));
+      self_constrained_signup out{};
+      expect(not glz::read_cbor(out, buffer));
+      expect(out.id == 7);
+      expect(out.login.password == ok.login.password);
    };
 };
 

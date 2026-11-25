@@ -1,6 +1,8 @@
 // Glaze Library
 // For the license information refer to glaze.ixx
 // glz:header path="glaze/msgpack/wrappers.hpp"
+// glz:header std=<cstdint>
+// glz:header std=<type_traits>
 export module glaze.msgpack.wrappers;
 
 import std;

@@ -1,4 +1,3 @@
-import std;
 // Tests covering glz::http_client's automatic redirect following: the hop rules of
 // RFC 9110 15.4, reference resolution of the Location field (RFC 3986 5.2/5.3), the hop
 // limit, and the credential stripping that applies when a hop crosses origins.
@@ -7,13 +6,24 @@ import std;
 // can answer with an exact set of response bytes - including deliberately malformed
 // Location fields that a well-behaved server would never emit.
 
+import std;
 
 import glaze.ext.glaze_asio;
+import glaze.net.http;
 import glaze.net.http_client;
+import glaze.net.http_router;
+
+import glaze.util.compare;
+
 import ut;
 
 using namespace ut;
 using namespace glz;
+
+using std::size_t;
+using std::uint16_t;
+
+#include "glaze/ext/asio_include.hpp"
 
 namespace
 {

@@ -11,6 +11,7 @@ import std;
 
 import glaze.net.http_client;
 import glaze.net.http_router;
+import glaze.net.ssl;
 
 import ut;
 

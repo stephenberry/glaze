@@ -18,6 +18,7 @@ import std;
 
 using std::uint32_t;
 using std::uint64_t;
+using std::int64_t;
 using std::size_t;
 
 using namespace ut;
@@ -70,7 +71,7 @@ suite starter = [] {
       const std::string schema = glz::ex::write_json_schema<my_struct>();
       expect(
          schema ==
-         R"({"type":"object","properties":{"arr":{"type":"array","items":{"$ref":"#/$defs/uint64_t"},"maxItems":3},"d":{"$ref":"#/$defs/double"},"hello":{"type":"string"},"i":{"$ref":"#/$defs/int32_t"}},"additionalProperties":false,"$defs":{"double":{"type":"number","minimum":-1.7976931348623157E308,"maximum":1.7976931348623157E308},"int32_t":{"type":"integer","minimum":-2147483648,"maximum":2147483647},"uint64_t":{"type":"integer","minimum":0,"maximum":18446744073709551615}},"title":"my_struct"})")
+         R"({"type":"object","properties":{"arr":{"type":"array","items":{"$ref":"#/$defs/std::uint64_t"},"maxItems":3},"d":{"$ref":"#/$defs/double"},"hello":{"type":"string"},"i":{"$ref":"#/$defs/std::int32_t"}},"additionalProperties":false,"$defs":{"double":{"type":"number"},"std::int32_t":{"type":"integer","minimum":-2147483648,"maximum":2147483647},"std::uint64_t":{"type":"integer","format":"uint64","minimum":0,"maximum":18446744073709551615}},"title":"my_struct"})")
          << schema;
    };
 
@@ -79,7 +80,7 @@ suite starter = [] {
       glz::ex::write_json_schema<my_struct>(schema);
       expect(
          schema ==
-         R"({"type":"object","properties":{"arr":{"type":"array","items":{"$ref":"#/$defs/uint64_t"},"maxItems":3},"d":{"$ref":"#/$defs/double"},"hello":{"type":"string"},"i":{"$ref":"#/$defs/int32_t"}},"additionalProperties":false,"$defs":{"double":{"type":"number","minimum":-1.7976931348623157E308,"maximum":1.7976931348623157E308},"int32_t":{"type":"integer","minimum":-2147483648,"maximum":2147483647},"uint64_t":{"type":"integer","minimum":0,"maximum":18446744073709551615}},"title":"my_struct"})")
+         R"({"type":"object","properties":{"arr":{"type":"array","items":{"$ref":"#/$defs/std::uint64_t"},"maxItems":3},"d":{"$ref":"#/$defs/double"},"hello":{"type":"string"},"i":{"$ref":"#/$defs/std::int32_t"}},"additionalProperties":false,"$defs":{"double":{"type":"number"},"std::int32_t":{"type":"integer","minimum":-2147483648,"maximum":2147483647},"std::uint64_t":{"type":"integer","format":"uint64","minimum":0,"maximum":18446744073709551615}},"title":"my_struct"})")
          << schema;
    };
 };
@@ -131,6 +132,16 @@ suite basic_types = [] {
    "bool write"_test = [] {
       std::string buffer = glz::ex::write<glz::opts{}>(true);
       expect(buffer == "true");
+   };
+
+   "write to a C array"_test = [] {
+      my_struct obj{};
+      char small[16]{};
+      expect(throws([&] { std::ignore = glz::ex::write<glz::opts{}>(obj, small); }));
+
+      char large[512]{};
+      const auto count = glz::ex::write<glz::opts{}>(obj, large);
+      expect(std::string_view(large, count) == glz::write_json(obj).value());
    };
 
    "bool read valid"_test = [] {
@@ -228,6 +239,19 @@ suite generic_access_error_tests = [] {
       const glz::generic json = {{"name", "Niels"}};
       expect(caught_message<std::runtime_error>([&] { (void)json.at("missing"); }) ==
              R"(glz::generic key not found: "missing")");
+   };
+
+   "generic mutable at does not insert"_test = [] {
+      glz::generic json = {{"present", 1.0}};
+      expect(json.at("present").get<double>() == 1.0);
+      expect(caught_message<std::runtime_error>([&] { (void)json.at("missing"); }) ==
+             R"(glz::generic key not found: "missing")");
+      expect(!json.contains("missing"));
+
+      glz::generic null_value{};
+      expect(caught_message<std::bad_variant_access>([&] { (void)null_value.at("key"); }) ==
+             R"(glz::generic key "key": expected object, but holds null)");
+      expect(null_value.is_null());
    };
 
    "generic get names expected and held types"_test = [] {

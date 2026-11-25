@@ -287,7 +287,10 @@ namespace glz
    inline char* to_chars(char* buf, T val) noexcept
    {
       *buf = '-';
-      return to_chars(buf + (val < 0), uint8_t(val ^ (val >> 7)) - (val >> 7));
+      // Keep the magnitude uint8_t: arithmetic promotes to int, which has no overload where int32_t is long
+      // (e.g. arm-none-eabi, ESP32).
+      const uint8_t u = uint8_t(val);
+      return to_chars(buf + (val < 0), uint8_t(val < 0 ? 0u - u : u));
    }
 
    // std::uint16_t: 0-65535 (1-5 digits)
@@ -316,7 +319,8 @@ namespace glz
    inline char* to_chars(char* buf, T val) noexcept
    {
       *buf = '-';
-      return to_chars(buf + (val < 0), uint16_t(val ^ (val >> 15)) - (val >> 15));
+      const uint16_t u = uint16_t(val); // see int8_t
+      return to_chars(buf + (val < 0), uint16_t(val < 0 ? 0u - u : u));
    }
 
    // Shared two-digit char table; re-exposed at glz scope for callers that need it.

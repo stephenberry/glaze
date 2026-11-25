@@ -73,6 +73,24 @@ namespace glz
    template <>
    inline constexpr bool format_supports_streaming<NDJSON> = true;
 
+   // Whether a format's documents may contain zero bytes. glz::read rejects a null-terminated C string
+   // for such a format, since strlen would truncate it. A user-defined binary format specializes this.
+   template <std::uint32_t Format>
+   inline constexpr bool format_is_binary = false;
+
+   template <>
+   inline constexpr bool format_is_binary<BEVE> = true;
+   template <>
+   inline constexpr bool format_is_binary<CBOR> = true;
+   template <>
+   inline constexpr bool format_is_binary<JSONB> = true;
+   template <>
+   inline constexpr bool format_is_binary<BSON> = true;
+   template <>
+   inline constexpr bool format_is_binary<MSGPACK> = true;
+   template <>
+   inline constexpr bool format_is_binary<EETF> = true;
+
    // Reflection metadata customization point.
    template <class T>
    struct meta;

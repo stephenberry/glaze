@@ -8,7 +8,7 @@ add_subdirectory(test_lib)
 
 add_dependencies(${PROJECT_NAME} test_lib)
 
-target_compile_definitions(${PROJECT_NAME} PRIVATE GLZ_TEST_DIRECTORY="${CMAKE_SOURCE_DIR}/bin")
+target_compile_definitions(${PROJECT_NAME} PRIVATE GLZ_TEST_DIRECTORY="$<TARGET_FILE_DIR:test_lib>")
 
 add_test(NAME ${PROJECT_NAME} COMMAND ${PROJECT_NAME})
 

@@ -5,6 +5,7 @@
 // glz:header std=<deque>
 // glz:header std=<fstream>
 // glz:header std=<ios>
+// glz:header std=<span>
 // glz:header std=<string>
 // glz:header std=<type_traits>
 // glz:header std=<utility>
@@ -28,7 +29,7 @@ namespace glz
 {
    // For writing to a std::string, std::vector<char>, std::deque<char> and the like
    export template <auto Opts, class T, output_buffer Buffer>
-      requires write_supported<T, Opts.format>
+      requires(write_supported<T, Opts.format> && not byte_array_buffer<Buffer>)
    [[nodiscard]] error_ctx write(T&& value, Buffer& buffer, is_context auto&& ctx)
    {
       using traits = buffer_traits<std::remove_cvref_t<Buffer>>;
@@ -59,7 +60,7 @@ namespace glz
    }
 
    export template <auto& Partial, auto Opts, class T, output_buffer Buffer>
-      requires write_supported<T, Opts.format>
+      requires(write_supported<T, Opts.format> && not byte_array_buffer<Buffer>)
    [[nodiscard]] error_ctx write(T&& value, Buffer& buffer)
    {
       using traits = buffer_traits<std::remove_cvref_t<Buffer>>;
@@ -87,6 +88,24 @@ namespace glz
 
       traits::finalize(buffer, ix);
       return {ix, error_code::none, ctx.custom_error_message};
+   }
+
+   // A C array has no members to serialize through. A span over it keeps the extent as the capacity, so it is
+   // bounds checked exactly like std::array.
+   export template <auto Opts, class T, byte_array_buffer Buffer>
+      requires write_supported<T, Opts.format>
+   [[nodiscard]] error_ctx write(T&& value, Buffer& buffer, is_context auto&& ctx)
+   {
+      auto view = std::span{buffer};
+      return write<Opts>(std::forward<T>(value), view, ctx);
+   }
+
+   export template <auto& Partial, auto Opts, class T, byte_array_buffer Buffer>
+      requires write_supported<T, Opts.format>
+   [[nodiscard]] error_ctx write(T&& value, Buffer& buffer)
+   {
+      auto view = std::span{buffer};
+      return write<Partial, Opts>(std::forward<T>(value), view);
    }
 
    export template <auto& Partial, auto Opts, class T, raw_buffer Buffer>

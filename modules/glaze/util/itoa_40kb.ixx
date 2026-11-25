@@ -19,7 +19,7 @@ import std;
 // Use to_chars from itoa.hpp for a smaller binary with 400B tables
 // Based on techniques from:
 // - https://github.com/ibireme/c_numconv_benchmark/blob/master/src/itoa/itoa_yy.c
-// - https://github.com/RealTimeChris/Jsonifier (IToStr.hpp)
+// - https://github.com/nihilai-collective/Jsonifier/ (i_to_str.hpp)
 
 using std::int32_t;
 using std::uint32_t;

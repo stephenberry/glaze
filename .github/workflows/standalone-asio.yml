@@ -29,7 +29,7 @@ concurrency:
 jobs:
   build:
     name: Standalone ASIO 1.36 + SSL
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     container:
       image: gcc:15
 
@@ -57,7 +57,7 @@ jobs:
           python3
         update-ca-certificates
 
-    - uses: actions/checkout@v6
+    - uses: actions/checkout@v7
 
     - name: Configure CMake
       run: |

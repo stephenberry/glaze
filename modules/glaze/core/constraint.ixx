@@ -14,12 +14,14 @@ import std;
 
 import glaze.core.common;
 import glaze.core.context;
+import glaze.core.meta;
 import glaze.core.opts;
 
 import glaze.tuplet;
 import glaze.util.string_literal;
 import glaze.util.type_traits;
 
+using std::uint8_t;
 using std::uint32_t;
 
 namespace glz
@@ -55,6 +57,24 @@ namespace glz
       template <auto Opts>
       static void op(auto&& value, is_context auto&& ctx, auto&& it, auto end)
       {
+         read<Opts>(value, ctx, [&](auto& input) { parse<Format>::template op<Opts>(input, ctx, it, end); });
+      }
+
+      // The caller has already consumed the value's type tag and passes it in: MessagePack does
+      // this for every value, BEVE inside no_header contexts.
+      template <auto Opts>
+      static void op(auto&& value, const uint8_t tag, is_context auto&& ctx, auto&& it, auto end)
+      {
+         read<Opts>(value, ctx,
+                    [&](auto& input) { parse<Format>::template op<no_header_on<Opts>()>(input, tag, ctx, it, end); });
+      }
+
+     private:
+      // parse_input(input) reads the incoming value into input, which is then checked against the
+      // constraint before it is assigned to the target.
+      template <auto Opts>
+      static void read(auto&& value, is_context auto&& ctx, auto&& parse_input)
+      {
          using V = std::decay_t<decltype(value)>;
          using Constraint = typename V::constraint_t;
 
@@ -80,7 +100,7 @@ namespace glz
                   using Tuple = typename inputs_as_tuple<Constraint>::type;
                   if constexpr (glz::tuple_size_v<Tuple> == 1) {
                      std::decay_t<glz::tuple_element_t<0, Tuple>> input{};
-                     parse<Format>::template op<Opts>(input, ctx, it, end);
+                     parse_input(input);
                      if (parse_failed(ctx.error)) [[unlikely]]
                         return;
                      if constexpr (!check_skip_read_constraint(Opts)) {
@@ -111,7 +131,7 @@ namespace glz
                      using Tuple = typename function_traits<Func>::arguments;
                      if constexpr (glz::tuple_size_v<Tuple> == 1) {
                         std::decay_t<glz::tuple_element_t<0, Tuple>> input{};
-                        parse<Format>::template op<Opts>(input, ctx, it, end);
+                        parse_input(input);
                         if (parse_failed(ctx.error)) [[unlikely]]
                            return;
                         if constexpr (!check_skip_read_constraint(Opts)) {
@@ -153,7 +173,7 @@ namespace glz
                   }
                   else if constexpr (N == 2) {
                      std::decay_t<glz::tuple_element_t<1, Tuple>> input{};
-                     parse<Format>::template op<Opts>(input, ctx, it, end);
+                     parse_input(input);
                      if (parse_failed(ctx.error)) [[unlikely]]
                         return;
                      if constexpr (!check_skip_read_constraint(Opts)) {
@@ -219,8 +239,9 @@ namespace glz
    template <auto Target, auto Constraint, string_literal Message>
    constexpr auto read_constraint_impl() noexcept
    {
-      return
-         [](auto&& v) { return read_constraint_t<std::remove_cvref_t<decltype(v)>, Target, Constraint, Message>{v}; };
+      return [](auto&& v) {
+         return read_constraint_t<std::remove_reference_t<decltype(v)>, Target, Constraint, Message>{v};
+      };
    }
 
    export template <auto Target, auto Constraint, string_literal Message>
@@ -276,6 +297,21 @@ namespace glz
          }
       }
    };
+
+   // Runs the self_constraint declared for T once an object reader has read all of its members.
+   // Every format's object reader calls this at its successful end, so the check does not depend on
+   // the format the object arrived in. A failed or partial read leaves the object incomplete and is
+   // not checked.
+   export template <uint32_t Format, auto Opts, class T>
+   void check_self_constraint(T& value, is_context auto& ctx)
+   {
+      if constexpr (has_self_constraint_v<T> && !check_skip_self_constraint(Opts)) {
+         if (ctx.error == error_code::none || ctx.error == error_code::end_reached) {
+            auto wrapper = self_constraint_v<T>(value);
+            from<Format, decltype(wrapper)>::template op<Opts>(wrapper, ctx, nullptr, nullptr);
+         }
+      }
+   }
 
    template <auto Constraint, string_literal Message>
    constexpr auto self_constraint_impl() noexcept

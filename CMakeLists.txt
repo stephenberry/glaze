@@ -1,20 +1,14 @@
-cmake_minimum_required(VERSION 4.4) 
-
-set(CACHE{CMAKE_EXPERIMENTAL_CXX_IMPORT_STD} VALUE "f35a9ac6-8463-4d38-8eec-5d6008153e7d")
+cmake_minimum_required(VERSION 4.5)
 
 include(cmake/prelude.cmake)
 
 project(
     glaze
-    VERSION 9.0.0
+    VERSION 9.1.0
     LANGUAGES CXX
 )
 
-option(GLAZE_ENABLE_MODULES "Enable modules with import std" ON) # or GLAZE_GENERATE_HEADERS ??
-
-if (GLAZE_ENABLE_MODULES)
-   set(CMAKE_CXX_MODULE_STD 1)
-endif()
+option(GLAZE_GENERATE_HEADERS "Generate headers" OFF)
 
 include(cmake/project-is-top-level.cmake)
 include(cmake/variables.cmake)
@@ -23,7 +17,7 @@ if (PROJECT_IS_TOP_LEVEL)
   set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 endif()
 
-if(GLAZE_ENABLE_MODULES)
+if(NOT GLAZE_GENERATE_HEADERS)
   add_library(glaze_glaze STATIC)
   target_compile_definitions(glaze_glaze PRIVATE GLZ_BUILDING_MODULES)
   if (PROJECT_IS_TOP_LEVEL)
@@ -88,24 +82,23 @@ endif()
 set_property(TARGET ${PROJECT_NAME}_${PROJECT_NAME} PROPERTY EXPORT_NAME glaze)
 
 target_compile_features(glaze_glaze ${GLAZE_LIB_TYPE} cxx_std_23)
-target_include_directories(
-    glaze_glaze ${warning_guard}
-    PUBLIC
-      "$<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/modules>"
-)
-
 include(cmake/glaze-asio.cmake)
-glaze_setup_asio()
-target_link_libraries(glaze_glaze PRIVATE "$<BUILD_INTERFACE:glaze::asio>")
 
-include(cmake/modules-files.cmake)
+if(GLAZE_GENERATE_HEADERS)
+  include(cmake/generate-headers.cmake)
+else()
+  target_include_directories(glaze_glaze ${warning_guard} PUBLIC "$<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/modules>")
+  glaze_setup_asio()
+  target_link_libraries(glaze_glaze PRIVATE "$<BUILD_INTERFACE:glaze::asio>")
+  include(cmake/modules-files.cmake)
+endif()
 
 option(glaze_INSTALL "Generate installation rules for glaze" "${PROJECT_IS_TOP_LEVEL}")
 if(glaze_INSTALL AND NOT CMAKE_SKIP_INSTALL_RULES)
   include(cmake/install-rules.cmake)
 endif()
 
-if (glaze_DEVELOPER_MODE)
+if (glaze_DEVELOPER_MODE AND NOT GLAZE_GENERATE_HEADERS)
   include(cmake/dev-mode.cmake)
 endif()
 
@@ -175,7 +168,7 @@ endif(glaze_ENABLE_SSL)
 option(glaze_ENABLE_REFLECTION26 "Enable C++26 P2996 reflection (requires Bloomberg clang-p2996 or compatible compiler)" OFF)
 
 if(glaze_ENABLE_REFLECTION26)
-  target_compile_definitions(glaze_glaze INTERFACE GLZ_REFLECTION26=1)
+  target_compile_definitions(glaze_glaze ${GLAZE_LIB_TYPE} GLZ_REFLECTION26=1)
 endif(glaze_ENABLE_REFLECTION26)
 
 # Make `size` the build-wide default optimization level. Every call site that does not
@@ -186,6 +179,6 @@ option(glaze_DEFAULT_OPTIMIZATION_SIZE
   "Default all (de)serialization to the size-optimized level (drops 40KB int / ~16KB float / per-struct hash tables)" OFF)
 
 if(glaze_DEFAULT_OPTIMIZATION_SIZE)
-  target_compile_definitions(glaze_glaze INTERFACE GLZ_DEFAULT_OPTIMIZATION_SIZE)
+  target_compile_definitions(glaze_glaze ${GLAZE_LIB_TYPE} GLZ_DEFAULT_OPTIMIZATION_SIZE)
 endif(glaze_DEFAULT_OPTIMIZATION_SIZE)
 

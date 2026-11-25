@@ -247,6 +247,27 @@ void clear_headers();
 client.clear_headers();
 ```
 
+### configure_ssl_context()
+
+Gives thread-safe access to the TLS context for the settings the client does not wrap: protocol version bounds, cipher suites, ALPN or a client certificate. Available when built with `GLZ_ENABLE_SSL`.
+
+```cpp
+template <typename Func>
+void configure_ssl_context(Func&& func);
+```
+
+The callable receives the `asio::ssl::context&` that `connect()` uses, created on first use with the platform's trust anchors loaded. It runs while the client's TLS lock is held, so it must not call back into the client.
+
+Call it before `connect()`, since OpenSSL reads the context without locking during a handshake. `connect()` re-applies the mode from `set_ssl_verify_mode()`, so set the verify mode there rather than on the context.
+
+**Example:**
+```cpp
+// Require TLS 1.3, which the client otherwise prefers but does not insist on.
+client.configure_ssl_context([](asio::ssl::context& ctx) {
+    SSL_CTX_set_min_proto_version(ctx.native_handle(), TLS1_3_VERSION);
+});
+```
+
 ## Event Handlers
 
 Event handlers are callback functions that are invoked when specific events occur.

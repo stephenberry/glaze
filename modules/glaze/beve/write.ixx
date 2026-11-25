@@ -2024,7 +2024,7 @@ namespace glz
 
    // Write multiple BEVE values to a buffer with delimiters between them
    export template <auto Opts = opts{}, class Container, class Buffer>
-      requires output_buffer<Buffer> && readable_array_t<Container>
+      requires(output_buffer<Buffer> && not byte_array_buffer<Buffer> && readable_array_t<Container>)
    [[nodiscard]] error_ctx write_beve_delimited(const Container& values, Buffer& buffer)
    {
       using traits = buffer_traits<std::remove_cvref_t<Buffer>>;
@@ -2056,6 +2056,15 @@ namespace glz
 
       traits::finalize(buffer, ix);
       return {ix, error_code::none, ctx.custom_error_message};
+   }
+
+   // A C array has no members to serialize through; a span over it keeps the extent as the capacity.
+   export template <auto Opts = opts{}, class Container, byte_array_buffer Buffer>
+      requires readable_array_t<Container>
+   [[nodiscard]] error_ctx write_beve_delimited(const Container& values, Buffer& buffer)
+   {
+      auto view = std::span{buffer};
+      return write_beve_delimited<Opts>(values, view);
    }
 
    // Write multiple BEVE values to a buffer with delimiters, returning the buffer

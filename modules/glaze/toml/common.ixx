@@ -1,6 +1,9 @@
 // Glaze Library
 // For the license information refer to glaze.ixx
 // glz:header path="glaze/toml/common.hpp"
+// glz:header std=<array>
+// glz:header std=<cstddef>
+// glz:header std=<cstdint>
 export module glaze.toml.common;
 
 import std;
@@ -105,7 +108,7 @@ export namespace glz::toml
    }
 } // export namespace glz::toml
 
-namespace glz
+export namespace glz
 {
    // Skip whitespace and comments
    template <class It, class End>

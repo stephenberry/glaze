@@ -367,7 +367,7 @@ namespace glz
 
    // A packed boolean array stores its SIZE bits LSB-first in ceil(SIZE / 8) bytes. When SIZE is not a multiple
    // of 8, the unused high bits of the final byte are padding and must be zero.
-   [[nodiscard]] GLZ_ALWAYS_INLINE constexpr bool packed_bool_padding_is_zero(const uint8_t last_byte,
+   export [[nodiscard]] GLZ_ALWAYS_INLINE constexpr bool packed_bool_padding_is_zero(const uint8_t last_byte,
                                                                               const size_t count) noexcept
    {
       const size_t used_bits = count % 8;
@@ -386,7 +386,7 @@ namespace glz
    //
    // On success `it` points at the first component, the whole payload is known to be in bounds, and the
    // number of complex elements (SIZE / 2) is returned.
-   [[nodiscard]] GLZ_ALWAYS_INLINE size_t read_aligned_complex_header(is_context auto&& ctx, auto&& it, auto end,
+   export [[nodiscard]] GLZ_ALWAYS_INLINE size_t read_aligned_complex_header(is_context auto&& ctx, auto&& it, auto end,
                                                                       const uint8_t complex_header) noexcept
    {
       if (invalid_end(ctx, it, end)) {

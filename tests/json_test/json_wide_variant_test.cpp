@@ -1,14 +1,18 @@
 import std;
+
+using std::size_t;
+
 // Glaze Library
 // For the license information refer to glaze.hpp
 
 // Variants with more than 64 alternatives. Key deduction narrows a candidate bit set that spans several
 // words, and the lone survivor must be read back as exactly the alternative that was written.
 
-
 import glaze;
+
+import glaze.tests.wide_variant_types;
+
 import ut;
-#include "wide_variant_types.hpp"
 
 using namespace ut;
 

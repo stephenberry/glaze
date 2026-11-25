@@ -4,19 +4,7 @@
 import std;
 
 import glaze;
-import glaze.tests.scratch_directory;
 
-import glaze.core.array_apply;
-import glaze.core.constraint;
-import glaze.core.custom;
-import glaze.core.std_error_code;
-import glaze.core.to;
-
-import glaze.file.raw_or_file;
-
-import glaze.api.impl;
-import glaze.api.type_support;
-import glaze.api.tuple;
 import glaze.api.std.array;
 import glaze.api.std.deque;
 import glaze.api.std.functional;
@@ -27,21 +15,24 @@ import glaze.api.std.shared_ptr;
 import glaze.api.std.string;
 import glaze.api.std.variant;
 import glaze.api.std.vector;
+import glaze.api.tuple;
+import glaze.api.type_support;
+import glaze.containers.flat_map;
+import glaze.core.array_apply;
+import glaze.core.std_error_code;
+import glaze.file.raw_or_file;
 import glaze.hardware.volatile_array;
-import glaze.concepts.container_concepts;
 import glaze.record.recorder;
 import glaze.thread.threadpool;
 import glaze.trace;
 import glaze.tuplet;
-import glaze.reflection.to_tuple;
-import glaze.containers.flat_map;
-
-import glaze.util.for_each;
-import glaze.util.parse;
 import glaze.util.string_literal;
 import glaze.util.type_traits;
 
 import glaze.tests.json.json_test_shared_types;
+import glaze.tests.minimal_buffer;
+import glaze.tests.scratch_directory;
+import glaze.tests.speculation_guard;
 
 import ut;
 
@@ -854,7 +845,6 @@ bool equal(T x, T y)
    return x == y;
 }
 
-// Reflection needs external linkage, so these cannot be declared inside the test that uses them.
 struct partial_reuse_inner_t
 {
    int a{};
@@ -2996,6 +2986,36 @@ suite non_null_terminated_scanner_bounds = [] {
       const auto value = glz::get_as_json<int, "/a">(buf);
       expect(value.has_value());
       expect(*value == 12);
+   };
+
+   "compile-time json pointer that does not resolve is an error"_test = [] {
+      // An index into a scalar names nothing. The runtime seek reports it, and the compile-time
+      // seek must too rather than returning an empty view with a null data().
+      const std::string scalar = R"({"a":5})";
+      expect(glz::get_view_json<"/a/0">(scalar).error().ec == glz::error_code::syntax_error);
+      expect(glz::get_view_json("/a/0", scalar).error().ec == glz::error_code::syntax_error);
+      expect(not glz::get_view_json<"/a/1">(std::string{R"({"a":"text"})"}).has_value());
+      expect(not glz::get_sv_json<"/a/0">(scalar).has_value());
+
+      // An object that ends after a ',' without the key.
+      const std::string trailing = R"({"b":1,)";
+      expect(glz::get_view_json<"/a">(trailing).error().ec == glz::error_code::unexpected_end);
+      expect(not glz::get_view_json("/a", trailing).has_value());
+
+      // The same document in a vector ends the seek before the next token, without reading past it.
+      const std::vector<char> truncated{'{', '"', 'b', '"', ':', '1', ','};
+      expect(not glz::get_view_json<"/a/0">(truncated).has_value());
+
+      // write_at reports the error and leaves the buffer alone.
+      std::string doc = R"({"a":5})";
+      expect(glz::write_at<"/a/0">("1", doc).ec == glz::error_code::syntax_error);
+      expect(doc == R"({"a":5})");
+
+      // Pointers that resolve are unchanged.
+      const std::string nested = R"({"a":[1,{"b":2}]})";
+      const auto view = glz::get_view_json<"/a/1/b">(nested);
+      expect(view.has_value());
+      expect(std::string_view{view->data(), view->size()} == "2");
    };
 };
 
@@ -5863,7 +5883,7 @@ suite json_schema = [] {
       // when you update this string
       expect(
          schema ==
-         R"({"type":"object","properties":{"array":{"type":"array","items":{"type":"string"},"maxItems":4},"b":{"type":"boolean"},"c":{"type":"string"},"color":{"type":"string","oneOf":[{"title":"Red","const":"Red"},{"title":"Green","const":"Green"},{"title":"Blue","const":"Blue"}]},"d":{"$ref":"#/$defs/double"},"deque":{"type":"array","items":{"$ref":"#/$defs/double"}},"i":{"$ref":"#/$defs/std::int32_t"},"list":{"type":"array","items":{"$ref":"#/$defs/std::int32_t"}},"map":{"type":"object","additionalProperties":{"$ref":"#/$defs/std::int32_t"}},"mapi":{"type":"object","additionalProperties":{"$ref":"#/$defs/double"}},"optional":{"anyOf":[{"$ref":"#/$defs/V3"},{"type":"null"}]},"sptr":{"anyOf":[{"$ref":"#/$defs/sub_thing"},{"type":"null"}]},"thing":{"$ref":"#/$defs/sub_thing"},"thing2array":{"type":"array","items":{"type":"object","properties":{"a":{"$ref":"#/$defs/double"},"b":{"type":"string"},"c":{"$ref":"#/$defs/double"},"d":{"$ref":"#/$defs/double"},"e":{"$ref":"#/$defs/double"},"f":{"$ref":"#/$defs/float"},"g":{"$ref":"#/$defs/double"},"h":{"$ref":"#/$defs/double"}},"additionalProperties":false},"maxItems":1},"thing_ptr":{"anyOf":[{"$ref":"#/$defs/sub_thing"},{"type":"null"}]},"v":{"type":"object","oneOf":[{"type":"object","properties":{"x":{"$ref":"#/$defs/double"}},"additionalProperties":false,"title":"var1_t"},{"type":"object","properties":{"y":{"$ref":"#/$defs/double"}},"additionalProperties":false,"title":"var2_t"}]},"vb":{"type":"array","items":{"type":"boolean"}},"vec3":{"$ref":"#/$defs/V3"},"vector":{"type":"array","items":{"$ref":"#/$defs/V3"}}},"additionalProperties":false,"$defs":{"V3":{"type":"array","prefixItems":[{"type":"number","minimum":-1.7976931348623157E308,"maximum":1.7976931348623157E308},{"type":"number","minimum":-1.7976931348623157E308,"maximum":1.7976931348623157E308},{"type":"number","minimum":-1.7976931348623157E308,"maximum":1.7976931348623157E308}],"items":false,"maxItems":3},"double":{"type":"number","minimum":-1.7976931348623157E308,"maximum":1.7976931348623157E308},"float":{"type":"number","minimum":-3.4028234663852886E38,"maximum":3.4028234663852886E38},"std::int32_t":{"type":"integer","minimum":-2147483648,"maximum":2147483647},"sub_thing":{"type":"object","properties":{"a":{"$ref":"#/$defs/double"},"b":{"type":"string"}},"additionalProperties":false}},"examples":[{"thing":{},"i":42}],"required":["thing","i"],"title":"Thing"})")
+         R"({"type":"object","properties":{"array":{"type":"array","items":{"type":"string"},"maxItems":4},"b":{"type":"boolean"},"c":{"type":"string"},"color":{"type":"string","oneOf":[{"title":"Red","const":"Red"},{"title":"Green","const":"Green"},{"title":"Blue","const":"Blue"}]},"d":{"$ref":"#/$defs/double"},"deque":{"type":"array","items":{"$ref":"#/$defs/double"}},"i":{"$ref":"#/$defs/std::int32_t"},"list":{"type":"array","items":{"$ref":"#/$defs/std::int32_t"}},"map":{"type":"object","additionalProperties":{"$ref":"#/$defs/std::int32_t"}},"mapi":{"type":"object","additionalProperties":{"$ref":"#/$defs/double"}},"optional":{"anyOf":[{"$ref":"#/$defs/V3"},{"type":"null"}]},"sptr":{"anyOf":[{"$ref":"#/$defs/sub_thing"},{"type":"null"}]},"thing":{"$ref":"#/$defs/sub_thing"},"thing2array":{"type":"array","items":{"type":"object","properties":{"a":{"$ref":"#/$defs/double"},"b":{"type":"string"},"c":{"$ref":"#/$defs/double"},"d":{"$ref":"#/$defs/double"},"e":{"$ref":"#/$defs/double"},"f":{"$ref":"#/$defs/float"},"g":{"$ref":"#/$defs/double"},"h":{"$ref":"#/$defs/double"}},"additionalProperties":false},"maxItems":1},"thing_ptr":{"anyOf":[{"$ref":"#/$defs/sub_thing"},{"type":"null"}]},"v":{"type":"object","oneOf":[{"type":"object","properties":{"x":{"$ref":"#/$defs/double"}},"additionalProperties":false,"title":"var1_t"},{"type":"object","properties":{"y":{"$ref":"#/$defs/double"}},"additionalProperties":false,"title":"var2_t"}]},"vb":{"type":"array","items":{"type":"boolean"}},"vec3":{"$ref":"#/$defs/V3"},"vector":{"type":"array","items":{"$ref":"#/$defs/V3"}}},"additionalProperties":false,"$defs":{"V3":{"type":"array","prefixItems":[{"type":"number"},{"type":"number"},{"type":"number"}],"items":false,"maxItems":3},"double":{"type":"number"},"float":{"type":"number","minimum":-3.4028234663852886E38,"maximum":3.4028234663852886E38},"std::int32_t":{"type":"integer","minimum":-2147483648,"maximum":2147483647},"sub_thing":{"type":"object","properties":{"a":{"$ref":"#/$defs/double"},"b":{"type":"string"}},"additionalProperties":false}},"examples":[{"thing":{},"i":42}],"required":["thing","i"],"title":"Thing"})")
          << schema;
    };
 };
@@ -6792,6 +6812,33 @@ suite get_sv = [] {
       auto ec2 = glz::write_at("/c~0d", "20", buffer);
       expect(not ec2);
       expect(buffer == R"({"a/b":10,"c~d":20})");
+   };
+
+   "runtime json_ptr invalid escape"_test = [] {
+      // RFC 6901 3: '~' must be followed by '0' or '1'. An invalid escape must not resolve to the
+      // key before the '~' and drop the rest of the pointer.
+      const std::string original = R"({"a":{"x":"secret"},"a~2":1,"b":1})";
+      std::string buffer = original;
+
+      for (const auto* ptr : {"/a~2", "/a~", "/a~2/zzz", "/a~9/x", "/b/a~"}) {
+         auto view = glz::get_view_json(std::string_view{ptr}, buffer);
+         expect(not view.has_value()) << ptr;
+         if (not view) {
+            expect(view.error().ec == glz::error_code::invalid_json_pointer) << ptr;
+         }
+      }
+
+      auto ec = glz::write_at("/a~2/deep", "0", buffer);
+      expect(ec.ec == glz::error_code::invalid_json_pointer);
+      expect(buffer == original);
+
+      // Valid escapes are unaffected
+      const std::string escaped = R"({"a~2":7})";
+      auto view = glz::get_view_json("/a~02", escaped);
+      expect(view.has_value());
+      if (view) {
+         expect(glz::sv{view->data(), view->size()} == "7");
+      }
    };
 
    "runtime get_view_json empty pointer"_test = [] {
@@ -9670,6 +9717,15 @@ suite write_as_json_raw = [] {
       expect(glz::write_as_json(obj, "/i", b.data()));
       expect(std::string_view{b.data()} == "287");
    };
+
+   "write_as_json reports overflow of a C array"_test = [] {
+      my_struct obj{};
+      char small[16]{};
+      expect(not glz::write_as_json(obj, "/hello", small));
+      char large[512]{};
+      expect(glz::write_as_json(obj, "/hello", large));
+      expect(std::string_view{large} == R"("Hello World")");
+   };
 };
 
 struct error_on_const_read_opts : glz::opts
@@ -10126,6 +10182,13 @@ suite constraint_tests = [] {
       const std::string invalid_data = R"({"name":"FakeName","data":[-2]})";
       ec = glz::read<opts>(obj, invalid_data);
       expect(ec == glz::error_code::constraint_violated);
+   };
+
+   "read_constraint writes a const object"_test = [] {
+      const constrained_object obj{.age = 1, .name = "test"};
+      std::string buffer{};
+      expect(not glz::write_json(obj, buffer));
+      expect(buffer == R"({"age":1,"name":"test"})") << buffer;
    };
 };
 
@@ -11342,10 +11405,43 @@ struct Sinks
    };
 };
 
+struct FlagPermissions
+{
+   bool read = false;
+   bool write = false;
+   bool execute = false;
+
+   struct glaze
+   {
+      using T = FlagPermissions;
+      static constexpr auto value = glz::flags("read", &T::read, "write", &T::write, "execute", &T::execute);
+   };
+};
+
 suite flags_test = [] {
    const auto opt = glz::read_json<Sinks>(R"([  "file"])");
    expect(opt.has_value());
    expect(opt.value().file);
+
+   "flags reject strings that only hash to a flag"_test = [] {
+      // Each of these lands on a member's hash slot without naming the member.
+      for (const std::string_view input : {R"(["fail"])", R"(["none"])"}) {
+         Sinks sinks{};
+         expect(glz::read_json(sinks, input).ec == glz::error_code::invalid_flag_input) << input;
+         expect(not sinks.file && not sinks.console) << input;
+      }
+      for (const std::string_view input : {R"(["exec"])", R"(["wrote"])", R"(["reed"])", R"(["read", "exec"])"}) {
+         FlagPermissions perms{};
+         expect(glz::read_json(perms, input).ec == glz::error_code::invalid_flag_input) << input;
+         expect(not perms.write && not perms.execute) << input;
+      }
+   };
+
+   "flags read every declared name"_test = [] {
+      FlagPermissions perms{};
+      expect(not glz::read_json(perms, R"(["read", "execute"])"));
+      expect(perms.read && not perms.write && perms.execute);
+   };
 };
 
 struct Header
@@ -11899,6 +11995,15 @@ suite glz_text_tests = [] {
    };
 };
 
+// glz::raw_or_file is deprecated; these tests keep it working until it is removed.
+#if defined(_MSC_VER) && !defined(__clang__)
+#pragma warning(push)
+#pragma warning(disable : 4996)
+#elif defined(__GNUC__)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
+#endif
+
 struct raw_or_file_tester
 {
    glz::raw_or_file input{};
@@ -11955,7 +12060,42 @@ suite raw_or_file_tests = [] {
       expect(obj.input.str == R"("Hello from Mars")");
       expect(obj.name == "Edward");
    };
+
+   "raw_or_file keeps escapes in a string that is not a file"_test = [] {
+      // An escaped quote must stay inside the string when the raw value is written back out
+      const std::string quoted = R"({"input":"x\",\"role\":\"admin","name":"Edward"})";
+      raw_or_file_tester obj{};
+      expect(!glz::read_json(obj, quoted));
+      expect(obj.input.str == R"("x\",\"role\":\"admin")");
+
+      std::string out{};
+      expect(not glz::write_json(obj, out));
+      expect(out == quoted);
+
+      std::map<std::string, std::string> fields{};
+      expect(!glz::read_json(fields, out));
+      expect(fields.size() == 2);
+      expect(fields["input"] == R"(x","role":"admin)");
+      expect(not fields.contains("role"));
+
+      // A backslash in a path that does not exist must stay escaped
+      const std::string path = R"({"input":"C:\\glaze-missing\\none.json","name":"n"})";
+      obj = {};
+      expect(!glz::read_json(obj, path));
+      out.clear();
+      expect(not glz::write_json(obj, out));
+      expect(out == path);
+      fields.clear();
+      expect(!glz::read_json(fields, out));
+      expect(fields["input"] == R"(C:\glaze-missing\none.json)");
+   };
 };
+
+#if defined(_MSC_VER) && !defined(__clang__)
+#pragma warning(pop)
+#elif defined(__GNUC__)
+#pragma GCC diagnostic pop
+#endif
 
 struct animals_t
 {
@@ -12035,13 +12175,22 @@ suite partial_write_tests = [] {
       expect(s == R"({"animals":{"tiger":"Tiger"},"name":"My Awesome Zoo"})") << s;
    };
 
-   "partial write with raw buffer"_test = [] {
+   "partial write with C array"_test = [] {
+      static constexpr auto json_ptrs = glz::json_ptrs("/name");
+      zoo_t obj{};
+      char buf[512]{};
+      const auto result = glz::write_json<json_ptrs>(obj, buf);
+      expect(!result) << "write should succeed";
+      expect(std::string_view{buf, result.count} == R"({"name":"My Awesome Zoo"})");
+   };
+
+   "partial write with small C array reports overflow"_test = [] {
       static constexpr auto json_ptrs = glz::json_ptrs("/name");
       zoo_t obj{};
       char buf[32]{};
       const auto result = glz::write_json<json_ptrs>(obj, buf);
-      expect(!result) << "write should succeed";
-      expect(std::string_view{buf} == R"({"name":"My Awesome Zoo"})");
+      expect(result.ec == glz::error_code::buffer_overflow);
+      expect(result.count <= sizeof(buf));
    };
 
    "partial_write_tester"_test = [] {
@@ -12866,6 +13015,47 @@ suite filesystem_tests = [] {
       expect(glz::write_json(p) == R"("C:/123")");
    };
 
+   "non-ASCII path writes UTF-8"_test = [] {
+      const auto latin1 = glz::write_json(std::filesystem::path{u8"C:/Z\u00FCrich.txt"});
+      expect(latin1.has_value());
+      expect(*latin1 == std::string{"\"C:/Z\xC3\xBCrich.txt\""}) << *latin1;
+
+      // U+0105 has no code page 1252 byte, so the writer must not be consulting the ANSI code page
+      const auto not_in_code_page = glz::write_json(std::filesystem::path{u8"C:/\u0105.txt"});
+      expect(not_in_code_page.has_value());
+      expect(*not_in_code_page == std::string{"\"C:/\xC4\x85.txt\""}) << *not_in_code_page;
+
+      const auto supplementary = glz::write_json(std::filesystem::path{u8"C:/\U0001F600.txt"});
+      expect(supplementary.has_value());
+      expect(*supplementary == std::string{"\"C:/\xF0\x9F\x98\x80.txt\""}) << *supplementary;
+   };
+
+   "non-ASCII path reads UTF-8"_test = [] {
+      std::filesystem::path latin1{};
+      expect(!glz::read_json(latin1, "\"C:/Z\xC3\xBCrich.txt\""));
+      expect(latin1 == std::filesystem::path{u8"C:/Z\u00FCrich.txt"});
+
+      std::filesystem::path supplementary{};
+      expect(!glz::read_json(supplementary, "\"C:/\xF0\x9F\x98\x80.txt\""));
+      expect(supplementary == std::filesystem::path{u8"C:/\U0001F600.txt"});
+   };
+
+#ifdef _WIN32
+   "unpaired surrogates write invalid_utf8"_test = [] {
+      const auto write_path = [](wchar_t surrogate) {
+         return glz::write_json(std::filesystem::path{std::wstring{L"C:/bad_"} + surrogate});
+      };
+
+      const auto high = write_path(wchar_t(0xD800));
+      expect(!high.has_value());
+      expect(high.error().ec == glz::error_code::invalid_utf8);
+
+      const auto low = write_path(wchar_t(0xDC00));
+      expect(!low.has_value());
+      expect(low.error().ec == glz::error_code::invalid_utf8);
+   };
+#endif
+
    "path_test_struct"_test = [] {
       path_test_struct obj{};
       std::string buffer = glz::write_json(obj).value_or("error");
@@ -13010,6 +13200,47 @@ struct float_opts : glz::opts
    glz::float_precision float_max_write_precision{};
 };
 
+struct mixed_write_precision_t
+{
+   double f32 = std::numbers::pi_v<double>;
+   double f64 = std::numbers::pi_v<double>;
+   double full = std::numbers::pi_v<double>;
+
+   struct glaze
+   {
+      using T = mixed_write_precision_t;
+      static constexpr auto value = glz::object("f32", glz::write_float32<&T::f32>, "f64", glz::write_float64<&T::f64>,
+                                                "full", glz::write_float_full<&T::full>);
+   };
+};
+
+struct conversions_opts : glz::opts
+{
+   bool allow_conversions = true;
+};
+
+suite set_opt_tests = [] {
+   "set_opt adds a missing inheritable option"_test = [] {
+      static constexpr auto conversions = glz::set_opt<glz::opts{}, glz::allow_conversions_opt_tag{}>(false);
+      static_assert(!glz::check_allow_conversions(conversions));
+
+      static constexpr auto precision =
+         glz::set_opt<glz::opts{}, glz::float_max_write_precision_opt_tag{}>(glz::float_precision::float32);
+      static_assert(glz::check_float_max_write_precision(precision) == glz::float_precision::float32);
+   };
+
+   "set_opt updates an existing inheritable option"_test = [] {
+      static constexpr auto conversions = glz::set_opt<conversions_opts{}, glz::allow_conversions_opt_tag{}>(false);
+      static_assert(std::same_as<std::remove_cv_t<decltype(conversions)>, conversions_opts>);
+      static_assert(!conversions.allow_conversions);
+
+      static constexpr auto precision =
+         glz::set_opt<float_opts{}, glz::float_max_write_precision_opt_tag{}>(glz::float_precision::float64);
+      static_assert(std::same_as<std::remove_cv_t<decltype(precision)>, float_opts>);
+      static_assert(precision.float_max_write_precision == glz::float_precision::float64);
+   };
+};
+
 suite max_write_precision_tests = [] {
    "max_write_precision"_test = [] {
       double pi = std::numbers::pi_v<double>;
@@ -13033,6 +13264,23 @@ suite max_write_precision_tests = [] {
       write_precision_t obj{};
       std::string json_float = glz::write<float_opts{}>(obj).value_or("error");
       expect(json_float == R"({"pi":3.1415927})") << json_float;
+   };
+
+   "write_float wrappers with default opts"_test = [] {
+      write_precision_t obj{};
+      std::string json = glz::write_json(obj).value_or("error");
+      expect(json == R"({"pi":3.1415927})") << json;
+
+      mixed_write_precision_t mixed{};
+      json = glz::write_json(mixed).value_or("error");
+      expect(json == R"({"f32":3.1415927,"f64":3.141592653589793,"full":3.141592653589793})") << json;
+
+      // The wrappers override a float_max_write_precision set in a custom options struct
+      json = glz::write<float_opts{{}, glz::float_precision::float32}>(mixed).value_or("error");
+      expect(json == R"({"f32":3.1415927,"f64":3.141592653589793,"full":3.141592653589793})") << json;
+
+      expect(!glz::read_json(mixed, R"({"f32":1.5,"f64":2.5,"full":3.5})"));
+      expect(mixed.f32 == 1.5 && mixed.f64 == 2.5 && mixed.full == 3.5);
    };
 
    "float32 narrowing of finite values beyond float's range"_test = [] {
@@ -15555,41 +15803,10 @@ suite member_function_pointer_serialization = [] {
 
       std::string buffer{};
       expect(not glz::write<opts_with_function_pointers{}>(thing, buffer));
-#if GLZ_REFLECTION26
-      // P2996 display_string_of behavior varies by compiler:
-      // - Bloomberg Clang: "(member-function-pointer-type)"
-      // - GCC: full signature like traditional GCC
-      bool pass =
-         (buffer == R"json({"name":"test_item","description":"(member-function-pointer-type)"})json") ||
-         (buffer ==
-          R"({"name":"test_item","description":"std::__cxx11::basic_string<char> (MemberFunctionThing::*)() const"})") ||
-         (buffer == R"({"name":"test_item","description":"std::basic_string<char> (MemberFunctionThing::*)() const"})");
-      expect(pass) << buffer;
-#elif defined(__GNUC__) && !defined(__clang__)
-#if defined(_GLIBCXX_USE_CXX11_ABI) && _GLIBCXX_USE_CXX11_ABI == 0
-      // Old ABI uses std::basic_string<char> without __cxx11 namespace
-      expect(buffer ==
-             R"({"name":"test_item","description":"std::basic_string<char> (MemberFunctionThing::*)() const"})")
-         << buffer;
-#else
-      expect(
-         buffer ==
-         R"({"name":"test_item","description":"std::__cxx11::basic_string<char> (MemberFunctionThing::*)() const"})")
-         << buffer;
-#endif
-#elif defined(_MSC_VER)
-      // MSVC produces fully qualified type names with calling convention
-      expect(buffer.find("MemberFunctionThing") != std::string::npos && buffer.find("test_item") != std::string::npos)
-         << buffer;
-#elif defined(__clang__) && defined(__GLIBCXX__)
-      // Clang printing libstdc++ types strips the __cxx11 inline namespace regardless of ABI.
-      expect(buffer ==
-             R"({"name":"test_item","description":"std::basic_string<char> (MemberFunctionThing::*)() const"})")
-         << buffer;
-#else
-      expect(buffer == R"({"name":"test_item","description":"std::string (MemberFunctionThing::*)() const"})")
-         << buffer;
-#endif
+      using member_pointer = decltype(&MemberFunctionThing::get_description);
+      const auto expected = std::string{R"({"name":"test_item","description":")"} +
+                            std::string{glz::name_v<member_pointer>} + R"("})";
+      expect(buffer == expected) << buffer;
    };
 
    "member function only serialization"_test = [] {
@@ -15835,6 +16052,78 @@ suite bounded_buffer_overflow_tests = [] {
 
       auto result = glz::write_json(obj, buffer);
       expect(result.ec == glz::error_code::buffer_overflow) << "should return buffer_overflow error";
+   };
+
+   "write to a C array preserves its capacity"_test = [] {
+      simple_short obj{};
+      char buffer[512]{};
+
+      auto result = glz::write_json(obj, buffer);
+      expect(not result);
+      expect(std::string_view(buffer, result.count) == R"({"x":42,"name":"hi"})");
+   };
+
+   "write to a small C array reports overflow"_test = [] {
+      simple_long obj{};
+      char buffer[16]{};
+
+      auto result = glz::write_json(obj, buffer);
+      expect(result.ec == glz::error_code::buffer_overflow);
+      expect(result.count <= sizeof(buffer));
+   };
+
+   "a failed object member does not write a closing brace past a bounded buffer"_test = [] {
+      simple_long obj{};
+      std::array<char, 1> buffer{};
+
+      auto result = glz::write_json(obj, buffer);
+      expect(result.ec == glz::error_code::buffer_overflow);
+      expect(result.count <= buffer.size());
+   };
+
+   "partial and exclude writes bound C arrays"_test = [] {
+      simple_long obj{};
+      std::array<std::string_view, 1> include_keys{"name"};
+      std::array<std::string_view, 1> exclude_keys{"x"};
+      char partial[16]{};
+      char excluded[16]{};
+
+      auto partial_result = glz::write_json_partial(obj, include_keys, partial);
+      auto exclude_result = glz::write_json_exclude(obj, exclude_keys, excluded);
+      expect(partial_result.ec == glz::error_code::buffer_overflow);
+      expect(exclude_result.ec == glz::error_code::buffer_overflow);
+      expect(partial_result.count <= sizeof(partial));
+      expect(exclude_result.count <= sizeof(excluded));
+   };
+
+   "a C array is a bounded output buffer, not a raw pointer"_test = [] {
+      static_assert(glz::output_buffer<char (&)[8]>);
+      static_assert(glz::output_buffer<unsigned char (&)[8]>);
+      static_assert(not glz::output_buffer<const char (&)[8]>);
+      static_assert(not glz::raw_buffer<char (&)[8]>);
+      static_assert(glz::raw_buffer<char*>);
+      static_assert(glz::raw_buffer<char*&>);
+   };
+
+   "minify and prettify into a C array"_test = [] {
+      std::string compact = R"({"a":[1,2],"b":"c"})";
+      const std::string pretty = glz::prettify_json(compact);
+
+      char pretty_out[512]{};
+      const auto pretty_ec = glz::prettify_json(compact, pretty_out);
+      expect(not pretty_ec);
+      expect(std::string_view(pretty_out, pretty_ec.count) == pretty);
+
+      std::string pretty_in = pretty;
+      char compact_out[512]{};
+      const auto compact_ec = glz::minify_json(pretty_in, compact_out);
+      expect(not compact_ec);
+      expect(std::string_view(compact_out, compact_ec.count) == compact);
+
+      char small[4]{};
+      const auto overflow = glz::prettify_json(compact, small);
+      expect(bool(overflow));
+      expect(overflow.count <= sizeof(small));
    };
 
    "bounded buffer reserves what an escaped string escapes to"_test = [] {
@@ -16485,7 +16774,7 @@ suite json_recursion_depth_limit = [] {
       // The JSON analogue of the BEVE cascade: two array alternatives, so every level tries both,
       // with a malformed leaf at the bottom that every level retries. 339 bytes took 40 seconds
       // before the speculation budget capped the total re-parsed bytes; the cost no longer grows
-      // with depth. See speculation_guard.hpp for what is timed.
+      // with depth. See speculation_guard.ixx for what is timed.
       const auto build = [](size_t levels) {
          std::string b;
          for (size_t i = 0; i < levels; ++i) b += R"([{"child":)";
@@ -16521,7 +16810,7 @@ suite json_recursion_depth_limit = [] {
    };
 };
 
-// Buffers that promise only what glaze's concepts require; see tests/minimal_buffer.hpp.
+// Buffers that promise only what glaze's concepts require; see tests/minimal_buffer.ixx.
 // Regression coverage for GitHub issue #2854.
 using test_buffers::qt_style_buffer;
 using test_buffers::read_only_buffer;

@@ -30,6 +30,31 @@ An included file is a fragment of the object that names it: some of the object's
 
 ## glz::raw_or_file
 
+> [!WARNING]
+> `glz::raw_or_file` is deprecated and will be removed in a future major version. Any string value that names an existing file is replaced by that file's contents, so whether a value stays a string depends on the filesystem at read time, and untrusted input can pull in any file the process can read. Use `glz::raw_json` and load files where your application decides a value is a path, as shown below.
+
+```c++
+struct config
+{
+   glz::raw_json input{}; // a JSON value, or a string naming a file
+   std::string name{};
+};
+
+config cfg{};
+if (auto ec = glz::read_json(cfg, buffer)) {
+   // handle error
+}
+
+// The application decides that a string here is a path (and which paths are allowed)
+std::string path{};
+if (not glz::read_json(path, cfg.input.str)) {
+   std::string contents{};
+   if (not bool(glz::file_to_buffer(contents, path)) && not glz::validate_json(contents)) {
+      cfg.input.str = std::move(contents);
+   }
+}
+```
+
 `glz::raw_or_file` is somewhat like a `glz::file_include`, but also handles serialization. The purpose is to allow JSON files to be optionally referred to within higher level configuration files, but once loaded, the files behave as glz::raw_json, where the format does not need to be understood until deserialized.
 
 > Note that his approach only allows a single layer of includes. It does not allow infinitely deep includes like `glz::file_include` supports.
@@ -38,6 +63,7 @@ An included file is a fragment of the object that names it: some of the object's
 If the input is a valid file path within a string, the entire file will be read into a std::string within the glz::raw_or_file member. The internal buffer does not escape characters, as it is handled like glz::raw_json.
 If the input is not a valid file path or not a string, the value is simply validated and stored like glz::raw_json
 When serialized, the value is dumped like glz::raw_json, which means it will look like the input file was copied and pasted into the higher level document.
+A loaded file is validated with comments allowed, and its comments are written out with it, which is not valid JSON. Keep comments out of files read this way.
 
 Benefits of this approach include:
 

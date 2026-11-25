@@ -39,7 +39,7 @@ concurrency:
 jobs:
   build:
     name: ${{ matrix.name }}
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     timeout-minutes: 45
 
     strategy:
@@ -49,17 +49,23 @@ jobs:
           - name: gcc-14 libstdc++
             cxx: g++-14
             cxx_flags: ''
-          - name: clang-18 libc++
-            cxx: clang++-18
+          - name: clang-19 libc++
+            cxx: clang++-19
             cxx_flags: '-stdlib=libc++'
 
     steps:
     - name: Install dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y erlang-dev libeigen3-dev libssl-dev libc++-dev libc++abi-dev
+        sudo apt-get install -y erlang-dev libeigen3-dev libssl-dev
 
-    - uses: actions/checkout@v6
+    - uses: actions/checkout@v7
+
+    - name: Install Clang
+      if: startsWith(matrix.cxx, 'clang')
+      uses: ./.github/actions/install-clang
+      with:
+        version: 19
 
     - name: Configure CMake
       run: |

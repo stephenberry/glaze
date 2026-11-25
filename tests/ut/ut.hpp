@@ -21,6 +21,7 @@
 #include <cstdlib>
 #include <iostream>
 #include <source_location>
+#include <string>
 #include <string_view>
 
 namespace ut
@@ -108,6 +109,8 @@ namespace ut
    template <class OStream>
    struct outputter
    {
+      constexpr explicit outputter(OStream& os_) : os(os_) {}
+
       template <events::mode Mode>
       constexpr auto on(const events::test_begin<Mode>&)
       {}
@@ -167,6 +170,8 @@ namespace ut
    template <class Outputter, uint32_t MaxDepth = 16>
    struct reporter
    {
+      constexpr explicit reporter(Outputter& outputter_) : outputter(outputter_) {}
+
       constexpr auto on(const events::test_begin<events::mode::run_time>& event)
       {
          asserts_failed[current++] = summary.asserts[events::summary::FAILED];
@@ -220,6 +225,8 @@ namespace ut
    template <class Reporter>
    struct runner
    {
+      constexpr explicit runner(Reporter& reporter_) : reporter(reporter_) {}
+
       template <class Test>
       constexpr auto on(Test test, const std::string_view file_name, uint_least32_t line, const std::string_view name)
          -> bool
@@ -234,9 +241,18 @@ namespace ut
             }
          }
          else {
-            static const std::string_view filter = []() -> std::string_view {
-               if (const char* env = std::getenv("UT_RUN")) return env;
-               return {};
+            static const std::string filter = [] {
+               std::string value{};
+#if defined(_MSC_VER) && !defined(__clang__)
+               // MSVC deprecates std::getenv (C4996)
+               char* env = nullptr;
+               size_t len = 0;
+               if (_dupenv_s(&env, &len, "UT_RUN") == 0 && env) value = env;
+               std::free(env);
+#else
+               if (const char* env = std::getenv("UT_RUN")) value = env;
+#endif
+               return value;
             }();
 
             auto matches_filter = [](std::string_view test_name, std::string_view f) {
@@ -287,6 +303,8 @@ namespace ut
 
 namespace ut
 {
+   // outputter, reporter, and runner have explicit constructors rather than being aggregates. With MSVC 19.52,
+   // aggregate initialization here left reporter.outputter null, crashing the first global suite to run.
    inline struct
    {
       struct

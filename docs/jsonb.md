@@ -127,7 +127,7 @@ Auto-deduction requires that the variant has **at most one alternative per JSONB
 
 ### Tagged variants
 
-JSONB supports internal tagging only. When the variant declares `tag` (via `glz::meta<T>::tag`), the writer emits an OBJECT with the tag pair prepended. Adjacent tagging (`content`) is not implemented for JSONB and is rejected at compile time — see [Variant Handling](./variant-handling.md#choosing-a-tagging-representation).
+When the variant declares `tag` (via `glz::meta<T>::tag`), the writer emits an OBJECT with the tag pair prepended. See [Variant Handling](./variant-handling.md#choosing-a-tagging-representation) for how the representations compare.
 
 ```c++
 struct put_op { std::string path; int value; };
@@ -146,6 +146,24 @@ glz::write_jsonb(v, buf);   // OBJECT { "op": "put", "path": "/users/42", "value
 Tagged variants relax the auto-deducibility check: multiple object alternatives are allowed, since the tag picks among them on read. String ids and integer ids both work.
 
 **Reader constraint:** the tag must be the **first key** in the OBJECT. Glaze's writer always emits it first, so round-trips work; external producers must follow the same convention or the reader returns `no_matching_variant_type`.
+
+### Adjacently tagged variants
+
+Declaring `content` beside `tag` writes every alternative as a two-member OBJECT, in the same shape as JSON and BEVE, so one `glz::meta` serves all three. It works for alternatives of any shape, including several that share a JSONB category, which the deduction above cannot separate:
+
+```c++
+using value = std::variant<std::vector<double>, std::deque<double>, int>;
+template <> struct glz::meta<value> {
+   static constexpr std::string_view tag = "type";
+   static constexpr std::string_view content = "value";
+   static constexpr auto ids = std::array{"vec", "deq", "num"};
+};
+
+value v = std::deque<double>{1, 2};
+glz::write_jsonb(v, buf);   // OBJECT { "type": "deq", "value": [1, 2] }
+```
+
+The reader accepts the two keys in either order, so the first-key constraint above does not apply here. Any other key, or a repeat of either, is an `unknown_key` error under the default options; with `error_on_unknown_keys = false` it is skipped and the first occurrence counts. A missing key is a `missing_key` error, and an object rejected for any of these reasons leaves the destination untouched.
 
 ## Generic / Schemaless Values
 

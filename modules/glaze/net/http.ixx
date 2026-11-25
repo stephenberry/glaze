@@ -7,6 +7,7 @@
 // glz:header std=<cstddef>
 // glz:header std=<cstdint>
 // glz:header std=<expected>
+// glz:header std=<initializer_list>
 // glz:header std=<optional>
 // glz:header std=<string>
 // glz:header std=<string_view>
@@ -27,6 +28,7 @@ import glaze.util.compare;
 #endif
 
 using std::size_t;
+using std::uint8_t;
 
 namespace glz
 {
@@ -265,6 +267,50 @@ namespace glz
       if (method == "OPTIONS") return OPTIONS;
       return std::nullopt;
    }
+
+   // A set of HTTP methods, one bit per http_method.
+   export struct http_method_set
+   {
+      constexpr http_method_set() noexcept = default;
+      constexpr http_method_set(std::initializer_list<http_method> methods) noexcept
+      {
+         for (const http_method method : methods) {
+            insert(method);
+         }
+      }
+
+      constexpr void insert(http_method method) noexcept { bits_ |= bit(method); }
+      [[nodiscard]] constexpr bool contains(http_method method) const noexcept { return bits_ & bit(method); }
+      [[nodiscard]] constexpr bool empty() const noexcept { return bits_ == 0; }
+
+      constexpr http_method_set& operator|=(http_method_set other) noexcept
+      {
+         bits_ |= other.bits_;
+         return *this;
+      }
+
+      constexpr bool operator==(const http_method_set&) const noexcept = default;
+
+      // Comma-separated in http_method order, as an Allow header lists methods (RFC 9110 10.2.1).
+      [[nodiscard]] std::string to_string() const
+      {
+         std::string result;
+         for (uint8_t i = 0; i <= uint8_t(http_method::OPTIONS); ++i) {
+            const auto method = static_cast<http_method>(i);
+            if (contains(method)) {
+               if (!result.empty()) result.append(", ");
+               result.append(glz::to_string(method));
+            }
+         }
+         return result;
+      }
+
+     private:
+      static_assert(uint8_t(http_method::OPTIONS) < 8, "every http_method needs a bit");
+      static constexpr uint8_t bit(http_method method) noexcept { return uint8_t(1u << uint8_t(method)); }
+
+      uint8_t bits_{};
+   };
 
    export struct HttpStatusLine
    {

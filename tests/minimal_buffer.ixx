@@ -1,9 +1,11 @@
-import std;
 // Glaze Library
-// For the license information refer to glaze.hpp
+// For the license information refer to glaze.ixx
 
-#pragma once
+export module glaze.tests.minimal_buffer;
 
+import std;
+
+using std::size_t;
 
 // Buffer types that promise no more than Glaze's buffer concepts require; see the comment on
 // `concept contiguous` in glaze/concepts/container_concepts.hpp for why that matters.
@@ -12,7 +14,7 @@ import std;
 // so qt_style_buffer is forced to carry iterators and a subscript. read_only_buffer is the only
 // one that pins "exactly data() and size()", so it is what catches code indexing a buffer it was
 // only ever promised a pointer and a length for.
-namespace test_buffers
+export namespace test_buffers
 {
    // Shaped like Qt's QByteArray: contiguous and resizable, with emptiness spelled isEmpty().
    // Deliberately omits empty(), clear(), push_back(), append() and reserve(); glaze must not

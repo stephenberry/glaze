@@ -13,6 +13,8 @@
 export module glaze.beve.lazy;
 
 import std;
+
+import glaze.core.buffer_traits;
 import glaze.core.read;
 
 import glaze.beve.header;
@@ -279,10 +281,11 @@ namespace glz
          context ctx{};
          auto it = data_;
          auto end = beve_end();
+         seed_speculation_budget(ctx, size_t(end - it)); // as glz::read would; see charge_speculation
          parse<BEVE>::op<Opts>(value, ctx, it, end);
          finalize_read_context(ctx);
          if (bool(ctx.error)) {
-            return error_ctx{static_cast<size_t>(it - data_), ctx.error};
+            return error_ctx{static_cast<size_t>(it - data_), ctx.error, ctx.custom_error_message};
          }
          return {};
       }
@@ -1318,12 +1321,19 @@ namespace glz
       };
 
       if (type == 0) {
-         // Floating point
-         if (byte_count == 4) {
-            return static_cast<T>(load.template operator()<float>());
+         // Floating point. from<BEVE, num_t> refuses a float to integral conversion, and a
+         // static_cast of an out-of-range double to an integer is undefined behavior, so an
+         // integral get<T>() on a float element reports the error the numeric reader would.
+         if constexpr (std::integral<T>) {
+            return unexpected(error_ctx{0, error_code::syntax_error});
          }
-         else if (byte_count == 8) {
-            return static_cast<T>(load.template operator()<double>());
+         else {
+            if (byte_count == 4) {
+               return static_cast<T>(load.template operator()<float>());
+            }
+            else if (byte_count == 8) {
+               return static_cast<T>(load.template operator()<double>());
+            }
          }
       }
       else if (type == 1) {

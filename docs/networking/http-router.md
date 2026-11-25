@@ -106,7 +106,7 @@ router.get("/users/:id/posts", [](const glz::request& req, glz::response& res) {
 The request object provides:
 - `req.target` - Full URL including query string (e.g., `/api/users?limit=10`)
 - `req.path` - Path only, without query string (e.g., `/api/users`)
-- `req.params` - Path parameters from route (e.g., `:id`) - **URL-decoded**
+- `req.params` - Path parameters from route (e.g., `:id`) - **URL-decoded**, with `+` kept as a literal plus
 - `req.query` - Parsed query parameters - **URL-decoded**
 
 Decoded `:param` and `*wildcard` captures with a `..` component, a leading `/` or `\`, a leading Windows drive prefix (a single letter followed by `:`, such as `C:`), or a NUL byte (`%00`) do not match. Encoded separators elsewhere in a capture remain valid, as do colons anywhere else (`ab:c`, `notes/C:x`).
@@ -165,7 +165,7 @@ Constraints are passed through the `route_spec` argument (`.constraints = ...`).
 Constraint behavior:
 - If validation returns `false`, the route is treated as a non-match.
 - `router.match(...)` returns no handler in this case.
-- With `glz::http_server`, the default result is `404 Not Found`.
+- With `glz::http_server`, the default result is `404 Not Found`, or `405 Method Not Allowed` when a route for another method matches.
 - `param_constraint.description` is used for generated OpenAPI path parameter descriptions and debug output, not automatic runtime error bodies.
 
 ### Advanced Validation Functions

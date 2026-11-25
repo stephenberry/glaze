@@ -25,9 +25,11 @@ import glaze.bson.skip;
 
 import glaze.concepts.container_concepts;
 
+import glaze.core.constraint;
 import glaze.core.chrono;
 import glaze.core.common;
 import glaze.core.context;
+import glaze.core.custom;
 import glaze.core.meta;
 import glaze.core.opts;
 import glaze.core.read;
@@ -369,6 +371,22 @@ namespace glz
          from<BSON, U>::template op<Opts>(u, tag, ctx, it, end);
          if (bool(ctx.error)) return;
          value = static_cast<T>(u);
+      }
+   };
+
+   // --- Whole-type glz::meta value ----------------------------------------------
+   //
+   // A type whose glz::meta value is a member pointer, a glz::custom, etc. reads as the value it wraps,
+   // under the same element tag. The write side is resolved in bson_detail::write_member_element.
+   template <class T>
+      requires(glaze_value_t<T> && !custom_read<T>)
+   struct from<BSON, T>
+   {
+      template <auto Opts, class Value, is_context Ctx, class It, class End>
+      static void op(Value&& value, uint8_t tag, Ctx&& ctx, It& it, const End& end)
+      {
+         using V = std::remove_cvref_t<decltype(get_member(std::declval<Value>(), meta_wrapper_v<T>))>;
+         from<BSON, V>::template op<Opts>(get_member(std::forward<Value>(value), meta_wrapper_v<T>), tag, ctx, it, end);
       }
    };
 
@@ -766,6 +784,24 @@ namespace glz
    {
       // --- Category traits ---------------------------------------------------
 
+      // An alternative whose glz::meta value is a member pointer is categorized by the type it wraps.
+      // A whole-type glz::custom has no single wrapped type to categorize by, as in JSON.
+      template <class T>
+      struct bson_variant_category
+      {
+         using type = T;
+      };
+
+      template <class T>
+         requires(glaze_value_t<T> && !custom_read<T> && !is_specialization_v<remove_meta_wrapper_t<T>, custom_t>)
+      struct bson_variant_category<T>
+      {
+         using type = typename bson_variant_category<std::remove_cvref_t<remove_meta_wrapper_t<T>>>::type;
+      };
+
+      template <class T>
+      using bson_variant_category_t = typename bson_variant_category<std::remove_cvref_t<T>>::type;
+
       template <class T>
       struct is_bson_variant_null : std::bool_constant<null_t<T>>
       {};
@@ -871,7 +907,7 @@ namespace glz
          {
             size_t result = std::variant_npos;
             size_t idx = 0;
-            ((Trait<std::remove_cvref_t<Ts>>::value && result == std::variant_npos ? (result = idx, ++idx) : ++idx),
+            ((Trait<bson_variant_category_t<Ts>>::value && result == std::variant_npos ? (result = idx, ++idx) : ++idx),
              ...);
             return result;
          }
@@ -891,7 +927,7 @@ namespace glz
                 min_keys = 0, max_keys = 0;
          [&]<size_t... I>(std::index_sequence<I...>) {
             (([&]<size_t Idx>() {
-                using V = std::remove_cvref_t<std::variant_alternative_t<Idx, T>>;
+                using V = bson_variant_category_t<std::variant_alternative_t<Idx, T>>;
                 nulls += is_bson_variant_null<V>::value;
                 bools += is_bson_variant_bool<V>::value;
                 ints += is_bson_variant_int<V>::value;
@@ -1173,8 +1209,11 @@ namespace glz
                   }
                }
                ctx.error = error_code::missing_key;
+               return;
             }
          }
+
+         check_self_constraint<BSON, Opts>(value, ctx);
       }
    } // namespace bson_detail
 

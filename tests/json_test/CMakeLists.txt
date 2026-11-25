@@ -29,6 +29,7 @@ endfunction()
 
 add_glz_json_test(${PROJECT_NAME} ${JSON_TEST_SOURCES})
 add_glz_json_test(json_variant_support_test ${JSON_VARIANT_SUPPORT_SOURCES})
+add_glz_json_test(bounded_tuple_test bounded_tuple_test.cpp)
 
 set_tests_properties(json_test json_test_non_null PROPERTIES TIMEOUT 60)
 

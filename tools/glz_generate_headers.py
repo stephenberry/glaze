@@ -4,7 +4,6 @@
 from __future__ import annotations
 
 import argparse
-import json
 import re
 import shlex
 import sys
@@ -12,10 +11,22 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 
-HEADER_META_RE = re.compile(r"^\s*//\s*glz:header(?:\s+(?P<body>.*))?$")
-MODULE_RE = re.compile(r"^\s*(?:export\s+)?module(?:\s+(?:[A-Za-z_][\w.:]*|:private))?\s*;\s*(?://.*)?$")
-IMPORT_RE = re.compile(r"^\s*(?:export\s+)?import\s+(?P<target>[^;]+?)\s*;\s*(?://.*)?$")
-IDENT_CHARS = set("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_")
+# Match complete C++ literals, comments, preprocessing numbers and directives so
+# that module syntax inside them passes through untouched.
+CPP_TOKENS = re.compile(
+    r"""
+    ^[ \t]*//[ \t]*glz:header\b(?P<metadata>[^\n]*)\n?
+  | ^[ \t]*(?:export[ \t]+)?module\b[ \t]*(?P<module>[\w.:]*)[ \t]*;
+  | ^[ \t]*(?:export[ \t]+)?import[ \t]+(?P<import_name>[^;\n]+?)[ \t]*;
+  | ^[ \t]*\#(?:[^\\\n]|\\[\s\S])*  # include continuation lines
+  | //[^\n]* | /\*[\s\S]*?(?:\*/|\Z)
+  | (?:u8|u|U|L)?R"(?P<delimiter>[^\s()\\]{0,16})\([\s\S]*?\)(?P=delimiter)"
+  | "(?:\\[\s\S]|[^"\\])*" | '(?:\\[\s\S]|[^'\\])*'
+  | (?:\b[0-9]|\.[0-9])(?:[eEpP][+-]|[\w.]|'[\w])*
+  | \b(?P<export>export)\b[ \t]?
+    """,
+    re.MULTILINE | re.VERBOSE,
+)
 
 
 class HeaderGenerationError(RuntimeError):
@@ -32,23 +43,25 @@ class HeaderMetadata:
 
 
 @dataclass
-class Manifest:
-    import_overrides: dict[str, str] = field(default_factory=dict)
+class Module:
+    name: str
+    source_path: Path
+    metadata: HeaderMetadata
+    source: str
+    directives: list[re.Match]
 
 
 @dataclass
 class GeneratedHeader:
-    module_name: str | None
-    source_path: Path
     header_path: Path
     content: str
 
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--output-list", type=Path, help="Write the generated header paths, one per line")
     parser.add_argument("--module-root", type=Path, default=Path("modules"), help="Root directory containing .ixx files")
     parser.add_argument("--include-root", type=Path, default=Path("include"), help="Root directory for generated headers")
-    parser.add_argument("--manifest", type=Path, help="Optional manifest with import_overrides")
     parser.add_argument(
         "--module",
         action="append",
@@ -70,58 +83,15 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def parse_manifest(path: Path | None) -> Manifest:
-    if path is None:
-        return Manifest()
-    if not path.exists():
-        raise HeaderGenerationError(f"manifest does not exist: {path}")
-
-    text = path.read_text(encoding="utf-8")
-    if path.suffix.lower() == ".json":
-        data = json.loads(text)
-        return Manifest(import_overrides=dict(data.get("import_overrides", {})))
-
-    import_overrides: dict[str, str] = {}
-    section: str | None = None
-    for line_number, line in enumerate(text.splitlines(), start=1):
-        stripped = line.strip()
-        if not stripped or stripped.startswith("#"):
-            continue
-        if not line.startswith((" ", "\t")):
-            if stripped == "import_overrides:":
-                section = "import_overrides"
-                continue
-            section = None
-            continue
-        if section != "import_overrides":
-            continue
-        match = re.match(r"\s*([A-Za-z_][\w.:]*)\s*:\s*(.+?)\s*$", line)
-        if not match:
-            raise HeaderGenerationError(f"{path}:{line_number}: invalid import_overrides entry")
-        import_overrides[match.group(1)] = strip_yaml_scalar(match.group(2))
-
-    return Manifest(import_overrides=import_overrides)
-
-
-def strip_yaml_scalar(value: str) -> str:
-    value = value.strip()
-    if len(value) >= 2 and value[0] == value[-1] and value[0] in {"'", '"'}:
-        return value[1:-1]
-    return value
-
-
-def parse_metadata(source_path: Path, lines: list[str]) -> HeaderMetadata | None:
+def parse_metadata(source_path: Path, source: str, directives: list[re.Match]) -> HeaderMetadata | None:
     metadata = HeaderMetadata()
-    found = False
+    annotations = [match for match in directives if match.lastgroup == "metadata"]
+    if not annotations:
+        return None
 
-    for line_number, line in enumerate(lines, start=1):
-        match = HEADER_META_RE.match(line)
-        if not match:
-            continue
-        found = True
-        body = match.group("body") or ""
-        if not body.strip():
-            continue
+    for match in annotations:
+        line_number = source.count("\n", 0, match.start()) + 1
+        body = match["metadata"]
         try:
             tokens = shlex.split(body, posix=True)
         except ValueError as exc:
@@ -137,18 +107,16 @@ def parse_metadata(source_path: Path, lines: list[str]) -> HeaderMetadata | None
             elif key in {"include", "extra_include", "extra_includes"}:
                 metadata.includes.append(normalize_project_include(value))
             elif key == "project_imports":
-               if value not in {"include", "ignore"}:
-                  raise HeaderGenerationError(
-                     f"{source_path}:{line_number}: project_imports must be 'include' or 'ignore'"
-                  )
-               metadata.project_imports = value
+                if value not in {"include", "ignore"}:
+                    raise HeaderGenerationError(
+                        f"{source_path}:{line_number}: project_imports must be 'include' or 'ignore'"
+                    )
+                metadata.project_imports = value
             elif key == "skip":
-               metadata.skip = value or "true"
+                metadata.skip = value or "true"
             else:
-               raise HeaderGenerationError(f"{source_path}:{line_number}: unknown glz:header key {key!r}")
+                raise HeaderGenerationError(f"{source_path}:{line_number}: unknown glz:header key {key!r}")
 
-    if not found:
-        return None
     if metadata.skip is not None:
         return metadata
     if metadata.path is None:
@@ -170,332 +138,83 @@ def normalize_project_include(value: str) -> str:
     return f'"{value}"'
 
 
-def discover_module_name(lines: list[str]) -> str | None:
-    for line in lines:
-        match = re.match(r"^\s*(?:export\s+)?module\s+([A-Za-z_][\w.:]*)\s*;", line)
-        if match:
-            return match.group(1)
-    return None
-
-
-def module_import_to_include(
-    imported_name: str, current_module_name: str | None, manifest: Manifest, source_path: Path
-) -> str:
-    resolved_name = imported_name
-    if imported_name.startswith(":"):
-        if current_module_name is None:
-            raise HeaderGenerationError(
-                f"{source_path}: cannot resolve local partition import {imported_name!r} without a module declaration"
-            )
-        partition_name = imported_name[1:]
-        if not re.fullmatch(r"[A-Za-z_][\w.]*", partition_name):
-            raise HeaderGenerationError(f"{source_path}: invalid local partition import {imported_name!r}")
-        owning_module = current_module_name.partition(":")[0]
-        resolved_name = f"{owning_module}:{partition_name}"
-
-    if resolved_name in manifest.import_overrides:
-        return normalize_project_include(manifest.import_overrides[resolved_name])
-    if resolved_name == "glaze":
-        return '"glaze/glaze.hpp"'
-    if imported_name.startswith(":") and resolved_name.startswith("glaze."):
-        # Keep partition headers beside their owning module header:
-        #   import :fwd; in glaze.json.generic -> glaze/json/generic_fwd.hpp
-        owning_module, partition_name = resolved_name.split(":", maxsplit=1)
-        header_stem = owning_module.replace(".", "/")
-        partition_suffix = partition_name.replace(".", "_")
-        return f'"{header_stem}_{partition_suffix}.hpp"'
-    if resolved_name.startswith("glaze."):
-        return f'"{resolved_name.replace(".", "/")}.hpp"'
-    raise HeaderGenerationError(f"{source_path}: unsupported import {imported_name!r}; add an import_overrides entry")
-
-
-def dedupe(items: list[str]) -> list[str]:
-    seen: set[str] = set()
-    result: list[str] = []
-    for item in items:
-        if item in seen:
-            continue
-        seen.add(item)
-        result.append(item)
-    return result
-
-
-def transform_source(
-    source_path: Path,
-    source_text: str,
-    metadata: HeaderMetadata,
-    manifest: Manifest,
-    include_root: Path,
-) -> GeneratedHeader:
-    lines = source_text.splitlines()
-    module_name = discover_module_name(lines)
-
-    std_includes = list(metadata.std)
-    project_includes: list[str] = []
-    extra_includes = list(metadata.includes)
-    import_std_seen = False
-    in_global_fragment = False
-    global_fragment_lines: list[str] = []
-    transformed_lines: list[str] = []
-
-    for line in lines:
-        if HEADER_META_RE.match(line):
-            continue
-        if re.match(r"^\s*module\s*;\s*(?://.*)?$", line):
-            in_global_fragment = True
-            continue
-        if in_global_fragment and re.match(r"^\s*export\s+module\s+[A-Za-z_][\w.:]*\s*;\s*(?://.*)?$", line):
-            in_global_fragment = False
-            continue
-        if MODULE_RE.match(line):
-            continue
-        if in_global_fragment:
-            global_fragment_lines.append(line)
-            continue
-        import_match = IMPORT_RE.match(line)
-        if import_match:
-            target = import_match.group("target").strip()
-            if target == "std":
-                import_std_seen = True
-            elif metadata.project_imports == "include":
-                project_includes.append(module_import_to_include(target, module_name, manifest, source_path))
-            continue
-        transformed_lines.append(line)
-
-    if import_std_seen and not metadata.std:
-        raise HeaderGenerationError(f"{source_path}: import std; requires at least one glz:header std=... entry")
-
-    body = remove_export_tokens("\n".join(transformed_lines))
-    body_lines = collapse_blank_runs(trim_blank_edges(body.splitlines()))
-    prefix, body_lines = split_leading_file_comments(body_lines)
-
-    std_include_lines = [f"#include {include}" for include in dedupe(std_includes)]
-    project_include_lines = [f"#include {include}" for include in dedupe(project_includes + extra_includes)]
-    global_fragment_lines = collapse_blank_runs(trim_blank_edges(global_fragment_lines))
-    output_lines: list[str] = []
-    output_lines.extend(prefix)
-    if output_lines and output_lines[-1] != "":
-        output_lines.append("")
-    output_lines.append("#pragma once")
-    if std_include_lines:
-        output_lines.append("")
-        output_lines.extend(std_include_lines)
-    if global_fragment_lines:
-        output_lines.append("")
-        output_lines.extend(global_fragment_lines)
-    if project_include_lines:
-        output_lines.append("")
-        output_lines.extend(project_include_lines)
-    if body_lines:
-        output_lines.append("")
-        output_lines.extend(body_lines)
-
-    header_path = resolve_header_path(include_root, metadata.path)
-    return GeneratedHeader(module_name=module_name, source_path=source_path, header_path=header_path, content="\n".join(output_lines) + "\n")
-
-
-def trim_blank_edges(lines: list[str]) -> list[str]:
-    start = 0
-    end = len(lines)
-    while start < end and lines[start].strip() == "":
-        start += 1
-    while end > start and lines[end - 1].strip() == "":
-        end -= 1
-    return lines[start:end]
-
-
-def collapse_blank_runs(lines: list[str], max_run: int = 1) -> list[str]:
-    result: list[str] = []
-    blank_run = 0
-    for line in lines:
-        if line.strip() == "":
-            blank_run += 1
-            if blank_run <= max_run:
-                result.append(line)
-            continue
-        blank_run = 0
-        result.append(line)
-    return result
-
-
-def split_leading_file_comments(lines: list[str]) -> tuple[list[str], list[str]]:
-    prefix: list[str] = []
-    index = 0
-    while index < len(lines):
-        stripped = lines[index].strip()
-        if stripped == "" or stripped.startswith("//"):
-            prefix.append(lines[index])
-            index += 1
-            continue
-        if stripped.startswith("/*"):
-            while index < len(lines):
-                prefix.append(lines[index])
-                if "*/" in lines[index]:
-                    index += 1
-                    break
-                index += 1
-            continue
-        break
-    while prefix and prefix[-1].strip() == "":
-        prefix.pop()
-    return prefix, trim_blank_edges(lines[index:])
-
-
-def resolve_header_path(include_root: Path, metadata_path: str) -> Path:
-    path = Path(metadata_path)
-    if path.is_absolute():
-        return path
-    return include_root / path
-
-
-def remove_export_tokens(text: str) -> str:
-    result: list[str] = []
-    index = 0
-    length = len(text)
-    line_start = True
-    preprocessor_line = False
-
-    while index < length:
-        ch = text[index]
-
-        if line_start:
-            lookahead = index
-            while lookahead < length and text[lookahead] in " \t":
-                lookahead += 1
-            preprocessor_line = lookahead < length and text[lookahead] == "#"
-            line_start = False
-
-        if ch == "\n":
-            result.append(ch)
-            index += 1
-            line_start = True
-            preprocessor_line = False
-            continue
-
-        if ch == "/" and index + 1 < length and text[index + 1] == "/":
-            end = text.find("\n", index)
-            if end == -1:
-                result.append(text[index:])
-                break
-            result.append(text[index:end])
-            index = end
-            continue
-
-        if ch == "/" and index + 1 < length and text[index + 1] == "*":
-            end = text.find("*/", index + 2)
-            if end == -1:
-                result.append(text[index:])
-                break
-            result.append(text[index : end + 2])
-            index = end + 2
-            continue
-
-        if ch == "R" and index + 1 < length and text[index + 1] == '"':
-            raw_end = find_raw_string_end(text, index)
-            if raw_end is not None:
-                result.append(text[index:raw_end])
-                index = raw_end
-                continue
-
-        if ch == "'" and is_digit_separator(text, index):
-            result.append(ch)
-            index += 1
-            continue
-
-        if ch in {'"', "'"}:
-            literal_end = find_quoted_literal_end(text, index, ch)
-            result.append(text[index:literal_end])
-            index = literal_end
-            continue
-
-        if not preprocessor_line and (ch.isalpha() or ch == "_"):
-            end = index + 1
-            while end < length and text[end] in IDENT_CHARS:
-                end += 1
-            token = text[index:end]
-            if token == "export":
-                index = end + 1 if end < length and text[end] in " \t" else end
-                continue
-            result.append(token)
-            index = end
-            continue
-
-        result.append(ch)
-        index += 1
-
-    return "".join(result)
-
-
-def is_digit_separator(text: str, index: int) -> bool:
-    return (
-        index > 0
-        and index + 1 < len(text)
-        and (text[index - 1].isalnum() or text[index - 1] == "_")
-        and (text[index + 1].isalnum() or text[index + 1] == "_")
-    )
-
-
-def find_quoted_literal_end(text: str, start: int, quote: str) -> int:
-    index = start + 1
-    while index < len(text):
-        if text[index] == "\\":
-            index += 2
-            continue
-        if text[index] == quote:
-            return index + 1
-        index += 1
-    return len(text)
-
-
-def find_raw_string_end(text: str, start: int) -> int | None:
-    delimiter_end = text.find("(", start + 2)
-    if delimiter_end == -1:
+def read_module(source_path: Path, allow_missing_metadata: bool) -> Module | None:
+    source = source_path.read_text(encoding="utf-8")
+    directives = [
+        match for match in CPP_TOKENS.finditer(source)
+        if match.lastgroup in {"module", "metadata", "import_name", "export"}
+    ]
+    metadata = parse_metadata(source_path, source, directives)
+    if metadata is None:
+        if allow_missing_metadata:
+            return None
+        raise HeaderGenerationError(f"{source_path}: missing glz:header metadata")
+    if metadata.skip is not None:
         return None
-    delimiter = text[start + 2 : delimiter_end]
-    if len(delimiter) > 16 or any(ch.isspace() or ch in "\\()" for ch in delimiter):
-        return None
-    terminator = ")" + delimiter + '"'
-    end = text.find(terminator, delimiter_end + 1)
-    if end == -1:
-        return len(text)
-    return end + len(terminator)
+    for match in directives:
+        name = match["module"]
+        if name and name != ":private":
+            return Module(name, source_path, metadata, source, directives)
+    raise HeaderGenerationError(f"{source_path}: missing named module declaration")
+
+
+def transform_source(module: Module, header_paths: dict[str, str]) -> str:
+    parts = []
+    offset = 0
+    preamble_written = False
+    for match in module.directives:
+        parts.append(module.source[offset:match.start()])
+        offset = match.end()
+        if match.lastgroup == "module":
+            if not preamble_written:
+                parts.append("#pragma once\n")
+                parts.extend(f"#include {header}\n" for header in dict.fromkeys(module.metadata.std))
+                preamble_written = True
+            if match["module"] == module.name:
+                parts.extend(f"#include {header}\n" for header in dict.fromkeys(module.metadata.includes))
+        elif match.lastgroup == "import_name":
+            name = match["import_name"].strip()
+            if name == "std":
+                if not module.metadata.std:
+                    raise HeaderGenerationError(f"{module.source_path}: import std; requires glz:header std=...")
+            elif module.metadata.project_imports == "include":
+                if name.startswith(":"):
+                    name = module.name.partition(":")[0] + name
+                if name not in header_paths:
+                    raise HeaderGenerationError(f"{module.source_path}: unknown module import {name!r}")
+                parts.append(f'#include "{header_paths[name]}"')
+        # Metadata comments and declaration-level export keywords are removed.
+    parts.append(module.source[offset:])
+    return "".join(parts)
 
 
 def generate_headers(args: argparse.Namespace) -> list[GeneratedHeader]:
-    manifest = parse_manifest(args.manifest)
-    source_root = args.module_root
-    include_root = args.include_root
+    modules = []
+    header_paths = {}
+    generated_paths = {}
     selected = set(args.module)
-    generated: list[GeneratedHeader] = []
-    generated_paths: dict[Path, Path] = {}
-    skipped = 0
-
-    for source_path in sorted(source_root.rglob("*.ixx")):
-        source_text = source_path.read_text(encoding="utf-8")
-        lines = source_text.splitlines()
-        metadata = parse_metadata(source_path, lines)
-        if metadata is None:
-            if args.allow_missing_metadata:
-                continue
-            raise HeaderGenerationError(f"{source_path}: missing glz:header metadata")
-        if metadata.skip is not None:
-            skipped += 1
+    for source_path in sorted(args.module_root.rglob("*.ixx")):
+        module = read_module(source_path, args.allow_missing_metadata)
+        if module is None:
             continue
-        header = transform_source(source_path, source_text, metadata, manifest, include_root)
-        if selected and not matches_selection(header, selected):
-            continue
-        previous = generated_paths.get(header.header_path)
-        if previous is not None:
+        if module.name in header_paths:
+            raise HeaderGenerationError(f"{source_path}: duplicate module declaration {module.name!r}")
+        header_path = args.include_root / module.metadata.path
+        if header_path in generated_paths:
             raise HeaderGenerationError(
-                f"{source_path}: duplicate generated header path {header.header_path} also used by {previous}"
+                f"{source_path}: duplicate generated header path {header_path} also used by {generated_paths[header_path]}"
             )
-        generated_paths[header.header_path] = source_path
-        generated.append(header)
+        header_paths[module.name] = module.metadata.path
+        generated_paths[header_path] = source_path
+        if matches_selection(module.name, source_path, header_path, selected):
+            modules.append((module, header_path))
 
+    generated = [
+        GeneratedHeader(path, transform_source(module, header_paths))
+        for module, path in modules
+    ]
     if not args.no_copy_headers:
-        generated.extend(copy_support_headers(source_root, include_root, generated_paths, selected))
-    if skipped:
-        print(f"skipped {skipped} module file(s) with glz:header skip metadata")
+        generated.extend(copy_support_headers(args.module_root, args.include_root, generated_paths, selected))
     return generated
 
 
@@ -507,24 +226,20 @@ def copy_support_headers(
         header_path = include_root / source_path.relative_to(source_root)
         if header_path in generated_paths:
             continue
+        if not matches_selection(None, source_path, header_path, selected):
+            continue
         header = GeneratedHeader(
-            module_name=None,
-            source_path=source_path,
             header_path=header_path,
             content=source_path.read_text(encoding="utf-8"),
         )
-        if selected and not matches_selection(header, selected):
-            continue
         copied.append(header)
     return copied
 
 
-def matches_selection(header: GeneratedHeader, selected: set[str]) -> bool:
-    source = header.source_path.as_posix()
-    destination = header.header_path.as_posix()
-    owning_module = header.module_name.partition(":")[0] if header.module_name else None
-    return any(
-        item == header.module_name or item == owning_module or item in source or item in destination for item in selected
+def matches_selection(name: str | None, source: Path, destination: Path, selected: set[str]) -> bool:
+    owner = name.partition(":")[0] if name else None
+    return not selected or any(
+        item in (name, owner) or item in source.as_posix() or item in destination.as_posix() for item in selected
     )
 
 
@@ -539,7 +254,8 @@ def write_or_check(headers: list[GeneratedHeader], check: bool, dry_run: bool) -
             print(f"{status}: {header.header_path}")
         elif not check and existing != header.content:
             header.header_path.parent.mkdir(parents=True, exist_ok=True)
-            header.header_path.write_text(header.content, encoding="utf-8", newline="\n")
+            with header.header_path.open("w", encoding="utf-8", newline="\n") as output:
+                output.write(header.content)
             print(f"generated: {header.header_path}")
 
     if check and changed:
@@ -560,7 +276,10 @@ def main() -> int:
         if not headers:
             print("no module files with glz:header metadata found", file=sys.stderr)
             return 1
-        return write_or_check(headers, check=args.check, dry_run=args.dry_run)
+        result = write_or_check(headers, check=args.check, dry_run=args.dry_run)
+        if result == 0 and args.output_list:
+            args.output_list.write_text("".join(f"{h.header_path.as_posix()}\n" for h in headers), encoding="utf-8")
+        return result
     except HeaderGenerationError as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 2

@@ -8,31 +8,39 @@
 export module glaze.yaml.read;
 
 import std;
-import glaze.util.tuple;
-import glaze.util.bit_array;
-import glaze.util.fast_float;
-import glaze.core.opts;
-import glaze.reflection.to_tuple;
-import glaze.core.tuple;
-import glaze.util.expected;
-import glaze.util.string_literal;
+
 import glaze.concepts.container_concepts;
-import glaze.core.meta;
-import glaze.core.context;
+import glaze.core.constraint;
 import glaze.core.chrono;
 import glaze.core.common;
+import glaze.core.context;
+import glaze.core.meta;
+import glaze.core.opts;
 import glaze.core.read;
 import glaze.core.reflect;
+import glaze.core.tuple;
+
 import glaze.file.file_ops;
+
 import glaze.json.generic;
+
+import glaze.reflection.to_tuple;
+
+import glaze.util.bit_array;
+import glaze.util.expected;
+import glaze.util.fast_float;
+import glaze.util.for_each;
 import glaze.util.glaze_fast_float;
 import glaze.util.nullable_traits;
 import glaze.util.parse;
+import glaze.util.string_literal;
+import glaze.util.tuple;
 import glaze.util.type_traits;
 import glaze.util.variant;
 import glaze.yaml.common;
 import glaze.yaml.opts;
 import glaze.yaml.skip;
+
 using std::int32_t;
 
 #include "glaze/util/inline.hpp"
@@ -198,6 +206,14 @@ export namespace glz
                      // But a plain "key: value" pattern here indicates malformed
                      // trailing mapping content after a completed root node.
                      const char first = *line;
+                     // A block sequence entry here has nothing it can belong to: every node
+                     // that could own it has returned, so accepting it would drop it and every
+                     // line after it from the document.
+                     if (first == '-' &&
+                         ((line + 1) == end || yaml::whitespace_or_line_end_table[static_cast<uint8_t>(*(line + 1))])) {
+                        ctx.error = error_code::syntax_error;
+                        return;
+                     }
                      const bool explicit_or_structural_start =
                         (first == ':' || first == '?' || first == '!' || first == '&' || first == '*' || first == '[' ||
                          first == '{' || first == '"' || first == '\'' || first == '-');
@@ -1275,14 +1291,15 @@ export namespace glz
                   // Terminates the scalar when the dash is at or above the
                   // enclosing sequence's indicator column, meaning it starts
                   // a sibling entry.  A dash deeper than the indicator is
-                  // plain content (yaml-test-suite AB8U).
-                  if (*lookahead == '-') {
+                  // plain content (yaml-test-suite AB8U). Outside a sequence
+                  // the line has already passed the dedent check above, so it
+                  // is a continuation: "k: a\n  - b" reads as "a - b", since a
+                  // node that began as a scalar cannot turn into a sequence.
+                  if (*lookahead == '-' && ctx.sequence_dash_indent >= 0 && line_indent <= ctx.sequence_dash_indent) {
                      auto after_dash = lookahead + 1;
                      if (after_dash == end || *after_dash == ' ' || *after_dash == '\t' || *after_dash == '\n' ||
                          *after_dash == '\r') {
-                        if (ctx.sequence_dash_indent < 0 || line_indent <= ctx.sequence_dash_indent) {
-                           return;
-                        }
+                        return;
                      }
                   }
 
@@ -1967,6 +1984,23 @@ export namespace glz
       template <class T>
       concept owning_scalar_target = not string_view_t<T> && std::assignable_from<std::decay_t<T>&, std::string&&>;
 
+      // Whether the node at `it` opens a collection rather than a plain scalar: a flow
+      // sequence or mapping, a block sequence entry, or an explicit mapping key. "-" and "?"
+      // are indicators only when whitespace or the end of the input follows, so "-1" and
+      // "?x" remain plain scalars.
+      template <class It, class End>
+      [[nodiscard]] inline bool plain_scalar_starts_collection(It it, End end) noexcept
+      {
+         if (it == end) return false;
+         const char c = *it;
+         if (c == '[' || c == '{') return true;
+         if (c == '-' || c == '?') {
+            ++it;
+            return it == end || whitespace_or_line_end_table[static_cast<uint8_t>(*it)];
+         }
+         return false;
+      }
+
    } // namespace yaml
 
    // String types
@@ -2004,6 +2038,13 @@ export namespace glz
                                      ctx.current_indent() > 0 ? (ctx.current_indent() - 1) : ctx.current_indent());
             break;
          case yaml::scalar_style::plain:
+            // A collection where a string is expected is a type mismatch. Reading it as a
+            // plain scalar would store its source text, and for a block sequence only the
+            // first entry, as the value.
+            if (yaml::plain_scalar_starts_collection(it, end)) [[unlikely]] {
+               ctx.error = error_code::syntax_error;
+               return;
+            }
             // In block context with known indent, use multiline parsing to support
             // plain scalars that span multiple lines (folding behavior)
             if constexpr (!yaml::check_flow_context(Opts)) {
@@ -2858,7 +2899,7 @@ export namespace glz
          }
          else if constexpr (!resizable<V>) {
             // Fixed-size containers (std::array)
-            while (it != end && !adapter.fixed_capacity_reached(value)) {
+            while (it != end) {
                skip_flow_ws_and_newlines(ctx, it, end);
                if (bool(ctx.error)) [[unlikely]]
                   return;
@@ -2890,6 +2931,12 @@ export namespace glz
                   return;
                }
                just_saw_comma = false;
+
+               // An item beyond the last slot is an error, as in JSON.
+               if (adapter.fixed_capacity_reached(value)) [[unlikely]] {
+                  ctx.error = error_code::exceeded_static_array_size;
+                  return;
+               }
 
                from<YAML, value_type>::template op<flow_context_on<Opts>()>(value[adapter.index], ctx, it, end);
 
@@ -2929,19 +2976,6 @@ export namespace glz
                   ctx.error = error_code::syntax_error;
                   return;
                }
-            }
-
-            // If we exited because the fixed-size container is full but haven't seen ']',
-            // skip to the closing bracket to consume overflow elements.
-            int bracket_depth = 1;
-            while (it != end && bracket_depth > 0) {
-               if (*it == '[') {
-                  ++bracket_depth;
-               }
-               else if (*it == ']') {
-                  --bracket_depth;
-               }
-               ++it;
             }
          }
          else {
@@ -3221,14 +3255,6 @@ export namespace glz
          int32_t pending_item_anchor_indent = sequence_indent;
 
          while (it != end) {
-            // For fixed-size arrays (e.g. std::array), stop when we've filled all elements.
-            // Exclude emplaceable types (e.g. std::set) which are not resizable but grow dynamically.
-            if constexpr (!resizable<V> && !emplaceable<V>) {
-               if (adapter.fixed_capacity_reached(value)) {
-                  return;
-               }
-            }
-
             // Skip blank lines and comments, track indent
             int32_t line_indent = 0;
             int32_t dash_col = -1; // actual column of the '-' on the line
@@ -3479,6 +3505,12 @@ export namespace glz
                }
             }
             else if constexpr (!resizable<V>) {
+               // Fixed-size (e.g. std::array): an item beyond the last slot is an error, as in JSON.
+               // Checked only once another item is confirmed, so a full container still ends cleanly.
+               if (adapter.fixed_capacity_reached(value)) [[unlikely]] {
+                  ctx.error = error_code::exceeded_static_array_size;
+                  return;
+               }
                parse_element(value[adapter.index]);
                adapter.commit_fixed_slot();
             }
@@ -4365,6 +4397,15 @@ export namespace glz
                   break;
                }
 
+               // Published to the element as parse_block_sequence does, so a multi-line plain
+               // scalar element ends at the next "- " entry rather than folding it in.
+               int32_t dash_col = static_cast<int32_t>(it - line_start);
+               if constexpr (std::is_pointer_v<std::decay_t<It>>) {
+                  if (ctx.stream_begin) {
+                     dash_col = ctx.line_prefix_before(&*it).column;
+                  }
+               }
+
                ++it; // Skip '-'
 
                // Check valid sequence indicator
@@ -4374,6 +4415,11 @@ export namespace glz
                }
 
                yaml::skip_inline_ws(it, end);
+
+               const bool prev_sequence_item_value_context = ctx.sequence_item_value_context;
+               const int32_t prev_sequence_dash_indent = ctx.sequence_dash_indent;
+               ctx.sequence_item_value_context = true;
+               ctx.sequence_dash_indent = dash_col;
 
                // Parse element at current index
                [&]<size_t... Is>(std::index_sequence<Is...>) {
@@ -4397,6 +4443,9 @@ export namespace glz
                      }.template operator()<Is>(),
                      ...);
                }(std::make_index_sequence<N>{});
+
+               ctx.sequence_dash_indent = prev_sequence_dash_indent;
+               ctx.sequence_item_value_context = prev_sequence_item_value_context;
 
                if (bool(ctx.error)) [[unlikely]]
                   return;
@@ -4622,6 +4671,8 @@ export namespace glz
             yaml::parse_block_mapping<Opts, Tag>(value, ctx, it, end, ctx.current_indent());
          }
 
+         check_self_constraint<YAML, Opts>(value, ctx);
+
          yaml::finalize_node_anchor(preamble.node_props, ctx, it);
       }
    };
@@ -4791,6 +4842,7 @@ export namespace glz
                   else {
                      static constexpr std::string_view null_value{"null"};
                      auto null_it = null_value.data();
+                     const yaml::yaml_context::scoped_stream literal_stream{ctx, null_value.data()};
                      from<YAML, val_t>::template op<yaml::flow_context_on<Opts>()>(
                         val, ctx, null_it, null_value.data() + null_value.size());
                      return !bool(ctx.error);

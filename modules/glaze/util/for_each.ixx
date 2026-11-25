@@ -325,7 +325,7 @@ export namespace glz
             }(std::make_index_sequence<N>{});
 #endif
 
-#if defined(__clang_major__) && (__clang_major__ >= 19)
+#if defined(__clang__)
             [[assume(index < N)]];
 #endif
             jump_table[index](lambda);

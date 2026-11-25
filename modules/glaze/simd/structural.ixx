@@ -128,7 +128,10 @@ export namespace glz::detail::structural
       return vgetq_lane_u64(vreinterpretq_u64_u8(s0), 0);
    }
 
-   GLZ_ALWAYS_INLINE window load_window(const char* p, const char open_c, const char close_c) noexcept
+#if !defined(GLZ_BUILDING_MODULES)
+   GLZ_ALWAYS_INLINE
+#endif
+   window load_window(const char* p, const char open_c, const char close_c) noexcept
    {
       const auto* u = reinterpret_cast<const uint8_t*>(p);
       const uint8x16_t v0 = vld1q_u8(u);

@@ -10,6 +10,8 @@
 
 import std;
 
+using std::size_t;
+
 import glaze.core.context;
 import glaze.core.opts;
 import glaze.core.write;

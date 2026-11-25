@@ -672,8 +672,7 @@ namespace glz
    //
    // Both the nullable and variant branches recurse back into this helper so
    // alternatives that are themselves nullable, always_null_t, or nested
-   // variants resolve to a concrete (type_byte | value) pair. Only the final
-   // else-branch reads `to<BSON, DT>::type_code` directly.
+   // variants resolve to a concrete (type_byte | value) pair.
    // ==========================================================================
    namespace bson_detail
    {
@@ -685,9 +684,18 @@ namespace glz
          if constexpr (always_null_t<DT>) {
             (void)write_element_prefix(ctx, bson::type::null, key, b, ix);
          }
-         else if constexpr (is_specialization_v<DT, custom_t>) {
-            // The element type byte depends on what the getter yields, which may itself be nullable or
-            // a variant, so the getter is resolved here and its result dispatched like any other member.
+         else if constexpr (requires { to<BSON, DT>::type_code; }) {
+            // Checked first so that a user specialization, such as to<BSON, std::variant<...>> or one for
+            // a type that also has a glz::meta value, takes precedence over the generic dispatch below.
+            if (!write_element_prefix(ctx, to<BSON, DT>::type_code, key, b, ix)) [[unlikely]] {
+               return;
+            }
+            to<BSON, DT>::template op<Opts>(std::forward<T>(value), ctx, b, ix);
+         }
+         else if constexpr (transparent_write_wrapper<DT>) {
+            // A glz::custom getter or a whole-type glz::meta value (which may itself be a glz::custom)
+            // has no type byte of its own: it depends on what the wrapper yields, which may be nullable
+            // or a variant. Resolve the wrapper here and dispatch its result like any other member.
             unwrap_write_value(std::forward<T>(value), ctx, [&]<class Resolved>(Resolved&& resolved) {
                if constexpr (is_specialization_v<std::remove_cvref_t<Resolved>, custom_t>) {
                   static_assert(false_v<Resolved>, "glz::custom getter must be invocable on the parent object");
@@ -696,6 +704,11 @@ namespace glz
                   write_member_element<Opts>(key, std::forward<Resolved>(resolved), ctx, b, ix);
                }
             });
+         }
+         else if constexpr ((nullable_like<DT> || is_variant<DT>) && requires { to<BSON, DT>{}; }) {
+            // Without this, a user specialization missing type_code would be silently bypassed by the
+            // generic dispatch below.
+            static_assert(false_v<DT>, "a to<BSON, T> specialization must define static constexpr uint8_t type_code");
          }
          else if constexpr (nullable_like<DT>) {
             if (value) {
@@ -708,17 +721,11 @@ namespace glz
          else if constexpr (is_variant<DT>) {
             std::visit([&](auto&& alt) { write_member_element<Opts>(key, alt, ctx, b, ix); }, std::forward<T>(value));
          }
-         else if constexpr (!requires { to<BSON, DT>::type_code; }) {
+         else {
             // A value writer always has a type code, so this is a type BSON cannot write: either a
             // rejection point such as glz::invoke's, or no to<BSON, DT> at all. Calling op directly makes
             // the compiler report that (the rejection's static_assert, or the missing specialization)
             // rather than the missing type_code, which some compilers diagnose first.
-            to<BSON, DT>::template op<Opts>(std::forward<T>(value), ctx, b, ix);
-         }
-         else {
-            if (!write_element_prefix(ctx, to<BSON, DT>::type_code, key, b, ix)) [[unlikely]] {
-               return;
-            }
             to<BSON, DT>::template op<Opts>(std::forward<T>(value), ctx, b, ix);
          }
       }
@@ -754,6 +761,9 @@ namespace glz
          }
          else if constexpr (Opts.skip_null_members && custom_getter_returns_nullable<val_t>()) {
             if (custom_getter_is_null(get_member(value, member), ctx)) return true;
+         }
+         else if constexpr (Opts.skip_null_members && glaze_value_is_nullable<val_t>()) {
+            if (is_glaze_value_field_null<T, I>(value, t)) return true;
          }
          if constexpr (check_skip_default_members(Opts) && has_skippable_default<val_t>) {
             if (is_default_value(get_member(value, member))) return true;

@@ -75,7 +75,7 @@ namespace glz
    //
    // Every entry point that builds iterators over a caller's buffer has to go through this. Reached
    // by two paths before, they disagreed, and the one that skipped it read out of bounds.
-   template <auto Opts, class Buf>
+   export template <auto Opts, class Buf>
    consteval auto parse_opts_for()
    {
       auto o = is_padded_off<Opts>();
@@ -169,7 +169,8 @@ namespace glz
 
       call_scope scope{ctx};
 
-      if constexpr (Opts.format != NDJSON) {
+      // A TOML document with no keys is valid, so its reader decides by the type being read.
+      if constexpr (Opts.format != NDJSON && Opts.format != TOML) {
          if (buffer.size() == 0) [[unlikely]] {
             ctx.error = error_code::no_read_input;
             return {0, ctx.error, ctx.custom_error_message};
@@ -194,11 +195,7 @@ namespace glz
 
       // Bound the speculative re-parsing a variant resolution may do, in bytes, relative to this
       // input. Seeded per read so a reused context starts fresh. See charge_speculation.
-      if constexpr (requires { ctx.speculation_budget; }) {
-         const size_t proportional = max_speculative_parse_factor * size_t(end - it);
-         ctx.speculation_budget =
-            (proportional > min_speculative_parse_bytes ? proportional : min_speculative_parse_bytes) + 2;
-      }
+      seed_speculation_budget(ctx, size_t(end - it));
 
       // A YAML context marks its outermost parse with stream_begin and seeds its expansion budgets
       // there, so clearing it here is what makes those budgets per-read like the one above. A
@@ -260,9 +257,15 @@ namespace glz
       requires read_supported<T, Opts.format>
    [[nodiscard]] error_ctx read(T& value, Buffer&& buffer, auto&& ctx)
    {
+      static_assert(!format_is_binary<Opts.format>,
+                    "A binary format cannot be read from a null-terminated C string: its length would be taken "
+                    "with strlen and stop at the first zero byte. Pass the buffer itself (e.g. the std::string, "
+                    "not its .data()), or a std::string_view/std::span with an explicit size.");
       const auto str = std::string_view{std::forward<Buffer>(buffer)};
-      if (str.empty()) {
-         return {0, error_code::no_read_input};
+      if constexpr (Opts.format != TOML) {
+         if (str.empty()) {
+            return {0, error_code::no_read_input};
+         }
       }
       return read<Opts>(value, str, ctx);
    }

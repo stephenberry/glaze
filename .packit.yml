@@ -4,11 +4,15 @@ specfile_path: util/glaze.spec
 
 notifications:
   failure_comment:
-    message: "One of the tests failed for {commit_sha}. @admin check logs {logs_url}, packit dashboard {packit_dashboard_url} and external service dashboard {external_dashboard_url}"
+    message: "One of the tests failed for {commit_sha}. Check logs {logs_url}, packit dashboard {packit_dashboard_url} and external service dashboard {external_dashboard_url}"
 
 jobs:
+# The Copr builds run on shared Fedora infrastructure that often fails or times out under
+# load, which is unrelated to the change being tested, so they run on commits to main only,
+# not on pull requests. `branch` is a regular expression, so the `$` keeps it to main exactly.
 - job: copr_build
-  trigger: pull_request
+  trigger: commit
+  branch: main$
   targets:
   - fedora-rawhide-aarch64
   - fedora-rawhide-i386

@@ -31,6 +31,8 @@
 export module glaze.json.read;
 
 import std;
+
+import glaze.core.filesystem_path;
 import glaze.util.bit;
 
 import glaze.json.json_concepts;
@@ -2664,8 +2666,10 @@ namespace glz
             const auto index = decode_hash_with_size<JSON, T, HashInfo, HashInfo.type>::op(
                ctx.scratch.data(), ctx.scratch.data() + ctx.scratch.size(), ctx.scratch.size());
 
+            // The hash narrows a string to one candidate flag but does not reject strings that are not
+            // flag names, so the name itself has to match.
             constexpr auto N = reflect<T>::size;
-            if (index < N) [[likely]] {
+            if (index < N && std::string_view{ctx.scratch} == reflect<T>::keys[index]) [[likely]] {
                visit<N>([&]<size_t I>() { get_member(value, get<I>(reflect<T>::values)) = true; }, index);
             }
             else [[unlikely]] {
@@ -3932,6 +3936,18 @@ namespace glz
       template <auto Options>
       static void read_deduced(auto&& value, is_context auto&& ctx, auto&& it, auto end)
       {
+         // In the reader rather than on the variant, because the choice only exists here: writing such
+         // a variant is unambiguous, and code that only writes one has nothing to fix.
+         using indistinguishable = variant_indistinguishable_alternatives<T>;
+         static_assert(not indistinguishable::found ||
+                          detail::variant_alternatives_are_indistinguishable<T, typename indistinguishable::first,
+                                                                             typename indistinguishable::second>::value,
+                       "Two alternatives of this variant have the same keys holding the same types and no "
+                       "discriminator, so reading JSON into it cannot tell them apart: every read would silently "
+                       "produce the first, whichever was written. Declare `tag` and `ids` in glz::meta for the "
+                       "variant, or remove one of the two. They are the last two template arguments of "
+                       "variant_alternatives_are_indistinguishable in the instantiation backtrace.");
+
          constexpr auto Opts = ws_handled_off<Options>();
          if constexpr (variant_is_auto_deducible<T>()) {
             if constexpr (not check_ws_handled(Options)) {
@@ -5006,7 +5022,9 @@ namespace glz
          if (parse_failed(ctx.error)) [[unlikely]] {
             return;
          }
-         value = ctx.scratch;
+         if (!detail::assign_utf8_path(value, ctx.scratch)) [[unlikely]] {
+            ctx.error = error_code::invalid_utf8;
+         }
       }
    };
 

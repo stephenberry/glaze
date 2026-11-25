@@ -1,9 +1,12 @@
-import std;
 // Glaze Library
 // For the license information refer to glaze.hpp
 
+import std;
+
+import glaze.api.tuple;
 import glaze.core.tuple;
 
+using std::int32_t;
 
 import glaze;
 #include "glaze/util/attributes.hpp"
@@ -351,7 +354,7 @@ suite serialization = [] {
       expect(parsed == t);
    };
 
-   "type name"_test = [] { expect(glz::name_v<glz::tuple<int32_t, double>> == "glz::tuple<int32_t,double>"); };
+   "type name"_test = [] { expect(glz::name_v<glz::tuple<int32_t, double>> == "glz::tuple<std::int32_t,double>"); };
 };
 
 int main() { return 0; }

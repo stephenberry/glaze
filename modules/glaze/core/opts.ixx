@@ -71,6 +71,24 @@ export namespace glz
    template <>
    inline constexpr bool format_supports_streaming<NDJSON> = true;
 
+   // Whether a format's documents may contain zero bytes. glz::read rejects a null-terminated C string
+   // for such a format, since strlen would truncate it. A user-defined binary format specializes this.
+   template <std::uint32_t Format>
+   inline constexpr bool format_is_binary = false;
+
+   template <>
+   inline constexpr bool format_is_binary<BEVE> = true;
+   template <>
+   inline constexpr bool format_is_binary<CBOR> = true;
+   template <>
+   inline constexpr bool format_is_binary<JSONB> = true;
+   template <>
+   inline constexpr bool format_is_binary<BSON> = true;
+   template <>
+   inline constexpr bool format_is_binary<MSGPACK> = true;
+   template <>
+   inline constexpr bool format_is_binary<EETF> = true;
+
    // layout
    inline constexpr uint8_t rowwise = 0;
    inline constexpr uint8_t colwise = 1;
@@ -119,13 +137,13 @@ export namespace glz
 
    // NOTE TO USER:
    // glz::opts are the default options for using Glaze
-   // You can create your own options struct with more or less fields as long as your struct has:
-   // - opts_internal internal{};
-   // - std::uint32_t format
-   // The recommended approach is to inherit:
+   // To add options, create your own options struct that inherits from glz::opts:
    // struct custom_opts : glz::opts {
    //   bool validate_trailing_whitespace = true;
    // };
+   // The built-in formats other than CSV (see opts_csv) read the fields of glz::opts directly, so a custom options
+   // struct must provide all of them. Inheriting does that. A struct that leaves some out compiles only where
+   // nothing reads the missing fields, which depends on the format and the types being read or written.
 
    struct opts
    {
@@ -402,6 +420,9 @@ export namespace glz
    struct allow_conversions_opt_tag
    {};
 
+   struct float_max_write_precision_opt_tag
+   {};
+
    // Helper for deprecated option static_asserts (dependent false pattern)
    template <class>
    inline constexpr bool deprecated_opts_raw = false;
@@ -435,6 +456,10 @@ export namespace glz
 
    template <auto member_ptr>
    concept is_allow_conversions_tag = std::same_as<std::decay_t<decltype(member_ptr)>, allow_conversions_opt_tag>;
+
+   template <auto member_ptr>
+   concept is_float_max_write_precision_tag =
+      std::same_as<std::decay_t<decltype(member_ptr)>, float_max_write_precision_opt_tag>;
 
    consteval bool check_validate_skipped(auto&& Opts)
    {
@@ -526,8 +551,8 @@ export namespace glz
       }
    }
 
-   // Not every options struct carries this: the docs invite trimmed-down custom ones, and formats
-   // that never enforced required keys never made their users declare it. Absent means off.
+   // Not every options struct carries this: opts_csv does not, and formats that never enforced
+   // required keys never made their users declare it. Absent means off.
    consteval bool check_error_on_missing_keys(auto&& Opts)
    {
       if constexpr (requires { Opts.error_on_missing_keys; }) {
@@ -1259,6 +1284,34 @@ export namespace glz
                bool structs_as_arrays{};
             };
             return opts_structs_as_arrays{{Opts}, static_cast<bool>(value)};
+         }
+      }
+      else if constexpr (is_allow_conversions_tag<member_ptr>) {
+         if constexpr (requires { Opts.allow_conversions; }) {
+            auto ret = Opts;
+            ret.allow_conversions = static_cast<bool>(value);
+            return ret;
+         }
+         else {
+            struct opts_allow_conversions : std::decay_t<decltype(Opts)>
+            {
+               bool allow_conversions{};
+            };
+            return opts_allow_conversions{{Opts}, static_cast<bool>(value)};
+         }
+      }
+      else if constexpr (is_float_max_write_precision_tag<member_ptr>) {
+         if constexpr (requires { Opts.float_max_write_precision; }) {
+            auto ret = Opts;
+            ret.float_max_write_precision = static_cast<float_precision>(value);
+            return ret;
+         }
+         else {
+            struct opts_float_max_write_precision : std::decay_t<decltype(Opts)>
+            {
+               float_precision float_max_write_precision{};
+            };
+            return opts_float_max_write_precision{{Opts}, static_cast<float_precision>(value)};
          }
       }
       else {

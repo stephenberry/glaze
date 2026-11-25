@@ -17,7 +17,7 @@ import glaze.api.std.array;
 import glaze.beve.read;
 import glaze.beve.write;
 
-import cbor;
+import glaze.cbor;
 
 import glaze.core.common;
 import glaze.core.meta;

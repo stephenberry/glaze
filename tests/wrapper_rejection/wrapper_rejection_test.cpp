@@ -1,6 +1,11 @@
-import std;
 // Glaze Library
 // For the license information refer to glaze.hpp
+
+import std;
+
+import glaze.core.common;
+
+using std::uint32_t;
 
 // A wrapper (a glaze_wrapper such as glz::quoted or glz::invoke) is a view onto a member, not a struct.
 // A format with no specialization for one must not reflect it, which writes the wrapper's internals
