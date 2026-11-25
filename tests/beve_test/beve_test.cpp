@@ -2970,6 +2970,51 @@ suite beve_to_json_tests = [] {
       expect(json == R"([99,"spiders"])") << json;
    };
 
+   // An empty buffer holds no value, and no value is not a JSON document. The conversion used to
+   // report success while producing nothing.
+   "beve_to_json requires a value"_test = [] {
+      std::string json{};
+      expect(glz::beve_to_json(std::string_view{}, json).ec == glz::error_code::unexpected_end);
+   };
+
+   // Several values in one buffer convert to one JSON document per line. A delimiter tag writes
+   // that newline; without one the converter writes it, rather than running the two documents
+   // together into text that is no longer JSON.
+   "beve_to_json separates several values"_test = [] {
+      std::string delimited{};
+      expect(not glz::write_beve_append(1, delimited));
+      expect(not glz::write_beve_append_with_delimiter(2, delimited));
+
+      std::string json{};
+      expect(not glz::beve_to_json(delimited, json));
+      expect(json == "1\n2") << json;
+
+      std::string concatenated{};
+      expect(not glz::write_beve_append(1, concatenated));
+      expect(not glz::write_beve_append(2, concatenated));
+
+      expect(not glz::beve_to_json(concatenated, json));
+      expect(json == "1\n2") << json;
+   };
+
+   // dump() does not bounds check a buffer it cannot grow, so the converter reserves every write.
+   "beve_to_json fixed buffer"_test = [] {
+      std::vector<std::vector<int>> v{{}, {}};
+      std::string buffer{};
+      expect(not glz::write_beve(v, buffer));
+
+      std::array<char, 64> room{};
+      const auto ec = glz::beve_to_json(buffer, room);
+      expect(not ec);
+      // count carries the written length, which a fixed-size buffer has no other way to learn
+      expect(std::string_view{room.data(), ec.count} == "[[],[]]");
+
+      // Nested arrays write nothing but structural characters, the writes that used to go
+      // unchecked, so they overflow a small buffer without ever reaching a value writer.
+      std::array<char, 2> cramped{};
+      expect(glz::beve_to_json(buffer, cramped).ec == glz::error_code::buffer_overflow);
+   };
+
    "beve_to_json std::variant<int, std::string>"_test = [] {
       std::variant<int, std::string> v = 99;
       std::string buffer{};

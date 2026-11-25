@@ -135,7 +135,7 @@ Read into the owning equivalent (`std::string`, `glz::raw_json`, `glz::text`) wh
 
 The check is on the readers that point into the buffer rather than on the shape of the destination, so it applies equally to a view reached through a container, a `std::tuple`, a map key, or a `glz::custom` setter. A `std::span` over your own storage is not affected — only `std::span<const T>` is ever aimed at the input.
 
-What the check is aimed at is a view the *caller* keeps. A reader that borrows a view of the string it just parsed and turns it into a value before returning — how `std::chrono::system_clock::time_point`, `std::chrono::year_month_day`, and `glz::date_format` fields are read — holds it across nothing that refills, so those types stream normally.
+What the check is aimed at is a view the *caller* keeps. A reader that borrows a view of the string it just parsed and turns it into a value before returning — how `std::chrono::system_clock::time_point`, `std::chrono::year_month_day`, and `glz::date_format` fields are read, and how a tagged variant turns its discriminator into an alternative index — holds it across nothing that refills, so those types stream normally.
 
 Buffered reads are unaffected. A buffer holds the whole document for the duration of the call, so views into it stay valid and remain a supported zero-copy idiom.
 
@@ -161,6 +161,15 @@ glz::basic_istream_buffer<std::ifstream, 1 << 20> buffer(file);  // 1 MB window
 ```
 
 Leading whitespace is also read without refilling, so whitespace wider than the window stops a read before it reaches the value behind it.
+
+A `std::variant` of objects adds one more case. When the alternative is decided by the shape of the object, or by a tag that is not the first key, the reader scans the object once to work out which alternative it is and then reads it again from the opening brace. Adjacent tagging (`tag` plus `content`) always reads it twice, whatever the key order.
+
+That second pass needs the opening brace to still be in the window. A refill releases whatever the parse has stepped over, so the object has to fit in the room the window has left *at the point it starts* — not in the window's full capacity, since the reader tops the window up between elements rather than at every byte. Where it does not fit, the read stops with `error_code::streaming_unsupported` rather than re-reading relocated bytes. Give the window several times the size of the largest such object, or put an internal tag first, which skips the second pass entirely and streams at any size:
+
+```jsonc
+{"type":"circle","points":[ ... a megabyte of them ... ]}  // streams in a 64 KB window
+{"points":[ ... a megabyte of them ... ],"type":"circle"}  // needs room for the whole object
+```
 
 ## See Also
 

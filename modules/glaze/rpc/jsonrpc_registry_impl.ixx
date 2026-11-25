@@ -121,14 +121,14 @@ namespace glz
    }
 
    // Storage for JSON RPC protocol - similar to REPE but with JSON RPC state
-   export template <>
+   template <>
    struct protocol_storage<JSONRPC>
    {
       using type = std::unordered_map<sv, std::function<void(jsonrpc::state&&)>, detail::string_hash, std::equal_to<>>;
    };
 
    // Implementation for JSON RPC protocol
-   export template <auto Opts>
+   template <auto Opts>
    struct registry_impl<Opts, JSONRPC>
    {
      private:

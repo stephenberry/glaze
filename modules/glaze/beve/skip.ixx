@@ -51,7 +51,7 @@ namespace glz
       const auto tag = uint8_t(*it);
       const uint8_t byte_count = byte_count_lookup[tag >> 5];
       ++it;
-      if ((it + byte_count) > end) [[unlikely]] {
+      if (size_t(end - it) < byte_count) [[unlikely]] {
          ctx.error = error_code::unexpected_end;
          return;
       }

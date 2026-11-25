@@ -4,6 +4,7 @@
 import std;
 
 import glaze.core.common;
+import glaze.core.custom;
 import glaze.core.meta_fwd;
 import glaze.core.opts;
 import glaze.net.http_router;

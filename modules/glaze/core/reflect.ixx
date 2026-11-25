@@ -2554,7 +2554,7 @@ namespace glz
          else {
             if constexpr (N == 2) {
                if constexpr (uindex > 0) {
-                  if ((it + uindex) >= end) [[unlikely]] {
+                  if (size_t(end - it) <= uindex) [[unlikely]] {
                      return N; // error
                   }
                }
@@ -2564,7 +2564,7 @@ namespace glz
             }
             else {
                if constexpr (uindex > 0) {
-                  if ((it + uindex) >= end) [[unlikely]] {
+                  if (size_t(end - it) <= uindex) [[unlikely]] {
                      return N; // error
                   }
                }
@@ -2583,7 +2583,7 @@ namespace glz
       GLZ_ALWAYS_INLINE static constexpr size_t op(auto&& it, auto end) noexcept
       {
          if constexpr (uindex > 0) {
-            if ((it + uindex) >= end) [[unlikely]] {
+            if (size_t(end - it) <= uindex) [[unlikely]] {
                return N; // error
             }
          }
@@ -2602,7 +2602,7 @@ namespace glz
       GLZ_ALWAYS_INLINE static constexpr size_t op(auto&& it, auto end) noexcept
       {
          if constexpr (HashInfo.front_hash_bytes == 2) {
-            if ((it + 2) >= end) [[unlikely]] {
+            if (size_t(end - it) <= 2) [[unlikely]] {
                return N; // error
             }
             uint16_t h;
@@ -2621,7 +2621,7 @@ namespace glz
             return HashInfo.table[bitmix(h, HashInfo.seed) % bsize];
          }
          else if constexpr (HashInfo.front_hash_bytes == 4) {
-            if ((it + 4) >= end) [[unlikely]] {
+            if (size_t(end - it) <= 4) [[unlikely]] {
                return N;
             }
             uint32_t h;
@@ -2640,7 +2640,7 @@ namespace glz
             return HashInfo.table[bitmix(h, HashInfo.seed) % bsize];
          }
          else if constexpr (HashInfo.front_hash_bytes == 8) {
-            if ((it + 8) >= end) [[unlikely]] {
+            if (size_t(end - it) <= 8) [[unlikely]] {
                return N;
             }
             uint64_t h;
@@ -2676,7 +2676,7 @@ namespace glz
          if (c) [[likely]] {
             const auto n = uint8_t(static_cast<std::decay_t<decltype(it)>>(c) - it);
             const auto pos = per_length_info<T>.unique_index[n];
-            if ((it + pos) >= end) [[unlikely]] {
+            if (size_t(end - it) <= pos) [[unlikely]] {
                return N; // error
             }
             const auto h = bitmix(uint16_t(it[pos]) | (uint16_t(n) << 8), HashInfo.seed);
@@ -2704,7 +2704,7 @@ namespace glz
          // extra characters exist after the closing quote (e.g., standalone enum: "value")
 
          if constexpr (length_range == 0) {
-            if ((it + min_length) >= end) [[unlikely]] {
+            if (size_t(end - it) <= min_length) [[unlikely]] {
                return N;
             }
             const auto h = full_hash<HashInfo.min_length, HashInfo.max_length, HashInfo.seed>(it, min_length);
@@ -2919,7 +2919,7 @@ namespace glz
          // a gap of [min_length, max_length] would read it[255]. The wrapper's length pre-screen
          // does not catch that, so this reader keeps its own end check.
          const auto pos = per_length_info<T>.unique_index[uint8_t(n)];
-         if ((it + pos) >= end) [[unlikely]] {
+         if (size_t(end - it) <= pos) [[unlikely]] {
             return N; // error
          }
          const auto h = bitmix(uint16_t(it[pos]) | (uint16_t(n) << 8), HashInfo.seed);

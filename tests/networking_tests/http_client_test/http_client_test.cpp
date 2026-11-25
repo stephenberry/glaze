@@ -24,7 +24,7 @@ using namespace glz;
 
 namespace test_http_client
 {
-   struct put_payload
+   struct json_payload
    {
       int value{};
       std::string message{};
@@ -34,9 +34,9 @@ namespace test_http_client
 namespace glz
 {
    template <>
-   struct meta<test_http_client::put_payload>
+   struct meta<test_http_client::json_payload>
    {
-      using T = test_http_client::put_payload;
+      using T = test_http_client::json_payload;
       static constexpr auto value = glz::object("value", &T::value, "message", &T::message);
    };
 }
@@ -168,6 +168,32 @@ class working_test_server
       });
 
       server_.put("/json", [](const request& req, response& res) {
+         auto content_type = req.headers.first_value("content-type");
+         if (!content_type) {
+            res.status(415).body("missing content-type");
+            return;
+         }
+
+         std::string response_body = "CT=";
+         response_body.append(*content_type);
+         response_body.append(";CT_COUNT=");
+         response_body.append(std::to_string(req.headers.count("content-type")));
+         response_body.append(";BODY=");
+         response_body.append(req.body);
+         res.status(200).content_type("text/plain").body(response_body);
+      });
+
+      server_.patch("/patch", [](const request& req, response& res) {
+         std::string response_body = "PATCH:";
+         response_body.append(req.body);
+         if (auto it = req.headers.find("x-test-header"); it != req.headers.end()) {
+            response_body.append(":");
+            response_body.append(it->value);
+         }
+         res.status(200).content_type("text/plain").body(response_body);
+      });
+
+      server_.patch("/json", [](const request& req, response& res) {
          auto content_type = req.headers.first_value("content-type");
          if (!content_type) {
             res.status(415).body("missing content-type");
@@ -986,13 +1012,32 @@ suite glz_http_client_tests = [] {
       server.stop();
    };
 
+   "synchronous_patch_request"_test = [] {
+      working_test_server server;
+      expect(server.start());
+
+      glz::http_client client;
+
+      glz::http_headers headers{{"x-test-header", "header-value"}};
+      auto result = client.patch(server.base_url() + "/patch", "payload", headers);
+
+      expect(result.has_value()) << "PATCH request should succeed";
+      if (result.has_value()) {
+         expect(result->status_code == 200) << "PATCH status should be 200";
+         expect(result->response_body == "PATCH:payload:header-value")
+            << "Response body should echo payload and header";
+      }
+
+      server.stop();
+   };
+
    "put_json_sets_content_type"_test = [] {
       working_test_server server;
       expect(server.start());
 
       glz::http_client client;
 
-      test_http_client::put_payload payload{.value = 42, .message = "update"};
+      test_http_client::json_payload payload{.value = 42, .message = "update"};
 
       std::string expected_json;
       auto ec = glz::write_json(payload, expected_json);
@@ -1021,7 +1066,7 @@ suite glz_http_client_tests = [] {
 
       glz::http_client client;
 
-      test_http_client::put_payload payload{.value = 7, .message = "vendor"};
+      test_http_client::json_payload payload{.value = 7, .message = "vendor"};
 
       glz::http_headers vendor_headers{{"Content-Type", "application/vnd.api+json"}};
       auto result = client.put_json(server.base_url() + "/json", payload, vendor_headers);
@@ -1043,7 +1088,7 @@ suite glz_http_client_tests = [] {
 
       glz::http_client client;
 
-      test_http_client::put_payload payload{.value = 9, .message = "charset"};
+      test_http_client::json_payload payload{.value = 9, .message = "charset"};
 
       glz::http_headers lowercase_headers{{"content-type", "application/json; charset=utf-8"}};
       auto result = client.put_json(server.base_url() + "/json", payload, lowercase_headers);
@@ -1054,6 +1099,34 @@ suite glz_http_client_tests = [] {
             << "The charset parameter must survive";
          expect(result->response_body.find("CT_COUNT=1") != std::string::npos)
             << "A lowercase field name must be recognized as already present";
+      }
+
+      server.stop();
+   };
+
+   "patch_json_sets_content_type"_test = [] {
+      working_test_server server;
+      expect(server.start());
+
+      glz::http_client client;
+
+      test_http_client::json_payload payload{.value = 42, .message = "patch"};
+
+      std::string expected_json;
+      auto ec = glz::write_json(payload, expected_json);
+      expect(!ec) << "Serializing payload should succeed";
+
+      auto result = client.patch_json(server.base_url() + "/json", payload);
+
+      expect(result.has_value()) << "PATCH JSON request should succeed";
+      if (result.has_value()) {
+         expect(result->status_code == 200) << "PATCH JSON status should be 200";
+         expect(result->response_body.find("CT=application/json") != std::string::npos)
+            << "Content-Type header should be forwarded";
+         expect(result->response_body.find("CT_COUNT=1") != std::string::npos)
+            << "Content-Type should reach the wire exactly once";
+         expect(result->response_body.find("BODY=" + expected_json) != std::string::npos)
+            << "JSON body should be forwarded";
       }
 
       server.stop();

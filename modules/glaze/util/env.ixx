@@ -4,6 +4,10 @@
 // glz:header std=<cstdlib>
 // glz:header std=<optional>
 // glz:header std=<string>
+module;
+#if defined(_MSC_VER)
+#include <stdlib.h>
+#endif
 export module glaze.util.env;
 
 import std;

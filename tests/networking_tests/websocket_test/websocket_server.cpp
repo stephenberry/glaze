@@ -3,6 +3,11 @@
 
 // Complete example showing Glaze HTTP server with WebSocket support
 
+#include "glaze/ext/asio_include.hpp"
+#ifdef DELETE
+#undef DELETE
+#endif
+
 import std;
 
 import glaze.net.http_router;

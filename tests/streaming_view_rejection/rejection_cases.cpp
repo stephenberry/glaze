@@ -62,6 +62,25 @@ struct holds_text_view_t
    glz::text_view tv{};
 };
 
+// A tagged variant's discriminator is exempt from the guard: it is turned into an alternative index
+// inside the reader that parsed it and never reaches the caller (issue #2823). That exemption is the
+// discriminator's alone -- an alternative that really does hold a view must still be rejected.
+struct view_alternative_t
+{
+   std::string_view v{};
+};
+struct plain_alternative_t
+{
+   int n{};
+};
+using tagged_view_variant_t = std::variant<view_alternative_t, plain_alternative_t>;
+template <>
+struct glz::meta<tagged_view_variant_t>
+{
+   static constexpr std::string_view tag = "t";
+   static constexpr auto ids = std::array{"view", "plain"};
+};
+
 template <class T>
 void stream_into()
 {
@@ -81,6 +100,9 @@ int main()
 #endif
 #ifdef GLZ_REJECT_CASE_TEXT_VIEW
    stream_into<holds_text_view_t>();
+#endif
+#ifdef GLZ_REJECT_CASE_TAGGED_VARIANT_VIEW
+   stream_into<tagged_view_variant_t>();
 #endif
 #ifdef GLZ_REJECT_CASE_PAST_ANY_DEPTH
    stream_into<deeply_nested_view_t>();

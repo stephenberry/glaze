@@ -9,6 +9,7 @@ set(glz_rejection_cases
     DIRECT_VIEW
     BEHIND_TUPLE
     TEXT_VIEW
+    TAGGED_VARIANT_VIEW
     PAST_ANY_DEPTH
     CUSTOM_SETTER
     NDJSON

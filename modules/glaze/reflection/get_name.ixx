@@ -15,7 +15,7 @@ import std;
 
 export import glaze.core.meta_fwd;
 
-import glaze.reflection.to_tuple;
+export import glaze.reflection.to_tuple;
 
 import glaze.util.string_literal;
 

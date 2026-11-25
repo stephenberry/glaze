@@ -9,7 +9,9 @@
 //      as an error, not a short body. Covers both client paths.
 //   3. A connection whose body read ends with the peer closing the socket (EOF) is not
 //      returned to the pool. Pooling an EOF'd (half-closed) socket would hand the next
-//      request a dead connection.
+//      request a dead connection. The streaming path shares that pool, so the same rule
+//      applies to it: a stream is only reusable once its response is read to its framed
+//      end, terminal chunk and trailer section included.
 
 #include "glaze/ext/asio_include.hpp"
 
@@ -540,6 +542,175 @@ suite content_length_connection_reuse = [] {
       }
       expect(accept_count->load() == 2) << "expected two server connections (dead socket not reused), got: "
                                         << accept_count->load();
+   };
+
+   // The streaming path shares the same connection pool as ordinary requests, so a
+   // socket it hands back poisons whatever request draws it next. A stream whose
+   // body is framed by connection close ends at EOF: the socket is still "open" from
+   // this side, so it used to be pooled unconditionally and the next request drew a
+   // dead connection. Only a stream read to its framed end is reusable.
+   "eof_framed_stream_not_pooled"_test = [] {
+      auto listener = std::make_shared<asio::io_context>();
+      auto acceptor = std::make_shared<asio::ip::tcp::acceptor>(*listener);
+      asio::ip::tcp::endpoint ep(asio::ip::make_address("127.0.0.1"), 0);
+      acceptor->open(ep.protocol());
+      acceptor->set_option(asio::socket_base::reuse_address(true));
+      acceptor->bind(ep);
+      acceptor->listen(2);
+      const uint16_t port = acceptor->local_endpoint().port();
+
+      auto accept_count = std::make_shared<std::atomic<int>>(0);
+      std::vector<std::string> responses = {
+         // No Content-Length and no chunked framing: the body runs to the close that
+         // serve_sequence performs after writing.
+         "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nConnection: keep-alive\r\n\r\nSTREAMED",
+         "HTTP/1.1 200 OK\r\nContent-Length: 5\r\n\r\nHELLO",
+      };
+      auto server = serve_sequence(listener, acceptor, responses, accept_count);
+
+      glz::http_client client;
+      // Force a pooled dead socket to be reused rather than culled by the acquire-time peek.
+      client.set_pool_active_liveness_check(false);
+
+      const std::string base = "http://127.0.0.1:" + std::to_string(port) + "/";
+
+      std::promise<void> stream_done;
+      auto stream_finished = stream_done.get_future();
+      std::string streamed;
+      auto conn = client.stream_request_v2({.url = base,
+                                            .on_data = [&](std::string_view data) { streamed.append(data); },
+                                            .on_error = [](std::error_code) {},
+                                            .on_disconnect = [&] { stream_done.set_value(); }});
+      expect(conn != nullptr) << "stream request should start";
+      expect(stream_finished.wait_for(std::chrono::seconds(5)) == std::future_status::ready)
+         << "stream should reach its end";
+
+      // POST, not GET: the transparent-retry path covers idempotent methods, so a GET
+      // would silently reopen on a dead socket and hide the bug this pins.
+      auto second = client.post_async(base, "two").get(); // must land on a fresh connection 2
+
+      server.join();
+
+      expect(streamed == "STREAMED") << "stream body should arrive intact, got: " << streamed;
+      expect(second.has_value()) << "after an EOF-framed stream the connection must not be pooled; the follow-up "
+                                    "request must open a fresh connection instead of reusing a dead socket";
+      if (second) {
+         expect(second->status_code == 200);
+         expect(second->response_body == "HELLO");
+      }
+      expect(accept_count->load() == 2) << "expected two server connections (dead socket not reused), got: "
+                                        << accept_count->load();
+   };
+
+   // The other side of the same rule: a stream that reaches the end of its framing does
+   // leave a reusable socket, but only once the trailer section and the final CRLF that
+   // follow the terminal chunk have been consumed too (RFC 9112 7.1.2). Those bytes are
+   // written in a separate segment here, so they are still on the socket when the
+   // terminal chunk is parsed - pooling at that point hands the next request a socket
+   // with a trailer line in front of the status line.
+   "chunked_stream_pools_only_after_trailers"_test = [] {
+      auto listener = std::make_shared<asio::io_context>();
+      auto acceptor = std::make_shared<asio::ip::tcp::acceptor>(*listener);
+      asio::ip::tcp::endpoint ep(asio::ip::make_address("127.0.0.1"), 0);
+      acceptor->open(ep.protocol());
+      acceptor->set_option(asio::socket_base::reuse_address(true));
+      acceptor->bind(ep);
+      acceptor->listen(2);
+      const uint16_t port = acceptor->local_endpoint().port();
+
+      auto accept_count = std::make_shared<std::atomic<int>>(0);
+      auto server = std::thread([listener, acceptor, accept_count] {
+         asio::error_code ec;
+         acceptor->non_blocking(true, ec);
+         const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
+         asio::ip::tcp::socket socket(*listener);
+         while (std::chrono::steady_clock::now() < deadline) {
+            acceptor->accept(socket, ec);
+            if (ec == asio::error::would_block || ec == asio::error::try_again) {
+               std::this_thread::sleep_for(std::chrono::milliseconds(5));
+               continue;
+            }
+            break;
+         }
+         if (ec) return;
+         accept_count->fetch_add(1);
+         socket.non_blocking(false, ec); // the accepted socket may inherit non-blocking mode
+
+         asio::streambuf req_buf;
+         asio::read_until(socket, req_buf, "\r\n\r\n", ec);
+         asio::write(socket,
+                     asio::buffer(std::string("HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n"
+                                              "8\r\nSTREAMED\r\n"
+                                              "0\r\n")),
+                     ec);
+         // Separate segment: the trailer section must be read off the socket rather than
+         // found already sitting in the client's buffer.
+         std::this_thread::sleep_for(std::chrono::milliseconds(50));
+         asio::write(socket, asio::buffer(std::string("X-Checksum: 1234\r\n\r\n")), ec);
+
+         // Second request, on this same connection if the socket was pooled correctly.
+         // Polled against a deadline rather than blocking: if a regression stops the socket
+         // being reused, the request never arrives here and an unbounded read would hang the
+         // thread, and with it join() and the whole test, until ctest times it out.
+         req_buf.consume(req_buf.size());
+         socket.non_blocking(true, ec);
+         const auto request_deadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
+         bool second_request_arrived = false;
+         while (std::chrono::steady_clock::now() < request_deadline) {
+            ec = {};
+            asio::read_until(socket, req_buf, "\r\n\r\n", ec);
+            if (!ec) {
+               second_request_arrived = true;
+               break;
+            }
+            if (ec != asio::error::would_block && ec != asio::error::try_again) break;
+            std::this_thread::sleep_for(std::chrono::milliseconds(5));
+         }
+         socket.non_blocking(false, ec);
+         if (second_request_arrived) {
+            asio::write(socket, asio::buffer(std::string("HTTP/1.1 200 OK\r\nContent-Length: 5\r\n\r\nWORLD")), ec);
+         }
+         socket.shutdown(asio::ip::tcp::socket::shutdown_both, ec);
+         socket.close(ec);
+      });
+
+      glz::http_client client;
+      client.set_pool_active_liveness_check(false);
+
+      const std::string base = "http://127.0.0.1:" + std::to_string(port) + "/";
+
+      std::promise<void> stream_done;
+      auto stream_finished = stream_done.get_future();
+      std::string streamed;
+      auto conn = client.stream_request_v2({.url = base,
+                                            .on_data = [&](std::string_view data) { streamed.append(data); },
+                                            .on_error = [](std::error_code) {},
+                                            .on_disconnect = [&] { stream_done.set_value(); }});
+      expect(conn != nullptr) << "stream request should start";
+      expect(stream_finished.wait_for(std::chrono::seconds(5)) == std::future_status::ready)
+         << "stream should reach its end";
+
+      // POST so a failed read can't be masked by the idempotent-method retry path. Waited
+      // on with a deadline for the same reason the server polls: a socket that was not
+      // reused leaves this request talking to a server that has stopped accepting.
+      auto second_future = client.post_async(base, "two");
+      const bool second_answered = second_future.wait_for(std::chrono::seconds(10)) == std::future_status::ready;
+      expect(second_answered) << "follow-up request never completed; the pooled socket was not reused";
+
+      server.join();
+
+      expect(streamed == "STREAMED") << "stream body should arrive intact, got: " << streamed;
+      if (second_answered) {
+         auto second = second_future.get();
+         expect(second.has_value()) << "the pooled socket must sit at the start of the next response, not on the "
+                                       "trailer section that follows the terminal chunk";
+         if (second) {
+            expect(second->status_code == 200);
+            expect(second->response_body == "WORLD");
+         }
+      }
+      expect(accept_count->load() == 1) << "a stream read to its framed end should be reused, not reopened; got "
+                                        << accept_count->load() << " connections";
    };
 };
 

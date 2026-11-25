@@ -30,10 +30,20 @@ namespace glz::repe
 {
    // Thread-local response buffer for plugin implementations
    // Note: This buffer grows as needed but does not shrink during the thread's lifetime
-   export inline thread_local std::string plugin_response_buffer;
+
+   export
+#if !defined(GLZ_BUILDING_MODULES)
+   inline
+#endif
+   thread_local std::string plugin_response_buffer;
 
    // Create an error response with proper REPE format (zero-copy to thread-local buffer)
-   export inline void plugin_error_response(error_code ec, std::string_view error_msg, uint64_t id = 0)
+
+   export
+#if !defined(GLZ_BUILDING_MODULES)
+   inline
+#endif
+   void plugin_error_response(error_code ec, std::string_view error_msg, uint64_t id = 0)
    {
       encode_error_buffer(ec, plugin_response_buffer, error_msg, id);
    }

@@ -153,6 +153,26 @@ std::expected<response, std::error_code> post(
 );
 ```
 
+### PUT Request
+
+```cpp
+std::expected<response, std::error_code> put(
+    std::string_view url, 
+    const std::string& body,
+    const glz::http_headers& headers = {}
+);
+```
+
+### PATCH Request
+
+```cpp
+std::expected<response, std::error_code> patch(
+    std::string_view url, 
+    const std::string& body,
+    const glz::http_headers& headers = {}
+);
+```
+
 ### JSON POST Request
 ```cpp
 template<class T>
@@ -162,6 +182,28 @@ std::expected<response, std::error_code> post_json(
     const glz::http_headers& headers = {}
 );
 ```
+
+### JSON PUT Request
+```cpp
+template<class T>
+std::expected<response, std::error_code> put_json(
+    std::string_view url, 
+    const T& data,
+    const glz::http_headers& headers = {}
+);
+```
+
+
+### JSON PATCH Request
+```cpp
+template<class T>
+std::expected<response, std::error_code> patch_json(
+    std::string_view url, 
+    const T& data,
+    const glz::http_headers& headers = {}
+);
+```
+
 
 ## Asynchronous Methods
 
@@ -254,10 +296,10 @@ struct stream_request_params_v2 {
     size_t max_buffer_size{1024 * 1024};
     std::string body;
     glz::http_headers headers;
-    http_connect_handler on_connect;
-    http_disconnect_handler on_disconnect;
     http_data_handler on_data;
     http_error_handler on_error;
+    http_connect_handler on_connect;
+    http_disconnect_handler on_disconnect;
     std::function<bool(int)> status_is_error{[](int status){ return status >= 400; }};
 };
 ```
@@ -269,10 +311,10 @@ struct stream_request_params_v2 {
 -   `max_buffer_size`: Larger buffer can decrease dropouts and increase throughput at cost of memory usage. (default is 1 MiB)
 -   `body`: The HTTP Body to send.
 -   `headers`: The HTTP headers to send.
--   `on_connect`: A callback that's called when the connection is established and the headers are received.
--   `on_disconnect`: A callback that's called when the connection is closed.
 -   `on_data`: A callback that's called when data is received.
 -   `on_error`: A callback that's called when an error occurs.
+-   `on_connect`: A callback that's called when the connection is established and the headers are received.
+-   `on_disconnect`: A callback that's called when the connection is closed.
 -   `status_is_error`: Optional predicate to decide whether a status code should trigger `on_error` (defaults to checking for codes ≥ 400).
 
 To override the default behaviour you can supply a predicate:

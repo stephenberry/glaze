@@ -501,16 +501,18 @@ namespace glz
 
       jsonb_detail::jsonb_to_json_value<Opts>(ctx, it, end, out, ix, 0);
       if (bool(ctx.error)) {
-         return {0, ctx.error};
+         return {ix, ctx.error};
       }
       if (it != end) {
-         return {0, error_code::syntax_error};
+         return {ix, error_code::syntax_error};
       }
 
       if constexpr (resizable<JSONBuffer>) {
          out.resize(ix);
       }
-      return {};
+      // count is the number of bytes written. A resizable buffer carries its own size, but a
+      // fixed-size one has no other way to learn how much of it now holds JSON.
+      return {ix};
    }
 
    export template <auto Opts = glz::opts{}, class JSONBBuffer>

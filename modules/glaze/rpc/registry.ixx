@@ -23,13 +23,13 @@ import std;
 import glaze;
 import glaze.ext.jsonrpc;
 import glaze.net.http_router;
-import glaze.net.rest_registry_impl;
-import glaze.rpc.jsonrpc_registry_impl;
+export import glaze.net.rest_registry_impl;
+export import glaze.rpc.jsonrpc_registry_impl;
 export import glaze.rpc.registry_fwd;
 import glaze.rpc.repe.buffer;
 import glaze.rpc.repe.header;
 import glaze.rpc.repe;
-import glaze.rpc.repe.repe_registry_impl;
+export import glaze.rpc.repe.repe_registry_impl;
 
 import glaze.reflection.to_tuple;
 
@@ -52,7 +52,12 @@ namespace glz
       export inline constexpr std::string_view empty_path = "";
 
       // Single shared thread_local buffer for error messages (safe for synchronous operations)
-      inline std::string& error_buffer()
+      // Keep TLS initialization in the owning module to avoid MSVC's imported-inline
+      // __tlregdtor reference. Generated headers still need an inline definition.
+#if !defined(GLZ_BUILDING_MODULES)
+      inline
+#endif
+      std::string& error_buffer()
       {
          thread_local std::string buffer;
          buffer.clear();

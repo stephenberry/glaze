@@ -494,12 +494,24 @@ export namespace glz
          }
       }
       else if constexpr (global_meta_t<T>) {
+#if defined(_MSC_VER) && !defined(__clang__)
+         // Workaround for regression of this code in MSVC with modules. If fixed, can be removed.
+         return [&meta_value = meta<T>::value] {
+            if constexpr (std::same_as<std::remove_cvref_t<decltype(meta_value)>, reflect_array>) {
+               return detail::make_reflect_array<T>();
+            }
+            else {
+               return meta_value;
+            }
+         }();
+#else
          if constexpr (std::same_as<std::remove_cvref_t<decltype(meta<T>::value)>, reflect_array>) {
             return detail::make_reflect_array<T>();
          }
          else {
             return meta<T>::value;
          }
+#endif
       }
       else if constexpr (modify_t<T>) {
          return detail::make_modified_object<std::decay_t<T>>();

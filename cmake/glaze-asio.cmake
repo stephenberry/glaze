@@ -45,7 +45,7 @@ function(glaze_setup_asio)
         add_library(glaze::asio ALIAS glaze_asio)
         # Pin glaze/ext/glaze_asio.hpp to the Boost backend it would not otherwise
         # select when standalone <asio.hpp> is also visible (issue #2599).
-        target_compile_definitions(glaze_asio INTERFACE GLZ_USE_BOOST_ASIO)
+        target_compile_definitions(glaze_asio INTERFACE GLZ_USE_BOOST_ASIO BOOST_ASIO_NO_DEPRECATED)
         # Boost.Asio is header-only; Boost::system was removed in Boost 1.89
         # (header-only since 1.69), so Boost::headers alone is sufficient.
         if(TARGET Boost::headers)

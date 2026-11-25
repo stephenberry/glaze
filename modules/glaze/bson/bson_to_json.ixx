@@ -66,43 +66,16 @@ namespace glz
 {
    namespace bson_detail
    {
-      // --- small emit helpers ------------------------------------------------
-
-      template <class B, size_t N>
-      GLZ_ALWAYS_INLINE void emit_literal(is_context auto& ctx, B& out, size_t& ix, const char (&lit)[N]) noexcept
-      {
-         constexpr size_t n = N - 1; // exclude the trailing NUL
-         if (!ensure_space(ctx, out, ix + n + write_padding_bytes)) return;
-         std::memcpy(&out[ix], lit, n);
-         ix += n;
-      }
-
-      template <class B>
-      GLZ_ALWAYS_INLINE void emit_char(is_context auto& ctx, B& out, size_t& ix, char c) noexcept
-      {
-         using V = typename std::decay_t<B>::value_type;
-         if (!ensure_space(ctx, out, ix + 1 + write_padding_bytes)) return;
-         out[ix++] = static_cast<V>(c);
-      }
+      // Structural writes go through the shared converter emits in glz::detail, which reserve
+      // exactly what they write and report whether a fixed-size buffer had room.
+      using detail::emit_char;
+      using detail::emit_hex_bytes;
+      using detail::emit_literal;
 
       template <auto Opts, class B>
       GLZ_ALWAYS_INLINE void emit_json_string(is_context auto& ctx, std::string_view s, B& out, size_t& ix) noexcept
       {
          detail::emit_untrusted_string<Opts>(ctx, s, out, ix);
-      }
-
-      // Emit `n` payload bytes as a lowercase hex literal (no quotes, no prefix).
-      template <class B>
-      inline void emit_hex_bytes(is_context auto& ctx, const uint8_t* bytes, size_t n, B& out, size_t& ix) noexcept
-      {
-         using V = typename std::decay_t<B>::value_type;
-         static constexpr char digits[] = "0123456789abcdef";
-         if (!ensure_space(ctx, out, ix + 2 * n + write_padding_bytes)) return;
-         for (size_t i = 0; i < n; ++i) {
-            const uint8_t b = bytes[i];
-            out[ix++] = static_cast<V>(digits[b >> 4]);
-            out[ix++] = static_cast<V>(digits[b & 0x0F]);
-         }
       }
 
       // --- value / document / array dispatchers ------------------------------
@@ -116,27 +89,24 @@ namespace glz
          depth_guard guard{ctx};
          if (!guard) return;
 
-         emit_char(ctx, out, ix, '{');
-         if (bool(ctx.error)) return;
+         if (!emit_char(ctx, '{', out, ix)) return;
 
          bool first = true;
          read_document_elements(ctx, it, stop, [&](uint8_t element_tag, std::string_view key) {
             if (!first) {
-               emit_char(ctx, out, ix, ',');
-               if (bool(ctx.error)) return;
+               if (!emit_char(ctx, ',', out, ix)) return;
             }
             first = false;
 
             emit_json_string<Opts>(ctx, key, out, ix);
             if (bool(ctx.error)) return;
-            emit_char(ctx, out, ix, ':');
-            if (bool(ctx.error)) return;
+            if (!emit_char(ctx, ':', out, ix)) return;
 
             bson_to_json_value<Opts>(element_tag, ctx, it, stop, out, ix);
          });
          if (bool(ctx.error)) return;
 
-         emit_char(ctx, out, ix, '}');
+         if (!emit_char(ctx, '}', out, ix)) return;
       }
 
       template <auto Opts, class It, class B>
@@ -145,21 +115,19 @@ namespace glz
          depth_guard guard{ctx};
          if (!guard) return;
 
-         emit_char(ctx, out, ix, '[');
-         if (bool(ctx.error)) return;
+         if (!emit_char(ctx, '[', out, ix)) return;
 
          bool first = true;
          read_document_elements(ctx, it, stop, [&](uint8_t element_tag, std::string_view /*key*/) {
             if (!first) {
-               emit_char(ctx, out, ix, ',');
-               if (bool(ctx.error)) return;
+               if (!emit_char(ctx, ',', out, ix)) return;
             }
             first = false;
             bson_to_json_value<Opts>(element_tag, ctx, it, stop, out, ix);
          });
          if (bool(ctx.error)) return;
 
-         emit_char(ctx, out, ix, ']');
+         if (!emit_char(ctx, ']', out, ix)) return;
       }
 
       template <auto Opts, class It, class End, class B>
@@ -235,19 +203,16 @@ namespace glz
             const uint8_t* payload = reinterpret_cast<const uint8_t*>(&*it);
             it += payload_len;
 
-            emit_literal(ctx, out, ix, R"({"$binary":{"base64":")");
-            if (bool(ctx.error)) return;
+            if (!emit_literal<R"({"$binary":{"base64":")">(ctx, out, ix)) return;
             write_base64_to(ctx, payload, static_cast<size_t>(payload_len), out, ix);
             if (bool(ctx.error)) return;
-            emit_literal(ctx, out, ix, R"(","subType":")");
-            if (bool(ctx.error)) return;
-            emit_hex_bytes(ctx, &subtype, 1, out, ix);
-            if (bool(ctx.error)) return;
-            emit_literal(ctx, out, ix, R"("}})");
+            if (!emit_literal<R"(","subType":")">(ctx, out, ix)) return;
+            if (!emit_hex_bytes(ctx, &subtype, 1, out, ix)) return;
+            if (!emit_literal<R"("}})">(ctx, out, ix)) return;
             return;
          }
          case type::undefined:
-            emit_literal(ctx, out, ix, R"({"$undefined":true})");
+            if (!emit_literal<R"({"$undefined":true})">(ctx, out, ix)) return;
             return;
          case type::object_id: {
             if (static_cast<int64_t>(end - it) < 12) [[unlikely]] {
@@ -255,11 +220,9 @@ namespace glz
                return;
             }
             const uint8_t* payload = reinterpret_cast<const uint8_t*>(&*it);
-            emit_literal(ctx, out, ix, R"({"$oid":")");
-            if (bool(ctx.error)) return;
-            emit_hex_bytes(ctx, payload, 12, out, ix);
-            if (bool(ctx.error)) return;
-            emit_literal(ctx, out, ix, R"("})");
+            if (!emit_literal<R"({"$oid":")">(ctx, out, ix)) return;
+            if (!emit_hex_bytes(ctx, payload, 12, out, ix)) return;
+            if (!emit_literal<R"("})">(ctx, out, ix)) return;
             it += 12;
             return;
          }
@@ -270,10 +233,10 @@ namespace glz
             }
             const uint8_t b = static_cast<uint8_t>(*it++);
             if (b == 0) {
-               emit_literal(ctx, out, ix, "false");
+               if (!emit_literal<"false">(ctx, out, ix)) return;
             }
             else {
-               emit_literal(ctx, out, ix, "true");
+               if (!emit_literal<"true">(ctx, out, ix)) return;
             }
             return;
          }
@@ -283,30 +246,27 @@ namespace glz
             // Canonical Extended JSON v2: always wrap in {"$numberLong":"..."}
             // (Relaxed uses ISO-8601 for in-range values, which Glaze has no
             // formatter for; canonical form is valid in both modes.)
-            emit_literal(ctx, out, ix, R"({"$date":{"$numberLong":")");
-            if (bool(ctx.error)) return;
+            if (!emit_literal<R"({"$date":{"$numberLong":")">(ctx, out, ix)) return;
             to<JSON, int64_t>::template op<Opts>(ms, ctx, out, ix);
             if (bool(ctx.error)) return;
-            emit_literal(ctx, out, ix, R"("}})");
+            if (!emit_literal<R"("}})">(ctx, out, ix)) return;
             return;
          }
          case type::null:
-            emit_literal(ctx, out, ix, "null");
+            if (!emit_literal<"null">(ctx, out, ix)) return;
             return;
          case type::regex: {
             std::string_view pattern{};
             if (!read_cstring(ctx, it, end, pattern)) return;
             std::string_view options{};
             if (!read_cstring(ctx, it, end, options)) return;
-            emit_literal(ctx, out, ix, R"({"$regularExpression":{"pattern":)");
-            if (bool(ctx.error)) return;
+            if (!emit_literal<R"({"$regularExpression":{"pattern":)">(ctx, out, ix)) return;
             emit_json_string<Opts>(ctx, pattern, out, ix);
             if (bool(ctx.error)) return;
-            emit_literal(ctx, out, ix, R"(,"options":)");
-            if (bool(ctx.error)) return;
+            if (!emit_literal<R"(,"options":)">(ctx, out, ix)) return;
             emit_json_string<Opts>(ctx, options, out, ix);
             if (bool(ctx.error)) return;
-            emit_literal(ctx, out, ix, "}}");
+            if (!emit_literal<"}}">(ctx, out, ix)) return;
             return;
          }
          case type::javascript: {
@@ -322,11 +282,10 @@ namespace glz
             }
             const auto n = static_cast<size_t>(len) - 1;
             std::string_view s{reinterpret_cast<const char*>(&*it), n};
-            emit_literal(ctx, out, ix, R"({"$code":)");
-            if (bool(ctx.error)) return;
+            if (!emit_literal<R"({"$code":)">(ctx, out, ix)) return;
             emit_json_string<Opts>(ctx, s, out, ix);
             if (bool(ctx.error)) return;
-            emit_char(ctx, out, ix, '}');
+            if (!emit_char(ctx, '}', out, ix)) return;
             it += len;
             return;
          }
@@ -343,11 +302,10 @@ namespace glz
             }
             const auto n = static_cast<size_t>(len) - 1;
             std::string_view s{reinterpret_cast<const char*>(&*it), n};
-            emit_literal(ctx, out, ix, R"({"$symbol":)");
-            if (bool(ctx.error)) return;
+            if (!emit_literal<R"({"$symbol":)">(ctx, out, ix)) return;
             emit_json_string<Opts>(ctx, s, out, ix);
             if (bool(ctx.error)) return;
-            emit_char(ctx, out, ix, '}');
+            if (!emit_char(ctx, '}', out, ix)) return;
             it += len;
             return;
          }
@@ -362,15 +320,13 @@ namespace glz
             uint32_t seconds{};
             if (!read_le<uint32_t>(ctx, it, end, increment)) return;
             if (!read_le<uint32_t>(ctx, it, end, seconds)) return;
-            emit_literal(ctx, out, ix, R"({"$timestamp":{"t":)");
-            if (bool(ctx.error)) return;
+            if (!emit_literal<R"({"$timestamp":{"t":)">(ctx, out, ix)) return;
             to<JSON, uint32_t>::template op<Opts>(seconds, ctx, out, ix);
             if (bool(ctx.error)) return;
-            emit_literal(ctx, out, ix, R"(,"i":)");
-            if (bool(ctx.error)) return;
+            if (!emit_literal<R"(,"i":)">(ctx, out, ix)) return;
             to<JSON, uint32_t>::template op<Opts>(increment, ctx, out, ix);
             if (bool(ctx.error)) return;
-            emit_literal(ctx, out, ix, "}}");
+            if (!emit_literal<"}}">(ctx, out, ix)) return;
             return;
          }
          case type::int64: {
@@ -388,19 +344,17 @@ namespace glz
             // Extended JSON v2 $numberDecimal requires a decimal string, which
             // Glaze has no decimal128 formatter for. Emit under a non-`$`
             // wrapper so this doesn't masquerade as real $numberDecimal.
-            emit_literal(ctx, out, ix, R"({"decimal128Hex":")");
-            if (bool(ctx.error)) return;
-            emit_hex_bytes(ctx, payload, 16, out, ix);
-            if (bool(ctx.error)) return;
-            emit_literal(ctx, out, ix, R"("})");
+            if (!emit_literal<R"({"decimal128Hex":")">(ctx, out, ix)) return;
+            if (!emit_hex_bytes(ctx, payload, 16, out, ix)) return;
+            if (!emit_literal<R"("})">(ctx, out, ix)) return;
             it += 16;
             return;
          }
          case type::min_key:
-            emit_literal(ctx, out, ix, R"({"$minKey":1})");
+            if (!emit_literal<R"({"$minKey":1})">(ctx, out, ix)) return;
             return;
          case type::max_key:
-            emit_literal(ctx, out, ix, R"({"$maxKey":1})");
+            if (!emit_literal<R"({"$maxKey":1})">(ctx, out, ix)) return;
             return;
          case type::db_pointer:
          case type::code_w_scope:
@@ -447,7 +401,9 @@ namespace glz
       if constexpr (resizable<JSONBuffer>) {
          out.resize(ix);
       }
-      return {};
+      // count is the number of bytes written. A resizable buffer carries its own size, but a
+      // fixed-size one has no other way to learn how much of it now holds JSON.
+      return {ix};
    }
 
    export template <auto Opts = glz::opts{}, class BSONBuffer>

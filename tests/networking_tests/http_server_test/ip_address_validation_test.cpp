@@ -1,3 +1,8 @@
+#include "glaze/ext/asio_include.hpp"
+#ifdef DELETE
+#undef DELETE
+#endif
+
 import std;
 
 import glaze.net.http_server;

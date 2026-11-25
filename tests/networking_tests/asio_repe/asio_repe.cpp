@@ -1,6 +1,11 @@
 // Glaze Library
 // For the license information refer to glaze.ixx
 
+#include "glaze/ext/asio_include.hpp"
+#ifdef DELETE
+#undef DELETE
+#endif
+
 import std;
 
 import glaze.core.common;
@@ -11,6 +16,7 @@ import glaze.rpc.repe.header;
 import glaze.rpc.repe;
 import glaze.core.context;
 import glaze.thread.async_string;
+import glaze.thread.atomic;
 
 import ut;
 

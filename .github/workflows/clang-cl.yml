@@ -16,6 +16,9 @@ on:
       - 'docs/**'
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 env:
   CTEST_OUTPUT_ON_FAILURE: 1
   BUILD_TYPE: Debug
@@ -49,3 +52,27 @@ jobs:
     - name: Test
       working-directory: build
       run: ctest --build-config ${{env.BUILD_TYPE}} --timeout 300
+
+  build-direct-clang-cl:
+    runs-on: windows-2025-vs2026
+    timeout-minutes: 25
+
+    steps:
+    - uses: actions/checkout@v6
+
+    # Ninja and vswhere are both preinstalled on this runner image, and vcvarsall is
+    # what hands clang-cl the MSVC headers, libraries and linker, so nothing here has
+    # to be fetched from outside the image. That keeps the job's supply chain to the
+    # runner itself rather than a third-party action fetching a toolchain at run time.
+    # The developer environment only lives as long as the step that calls vcvarsall,
+    # so configure, build and test all run inside this one step.
+    - name: Configure, build and test with clang-cl
+      shell: cmd
+      run: |
+        "%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe" -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath > "%RUNNER_TEMP%\vsinstall.txt" || exit /b 1
+        set /p VSINSTALL=<"%RUNNER_TEMP%\vsinstall.txt"
+        if not defined VSINSTALL (echo No Visual Studio installation with the C++ toolset was found & exit /b 1)
+        call "%VSINSTALL%\VC\Auxiliary\Build\vcvarsall.bat" x64 || exit /b 1
+        cmake -B build-direct-clang-cl -G Ninja -DCMAKE_C_COMPILER=clang-cl -DCMAKE_CXX_COMPILER=clang-cl -DCMAKE_BUILD_TYPE=%BUILD_TYPE% -DCMAKE_CXX_STANDARD=23 || exit /b 1
+        cmake --build build-direct-clang-cl --parallel || exit /b 1
+        ctest --test-dir build-direct-clang-cl --build-config %BUILD_TYPE% --timeout 300 || exit /b 1

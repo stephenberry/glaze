@@ -46,10 +46,17 @@ namespace glz::yaml
       return ret;
    }
 
-   consteval uint8_t check_indent_width(auto&& o)
+   // Takes Opts as a template parameter (like csv_delimiter) so the value can be validated: too
+   // small a width writes nested block content at or before its parent's column, which is not the
+   // same document and does not read back.
+   template <auto Opts>
+   consteval uint8_t check_indent_width()
    {
-      if constexpr (requires { o.indent_width; }) {
-         return o.indent_width;
+      if constexpr (requires { Opts.indent_width; }) {
+         static_assert(Opts.indent_width >= 2,
+                       "YAML indent_width must be at least 2: a sequence dash takes one column and "
+                       "needs at least one space before same-line content");
+         return Opts.indent_width;
       }
       else {
          return 2;

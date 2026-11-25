@@ -1153,8 +1153,6 @@ suite chunked_streaming_tests = [] {
          .url = server.base_url() + "/single-chunk",
          .body = {},
          .headers = {},
-         .on_connect = {},
-         .on_disconnect = [&] { done_promise.set_value(); },
          .on_data =
             [&](std::string_view data) {
                std::lock_guard lock(data_mutex);
@@ -1162,6 +1160,8 @@ suite chunked_streaming_tests = [] {
                ++chunk_count;
             },
          .on_error = [](std::error_code) {},
+         .on_connect = {},
+         .on_disconnect = [&] { done_promise.set_value(); },
       });
 
       auto status = done_future.wait_for(std::chrono::seconds(5));
@@ -1189,8 +1189,6 @@ suite chunked_streaming_tests = [] {
          .url = server.base_url() + "/multi-chunk",
          .body = {},
          .headers = {},
-         .on_connect = {},
-         .on_disconnect = [&] { done_promise.set_value(); },
          .on_data =
             [&](std::string_view data) {
                std::lock_guard lock(data_mutex);
@@ -1198,6 +1196,8 @@ suite chunked_streaming_tests = [] {
                ++chunk_count;
             },
          .on_error = [](std::error_code) {},
+         .on_connect = {},
+         .on_disconnect = [&] { done_promise.set_value(); },
       });
 
       auto status = done_future.wait_for(std::chrono::seconds(5));
@@ -1224,14 +1224,14 @@ suite chunked_streaming_tests = [] {
          .url = server.base_url() + "/large-chunked",
          .body = {},
          .headers = {},
-         .on_connect = {},
-         .on_disconnect = [&] { done_promise.set_value(); },
          .on_data =
             [&](std::string_view data) {
                std::lock_guard lock(data_mutex);
                received_data.append(data);
             },
          .on_error = [](std::error_code) {},
+         .on_connect = {},
+         .on_disconnect = [&] { done_promise.set_value(); },
       });
 
       auto status = done_future.wait_for(std::chrono::seconds(10));
@@ -1258,14 +1258,14 @@ suite chunked_streaming_tests = [] {
          .url = server.base_url() + "/empty-chunked",
          .body = {},
          .headers = {},
-         .on_connect = {},
-         .on_disconnect = [&] { done_promise.set_value(); },
          .on_data =
             [&](std::string_view data) {
                std::lock_guard lock(data_mutex);
                received_data.append(data);
             },
          .on_error = [](std::error_code) {},
+         .on_connect = {},
+         .on_disconnect = [&] { done_promise.set_value(); },
       });
 
       auto status = done_future.wait_for(std::chrono::seconds(5));
@@ -1652,8 +1652,6 @@ suite chunked_raw_socket_tests = [] {
          .url = "http://127.0.0.1:" + std::to_string(port) + "/test",
          .body = {},
          .headers = {},
-         .on_connect = {},
-         .on_disconnect = [&] { finish(); },
          .on_data =
             [&](std::string_view data) {
                // Record only the claimed size; reading the bytes of an oversized view is
@@ -1663,6 +1661,8 @@ suite chunked_raw_socket_tests = [] {
                }
             },
          .on_error = [&](std::error_code) { error_fired = true; },
+         .on_connect = {},
+         .on_disconnect = [&] { finish(); },
       });
 
       done_future.wait_for(std::chrono::seconds(5));

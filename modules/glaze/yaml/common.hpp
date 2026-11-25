@@ -53,6 +53,18 @@ namespace glz::yaml
    inline constexpr size_t max_key_expansion_factor = 64;
    inline constexpr size_t min_key_expansion_bytes = 8 << 20;
 
+   // How deeply a YAML document may nest. Lower than the shared `max_recursive_depth_limit`
+   // because the cap is a stack budget rather than a statement about documents, and a YAML level
+   // is not a JSON level: a generic value routes through the variant reader, which speculatively
+   // parses an alternative before committing to it, so one level of nesting is a chain of large
+   // frames (variant op -> block-mapping probe -> map op -> value) instead of a single small one.
+   // Measured on the generic reader, a block-mapping level costs ~6x what a JSON one does, which
+   // put 256 levels past an 8 MB stack in an unoptimized sanitizer build -- the depth guard
+   // reported the limit, but only after the stack was already gone. This cap keeps the deepest
+   // accepted YAML document inside roughly the same stack that the shared cap buys JSON, and it
+   // stays far above what real documents nest.
+   inline constexpr size_t max_yaml_recursive_depth = 64;
+
    // YAML-specific context extending the base context
    // Adds indent tracking needed for block-style parsing
    struct yaml_context : context
@@ -62,7 +74,7 @@ namespace glz::yaml
       // back() gives the current block indent level.
       std::vector<int16_t> indent_stack = [] {
          std::vector<int16_t> v;
-         v.reserve(max_recursive_depth_limit);
+         v.reserve(max_yaml_recursive_depth);
          return v;
       }();
 
@@ -70,7 +82,7 @@ namespace glz::yaml
 
       bool push_indent(int32_t indent) noexcept
       {
-         if (indent_stack.size() >= max_recursive_depth_limit) [[unlikely]] {
+         if (indent_stack.size() >= max_yaml_recursive_depth) [[unlikely]] {
             error = error_code::exceeded_max_recursive_depth;
             return false;
          }

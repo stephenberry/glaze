@@ -480,6 +480,10 @@ Writing is Version 2 only. Version 2 output is not decodable as a variant by a G
 
 `glaze/binary/beve_to_json.hpp` provides `glz::beve_to_json`, which directly converts a buffer of BEVE data to a buffer of JSON data.
 
+An empty buffer holds no value, which is not a document, and fails with `error_code::unexpected_end` rather than converting to empty output. On success the returned `error_ctx::count` is the number of bytes written, which is how a fixed-size output buffer learns how much of it holds JSON.
+
+A buffer holding several values converts to one JSON document per line. See [Delimiter Format](#delimiter-format).
+
 ### String Escaping
 
 A BEVE string can hold any byte, including control characters (0x00–1F). JSON cannot. `\n`, `\t`, `\b`, `\f` and `\r` are escaped normally, but the rest have no short escape, and by default the conversion fails rather than write something that will not parse:
@@ -737,6 +741,8 @@ auto ec = glz::read_beve_delimited(messages, buffer);
 ### Delimiter Format
 
 The BEVE delimiter is a single byte: `0x06` (extensions type 6 with subtype 0). When converting delimited BEVE to JSON via `glz::beve_to_json`, each delimiter is converted to a newline character (`\n`), producing NDJSON-compatible output.
+
+Values concatenated without delimiters, which `glz::read_beve_delimited` also accepts, get the same newline between them. Two JSON documents never run together into text that is no longer JSON.
 
 ## Lazy BEVE Parsing
 

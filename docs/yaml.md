@@ -199,6 +199,17 @@ person:
 person: {name: John, age: 30}
 ```
 
+### Empty Collections
+
+An empty mapping or sequence has no block form, so it is written with the flow token. A bare `key:` is null, not an empty collection:
+
+```yaml
+mapping: {}
+sequence: []
+```
+
+An object writes `{}` too when nothing is left to emit for it, which includes a struct whose every member was dropped by `skip_null_members` or `meta::skip_if`.
+
 ## Document Markers
 
 Glaze supports YAML document markers:
@@ -251,8 +262,20 @@ The `glz::yaml::yaml_opts` struct provides YAML-specific options:
 |--------|---------|-------------|
 | `error_on_unknown_keys` | `true` | Error on unknown YAML keys |
 | `skip_null_members` | `true` | Skip null values when writing |
-| `indent_width` | `2` | Spaces per indent level |
+| `indent_width` | `2` | Spaces per indent level when writing (minimum 2) |
 | `flow_style` | `false` | Use flow style (compact) output |
+
+A sequence dash takes the first column of its element's indent and is padded across the rest, so
+a mapping continued on following lines aligns with its first key:
+
+```yaml
+# indent_width = 4
+items:
+    -   a: 1
+        b: 2
+```
+
+Reading needs no matching option: YAML indentation is self describing.
 
 Example with flow style output:
 

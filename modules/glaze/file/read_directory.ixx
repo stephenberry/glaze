@@ -5,6 +5,13 @@
 // glz:header std=<functional>
 // glz:header std=<string>
 // glz:header std=<unordered_map>
+module;
+
+#if defined(_MSC_VER) && !defined(__clang__)
+// MSVC otherwise omits the imported path::preferred_separator definition.
+#include <filesystem>
+#endif
+
 export module glaze.file.read_directory;
 
 import glaze.file.file_ops;

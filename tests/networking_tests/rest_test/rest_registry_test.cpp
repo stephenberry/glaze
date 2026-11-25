@@ -1,6 +1,11 @@
 // Glaze Library
 // For the license information refer to glaze.ixx
 
+#include "glaze/ext/asio_include.hpp"
+#ifdef DELETE
+#undef DELETE
+#endif
+
 import std;
 
 import glaze.core.common;

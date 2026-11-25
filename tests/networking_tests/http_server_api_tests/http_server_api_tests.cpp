@@ -5,6 +5,9 @@
 // Tests async route handling, server lifecycle, and advanced routing features
 
 #include "glaze/ext/asio_include.hpp"
+#ifdef DELETE
+#undef DELETE
+#endif
 
 import std;
 

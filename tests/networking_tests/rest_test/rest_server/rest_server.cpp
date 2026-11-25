@@ -1,5 +1,10 @@
 // Glaze REST Demo Server
 
+#include "glaze/ext/asio_include.hpp"
+#ifdef DELETE
+#undef DELETE
+#endif
+
 import std;
 
 import glaze.core.common;

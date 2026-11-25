@@ -517,6 +517,18 @@ export namespace glz
       }
    }
 
+   // Not every options struct carries this: the docs invite trimmed-down custom ones, and formats
+   // that never enforced required keys never made their users declare it. Absent means off.
+   consteval bool check_error_on_missing_keys(auto&& Opts)
+   {
+      if constexpr (requires { Opts.error_on_missing_keys; }) {
+         return Opts.error_on_missing_keys;
+      }
+      else {
+         return false;
+      }
+   }
+
    consteval bool check_partial_read(auto&& Opts)
    {
       if constexpr (requires { Opts.partial_read; }) {

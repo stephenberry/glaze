@@ -19,7 +19,8 @@ import glaze.core.common;
 import glaze.core.opts;
 import glaze.core.read;
 import glaze.core.reflect;
-import glaze.json.schema;
+export import glaze.json.read;
+export import glaze.json.schema;
 import glaze.rpc.registry_fwd;
 
 import glaze.util.string_literal;
@@ -29,14 +30,14 @@ using std::uint32_t;
 
 namespace glz
 {
-   export template <>
+   template <>
    struct protocol_storage<REST>
    {
       using type = http_router;
    };
 
    // Implementation for REST protocol
-   export template <auto Opts>
+   template <auto Opts>
    struct registry_impl<Opts, REST>
    {
       using enum http_method;

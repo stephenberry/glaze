@@ -89,7 +89,7 @@ namespace glz
             return val;
          }
          case info::uint16_follows: {
-            if ((it + 2) > end) [[unlikely]] {
+            if ((end - it) < 2) [[unlikely]] {
                ctx.error = error_code::unexpected_end;
                return 0;
             }
@@ -102,7 +102,7 @@ namespace glz
             return val;
          }
          case info::uint32_follows: {
-            if ((it + 4) > end) [[unlikely]] {
+            if ((end - it) < 4) [[unlikely]] {
                ctx.error = error_code::unexpected_end;
                return 0;
             }
@@ -115,7 +115,7 @@ namespace glz
             return val;
          }
          case info::uint64_follows: {
-            if ((it + 8) > end) [[unlikely]] {
+            if ((end - it) < 8) [[unlikely]] {
                ctx.error = error_code::unexpected_end;
                return 0;
             }
@@ -501,7 +501,7 @@ namespace glz
 
          switch (additional_info) {
          case simple::float16: {
-            if ((it + 2) > end) [[unlikely]] {
+            if ((end - it) < 2) [[unlikely]] {
                ctx.error = error_code::unexpected_end;
                return;
             }
@@ -515,7 +515,7 @@ namespace glz
             break;
          }
          case simple::float32: {
-            if ((it + 4) > end) [[unlikely]] {
+            if ((end - it) < 4) [[unlikely]] {
                ctx.error = error_code::unexpected_end;
                return;
             }
@@ -531,7 +531,7 @@ namespace glz
             break;
          }
          case simple::float64: {
-            if ((it + 8) > end) [[unlikely]] {
+            if ((end - it) < 8) [[unlikely]] {
                ctx.error = error_code::unexpected_end;
                return;
             }

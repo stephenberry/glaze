@@ -11,6 +11,9 @@ on:
     branches: [main]
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 env:
   BUILD_TYPE: Release
   # Public Docker image with Bloomberg clang-p2996
@@ -20,6 +23,8 @@ env:
   P2996_LIB_PATH: /opt/p2996/clang/lib/x86_64-unknown-linux-gnu
   # The image is Ubuntu 24.04, whose apt cmake is 3.28 — older than the 3.31 that
   # ut requires since v1.2.0. Install an official Kitware build instead of apt's.
+  # Downloaded to a file rather than piped into tar: a retry restarts the transfer
+  # from the first byte, which would corrupt a stream tar is already reading.
   CMAKE_TARBALL: https://github.com/Kitware/CMake/releases/download/v4.4.2/cmake-4.4.2-linux-x86_64.tar.gz
 
 concurrency:
@@ -58,6 +63,10 @@ jobs:
             /tmp/p2996_test
           "
 
+    # libeigen3-dev is Eigen 3.4.0 on Ubuntu 24.04 and ships a CMake config, so
+    # tests/eigen_test takes its find_package branch. Without it that test falls back
+    # to cloning gitlab.com, which is a second forge to depend on and the one that
+    # refuses unauthenticated clones from CI address ranges.
     - name: Build and run tests with CMake
       run: |
         docker run --rm \
@@ -65,8 +74,9 @@ jobs:
           -w /glaze \
           ${{ env.P2996_IMAGE }} \
           /bin/sh -c "
-            apt-get update && apt-get install -y curl &&
-            curl -fsSL ${{ env.CMAKE_TARBALL }} | tar xz --strip-components=1 -C /usr/local &&
+            apt-get update && apt-get install -y curl libeigen3-dev &&
+            curl -fsSL --retry 5 --retry-delay 2 --retry-all-errors -o /tmp/cmake.tar.gz ${{ env.CMAKE_TARBALL }} &&
+            tar xzf /tmp/cmake.tar.gz --strip-components=1 -C /usr/local &&
             cmake --version &&
             cmake -B build \
               -DCMAKE_CXX_COMPILER=clang++ \

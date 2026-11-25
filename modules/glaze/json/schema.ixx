@@ -21,9 +21,9 @@ export module glaze.json.schema;
 
 import std;
 
-import glaze.json.wrappers;
+export import glaze.json.wrappers;
 import glaze.json.read;
-import glaze.json.write;
+export import glaze.json.write;
 
 import glaze.core.custom_meta;
 import glaze.core.common;
@@ -1073,6 +1073,34 @@ namespace glz
          }
       }
 
+      template <class T, size_t I>
+      consteval auto json_schema_index_from_original_name(std::false_type) -> size_t
+      {
+         return reflect<json_schema_type<T>>::size;
+      }
+
+      template <class T, size_t I>
+      consteval auto json_schema_index_from_original_name(std::true_type) -> size_t
+      {
+         constexpr auto json_schema_size = reflect<json_schema_type<T>>::size;
+         constexpr auto& original_names = member_names<std::decay_t<T>>;
+
+         if (I < original_names.size()) {
+            constexpr sv key = reflect<T>::keys[I];
+            const sv original_name = original_names[I];
+            if (original_name != key) {
+               constexpr auto& schema_keys = reflect<json_schema_type<T>>::keys;
+               for (size_t i = 0; i < json_schema_size; ++i) {
+                  if (schema_keys[i] == original_name) {
+                     return i;
+                  }
+               }
+            }
+         }
+
+         return json_schema_size;
+      }
+
       auto consteval has_slash(std::string_view str) noexcept -> bool
       {
          return std::ranges::any_of(str, [](const auto character) { return character == '/'; });
@@ -1146,18 +1174,10 @@ namespace glz
                            return i;
                         }
                      }
-                     // For modify types, try matching by original C++ member name
-                     if constexpr (modify_t<std::decay_t<T>> && I < count_members<std::decay_t<T>>) {
-                        constexpr sv original_name = member_names<std::decay_t<T>>[I];
-                        if constexpr (original_name != key) {
-                           for (size_t i = 0; i < json_schema_size; ++i) {
-                              if (schema_keys[i] == original_name) {
-                                 return i;
-                              }
-                           }
-                        }
-                     }
-                     return json_schema_size;
+                     // MSVC's module consumer instantiates variable-template references in discarded
+                     // if constexpr branches, so dispatch to an overload that never names member_names<T>.
+                     return json_schema_index_from_original_name<T, I>(
+                        std::bool_constant<modify_t<std::decay_t<T>>>{});
                   }();
 
                   if constexpr (schema_index < json_schema_size) {

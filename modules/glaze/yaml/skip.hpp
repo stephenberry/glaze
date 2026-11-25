@@ -136,7 +136,7 @@ namespace glz::yaml
       // Nested flow collections with alternating delimiters ("[{[{...") recurse one frame per
       // delimiter, so bound the recursion to stop adversarial skipped input from overflowing the
       // stack. Same-delimiter nesting ("[[[[") is handled by the loop below without recursing.
-      depth_guard guard{ctx};
+      depth_guard guard{ctx, yaml::max_yaml_recursive_depth};
       if (!guard) [[unlikely]] {
          return;
       }
@@ -210,6 +210,28 @@ namespace glz::yaml
       }
    }
 
+   // Whether a line reads as a mapping entry ("key: value"), i.e. it holds a ':' followed by a
+   // space or the line end. parse_plain_scalar_multiline applies this same heuristic to refuse to
+   // fold such a line into a multi-line plain scalar, so a skipper that must consume exactly what
+   // the parser would consume has to stop at it as well. `it` is expected at the line's first
+   // non-space character; the scan is deliberately raw (no quote or flow tracking) to stay in
+   // lockstep with the parser's heuristic.
+   template <class It, class End>
+   inline bool line_reads_as_mapping_entry(It it, End end) noexcept
+   {
+      while (it != end && *it != '\n' && *it != '\r') {
+         if (*it == ':') {
+            auto after_colon = it + 1;
+            if (after_colon == end || *after_colon == ' ' || *after_colon == '\t' || *after_colon == '\n' ||
+                *after_colon == '\r') {
+               return true;
+            }
+         }
+         ++it;
+      }
+      return false;
+   }
+
    // Skip a plain scalar (unquoted)
    template <class It, class End>
    inline void skip_plain_scalar(It& it, End end, bool in_flow) noexcept
@@ -219,6 +241,24 @@ namespace glz::yaml
 
          // End of plain scalar
          if (c == '\n' || c == '\r') {
+            if (in_flow) {
+               // A plain scalar in flow context folds across lines: it ends only where the next
+               // content is a flow indicator, a ':', a comment, or the input's end. This mirrors
+               // parse_plain_scalar's flow rule so that skipping a value consumes exactly what
+               // reading it would have -- stopping at the line break instead would leave the
+               // scalar's own continuation to be read as the collection's next entry.
+               auto continuation = it;
+               skip_newline(continuation, end);
+               while (continuation != end && (*continuation == ' ' || *continuation == '\t')) {
+                  ++continuation;
+               }
+               if (continuation == end || *continuation == '#' || *continuation == ',' || *continuation == ']' ||
+                   *continuation == '}' || *continuation == ':') {
+                  break;
+               }
+               it = continuation;
+               continue;
+            }
             break;
          }
 
@@ -421,6 +461,16 @@ namespace glz::yaml
             }
 
             if (line_indent <= current_indent) {
+               it = line_start;
+               break;
+            }
+
+            // A deeper line that reads as a mapping entry is a sibling of the skipped key, not a
+            // continuation of its scalar -- the parser stops there, so the skipper must too. This
+            // matters when the skipped key began mid-line ("- key: value"), where the key's true
+            // column is deeper than the indent this loop is measuring against, and every following
+            // sibling would otherwise be swallowed along with the value.
+            if (line_reads_as_mapping_entry(it, end)) {
                it = line_start;
                break;
             }

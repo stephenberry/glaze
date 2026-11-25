@@ -2528,6 +2528,80 @@ void cbor_to_json_tests()
       expect(glz::cbor_to_json<pretty>(definite_wide).value() == "{}");
    };
 
+   // A CBOR document is one data item. Neither an empty buffer nor a CBOR sequence (RFC 8742) is
+   // one, and converting either used to report success while producing text no JSON parser accepts.
+   "cbor_to_json_requires_exactly_one_item"_test = [] {
+      std::string json;
+      expect(glz::cbor_to_json(std::string_view{}, json).ec == glz::error_code::unexpected_end);
+
+      const std::array<uint8_t, 2> two_items{0x01, 0x02};
+      expect(glz::cbor_to_json(two_items, json).ec == glz::error_code::syntax_error);
+
+      // Trailing bytes after a complete item are trailing bytes even when they are not a full item
+      const std::array<uint8_t, 2> trailing{0x01, 0x19};
+      expect(glz::cbor_to_json(trailing, json).ec == glz::error_code::syntax_error);
+   };
+
+   // dump() does not bounds check a buffer it cannot grow, so the converter reserves every write.
+   "cbor_to_json_fixed_buffer"_test = [] {
+      const std::array<uint8_t, 4> input{0x83, 0x01, 0x02, 0x03}; // [1,2,3]
+
+      std::array<char, 64> room{};
+      const auto ec = glz::cbor_to_json(input, room);
+      expect(not ec);
+      // count carries the written length, which a fixed-size buffer has no other way to learn
+      expect(std::string_view{room.data(), ec.count} == "[1,2,3]");
+
+      // Nested arrays write nothing but structural characters, the writes that used to go
+      // unchecked, so they overflow a small buffer without ever reaching a value writer.
+      const std::array<uint8_t, 3> nested{0x81, 0x81, 0x80}; // [[[]]]
+      std::array<char, 2> cramped{};
+      expect(glz::cbor_to_json(nested, cramped).ec == glz::error_code::buffer_overflow);
+   };
+
+   // A byte string has no JSON counterpart and becomes a string of hex digit pairs, whether its
+   // length is known up front or it arrives in chunks.
+   "cbor_to_json_byte_string_hex"_test = [] {
+      const std::array<uint8_t, 4> definite{0x43, 0x01, 0xab, 0xff}; // bytes(3)
+      expect(glz::cbor_to_json(definite).value() == "\"01abff\"");
+
+      // indefinite: two chunks then break
+      const std::array<uint8_t, 7> indefinite{0x5f, 0x42, 0x01, 0xab, 0x41, 0xff, 0xff};
+      expect(glz::cbor_to_json(indefinite).value() == "\"01abff\"");
+
+      const std::array<uint8_t, 2> empty_chunks{0x5f, 0xff};
+      expect(glz::cbor_to_json(empty_chunks).value() == "\"\"");
+   };
+
+   // RFC 8746 tags 80 and 84 hold half precision elements, which widen to double on the way out.
+   // Tags 83 and 87 hold binary128, which has no C++ representation here and is refused before
+   // any part of the array is written.
+   "cbor_to_json_typed_array_float_widths"_test = [] {
+      const std::array<uint8_t, 7> half{0xd8, 0x50, 0x44, 0x3c, 0x00, 0xc0, 0x00}; // tag(80) bytes(4)
+      expect(glz::cbor_to_json(half).value() == "[1,-2]");
+
+      const std::array<uint8_t, 3> binary128{0xd8, 0x53, 0x40}; // tag(83) bytes(0)
+      expect(glz::cbor_to_json(binary128).error().ec == glz::error_code::feature_not_supported);
+   };
+
+   // At depth zero a prettified line break writes '\n' and nothing else, which used to leave the
+   // write index one past the end of a buffer that cannot grow and form &out[size] to memset zero
+   // bytes through. The address is out of range whether or not the memset touches it.
+   "cbor_to_json_prettify_exact_fit_fixed_buffer"_test = [] {
+      constexpr glz::opts pretty{.prettify = true};
+
+      const std::array<uint8_t, 3> input{0xa1, 0x40, 0xa0}; // map(1){ bytes(0): map(0) }
+      constexpr std::string_view expected = "{\n   \"\": {}\n}";
+
+      std::array<char, expected.size()> exact{};
+      const auto ec = glz::cbor_to_json<pretty>(input, exact);
+      expect(not ec);
+      expect(std::string_view{exact.data(), ec.count} == expected);
+
+      std::array<char, expected.size() - 1> short_by_one{};
+      expect(glz::cbor_to_json<pretty>(input, short_by_one).ec == glz::error_code::buffer_overflow);
+   };
+
    "cbor_to_json_prettify_non_empty_map"_test = [] {
       constexpr glz::opts pretty{.prettify = true};
 

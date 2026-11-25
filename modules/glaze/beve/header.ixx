@@ -249,7 +249,7 @@ namespace glz
       std::memcpy(&header, it, 1);
       const uint8_t config = header & 0b000000'11;
 
-      if ((it + byte_count_lookup[config]) > end) [[unlikely]] {
+      if (size_t(end - it) < byte_count_lookup[config]) [[unlikely]] {
          ctx.error = error_code::unexpected_end;
          return 0;
       }
@@ -316,7 +316,7 @@ namespace glz
       std::memcpy(&header, it, 1);
       const uint8_t config = header & 0b000000'11;
 
-      if ((it + byte_count_lookup[config]) > end) [[unlikely]] {
+      if (size_t(end - it) < byte_count_lookup[config]) [[unlikely]] {
          ctx.error = error_code::unexpected_end;
          return;
       }

@@ -42,6 +42,7 @@ export namespace glz
       bool (*refill)(void*) = nullptr;
       bool (*eof)(void*) = nullptr;
       bool (*source_eof)(void*) = nullptr;
+      size_t (*consumed)(void*) = nullptr;
 
       // Check if streaming is enabled
       bool enabled() const noexcept { return buffer_ptr != nullptr; }
@@ -51,6 +52,11 @@ export namespace glz
 
       // Get current available size
       size_t size() const noexcept { return get_size(buffer_ptr); }
+
+      // How many bytes the stream has released, which is also the stream offset the window starts
+      // at. A refill moves the window without changing this, so it is what turns a pointer into a
+      // position that survives one. See rewind_anchor.
+      size_t bytes_consumed() const noexcept { return consumed(buffer_ptr); }
 
       // Consume n bytes from buffer
       void consume_bytes(size_t n) const noexcept { consume(buffer_ptr, n); }
@@ -90,6 +96,7 @@ export namespace glz
       state.consume = [](void* p, size_t n) { static_cast<Buffer*>(p)->consume(n); };
       state.refill = [](void* p) -> bool { return static_cast<Buffer*>(p)->refill(); };
       state.eof = [](void* p) -> bool { return static_cast<Buffer*>(p)->eof(); };
+      state.consumed = [](void* p) -> size_t { return static_cast<Buffer*>(p)->bytes_consumed(); };
       if constexpr (requires(Buffer& b) {
                        { b.source_exhausted() } -> std::convertible_to<bool>;
                     }) {
@@ -175,6 +182,66 @@ export namespace glz
             end = new_end;
          }
       }
+   }
+
+   // A position in the input that a reader means to come back to after reading past it -- how a
+   // variant re-reads an object once it knows which alternative it holds.
+   //
+   // A buffered read just keeps the pointer. A streaming read cannot, for the reason spelled out at
+   // the bottom of this file: a refill relocates the window and releases what the parse has stepped
+   // over, and the stale pointer stays inside the buffer's allocation, so the re-read quietly lands
+   // on something else and reports success.
+   //
+   // The position is held as a stream offset instead, which a refill does not change, and returned
+   // to only while those bytes are still in the window. When they are not, the document asked for
+   // more lookback than the window can hold; rewind() says so rather than guessing.
+   //
+   // For a context with no streaming state -- every buffered read -- this is the pointer that would
+   // have been kept anyway, and every branch below folds away.
+   template <class It>
+   struct rewind_anchor
+   {
+      It pos{};
+      size_t offset{}; // stream offset of `pos`; meaningful only under a streaming read
+
+      // Return `it`, and the window edge that goes with it, to the anchored position. False means
+      // the bytes are gone, with ctx.error set to say why.
+      template <class Ctx, class End>
+      [[nodiscard]] GLZ_ALWAYS_INLINE bool rewind(Ctx& ctx, It& it, End& end) const noexcept
+      {
+         if constexpr (has_streaming_state<Ctx>) {
+            if (ctx.stream.enabled()) {
+               // Where the offset sits in the window now. The window holds stream offsets
+               // [bytes_consumed(), bytes_consumed() + size()]; anything earlier has been released.
+               const size_t base = ctx.stream.bytes_consumed();
+               if (offset < base || (offset - base) > ctx.stream.size()) [[unlikely]] {
+                  ctx.error = error_code::streaming_unsupported;
+                  ctx.custom_error_message =
+                     "this value has to be re-read from its start, and the window has moved past it";
+                  return false;
+               }
+               it = ctx.stream.data() + (offset - base);
+               end = ctx.stream.data() + ctx.stream.size();
+               return true;
+            }
+         }
+         it = pos;
+         return true;
+      }
+   };
+
+   // Anchor where `it` is now. Under a streaming read the position is recorded as a stream offset,
+   // which is what lets it survive the refills that happen before the reader comes back to it.
+   template <class Ctx, class It>
+   [[nodiscard]] GLZ_ALWAYS_INLINE rewind_anchor<std::decay_t<It>> make_rewind_anchor(Ctx& ctx, It it) noexcept
+   {
+      rewind_anchor<std::decay_t<It>> anchor{it, 0};
+      if constexpr (has_streaming_state<Ctx>) {
+         if (ctx.stream.enabled()) {
+            anchor.offset = ctx.stream.bytes_consumed() + size_t(it - ctx.stream.data());
+         }
+      }
+      return anchor;
    }
 }
 

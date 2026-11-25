@@ -122,7 +122,10 @@ namespace glz
       // written. Raised by the binary-to-JSON converters, which refuse
       // to emit a byte they would have to corrupt or hide.
       // Streaming errors
-      streaming_unsupported, // Document outruns the buffer window and this format's reader cannot refill
+      // The buffer window is too small for what the read needs: either the format's reader has no
+      // refill points and the document outruns one window, or a value has to be re-read from its
+      // start and is longer than the window. custom_error_message says which.
+      streaming_unsupported,
       // Expansion errors
       // A YAML read produced more text than its budgets allow. Both budgets bound the same thing
       // -- text a small document can multiply into an unbounded amount -- and both call for the
@@ -173,15 +176,24 @@ namespace glz
    // erroring out before the nesting reaches max_recursive_depth_limit so adversarial deeply
    // nested input can't overflow the stack. Mirrors the per-reader guards already used by the
    // BSON and JSONB binary readers; placed here so the text-format readers can share one copy.
+   //
+   // The JSON/NDJSON readers cannot use this: with a non-null-terminated buffer they overload
+   // ctx.depth as a completion counter (a value that closed cleanly ends at depth 0, which is how
+   // finalize_read_context tells "the buffer ended exactly here" from "the buffer was truncated"),
+   // so they count by hand and enforce the same limit inline.
+   //
+   // `limit` defaults to the shared cap but is a parameter because the cap is a stack budget, not a
+   // document property: a reader whose levels cost several times what a JSON level costs has to
+   // stop several times sooner to stay inside the same stack. See `yaml::max_yaml_recursive_depth`.
    export template <class Ctx>
    struct depth_guard
    {
       Ctx& ctx;
       bool entered = false;
 
-      depth_guard(Ctx& c) noexcept : ctx(c)
+      depth_guard(Ctx& c, const size_t limit = max_recursive_depth_limit) noexcept : ctx(c)
       {
-         if (ctx.depth >= max_recursive_depth_limit) [[unlikely]] {
+         if (ctx.depth >= limit) [[unlikely]] {
             ctx.error = error_code::exceeded_max_recursive_depth;
             return;
          }
@@ -193,6 +205,26 @@ namespace glz
          if (entered) --ctx.depth;
       }
       explicit operator bool() const noexcept { return entered; }
+   };
+
+   // Raises the indentation depth for the lifetime of a container being written, so that every way
+   // out of it -- including an error return from a nested value -- puts the depth back. The step is
+   // the writer's indentation width, passed in because it is a formatting option the context knows
+   // nothing about.
+   export template <class Ctx>
+   struct indent_guard
+   {
+      Ctx& ctx;
+      size_t step;
+
+      indent_guard(Ctx& c, const size_t indentation_step) noexcept : ctx(c), step(indentation_step)
+      {
+         ctx.depth += step;
+      }
+      ~indent_guard() { ctx.depth -= step; }
+
+      indent_guard(const indent_guard&) = delete;
+      indent_guard& operator=(const indent_guard&) = delete;
    };
 
    // A variant read is speculative: an alternative is parsed to find out whether it fits, and a

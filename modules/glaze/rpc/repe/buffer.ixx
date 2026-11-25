@@ -24,7 +24,7 @@ import glaze.core.reflect;
 import glaze.core.context;
 import glaze.core.opts;
 
-import glaze.json.read;
+export import glaze.json.read;
 
 using std::size_t;
 using std::uint16_t;

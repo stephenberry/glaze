@@ -36,7 +36,7 @@ import glaze.core.chrono;
 import glaze.core.buffer_traits;
 import glaze.core.common;
 import glaze.core.context;
-import glaze.core.custom;
+export import glaze.core.custom;
 import glaze.core.custom_meta;
 import glaze.core.meta;
 import glaze.core.opts;
@@ -1206,6 +1206,68 @@ namespace glz
       {
          to<JSON, std::string_view>::template op<untrusted_string_emit_opts<Opts>>(s, ctx, out, ix);
       }
+
+      // Structural writes for the binary-to-JSON converters.
+      //
+      // dump() grows a resizable buffer but does not bounds check one it cannot grow, so a
+      // converter has to reserve before it writes or it walks off the end of a std::array or
+      // std::span. Each of these folds the reservation into the write, which keeps the byte count
+      // next to the bytes rather than hand-maintained at the call site. They return false, with
+      // ctx.error set to buffer_overflow, when a fixed-size buffer has no room left.
+
+      export template <class B>
+      [[nodiscard]] GLZ_ALWAYS_INLINE bool emit_char(is_context auto& ctx, const char c, B& out, size_t& ix)
+      {
+         if (!ensure_space(ctx, out, ix + 1)) [[unlikely]] {
+            return false;
+         }
+         dump<false>(c, out, ix);
+         return true;
+      }
+
+      export template <string_literal str, class B>
+      [[nodiscard]] GLZ_ALWAYS_INLINE bool emit_literal(is_context auto& ctx, B& out, size_t& ix)
+      {
+         static constexpr auto s = str.sv();
+         if (!ensure_space(ctx, out, ix + s.size())) [[unlikely]] {
+            return false;
+         }
+         dump<false>(s, out, ix);
+         return true;
+      }
+
+      // The newline and indentation that open a line of prettified output
+      export template <auto Opts, class B>
+      [[nodiscard]] GLZ_ALWAYS_INLINE bool emit_newline_indent(is_context auto& ctx, B& out, size_t& ix)
+      {
+         if (!ensure_space(ctx, out, ix + 1 + ctx.depth)) [[unlikely]] {
+            return false;
+         }
+         dump<false>('\n', out, ix);
+         dumpn_unchecked(check_indentation_char(Opts), ctx.depth, out, ix);
+         return true;
+      }
+
+      // Byte payloads have no JSON counterpart, so they are written as a string of two lowercase
+      // hex digits per byte. The caller writes the surrounding quotes, which lets an indefinite
+      // length payload be emitted chunk by chunk rather than assembled first.
+      export template <class B>
+      [[nodiscard]] inline bool emit_hex_bytes(is_context auto& ctx, auto data, const uint64_t n, B& out, size_t& ix)
+      {
+         static constexpr char digits[] = "0123456789abcdef";
+
+         if (!ensure_space(ctx, out, ix + 2 * n)) [[unlikely]] {
+            return false;
+         }
+
+         for (uint64_t i = 0; i < n; ++i) {
+            uint8_t b;
+            std::memcpy(&b, data + i, 1);
+            dump<false>(digits[(b >> 4) & 0xf], out, ix);
+            dump<false>(digits[b & 0xf], out, ix);
+         }
+         return true;
+      }
    }
 
    template <class T>
@@ -1352,7 +1414,7 @@ namespace glz
       }
    };
 
-   template <auto Opts, bool minified_check = true, class B>
+   export template <auto Opts, bool minified_check = true, class B>
    GLZ_ALWAYS_INLINE void write_array_entry_separator(is_context auto&& ctx, B&& b, auto& ix)
    {
       if constexpr (Opts.prettify) {

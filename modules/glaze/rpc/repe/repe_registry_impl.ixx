@@ -25,14 +25,14 @@ using std::uint32_t;
 
 namespace glz
 {
-   export template <>
+   template <>
    struct protocol_storage<REPE>
    {
       using type = std::unordered_map<sv, std::function<void(repe::state_view&)>, detail::string_hash, std::equal_to<>>;
    };
 
    // Implementation for REPE protocol
-   export template <auto Opts>
+   template <auto Opts>
    struct registry_impl<Opts, REPE>
    {
       template <class T, class RegistryType>

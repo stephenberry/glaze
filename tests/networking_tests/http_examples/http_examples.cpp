@@ -2,6 +2,11 @@
 // Tests examples from the Glaze HTTP/REST Documentation
 // See: http-examples.md
 
+#include "glaze/ext/asio_include.hpp"
+#ifdef DELETE
+#undef DELETE
+#endif
+
 import std;
 
 import glaze.json.read;
