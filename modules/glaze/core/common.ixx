@@ -46,15 +46,22 @@ import glaze.util.variant;
 
 using std::size_t;
 
-namespace glz
+export namespace glz
 {
    // We use an error buffer to avoid multiple allocations in the case that errors occur multiple times.
-   export inline std::string& error_buffer() noexcept
+   // Keep thread-local destructor registration in the module object on MSVC.
+#if !defined(GLZ_BUILDING_MODULES)
+   inline
+#endif
+   std::string& error_buffer() noexcept
    {
       static thread_local std::string buffer(256, '\0');
       return buffer;
    }
+}
 
+namespace glz
+{
    // write out a string like type without quoting it
    export template <class T>
    struct raw_t

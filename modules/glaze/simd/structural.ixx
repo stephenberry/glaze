@@ -40,6 +40,12 @@ using std::uint8_t;
 
 #if defined(GLZ_STRUCTURAL_SIMD)
 
+#if defined(GLZ_BUILDING_MODULES)
+#define GLZ_STRUCTURAL_INLINE
+#else
+#define GLZ_STRUCTURAL_INLINE GLZ_ALWAYS_INLINE
+#endif
+
 export namespace glz::detail::structural
 {
    // One bit per byte of a 64 byte window, lowest bit for the lowest address.
@@ -56,7 +62,7 @@ export namespace glz::detail::structural
 
    inline constexpr std::string_view backend = "AVX512BW";
 
-   GLZ_ALWAYS_INLINE window load_window(const char* p, const char open_c, const char close_c) noexcept
+   GLZ_STRUCTURAL_INLINE window load_window(const char* p, const char open_c, const char close_c) noexcept
    {
       const __m512i v = _mm512_loadu_si512(reinterpret_cast<const void*>(p));
       return {uint64_t(_mm512_cmpeq_epi8_mask(v, _mm512_set1_epi8('"'))),
@@ -69,7 +75,7 @@ export namespace glz::detail::structural
 
    inline constexpr std::string_view backend = "AVX2";
 
-   GLZ_ALWAYS_INLINE window load_window(const char* p, const char open_c, const char close_c) noexcept
+   GLZ_STRUCTURAL_INLINE window load_window(const char* p, const char open_c, const char close_c) noexcept
    {
       const __m256i v0 = _mm256_loadu_si256(reinterpret_cast<const __m256i*>(p));
       const __m256i v1 = _mm256_loadu_si256(reinterpret_cast<const __m256i*>(p + 32));
@@ -91,7 +97,7 @@ export namespace glz::detail::structural
 
    inline constexpr std::string_view backend = "SSE2";
 
-   GLZ_ALWAYS_INLINE window load_window(const char* p, const char open_c, const char close_c) noexcept
+   GLZ_STRUCTURAL_INLINE window load_window(const char* p, const char open_c, const char close_c) noexcept
    {
       const __m128i v0 = _mm_loadu_si128(reinterpret_cast<const __m128i*>(p));
       const __m128i v1 = _mm_loadu_si128(reinterpret_cast<const __m128i*>(p + 16));
@@ -132,10 +138,7 @@ export namespace glz::detail::structural
       return vgetq_lane_u64(vreinterpretq_u64_u8(s0), 0);
    }
 
-#if !defined(GLZ_BUILDING_MODULES)
-   GLZ_ALWAYS_INLINE
-#endif
-   window load_window(const char* p, const char open_c, const char close_c) noexcept
+   GLZ_STRUCTURAL_INLINE window load_window(const char* p, const char open_c, const char close_c) noexcept
    {
       const auto* u = reinterpret_cast<const uint8_t*>(p);
       const uint8x16_t v0 = vld1q_u8(u);
@@ -162,7 +165,7 @@ export namespace glz::detail::structural
 
    inline constexpr std::string_view backend = "WASM_SIMD128";
 
-   GLZ_ALWAYS_INLINE window load_window(const char* p, const char open_c, const char close_c) noexcept
+   GLZ_STRUCTURAL_INLINE window load_window(const char* p, const char open_c, const char close_c) noexcept
    {
       const v128_t v0 = wasm_v128_load(p);
       const v128_t v1 = wasm_v128_load(p + 16);
@@ -187,4 +190,5 @@ export namespace glz::detail::structural
 #endif
 }
 
+#undef GLZ_STRUCTURAL_INLINE
 #endif

@@ -6,6 +6,8 @@
 // can answer with an exact set of response bytes - including deliberately malformed
 // Location fields that a well-behaved server would never emit.
 
+#include "glaze/ext/asio_include.hpp"
+
 import std;
 
 import glaze.ext.glaze_asio;
@@ -22,8 +24,6 @@ using namespace glz;
 
 using std::size_t;
 using std::uint16_t;
-
-#include "glaze/ext/asio_include.hpp"
 
 namespace
 {
