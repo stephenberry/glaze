@@ -272,6 +272,8 @@ When parsing JSON from untrusted sources:
 
 1. **Recursion depth is bounded**: the readers, skippers, and format converters cap nesting at `max_recursive_depth_limit` (256 levels) and return `error_code::exceeded_max_recursive_depth`, so deeply nested input cannot overflow the stack. Every object and every array counts as a level, so a struct holding a vector of itself reaches the cap at 128 struct levels. YAML caps lower, at `glz::yaml::max_yaml_recursive_depth` (64 levels): a YAML level routes through the variant reader's speculative mapping probe and costs several times the stack a JSON level does, so it has to stop sooner to stay inside the same stack. As in JSON, every YAML sequence and mapping counts as a level and the scalar at the bottom does not. Flatten your data structures if you legitimately need to exceed that.
 
+   This limit is on the read side only. Writers recurse as deep as the data goes and have no depth check, so a value built in memory (not parsed, since parsing stops at the cap) can overflow the stack when written. Writing can also produce a document Glaze cannot read back: `glz::write_json` of a `glz::generic` nested 256 levels deep succeeds, and `glz::read_json` of that text returns `exceeded_max_recursive_depth`. If your program builds deeply nested values from untrusted data, limit the depth while building them. Destroying a very deep `glz::generic` recurses too, since each `std::vector` destroys its elements in turn.
+
 2. **Limit string sizes**: Very large strings can consume excessive memory. Control this through input buffer size limits.
 
 3. **Handle unknown keys**: Use `error_on_unknown_keys = false` if you want to ignore unexpected fields, or keep it `true` (default) to reject messages with unknown structure.
