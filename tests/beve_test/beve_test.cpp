@@ -3339,6 +3339,17 @@ suite error_outputs = [] {
       expect(ec != glz::error_code::none);
       [[maybe_unused]] auto err = glz::format_error(ec, buffer);
    };
+
+   "truncated buffer reports only the index"_test = [] {
+      // BEVE is binary, so a formatted error must not print the buffer as a line of text.
+      std::map<std::string, int> value{{"a", 1}, {"b", 2}};
+      auto buffer = glz::write_beve(value).value();
+      buffer.pop_back();
+      auto ec = glz::read_beve(value, buffer);
+      expect(ec.ec == glz::error_code::unexpected_end);
+      const auto err = glz::format_error(ec, buffer);
+      expect(err.starts_with("index ") && err.find('\n') == std::string::npos) << err;
+   };
 };
 
 struct partial_struct

@@ -3999,6 +3999,19 @@ y: 2.0)";
       expect(bool(ec));
    };
 
+   "type_mismatch_error_at_end_of_input_has_location"_test = [] {
+      // These mismatches are detected at the end of the input. The formatted error should
+      // still give the line, column and context, not only an index (issue #3067).
+      for (const std::string yaml : {"data: 42", "data: \"test\"", "data: [1, 2, 3]", "data: 42\n"}) {
+         nested_struct obj{};
+         auto ec = glz::read_yaml(obj, yaml);
+         expect(bool(ec)) << yaml;
+         const auto message = glz::format_error(ec, yaml);
+         expect(message.starts_with("1:")) << message;
+         expect(message.find("data: ") != std::string::npos) << message;
+      }
+   };
+
    "type_mismatch_flow_collection_to_string"_test = [] {
       for (const std::string yaml : {"name: [1, 2, 3]", "name: []", "name: {}", "name: {a: 5}"}) {
          simple_struct obj{};
@@ -10995,7 +11008,10 @@ suite yaml_error_on_missing_keys_format_error = [] {
       auto err = glz::read_yaml<glz::opts{.error_on_missing_keys = true}>(data, yaml);
       expect(err.ec == glz::error_code::missing_key);
       auto msg = glz::format_error(err, yaml);
-      expect(msg == R"(index 7: missing_key b)") << msg;
+      expect(msg == R"(1:7: missing_key
+   a: 101
+         ^ b)")
+         << msg;
    };
 
    "format_error_block_missing_hello"_test = [] {
@@ -11006,7 +11022,10 @@ d: 2.0
       auto err = glz::read_yaml<glz::opts{.error_on_missing_keys = true}>(data, yaml);
       expect(err.ec == glz::error_code::missing_key);
       auto msg = glz::format_error(err, yaml);
-      expect(msg == R"(index 12: missing_key hello)") << msg;
+      expect(msg == R"(2:7: missing_key
+   d: 2.0
+         ^ hello)")
+         << msg;
    };
 
    "format_error_flow_missing_b"_test = [] {
@@ -11015,7 +11034,10 @@ d: 2.0
       auto err = glz::read_yaml<glz::opts{.error_on_missing_keys = true}>(data, yaml);
       expect(err.ec == glz::error_code::missing_key);
       auto msg = glz::format_error(err, yaml);
-      expect(msg == R"(index 8: missing_key b)") << msg;
+      expect(msg == R"(1:9: missing_key
+   {a: 101}
+           ^ b)")
+         << msg;
    };
 
    "format_error_flow_empty"_test = [] {
@@ -11024,7 +11046,10 @@ d: 2.0
       auto err = glz::read_yaml<glz::opts{.error_on_missing_keys = true}>(data, yaml);
       expect(err.ec == glz::error_code::missing_key);
       auto msg = glz::format_error(err, yaml);
-      expect(msg == R"(index 2: missing_key a)") << msg;
+      expect(msg == R"(1:3: missing_key
+   {}
+     ^ a)")
+         << msg;
    };
 };
 

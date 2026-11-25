@@ -2768,6 +2768,19 @@ void error_tests()
       expect(bool(ec)); // Should fail
    };
 
+   "truncated_input_formats_only_the_index"_test = [] {
+      // {"ab": 1, "cd": 2} without its last byte. Small CBOR values have no zero bytes, so this
+      // checks that the binary buffer is recognized by its control bytes.
+      std::map<std::string, int> value{{"ab", 1}, {"cd", 2}};
+      auto buffer = glz::write_cbor(value).value();
+      buffer.pop_back();
+      expect(buffer.find('\0') == std::string::npos);
+      auto ec = glz::read_cbor(value, buffer);
+      expect(bool(ec));
+      const auto err = glz::format_error(ec, buffer);
+      expect(err.starts_with("index ") && err.find('\n') == std::string::npos) << err;
+   };
+
    "invalid_major_type"_test = [] {
       // This test just verifies we handle malformed input gracefully
       std::string buffer;

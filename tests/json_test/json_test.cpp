@@ -4330,6 +4330,95 @@ suite error_outputs = [] {
       auto err = glz::format_error(ex.error(), s);
       expect(err == "10:6: expected_brace\n        ]\n        ^") << err;
    };
+
+   "error at the end of the input"_test = [] {
+      // A truncated document fails at the end of the buffer, where there is no character to
+      // point at. The message should still show the line where the input stops.
+      std::string s = R"({"Hello":"World")";
+      std::map<std::string, std::string> m;
+      auto pe = glz::read_json(m, s);
+      expect(pe.count == s.size());
+      auto err = glz::format_error(pe, s);
+      // The error code depends on GLZ_NULL_TERMINATED, so only the location is checked.
+      expect(err.starts_with("1:17: ")) << err;
+      expect(err.ends_with("\n   {\"Hello\":\"World\"\n                   ^")) << err;
+   };
+
+   "error at the end of the input with trailing whitespace"_test = [] {
+      std::string s = "{\n  \"a\": [1, 2],\n  \"b\": [3, 4\n\n";
+      std::map<std::string, std::vector<int>> m;
+      auto pe = glz::read_json(m, s);
+      expect(pe.count == s.size());
+      auto err = glz::format_error(pe, s);
+      // The caret goes after the last character of the last line with content. The error code
+      // depends on GLZ_NULL_TERMINATED, so only the location is checked.
+      expect(err.starts_with("3:13: ")) << err;
+      expect(err.ends_with("\n     \"b\": [3, 4\n               ^")) << err;
+   };
+
+   "error at a newline"_test = [] {
+      // The context is only the line with the error, not the line after it.
+      std::string s = "{\"a\": 1\n\"b\": 2}";
+      auto err = glz::format_error(glz::error_ctx{7, glz::error_code::expected_comma}, s);
+      expect(err == "1:8: expected_comma\n   {\"a\": 1\n          ^") << err;
+   };
+
+   "error at the end of an input that is only whitespace"_test = [] {
+      std::string s = " \n\t\n";
+      auto err = glz::format_error(glz::error_ctx{s.size(), glz::error_code::unexpected_end}, s);
+      expect(err == "index 4: unexpected_end") << err;
+   };
+
+   "error at the end of a CRLF line"_test = [] {
+      // The carriage return of a CRLF line ending is shown as a space.
+      std::string s = "{\r\n  \"b\": [3, 4\r\n";
+      std::map<std::string, std::vector<int>> m;
+      auto pe = glz::read_json(m, s);
+      expect(pe.count == s.size());
+      auto err = glz::format_error(pe, s);
+      // The error code depends on GLZ_NULL_TERMINATED, so only the location is checked.
+      expect(err.starts_with("2:13: ")) << err;
+      expect(err.ends_with("\n     \"b\": [3, 4 \n               ^")) << err;
+   };
+
+   "error with CR line endings"_test = [] {
+      // Lone carriage returns do not end a line, and are shown as spaces so they cannot move the
+      // terminal's cursor.
+      std::string s = "a\rbb\rccc\r";
+      auto err = glz::format_error(glz::error_ctx{s.size(), glz::error_code::unexpected_end}, s);
+      expect(err == "1:9: unexpected_end\n   a bb ccc \n           ^") << err;
+   };
+
+   "error on an empty line"_test = [] {
+      // An empty line has an empty context, but the error still has a line and column.
+      std::string s = "a\n\nb";
+      auto err = glz::format_error(glz::error_ctx{2, glz::error_code::syntax_error}, s);
+      expect(err == "2:1: syntax_error\n   \n   ^") << err;
+      s = "\nabc";
+      err = glz::format_error(glz::error_ctx{0, glz::error_code::syntax_error}, s);
+      expect(err == "1:1: syntax_error\n   \n   ^") << err;
+   };
+
+   "control character at the error is shown as a space"_test = [] {
+      // A raw control character in a string is the error itself, so the line keeps its context.
+      std::string s = "{\"a\":\"x\x01y\"}";
+      std::map<std::string, std::string> m;
+      auto pe = glz::read_json(m, s);
+      expect(pe.count == 7);
+      auto err = glz::format_error(pe, s);
+      expect(err.starts_with("1:8: ")) << err;
+      expect(err.ends_with("\n   {\"a\":\"x y\"}\n          ^")) << err;
+   };
+
+   "error in a binary buffer reports only the index"_test = [] {
+      // Binary input held in a std::string has no lines to show, and printing it would write raw
+      // bytes to the terminal.
+      const std::string s{"\x03\x08\x04" "a\x01\x00\x00", 7};
+      auto err = glz::format_error(glz::error_ctx{s.size(), glz::error_code::unexpected_end}, s);
+      expect(err == "index 7: unexpected_end") << err;
+      err = glz::format_error(glz::error_ctx{3, glz::error_code::syntax_error}, s);
+      expect(err == "index 3: syntax_error") << err;
+   };
 };
 
 struct study_obj
