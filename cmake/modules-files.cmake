@@ -238,6 +238,7 @@ target_sources(glaze_glaze
     FILES
     modules/glaze/rpc/jsonrpc_registry_impl.ixx
     modules/glaze/rpc/registry.ixx
+    modules/glaze/rpc/read_and_commit.ixx
     modules/glaze/rpc/registry_fwd.ixx
 )
 

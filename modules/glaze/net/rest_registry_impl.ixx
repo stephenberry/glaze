@@ -16,11 +16,13 @@ import glaze.net.http_router;
 
 import glaze.concepts.container_concepts;
 import glaze.core.common;
+import glaze.core.context;
 import glaze.core.opts;
 import glaze.core.read;
 import glaze.core.reflect;
 export import glaze.json.read;
 export import glaze.json.schema;
+import glaze.rpc.read_and_commit;
 import glaze.rpc.registry_fwd;
 
 import glaze.util.string_literal;
@@ -131,7 +133,11 @@ namespace glz
             PUT, rest_path,
             [&value](const request& req, response& res) {
                // Parse the JSON request body
-               auto ec = read<Opts>(value, req.body);
+               error_ctx ec{};
+               detail::read_and_commit(value, [&](auto& target) {
+                  ec = read<Opts>(target, req.body);
+                  return !ec;
+               });
                if (ec) {
                   res.status(400).body("Invalid request body: " + format_error(ec, req.body));
                   return;
@@ -211,7 +217,11 @@ namespace glz
             PUT, rest_path,
             [&obj](const request& req, response& res) {
                // Parse the JSON request body
-               auto ec = read<Opts>(obj, req.body);
+               error_ctx ec{};
+               detail::read_and_commit(obj, [&](auto& target) {
+                  ec = read<Opts>(target, req.body);
+                  return !ec;
+               });
                if (ec) {
                   res.status(400).body("Invalid request body: " + format_error(ec, req.body));
                   return;
@@ -238,7 +248,11 @@ namespace glz
             PUT, rest_path,
             [&value](const request& req, response& res) {
                // Parse the JSON request body
-               auto ec = read<Opts>(value, req.body);
+               error_ctx ec{};
+               detail::read_and_commit(value, [&](auto& target) {
+                  ec = read<Opts>(target, req.body);
+                  return !ec;
+               });
                if (ec) {
                   res.status(400).body("Invalid request body: " + format_error(ec, req.body));
                   return;
@@ -265,7 +279,11 @@ namespace glz
             PUT, rest_path,
             [&var](const request& req, response& res) {
                // Parse the JSON request body
-               auto ec = read<Opts>(var, req.body);
+               error_ctx ec{};
+               detail::read_and_commit(var, [&](auto& target) {
+                  ec = read<Opts>(target, req.body);
+                  return !ec;
+               });
                if (ec) {
                   res.status(400).body("Invalid request body: " + format_error(ec, req.body));
                   return;

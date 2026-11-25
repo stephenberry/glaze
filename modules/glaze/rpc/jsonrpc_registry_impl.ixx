@@ -16,6 +16,7 @@ export module glaze.rpc.jsonrpc_registry_impl;
 import glaze;
 import glaze.core.opts;
 import glaze.ext.jsonrpc;
+import glaze.rpc.read_and_commit;
 import glaze.rpc.registry_fwd;
 import glaze.util.string_literal;
 
@@ -139,7 +140,8 @@ namespace glz
       {
          reg.endpoints[path] = [&value](jsonrpc::state&& state) mutable {
             if (state.has_body()) {
-               if (!jsonrpc::read_params<Opts>(value, state)) {
+               if (!detail::read_and_commit(value,
+                                            [&](auto& target) { return jsonrpc::read_params<Opts>(target, state); })) {
                   return;
                }
             }
@@ -230,7 +232,8 @@ namespace glz
       {
          reg.endpoints[path] = [value](jsonrpc::state&& state) mutable {
             if (state.has_body()) {
-               if (!jsonrpc::read_params<Opts>(value, state)) {
+               if (!detail::read_and_commit(value,
+                                            [&](auto& target) { return jsonrpc::read_params<Opts>(target, state); })) {
                   return;
                }
             }

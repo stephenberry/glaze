@@ -1610,6 +1610,43 @@ namespace glz
       requires(readable_array_t<T> && !emplace_backable<T> && !resizable<T> && emplaceable<T>)
    struct from<BEVE, T> final
    {
+      // A generic array: a count followed by that many individually tagged values
+      template <auto Opts>
+      static void read_generic_array(auto&& value, is_context auto&& ctx, auto&& it, auto end)
+      {
+         using V = range_value_t<std::decay_t<T>>;
+
+         depth_guard guard{ctx};
+         if (!guard) [[unlikely]] {
+            return;
+         }
+
+         ++it;
+         const auto n = int_from_compressed(ctx, it, end);
+         if (bool(ctx.error)) [[unlikely]] {
+            return;
+         }
+
+         // Each element needs at least 1 byte for its tag, so a count larger than the remaining
+         // input cannot be honored. Without this (and the error check in the loop) an element count
+         // of 2^48 in a 3 byte buffer spins for hours on reads that error instantly.
+         if (uint64_t(end - it) < n) [[unlikely]] {
+            ctx.error = error_code::invalid_length;
+            return;
+         }
+
+         value.clear();
+
+         for (size_t i = 0; i < n; ++i) {
+            V v;
+            parse<BEVE>::op<Opts>(v, ctx, it, end);
+            if (bool(ctx.error)) [[unlikely]] {
+               return;
+            }
+            value.emplace(std::move(v));
+         }
+      }
+
       template <auto Opts>
       static void op(auto&& value, is_context auto&& ctx, auto&& it, auto end)
       {
@@ -1619,6 +1656,15 @@ namespace glz
             return;
          }
          const auto tag = uint8_t(*it);
+
+         // Elements that have a typed-array form may also arrive as a generic array of individually tagged
+         // values, which other writers emit, for example for an empty sequence whose element type is not known
+         if constexpr (boolean_like<V> || beve_num_array_t<V> || str_t<V>) {
+            if ((tag & 0b00000'111) == tag::generic_array) {
+               read_generic_array<Opts>(value, ctx, it, end);
+               return;
+            }
+         }
 
          if constexpr (boolean_like<V>) {
             constexpr uint8_t type = uint8_t(3) << 3;
@@ -1733,41 +1779,11 @@ namespace glz
             static_assert(false_v<T>, "TODO");
          }
          else {
-            // generic array
             if ((tag & 0b00000'111) != tag::generic_array) [[unlikely]] {
                ctx.error = error_code::syntax_error;
                return;
             }
-
-            depth_guard guard{ctx};
-            if (!guard) [[unlikely]] {
-               return;
-            }
-
-            ++it;
-            const auto n = int_from_compressed(ctx, it, end);
-            if (bool(ctx.error)) [[unlikely]] {
-               return;
-            }
-
-            // Each element needs at least 1 byte for its tag, so a count larger than the remaining
-            // input cannot be honored. Without this (and the error check in the loop) an element count
-            // of 2^48 in a 3 byte buffer spins for hours on reads that error instantly.
-            if (uint64_t(end - it) < n) [[unlikely]] {
-               ctx.error = error_code::invalid_length;
-               return;
-            }
-
-            value.clear();
-
-            for (size_t i = 0; i < n; ++i) {
-               V v;
-               parse<BEVE>::op<Opts>(v, ctx, it, end);
-               if (bool(ctx.error)) [[unlikely]] {
-                  return;
-               }
-               value.emplace(std::move(v));
-            }
+            read_generic_array<Opts>(value, ctx, it, end);
          }
       }
    };
@@ -1949,6 +1965,66 @@ namespace glz
    template <readable_array_t T>
    struct from<BEVE, T> final
    {
+      // A generic array: a count followed by that many individually tagged values
+      template <auto Opts>
+      static void read_generic_array(auto&& value, is_context auto&& ctx, auto&& it, auto end)
+      {
+         depth_guard guard{ctx};
+         if (!guard) [[unlikely]] {
+            return;
+         }
+
+         ++it;
+         std::conditional_t<check_partial_read(Opts), size_t, const size_t> n = int_from_compressed(ctx, it, end);
+         if (bool(ctx.error)) [[unlikely]] {
+            return;
+         }
+
+         if constexpr (Opts.partial_read) {
+            n = value.size();
+         }
+
+         // Each element needs at least 1 byte for its tag
+         if (uint64_t(end - it) < n) [[unlikely]] {
+            ctx.error = error_code::invalid_length;
+            return;
+         }
+         if constexpr (check_max_array_size(Opts) > 0) {
+            if (n > check_max_array_size(Opts)) [[unlikely]] {
+               ctx.error = error_code::invalid_length;
+               return;
+            }
+         }
+         if constexpr (has_runtime_max_array_size<std::decay_t<decltype(ctx)>>) {
+            if (ctx.max_array_size > 0 && n > ctx.max_array_size) [[unlikely]] {
+               ctx.error = error_code::invalid_length;
+               return;
+            }
+         }
+
+         if constexpr (resizable<T>) {
+            if (exceeds_capacity(value, n, ctx)) [[unlikely]] {
+               return;
+            }
+            value.resize(n);
+
+            if constexpr (check_shrink_to_fit(Opts) && has_shrink_to_fit<T>) {
+               value.shrink_to_fit();
+            }
+         }
+         else {
+            if (n > value.size()) {
+               ctx.error = error_code::syntax_error;
+               return;
+            }
+         }
+
+         auto item_it = value.begin();
+         for (size_t i = 0; i < n; ++i, ++item_it) {
+            parse<BEVE>::op<Opts>(*item_it, ctx, it, end);
+         }
+      }
+
       template <auto Opts>
       static void op(auto&& value, is_context auto&& ctx, auto&& it, auto end)
       {
@@ -1958,6 +2034,15 @@ namespace glz
             return;
          }
          const auto tag = uint8_t(*it);
+
+         // Elements that have a typed-array form may also arrive as a generic array of individually tagged
+         // values, which other writers emit, for example for an empty sequence whose element type is not known
+         if constexpr (boolean_like<V> || beve_num_array_t<V> || str_t<V> || complex_t<V>) {
+            if ((tag & 0b00000'111) == tag::generic_array) {
+               read_generic_array<Opts>(value, ctx, it, end);
+               return;
+            }
+         }
 
          if constexpr (boolean_like<V>) {
             constexpr uint8_t type = uint8_t(3) << 3;
@@ -2469,61 +2554,7 @@ namespace glz
                ctx.error = error_code::syntax_error;
                return;
             }
-
-            depth_guard guard{ctx};
-            if (!guard) [[unlikely]] {
-               return;
-            }
-
-            ++it;
-            std::conditional_t<check_partial_read(Opts), size_t, const size_t> n = int_from_compressed(ctx, it, end);
-            if (bool(ctx.error)) [[unlikely]] {
-               return;
-            }
-
-            if constexpr (Opts.partial_read) {
-               n = value.size();
-            }
-
-            // Each element needs at least 1 byte for its tag
-            if (uint64_t(end - it) < n) [[unlikely]] {
-               ctx.error = error_code::invalid_length;
-               return;
-            }
-            if constexpr (check_max_array_size(Opts) > 0) {
-               if (n > check_max_array_size(Opts)) [[unlikely]] {
-                  ctx.error = error_code::invalid_length;
-                  return;
-               }
-            }
-            if constexpr (has_runtime_max_array_size<std::decay_t<decltype(ctx)>>) {
-               if (ctx.max_array_size > 0 && n > ctx.max_array_size) [[unlikely]] {
-                  ctx.error = error_code::invalid_length;
-                  return;
-               }
-            }
-
-            if constexpr (resizable<T>) {
-               if (exceeds_capacity(value, n, ctx)) [[unlikely]] {
-                  return;
-               }
-               value.resize(n);
-
-               if constexpr (check_shrink_to_fit(Opts) && has_shrink_to_fit<T>) {
-                  value.shrink_to_fit();
-               }
-            }
-            else {
-               if (n > value.size()) {
-                  ctx.error = error_code::syntax_error;
-                  return;
-               }
-            }
-
-            auto item_it = value.begin();
-            for (size_t i = 0; i < n; ++i, ++item_it) {
-               parse<BEVE>::op<Opts>(*item_it, ctx, it, end);
-            }
+            read_generic_array<Opts>(value, ctx, it, end);
          }
       }
 

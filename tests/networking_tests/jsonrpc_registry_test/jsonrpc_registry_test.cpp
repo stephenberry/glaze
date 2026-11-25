@@ -745,4 +745,83 @@ suite unterminated_request_tests = [] {
    };
 };
 
+// A write the registry rejects must leave the registered value as it was. The read assigns each
+// member as it goes, so before this was staged a failing read_constraint or self_constraint
+// answered with an error yet kept every member read ahead of the failure.
+struct guarded_account
+{
+   std::string username = "alice";
+   std::string password = "correct horse battery";
+   std::string confirm_password = "correct horse battery";
+   int age = 30;
+};
+
+template <>
+struct glz::meta<guarded_account>
+{
+   using T = guarded_account;
+   static constexpr auto limit_age = [](const T&, int age) { return age >= 0 && age <= 120; };
+   static constexpr auto strong = [](const T& v) {
+      return v.password.size() >= 12 && v.password == v.confirm_password;
+   };
+   static constexpr auto value = object(&T::username, &T::password, &T::confirm_password, "age",
+                                        read_constraint<&T::age, limit_age, "Age out of range">);
+   static constexpr auto self_constraint = glz::self_constraint<strong, "Weak or mismatched password">;
+};
+
+struct guarded_service
+{
+   guarded_account account{};
+};
+
+suite rejected_write_tests = [] {
+   "rejected_write_keeps_value"_test = [] {
+      glz::registry<glz::opts{}, glz::JSONRPC> server{};
+      guarded_service service{};
+      server.on(service);
+
+      auto response = server.call(
+         R"({"jsonrpc":"2.0","method":"account","params":{"password":"short","confirm_password":"other"},"id":1})");
+      expect(response.find(R"("code":-32602)") != std::string::npos) << response;
+      expect(service.account.password == "correct horse battery") << service.account.password;
+      expect(service.account.confirm_password == "correct horse battery") << service.account.confirm_password;
+
+      response =
+         server.call(R"({"jsonrpc":"2.0","method":"account","params":{"username":"mallory","age":500},"id":2})");
+      expect(response.find(R"("code":-32602)") != std::string::npos) << response;
+      expect(service.account.username == "alice") << service.account.username;
+
+      // A valid write still lands
+      response = server.call(R"({"jsonrpc":"2.0","method":"account","params":{"username":"bob","age":40},"id":3})");
+      expect(response.find("error") == std::string::npos) << response;
+      expect(service.account.username == "bob");
+      expect(service.account.age == 40);
+   };
+};
+
+// A member that cannot really be copied (a container of std::unique_ptr) is read in place rather than failing to
+// compile.
+struct move_only_store
+{
+   std::vector<std::unique_ptr<int>> items{};
+   int count{};
+};
+
+struct move_only_service
+{
+   move_only_store store{};
+};
+
+suite move_only_tests = [] {
+   "move_only_members_register"_test = [] {
+      glz::registry<glz::opts{}, glz::JSONRPC> server{};
+      move_only_service service{};
+      server.on(service);
+
+      auto response = server.call(R"({"jsonrpc":"2.0","method":"store","params":{"count":8},"id":1})");
+      expect(response.find("error") == std::string::npos) << response;
+      expect(service.store.count == 8);
+   };
+};
+
 int main() { return 0; }
