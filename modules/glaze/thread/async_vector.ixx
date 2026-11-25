@@ -12,6 +12,7 @@
 // glz:header std=<utility>
 // glz:header std=<vector>
 export module glaze.thread.async_vector;
+import glaze.core.common;
 
 import std;
 import glaze.core.traits;
@@ -28,7 +29,6 @@ import glaze.core.traits;
 
 import glaze.core.context;
 import glaze.core.opts;
-import glaze.thread.value_proxy;
 import glaze.util.type_traits;
 
 // Provides a thread-safe vector

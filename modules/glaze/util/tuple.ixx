@@ -3,6 +3,7 @@
 // glz:header path="glaze/util/tuple.hpp"
 // glz:header std=<tuple>
 export module glaze.util.tuple;
+import glaze.core.tuple;
 
 import std;
 

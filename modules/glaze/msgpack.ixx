@@ -2,6 +2,7 @@
 // For the license information refer to glaze.ixx
 // glz:header path="glaze/msgpack.hpp"
 export module glaze.msgpack;
+export import glaze.msgpack.wrappers;
 
 export import glaze.msgpack.common;
 export import glaze.msgpack.read;

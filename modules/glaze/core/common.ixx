@@ -169,6 +169,59 @@ namespace glz
    export template <class T>
    concept is_includer = requires(T t) { requires T::glaze_includer == true; };
 
+   // Identity of the type an object's key bits belong to (see context::include_key_type). The
+   // address of each instantiation is unique, so comparing addresses compares types. Deliberately
+   // not const: linkers that fold identical read-only data (MSVC /OPT:ICF, gold --icf=all) could
+   // otherwise give every instantiation the same address, and a false match would reinterpret one
+   // type's key bits as another's.
+   export template <class T>
+   inline char include_key_tag{};
+
+   // Publishes an object's missing-key bits on the context while it is parsed, so that an includer
+   // member can hand them to the read of its file, and restores the previous value on the way out.
+   export template <class Ctx>
+   struct key_bits_scope final
+   {
+      Ctx& ctx;
+      void* previous;
+
+      key_bits_scope(Ctx& ctx, void* bits) noexcept : ctx(ctx), previous(ctx.key_bits) { ctx.key_bits = bits; }
+      key_bits_scope(const key_bits_scope&) = delete;
+      key_bits_scope& operator=(const key_bits_scope&) = delete;
+      ~key_bits_scope() noexcept { ctx.key_bits = previous; }
+   };
+
+   // Stands in for key_bits_scope in objects that cannot include a file, so they do not touch the
+   // context at all.
+   export struct inert_key_bits_scope final
+   {
+      constexpr inert_key_bits_scope(auto&&, void*) noexcept {}
+   };
+
+   // Hands the including object's key bits to the read of an included file, and clears them
+   // afterwards in case that read never claimed them (an included document whose top level is not
+   // the including object, or one that failed before reaching its closing brace).
+   export template <class Ctx>
+   struct include_key_scope final
+   {
+      Ctx& ctx;
+
+      include_key_scope(Ctx& ctx, const void* type_tag) noexcept : ctx(ctx)
+      {
+         if (ctx.key_bits) {
+            ctx.include_key_bits = ctx.key_bits;
+            ctx.include_key_type = type_tag;
+         }
+      }
+      include_key_scope(const include_key_scope&) = delete;
+      include_key_scope& operator=(const include_key_scope&) = delete;
+      ~include_key_scope() noexcept
+      {
+         ctx.include_key_bits = nullptr;
+         ctx.include_key_type = nullptr;
+      }
+   };
+
    export template <class T>
    concept is_member_function_pointer = std::is_member_function_pointer_v<T>;
 
@@ -569,19 +622,27 @@ namespace glz
 
    // P2996 can reflect any class, but we must exclude types with their own Glaze specializations.
    // Types with custom serialization should specialize glz::specified<T> to std::true_type.
+   //
+   // A glaze_wrapper (glz::quoted, glz::invoke, glz::escape_bytes, ...) is a view onto a member, not
+   // a struct: its fields are a reference and perhaps a pointer. A format that has no specialization
+   // for a wrapper must fail to compile rather than reflect it, which would write the wrapper's
+   // internals (often an empty object) and read into them.
    export template <class T>
-   concept reflectable = std::is_class_v<std::remove_cvref_t<T>> &&
-                         !(is_no_reflect<T> || glaze_t<T> || meta_keys<T> || range<T> || pair_t<T> || null_t<T> ||
-                           str_t<T> || bool_t<T> || tuple_t<T> || func_t<T> || is_specified<T>);
+   concept reflectable =
+      std::is_class_v<std::remove_cvref_t<T>> &&
+      !(is_no_reflect<T> || glaze_wrapper<std::remove_cvref_t<T>> || glaze_t<T> || meta_keys<T> || range<T> ||
+        pair_t<T> || null_t<T> || str_t<T> || bool_t<T> || tuple_t<T> || func_t<T> || is_specified<T>);
 #else
    // Traditional reflection requires aggregates. The exclusion list mirrors P2996 for consistency.
    // These exclusions handle aggregate types that shouldn't be reflected as objects:
    // str_t: aggregate string-like types, tuple_t: std::array and custom tuple-like aggregates,
-   // func_t: aggregate callables, is_specified: types with explicit serialization.
+   // func_t: aggregate callables, is_specified: types with explicit serialization, glaze_wrapper: views
+   // onto a member (see the P2996 branch above).
    export template <class T>
-   concept reflectable = std::is_aggregate_v<std::remove_cvref_t<T>> && std::is_class_v<std::remove_cvref_t<T>> &&
-                         !(is_no_reflect<T> || glaze_t<T> || meta_keys<T> || range<T> || pair_t<T> || null_t<T> ||
-                           str_t<T> || bool_t<T> || tuple_t<T> || func_t<T> || is_specified<T>);
+   concept reflectable =
+      std::is_aggregate_v<std::remove_cvref_t<T>> && std::is_class_v<std::remove_cvref_t<T>> &&
+      !(is_no_reflect<T> || glaze_wrapper<std::remove_cvref_t<T>> || glaze_t<T> || meta_keys<T> || range<T> ||
+        pair_t<T> || null_t<T> || str_t<T> || bool_t<T> || tuple_t<T> || func_t<T> || is_specified<T>);
 #endif
 
    export template <class T>

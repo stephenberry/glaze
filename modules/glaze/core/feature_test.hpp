@@ -32,6 +32,17 @@
 #endif
 #endif
 
+// C++20 std::chrono::utc_clock, clock_cast and leap-second support (P0355). __cpp_lib_chrono
+// reaches 201907L only once the calendar and time zone library is complete; Apple libc++
+// reports a lower value and has no utc_clock.
+#ifndef GLZ_HAS_UTC_CLOCK
+#if defined(__cpp_lib_chrono) && __cpp_lib_chrono >= 201907L
+#define GLZ_HAS_UTC_CLOCK 1
+#else
+#define GLZ_HAS_UTC_CLOCK 0
+#endif
+#endif
+
 namespace glz
 {
    // Constexpr bool for use in if constexpr or other compile-time contexts
@@ -45,9 +56,75 @@ namespace glz
    // C++26 P2988 std::optional<T&> support
    // Use GLZ_HAS_OPTIONAL_REF macro for #if preprocessor guards
    inline constexpr bool has_optional_ref = GLZ_HAS_OPTIONAL_REF;
+
+   // C++20 std::chrono::utc_clock support
+   // Use GLZ_HAS_UTC_CLOCK macro for #if preprocessor guards
+   inline constexpr bool has_utc_clock = GLZ_HAS_UTC_CLOCK;
 }
 
 // Glaze Feature Test Macros for breaking changes
+
+// v9.0.0 honors meta<T>::skip in every format that writes keyed objects
+//
+// meta<T>::skip was only consulted by JSON and YAML. BEVE, CBOR, MessagePack, TOML, BSON and
+// JSONB wrote a key skipped on serialize and read a key skipped on parse. They now leave the
+// key out of their output and consume it without reading, as JSON does, and a skipped member
+// needs no reader or writer in these formats either. Positional layouts (structs_as_arrays)
+// have no keys and are unchanged.
+#define glaze_v9_0_0_meta_skip_all_formats
+
+// v9.0.0 removes glz::invoke_update and makes writing a glz::invoke member an error
+//
+// glz::invoke_update is gone. It detected change by comparing the raw JSON text of the
+// argument array, so "[]" and "[ ]" counted as different and fired the callback, and it
+// kept parser state (prev, initialized) inside the user's data model. To call a function
+// when a value changes, specialize from<JSON, T> for a type of your own, where the
+// comparison is over parsed values rather than text.
+//
+// Writing a glz::invoke member is now a compile error. It previously wrote "[]" for a
+// member function pointer, "[[0]]" (fabricated zeroed arguments, which Glaze cannot read
+// back) for a std::function with by-value arguments, and failed to compile for zero
+// argument or reference argument std::functions. An invoke member is a call site rather
+// than state, and reading the written "[]" back invokes the function. Exclude these
+// members from output with a meta<T>::skip that returns true for operation::serialize:
+//
+//   static constexpr bool skip(const std::string_view key, const glz::meta_context& ctx)
+//   {
+//      return ctx.op == glz::operation::serialize && key == "add_one";
+//   }
+#define glaze_v9_0_0_invoke
+
+// v9.0.0 stops reflecting Glaze's own wrapper types
+//
+// A format with no specialization for a wrapper (glz::invoke, glz::quoted, glz::raw_string,
+// glz::escaped, glz::escape_bytes, ...) reflected the wrapper struct itself: it wrote the
+// wrapper's internals, usually an empty object, and read into them. That is now a compile
+// error. glz::invoke is rejected with a message in every format for writing, and in every
+// format but JSON for reading. Exclude such members from the other formats with a
+// meta<T>::skip (which applies to every format).
+#define glaze_v9_0_0_wrappers_not_reflected
+
+// v8.3.0 fixes GLZ_NO_UNIQUE_ADDRESS on the MSVC ABI
+//
+// The macro tested the standard [[no_unique_address]] before [[msvc::no_unique_address]].
+// MSVC accepts the standard spelling but gives it no layout effect, so a front end that
+// reports it through __has_cpp_attribute would select the inert form and lose the empty
+// member optimization. This can shrink glz::tuple, glz::lazy_document and glz::ordered_map
+// on MSVC, which is a layout change for object files built against an older Glaze.
+#define glaze_v8_3_0_msvc_no_unique_address
+
+// v8.3.0 reimplements glz::tuple and moves it to <glaze/core/tuple.hpp>
+//
+// glz::tuple keeps its API but is now a fresh implementation with no third-party
+// lineage, so <glaze/glaze.hpp> no longer carries a non-MIT dependency. Element
+// access is a base-class cast rather than an operator[] overload set, which cuts
+// tuple compile time without changing generated code.
+//
+// <glaze/tuplet/tuple.hpp> still forwards to the new location and will be removed
+// in a future major release. The glz::tuplet namespace retains make_tuple,
+// forward_as_tuple, tuple_cat and convert; its internal metaprogramming helpers
+// (tag, type_list, base_list, tuple_elem, ...) are gone.
+#define glaze_v8_3_0_tuple
 
 // v7.7.0 drops glaze/msgpack.hpp from the glaze/glaze.hpp aggregate header.
 //

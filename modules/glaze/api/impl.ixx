@@ -14,7 +14,7 @@ export module glaze.api.impl;
 import std;
 
 export import glaze.api.api;
-import glaze.api.tuplet;
+import glaze.api.tuple;
 import glaze.api.type_support;
 import glaze.api.trait;
 

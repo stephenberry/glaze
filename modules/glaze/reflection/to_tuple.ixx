@@ -9,6 +9,7 @@
 // glz:header std=<type_traits>
 // glz:header std=<utility>
 export module glaze.reflection.to_tuple;
+import glaze.core.tuple;
 
 import std;
 

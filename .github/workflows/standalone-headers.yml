@@ -1,0 +1,73 @@
+# This workflow verifies that every public Glaze header compiles when it is the only
+# #include in a translation unit (see cmake/ci/standalone-headers/CMakeLists.txt).
+#
+# libstdc++ and libc++ differ in which standard headers they include transitively, so a
+# missing #include often compiles against one and not the other. Both are checked.
+
+name: standalone-headers
+
+on:
+  push:
+    branches:
+      - main
+      - feature/*
+    paths:
+      - 'include/**'
+      - 'cmake/**'
+      - 'CMakeLists.txt'
+      - '.github/workflows/standalone-headers.yml'
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'include/**'
+      - 'cmake/**'
+      - 'CMakeLists.txt'
+      - '.github/workflows/standalone-headers.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  # Supersede an in-flight run when a branch is pushed again, so a fixup commit
+  # does not leave the previous run competing for the same runners. Pushes to main
+  # are exempt: every merged commit keeps a completed CI record.
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+jobs:
+  build:
+    name: ${{ matrix.name }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: gcc-14 libstdc++
+            cxx: g++-14
+            cxx_flags: ''
+          - name: clang-18 libc++
+            cxx: clang++-18
+            cxx_flags: '-stdlib=libc++'
+
+    steps:
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y erlang-dev libeigen3-dev libssl-dev libc++-dev libc++abi-dev
+
+    - uses: actions/checkout@v6
+
+    - name: Configure CMake
+      run: |
+        cmake -S "$GITHUB_WORKSPACE/cmake/ci/standalone-headers" \
+          -B "$GITHUB_WORKSPACE/build/standalone-headers" \
+          -DGLAZE_SOURCE_DIR="$GITHUB_WORKSPACE" \
+          -DCMAKE_CXX_COMPILER=${{ matrix.cxx }} \
+          -DCMAKE_CXX_FLAGS="${{ matrix.cxx_flags }}"
+
+    - name: Build
+      run: cmake --build "$GITHUB_WORKSPACE/build/standalone-headers" --target glaze_standalone_headers --parallel $(nproc) -- --keep-going

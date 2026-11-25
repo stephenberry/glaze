@@ -212,6 +212,29 @@ my_lib::ring_buffer<4096> ring;
 auto ec = glz::write_json(obj, ring);
 ```
 
+### Growth policy (`grow`)
+
+A buffer that *can* resize chooses how much it resizes by. Define `grow` to say so:
+
+```cpp
+namespace glz {
+    template <>
+    struct buffer_traits<my_lib::arena_buffer> {
+        static constexpr bool is_resizable = true;
+        // ... capacity / ensure_capacity / finalize as above ...
+
+        // `required` is the logical end position the write needs to be able to address.
+        static void grow(my_lib::arena_buffer& b, size_t required) {
+            b.resize(required + my_lib::arena_buffer::block_size);
+        }
+    };
+}
+```
+
+`grow` is optional. A specialization that omits it gets the default policy, `resize(2 * required)`, which amortizes repeated reallocations to O(n) over a whole write.
+
+The argument is a **logical end position**, not an amount of storage to add. For an ordinary buffer the two are the same thing, because logical position and physical offset coincide. They part ways for a buffer that does not keep the whole document — `basic_ostream_buffer` holds only the span it has not flushed yet, and its logical index keeps climbing after a flush releases the bytes behind it. Doubling that index would size storage to the document instead of to the window, so it defines its own `grow` that reserves the window the write needs plus a fixed slack. Define `grow` whenever your buffer's storage is not simply a prefix of the logical stream.
+
 ## See Also
 
 - [Reading](reading.md) - Reading from buffers

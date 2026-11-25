@@ -20,6 +20,8 @@
 // glz:header std=<variant>
 // glz:header std=<vector>
 export module glaze.toml.read;
+import glaze.util.non_finite;
+import glaze.util.atoi;
 
 import std;
 
@@ -61,6 +63,13 @@ using std::size_t;
 
 namespace glz
 {
+   namespace detail
+   {
+      // Defined after the variant reader. Returns false when the input is not read as a document.
+      template <auto Opts, class T, class Ctx, class It, class End>
+      bool read_toml_document_root(T& value, Ctx& ctx, It& it, End end);
+   }
+
    template <>
    struct parse<TOML>
    {
@@ -68,6 +77,11 @@ namespace glz
       static void op(T&& value, Ctx&& ctx, It0&& it, It1 end)
       {
          using V = std::remove_cvref_t<T>;
+         // Only the document root can hold key/value lines, so that decision is made here rather
+         // than in the value readers, which also run for every nested value.
+         if (detail::read_toml_document_root<Opts>(value, ctx, it, end)) {
+            return;
+         }
          from<TOML, V>::template op<Opts>(std::forward<T>(value), std::forward<Ctx>(ctx), std::forward<It0>(it), end);
       }
    };
@@ -80,44 +94,21 @@ namespace glz
       return -1;
    }
 
-   template <class It, class End>
-   inline bool append_toml_unicode_escape_u(std::string& out, It& it, End end) noexcept
+   // Decodes the Digits hex digits of a \uXXXX (Digits = 4) or \UXXXXXXXX (Digits = 8) escape, with `it` on the
+   // 'u' or 'U'. TOML requires each escape to be a Unicode scalar value, so surrogates are rejected rather than
+   // combined into UTF-16 pairs as JSON does.
+   template <size_t Digits, class It, class End>
+   inline bool append_toml_unicode_escape(std::string& out, It& it, End end) noexcept
    {
       auto hex_it = it;
-      ++hex_it; // first hex digit after 'u'
-      if (hex_it == end) {
-         return false;
-      }
+      ++hex_it; // first hex digit
 
-      const auto* const hex_begin = &(*hex_it);
-      const auto* const hex_end = hex_begin + (end - hex_it);
-      const auto* cursor = hex_begin;
-      char utf8[4]{};
-      char* dst = utf8;
-
-      if (!handle_unicode_code_point(cursor, dst, hex_end)) {
-         return false;
-      }
-
-      out.append(utf8, static_cast<size_t>(dst - utf8));
-      hex_it += (cursor - hex_begin);
-      --hex_it; // leave iterator on the last consumed character
-      it = hex_it;
-      return true;
-   }
-
-   template <class It, class End>
-   inline bool append_toml_unicode_escape_U(std::string& out, It& it, End end) noexcept
-   {
-      auto hex_it = it;
-      ++hex_it; // first hex digit after 'U'
-
-      if ((end - hex_it) < 8) {
+      if ((end - hex_it) < static_cast<std::ptrdiff_t>(Digits)) {
          return false;
       }
 
       uint32_t code_point{};
-      for (size_t i = 0; i < 8; ++i) {
+      for (size_t i = 0; i < Digits; ++i) {
          const int digit = toml_hex_to_int(*(hex_it + i));
          if (digit < 0) {
             return false;
@@ -131,12 +122,8 @@ namespace glz
 
       char utf8[4]{};
       const auto offset = code_point_to_utf8(code_point, utf8);
-      if (!offset) {
-         return false;
-      }
-
       out.append(utf8, static_cast<size_t>(offset));
-      it = hex_it + 7; // leave iterator on the last consumed character
+      it = hex_it + (Digits - 1); // leave iterator on the last consumed character
       return true;
    }
 
@@ -182,9 +169,9 @@ namespace glz
          return true;
       }
       case 'u':
-         return append_toml_unicode_escape_u(out, it, end);
+         return append_toml_unicode_escape<4>(out, it, end);
       case 'U':
-         return append_toml_unicode_escape_U(out, it, end);
+         return append_toml_unicode_escape<8>(out, it, end);
       default:
          return false;
       }
@@ -205,20 +192,29 @@ namespace glz
       if (*it == '"') {
          // Quoted key
          ++it;
-         while (it != end && *it != '"') {
-            if (*it == '\\') {
+         while (true) {
+            const auto run_start = it;
+            while (it != end && !toml::basic_string_dispatch_table[uint8_t(*it)]) {
                ++it;
-               if (it == end) {
-                  ctx.error = error_code::unexpected_end;
-                  return false;
-               }
-               if (!append_toml_basic_escape(key, it, end)) {
-                  ctx.error = error_code::syntax_error;
-                  return false;
-               }
             }
-            else {
-               key.push_back(*it);
+            if (it != run_start) {
+               key.append(run_start, it);
+            }
+            if (it == end || *it == '"') {
+               break;
+            }
+            if (toml::forbidden_control_table[uint8_t(*it)]) [[unlikely]] {
+               ctx.error = error_code::invalid_control_character;
+               return false;
+            }
+            ++it; // the scan only stops on a backslash once controls are ruled out
+            if (it == end) {
+               ctx.error = error_code::unexpected_end;
+               return false;
+            }
+            if (!append_toml_basic_escape(key, it, end)) {
+               ctx.error = error_code::syntax_error;
+               return false;
             }
             ++it;
          }
@@ -232,13 +228,23 @@ namespace glz
       else if (*it == '\'') {
          // Single-quoted (literal) key
          ++it;
-         while (it != end && *it != '\'') {
+         while (true) {
+            const auto run_start = it;
+            while (it != end && !toml::literal_string_dispatch_table[uint8_t(*it)]) {
+               ++it;
+            }
+            if (it != run_start) {
+               key.append(run_start, it);
+            }
+            if (it == end || *it == '\'') {
+               break;
+            }
             if (*it == '\n' || *it == '\r') {
                ctx.error = error_code::syntax_error;
                return false;
             }
-            key.push_back(*it);
-            ++it;
+            ctx.error = error_code::invalid_control_character;
+            return false;
          }
 
          if (it == end || *it != '\'') {
@@ -284,20 +290,29 @@ namespace glz
 
          if (*it == '"') {
             ++it;
-            while (it != end && *it != '"') {
-               if (*it == '\\') {
+            while (true) {
+               const auto run_start = it;
+               while (it != end && !toml::basic_string_dispatch_table[uint8_t(*it)]) {
                   ++it;
-                  if (it == end) {
-                     ctx.error = error_code::unexpected_end;
-                     return false;
-                  }
-                  if (!append_toml_basic_escape(key, it, end)) {
-                     ctx.error = error_code::syntax_error;
-                     return false;
-                  }
                }
-               else {
-                  key.push_back(*it);
+               if (it != run_start) {
+                  key.append(run_start, it);
+               }
+               if (it == end || *it == '"') {
+                  break;
+               }
+               if (toml::forbidden_control_table[uint8_t(*it)]) [[unlikely]] {
+                  ctx.error = error_code::invalid_control_character;
+                  return false;
+               }
+               ++it; // the scan only stops on a backslash once controls are ruled out
+               if (it == end) {
+                  ctx.error = error_code::unexpected_end;
+                  return false;
+               }
+               if (!append_toml_basic_escape(key, it, end)) {
+                  ctx.error = error_code::syntax_error;
+                  return false;
                }
                ++it;
             }
@@ -310,13 +325,23 @@ namespace glz
          }
          else if (*it == '\'') {
             ++it;
-            while (it != end && *it != '\'') {
+            while (true) {
+               const auto run_start = it;
+               while (it != end && !toml::literal_string_dispatch_table[uint8_t(*it)]) {
+                  ++it;
+               }
+               if (it != run_start) {
+                  key.append(run_start, it);
+               }
+               if (it == end || *it == '\'') {
+                  break;
+               }
                if (*it == '\n' || *it == '\r') {
                   ctx.error = error_code::syntax_error;
                   return false;
                }
-               key.push_back(*it);
-               ++it;
+               ctx.error = error_code::invalid_control_character;
+               return false;
             }
 
             if (it == end || *it != '\'') {
@@ -355,6 +380,40 @@ namespace glz
       }
 
       return true;
+   }
+
+   // Consume the input that a key skipped by meta<T>::skip on parse names. After `key =` that is one
+   // value. After a [table] or [[array]] header it is the table's body, every `key = value` line up to
+   // the next header: skipping only the rest of the header line would leave those lines to be read
+   // into the enclosing table.
+   template <auto Opts, class Ctx, class It, class End>
+   inline void skip_toml_member(Ctx& ctx, It& it, End end)
+   {
+      skip_ws_and_comments(it, end);
+      if (it != end && *it != '\n' && *it != '\r') {
+         skip_value<TOML>::template op<Opts>(ctx, it, end);
+         return;
+      }
+
+      std::vector<std::string> key{};
+      while (true) {
+         skip_ws_newlines_and_comments(it, end);
+         if (it == end || *it == '[') {
+            return;
+         }
+         if (!parse_toml_key(key, ctx, it, end)) {
+            return;
+         }
+         if (it == end || *it != '=') {
+            ctx.error = error_code::syntax_error;
+            return;
+         }
+         ++it; // skip '='
+         skip_value<TOML>::template op<Opts>(ctx, it, end);
+         if (bool(ctx.error)) [[unlikely]] {
+            return;
+         }
+      }
    }
 
    template <glaze_value_t T>
@@ -668,43 +727,43 @@ namespace glz
          return c == ',' || c == ']' || c == '}' || c == '\n' || c == '\r' || c == '#' || c == ' ' || c == '\t';
       }
 
-      template <std::floating_point T>
-      bool parse_toml_special_float(T& value, auto& it, auto end) noexcept
+      // TOML permits an underscore between two digits of a float (1_000.5, 6.626e-3_4), which
+      // from_chars does not accept. Parses the float token starting at `first` with its underscores
+      // removed. Returns one past the end of the token, or nullptr if the token is invalid.
+      template <class T>
+      const char* parse_toml_float_with_underscores(T& value, const char* first, const char* end) noexcept
       {
-         auto p = it;
-         bool negative = false;
-
-         if (p != end && (*p == '+' || *p == '-')) {
-            negative = (*p == '-');
-            ++p;
+         auto last = first;
+         while (last != end && (is_digit(*last) || *last == '_' || *last == '.' || *last == 'e' || *last == 'E' ||
+                                *last == '+' || *last == '-')) {
+            ++last;
          }
 
-         if ((end - p) >= 3 && p[0] == 'i' && p[1] == 'n' && p[2] == 'f') {
-            const auto next = p + 3;
-            if (next != end && !is_toml_number_terminator(*next)) {
-               return false;
-            }
-
-            value = negative ? -std::numeric_limits<T>::infinity() : std::numeric_limits<T>::infinity();
-            it = next;
-            return true;
+         // The token is copied to a stack buffer, falling back to the heap for unusually long tokens
+         char stack_buffer[128];
+         std::string heap_buffer;
+         char* buffer = stack_buffer;
+         if (size_t(last - first) > sizeof(stack_buffer)) [[unlikely]] {
+            heap_buffer.resize(size_t(last - first));
+            buffer = heap_buffer.data();
          }
 
-         if ((end - p) >= 3 && p[0] == 'n' && p[1] == 'a' && p[2] == 'n') {
-            const auto next = p + 3;
-            if (next != end && !is_toml_number_terminator(*next)) {
-               return false;
+         // Each underscore must sit between two digits
+         char* buffer_end = buffer;
+         for (auto p = first; p != last; ++p) {
+            if (*p != '_') {
+               *buffer_end++ = *p;
             }
-
-            value = std::numeric_limits<T>::quiet_NaN();
-            if (negative) {
-               value = -value;
+            else if (p == first || not is_digit(p[-1]) || p + 1 == last || not is_digit(p[1])) [[unlikely]] {
+               return nullptr;
             }
-            it = next;
-            return true;
          }
 
-         return false;
+         auto [ptr, ec] = glz::from_chars<false>(static_cast<const char*>(buffer), buffer_end, value);
+         if (ec != std::errc() || ptr != buffer_end) [[unlikely]] {
+            return nullptr;
+         }
+         return last;
       }
    }
 
@@ -733,14 +792,33 @@ namespace glz
             }
          }
          else {
-            if (detail::parse_toml_special_float(value, it, end)) {
+            if (detail::parse_non_finite_float(value, it, end, detail::is_toml_number_terminator)) {
                return;
             }
 
-            auto [ptr, ec] = glz::from_chars<false>(it, end, value); // Always treat as non-null-terminated
+            // TOML allows an explicit '+' sign on floats, which from_chars does not accept
+            auto start = it;
+            if (*start == '+') {
+               ++start;
+               if (start == end || *start == '+' || *start == '-') [[unlikely]] {
+                  ctx.error = error_code::parse_number_failure;
+                  return;
+               }
+            }
+
+            auto [ptr, ec] = glz::from_chars<false>(start, end, value); // Always treat as non-null-terminated
             if (ec != std::errc()) [[unlikely]] {
                ctx.error = error_code::parse_number_failure;
                return;
+            }
+
+            // from_chars stops at an underscore, so a valid underscore always follows a parsed prefix
+            if (ptr != end && *ptr == '_') [[unlikely]] {
+               ptr = detail::parse_toml_float_with_underscores(value, it, end);
+               if (ptr == nullptr) [[unlikely]] {
+                  ctx.error = error_code::parse_number_failure;
+                  return;
+               }
             }
             it = ptr;
          }
@@ -782,22 +860,19 @@ namespace glz
                      ctx.error = error_code::unexpected_end;
                      return;
                   }
-                  // Escaped newline continuation in multiline basic strings
-                  if (*it == '\n') {
-                     // Trim all whitespace after escaped newline until non-whitespace or actual newline
-                     while (it + 1 < end &&
-                            (*(it + 1) == ' ' || *(it + 1) == '\t' || *(it + 1) == '\r' || *(it + 1) == '\n')) {
-                        ++it;
-                        if (*it == '\n') break; // Stop if we hit an actual newline
-                     }
+                  // Line ending backslash: optional spaces or tabs, then a newline. The
+                  // backslash and all whitespace, newlines included, up to the next
+                  // non-whitespace character are trimmed.
+                  auto ws = it;
+                  while (ws < end && (*ws == ' ' || *ws == '\t')) {
+                     ++ws;
                   }
-                  else if (*it == '\r') { // part of CRLF, handle similar to \n
-                     if (it + 1 < end && *(it + 1) == '\n') ++it;
-                     while (it + 1 < end &&
-                            (*(it + 1) == ' ' || *(it + 1) == '\t' || *(it + 1) == '\r' || *(it + 1) == '\n')) {
-                        ++it;
-                        if (*it == '\n') break;
+                  if (ws < end && (*ws == '\n' || (*ws == '\r' && ws + 1 < end && *(ws + 1) == '\n'))) {
+                     while (ws + 1 < end && (*(ws + 1) == ' ' || *(ws + 1) == '\t' || *(ws + 1) == '\n' ||
+                                             (*(ws + 1) == '\r' && ws + 2 < end && *(ws + 2) == '\n'))) {
+                        ++ws;
                      }
+                     it = ws; // the ++it below steps past the trimmed whitespace
                   }
                   else if (!append_toml_basic_escape(value, it, end)) {
                      ctx.error = error_code::syntax_error;
@@ -805,7 +880,33 @@ namespace glz
                   }
                }
                else {
-                  value.push_back(*it);
+                  const auto run_start = it;
+                  while (it + 2 < end && !toml::multiline_basic_dispatch_table[uint8_t(*it)]) {
+                     ++it;
+                  }
+                  if (it != run_start) {
+                     value.append(run_start, it);
+                  }
+                  if (it + 2 >= end) {
+                     break; // unterminated; reported by the check after the loop
+                  }
+                  if (toml::forbidden_control_multiline_table[uint8_t(*it)] || toml::is_bare_carriage_return(it, end))
+                     [[unlikely]] {
+                     ctx.error = error_code::invalid_control_character;
+                     return;
+                  }
+                  if (*it == '\\') {
+                     continue; // hand the escape back to the branch above
+                  }
+                  if (*it == '\r') {
+                     value.push_back('\r'); // a CRLF line ending; the line feed joins the next run
+                  }
+                  else if (*(it + 1) == '"' && *(it + 2) == '"') {
+                     break; // closing delimiter
+                  }
+                  else {
+                     value.push_back('"'); // a lone quote inside the string
+                  }
                }
                ++it;
             }
@@ -820,24 +921,33 @@ namespace glz
             // Basic string
             ++it; // Skip opening quote
 
-            while (it != end && *it != '"') {
-               if (*it == '\\') {
+            while (true) {
+               const auto run_start = it;
+               while (it != end && !toml::basic_string_dispatch_table[uint8_t(*it)]) {
                   ++it;
-                  if (it == end) {
-                     ctx.error = error_code::unexpected_end;
-                     return;
-                  }
-                  if (!append_toml_basic_escape(value, it, end)) {
-                     ctx.error = error_code::syntax_error;
-                     return;
-                  }
                }
-               else if (*it == '\n' || *it == '\r') { // Newlines not allowed in single-line basic strings
+               if (it != run_start) {
+                  value.append(run_start, it);
+               }
+               if (it == end || *it == '"') {
+                  break;
+               }
+               if (*it == '\n' || *it == '\r') { // Newlines not allowed in single-line basic strings
                   ctx.error = error_code::syntax_error;
                   return;
                }
-               else {
-                  value.push_back(*it);
+               if (toml::forbidden_control_table[uint8_t(*it)]) [[unlikely]] {
+                  ctx.error = error_code::invalid_control_character;
+                  return;
+               }
+               ++it; // the scan only stops on a backslash once controls are ruled out
+               if (it == end) {
+                  ctx.error = error_code::unexpected_end;
+                  return;
+               }
+               if (!append_toml_basic_escape(value, it, end)) {
+                  ctx.error = error_code::syntax_error;
+                  return;
                }
                ++it;
             }
@@ -859,7 +969,25 @@ namespace glz
             }
 
             while (it + 2 < end && !(*it == '\'' && *(it + 1) == '\'' && *(it + 2) == '\'')) {
-               value.push_back(*it);
+               const auto run_start = it;
+               while (it + 2 < end && !toml::multiline_literal_dispatch_table[uint8_t(*it)]) {
+                  ++it;
+               }
+               if (it != run_start) {
+                  value.append(run_start, it);
+               }
+               if (it + 2 >= end) {
+                  break;
+               }
+               if (toml::forbidden_control_multiline_table[uint8_t(*it)] || toml::is_bare_carriage_return(it, end))
+                  [[unlikely]] {
+                  ctx.error = error_code::invalid_control_character;
+                  return;
+               }
+               if (*it == '\'' && *(it + 1) == '\'' && *(it + 2) == '\'') {
+                  break; // closing delimiter
+               }
+               value.push_back(*it); // a lone quote, or the carriage return of a CRLF line ending
                ++it;
             }
 
@@ -873,13 +1001,23 @@ namespace glz
             // Literal string
             ++it; // Skip opening quote
 
-            while (it != end && *it != '\'') {
+            while (true) {
+               const auto run_start = it;
+               while (it != end && !toml::literal_string_dispatch_table[uint8_t(*it)]) {
+                  ++it;
+               }
+               if (it != run_start) {
+                  value.append(run_start, it);
+               }
+               if (it == end || *it == '\'') {
+                  break;
+               }
                if (*it == '\n' || *it == '\r') { // Newlines not allowed in single-line literal strings
                   ctx.error = error_code::syntax_error;
                   return;
                }
-               value.push_back(*it);
-               ++it;
+               ctx.error = error_code::invalid_control_character;
+               return;
             }
 
             if (it == end || *it != '\'') {
@@ -1049,11 +1187,12 @@ namespace glz
    // Duration: parsed generically (from the bare rep count) by the
    // from<uint32_t Format, is_duration T> specialization in core/chrono.hpp.
 
-   // system_clock::time_point: parse from TOML native datetime (RFC 3339)
+   // system_clock / utc_clock time_point: parse from TOML native datetime (RFC 3339)
    // TOML datetimes are NOT quoted - they're native values
    // Format: YYYY-MM-DDTHH:MM:SS[.fraction][Z|+HH:MM|-HH:MM]
    // Also accepts space instead of T, and seconds can be omitted
-   template <is_system_time_point T>
+   // A seconds field of 60 is a leap second, which only a utc_clock target accepts
+   template <is_calendar_time_point T>
       requires(not custom_read<T>)
    struct from<TOML, T>
    {
@@ -1136,7 +1275,7 @@ namespace glz
                return;
             }
             sc = parse_digits(s + pos, 2);
-            if (sc < 0 || sc > 59) [[unlikely]] {
+            if (sc < 0 || sc > 60) [[unlikely]] {
                ctx.error = error_code::parse_error;
                return;
             }
@@ -1204,11 +1343,8 @@ namespace glz
             return;
          }
 
-         const auto tp = sys_days{ymd} + hours{hr} + minutes{mi} + seconds{sc} + seconds{tz_offset_seconds} +
-                         nanoseconds{subsec_nanos};
-
-         using Duration = typename std::remove_cvref_t<T>::duration;
-         value = time_point_cast<Duration>(tp);
+         chrono_detail::from_civil_time(value, ymd, hr, mi, sc, tz_offset_seconds, nanoseconds{subsec_nanos},
+                                        ctx.error);
       }
    };
 
@@ -1720,6 +1856,9 @@ namespace glz
 
             if (*it == '\n' || *it == '\r') {
                skip_to_next_line(ctx, it, end);
+               if (bool(ctx.error)) [[unlikely]] {
+                  return;
+               }
                continue;
             }
 
@@ -1763,7 +1902,14 @@ namespace glz
                }
                visit<N>(
                   [&]<size_t I>() {
-                     if (I == index) {
+                     // A field skipped on parse consumes its value in a branch of its own, so its
+                     // reader is never instantiated -- see `skipped_by_meta`.
+                     if constexpr (skipped_by_meta<U, I, operation::parse>) {
+                        if (I == index) {
+                           skip_value<TOML>::template op<Opts>(ctx, it, end);
+                        }
+                     }
+                     else if (I == index) {
                         decltype(auto) member_obj = [&]() -> decltype(auto) {
                            if constexpr (reflectable<U>) {
                               // For reflectable types, to_tie provides access to members
@@ -1877,7 +2023,14 @@ namespace glz
             }
             visit<N>(
                [&]<size_t I>() {
-                  if (I == index) {
+                  // A field skipped on parse is consumed, value or table body, in a branch of its own
+                  // so its reader is never instantiated -- see `skipped_by_meta`.
+                  if constexpr (skipped_by_meta<U, I, operation::parse>) {
+                     if (I == index) {
+                        skip_toml_member<Opts>(ctx, it, end);
+                     }
+                  }
+                  else if (I == index) {
                      decltype(auto) member_obj = [&]() -> decltype(auto) {
                         if constexpr (reflectable<U>) {
                            return get<I>(to_tie(root));
@@ -1972,7 +2125,14 @@ namespace glz
             bool success = false;
             glz::visit<N>(
                [&]<size_t I>() {
-                  if (I == index) {
+                  // See resolve_nested: a field skipped on parse is consumed without being read.
+                  if constexpr (skipped_by_meta<U, I, operation::parse>) {
+                     if (I == index) {
+                        skip_toml_member<Opts>(ctx, it, end);
+                        success = !bool(ctx.error);
+                     }
+                  }
+                  else if (I == index) {
                      decltype(auto) raw_member_obj = [&]() -> decltype(auto) {
                         if constexpr (reflectable<U>) {
                            return get<I>(to_tie(root));
@@ -2400,6 +2560,9 @@ namespace glz
 
             if (*it == '\n' || *it == '\r') {
                skip_to_next_line(ctx, it, end);
+               if (bool(ctx.error)) [[unlikely]] {
+                  return;
+               }
                continue;
             }
 
@@ -2487,6 +2650,9 @@ namespace glz
             }
             if (*it == '\n' || *it == '\r') {
                skip_to_next_line(ctx, it, end);
+               if (bool(ctx.error)) [[unlikely]] {
+                  return;
+               }
                continue;
             }
 
@@ -2601,6 +2767,9 @@ namespace glz
             }
             if (*it == '\n' || *it == '\r') {
                skip_to_next_line(ctx, it, end);
+               if (bool(ctx.error)) [[unlikely]] {
+                  return;
+               }
                continue;
             }
 
@@ -2837,9 +3006,6 @@ namespace glz
       template <class T>
       concept toml_variant_object_type = (glz::glaze_object_t<T> || glz::reflectable<T> || glz::writable_map_t<T>);
 
-      template <class T>
-      concept toml_variant_null_type = glz::null_t<T>;
-
       // Type trait wrappers for template use
       template <class T>
       struct is_toml_variant_bool : std::bool_constant<toml_variant_bool_type<T>>
@@ -2864,9 +3030,6 @@ namespace glz
       {};
       template <class T>
       struct is_toml_variant_object : std::bool_constant<toml_variant_object_type<T>>
-      {};
-      template <class T>
-      struct is_toml_variant_null : std::bool_constant<toml_variant_null_type<T>>
       {};
 
       // Count types in variant matching a trait
@@ -3107,6 +3270,48 @@ namespace glz
          }
          return false;
       }
+
+      // True when [it, end) starts with a key, possibly dotted, followed by '=' on the same line.
+      // A value is never followed by '=', so this tells a key/value line apart from a value whose
+      // first byte looks like a key ("a b" = 1, 1234 = 5, true = 1) without consuming anything.
+      template <class It, class End>
+      inline bool is_toml_keyval(It it, End end) noexcept
+      {
+         while (true) {
+            if (it == end) return false;
+            if (*it == '"' || *it == '\'') {
+               const char quote = *it;
+               ++it;
+               while (it != end && *it != quote) {
+                  if (*it == '\n' || *it == '\r') return false;
+                  if (quote == '"' && *it == '\\') {
+                     ++it;
+                     if (it == end) return false;
+                  }
+                  ++it;
+               }
+               if (it == end) return false;
+               ++it;
+            }
+            else {
+               const auto key_start = it;
+               while (it != end && (std::isalnum(static_cast<unsigned char>(*it)) || *it == '_' || *it == '-')) {
+                  ++it;
+               }
+               if (it == key_start) return false;
+            }
+            while (it != end && (*it == ' ' || *it == '\t')) {
+               ++it;
+            }
+            if (it == end) return false;
+            if (*it == '=') return true;
+            if (*it != '.') return false;
+            ++it;
+            while (it != end && (*it == ' ' || *it == '\t')) {
+               ++it;
+            }
+         }
+      }
    } // namespace detail
 
    template <class T>
@@ -3309,38 +3514,59 @@ namespace glz
             }
          }
          else {
-            // Identifiers (a-z, A-Z, _) at document root indicate key-value pairs
-            // Check if the variant has a map alternative we can use
-            const bool is_identifier = (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c == '_';
-            constexpr auto map_idx = detail::find_map_alternative_index<Variant>();
-
-            if constexpr (map_idx != std::variant_npos) {
-               if (is_identifier) {
-                  // Parse as a TOML document with key-value pairs into the map alternative
-                  using V = std::variant_alternative_t<map_idx, Variant>;
-                  if (!std::holds_alternative<V>(value)) {
-                     value.template emplace<map_idx>();
-                  }
-                  from<TOML, V>::template op<Opts>(std::get<V>(value), ctx, it, end);
-                  return;
-               }
-            }
-
-            // Unknown type - could be null or invalid
-            constexpr auto null_count = detail::toml_variant_count_v<Variant, detail::is_toml_variant_null>;
-            if constexpr (null_count > 0) {
-               // Try to parse as null (for std::nullptr_t or similar)
-               constexpr auto idx = detail::toml_variant_first_index_v<Variant, detail::is_toml_variant_null>;
-               value.template emplace<idx>();
-               // Note: TOML doesn't have a native null, so this may fail unless
-               // custom handling is provided
-            }
-            else {
-               ctx.error = error_code::syntax_error;
-            }
+            // A document root is read by detail::read_toml_document_root, so an identifier here is
+            // in value position (`a = b = 1`), where no TOML value starts with a key.
+            //
+            // TOML has no null, so a byte that starts no TOML value is a syntax error even when
+            // the variant has a null alternative. Emplacing null here without consuming anything
+            // accepted documents every conforming parser rejects -- a key with nothing after its
+            // equals (`a =` ending the line, `a = # comment`), an inline-table member with no
+            // value ({u = }), and an empty array element ([1, , 2]) -- all reported as success.
+            ctx.error = error_code::syntax_error;
          }
       }
    };
+
+   namespace detail
+   {
+      // A schema-less target (glz::generic, or a variant with a map alternative) read at the root
+      // takes either a document or a single bare value. The variant reader picks by the first byte
+      // of a value, so a document whose first key is quoted or starts like a value ("a b" = 1,
+      // 1234 = 5, true = 1) read as that one scalar and the rest of the document was dropped, and a
+      // leading blank line or comment failed. Lines of key/value pairs make it a document.
+      template <auto Opts, class T, class Ctx, class It, class End>
+      bool read_toml_document_root(T& value, Ctx& ctx, It& it, End end)
+      {
+         using V = std::remove_cvref_t<T>;
+         if constexpr (!std::is_const_v<T> && has_variant_data_member<V> && glaze_value_t<V>) {
+            return read_toml_document_root<Opts>(value.data, ctx, it, end);
+         }
+         else if constexpr (!toml::check_is_internal(Opts) && !std::is_const_v<T> && is_variant<V>) {
+            // Wrappers such as glz::cast also enter through parse<TOML> for a nested value, which the
+            // internal flag marks; a key there is in value position and must stay a syntax error.
+            constexpr auto map_idx = find_map_alternative_index<V>();
+            if constexpr (map_idx != std::variant_npos) {
+               auto start = it;
+               skip_ws_newlines_and_comments(start, end);
+               if (is_toml_keyval(start, end)) {
+                  depth_guard guard{ctx};
+                  if (!guard) [[unlikely]] {
+                     return true;
+                  }
+
+                  using M = std::variant_alternative_t<map_idx, V>;
+                  if (!std::holds_alternative<M>(value)) {
+                     value.template emplace<map_idx>();
+                  }
+                  from<TOML, M>::template op<Opts>(std::get<M>(value), ctx, it, end);
+                  return true;
+               }
+            }
+         }
+         (void)value, (void)ctx, (void)it, (void)end;
+         return false;
+      }
+   }
 
    // Nullable types: std::optional, std::unique_ptr, std::shared_ptr, raw pointers
    template <nullable_like T>

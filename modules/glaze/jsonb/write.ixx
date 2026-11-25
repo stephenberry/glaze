@@ -397,16 +397,7 @@ namespace glz
       template <class T, auto Opts, size_t I>
       consteval bool should_skip_reflected_field()
       {
-         using V = field_t<T, I>;
-         if constexpr (always_skipped<V>) {
-            return true;
-         }
-         else if constexpr (is_any_function_ptr<V>) {
-            return !check_write_function_pointers(Opts);
-         }
-         else {
-            return false;
-         }
+         return skipped_on_write<Opts, T, I>;
       }
 
       // Write the (key, value) pairs of a reflected struct without an enclosing OBJECT
@@ -747,7 +738,7 @@ namespace glz
       {}
    };
 
-   // Generic JSON value — dispatch each variant alternative to the matching JSONB element.
+   // Generic JSON value — write the active alternative as its native JSONB element.
    // Without this specialization, glz::generic would fall through to the variant handler and
    // serialize as an [index, value] array rather than as the native element type.
    template <num_mode Mode, template <class> class MapType>
@@ -756,36 +747,7 @@ namespace glz
       template <auto Opts>
       static void op(auto&& value, is_context auto&& ctx, auto&& b, auto& ix)
       {
-         using G = std::decay_t<decltype(value)>;
-         using array_t = typename G::array_t;
-         using object_t = typename G::object_t;
-
-         std::visit(
-            [&](auto&& v) {
-               using V = std::decay_t<decltype(v)>;
-               if constexpr (std::same_as<V, std::nullptr_t>) {
-                  to<JSONB, std::nullptr_t>::template op<Opts>(nullptr, ctx, b, ix);
-               }
-               else if constexpr (std::same_as<V, bool>) {
-                  to<JSONB, bool>::template op<Opts>(v, ctx, b, ix);
-               }
-               else if constexpr (std::same_as<V, std::string>) {
-                  to<JSONB, std::string>::template op<Opts>(v, ctx, b, ix);
-               }
-               else if constexpr (std::same_as<V, array_t>) {
-                  // Container dispatch: array of generic_json — handled by writable_array_t.
-                  to<JSONB, array_t>::template op<Opts>(v, ctx, b, ix);
-               }
-               else if constexpr (std::same_as<V, object_t>) {
-                  // Map<string, generic_json> — writable_map_t handles it.
-                  to<JSONB, object_t>::template op<Opts>(v, ctx, b, ix);
-               }
-               else {
-                  // Numeric types: uint64_t, int64_t, double depending on Mode.
-                  to<JSONB, V>::template op<Opts>(v, ctx, b, ix);
-               }
-            },
-            value.data);
+         std::visit([&](auto&& v) { serialize<JSONB>::op<Opts>(v, ctx, b, ix); }, value.data);
       }
    };
 
@@ -804,12 +766,15 @@ namespace glz
    }
 
    export template <auto Opts = opts{}, write_supported<JSONB> T>
-   [[nodiscard]] inline error_code write_file_jsonb(T&& value, const sv file_name, auto&& buffer)
+   [[nodiscard]] inline error_ctx write_file_jsonb(T&& value, const sv file_name, auto&& buffer)
    {
       const auto ec = write<set_jsonb<Opts>()>(std::forward<T>(value), buffer);
       if (bool(ec)) [[unlikely]] {
-         return ec.ec;
+         return ec;
       }
-      return buffer_to_file(buffer, file_name);
+      if (auto file_ec = buffer_to_file(buffer, file_name); bool(file_ec)) {
+         return {0, file_ec};
+      }
+      return {};
    }
 }

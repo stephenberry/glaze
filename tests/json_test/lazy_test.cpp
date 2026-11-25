@@ -361,6 +361,29 @@ suite lazy_json_tests = [] {
       expect(std::abs(float_result.value() - 2.5f) < 0.001f);
    };
 
+   // An exponent marker needs at least one digit after it and its optional sign
+   "lazy_json_empty_exponent"_test = [] {
+      for (const std::string_view num : {"1e", "1.0E", "1.0e-", "1e+"}) {
+         std::string scalar{num};
+         auto root = glz::lazy_json(scalar);
+         expect(root.has_value());
+         expect(!root->root().get<double>().has_value()) << num;
+         expect(!root->root().get<float>().has_value()) << num;
+         expect(!root->root().get<int64_t>().has_value()) << num;
+
+         std::string object = R"({"value":)" + scalar + "}";
+         auto doc = glz::lazy_json(object);
+         expect(doc.has_value());
+         expect(!(*doc)["value"].get<double>().has_value()) << num;
+         expect(!(*doc)["value"].get<float>().has_value()) << num;
+      }
+
+      std::string valid = R"({"value":1.5e+2})";
+      auto doc = glz::lazy_json(valid);
+      expect(doc.has_value());
+      expect((*doc)["value"].get<double>().value() == 150.0);
+   };
+
    "lazy_json_large_array"_test = [] {
       std::string buffer = R"([0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19])";
       auto result = glz::lazy_json(buffer);
@@ -1450,6 +1473,31 @@ suite dynamic_key_custom_tests = [] {
          ++count;
       }
       expect(count == 1u); // only the "a" element is complete
+   };
+
+   // A std::vector<char> keeps no terminator of its own, so glz::read reads it with bounds whatever
+   // null_terminated says. lazy_json derives the same options from the buffer, so with the default
+   // options a document in a vector must stop at its end rather than scan for a sentinel past it.
+   "lazy_json_vector_buffer_bounds"_test = [] {
+      const std::vector<char> truncated{'{', '"', 'a', '"', ':'};
+      auto result = glz::lazy_json(truncated);
+      expect(result.has_value());
+      expect((*result)["a"].has_error());
+      expect((*result)["x"].has_error());
+
+      const std::vector<char> blank{' ', ' '};
+      auto blank_result = glz::lazy_json(blank);
+      expect(not blank_result.has_value());
+      expect(blank_result.error().ec == glz::error_code::unexpected_end);
+
+      // A complete document in a vector still reads.
+      const std::string_view json = R"({"a":1,"b":"two"})";
+      const std::vector<char> buf{json.begin(), json.end()};
+      auto doc = glz::lazy_json(buf);
+      expect(doc.has_value());
+      expect((*doc)["a"].get<int>().value_or(0) == 1);
+      expect((*doc)["b"].get<std::string_view>().value_or("") == "two");
+      expect((*doc).root().size() == 2u);
    };
 
    "lazy_json_truncated_iterate"_test = [] {

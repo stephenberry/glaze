@@ -50,22 +50,42 @@ namespace glz
       return false;
    }
 
-   export template <auto Opts, bool Padded = false>
+   export template <auto Opts>
    auto read_iterators(contiguous auto&& buffer) noexcept
    {
       static_assert(sizeof(decltype(*buffer.data())) == 1);
 
       auto it = reinterpret_cast<const char*>(buffer.data());
-      auto end = reinterpret_cast<const char*>(buffer.data()); // to be incremented
-
-      if constexpr (Padded) {
-         end += buffer.size() - padding_bytes;
-      }
-      else {
-         end += buffer.size();
-      }
+      auto end = it + buffer.size();
 
       return std::pair{it, end};
+   }
+
+   // The options a parse over `Buf` may actually assert, given what that buffer guarantees.
+   //
+   // `is_padded` comes off because nothing pads a buffer on the reader's behalf any more; a caller
+   // who really does have `padding_bytes` of readable slack sets `ctx.padded_input` and gets the
+   // unbounded loads that way.
+   //
+   // `null_terminated` is the subtle one. A resizable buffer used to be handed a terminator by that
+   // padding whether it kept one of its own or not, so the option -- which defaults on -- held for
+   // all of them. With the padding gone it holds only for buffers that terminate themselves, and
+   // asserting it for the rest reads a byte past the last one they own. A non-resizable buffer is
+   // left alone: it was never padded, so the caller has always been the one promising the sentinel.
+   //
+   // Every entry point that builds iterators over a caller's buffer has to go through this. Reached
+   // by two paths before, they disagreed, and the one that skipped it read out of bounds.
+   template <auto Opts, class Buf>
+   consteval auto parse_opts_for()
+   {
+      auto o = is_padded_off<Opts>();
+      using B = std::remove_cvref_t<Buf>;
+      if constexpr (resizable<B> && not self_terminating<B>) {
+         if constexpr (requires { o.null_terminated = false; }) {
+            o.null_terminated = false;
+         }
+      }
+      return o;
    }
 
    // Only a non-null-terminated read produces end_reached, and only ever to say "the buffer ran
@@ -86,27 +106,23 @@ namespace glz
       }
    }
 
-   export template <auto Opts, is_context Ctx>
-   GLZ_ALWAYS_INLINE void finalize_read_context(Ctx&& ctx) noexcept
+   // A partial read stops as soon as it has the fields it was asked for, which is a completed read,
+   // not a failed one. It unwinds through its enclosing containers on this code rather than through
+   // their closing braces, so depth is left raised; call_scope restores it on the way out of the
+   // entry point, and the entry points that finalize without one read on a fresh context.
+   //
+   // Every read settles it, whatever its options: the glz::partial_read member wrapper turns the
+   // option on for one member, so a read whose own options leave partial_read off can still end in it.
+   export GLZ_ALWAYS_INLINE void settle_partial_read_complete(is_context auto&& ctx) noexcept
    {
-      // A partial read stops as soon as it has the fields it was asked for, so it unwinds through
-      // its enclosing containers on an error code rather than through their closing braces, and
-      // none of them decrement depth on the way out. Depth is left standing at whatever nesting the
-      // last field sat at.
-      //
-      // That has to be cleared here rather than left for the next read to trip over. This is the
-      // one path that reports success with depth still raised, and depth is what settle_end_reached
-      // reads to tell a completed parse from a truncated one -- so a context reused after a partial
-      // read would see a later well-formed buffer settle to unexpected_end. Reads that end any
-      // other way either return depth to zero themselves or carry an error, and a context holding
-      // an error short-circuits the next read before it parses anything.
-      if constexpr (check_partial_read(Opts)) {
-         if (ctx.error == error_code::partial_read_complete) [[likely]] {
-            ctx.error = error_code::none;
-            ctx.depth = 0;
-            return;
-         }
+      if (ctx.error == error_code::partial_read_complete) {
+         ctx.error = error_code::none;
       }
+   }
+
+   export GLZ_ALWAYS_INLINE void finalize_read_context(is_context auto&& ctx) noexcept
+   {
+      settle_partial_read_complete(ctx);
       settle_end_reached(ctx);
    }
 
@@ -142,7 +158,7 @@ namespace glz
             }
          }
       }
-      finalize_read_context<Opts>(ctx);
+      finalize_read_context(ctx);
    }
 
    export template <auto Opts, class T, contiguous Buf>
@@ -150,29 +166,31 @@ namespace glz
    [[nodiscard]] error_ctx read(T& value, Buf&& buffer, is_context auto&& ctx)
    {
       static_assert(sizeof(decltype(*buffer.data())) == 1);
-      using Buffer = std::remove_reference_t<decltype(buffer)>;
+
+      call_scope scope{ctx};
 
       if constexpr (Opts.format != NDJSON) {
-         if (buffer.empty()) [[unlikely]] {
+         if (buffer.size() == 0) [[unlikely]] {
             ctx.error = error_code::no_read_input;
             return {0, ctx.error, ctx.custom_error_message};
          }
       }
 
-      constexpr bool use_padded = resizable<Buffer> && non_const_buffer<Buffer> && !check_disable_padding(Opts);
+      // The reader used to grow the caller's buffer by `padding_bytes` here and shrink it back on
+      // the way out, so that its fixed width loads could run off the end of the document into
+      // defined bytes. Every one of those loads is now bounded against `end` instead (see
+      // `chunk_min`), which costs the last chunk of the buffer its chunked path and nothing else --
+      // measurably less than the round trip did. `std::string::resize` is an ABI entry point on
+      // both libc++ and libstdc++, so neither call inlined and the parse was spilled around both
+      // for what amounted to a sixteen byte store; the price did not scale with the document, so on
+      // a small one it was the bulk of the call. A caller who does have that slack can still say so
+      // and get the unbounded loads back, and nobody else pays for the buffer being touched at all.
+      ctx.padded_input = check_is_padded(Opts);
 
-      [[maybe_unused]] size_t original_size{};
-      if constexpr (use_padded) {
-         // Pad the buffer for SWAR
-         original_size = buffer.size();
-         buffer.resize(original_size + padding_bytes);
-      }
+      static constexpr auto ParseOpts = parse_opts_for<Opts, Buf>();
 
-      auto [it, end] = read_iterators<Opts, use_padded>(buffer);
+      auto [it, end] = read_iterators<ParseOpts>(buffer);
       auto start = it;
-      if (bool(ctx.error)) [[unlikely]] {
-         goto finish;
-      }
 
       // Bound the speculative re-parsing a variant resolution may do, in bytes, relative to this
       // input. Seeded per read so a reused context starts fresh. See charge_speculation.
@@ -191,12 +209,10 @@ namespace glz
          ctx.stream_begin = nullptr;
       }
 
-      if constexpr (use_padded) {
-         parse<Opts.format>::template op<is_padded_on<Opts>()>(value, ctx, it, end);
-      }
-      else {
-         parse<Opts.format>::template op<is_padded_off<Opts>()>(value, ctx, it, end);
-      }
+      // Normalized off before dispatching: no reader branches on it any more, so leaving it set
+      // would split every instantiation below between callers who declared padding and callers who
+      // did not, for a flag none of them reads.
+      parse<Opts.format>::template op<ParseOpts>(value, ctx, it, end);
 
       if (bool(ctx.error)) [[unlikely]] {
          goto finish;
@@ -207,7 +223,7 @@ namespace glz
       // validate this, even though this memory will not affect Glaze.
       if constexpr (check_validate_trailing_whitespace(Opts)) {
          if (it < end) {
-            skip_ws<Opts>(ctx, it, end);
+            skip_ws<ParseOpts>(ctx, it, end);
             if (bool(ctx.error)) [[unlikely]] {
                goto finish;
             }
@@ -218,12 +234,9 @@ namespace glz
       }
 
    finish:
-      finalize_top_level_read<Opts>(ctx, start, it, end);
-
-      if constexpr (use_padded) {
-         // Restore the original buffer state
-         buffer.resize(original_size);
-      }
+      // ParseOpts, not Opts: this reads `null_terminated` to tell a value that ended with the
+      // buffer from one that ran out, and it has to be told the same thing the parse was.
+      finalize_top_level_read<ParseOpts>(ctx, start, it, end);
 
       return {size_t(it - start), ctx.error, ctx.custom_error_message};
    }
@@ -278,6 +291,20 @@ namespace glz
          return o;
       }();
 
+      call_scope scope{ctx};
+
+      // A stream window is never padded, whatever a reused context was told on its last read.
+      // Left set, `chunk_min` would hand every scan in this parse the unbounded chunk path and
+      // let it load up to seven bytes past the window.
+      ctx.padded_input = false;
+
+      // A stream has no size to scale a speculation budget by, so a streaming read runs unbudgeted
+      // (see charge_speculation) -- including on a context whose last read, a buffered one, left
+      // part of its own budget behind.
+      if constexpr (requires { ctx.speculation_budget; }) {
+         ctx.speculation_budget = 0;
+      }
+
       // Initial fill if buffer is empty
       if (buffer.empty()) {
          if (!refill_buffer(buffer)) {
@@ -323,7 +350,7 @@ namespace glz
          finalize_top_level_read<StreamingOpts>(ctx, window, it, end);
       }
       else {
-         finalize_read_context<StreamingOpts>(ctx);
+         finalize_read_context(ctx);
       }
 
       // Only the JSON reader has refill points (see format_supports_streaming). Every other reader

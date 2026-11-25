@@ -21,6 +21,7 @@
 // glz:header std=<variant>
 // glz:header std=<vector>
 export module glaze.cbor.write;
+import glaze.json.generic;
 
 import glaze.cbor.header;
 
@@ -89,7 +90,7 @@ namespace glz
       GLZ_ALWAYS_INLINE void dump_byte(uint8_t byte, B& b, IX& ix)
       {
          if (ix >= b.size()) [[unlikely]] {
-            b.resize(b.size() == 0 ? 128 : b.size() * 2);
+            grow_buffer(b, b.size() == 0 ? 64 : ix + 1);
          }
          b[ix] = static_cast<typename std::decay_t<B>::value_type>(byte);
          ++ix;
@@ -118,7 +119,7 @@ namespace glz
       {
          constexpr auto n = sizeof(T);
          if (const auto k = ix + n; k > b.size()) [[unlikely]] {
-            b.resize(2 * k);
+            grow_buffer(b, k);
          }
 
          if constexpr (std::endian::native == std::endian::little && n > 1) {
@@ -602,17 +603,7 @@ namespace glz
       template <auto Opts, size_t I>
       static consteval bool should_skip_field()
       {
-         using V = field_t<T, I>;
-
-         if constexpr (always_skipped<V>) {
-            return true;
-         }
-         else if constexpr (is_any_function_ptr<V>) {
-            return !check_write_function_pointers(Opts);
-         }
-         else {
-            return false;
-         }
+         return skipped_on_write<Opts, T, I>;
       }
 
       template <auto Opts>
@@ -625,6 +616,15 @@ namespace glz
 
       template <auto Opts>
       static void op(auto&& value, is_context auto&& ctx, auto&& b, auto& ix)
+      {
+         write_members<Opts>(value, ctx, b, ix, [] {});
+      }
+
+      // Writes the members, with `prefix` emitted first so an internally tagged variant can splice
+      // its discriminator into the same map. `Extra` is how many entries `prefix` adds to the header,
+      // so the count stays a compile-time constant and an ordinary object write keeps its fast path.
+      template <auto Opts, size_t Extra = 0>
+      static void write_members(auto&& value, is_context auto&& ctx, auto&& b, auto& ix, auto&& prefix)
       {
          [[maybe_unused]] decltype(auto) t = [&]() -> decltype(auto) {
             if constexpr (reflectable<T>) {
@@ -708,8 +708,15 @@ namespace glz
             });
 
             // Write map header with dynamic count
-            if (!cbor_detail::encode_arg(ctx, cbor::major::map, member_count, b, ix)) [[unlikely]] {
+            if (!cbor_detail::encode_arg(ctx, cbor::major::map, member_count + Extra, b, ix)) [[unlikely]] {
                return;
+            }
+
+            if constexpr (Extra) {
+               prefix();
+               if (bool(ctx.error)) [[unlikely]] {
+                  return;
+               }
             }
 
             // Second pass: write members
@@ -809,8 +816,16 @@ namespace glz
          }
          else {
             // Static path: use compile-time count for better performance
-            if (!cbor_detail::encode_arg_cx<count_to_write<Opts>()>(ctx, cbor::major::map, b, ix)) [[unlikely]] {
+            if (!cbor_detail::encode_arg_cx<count_to_write<Opts>() + Extra>(ctx, cbor::major::map, b, ix))
+               [[unlikely]] {
                return;
+            }
+
+            if constexpr (Extra) {
+               prefix();
+               if (bool(ctx.error)) [[unlikely]] {
+                  return;
+               }
             }
 
             for_each<N>([&]<size_t I>() {
@@ -950,37 +965,141 @@ namespace glz
    };
 
    // Variants
+   // A variant takes the shape its glz::meta declares, exactly as it does in JSON and BEVE:
+   //
+   //   internal   { tag : id, ...members }        `tag` declared alone
+   //   adjacent   { tag : id, content : value }   `tag` and `content` declared
+   //   none       the active alternative's own value, bare
+   //
+   // Nothing is invented for a variant the author did not describe. The [index, value] array written
+   // before was compact but no more self-describing than a type name: it is meaningless to any CBOR
+   // implementation that does not already know Glaze's convention.
    template <is_variant T>
       requires(not custom_write<T>)
    struct to<CBOR, T> final
    {
+      static constexpr auto tagging = variant_tagging_v<T>;
+
+      static bool write_str(is_context auto& ctx, const sv str, auto&& b, auto& ix)
+      {
+         if (!cbor_detail::encode_arg(ctx, cbor::major::tstr, str.size(), b, ix)) [[unlikely]] {
+            return false;
+         }
+         if (!ensure_space(ctx, b, ix + str.size() + write_padding_bytes)) [[unlikely]] {
+            return false;
+         }
+         if (str.size() > 0) {
+            std::memcpy(&b[ix], str.data(), str.size());
+            ix += str.size();
+         }
+         return true;
+      }
+
+      // glz::meta may declare `ids` as strings or as integrals; the readers accept both.
+      template <auto Opts>
+      static void write_id(is_context auto& ctx, const size_t index, auto&& b, auto& ix)
+      {
+         if constexpr (std::integral<std::decay_t<decltype(ids_v<T>[0])>>) {
+            serialize<CBOR>::op<Opts>(ids_v<T>[index], ctx, b, ix);
+         }
+         else {
+            write_str(ctx, ids_v<T>[index], b, ix);
+         }
+      }
+
       template <auto Opts>
       static void op(auto&& value, is_context auto&& ctx, auto&& b, auto& ix)
       {
-         // The active alternative is taken from the variant itself rather than recovered by matching
-         // the visited type against the alternative list: the index is what the reader consumes, and a
-         // type match is ambiguous for a variant that repeats an alternative type.
-         const size_t index = value.index();
-
-         // A valueless variant has no alternative to name, and variant_npos is not an index any
-         // reader could resolve. Reject it here rather than emitting an unreadable array.
-         if (index >= std::variant_size_v<std::remove_cvref_t<decltype(value)>>) [[unlikely]] {
-            ctx.error = error_code::no_matching_variant_type;
-            return;
+         if constexpr (tagging == variant_tagging_kind::none) {
+            if (value.index() >= std::variant_size_v<std::remove_cvref_t<decltype(value)>>) [[unlikely]] {
+               ctx.error = error_code::no_matching_variant_type;
+               return;
+            }
+            std::visit([&](auto&& v) { serialize<CBOR>::op<Opts>(v, ctx, b, ix); }, value);
          }
-
-         // Encode variant as array [index, value]
-         if (!cbor_detail::encode_arg_cx<2>(ctx, cbor::major::array, b, ix)) [[unlikely]] {
-            return;
+         else if constexpr (tagging == variant_tagging_kind::adjacent) {
+            if (variant_missing_id<T>(value, ctx)) [[unlikely]] {
+               return;
+            }
+            if (!cbor_detail::encode_arg_cx<2>(ctx, cbor::major::map, b, ix)) [[unlikely]] {
+               return;
+            }
+            if (!write_str(ctx, tag_v<T>, b, ix)) [[unlikely]] {
+               return;
+            }
+            write_id<Opts>(ctx, value.index(), b, ix);
+            if (bool(ctx.error)) [[unlikely]] {
+               return;
+            }
+            if (!write_str(ctx, content_v<T>, b, ix)) [[unlikely]] {
+               return;
+            }
+            std::visit([&](auto&& v) { serialize<CBOR>::op<Opts>(v, ctx, b, ix); }, value);
          }
-         if (!cbor_detail::encode_arg(ctx, cbor::major::uint, index, b, ix)) [[unlikely]] {
-            return;
-         }
+         else {
+            if (variant_missing_id<T>(value, ctx)) [[unlikely]] {
+               return;
+            }
+            const size_t id_index = value.index();
 
-         std::visit([&](auto&& v) { serialize<CBOR>::op<Opts>(v, ctx, b, ix); }, value);
+            std::visit(
+               [&](auto&& v) {
+                  using V = std::remove_cvref_t<decltype(v)>;
+                  using X = variant_alternative_object_t<V>;
+
+                  const auto prefix = [&] {
+                     if (!write_str(ctx, tag_v<T>, b, ix)) [[unlikely]] {
+                        return;
+                     }
+                     write_id<Opts>(ctx, id_index, b, ix);
+                  };
+
+                  if constexpr (alternative_declares_key<V>(tag_v<T>)) {
+                     // The alternative carries the discriminator in a member of its own, so merging
+                     // a second one would write the key twice.
+                     serialize<CBOR>::op<Opts>(v, ctx, b, ix);
+                  }
+                  else if constexpr (variant_unit_alternative<V>) {
+                     // No data to merge with: the discriminator alone is the whole map, which is the
+                     // same map an empty struct alternative produces.
+                     if (!cbor_detail::encode_arg_cx<1>(ctx, cbor::major::map, b, ix)) [[unlikely]] {
+                        return;
+                     }
+                     prefix();
+                  }
+                  else if constexpr ((glaze_object_t<X> || reflectable<X>) && (not custom_write<V>)) {
+                     if constexpr (is_memory_object<V>) {
+                        if (!v) [[unlikely]] {
+                           ctx.error = error_code::invalid_variant_object;
+                           return;
+                        }
+                        to<CBOR, X>::template write_members<Opts, 1>(*v, ctx, b, ix, prefix);
+                     }
+                     else {
+                        to<CBOR, X>::template write_members<Opts, 1>(v, ctx, b, ix, prefix);
+                     }
+                  }
+                  else {
+                     // A custom-serialized alternative is the one shape internal tagging promises but
+                     // CBOR cannot deliver: a definite-length map carries its entry count up front and
+                     // the member count of a body written by someone else's serializer is not knowable
+                     // in advance. The JSON writer merges into such a body because JSON objects are
+                     // not counted.
+                     static_assert(detail::binary_internal_tagging_needs_reflected_alternative<T, V>::value,
+                                   "Internal tagging (glz::meta `tag` without `content`) cannot be "
+                                   "written to CBOR for a custom-serialized alternative: a CBOR map is "
+                                   "length-prefixed and the member count of a custom body is not "
+                                   "knowable in advance. Declare `content` beside `tag` to select "
+                                   "adjacent tagging, which nests the custom value instead of merging "
+                                   "into it. The offending alternative is the second template argument "
+                                   "of binary_internal_tagging_needs_reflected_alternative in the "
+                                   "instantiation backtrace.");
+                  }
+               },
+               value);
+         }
       }
    };
-
    // Glaze value wrapper
    template <class T>
       requires(glaze_value_t<T> && !custom_write<T>)
@@ -995,32 +1114,9 @@ namespace glz
       }
    };
 
-   // Enums with glaze reflection
-   template <glaze_enum_t T>
-   struct to<CBOR, T> final
-   {
-      template <auto Opts>
-      GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&& b, auto& ix)
-      {
-         using V = std::underlying_type_t<std::decay_t<T>>;
-         if constexpr (std::is_signed_v<V>) {
-            const auto v = static_cast<V>(value);
-            if (v >= 0) {
-               cbor_detail::encode_arg(ctx, cbor::major::uint, static_cast<uint64_t>(v), b, ix);
-            }
-            else {
-               cbor_detail::encode_arg(ctx, cbor::major::nint, static_cast<uint64_t>(~v), b, ix);
-            }
-         }
-         else {
-            cbor_detail::encode_arg(ctx, cbor::major::uint, static_cast<uint64_t>(value), b, ix);
-         }
-      }
-   };
-
-   // Plain enums (non-glaze)
+   // Enums, reflected or plain: both are written as the ordinal, so one writer covers them
    template <class T>
-      requires(std::is_enum_v<T> && !glaze_enum_t<T>)
+      requires(std::is_enum_v<T>)
    struct to<CBOR, T> final
    {
       template <auto Opts>
@@ -1115,51 +1211,22 @@ namespace glz
    // std::chrono::duration - serialized generically (as the bare rep count) by the
    // to<uint32_t Format, is_duration T> specialization in core/chrono.hpp.
 
-   // system_clock::time_point - tag 0 (RFC 3339 date/time string)
-   template <is_system_time_point T>
+   // system_clock / utc_clock time_point - tag 0 (RFC 3339 date/time string). Always the full
+   // timestamp, with a utc_clock leap second written as :60.
+   template <is_calendar_time_point T>
    struct to<CBOR, T> final
    {
       template <auto Opts>
       static void op(auto&& value, is_context auto&& ctx, auto&& b, auto& ix)
       {
-         using namespace std::chrono;
-         using TP = std::remove_cvref_t<T>;
-         using Duration = typename TP::duration;
+         using Period = typename std::remove_cvref_t<T>::duration::period;
 
          // Write tag 0 (RFC 3339 date/time string)
          if (!cbor_detail::encode_arg(ctx, cbor::major::tag, cbor::semantic_tag::datetime_string, b, ix)) [[unlikely]] {
             return;
          }
 
-         constexpr size_t frac_digits = []() constexpr {
-            using Period = typename Duration::period;
-            if constexpr (std::ratio_greater_equal_v<Period, std::ratio<1>>) {
-               return 0;
-            }
-            else if constexpr (std::ratio_greater_equal_v<Period, std::milli>) {
-               return 3;
-            }
-            else if constexpr (std::ratio_greater_equal_v<Period, std::micro>) {
-               return 6;
-            }
-            else {
-               return 9;
-            }
-         }();
-
-         // "YYYY-MM-DDTHH:MM:SS[.fffffffff]Z"
-         constexpr size_t str_len = 20 + (frac_digits > 0 ? 1 + frac_digits : 0);
-
-         const auto dp = floor<days>(value);
-         const year_month_day ymd{dp};
-         const int yr = static_cast<int>(ymd.year());
-         // RFC 3339 requires 4-digit year in [0000, 9999]. Reject out-of-range values
-         // rather than silently corrupting the output with overflowed digits.
-         if (yr < 0 || yr > 9999) [[unlikely]] {
-            ctx.error = error_code::parse_error;
-            return;
-         }
-
+         constexpr size_t str_len = chrono_detail::iso_timestamp_size<Period>;
          if (!cbor_detail::encode_arg_cx<str_len>(ctx, cbor::major::tstr, b, ix)) [[unlikely]] {
             return;
          }
@@ -1168,48 +1235,7 @@ namespace glz
             return;
          }
 
-         const hh_mm_ss tod{floor<Duration>(value - dp)};
-         const unsigned mo = static_cast<unsigned>(ymd.month());
-         const unsigned dy = static_cast<unsigned>(ymd.day());
-         const auto hr = static_cast<unsigned>(tod.hours().count());
-         const auto mi = static_cast<unsigned>(tod.minutes().count());
-         const auto sc = static_cast<unsigned>(tod.seconds().count());
-
-         auto write_digits = [&]<size_t N>(uint64_t val) {
-            for (size_t i = N; i > 0; --i) {
-               b[ix + i - 1] = static_cast<typename std::decay_t<decltype(b)>::value_type>('0' + val % 10);
-               val /= 10;
-            }
-            ix += N;
-         };
-
-         write_digits.template operator()<4>(static_cast<uint64_t>(yr));
-         b[ix++] = '-';
-         write_digits.template operator()<2>(mo);
-         b[ix++] = '-';
-         write_digits.template operator()<2>(dy);
-         b[ix++] = 'T';
-         write_digits.template operator()<2>(hr);
-         b[ix++] = ':';
-         write_digits.template operator()<2>(mi);
-         b[ix++] = ':';
-         write_digits.template operator()<2>(sc);
-
-         if constexpr (frac_digits > 0) {
-            b[ix++] = '.';
-            const auto subsec = tod.subseconds();
-            if constexpr (frac_digits == 3) {
-               write_digits.template operator()<3>(static_cast<uint64_t>(duration_cast<milliseconds>(subsec).count()));
-            }
-            else if constexpr (frac_digits == 6) {
-               write_digits.template operator()<6>(static_cast<uint64_t>(duration_cast<microseconds>(subsec).count()));
-            }
-            else {
-               write_digits.template operator()<9>(static_cast<uint64_t>(duration_cast<nanoseconds>(subsec).count()));
-            }
-         }
-
-         b[ix++] = 'Z';
+         chrono_detail::write_iso_timestamp<false>(value, ctx, b, ix);
       }
    };
 
@@ -1279,12 +1305,15 @@ namespace glz
    }
 
    export template <auto Opts = opts{}, write_supported<CBOR> T>
-   [[nodiscard]] inline error_code write_file_cbor(T&& value, const sv file_name, auto&& buffer)
+   [[nodiscard]] inline error_ctx write_file_cbor(T&& value, const sv file_name, auto&& buffer)
    {
       const auto ec = write<set_cbor<Opts>()>(std::forward<T>(value), buffer);
       if (bool(ec)) [[unlikely]] {
-         return ec.ec;
+         return ec;
       }
-      return buffer_to_file(buffer, file_name);
+      if (auto file_ec = buffer_to_file(buffer, file_name); bool(file_ec)) {
+         return {0, file_ec};
+      }
+      return {};
    }
 }

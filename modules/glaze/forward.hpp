@@ -58,6 +58,13 @@ namespace glz
    template <std::uint32_t Format>
    inline constexpr bool format_supports_streaming = false;
 
+   // Whether a format can encode T as a whole top-level value. Most formats can encode anything they
+   // can encode at all; a format whose top level is restricted (BSON requires a document) specializes
+   // this so the generic glz::write/glz::read entry points reject such a T at compile time instead of
+   // producing unframed bytes.
+   template <std::uint32_t Format, class T>
+   inline constexpr bool top_level_supported = true;
+
    template <>
    inline constexpr bool format_supports_streaming<JSON> = true;
 

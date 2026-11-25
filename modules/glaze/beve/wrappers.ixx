@@ -5,6 +5,7 @@
 // glz:header std=<cstdint>
 // glz:header std=<type_traits>
 export module glaze.beve.wrappers;
+import glaze.beve.header;
 
 import std;
 

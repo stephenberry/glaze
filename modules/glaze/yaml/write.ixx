@@ -1,30 +1,42 @@
 // Glaze Library
-// For the license information refer to glaze.hpp
+// For the license information refer to glaze.ixx
+// glz:header path="glaze/yaml/write.hpp"
+export module glaze.yaml.write;
 
-#pragma once
-
-#include "glaze/core/buffer_traits.hpp"
-#include "glaze/core/chrono.hpp"
-#include "glaze/core/custom_meta.hpp"
-#include "glaze/core/custom.hpp"
-#include "glaze/core/opts.hpp"
-#include "glaze/core/reflect.hpp"
-#include "glaze/core/to.hpp"
-#include "glaze/core/write.hpp"
-#include "glaze/core/write_chars.hpp"
-#include "glaze/core/write_wrappers.hpp"
-#include "glaze/util/dump.hpp"
-#include "glaze/util/for_each.hpp"
-#include "glaze/util/parse.hpp"
-#include "glaze/util/variant.hpp"
-#include "glaze/yaml/common.hpp"
-#include "glaze/yaml/opts.hpp"
-
-using std::uint8_t;
+import std;
+import glaze.util.tuple;
+import glaze.reflection.to_tuple;
+import glaze.core.tuple;
+import glaze.util.expected;
+import glaze.util.string_literal;
+import glaze.util.type_traits;
+import glaze.concepts.container_concepts;
+import glaze.core.meta;
+import glaze.core.common;
+import glaze.core.context;
+import glaze.core.buffer_traits;
+import glaze.core.chrono;
+import glaze.core.custom_meta;
+import glaze.core.opts;
+import glaze.core.reflect;
+import glaze.core.to;
+import glaze.core.custom;
+import glaze.core.write;
+import glaze.core.write_chars;
+import glaze.core.write_wrappers;
+import glaze.util.dump;
+import glaze.util.for_each;
+import glaze.util.non_finite;
+import glaze.util.parse;
+import glaze.util.variant;
+import glaze.yaml.common;
+import glaze.yaml.opts;
 using std::int32_t;
-using std::size_t;
 
-namespace glz
+using std::size_t;
+using std::uint8_t;
+
+export namespace glz
 {
    template <>
    struct serialize<YAML>
@@ -128,17 +140,7 @@ namespace glz
          }
          // YAML supports .inf, -.inf, and .nan for special float values
          if constexpr (std::floating_point<std::remove_cvref_t<T>>) {
-            if (std::isnan(value)) {
-               dump(".nan", b, ix);
-               return;
-            }
-            else if (std::isinf(value)) {
-               if (value < 0) {
-                  dump("-.inf", b, ix);
-               }
-               else {
-                  dump(".inf", b, ix);
-               }
+            if (detail::write_non_finite_float(value, ".nan", ".inf", "-.inf", b, ix)) {
                return;
             }
          }
@@ -165,7 +167,7 @@ namespace glz
    namespace yaml
    {
       // Write a YAML double-quoted string with proper escaping
-      template <class B>
+      template <auto Opts, class B>
       inline void write_double_quoted_string(std::string_view str, is_context auto&& ctx, B&& b, auto& ix)
       {
          // Estimate max size: original + quotes + escapes
@@ -195,7 +197,10 @@ namespace glz
                dump("\\0", b, ix);
                break;
             default:
-               if (static_cast<unsigned char>(c) < 0x20) {
+               // Reached only once a quoted style has already been chosen, so this is off
+               // the common path and stays unconditional: having committed to a quoted
+               // scalar there is nothing to gain by emitting a raw control byte into it.
+               if (is_yaml_control(c)) {
                   // Control characters - use hex escape
                   dump("\\x", b, ix);
                   constexpr char hex[] = "0123456789abcdef";
@@ -231,22 +236,39 @@ namespace glz
          dump('\'', b, ix);
       }
 
-      // Write a literal block scalar (|)
+      // A literal block scalar, as write_literal_block emits it, reproduces `str` exactly only when:
+      // - Some line has content and the first such line does not start with a space. The block's
+      //   indentation is detected from its first non-empty line, so leading spaces there would be
+      //   taken as indentation, and a whitespace-only line before it would be an empty line
+      //   indented past the content (a syntax error). With no content line at all, chomping
+      //   discards every line break.
+      // - It ends in at most one line break. More would need keep chomping (|+), which also keeps
+      //   any blank line after the scalar, and every block caller ends the scalar's line with a
+      //   line break of its own.
+      inline bool literal_block_represents(std::string_view str) noexcept
+      {
+         const auto first_content = str.find_first_not_of('\n');
+         if (first_content == std::string_view::npos || str[first_content] == ' ') {
+            return false;
+         }
+         return !str.ends_with("\n\n");
+      }
+
+      // Write a literal block scalar (|), clipped when `str` ends in a line break and stripped
+      // (|-) otherwise. The caller must have checked literal_block_represents(str).
       template <class B>
       inline void write_literal_block(std::string_view str, is_context auto&& ctx, B&& b, auto& ix,
-                                      int32_t indent_level, uint8_t indent_width, char chomping)
+                                      int32_t indent_level, uint8_t indent_width)
       {
          if (!ensure_space(ctx, b, ix + str.size() + 64 + write_padding_bytes)) [[unlikely]] {
             return;
          }
 
-         if (chomping == '-' || chomping == '+') {
-            dump('|', b, ix);
-            dump(chomping, b, ix);
-            dump('\n', b, ix);
+         if (str.ends_with('\n')) {
+            dump("|\n", b, ix);
          }
          else {
-            dump("|\n", b, ix);
+            dump("|-\n", b, ix);
          }
 
          // Write each line with proper indentation
@@ -296,7 +318,7 @@ namespace glz
             // Block scalars are not valid inside flow collections ({...}, [...]).
             // Emit double-quoted escaped form in flow context.
             if constexpr (yaml::check_flow_style(Opts) || yaml::check_flow_context(Opts)) {
-               write_double_quoted_string(str, ctx, b, ix);
+               write_double_quoted_string<Opts>(str, ctx, b, ix);
                return;
             }
 
@@ -305,51 +327,62 @@ namespace glz
             {
                bool has_unrepresentable = false;
                for (char c : str) {
-                  if (c == '\r' || c == '\0' || (static_cast<unsigned char>(c) < 0x20 && c != '\n' && c != '\t')) {
-                     has_unrepresentable = true;
-                     break;
+                  if constexpr (check_escape_control_characters(Opts)) {
+                     if (is_yaml_control(c) && c != '\n' && c != '\t') {
+                        has_unrepresentable = true;
+                        break;
+                     }
+                  }
+                  else {
+                     // A raw carriage return would be re-read as a line break, so it
+                     // breaks the round trip whether or not escaping is requested.
+                     if (c == '\r') {
+                        has_unrepresentable = true;
+                        break;
+                     }
                   }
                }
                if (has_unrepresentable) {
-                  write_double_quoted_string(str, ctx, b, ix);
+                  write_double_quoted_string<Opts>(str, ctx, b, ix);
                   return;
                }
             }
 
-            size_t trailing_newlines = 0;
-            for (size_t i = str.size(); i > 0; --i) {
-               if (str[i - 1] == '\n') {
-                  ++trailing_newlines;
-               }
-               else {
-                  break;
-               }
+            // Leading spaces, only line breaks, or a run of trailing line breaks: the escaped
+            // double-quoted form is the one that round trips.
+            if (!literal_block_represents(str)) {
+               write_double_quoted_string<Opts>(str, ctx, b, ix);
+               return;
             }
-            char chomping = '\0';
-            if (trailing_newlines == 0) {
-               chomping = '-';
-            }
-            else if (trailing_newlines > 1) {
-               chomping = '+';
-            }
-            write_literal_block(str, ctx, b, ix, indent_level, indent_width, chomping);
+
+            write_literal_block(str, ctx, b, ix, indent_level, indent_width);
             return;
          }
 
          // Check if string needs quoting
-         if (yaml::needs_quoting(str)) {
+         if (yaml::needs_quoting<check_escape_control_characters(Opts)>(str)) {
             // Double-quoted style is required for strings with characters that need
             // escape sequences (\r, \0, control chars) since single-quoted strings
             // have no escape mechanism for these.
             bool needs_escapes = false;
             for (char c : str) {
-               if (c == '\r' || c == '\0' || (static_cast<unsigned char>(c) < 0x20 && c != '\t')) {
-                  needs_escapes = true;
-                  break;
+               if constexpr (check_escape_control_characters(Opts)) {
+                  if (is_yaml_control(c) && c != '\t') {
+                     needs_escapes = true;
+                     break;
+                  }
+               }
+               else {
+                  // Single-quoted scalars have no escapes, so a carriage return would be
+                  // re-read as a line break. Everything else is left to the reader.
+                  if (c == '\r') {
+                     needs_escapes = true;
+                     break;
+                  }
                }
             }
             if (needs_escapes || str.find('\'') != std::string_view::npos) {
-               write_double_quoted_string(str, ctx, b, ix);
+               write_double_quoted_string<Opts>(str, ctx, b, ix);
             }
             else {
                write_single_quoted_string(str, ctx, b, ix);
@@ -366,6 +399,19 @@ namespace glz
 #ifdef _MSC_VER
 #pragma warning(pop)
 #endif
+
+      // Write a string as an implicit block-mapping key. An implicit key is confined to one line,
+      // so a key holding a line break is written double-quoted rather than as a block scalar.
+      template <auto Opts, class B>
+      inline void write_yaml_key_string(std::string_view str, is_context auto&& ctx, B&& b, auto& ix)
+      {
+         if (str.find('\n') != std::string_view::npos) {
+            write_double_quoted_string<Opts>(str, ctx, b, ix);
+         }
+         else {
+            write_yaml_string<Opts>(str, ctx, b, ix);
+         }
+      }
    } // namespace yaml
 
    // str_t (strings)
@@ -396,8 +442,8 @@ namespace glz
    // handled generically in core/chrono.hpp; only the calendar types need a format-specific
    // representation.
 
-   // system_clock::time_point: plain ISO 8601 scalar (date-only for `days` precision)
-   template <is_system_time_point T>
+   // system_clock / utc_clock time_point: plain ISO 8601 scalar (date-only for `days` precision)
+   template <is_calendar_time_point T>
       requires(not custom_write<T>)
    struct to<YAML, T>
    {
@@ -438,13 +484,12 @@ namespace glz
       static void op(auto&& value, is_context auto&& ctx, B&& b, auto& ix)
       {
          const sv str = get_enum_name(value);
-         if (!str.empty()) {
-            yaml::write_yaml_string<Opts>(str, ctx, b, ix);
+         if (str.empty()) [[unlikely]] {
+            // Not enumerated, so it could not be read back
+            ctx.error = error_code::unexpected_enum;
+            return;
          }
-         else [[unlikely]] {
-            // Value doesn't have a mapped string, serialize as underlying number
-            serialize<YAML>::op<Opts>(static_cast<std::underlying_type_t<T>>(value), ctx, b, ix);
-         }
+         yaml::write_yaml_string<Opts>(str, ctx, b, ix);
       }
    };
 
@@ -1199,7 +1244,7 @@ namespace glz
 
          // Write key
          if constexpr (str_t<first_type>) {
-            write_yaml_string<Opts>(str_view<first_type>(key), ctx, b, ix);
+            write_yaml_key_string<Opts>(str_view<first_type>(key), ctx, b, ix);
          }
          else {
             serialize<YAML>::op<Opts>(key, ctx, b, ix);
@@ -1246,10 +1291,10 @@ namespace glz
 
             using val_t = field_t<V, I>;
 
-            // meta::skip (compile-time) gates the field here rather than returning from inside the
-            // block, so that a skipped field's writer is never instantiated -- see `skipped_by_meta`.
-            // meta::skip_if is a runtime check and stays below.
-            if constexpr (!always_skipped<val_t> && !skipped_by_meta<V, I, operation::serialize>) {
+            // Compile-time exclusions (meta::skip among them) gate the field here rather than returning
+            // from inside the block, so that a skipped field's writer is never instantiated -- see
+            // `skipped_by_meta`. meta::skip_if is a runtime check and stays below.
+            if constexpr (!skipped_on_write<Opts, V, I>) {
                static constexpr sv key = get<I>(reflect<V>::keys);
 
                // Get member value (supports both glaze_object_t and reflectable)
@@ -1275,6 +1320,11 @@ namespace glz
                      if (!member) {
                         return;
                      }
+                  }
+               }
+               else if constexpr (Opts.skip_null_members && custom_getter_returns_nullable<val_t>()) {
+                  if (custom_getter_is_null(member, ctx)) {
+                     return;
                   }
                }
 
@@ -1400,7 +1450,7 @@ namespace glz
                // Write key
                using key_t = std::remove_cvref_t<decltype(k)>;
                if constexpr (str_t<key_t>) {
-                  write_yaml_string<Opts>(str_view<key_t>(k), ctx, b, ix);
+                  write_yaml_key_string<Opts>(str_view<key_t>(k), ctx, b, ix);
                }
                else {
                   serialize<YAML>::op<Opts>(k, ctx, b, ix);
@@ -1493,7 +1543,7 @@ namespace glz
 
             // A field excluded by meta::skip is excluded from flow style too, and gating it here keeps
             // its writer uninstantiated -- see `skipped_by_meta`.
-            if constexpr (!always_skipped<val_t> && !skipped_by_meta<V, I, operation::serialize>) {
+            if constexpr (!skipped_on_write<Opts, V, I>) {
                static constexpr sv key = get<I>(reflect<V>::keys);
 
                // Get member value (supports both glaze_object_t and reflectable)
@@ -1512,6 +1562,11 @@ namespace glz
                      if (!member) {
                         return;
                      }
+                  }
+               }
+               else if constexpr (Opts.skip_null_members && custom_getter_returns_nullable<val_t>()) {
+                  if (custom_getter_is_null(member, ctx)) {
+                     return;
                   }
                }
 

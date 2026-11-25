@@ -3,10 +3,10 @@
 
 #include <string>
 
-#include "glaze/glaze.hpp"
-#include "glaze/json/patch.hpp"
-#include "glaze/yaml.hpp"
-#include "ut/ut.hpp"
+import glaze;
+import glaze.json.patch;
+import glaze.yaml;
+import ut;
 
 using namespace ut;
 

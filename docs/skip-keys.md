@@ -1,6 +1,8 @@
 # Skip Keys
 
-The `skip` functionality in Glaze allows you to conditionally skip struct members during JSON serialization and parsing at compile time. This feature operates at compile time and can differentiate between serialize and parse operations.
+The `skip` functionality in Glaze allows you to conditionally skip struct members during serialization and parsing at compile time. This feature operates at compile time and can differentiate between serialize and parse operations.
+
+`skip` applies to every format that writes structs as keyed objects: JSON, YAML, TOML, BEVE, CBOR, MessagePack, BSON, and JSONB. The examples below use JSON. Positional layouts (`structs_as_arrays` in BEVE and MessagePack) have no keys to skip, so they keep every member.
 
 ## Overview
 

@@ -15,6 +15,7 @@
 // glz:header std=<variant>
 // glz:header std=<vector>
 export module glaze.json.generic:fwd;
+import glaze.util.type_traits;
 
 import std;
 
@@ -39,6 +40,8 @@ import glaze.util.expected;
 #endif
 #endif
 
+#include "glaze/util/inline.hpp"
+
 using std::int64_t;
 using std::uint64_t;
 using std::size_t;
@@ -49,6 +52,18 @@ export namespace glz
    {
       GLZ_THROW_OR_ABORT(std::runtime_error(msg));
    }
+
+   // Thrown when a glz::generic holds a different type than the one requested.
+   // Derives from std::bad_variant_access so existing handlers for std::get failures still catch it.
+   struct bad_generic_access : std::bad_variant_access
+   {
+      explicit bad_generic_access(const std::string& msg) : message(msg) {}
+
+      const char* what() const noexcept override { return message.what(); }
+
+     private:
+      std::runtime_error message; // nothrow-copyable message storage
+   };
 }
 
 #if defined(_MSC_VER) && !defined(__clang__)
@@ -149,13 +164,19 @@ export namespace glz
       template <class T>
       [[nodiscard]] T& get()
       {
-         return std::get<T>(data);
+         if (auto* v = std::get_if<T>(&data)) [[likely]] {
+            return *v;
+         }
+         type_mismatch<T>("get");
       }
 
       template <class T>
       [[nodiscard]] const T& get() const
       {
-         return std::get<T>(data);
+         if (auto* v = std::get_if<T>(&data)) [[likely]] {
+            return *v;
+         }
+         type_mismatch<T>("get");
       }
 
       template <class T>
@@ -212,27 +233,45 @@ export namespace glz
          return std::holds_alternative<T>(data);
       }
 
-      generic_json& operator[](std::integral auto&& index) { return std::get<array_t>(data)[index]; }
+      generic_json& operator[](std::integral auto index)
+      {
+         if (auto* array = std::get_if<array_t>(&data)) [[likely]] {
+            return (*array)[index];
+         }
+         type_mismatch<array_t>("index");
+      }
 
-      const generic_json& operator[](std::integral auto&& index) const { return std::get<array_t>(data)[index]; }
+      const generic_json& operator[](std::integral auto index) const
+      {
+         if (auto* array = std::get_if<array_t>(&data)) [[likely]] {
+            return (*array)[index];
+         }
+         type_mismatch<array_t>("index");
+      }
 
       generic_json& operator[](std::convertible_to<std::string_view> auto&& key)
       {
          if (holds<null_t>()) data = object_t{};
-         auto& object = std::get<object_t>(data);
-         auto iter = object.find(key);
-         if (iter == object.end()) {
-            iter = object.insert(std::make_pair(std::string(key), generic_json{})).first;
+         auto* object = std::get_if<object_t>(&data);
+         if (!object) [[unlikely]] {
+            key_type_mismatch(key);
+         }
+         auto iter = object->find(key);
+         if (iter == object->end()) {
+            iter = object->insert(std::make_pair(std::string(key), generic_json{})).first;
          }
          return iter->second;
       }
 
       const generic_json& operator[](std::convertible_to<std::string_view> auto&& key) const
       {
-         auto& object = std::get<object_t>(data);
-         auto iter = object.find(key);
-         if (iter == object.end()) {
-            glaze_error("Key not found.");
+         auto* object = std::get_if<object_t>(&data);
+         if (!object) [[unlikely]] {
+            key_type_mismatch(key);
+         }
+         auto iter = object->find(key);
+         if (iter == object->end()) [[unlikely]] {
+            key_not_found(key);
          }
          return iter->second;
       }
@@ -554,6 +593,70 @@ export namespace glz
          else {
             return 0;
          }
+      }
+
+     private:
+      template <class T>
+      static constexpr std::string_view alternative_name() noexcept
+      {
+         if constexpr (std::same_as<T, null_t>) {
+            return "null";
+         }
+         else if constexpr (std::same_as<T, bool>) {
+            return "bool";
+         }
+         else if constexpr (std::same_as<T, double>) {
+            return "double";
+         }
+         else if constexpr (std::same_as<T, int64_t>) {
+            return "int64_t";
+         }
+         else if constexpr (std::same_as<T, uint64_t>) {
+            return "uint64_t";
+         }
+         else if constexpr (std::same_as<T, std::string>) {
+            return "string";
+         }
+         else if constexpr (std::same_as<T, array_t>) {
+            return "array";
+         }
+         else if constexpr (std::same_as<T, object_t>) {
+            return "object";
+         }
+         else {
+            static_assert(false_v<T>, "not an alternative of glz::generic");
+         }
+      }
+
+      std::string_view held_type_name() const noexcept
+      {
+         if (data.valueless_by_exception()) [[unlikely]] {
+            return "valueless";
+         }
+         return std::visit([](const auto& v) { return alternative_name<std::decay_t<decltype(v)>>(); }, data);
+      }
+
+      template <class Expected>
+      [[noreturn]] GLZ_NO_INLINE void type_mismatch(std::string_view operation) const
+      {
+         std::string msg{"glz::generic "};
+         msg.append(operation).append(": expected ").append(alternative_name<Expected>());
+         msg.append(", but holds ").append(held_type_name());
+         GLZ_THROW_OR_ABORT(bad_generic_access(msg));
+      }
+
+      [[noreturn]] GLZ_NO_INLINE void key_type_mismatch(std::string_view key) const
+      {
+         std::string msg{"glz::generic key \""};
+         msg.append(key).append("\": expected object, but holds ").append(held_type_name());
+         GLZ_THROW_OR_ABORT(bad_generic_access(msg));
+      }
+
+      [[noreturn]] GLZ_NO_INLINE static void key_not_found(std::string_view key)
+      {
+         std::string msg{"glz::generic key not found: \""};
+         msg.append(key).push_back('"');
+         GLZ_THROW_OR_ABORT(std::runtime_error(msg));
       }
    };
 

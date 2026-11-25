@@ -643,6 +643,8 @@ constexpr auto opts = glz::opts{.null_terminated = false};
 auto result = glz::lazy_json<opts>(buffer);
 ```
 
+As with `glz::read`, the option is derived from the buffer type: a resizable buffer that keeps no terminator of its own, such as a `std::vector<char>`, is read with bounds whatever the options say, while a `std::string_view` is taken at your word and needs `null_terminated = false` when the memory it views has no terminator.
+
 ## Memory Layout
 
 The lazy parser is designed for minimal memory overhead. A `lazy_json_view` is 48 bytes on 64-bit systems and 24 bytes on 32-bit systems.

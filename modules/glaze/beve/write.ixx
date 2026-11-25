@@ -127,7 +127,7 @@ namespace glz
          // Optimized single-byte path: direct assignment instead of memcpy
          if constexpr (vector_like<Buffer>) {
             if (ix == b.size()) [[unlikely]] {
-               b.resize(b.size() == 0 ? 128 : b.size() * 2);
+               grow_buffer(b, b.size() == 0 ? 64 : ix + 1);
             }
          }
          b[ix] = static_cast<std::decay_t<decltype(b[0])>>(value);
@@ -136,7 +136,7 @@ namespace glz
       else {
          if constexpr (vector_like<Buffer>) {
             if (const auto k = ix + n; k > b.size()) [[unlikely]] {
-               b.resize(2 * k);
+               grow_buffer(b, k);
             }
          }
 
@@ -1111,17 +1111,58 @@ namespace glz
             }
 
             using X = typename V::value_type;
-            constexpr uint8_t complex_array = 1;
             constexpr uint8_t type = std::floating_point<X> ? 0 : (std::is_signed_v<X> ? 0b000'01'000 : 0b000'10'000);
-            constexpr uint8_t complex_header = complex_array | type | (byte_count<X> << 5);
-            dump_type(ctx, complex_header, b, ix);
-            if (bool(ctx.error)) [[unlikely]] {
-               return;
-            }
+            // Numerical type and BYTE COUNT, in the same bits of the COMPLEX HEADER and a numeric typed array header
+            constexpr uint8_t numeric_bits = type | (byte_count<X> << 5);
 
-            dump_compressed_int(ctx, value.size(), b, ix);
-            if (bool(ctx.error)) [[unlikely]] {
-               return;
+            // Single-byte components are always aligned, so they keep the more compact complex array
+            if constexpr (check_aligned_arrays(Opts) && sizeof(X) > 1) {
+               // Aligned complex array: the interleaved components form a nested aligned typed array
+               // HEADER | COMPLEX HEADER | ALIGNED_HEADER | NUMERIC_HEADER | SIZE | PADDING_LENGTH | PADDING | DATA
+               constexpr uint8_t complex_header = extension::complex_aligned_array | numeric_bits;
+               dump_type(ctx, complex_header, b, ix);
+               if (bool(ctx.error)) [[unlikely]] {
+                  return;
+               }
+               dump_type(ctx, tag::aligned_typed_array, b, ix);
+               if (bool(ctx.error)) [[unlikely]] {
+                  return;
+               }
+               constexpr uint8_t numeric_header = tag::typed_array | numeric_bits;
+               dump_type(ctx, numeric_header, b, ix);
+               if (bool(ctx.error)) [[unlikely]] {
+                  return;
+               }
+               // SIZE counts components: two per complex element
+               dump_compressed_int(ctx, 2 * value.size(), b, ix);
+               if (bool(ctx.error)) [[unlikely]] {
+                  return;
+               }
+
+               // Write padding length byte and padding
+               constexpr size_t alignment = sizeof(X);
+               const uint8_t padding = uint8_t((alignment - ((ix + 1) % alignment)) % alignment);
+               if (!ensure_space(ctx, b, ix + 1 + padding + write_padding_bytes)) [[unlikely]] {
+                  return;
+               }
+               dump_type(ctx, padding, b, ix);
+               if (padding) {
+                  std::memset(&b[ix], 0, padding);
+                  ix += padding;
+               }
+            }
+            else {
+               // Complex array: HEADER | COMPLEX HEADER | SIZE | DATA
+               constexpr uint8_t complex_header = extension::complex_array | numeric_bits;
+               dump_type(ctx, complex_header, b, ix);
+               if (bool(ctx.error)) [[unlikely]] {
+                  return;
+               }
+
+               dump_compressed_int(ctx, value.size(), b, ix);
+               if (bool(ctx.error)) [[unlikely]] {
+                  return;
+               }
             }
 
             if constexpr (contiguous<T>) {
@@ -1407,17 +1448,7 @@ namespace glz
       template <auto Opts, class Value, size_t I>
       static consteval bool should_skip_field()
       {
-         using V = field_t<Value, I>;
-
-         if constexpr (always_skipped<V>) {
-            return true;
-         }
-         else if constexpr (is_any_function_ptr<V>) {
-            return !check_write_function_pointers(Opts);
-         }
-         else {
-            return false;
-         }
+         return skipped_on_write<Opts, Value, I>;
       }
 
       template <auto Opts, class Value>
@@ -1477,19 +1508,16 @@ namespace glz
    {
       static constexpr auto N = reflect<T>::size;
 
+      // A positional layout (structs_as_arrays) has no keys, so only a field's type can leave it out;
+      // meta<T>::skip names keys and applies to the keyed layout.
       template <auto Opts, size_t I>
       static consteval bool should_skip_field()
       {
-         using V = field_t<T, I>;
-
-         if constexpr (always_skipped<V>) {
-            return true;
-         }
-         else if constexpr (is_any_function_ptr<V>) {
-            return !check_write_function_pointers(Opts);
+         if constexpr (check_structs_as_arrays(Opts)) {
+            return never_written<Opts, field_t<T, I>>;
          }
          else {
-            return false;
+            return skipped_on_write<Opts, T, I>;
          }
       }
 
@@ -1935,10 +1963,15 @@ namespace glz
 
    // Write the BEVE delimiter byte to a buffer
    // Used to separate multiple BEVE values in a stream/buffer (like NDJSON's newline)
+   // Resizable because appending has no meaning for a fixed-size buffer, whose size is already its
+   // capacity. resize/index is also all that `output_buffer` promises; push_back is not.
    export template <class Buffer>
+      requires output_buffer<Buffer> && resizable<Buffer>
    void write_beve_delimiter(Buffer& buffer)
    {
-      buffer.push_back(static_cast<typename Buffer::value_type>(tag::delimiter));
+      const size_t ix = buffer.size();
+      buffer.resize(ix + 1);
+      buffer[ix] = static_cast<typename Buffer::value_type>(tag::delimiter);
    }
 
    // Append a BEVE value to an existing buffer without clearing it
@@ -1961,6 +1994,13 @@ namespace glz
       to<BEVE, std::remove_cvref_t<T>>::template op<set_beve<Opts>()>(std::forward<T>(value), ctx, buffer, ix);
 
       if (bool(ctx.error)) [[unlikely]] {
+         // Truncate to what was written, as the other write entry points do: the buffer grows
+         // unfilled from here on, so leaving it at its grown length hands the caller indeterminate
+         // bytes past `count`. Not `finalize`, which for a streaming buffer means flushing -- a
+         // failed write must not push the partial document downstream on its way out.
+         if constexpr (traits::is_resizable && not traits::is_output_streaming) {
+            buffer.resize(ix);
+         }
          return {ix - start_ix, ctx.error, ctx.custom_error_message};
       }
 
@@ -1971,7 +2011,7 @@ namespace glz
    // Append a BEVE value to an existing buffer with a delimiter prefix
    // Useful for streaming multiple values
    export template <auto Opts = opts{}, write_supported<BEVE> T, class Buffer>
-      requires output_buffer<Buffer>
+      requires output_buffer<Buffer> && resizable<Buffer>
    [[nodiscard]] error_ctx write_beve_append_with_delimiter(T&& value, Buffer& buffer)
    {
       write_beve_delimiter(buffer);
@@ -1992,7 +2032,7 @@ namespace glz
 
       if constexpr (traits::is_resizable) {
          if (buffer.size() < 2 * write_padding_bytes) {
-            buffer.resize(2 * write_padding_bytes);
+            resize_unfilled(buffer, 2 * write_padding_bytes);
          }
       }
 

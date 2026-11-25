@@ -49,3 +49,7 @@
    defined(GLZ_USE_WASM_SIMD128) || (defined(GLZ_UTF8_GENERIC_WIDTH) && !defined(GLZ_DISABLE_SIMD))
 #define GLZ_UTF8_SIMD
 #endif
+
+#if defined(GLZ_USE_AVX512BW) || defined(GLZ_USE_AVX2) || defined(GLZ_USE_SSE2) || defined(GLZ_USE_NEON64) || defined(GLZ_USE_WASM_SIMD128)
+#define GLZ_STRUCTURAL_SIMD
+#endif

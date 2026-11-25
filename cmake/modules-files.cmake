@@ -156,7 +156,7 @@ target_sources(glaze_glaze
     FILE_SET CXX_MODULES
     FILES
     modules/glaze/api/hash.ixx
-    modules/glaze/api/tuplet.ixx
+    modules/glaze/api/tuple.ixx
     modules/glaze/api/type_support.ixx
     modules/glaze/api/xxh64.ixx
     modules/glaze/api/impl.ixx
@@ -205,10 +205,7 @@ target_sources(glaze_glaze
     modules/glaze/thread/async.ixx
     modules/glaze/thread/async_string.ixx
     modules/glaze/thread/async_vector.ixx
-    modules/glaze/thread/shared_async_map.ixx
-    modules/glaze/thread/shared_async_vector.ixx
     modules/glaze/thread/threadpool.ixx
-    modules/glaze/thread/value_proxy.ixx
     modules/glaze/thread/guard.ixx
 )
 
@@ -295,7 +292,6 @@ target_sources(glaze_glaze
     FILE_SET CXX_MODULES
     FILES
     modules/glaze/file/file_ops.ixx
-    modules/glaze/file/hostname_include.ixx
     modules/glaze/file/raw_or_file.ixx
     modules/glaze/file/read_directory.ixx
     modules/glaze/file/write_directory.ixx
@@ -485,4 +481,23 @@ target_sources(glaze_glaze
     modules/glaze/net/url.ixx
     modules/glaze/net/websocket_client.ixx
     modules/glaze/net/websocket_connection.ixx
+)
+
+# Modules introduced by the upstream sync.
+target_sources(glaze_glaze PUBLIC FILE_SET CXX_MODULES FILES
+  modules/glaze/bson/common.ixx
+  modules/glaze/bson/wrappers.ixx
+  modules/glaze/simd/structural.ixx
+  modules/glaze/core/tuple.ixx
+  modules/glaze/msgpack/wrappers.ixx
+  modules/glaze/util/non_finite.ixx
+)
+
+target_sources(glaze_glaze PUBLIC FILE_SET CXX_MODULES FILES
+  modules/glaze/yaml.ixx
+  modules/glaze/yaml/common.ixx
+  modules/glaze/yaml/opts.ixx
+  modules/glaze/yaml/read.ixx
+  modules/glaze/yaml/skip.ixx
+  modules/glaze/yaml/write.ixx
 )

@@ -18,6 +18,7 @@
 // glz:header std=<variant>
 // glz:header std=<vector>
 export module glaze.bson.read;
+import glaze.bson.common;
 
 import glaze.bson.header;
 import glaze.bson.skip;
@@ -205,6 +206,8 @@ namespace glz
       template <auto Opts, class T, is_context Ctx, class It, class End>
       GLZ_ALWAYS_INLINE static void op(T&& value, Ctx&& ctx, It& it, const End& end) noexcept
       {
+         static_assert(bson_top_level_t<T>,
+                       "BSON can only encode a document (struct, map, or array) without an enclosing element.");
          if constexpr (const_value_v<T>) {
             if constexpr (check_error_on_const_read(Opts)) {
                ctx.error = error_code::attempt_const_read;
@@ -728,7 +731,19 @@ namespace glz
          }
          int64_t ms{};
          if (!bson_detail::read_le<int64_t>(ctx, it, end, ms)) return;
-         value = std::chrono::system_clock::time_point{std::chrono::milliseconds{ms}};
+         // The clock's duration is finer than milliseconds, so converting a full int64 count
+         // scales it up and wraps. Split it into floored seconds plus a [0, 1000) ms part and
+         // reject a datetime the clock cannot hold.
+         int64_t secs = ms / 1000;
+         int64_t sub_ms = ms % 1000;
+         if (sub_ms < 0) {
+            sub_ms += 1000;
+            --secs;
+         }
+         using namespace std::chrono;
+         if (!chrono_detail::make_sys_time(value, seconds{secs}, milliseconds{sub_ms})) [[unlikely]] {
+            ctx.error = error_code::parse_error;
+         }
       }
    };
 
@@ -1115,6 +1130,9 @@ namespace glz
                               // foreign input. Silently consume the value.
                               skip_value<BSON>::template op<Opts>(tag, ctx, it, stop);
                            }
+                           else if constexpr (skipped_by_meta<DT, I, operation::parse>) {
+                              skip_value<BSON>::template op<Opts>(tag, ctx, it, stop);
+                           }
                            else if constexpr (reflectable<DT>) {
                               from<BSON, MemberT>::template op<Opts>(get_member(value, get<I>(to_tie(value))), tag, ctx,
                                                                      it, stop);
@@ -1137,7 +1155,9 @@ namespace glz
                   ctx.custom_error_message = key;
                   return;
                }
-               skip_value<BSON>::template op<Opts>(tag, ctx, it, stop);
+               else {
+                  skip_value<BSON>::template op<Opts>(tag, ctx, it, stop);
+               }
             }
          });
 
@@ -1299,11 +1319,6 @@ namespace glz
    // Public entry points
    // ==========================================================================
 
-   export template <class T>
-   concept bson_top_level_read_t = glaze_object_t<std::remove_cvref_t<T>> || reflectable<std::remove_cvref_t<T>> ||
-                                   writable_map_t<std::remove_cvref_t<T>> || writable_array_t<std::remove_cvref_t<T>> ||
-                                   glaze_array_t<std::remove_cvref_t<T>>;
-
    // BSON documents are length-prefixed (int32 header = total bytes). The core
    // reader consumes exactly that many bytes, but would otherwise silently
    // ignore anything trailing the top-level document. Enforce exact-fill at the
@@ -1321,7 +1336,7 @@ namespace glz
       }
    }
 
-   export template <auto Opts = opts{}, bson_top_level_read_t T, class Buffer>
+   export template <auto Opts = opts{}, bson_top_level_t T, class Buffer>
    [[nodiscard]] inline error_ctx read_bson(T&& value, Buffer&& buffer)
    {
       auto ec = read<set_bson<Opts>()>(std::forward<T>(value), buffer);
@@ -1329,7 +1344,7 @@ namespace glz
    }
 
    export template <class T, auto Opts = opts{}, class Buffer>
-      requires bson_top_level_read_t<T>
+      requires bson_top_level_t<T>
    [[nodiscard]] inline expected<T, error_ctx> read_bson(Buffer&& buffer)
    {
       T value{};
@@ -1341,7 +1356,7 @@ namespace glz
       return value;
    }
 
-   export template <auto Opts = opts{}, bson_top_level_read_t T>
+   export template <auto Opts = opts{}, bson_top_level_t T>
    [[nodiscard]] inline error_ctx read_file_bson(T& value, const sv file_name, auto&& buffer)
    {
       context ctx{};
@@ -1350,7 +1365,8 @@ namespace glz
       if (bool(file_error)) [[unlikely]] {
          return error_ctx{0, file_error};
       }
-      auto ec = read<set_bson<Opts>()>(value, buffer, ctx);
+      // The buffer was sized to the file, so the caller's is_padded promise does not cover it.
+      auto ec = read<is_padded_off<set_bson<Opts>()>()>(value, buffer, ctx);
       return bson_detail::enforce_exact_fill(buffer, ec);
    }
 }

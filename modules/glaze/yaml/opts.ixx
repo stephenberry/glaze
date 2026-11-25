@@ -1,14 +1,15 @@
 // Glaze Library
-// For the license information refer to glaze.hpp
+// For the license information refer to glaze.ixx
+// glz:header path="glaze/yaml/opts.hpp"
+export module glaze.yaml.opts;
 
-#pragma once
-
-#include <glaze/core/opts.hpp>
+import std;
+import glaze.core.opts;
 
 using std::uint8_t;
 using std::uint32_t;
 
-namespace glz::yaml
+export namespace glz::yaml
 {
 
    enum struct opts_internal : uint32_t {
@@ -74,4 +75,3 @@ namespace glz::yaml
    }
 
 } // namespace glz::yaml
-

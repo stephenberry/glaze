@@ -28,11 +28,17 @@ concurrency:
 
 jobs:
   build:
-    runs-on: windows-2025-vs2026
+    runs-on: ${{ matrix.runner }}
     timeout-minutes: 60
 
     strategy:
+      # A failure on one architecture says nothing about the other, so let both finish.
+      fail-fast: false
       matrix:
+        # ARM64 builds the NEON paths with MSVC's own arm_neon.h, where the vector types are
+        # unions rather than compiler vector types. Code that Clang and GCC accept, such as brace
+        # initializing a uint8x16_t from 16 bytes, can fail there, and no other job would notice.
+        runner: [windows-2025-vs2026, windows-11-vs2026-arm]
         cpp_version: [23]
         # A Release build here runs well past 30 minutes, which is too long to spend on every
         # push and pull request. It runs on merges to main, where a slow and complete check is

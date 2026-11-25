@@ -10,6 +10,7 @@ module;
 export module glaze.simd.backends;
 
 import std;
+import glaze.simd.structural;
 
 import glaze.util.zmij;
 
@@ -105,6 +106,7 @@ namespace glz
       //
       // Names zmij's path only. Setting opts::float_format routes floats through std::format
       // instead (core/write_chars.hpp), which this field does not describe.
+      std::string_view structural_skip{};
       std::string_view float_write{};
    };
 
@@ -125,6 +127,12 @@ namespace glz
       .detected = detail::simd::detected_backend,
       .utf8_validation = detail::simd::utf8_validation_backend,
       .string_escape = detail::simd::string_escape_backend,
+      .structural_skip =
+#if defined(GLZ_STRUCTURAL_SIMD)
+         detail::structural::backend,
+#else
+         "SWAR",
+#endif
       .float_write = zmij::detail::float_write_backend(),
    };
 }

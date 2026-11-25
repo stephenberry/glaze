@@ -41,6 +41,9 @@ glz::epoch_count<std::chrono::milliseconds>(&T::time_point) // Write a system_cl
 ```
 
 > [!NOTE]
+> A format that has no support for a wrapper rejects it at compile time rather than serializing the wrapper itself. For example, `glz::quoted`, `glz::raw_string` and `glz::escape_bytes` are JSON wrappers, so a struct that uses one cannot be written to or read from BEVE. Such a struct can only be used with another format if the member is excluded with a [skip](./skip-keys.md), which applies to every format.
+
+> [!NOTE]
 > Unlike the wrappers above, `glz::date_format` and `glz::epoch_count` take the member pointer as a value argument rather than a non-type template parameter, and they live in `#include "glaze/chrono.hpp"`. See [std::chrono Support](chrono.md#per-field-format-customization) for the supported tokens, compile-time validation, and limitations.
 
 ## Associated glz::opts
@@ -848,6 +851,27 @@ expect(obj.y == 26); // 5 * 5 + 1
 };
 ```
 
+An `invoke` member is a call site rather than state, so it cannot be written: there is no value to serialize, and reading an invoke member back invokes it. Writing one is a compile error. Exclude it from output by adding a [skip](./skip-keys.md) to the `meta` above that returns `true` for `glz::operation::serialize`:
+
+```c++
+template <>
+struct glz::meta<invoke_struct>
+{
+   using T = invoke_struct;
+   static constexpr auto value = object("square", invoke<&T::square>, "add_one", invoke<&T::add_one>);
+
+   // added: invoke members are read-only
+   static constexpr bool skip(const std::string_view key, const glz::meta_context& ctx)
+   {
+      return ctx.op == glz::operation::serialize && (key == "square" || key == "add_one");
+   }
+};
+```
+
+> Before v9.0.0 an invoke member was written as `[]` (member function pointer) or `[[0]]` (a `std::function` with by-value arguments), neither of which is meaningful output. Add the `skip` above to keep such a struct writable.
+
+This holds for every format. Reading an invoke member is JSON only, since the arguments are parsed as JSON; reading one in another format is also a compile error. A `skip` that returns `true` for `glz::operation::parse` makes the struct readable in other formats, at the cost of no longer invoking the member from JSON either, because `skip` does not depend on the format.
+
 ## write_float32
 
 Writes out numbers with a maximum precision of `float32_t`.
@@ -1017,6 +1041,10 @@ float_precision float_max_write_precision{};
 ## custom
 
 Calls custom read and write std::functions, lambdas, or member functions.
+
+Supported by JSON, BEVE, CBOR, MessagePack, BSON, JSONB, TOML, YAML, and EETF. Not supported by CSV, whose columnar layout requires every struct field to be a container of row values rather than a single value.
+
+A read handler that takes no input (`custom<&T::trigger, &T::get>`) consumes and discards whatever value is present, then invokes the handler.
 
 ```c++
 struct custom_encoding

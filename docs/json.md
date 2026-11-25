@@ -219,7 +219,7 @@ Write operations return `error_ctx` with a `count` field. See [Writing](./writin
 
 ### Input Buffer Requirements
 
-For optimal performance, use null-terminated buffers (like `std::string`):
+For optimal performance, use null-terminated buffers (like `std::string`). A buffer counts as null-terminated only when the byte at `data()[size()]` is `'\0'`, so a `std::string_view` over part of a string must be read with `null_terminated = false`:
 
 ```cpp
 // Recommended - null terminated
@@ -333,6 +333,8 @@ struct glz::meta<Status> {
 // Now serializes as: "Active", "Inactive", "Pending"
 ```
 
+Writing a value with no enumerated name (e.g. `static_cast<Status>(7)`) fails with `glz::error_code::unexpected_enum`, since readers accept only enumerated names. This applies to JSON, TOML, YAML, and MessagePack. BEVE, CBOR, JSONB, and BSON write enums as numbers.
+
 > [!TIP]
 >
 > For automatic enum-to-string serialization without writing metadata for each enum, see [Automatic Enum Strings](enum-reflection.md).
@@ -400,6 +402,34 @@ std::string minified = glz::minify_json(pretty_json);
 // For reading minified JSON (performance optimization)
 auto ec = glz::read<glz::opts{.minified = true}>(person, minified_buffer);
 ```
+
+### Formatting JSONC
+
+`glz::minify_jsonc` and `glz::prettify_jsonc` accept both comment styles. Minifying preserves block comments and drops line comments, because minifying is what removes the newline that terminates a line comment. Pretty printing keeps both, and puts whatever follows a line comment onto a new line so the comment cannot swallow it.
+
+```cpp
+std::string jsonc = R"({"name":"John", // Person's name
+"age":30})";
+
+std::string minified = glz::minify_jsonc(jsonc); // {"name":"John","age":30}
+```
+
+The plain `glz::minify_json` and `glz::prettify_json` reject a comment rather than formatting around it, so a document that may carry one wants the `jsonc` entry points.
+
+The overloads that write into a buffer return an `error_ctx`, which is what distinguishes malformed input such as an unterminated comment or string from a successful run. It is not `[[nodiscard]]`, since formatting auto-generated JSON does not fail:
+
+```cpp
+std::string out{};
+if (const auto ec = glz::minify_jsonc(jsonc, out)) {
+   // ec == glz::error_code::expected_end_comment, for example
+}
+```
+
+The overloads that return the formatted text have nowhere to put an error, so on failure they return an empty string rather than the partial output, which is rarely a valid document.
+
+`error_ctx::count` is the number of bytes written, which is how a fixed-capacity output learns where its result ends. It is an offset into the output rather than the input, so `glz::format_error(ec, source)` does not point at the offending byte for these functions.
+
+Neither function validates the structure of the document. They report what they actually parse -- strings, comments and literals -- and copy the rest, so `[1 2]` minifies to `[12]`. Use `glz::validate_json` or `glz::validate_jsonc` to check a document that may not be well formed.
 
 ### Custom Serialization
 

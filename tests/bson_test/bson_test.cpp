@@ -162,6 +162,13 @@ namespace bson_test
       bool operator==(const time_s&) const = default;
    };
 
+   // Same key as time_s, but carrying the raw millisecond count so a test can put any int64
+   // datetime on the wire.
+   struct raw_time_s
+   {
+      glz::bson::datetime t{};
+   };
+
    struct duration_s
    {
       std::chrono::milliseconds ms{}; // int64 element
@@ -385,6 +392,29 @@ struct glz::meta<bson_test::meta_nested_s>
 {
    using T = bson_test::meta_nested_s;
    static constexpr auto value = glz::object("child", &T::child, "v", &T::value);
+};
+
+namespace bson_test
+{
+   struct custom_nullable_getter
+   {
+      std::optional<int32_t> opt{};
+      int32_t plain{7};
+      const std::optional<int32_t>& get_opt() const { return opt; }
+      void set_opt(std::optional<int32_t> in) { opt = in; }
+   };
+
+   struct custom_plain_only
+   {
+      int32_t plain{};
+   };
+}
+
+template <>
+struct glz::meta<bson_test::custom_nullable_getter>
+{
+   using T = bson_test::custom_nullable_getter;
+   static constexpr auto value = glz::object("opt", glz::custom<&T::set_opt, &T::get_opt>, "plain", &T::plain);
 };
 
 using namespace bson_test;
@@ -653,6 +683,26 @@ namespace
          using namespace std::chrono;
          time_s v{system_clock::time_point{milliseconds{1700000000000LL}}};
          expect_roundtrip_equal(v);
+      };
+
+      "chrono-datetime-out-of-range-rejected"_test = [] {
+         using namespace std::chrono;
+         // The datetime is a full int64 of milliseconds, and system_clock counts in something
+         // finer, so the extremes cannot be held. They used to wrap (INT64_MAX decoded as one
+         // millisecond before the epoch) and now fail.
+         for (const int64_t ms : {(std::numeric_limits<int64_t>::max)(), (std::numeric_limits<int64_t>::min)()}) {
+            std::string buffer;
+            expect(!glz::write_bson(raw_time_s{glz::bson::datetime{ms}}, buffer));
+            time_s out{};
+            expect(glz::read_bson(out, buffer) == glz::error_code::parse_error);
+         }
+
+         // Pre-epoch datetimes keep decoding as before.
+         std::string buffer;
+         expect(!glz::write_bson(raw_time_s{glz::bson::datetime{-1500}}, buffer));
+         time_s out{};
+         expect(!glz::read_bson(out, buffer));
+         expect(out.t == system_clock::time_point{milliseconds{-1500}});
       };
 
       "roundtrip-duration"_test = [] {
@@ -967,11 +1017,11 @@ namespace
       "uint64-write-above-int64-max-rejected"_test = [] {
          // BSON's int64 wire type is signed; uint64_t values above INT64_MAX
          // cannot be represented and must fail the write path with
-         // invalid_length (see write.hpp uint64_t range check).
+         // parse_number_failure, matching the read path (see write.hpp uint64_t range check).
          u64_s src{static_cast<uint64_t>((std::numeric_limits<int64_t>::max)()) + 1};
          auto w = glz::write_bson(src);
          expect(not w.has_value());
-         expect(w.error().ec == glz::error_code::invalid_length);
+         expect(w.error().ec == glz::error_code::parse_number_failure);
       };
 
       "uint64-write-at-int64-max-ok"_test = [] {
@@ -1088,7 +1138,28 @@ namespace
       };
    };
 
+   template <class T>
+   concept bson_generic_writable =
+      requires(T& value, std::string& buffer) { glz::write<glz::opts{.format = glz::BSON}>(value, buffer); };
+
+   template <class T>
+   concept bson_generic_readable =
+      requires(T& value, std::string& buffer) { glz::read<glz::opts{.format = glz::BSON}>(value, buffer); };
+
    suite bson_write_api_tests = [] {
+      "generic-api-rejects-top-level-primitives"_test = [] {
+         // BSON's top level is always a document, so a bare primitive has no valid encoding.
+         static_assert(not bson_generic_writable<int>);
+         static_assert(not bson_generic_writable<std::string>);
+         static_assert(not bson_generic_readable<int>);
+         static_assert(not bson_generic_readable<std::string>);
+         static_assert(bson_generic_writable<hello_t>);
+         static_assert(bson_generic_writable<std::map<std::string, int>>);
+         static_assert(bson_generic_writable<std::vector<int>>);
+         static_assert(bson_generic_readable<hello_t>);
+         static_assert(bson_generic_readable<std::vector<int>>);
+      };
+
       "fixed-buffer-write"_test = [] {
          // Bounded buffers require at least 512 bytes to account for the write
          // padding reservation (see glaze/core/buffer_traits.hpp).
@@ -1209,6 +1280,47 @@ namespace
          expect(out.size() == 2);
          expect(out.at("a") == 1);
          expect(!out.at("b").has_value());
+      };
+   };
+
+   // A glz::custom getter yields its value only at runtime, so the element type byte, and whether a
+   // null result is skipped, have to be decided from what the getter returns.
+   suite bson_custom_getter_tests = [] {
+      "custom-null-getter-skipped-by-default"_test = [] {
+         custom_nullable_getter in{};
+         std::vector<std::byte> buf{};
+         expect(not glz::write_bson(in, buf));
+
+         custom_plain_only out{};
+         auto rec = glz::read_bson(out, buf); // errors on the unknown key "opt" if it was written
+         expect(not rec);
+         expect(out.plain == 7);
+      };
+
+      "custom-null-getter-written-as-null-when-kept"_test = [] {
+         constexpr auto preserve = glz::opts{.skip_null_members = false};
+         custom_nullable_getter in{};
+         std::vector<std::byte> buf{};
+         expect(not glz::write_bson<preserve>(in, buf));
+
+         custom_nullable_getter out{};
+         out.opt = 99;
+         auto rec = glz::read_bson<preserve>(out, buf);
+         expect(not rec);
+         expect(not out.opt.has_value());
+         expect(out.plain == 7);
+      };
+
+      "custom-engaged-getter-round-trips"_test = [] {
+         custom_nullable_getter in{};
+         in.opt = 5;
+         std::vector<std::byte> buf{};
+         expect(not glz::write_bson(in, buf));
+
+         custom_nullable_getter out{};
+         auto rec = glz::read_bson(out, buf);
+         expect(not rec);
+         expect(out.opt == 5);
       };
    };
 
@@ -1915,6 +2027,64 @@ suite bson_char_array_tests = [] {
       expect(not glz::write_bson(src, buffer));
       bson_short_code dst{};
       expect(bool(glz::read_bson(dst, buffer)));
+   };
+};
+
+suite bson_cstring_embedded_null_tests = [] {
+   // A BSON e_name (map key) and the regex pattern/options fields are cstrings: a 0x00 ends the field
+   // on the wire, so a reader truncates the value there and reparses the trailing bytes as further
+   // elements. Without the write-side guard a single crafted map key read back as a document with an
+   // extra forged field while the write returned success.
+   "map key with an embedded null that injects a second field is rejected"_test = [] {
+      // Key "a" 0x00 <int32 1> 0x10 'z' : on the wire it reads back as {"a": 1, "z": 1}.
+      std::map<std::string, int32_t> m;
+      m[std::string("a\x00\x01\x00\x00\x00\x10z", 8)] = 1;
+      std::string buffer{};
+      auto ec = glz::write_bson(m, buffer);
+      expect(bool(ec));
+      expect(ec.ec == glz::error_code::invalid_control_character);
+   };
+
+   "map key with a trailing null is rejected"_test = [] {
+      std::map<std::string, int32_t> m;
+      m[std::string("k\x00", 2)] = 1;
+      std::string buffer{};
+      auto ec = glz::write_bson(m, buffer);
+      expect(bool(ec));
+      expect(ec.ec == glz::error_code::invalid_control_character);
+   };
+
+   "regex pattern with an embedded null is rejected"_test = [] {
+      regex_only_s v{};
+      v.r.pattern = std::string(
+         "ab\x00"
+         "cd",
+         5);
+      v.r.options = "i";
+      std::string buffer{};
+      auto ec = glz::write_bson(v, buffer);
+      expect(bool(ec));
+      expect(ec.ec == glz::error_code::invalid_control_character);
+   };
+
+   "regex options with an embedded null is rejected"_test = [] {
+      regex_only_s v{};
+      v.r.pattern = "ab";
+      v.r.options = std::string("i\x00", 2);
+      std::string buffer{};
+      auto ec = glz::write_bson(v, buffer);
+      expect(bool(ec));
+      expect(ec.ec == glz::error_code::invalid_control_character);
+   };
+
+   "null-free map keys still round trip unchanged"_test = [] {
+      std::map<std::string, int32_t> m{{"alpha", 1}, {"beta.b", 2}, {"has space", 3}};
+      auto w = glz::write_bson(m);
+      expect(w.has_value());
+      std::map<std::string, int32_t> r{};
+      auto ec = glz::read_bson(r, std::string_view{w.value()});
+      expect(not ec);
+      expect(r == m);
    };
 };
 

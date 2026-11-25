@@ -2,6 +2,7 @@
 // For the license information refer to glaze.ixx
 // glz:header path="glaze/bson.hpp"
 export module glaze.bson;
+export import glaze.bson.wrappers;
 
 export import glaze.util.uuid;
 

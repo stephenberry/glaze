@@ -23,6 +23,25 @@ Set to `0` for no limit. Default: `glz::http_default_max_body_size` (100 MB).
 
 > **Note:** This applies to `Content-Length`-based requests. The server does not currently support chunked request `Transfer-Encoding`.
 
+## Server: `max_request_header_size`
+
+Limits the size of a request's line and headers. A request whose header section has not ended within the limit is rejected with **HTTP 431 (Request Header Fields Too Large)** and the connection is closed, so a peer that never ends its headers cannot grow the read buffer without bound.
+
+```cpp
+glz::http_server server;
+server.max_request_header_size(16 * 1024); // 16 KB limit
+```
+
+Or via `connection_config`:
+
+```cpp
+server.connection_settings({
+   .max_request_header_size = 16 * 1024
+});
+```
+
+Set to `0` for no limit. Default: 64 KB.
+
 ## Client: `max_response_body_size`
 
 Limits incoming response body sizes. Responses exceeding the limit return `glz::http_client_error::response_too_large`.

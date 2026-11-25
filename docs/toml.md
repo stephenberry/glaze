@@ -286,6 +286,51 @@ glz::write_toml(c, toml);  // Regular write_toml, but products uses inline synta
 
 This is useful when you want a more compact representation or when the array contains simple objects with few fields.
 
+## Custom Read/Write
+
+`glz::custom<Read, Write>` works for TOML exactly as it does for JSON. It binds a key to a setter used on read and a getter used on write, so a member can be transformed, validated, or hidden behind an accessor:
+
+```cpp
+struct settings
+{
+   uint64_t port{};
+
+   void set_port(const std::string& s) { port = std::stoull(s); }
+   uint64_t get_port() const { return port; }
+};
+
+template <>
+struct glz::meta<settings>
+{
+   using T = settings;
+   static constexpr auto value = object("port", custom<&T::set_port, &T::get_port>);
+};
+```
+
+```toml
+port = "8080"   # read as a string, stored as a uint64_t
+```
+
+Member pointers, member functions, `std::function` members, and lambdas are all accepted, along with the three-parameter lambda form that also takes a `glz::context&` so a setter can report its own error:
+
+```cpp
+static constexpr auto read_port = [](settings& s, int port, glz::context& ctx) {
+   if (port < 1024) {
+      ctx.error = glz::error_code::constraint_violated;
+      ctx.custom_error_message = "port is reserved";
+   }
+   else {
+      s.port = port;
+   }
+};
+```
+
+Use `glz::skip{}` as the read handler for a key that is written but never read back.
+
+A custom getter that exposes a nested object is written as a `[table]`, matching the layout of a plain field of the same type. A custom getter that exposes a sequence of objects is written as an inline array rather than `[[array_of_tables]]`, because the reader cannot feed an array-of-tables section back into a setter.
+
+TOML has no null, so a custom getter returning a disengaged `std::optional` (or a null pointer) omits its key entirely, exactly as a plain nullable field does.
+
 ## Using the Generic API
 
 The convenience wrappers call into the generic `glz::read`/`glz::write` pipeline. You can reuse the same options struct you already use for JSON while switching the format to TOML:
@@ -776,6 +821,55 @@ auto ec = glz::read_toml(config, toml);
 
 ### Limitations
 
-- **Null values**: TOML has no native null type. When writing `std::nullptr_t` or a variant holding null, an empty string `""` is written.
+- **Null values**: TOML has no native null type. A struct field or map entry holding null (an empty `std::optional`, a null pointer, or a variant or `glz::generic` holding null) is omitted along with its key. In an array or tuple, the null alternative of a variant (such as a `glz::generic` null) is written as an empty string `""`, while an empty typed nullable such as `std::optional<int>` fails the write with `glz::error_code::feature_not_supported`. The reader never produces a null: a missing value (`a =`, `{u = }`, `[1, , 2]`) is a `syntax_error`.
 - **Type coercion**: The parser does not coerce types. If the variant has no matching alternative for the detected type, an error is returned.
 - **Array of tables in maps**: The `[[array_of_tables]]` syntax is not fully supported when reading into map types. Use struct-based types for this pattern.
+
+## Control Characters
+
+TOML v1.0.0 excludes raw control characters from strings, keys and comments. A single-line basic or literal string and a comment admit tab and nothing else in the C0 range; the multi-line forms (`"""` and `'''`) additionally admit line feed and carriage return. DEL (`0x7F`) is excluded from all of them.
+
+### Reading
+
+Reading rejects a raw control byte with `error_code::invalid_control_character`:
+
+```c++
+struct config { std::string note{}; };
+
+config c{};
+auto ec = glz::read_toml(c, "note = \"a\x01" "b\"");
+// ec == glz::error_code::invalid_control_character
+```
+
+An escape is the supported way to carry one, and is accepted as before:
+
+```c++
+auto ec = glz::read_toml(c, R"(note = "a\u0001b")");
+// ec is empty, c.note == "a\x01" "b"
+```
+
+### Writing
+
+Escaping costs a check on every string, so as in JSON it is off by default and the writer emits the byte as given:
+
+```c++
+config out{std::string("a\x01" "b")};
+std::string buffer{};
+(void)glz::write_toml(out, buffer);
+// buffer holds a raw 0x01, which is not valid TOML
+```
+
+Turn on `escape_control_characters` to have them written as `\u00XX`, so the document round-trips:
+
+```c++
+struct escape_opts : glz::toml_opts {
+   bool escape_control_characters = true;
+};
+
+(void)glz::write<escape_opts{}>(out, buffer);
+// buffer == R"(note = "a\u0001b")"
+```
+
+Characters with a short escape (`\t`, `\n`, `\r`, `\"`, `\\`) use it; the rest become `\u00XX`.
+
+Map keys are a separate case: a key that is not bare is written as a quoted basic string with its control characters always escaped, whatever the option says. A raw control byte there would reparse as invalid TOML and change the surrounding structure, so correctness of the key is not left to the option.

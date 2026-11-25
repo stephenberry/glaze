@@ -5,6 +5,7 @@
 // glz:header std=<type_traits>
 // glz:header std=<utility>
 export module glaze.core.cast;
+import glaze.core.tuple;
 
 import std;
 
@@ -77,13 +78,8 @@ export namespace glz
 
          Cast temp{};
          parse<Format>::template op<Opts>(temp, ctx, it, end);
-         if (bool(ctx.error)) [[unlikely]] {
-            if constexpr (check_null_terminated(Opts)) {
-               return;
-            }
-            else if (ctx.error != error_code::end_reached) {
-               return;
-            }
+         if (parse_failed(ctx.error)) [[unlikely]] {
+            return;
          }
 
          assign(value, temp);
@@ -98,13 +94,8 @@ export namespace glz
 
          Cast temp{};
          parse<Format>::template op<Opts>(temp, tag, ctx, it, end);
-         if (bool(ctx.error)) [[unlikely]] {
-            if constexpr (check_null_terminated(Opts)) {
-               return;
-            }
-            else if (ctx.error != error_code::end_reached) {
-               return;
-            }
+         if (parse_failed(ctx.error)) [[unlikely]] {
+            return;
          }
 
          assign(value, temp);

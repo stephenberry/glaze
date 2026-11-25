@@ -9,6 +9,7 @@
 // glz:header std=<utility>
 // glz:header std=<vector>
 export module glaze.csv.write;
+import glaze.util.non_finite;
 
 import std;
 
@@ -73,7 +74,9 @@ namespace glz
                      return size_t{64};
                   }
                   else if constexpr (sizeof(T) > 4) {
-                     return size_t{32};
+                     // glz::to_chars may use up to zmij::double_buffer_size bytes of the
+                     // buffer as scratch; 32 was two short. Matches required_padding<double>().
+                     return size_t{zmij::double_buffer_size + 4};
                   }
                   else {
                      return size_t{24};
@@ -91,6 +94,13 @@ namespace glz
             }();
 
             if (!ensure_space(ctx, b, ix + max_numeric_chars)) [[unlikely]] {
+               return;
+            }
+         }
+         // write_chars writes JSON's null for a non-finite float, which is not a CSV number.
+         // Write inf, -inf and nan, which the CSV reader accepts.
+         if constexpr (std::floating_point<std::remove_cvref_t<T>>) {
+            if (detail::write_non_finite_float(value, "nan", "inf", "-inf", b, ix)) {
                return;
             }
          }
@@ -378,10 +388,13 @@ namespace glz
          if constexpr (check_layout(Opts) == rowwise) {
             for (auto& [name, data] : value) {
                if constexpr (check_use_headers(Opts)) {
-                  if (!ensure_space(ctx, b, ix + name.size() + 2 + write_padding_bytes)) [[unlikely]] {
+                  dump_csv_string<csv_delimiter<Opts>()>(ctx, name, b, ix);
+                  if (bool(ctx.error)) [[unlikely]] {
                      return;
                   }
-                  dump_maybe_empty(name, b, ix);
+                  if (!ensure_space(ctx, b, ix + 1 + write_padding_bytes)) [[unlikely]] {
+                     return;
+                  }
                   dump(csv_delimiter<Opts>(), b, ix);
                }
                const auto n = data.size();
@@ -415,12 +428,15 @@ namespace glz
             if constexpr (check_use_headers(Opts)) {
                size_t i = 0;
                for (auto& [name, data] : value) {
-                  if (!ensure_space(ctx, b, ix + name.size() + 2 + write_padding_bytes)) [[unlikely]] {
+                  dump_csv_string<csv_delimiter<Opts>()>(ctx, name, b, ix);
+                  if (bool(ctx.error)) [[unlikely]] {
                      return;
                   }
-                  dump_maybe_empty(name, b, ix);
                   ++i;
                   if (i < n) {
+                     if (!ensure_space(ctx, b, ix + 1 + write_padding_bytes)) [[unlikely]] {
+                        return;
+                     }
                      dump(csv_delimiter<Opts>(), b, ix);
                      if constexpr (is_output_streaming<B>) {
                         flush_buffer(b, ix);

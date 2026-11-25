@@ -101,6 +101,26 @@ namespace glz
          }
       }
 
+      // A negative integer (major type 1) with argument n is -1 - n, and n is a full 64 bits on the
+      // wire, so the type reaches down to -2^64 where int64_t stops at -2^63. The ~n cast is exact
+      // while n fits int64_t; past that the true value is below int64_t's min and ~n lands in the
+      // positive range instead. A JSON number has no such bound, so the rest of the range is
+      // written as its decimal: '-' followed by n + 1, which only -2^64 itself cannot spell.
+      template <auto Opts, class Buffer>
+      inline void cbor_to_json_negative_integer(is_context auto& ctx, const uint64_t n, Buffer& out, size_t& ix)
+      {
+         if (n <= uint64_t((std::numeric_limits<int64_t>::max)())) [[likely]] {
+            to<JSON, int64_t>::template op<Opts>(static_cast<int64_t>(~n), ctx, out, ix);
+         }
+         else if (n == (std::numeric_limits<uint64_t>::max)()) [[unlikely]] {
+            if (!emit_literal<"-18446744073709551616">(ctx, out, ix)) return;
+         }
+         else {
+            if (!emit_char(ctx, '-', out, ix)) return;
+            to<JSON, uint64_t>::template op<Opts>(n + 1, ctx, out, ix);
+         }
+      }
+
       template <auto Opts, class Buffer>
       inline void cbor_to_json_key(auto&& ctx, auto&& it, auto&& end, Buffer& out, auto&& ix, uint32_t recursive_depth);
 
@@ -109,12 +129,6 @@ namespace glz
                                      uint32_t recursive_depth)
       {
          using namespace cbor;
-
-         // Check recursion depth limit
-         if (recursive_depth >= max_recursive_depth_limit) [[unlikely]] {
-            ctx.error = error_code::exceeded_max_recursive_depth;
-            return;
-         }
 
          if (it >= end) [[unlikely]] {
             ctx.error = error_code::unexpected_end;
@@ -127,6 +141,15 @@ namespace glz
 
          const uint8_t major_type = get_major_type(initial);
          const uint8_t additional_info = get_additional_info(initial);
+
+         // `recursive_depth` is the number of levels enclosing this value. Arrays, maps, and the tags
+         // that wrap a value open another; scalars do not, so as in the readers a scalar may sit
+         // inside the deepest container the limit allows.
+         const bool opens_level = major_type == major::array || major_type == major::map || major_type == major::tag;
+         if (opens_level && recursive_depth >= max_recursive_depth_limit) [[unlikely]] {
+            ctx.error = error_code::exceeded_max_recursive_depth;
+            return;
+         }
 
          switch (major_type) {
          case major::uint: {
@@ -143,9 +166,7 @@ namespace glz
             const uint64_t n = cbor_to_json_decode_arg(ctx, it, end, additional_info);
             if (bool(ctx.error)) [[unlikely]]
                return;
-            // Use two's complement trick for safe conversion
-            const int64_t value = static_cast<int64_t>(~n);
-            to<JSON, int64_t>::template op<Opts>(value, ctx, out, ix);
+            cbor_to_json_negative_integer<Opts>(ctx, n, out, ix);
             break;
          }
 
@@ -698,11 +719,6 @@ namespace glz
       {
          using namespace cbor;
 
-         if (recursive_depth >= max_recursive_depth_limit) [[unlikely]] {
-            ctx.error = error_code::exceeded_max_recursive_depth;
-            return;
-         }
-
          if (it >= end) [[unlikely]] {
             ctx.error = error_code::unexpected_end;
             return;
@@ -722,7 +738,12 @@ namespace glz
          case major::tag: {
             // Unwrap the tag and key-check the tagged content, so e.g. a tag-0
             // datetime text key still emits as a string. Typed-array tags
-            // (RFC 8746) decode to a JSON array and are rejected below.
+            // (RFC 8746) decode to a JSON array and are rejected below. The tag is the only key
+            // that recurses, so it is the one that takes a level, as it does as a value.
+            if (recursive_depth >= max_recursive_depth_limit) [[unlikely]] {
+               ctx.error = error_code::exceeded_max_recursive_depth;
+               return;
+            }
             ++it;
             const uint64_t tag_num = cbor_to_json_decode_arg(ctx, it, end, additional_info);
             if (bool(ctx.error)) [[unlikely]]
@@ -741,20 +762,16 @@ namespace glz
             if (bool(ctx.error)) [[unlikely]]
                return;
 
-            const auto emit_quoted = [&](const auto value) {
-               if (!emit_char(ctx, '"', out, ix)) return;
-               to<JSON, decltype(value)>::template op<Opts>(value, ctx, out, ix);
-               if (bool(ctx.error)) [[unlikely]]
-                  return;
-               if (!emit_char(ctx, '"', out, ix)) return;
-            };
-
+            if (!emit_char(ctx, '"', out, ix)) return;
             if (major_type == major::uint) {
-               emit_quoted(arg);
+               to<JSON, uint64_t>::template op<Opts>(arg, ctx, out, ix);
             }
             else {
-               emit_quoted(static_cast<int64_t>(~arg));
+               cbor_to_json_negative_integer<Opts>(ctx, arg, out, ix);
             }
+            if (bool(ctx.error)) [[unlikely]]
+               return;
+            if (!emit_char(ctx, '"', out, ix)) return;
             return;
          }
          default:

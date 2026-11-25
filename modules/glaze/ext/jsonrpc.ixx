@@ -16,6 +16,7 @@
 // glz:header std=<variant>
 // glz:header std=<vector>
 export module glaze.ext.jsonrpc;
+import glaze.core.tuple;
 
 import glaze;
 import glaze.core.context;

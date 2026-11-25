@@ -107,6 +107,11 @@ struct float_special_struct
    std::vector<double> values{};
 };
 
+struct float32_write_opts : glz::opts
+{
+   glz::float_precision float_max_write_precision{glz::float_precision::float32};
+};
+
 struct int_array_struct
 {
    std::vector<int> values{};
@@ -1028,6 +1033,69 @@ arr = [4, 5, 6])";
       expect(value == 3.14159);
    };
 
+   "read_float_empty_exponent"_test = [] {
+      // An exponent marker needs at least one digit after it and its optional sign
+      for (const std::string_view num : {"1e", "1E", "1e+", "1e-", "1.0e", "1.5E-"}) {
+         double value{};
+         expect(glz::read_toml(value, std::string{num}) == glz::error_code::parse_number_failure) << num;
+         float f{};
+         expect(glz::read_toml(f, std::string{num}) == glz::error_code::parse_number_failure) << num;
+      }
+
+      double value{};
+      expect(not glz::read_toml(value, std::string{"1.0e-5"}));
+      expect(value == 1.0e-5);
+      expect(not glz::read_toml(value, std::string{"1E+5"}));
+      expect(value == 1e5);
+   };
+
+   "read_float_with_underscores"_test = [] {
+      const std::pair<std::string_view, double> cases[] = {
+         {"1_000.5", 1000.5},   {"-1_000.5", -1000.5}, {"3.141_592", 3.141592}, {"1_0e1_0", 10e10},
+         {"6.6e-3_4", 6.6e-34}, {"1.5E+1_0", 1.5e10},  {"1_000", 1000.0},       {"9_9.9_9e1_2", 99.99e12},
+         {"0.0_1", 0.01},       {"0e0_1", 0.0},
+      };
+      for (const auto& [num, expected] : cases) {
+         double value{};
+         const std::string input{num};
+         const auto ec = glz::read_toml(value, input);
+         expect(not ec) << glz::format_error(ec, input);
+         expect(value == expected) << num;
+         float f{};
+         expect(not glz::read_toml(f, input)) << num;
+         expect(f == float(expected)) << num;
+      }
+
+      // A token longer than the parser's stack buffer
+      std::string long_input = "0.";
+      std::string expected_digits = "0.";
+      for (int i = 0; i < 100; ++i) {
+         long_input += "1_2";
+         expected_digits += "12";
+      }
+      double value{};
+      expect(not glz::read_toml(value, long_input));
+      expect(value == std::stod(expected_digits));
+   };
+
+   "read_float_with_misplaced_underscores"_test = [] {
+      // An underscore must sit between two digits
+      for (const std::string_view num : {"1__0.5", "1_.5", "1._5", "1.5_", "1.5_e3", "1.5e_3", "1.5e+_3", "1.5e3_",
+                                         "-_1.5", "0_1.5", "-0_0.5", "1_0.5_"}) {
+         double value{};
+         expect(glz::read_toml(value, std::string{num}) == glz::error_code::parse_number_failure) << num;
+      }
+   };
+
+   "read_struct_float_with_underscores"_test = [] {
+      const std::string input = "value = 1_000.25\nvalues = [1_0.5, 2e1_0, -3_3.0]";
+      float_special_struct s{};
+      const auto ec = glz::read_toml(s, input);
+      expect(not ec) << glz::format_error(ec, input);
+      expect(s.value == 1000.25);
+      expect(s.values == std::vector<double>{10.5, 2e10, -33.0});
+   };
+
    "read_string"_test = [] {
       std::string toml_input = R"("Hello TOML")";
       std::string value{};
@@ -1436,6 +1504,16 @@ b = "test string" # another eol comment
       auto result = glz::write_toml(c);
       expect(result.has_value());
       expect(result.value() == R"("Green")");
+   };
+
+   "write_unenumerated_enum_value"_test = [] {
+      const auto unenumerated = static_cast<Color>(7);
+      std::string buffer;
+      expect(glz::write_toml(unenumerated, buffer) == glz::error_code::unexpected_enum);
+
+      config_with_enums config{};
+      config.color = unenumerated;
+      expect(glz::write_toml(config, buffer) == glz::error_code::unexpected_enum);
    };
 
    "read_enum_basic"_test = [] {
@@ -1887,6 +1965,37 @@ hours_val = 1)";
 
       auto expected = sys_days{year{2024} / month{6} / day{15}} + hours{10} + minutes{30} + seconds{45};
       expect(time_point_cast<seconds>(tp) == time_point_cast<seconds>(expected));
+   };
+
+   "system_time_far_range_dates_do_not_wrap"_test = [] {
+      using namespace std::chrono;
+      // An int64 nanosecond count only spans 1677-2262; a seconds target holds every
+      // four-digit year, so the datetime must not be summed in nanoseconds on the way in
+      // (9999-12-31T23:59:59Z used to read back as a date in 1816).
+      sys_time<seconds> tp{};
+      std::string input = "9999-12-31T23:59:59Z";
+      auto error = glz::read_toml(tp, input);
+      expect(!error) << glz::format_error(error, input);
+      expect(tp == sys_time<seconds>{sys_days{year{9999} / month{12} / day{31}}} + seconds{86399});
+
+      input = "0001-01-01T00:00:00Z";
+      error = glz::read_toml(tp, input);
+      expect(!error) << glz::format_error(error, input);
+      expect(tp == sys_time<seconds>{sys_days{year{1} / month{1} / day{1}}});
+
+      // A nanosecond target cannot hold the date at all: an error, not a wrapped value.
+      sys_time<nanoseconds> ns_tp{};
+      input = "2300-01-01T00:00:00Z";
+      expect(glz::read_toml(ns_tp, input) == glz::error_code::parse_error);
+      input = "2262-04-11T23:47:16Z";
+      expect(!glz::read_toml(ns_tp, input));
+      expect(ns_tp.time_since_epoch() == nanoseconds{seconds{9223372036}});
+      // The boundary second's fraction up to max() still fits; one nanosecond more does not.
+      input = "2262-04-11T23:47:16.854775807Z";
+      expect(!glz::read_toml(ns_tp, input));
+      expect(ns_tp.time_since_epoch() == (nanoseconds::max)());
+      input = "2262-04-11T23:47:16.854775808Z";
+      expect(glz::read_toml(ns_tp, input) == glz::error_code::parse_error);
    };
 
    "system_time_struct_write"_test = [] {
@@ -3856,6 +3965,124 @@ suite generic_f64_toml_tests = [] {
    };
 };
 
+// glz::cast reads its member through parse<TOML>, so the member is in value position below the root
+struct generic_cast_member
+{
+   glz::generic g{};
+   int b{};
+};
+
+template <>
+struct glz::meta<generic_cast_member>
+{
+   using T = generic_cast_member;
+   static constexpr auto value = object("g", glz::cast<&T::g, glz::generic>, "b", &T::b);
+};
+
+suite generic_toml_document_root_tests = [] {
+   // A document whose first key is quoted or starts like a value must not read as that one scalar
+   "generic_read_toml_quoted_first_key"_test = [] {
+      glz::generic g;
+      std::string toml = "\"a b\" = 1\nrole = \"user\"";
+      auto ec = glz::read_toml(g, toml);
+      expect(not ec) << glz::format_error(ec, toml);
+      expect(g.is_object());
+      expect(g["a b"].get<double>() == 1.0);
+      expect(g["role"].get<std::string>() == "user");
+
+      glz::generic literal;
+      toml = "'k' = 1\nx = 2";
+      ec = glz::read_toml(literal, toml);
+      expect(not ec) << glz::format_error(ec, toml);
+      expect(literal.is_object());
+      expect(literal["k"].get<double>() == 1.0);
+      expect(literal["x"].get<double>() == 2.0);
+
+      glz::generic dotted;
+      toml = "\"a b\".c = 1";
+      ec = glz::read_toml(dotted, toml);
+      expect(not ec) << glz::format_error(ec, toml);
+      expect(dotted["a b"]["c"].get<double>() == 1.0);
+   };
+
+   "generic_read_toml_value_like_first_key"_test = [] {
+      for (const std::string key : {"true", "false", "1234", "inf", "nan", "1979-05-27", "-x"}) {
+         glz::generic g;
+         const std::string toml = key + " = 1\nnext = 2";
+         auto ec = glz::read_toml(g, toml);
+         expect(not ec) << glz::format_error(ec, toml);
+         expect(g.is_object()) << toml;
+         expect(g[key].get<double>() == 1.0) << toml;
+         expect(g["next"].get<double>() == 2.0) << toml;
+      }
+
+      glz::generic g;
+      std::string toml = "1.5 = 2";
+      auto ec = glz::read_toml(g, toml);
+      expect(not ec) << glz::format_error(ec, toml);
+      expect(g["1"]["5"].get<double>() == 2.0);
+   };
+
+   "generic_read_toml_leading_blank_line_and_comment"_test = [] {
+      glz::generic g;
+      std::string toml = "\nname = \"config\"\nport = 8080\n";
+      auto ec = glz::read_toml(g, toml);
+      expect(not ec) << glz::format_error(ec, toml);
+      expect(g["name"].get<std::string>() == "config");
+      expect(g["port"].get<double>() == 8080.0);
+
+      glz::generic commented;
+      toml = "# header\n\"k\" = 1\n";
+      ec = glz::read_toml(commented, toml);
+      expect(not ec) << glz::format_error(ec, toml);
+      expect(commented["k"].get<double>() == 1.0);
+   };
+
+   "generic_read_toml_key_in_value_position"_test = [] {
+      // `a = x = 1` is not TOML; it must not read `x = 1` and the lines after it as a table under a
+      glz::generic identifier;
+      expect(glz::read_toml(identifier, "a = x = 1\nb = 2") == glz::error_code::syntax_error);
+      glz::generic quoted;
+      expect(glz::read_toml(quoted, "a = \"x\" = 1") == glz::error_code::syntax_error);
+
+      std::map<std::string, glz::generic> m;
+      expect(glz::read_toml(m, "a = x = 1\nb = 2") == glz::error_code::syntax_error);
+
+      // A wrapper that reads its value through parse<TOML> is still in value position
+      generic_cast_member cast_identifier{};
+      expect(glz::read_toml(cast_identifier, "g = x = 1\nb = 2") == glz::error_code::syntax_error);
+      generic_cast_member cast_quoted{};
+      expect(glz::read_toml(cast_quoted, "g = \"k\" = 1\nb = 2") == glz::error_code::syntax_error);
+
+      generic_cast_member cast_value{};
+      const std::string toml = "g = 5\nb = 2";
+      const auto ec = glz::read_toml(cast_value, toml);
+      expect(not ec) << glz::format_error(ec, toml);
+      expect(cast_value.g.get<double>() == 5.0);
+      expect(cast_value.b == 2);
+   };
+
+   "variant_read_toml_quoted_first_key"_test = [] {
+      std::variant<std::string, std::map<std::string, int64_t>> v;
+      std::string toml = "\"k\" = 1\nx = 2";
+      auto ec = glz::read_toml(v, toml);
+      expect(not ec) << glz::format_error(ec, toml);
+      expect(std::holds_alternative<std::map<std::string, int64_t>>(v));
+      auto& m = std::get<std::map<std::string, int64_t>>(v);
+      expect(m.size() == 2);
+      expect(m["k"] == 1);
+      expect(m["x"] == 2);
+
+      // A bare value at the root is still read as a value
+      std::variant<std::string, std::map<std::string, int64_t>> bare;
+      toml = "\"k\"";
+      ec = glz::read_toml(bare, toml);
+      expect(not ec) << glz::format_error(ec, toml);
+      expect(std::holds_alternative<std::string>(bare));
+      expect(std::get<std::string>(bare) == "k");
+   };
+};
+
 // ============================================
 // Corner cases and nested structure tests
 // ============================================
@@ -3887,6 +4114,15 @@ suite variant_toml_corner_cases = [] {
       expect(not ec) << glz::format_error(ec, toml);
       expect(std::holds_alternative<int64_t>(v));
       expect(std::get<int64_t>(v) == 0b11010110);
+   };
+
+   "variant_read_underscore_float"_test = [] {
+      std::variant<int64_t, double, std::string> v;
+      std::string toml = "1_000.5e1_0";
+      auto ec = glz::read_toml(v, toml);
+      expect(not ec) << glz::format_error(ec, toml);
+      expect(std::holds_alternative<double>(v));
+      expect(std::get<double>(v) == 1000.5e10);
    };
 
    "variant_read_underscore_number"_test = [] {
@@ -4027,6 +4263,15 @@ suite generic_toml_corner_cases = [] {
       expect(not ec) << glz::format_error(ec, toml);
       expect(g.holds<int64_t>());
       expect(g.get<int64_t>() == 0b10101010);
+   };
+
+   "generic_i64_read_underscore_float"_test = [] {
+      glz::generic_i64 g;
+      std::string toml = "1_234.5";
+      auto ec = glz::read_toml(g, toml);
+      expect(not ec) << glz::format_error(ec, toml);
+      expect(g.holds<double>());
+      expect(g.get<double>() == 1234.5);
    };
 
    "generic_i64_read_underscore_number"_test = [] {
@@ -4740,6 +4985,42 @@ sname = "Second String")";
       }
    };
 
+   "toml_struct_float_value_plus_sign"_test = [] {
+      {
+         const std::string input = "value = +3.5";
+         float_special_struct value{};
+         const auto error = glz::read_toml(value, input);
+         expect(not error) << glz::format_error(error, input);
+         expect(value.value == 3.5);
+      }
+
+      {
+         const std::string input = "value = +1e3";
+         float_special_struct value{};
+         const auto error = glz::read_toml(value, input);
+         expect(not error) << glz::format_error(error, input);
+         expect(value.value == 1000.0);
+      }
+
+      {
+         const std::string input = "values = [+0.0, +2.5, -2.5]";
+         float_special_struct value{};
+         const auto error = glz::read_toml(value, input);
+         expect(not error) << glz::format_error(error, input);
+         expect(value.values.size() == 3);
+         if (value.values.size() == 3) {
+            expect(value.values[0] == 0.0);
+            expect(value.values[1] == 2.5);
+            expect(value.values[2] == -2.5);
+         }
+      }
+
+      for (const std::string input : {"value = +-1.0", "value = ++1.0", "value = +"}) {
+         float_special_struct value{};
+         expect(bool(glz::read_toml(value, input))) << input;
+      }
+   };
+
    "toml_1_1_struct_float_array_inf_nan"_test = [] {
       const std::string input = "values = [inf, nan, -inf]";
       float_special_struct value{};
@@ -4751,6 +5032,44 @@ sname = "Second String")";
       expect(std::isnan(value.values[1]));
       expect(std::isinf(value.values[2]));
       expect(value.values[2] < 0.0);
+   };
+
+   // https://github.com/stephenberry/glaze/issues/2963
+   "toml_write_non_finite_float_round_trip"_test = [] {
+      const float_special_struct value{
+         std::numeric_limits<double>::infinity(),
+         {-std::numeric_limits<double>::infinity(), std::numeric_limits<double>::quiet_NaN(), 1.5}};
+      std::string buffer{};
+      expect(not glz::write_toml(value, buffer));
+      expect(buffer == "value = inf\nvalues = [-inf, nan, 1.5]") << buffer;
+
+      float_special_struct read{};
+      const auto error = glz::read_toml(read, buffer);
+      expect(not error) << glz::format_error(error, buffer);
+      expect(std::isinf(read.value));
+      expect(read.value > 0.0);
+      expect(read.values.size() == 3);
+      expect(std::isinf(read.values[0]));
+      expect(read.values[0] < 0.0);
+      expect(std::isnan(read.values[1]));
+      expect(read.values[2] == 1.5);
+   };
+
+   // Narrowing a finite double beyond float's range must not produce an infinity, which TOML would write as inf
+   "toml_write_float32_narrowing_beyond_float_range"_test = [] {
+      const float_special_struct value{1e100, {-1e39, std::numeric_limits<double>::infinity(), 1.5}};
+      std::string buffer{};
+      expect(not glz::write<glz::set_toml<float32_write_opts{}>()>(value, buffer));
+      expect(buffer == "value = 1E100\nvalues = [-1E39, inf, 1.5]") << buffer;
+
+      float_special_struct read{};
+      const auto error = glz::read_toml(read, buffer);
+      expect(not error) << glz::format_error(error, buffer);
+      expect(read.value == 1e100);
+      expect(read.values.size() == 3);
+      expect(read.values[0] == -1e39);
+      expect(std::isinf(read.values[1]));
+      expect(read.values[2] == 1.5);
    };
 
    "toml_struct_array_trailing_comma_parses"_test = [] {
@@ -4816,6 +5135,62 @@ b = 222)";
       expected.push_back('\x1B');
       expected.push_back('B');
       expect(value == expected);
+   };
+
+   "toml_1_1_basic_string_unicode_escape_u_decodes_bmp"_test = [] {
+      // Non-raw literal so the parser actually sees the "\u00e9" escape sequence.
+      const std::string input = "\"\\u00e9\"";
+      std::string value{};
+      const auto error = glz::read_toml(value, input);
+      expect(not error) << glz::format_error(error, input);
+      expect(value == "\xC3\xA9");
+   };
+
+   "toml_1_1_basic_string_unicode_escape_u_rejects_surrogate_pair"_test = [] {
+      // TOML \uXXXX is a single scalar value; a UTF-16 surrogate pair is not valid TOML and must
+      // not be combined the way JSON does. U+1D11E is written \U0001D11E, never \uD834\uDD1E.
+      const std::string input = "\"\\uD834\\uDD1E\"";
+      std::string value{};
+      const auto error = glz::read_toml(value, input);
+      expect(error);
+   };
+
+   "toml_1_1_basic_string_unicode_escape_u_rejects_lone_surrogate"_test = [] {
+      {
+         const std::string input = "\"\\uD834\"";
+         std::string value{};
+         const auto error = glz::read_toml(value, input);
+         expect(error);
+      }
+      {
+         const std::string input = "\"\\uDD1E\"";
+         std::string value{};
+         const auto error = glz::read_toml(value, input);
+         expect(error);
+      }
+   };
+
+   "toml_1_1_multiline_basic_string_unicode_escape_u_rejects_surrogate_pair"_test = [] {
+      const std::string input = "\"\"\"\\uD834\\uDD1E\"\"\"";
+      std::string value{};
+      const auto error = glz::read_toml(value, input);
+      expect(error);
+   };
+
+   "toml_1_1_quoted_key_unicode_escape_u_rejects_surrogate_pair"_test = [] {
+      const std::string input = "\"\\uD834\\uDD1E\" = 1";
+      std::map<std::string, int> value{};
+      const auto error = glz::read_toml(value, input);
+      expect(error);
+   };
+
+   "toml_1_1_basic_string_unicode_escape_U_astral_scalar"_test = [] {
+      // The correct spelling of the same character decodes to its UTF-8 form.
+      const std::string input = "\"\\U0001D11E\"";
+      std::string value{};
+      const auto error = glz::read_toml(value, input);
+      expect(not error) << glz::format_error(error, input);
+      expect(value == "\xF0\x9D\x84\x9E");
    };
 
    "toml_1_1_single_quoted_key_basic"_test = [] {
@@ -5789,6 +6164,11 @@ suite issue_2595_transparent_wrappers = [] {
    };
 };
 
+struct skipped_value_doc
+{
+   int keep{};
+};
+
 suite recursion_depth_tests = [] {
    "deeply nested array is bounded"_test = [] {
       const std::string toml = "a = " + std::string(100000, '[');
@@ -5837,6 +6217,632 @@ suite recursion_depth_tests = [] {
       std::string json{};
       expect(!glz::write_json(value, json));
       expect(json == R"({"a":{"b":{"c":1}}})") << json;
+   };
+
+   // A skipped value nests through the bracket skipper, which alternates bracket types to defeat
+   // a single matching counter. It must be bounded rather than recursing per level.
+   "deeply nested skipped value is bounded"_test = [] {
+      std::string toml = "unknown = ";
+      for (int i = 0; i < 100000; ++i) toml += (i % 2) ? '{' : '[';
+      skipped_value_doc value{};
+      auto ec = glz::read<glz::opts{.format = glz::TOML, .error_on_unknown_keys = false}>(value, toml);
+      expect(ec.ec == glz::error_code::exceeded_max_recursive_depth);
+   };
+};
+
+suite toml_map_key_quoting_tests = [] {
+   // A runtime map key that is not a valid TOML bare key must be quoted, or it
+   // splices into the document: a dotted key becomes a nested table and a key
+   // holding '=' / a line break forges extra entries.
+   "dotted key is quoted"_test = [] {
+      std::map<std::string, int> m{{"a.b", 1}};
+      std::string buffer{};
+      expect(not glz::write_toml(m, buffer));
+      expect(buffer == R"("a.b" = 1)") << buffer;
+      std::map<std::string, int> back{};
+      expect(not glz::read_toml(back, buffer)) << buffer;
+      expect(back == m);
+   };
+
+   "key with '=' and newline does not inject"_test = [] {
+      std::map<std::string, int> m{{"x = 1\ninjected", 2}};
+      std::string buffer{};
+      expect(not glz::write_toml(m, buffer));
+      expect(buffer == R"("x = 1\ninjected" = 2)") << buffer;
+      std::map<std::string, int> back{};
+      expect(not glz::read_toml(back, buffer)) << buffer;
+      expect(back.size() == 1);
+      expect(back == m);
+   };
+
+   "key with space and quote is quoted"_test = [] {
+      std::map<std::string, int> m{{"a b\"c", 3}};
+      std::string buffer{};
+      expect(not glz::write_toml(m, buffer));
+      expect(buffer == R"("a b\"c" = 3)") << buffer;
+      std::map<std::string, int> back{};
+      expect(not glz::read_toml(back, buffer)) << buffer;
+      expect(back == m);
+   };
+
+   "empty key is quoted"_test = [] {
+      std::map<std::string, int> m{{"", 4}};
+      std::string buffer{};
+      expect(not glz::write_toml(m, buffer));
+      expect(buffer == R"("" = 4)") << buffer;
+      std::map<std::string, int> back{};
+      expect(not glz::read_toml(back, buffer)) << buffer;
+      expect(back == m);
+   };
+
+   "bare keys stay unquoted"_test = [] {
+      std::map<std::string, int> m{{"normal_key-1", 5}, {"a", 6}};
+      std::string buffer{};
+      expect(not glz::write_toml(m, buffer));
+      expect(buffer == R"(a = 6
+normal_key-1 = 5)")
+         << buffer;
+      std::map<std::string, int> back{};
+      expect(not glz::read_toml(back, buffer)) << buffer;
+      expect(back == m);
+   };
+
+   // A control byte with no short escape must go out as \u00XX, not raw, or the
+   // key sits unescaped in the basic string and reparses as invalid TOML.
+   "control byte key is escaped as \\u00XX"_test = [] {
+      std::map<std::string, int> m{{std::string("a\x01\x1f", 3), 8}};
+      std::string buffer{};
+      expect(not glz::write_toml(m, buffer));
+      expect(buffer == R"("a\u0001\u001F" = 8)") << buffer;
+      std::map<std::string, int> back{};
+      expect(not glz::read_toml(back, buffer)) << buffer;
+      expect(back == m);
+   };
+
+   // The inline-table map writer (a map nested as a value) shares the same key path.
+   "inline map key is quoted"_test = [] {
+      std::map<std::string, std::map<std::string, int>> m{{"outer", {{"in.ner", 7}}}};
+      std::string buffer{};
+      expect(not glz::write_toml(m, buffer));
+      expect(buffer == R"(outer = {"in.ner" = 7})") << buffer;
+      std::map<std::string, std::map<std::string, int>> back{};
+      expect(not glz::read_toml(back, buffer)) << buffer;
+      expect(back == m);
+   };
+};
+
+// TOML v1.0.0 excludes raw control characters from strings, keys and comments: a
+// single-line string or a comment admits tab and nothing else in the C0 range, the
+// multi-line forms also admit line feed and carriage return, and DEL (0x7F) is
+// excluded everywhere. Reading rejects them; writing escapes them only on request.
+struct toml_escape_opts : glz::toml_opts
+{
+   bool escape_control_characters = true;
+};
+
+struct control_value_t
+{
+   std::string v{};
+};
+
+suite toml_control_character_reader_tests = [] {
+   "basic string rejects raw control"_test = [] {
+      control_value_t obj{};
+      expect(glz::read_toml(obj,
+                            "v = \"a\x01"
+                            "b\"") == glz::error_code::invalid_control_character);
+   };
+
+   "basic string rejects DEL"_test = [] {
+      control_value_t obj{};
+      expect(glz::read_toml(obj,
+                            "v = \"a\x7f"
+                            "b\"") == glz::error_code::invalid_control_character);
+   };
+
+   "literal string rejects raw control"_test = [] {
+      control_value_t obj{};
+      expect(glz::read_toml(obj,
+                            "v = 'a\x01"
+                            "b'") == glz::error_code::invalid_control_character);
+   };
+
+   "literal string rejects DEL"_test = [] {
+      control_value_t obj{};
+      expect(glz::read_toml(obj,
+                            "v = 'a\x7f"
+                            "b'") == glz::error_code::invalid_control_character);
+   };
+
+   "multiline basic string rejects raw control"_test = [] {
+      control_value_t obj{};
+      expect(glz::read_toml(obj,
+                            "v = \"\"\"a\x01"
+                            "b\"\"\"") == glz::error_code::invalid_control_character);
+   };
+
+   "multiline basic string rejects DEL"_test = [] {
+      control_value_t obj{};
+      expect(glz::read_toml(obj,
+                            "v = \"\"\"a\x7f"
+                            "b\"\"\"") == glz::error_code::invalid_control_character);
+   };
+
+   "multiline literal string rejects raw control"_test = [] {
+      control_value_t obj{};
+      expect(glz::read_toml(obj,
+                            "v = '''a\x01"
+                            "b'''") == glz::error_code::invalid_control_character);
+   };
+
+   "quoted key rejects raw control"_test = [] {
+      std::map<std::string, std::string> m{};
+      expect(glz::read_toml(m,
+                            "\"k\x01"
+                            "e\" = \"x\"") == glz::error_code::invalid_control_character);
+   };
+
+   "literal key rejects DEL"_test = [] {
+      std::map<std::string, std::string> m{};
+      expect(glz::read_toml(m,
+                            "'k\x7f"
+                            "e' = \"x\"") == glz::error_code::invalid_control_character);
+   };
+
+   // The comment scan is noexcept and takes no context, so it stops on a forbidden
+   // byte rather than reporting it; the caller then rejects the unexpected character.
+   // The byte is refused either way, so the test pins rejection and not the code.
+   "comment rejects raw control"_test = [] {
+      control_value_t obj{};
+      expect(bool(glz::read_toml(obj,
+                                 "v = \"x\" # c\x01"
+                                 "d\n")));
+   };
+
+   "comment rejects DEL"_test = [] {
+      control_value_t obj{};
+      expect(bool(glz::read_toml(obj,
+                                 "v = \"x\" # c\x7f"
+                                 "d\n")));
+   };
+
+   // An escape is how a control character is meant to reach a TOML string, so the
+   // rejection above must not touch it.
+   "escaped control characters are accepted"_test = [] {
+      control_value_t obj{};
+      expect(not glz::read_toml(obj, "v = \"a\\u0001b\""));
+      expect(obj.v == std::string("a\x01"
+                                  "b"));
+   };
+
+   "tab is allowed raw in every string style"_test = [] {
+      control_value_t obj{};
+      expect(not glz::read_toml(obj, "v = \"a\tb\""));
+      expect(obj.v == "a\tb");
+      expect(not glz::read_toml(obj, "v = 'a\tb'"));
+      expect(obj.v == "a\tb");
+      expect(not glz::read_toml(obj, "v = \"\"\"a\tb\"\"\""));
+      expect(obj.v == "a\tb");
+      expect(not glz::read_toml(obj, "v = \"x\" # a\tb\n"));
+      expect(obj.v == "x");
+   };
+
+   "line breaks stay legal in multiline strings"_test = [] {
+      control_value_t obj{};
+      expect(not glz::read_toml(obj, "v = \"\"\"a\nb\"\"\""));
+      expect(obj.v == "a\nb");
+      expect(not glz::read_toml(obj, "v = '''a\nb'''"));
+      expect(obj.v == "a\nb");
+   };
+
+   // A carriage return is legal in a multiline string only as the start of CRLF.
+   "multiline strings keep CRLF line endings"_test = [] {
+      control_value_t obj{};
+      expect(not glz::read_toml(obj, "v = \"\"\"a\r\nb\r\n\"\"\""));
+      expect(obj.v == "a\r\nb\r\n");
+      expect(not glz::read_toml(obj, "v = '''a\r\nb\r\n'''"));
+      expect(obj.v == "a\r\nb\r\n");
+   };
+
+   "multiline basic string rejects bare carriage return"_test = [] {
+      control_value_t obj{};
+      expect(glz::read_toml(obj, "v = \"\"\"a\rb\"\"\"") == glz::error_code::invalid_control_character);
+      expect(glz::read_toml(obj, "v = \"\"\"a\r\"\"\"") == glz::error_code::invalid_control_character);
+      expect(glz::read_toml(obj, "v = \"\"\"a\r\r\nb\"\"\"") == glz::error_code::invalid_control_character);
+   };
+
+   "multiline literal string rejects bare carriage return"_test = [] {
+      control_value_t obj{};
+      expect(glz::read_toml(obj, "v = '''a\rb'''") == glz::error_code::invalid_control_character);
+      expect(glz::read_toml(obj, "v = '''a\r'''") == glz::error_code::invalid_control_character);
+      expect(glz::read_toml(obj, "v = '''a\r\r\nb'''") == glz::error_code::invalid_control_character);
+   };
+
+   "line ending backslash does not admit a bare carriage return"_test = [] {
+      control_value_t obj{};
+      expect(bool(glz::read_toml(obj, "v = \"\"\"a\\\rb\"\"\"")));
+      expect(glz::read_toml(obj, "v = \"\"\"a\\\n\r b\"\"\"") == glz::error_code::invalid_control_character);
+   };
+
+   // The scans now run as bulk runs broken by a dispatch table, so the cases that
+   // make a run stop without ending the string need to keep working.
+   "quotes inside multiline strings survive the scan"_test = [] {
+      control_value_t obj{};
+      expect(not glz::read_toml(obj, "v = \"\"\"a\"b\"\"\""));
+      expect(obj.v == "a\"b");
+      expect(not glz::read_toml(obj, "v = \"\"\"a\"\"b\"\"\""));
+      expect(obj.v == "a\"\"b");
+      expect(not glz::read_toml(obj, "v = '''a'b'''"));
+      expect(obj.v == "a'b");
+      expect(not glz::read_toml(obj, "v = \"\"\"a\\\n   b\"\"\""));
+      expect(obj.v == "ab");
+      expect(not glz::read_toml(obj, "v = \"a\\tb\\u0041\""));
+      expect(obj.v == "a\tbA");
+   };
+};
+
+suite toml_skipped_string_line_endings = [] {
+   static constexpr glz::opts skip_unknown{.format = glz::TOML, .error_on_unknown_keys = false};
+
+   "skipped multiline strings keep CRLF line endings"_test = [] {
+      control_value_t obj{};
+      expect(not glz::read<skip_unknown>(obj, "u = \"\"\"a\r\nb\\\r\n  c\"\"\"\nv = \"x\""));
+      expect(obj.v == "x");
+      expect(not glz::read<skip_unknown>(obj, "u = '''a\r\nb'''\nv = \"y\""));
+      expect(obj.v == "y");
+   };
+
+   "skipped multiline strings reject bare carriage return"_test = [] {
+      control_value_t obj{};
+      expect(glz::read<skip_unknown>(obj, "u = \"\"\"a\rb\"\"\"\nv = \"x\"") ==
+             glz::error_code::invalid_control_character);
+      expect(glz::read<skip_unknown>(obj, "u = '''a\rb'''\nv = \"x\"") == glz::error_code::invalid_control_character);
+      expect(glz::read<skip_unknown>(obj, "u = \"\"\"a\\\rb\"\"\"\nv = \"x\"") ==
+             glz::error_code::invalid_control_character);
+   };
+
+   "skipped single-line string rejects an escaped line break"_test = [] {
+      control_value_t obj{};
+      expect(bool(glz::read<skip_unknown>(obj, "u = \"a\\\nb\"\nv = \"x\"")));
+      expect(bool(glz::read<skip_unknown>(obj, "u = \"a\\\rb\"\nv = \"x\"")));
+   };
+
+   "skipped strings step over escaped quotes and backslashes"_test = [] {
+      control_value_t obj{};
+      expect(not glz::read<skip_unknown>(obj, "u = \"a\\\"b\"\nv = \"x\""));
+      expect(obj.v == "x");
+      expect(not glz::read<skip_unknown>(obj, "u = \"a\\\\\"\nv = \"y\""));
+      expect(obj.v == "y");
+      expect(not glz::read<skip_unknown>(obj, "u = \"\"\"a\\\"\"\" b\"\"\"\nv = \"z\""));
+      expect(obj.v == "z");
+      expect(not glz::read<skip_unknown>(obj, "u = \"\"\"a\\\\\"\"\"\nv = \"w\""));
+      expect(obj.v == "w");
+   };
+};
+
+struct line_ending_pair_t
+{
+   int a{};
+   int b{};
+};
+
+struct line_ending_doc_t
+{
+   line_ending_pair_t t{};
+   std::vector<int> v{};
+};
+
+// A TOML newline is LF or CRLF. A carriage return without a line feed after it is not a
+// line ending anywhere in a document.
+suite toml_document_line_endings = [] {
+   "CRLF line endings are accepted throughout a document"_test = [] {
+      line_ending_doc_t doc{};
+      const std::string input = "# c\r\nv = [\r\n1, # d\r\n2\r\n]\r\n[t]\r\na = 1 # e\r\nb = 2\r\n";
+      const auto error = glz::read_toml(doc, input);
+      expect(not error) << glz::format_error(error, input);
+      expect(doc.v == std::vector<int>{1, 2});
+      expect(doc.t.a == 1);
+      expect(doc.t.b == 2);
+   };
+
+   "bare carriage return is not a line ending"_test = [] {
+      line_ending_pair_t pair{};
+      expect(glz::read_toml(pair, "a = 1\rb = 2") == glz::error_code::syntax_error);
+      expect(glz::read_toml(pair, "a = 1 # c\rb = 2") == glz::error_code::syntax_error);
+      expect(glz::read_toml(pair, "\ra = 1\nb = 2") == glz::error_code::syntax_error);
+      expect(glz::read_toml(pair, "a = 1\r") == glz::error_code::syntax_error);
+
+      line_ending_doc_t doc{};
+      expect(glz::read_toml(doc, "[t]\ra = 1") == glz::error_code::syntax_error);
+      expect(bool(glz::read_toml(doc, "v = [1,\r2]")));
+      expect(bool(glz::read_toml(doc, "v = [1, # c\r2]")));
+
+      std::map<std::string, int> map{};
+      expect(glz::read_toml(map, "a = 1\rb = 2") == glz::error_code::syntax_error);
+
+      glz::generic generic{};
+      expect(glz::read_toml(generic, "a = 1\rb = 2") == glz::error_code::syntax_error);
+      expect(glz::read_toml(generic, "[t]\ra = 1") == glz::error_code::syntax_error);
+   };
+
+   "skipped values reject a bare carriage return"_test = [] {
+      static constexpr glz::opts skip_unknown{.format = glz::TOML, .error_on_unknown_keys = false};
+      control_value_t obj{};
+      expect(not glz::read<skip_unknown>(obj, "u = [1,\r\n2]\r\nw = 3\r\nv = \"x\"\r\n[u2]\r\nk = 1\r\n"));
+      expect(obj.v == "x");
+      expect(glz::read<skip_unknown>(obj, "u = [1,\r2]\nv = \"x\"") == glz::error_code::syntax_error);
+      expect(glz::read<skip_unknown>(obj, "u = 1\rv = \"x\"") == glz::error_code::syntax_error);
+      expect(glz::read<skip_unknown>(obj, "[u]\rk = 1") == glz::error_code::syntax_error);
+   };
+};
+
+suite toml_control_character_writer_tests = [] {
+   // Escaping costs a check on every string, so like JSON it is opt-in and the
+   // default output is unchanged.
+   "control characters are not escaped by default"_test = [] {
+      control_value_t obj{
+         std::string("a\x01"
+                     "b")};
+      std::string buffer{};
+      expect(not glz::write_toml(obj, buffer));
+      expect(buffer == std::string("v = \"a\x01"
+                                   "b\""))
+         << buffer;
+   };
+
+   "escape_control_characters emits unicode escapes"_test = [] {
+      control_value_t obj{
+         std::string("a\x01"
+                     "b")};
+      std::string buffer{};
+      expect(not glz::write<toml_escape_opts{}>(obj, buffer));
+      expect(buffer == R"(v = "a\u0001b")") << buffer;
+   };
+
+   "escape_control_characters emits DEL"_test = [] {
+      control_value_t obj{
+         std::string("a\x7f"
+                     "b")};
+      std::string buffer{};
+      expect(not glz::write<toml_escape_opts{}>(obj, buffer));
+      expect(buffer == R"(v = "a\u007Fb")") << buffer;
+   };
+
+   // Strings longer than eight bytes go through the SWAR scan rather than the scalar
+   // tail, and its mask only spots the C0 range until DEL is given its own term.
+   "escaping covers the SWAR path"_test = [] {
+      control_value_t obj{
+         std::string("abcdefghij\x01"
+                     "klmnopqrst")};
+      std::string buffer{};
+      expect(not glz::write<toml_escape_opts{}>(obj, buffer));
+      expect(buffer == R"(v = "abcdefghij\u0001klmnopqrst")") << buffer;
+
+      control_value_t del{
+         std::string("abcdefghij\x7f"
+                     "klmnopqrst")};
+      buffer.clear();
+      expect(not glz::write<toml_escape_opts{}>(del, buffer));
+      expect(buffer == R"(v = "abcdefghij\u007Fklmnopqrst")") << buffer;
+   };
+
+   "short escapes are preferred over unicode escapes"_test = [] {
+      control_value_t obj{"a\tb\nc\rd"};
+      std::string buffer{};
+      expect(not glz::write<toml_escape_opts{}>(obj, buffer));
+      expect(buffer == R"(v = "a\tb\nc\rd")") << buffer;
+   };
+
+   "ordinary strings are untouched by escaping"_test = [] {
+      control_value_t obj{"hello world, nothing special here at all"};
+      std::string buffer{};
+      expect(not glz::write<toml_escape_opts{}>(obj, buffer));
+      expect(buffer == R"(v = "hello world, nothing special here at all")") << buffer;
+   };
+
+   // A key is escaped whether or not the option is on: it is quoted only because it
+   // is not bare, and a raw control byte there would reparse as invalid TOML.
+   "DEL in a key is escaped without the option"_test = [] {
+      std::map<std::string, int> m{{std::string("a\x7f"
+                                                "b"),
+                                    8}};
+      std::string buffer{};
+      expect(not glz::write_toml(m, buffer));
+      expect(buffer == R"("a\u007Fb" = 8)") << buffer;
+      std::map<std::string, int> back{};
+      expect(not glz::read_toml(back, buffer)) << buffer;
+      expect(back == m);
+   };
+
+   "escaped control characters round-trip"_test = [] {
+      control_value_t obj{
+         std::string("a\x01"
+                     "b\x7f"
+                     "c")};
+      std::string buffer{};
+      expect(not glz::write<toml_escape_opts{}>(obj, buffer));
+      control_value_t back{};
+      expect(not glz::read_toml(back, buffer)) << buffer;
+      expect(back.v == obj.v);
+   };
+};
+
+// TOML has no null. A null value must not corrupt the structure written around it: a struct
+// field or map entry whose value is null (an empty nullable, or a nullable, variant, or
+// glz::generic holding null) is dropped, key and all. A null with no key to drop is either the
+// null alternative of a variant, written as the "" placeholder the std::nullptr_t writer
+// documents so it reads back into glz::generic, or an empty typed nullable in an array or tuple
+// slot, which fails the write rather than produce output that cannot be read back. The reader
+// in turn must not invent a null from a value that is not there (`a =` ending the line,
+// `{u = }`, `[1, , 2]`), which every conforming parser rejects.
+struct toml_null_fields
+{
+   int a{};
+   glz::generic g{};
+   std::variant<std::monostate, int> v{};
+   std::optional<std::optional<int>> nested{std::optional<int>{}};
+};
+
+suite toml_null_value_tests = [] {
+   "map entry with empty optional is dropped"_test = [] {
+      std::map<std::string, std::optional<int>> m{{"x", std::nullopt}, {"y", 2}};
+      std::string buffer{};
+      expect(not glz::write_toml(m, buffer));
+      expect(buffer == "y = 2") << buffer;
+   };
+
+   "inline table entry with empty optional is dropped"_test = [] {
+      std::map<std::string, std::map<std::string, std::optional<int>>> m{{"t", {{"u", std::nullopt}, {"v", 1}}}};
+      std::string buffer{};
+      expect(not glz::write_toml(m, buffer));
+      expect(buffer == "t = {v = 1}") << buffer;
+   };
+
+   "map with only null entries writes an empty document"_test = [] {
+      std::map<std::string, std::optional<int>> m{{"x", std::nullopt}};
+      std::string buffer = "overwritten";
+      expect(not glz::write_toml(m, buffer));
+      expect(buffer.empty()) << buffer;
+   };
+
+   "map entry holding a nested or variant null is dropped"_test = [] {
+      std::map<std::string, std::optional<std::optional<int>>> nested{{"x", std::optional<int>{}}, {"y", 2}};
+      std::string buffer{};
+      expect(not glz::write_toml(nested, buffer));
+      expect(buffer == "y = 2") << buffer;
+
+      std::map<std::string, std::variant<std::monostate, int>> variants{{"x", std::monostate{}}, {"y", 2}};
+      expect(not glz::write_toml(variants, buffer));
+      expect(buffer == "y = 2") << buffer;
+   };
+
+   "struct fields holding generic, variant, or nested nulls are dropped"_test = [] {
+      toml_null_fields fields{.a = 1};
+      std::string buffer{};
+      expect(not glz::write_toml(fields, buffer));
+      expect(buffer == "a = 1") << buffer;
+
+      std::vector<toml_null_fields> rows{toml_null_fields{.a = 2}};
+      expect(not glz::write_toml(rows, buffer));
+      expect(buffer == "[{a = 2}]") << buffer;
+   };
+
+   "array element with empty optional fails the write"_test = [] {
+      std::vector<std::optional<int>> v{1, std::nullopt, 3};
+      std::string buffer{};
+      expect(glz::write_toml(v, buffer).ec == glz::error_code::feature_not_supported);
+   };
+
+   "trailing empty optional fails the write"_test = [] {
+      // Writing nothing here produced [1, ], which every parser reads as the
+      // one-element [1]: an element lost without an error on either side.
+      std::vector<std::optional<int>> v{1, std::nullopt};
+      std::string buffer{};
+      expect(glz::write_toml(v, buffer).ec == glz::error_code::feature_not_supported);
+   };
+
+   "null pointer and tuple elements fail the write"_test = [] {
+      std::vector<std::unique_ptr<int>> ptrs{};
+      ptrs.emplace_back(nullptr);
+      std::string buffer{};
+      expect(glz::write_toml(ptrs, buffer).ec == glz::error_code::feature_not_supported);
+
+      std::tuple<int, std::optional<int>> t{1, std::nullopt};
+      expect(glz::write_toml(t, buffer).ec == glz::error_code::feature_not_supported);
+   };
+
+   "engaged optional array elements still write"_test = [] {
+      std::vector<std::optional<int>> v{1, 2};
+      std::string buffer{};
+      expect(not glz::write_toml(v, buffer));
+      expect(buffer == "[1, 2]") << buffer;
+   };
+
+   "generic nulls are dropped from tables and kept as placeholders in arrays"_test = [] {
+      glz::generic g{};
+      expect(not glz::read_json(g, R"({"b":1,"x":null,"t":{"u":null,"v":1},"arr":[null,2]})"));
+      std::string buffer{};
+      expect(not glz::write_toml(g, buffer));
+      expect(buffer == "b = 1\nt = {v = 1}\narr = [\"\", 2]") << buffer;
+      glz::generic back{};
+      expect(not glz::read_toml(back, buffer)) << buffer;
+   };
+
+   "reader rejects a key with no value before the line ends"_test = [] {
+      glz::generic g{};
+      std::string in = "a = \nb = 1";
+      expect(glz::read_toml(g, in) == glz::error_code::syntax_error);
+      in = "a = # only a comment\n";
+      expect(glz::read_toml(g, in) == glz::error_code::syntax_error);
+   };
+
+   "reader rejects an inline table member with no value"_test = [] {
+      glz::generic g{};
+      std::string in = "t = {u = }";
+      expect(glz::read_toml(g, in) == glz::error_code::syntax_error);
+      in = "t = {u = , v = 1}";
+      expect(glz::read_toml(g, in) == glz::error_code::syntax_error);
+   };
+
+   "reader rejects an empty array element"_test = [] {
+      glz::generic g{};
+      std::string in = "arr = [1, , 2]";
+      expect(glz::read_toml(g, in) == glz::error_code::syntax_error);
+      in = "arr = [,]";
+      expect(glz::read_toml(g, in) == glz::error_code::syntax_error);
+   };
+};
+
+suite toml_context_reuse = [] {
+   "a context reused after a failed read still reads"_test = [] {
+      static constexpr glz::opts options{.format = glz::TOML};
+      const std::string bad = "a = [[1, 2], [3\n";
+      const std::string good = "a = [[1, 2], [3]]\nb = [[4]]\n";
+
+      glz::context ctx{};
+      std::map<std::string, std::vector<std::vector<int>>> first{};
+      expect(bool(glz::read<options>(first, bad, ctx)));
+      expect(ctx.depth == 0u) << ctx.depth;
+
+      std::map<std::string, std::vector<std::vector<int>>> second{};
+      const auto ec = glz::read<options>(second, good, ctx);
+      expect(ec == glz::error_code::none) << glz::format_error(ec, good);
+      expect(second == std::map<std::string, std::vector<std::vector<int>>>{{"a", {{1, 2}, {3}}}, {"b", {{4}}}});
+   };
+};
+
+suite toml_line_ending_backslash = [] {
+   auto read = [](const std::string& input, std::string& value) { return glz::read_toml(value, input); };
+
+   "line_ending_backslash_with_trailing_whitespace"_test = [&] {
+      // TOML 1.0: whitespace may follow the backslash before the newline
+      const std::string input = "\"\"\"a\\  \n  b\"\"\"";
+      std::string value{};
+      const auto error = read(input, value);
+      expect(not error) << glz::format_error(error, input);
+      expect(value == "ab") << value;
+   };
+
+   "line_ending_backslash_trims_blank_lines"_test = [&] {
+      const std::string input = "\"\"\"a\\\n\n  \n  b\"\"\"";
+      std::string value{};
+      const auto error = read(input, value);
+      expect(not error) << glz::format_error(error, input);
+      expect(value == "ab") << value;
+   };
+
+   "line_ending_backslash_crlf_with_trailing_whitespace"_test = [&] {
+      const std::string input = "\"\"\"a\\ \t\r\n\r\n  b\"\"\"";
+      std::string value{};
+      const auto error = read(input, value);
+      expect(not error) << glz::format_error(error, input);
+      expect(value == "ab") << value;
+   };
+
+   "backslash_space_not_before_newline_is_invalid"_test = [&] {
+      const std::string input = "\"\"\"a\\ b\"\"\"";
+      std::string value{};
+      expect(bool(read(input, value)));
    };
 };
 

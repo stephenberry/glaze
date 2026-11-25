@@ -13,15 +13,22 @@
 #define GLZ_LIFETIMEBOUND
 #endif
 
-#ifndef __has_cpp_attribute
-#define GLZ_NO_UNIQUE_ADDRESS
-#elif __has_cpp_attribute(no_unique_address)
-#define GLZ_NO_UNIQUE_ADDRESS [[no_unique_address]]
-#elif __has_cpp_attribute(msvc::no_unique_address) || ((defined _MSC_VER) && (!defined __clang__))
-// Note __has_cpp_attribute(msvc::no_unique_address) itself doesn't work as
-// of 19.30.30709, even though the attribute itself is supported. See
+// The MSVC spelling is tested before the standard one. Under the MSVC ABI [[no_unique_address]]
+// is accepted but deliberately has no layout effect, so a front end there can report it through
+// __has_cpp_attribute while ignoring it. Testing the standard spelling first would select that
+// inert form and silently give up the empty member optimization on the whole ABI.
+#if defined(_MSC_VER) && !defined(__clang__)
+// cl.exe is matched directly rather than through __has_cpp_attribute, which did not report
+// msvc::no_unique_address as of 19.30.30709 even though the attribute was supported. See
 // https://github.com/llvm/llvm-project/issues/49358#issuecomment-981041089
 #define GLZ_NO_UNIQUE_ADDRESS [[msvc::no_unique_address]]
+#elif !defined(__has_cpp_attribute)
+#define GLZ_NO_UNIQUE_ADDRESS
+#elif __has_cpp_attribute(msvc::no_unique_address)
+// clang-cl, and any other front end targeting the MSVC ABI
+#define GLZ_NO_UNIQUE_ADDRESS [[msvc::no_unique_address]]
+#elif __has_cpp_attribute(no_unique_address)
+#define GLZ_NO_UNIQUE_ADDRESS [[no_unique_address]]
 #else
 // no_unique_address is not available.
 #define GLZ_NO_UNIQUE_ADDRESS

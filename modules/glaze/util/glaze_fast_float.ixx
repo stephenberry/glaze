@@ -115,9 +115,11 @@ export namespace glz
 
       int64_t exp_number = 0; // explicit exponential part
 
+      // An exponent marker must be followed by at least one digit, after an optional sign. Unlike
+      // std::from_chars, which ends the number before a digitless marker, "1e", "1e+" and "1.0E-" are
+      // rejected: ending early would read "1.0e" as 1 wherever trailing content goes unchecked.
       if constexpr (null_terminated) {
          if ((UC('e') == *p) || (UC('E') == *p)) {
-            UC const* location_of_e = p;
             ++p;
             bool neg_exp = false;
             if (UC('-') == *p) {
@@ -127,9 +129,8 @@ export namespace glz
             else if (UC('+') == *p) { // '+' on exponent is allowed by C++17 20.19.3.(7.1)
                ++p;
             }
-            if ((digit = glz::fast_float::digit_value(*p)) > 9) {
-               // Otherwise, we will be ignoring the 'e'.
-               p = location_of_e;
+            if ((digit = glz::fast_float::digit_value(*p)) > 9) [[unlikely]] {
+               return answer;
             }
             else {
                do {
@@ -147,7 +148,6 @@ export namespace glz
       }
       else {
          if ((p != pend) && ((UC('e') == *p) || (UC('E') == *p))) {
-            UC const* location_of_e = p;
             ++p;
             bool neg_exp = false;
             if ((p != pend) && (UC('-') == *p)) {
@@ -157,9 +157,8 @@ export namespace glz
             else if ((p != pend) && (UC('+') == *p)) { // '+' on exponent is allowed by C++17 20.19.3.(7.1)
                ++p;
             }
-            if ((p == pend) || (digit = glz::fast_float::digit_value(*p)) > 9) {
-               // Otherwise, we will be ignoring the 'e'.
-               p = location_of_e;
+            if ((p == pend) || (digit = glz::fast_float::digit_value(*p)) > 9) [[unlikely]] {
+               return answer;
             }
             else {
                do {

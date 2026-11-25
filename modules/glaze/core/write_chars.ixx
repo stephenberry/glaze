@@ -15,6 +15,7 @@ export module glaze.core.write_chars;
 import std;
 
 import glaze.core.opts;
+import glaze.core.buffer_traits;
 import glaze.core.context;
 
 import glaze.concepts.container_concepts;
@@ -231,7 +232,7 @@ export namespace glz
          // maximum length for a double should be 24 chars, we use 64 to be sufficient for float128_t
          if constexpr (resizable<B> && not check_write_unchecked(Opts)) {
             if (const auto k = ix + 64; k > b.size()) {
-               b.resize(2 * k);
+               grow_buffer(b, k);
             }
          }
 
@@ -265,7 +266,7 @@ export namespace glz
                   if (static_cast<size_t>(size) > available) {
                      // Output was truncated - size tells us exactly how much space we need
                      if constexpr (resizable<B>) {
-                        b.resize(2 * (ix + size));
+                        grow_buffer(b, ix + size);
                         std::format_to(reinterpret_cast<char*>(&b[ix]), fmt, V(value));
                      }
                      else {
@@ -294,7 +295,7 @@ export namespace glz
                if (static_cast<size_t>(len) >= available) {
                   // Output was truncated, need to resize and retry
                   if constexpr (resizable<B> && not check_write_unchecked(Opts)) {
-                     b.resize(2 * (ix + static_cast<size_t>(len) + 1));
+                     grow_buffer(b, ix + static_cast<size_t>(len) + 1);
                      std::snprintf(reinterpret_cast<char*>(&b[ix]), static_cast<size_t>(len) + 1, printf_fmt.data,
                                    static_cast<double>(value));
                   }
@@ -306,53 +307,59 @@ export namespace glz
                ix += static_cast<size_t>(len);
 #endif
             }
-            else if constexpr (uint8_t(check_float_max_write_precision(Opts)) > 0 &&
-                               uint8_t(check_float_max_write_precision(Opts)) < sizeof(V)) {
-               // we cast to a lower precision floating point value before writing out
-               if constexpr (uint8_t(check_float_max_write_precision(Opts)) == 8) {
-                  const auto reduced = static_cast<double>(value);
+            else {
+               constexpr auto max_precision = uint8_t(check_float_max_write_precision(Opts));
+               constexpr bool narrows = max_precision > 0 && max_precision < sizeof(V);
+#if !defined(_LIBCPP_VERSION) || _LIBCPP_AVAILABILITY_HAS_TO_CHARS_FLOATING_POINT
+               constexpr bool has_full_precision_writer = is_any_of<V, float, double> || is_float128<V>;
+#else
+               constexpr bool has_full_precision_writer = is_any_of<V, float, double>;
+#endif
+               if constexpr (narrows) {
+                  // we cast to a lower precision floating point value before writing out
+                  static_assert(max_precision == 4 || max_precision == 8, "invalid float_max_write_precision");
+                  using reduced_t = std::conditional_t<max_precision == 4, float, double>;
+                  const auto reduced = static_cast<reduced_t>(value);
+                  // A finite value beyond the reduced type's range rounds to infinity, which would be written as
+                  // null. Such a value is written at full precision below instead.
+                  const bool overflowed = std::isinf(reduced) && value != static_cast<V>(reduced);
+                  if (not has_full_precision_writer || not overflowed) {
+                     const auto start = reinterpret_cast<char*>(&b[ix]);
+                     const auto end = glz::to_chars(start, reduced);
+                     ix += size_t(end - start);
+                     return;
+                  }
+               }
+
+               // Size optimization: pass OptSize=true so the ~17KB pow-10 lookup
+               // tables are dropped (recomputed on the fly). Much faster than the
+               // old simple_float::to_chars path at essentially the same footprint.
+               // See discussion #2519.
+               if constexpr (is_size_optimized(Opts) && is_any_of<V, float, double>) {
                   const auto start = reinterpret_cast<char*>(&b[ix]);
-                  const auto end = glz::to_chars(start, reduced);
+                  const auto end = glz::to_chars<V, /*OptSize=*/true>(start, V(value));
                   ix += size_t(end - start);
                }
-               else if constexpr (uint8_t(check_float_max_write_precision(Opts)) == 4) {
-                  const auto reduced = static_cast<float>(value);
+               else if constexpr (is_any_of<V, float, double>) {
                   const auto start = reinterpret_cast<char*>(&b[ix]);
-                  const auto end = glz::to_chars(start, reduced);
+                  const auto end = glz::to_chars(start, value);
                   ix += size_t(end - start);
                }
-               else {
-                  static_assert(false_v<V>, "invalid float_max_write_precision");
-               }
-            }
-            // Size optimization: pass OptSize=true so the ~17KB pow-10 lookup
-            // tables are dropped (recomputed on the fly). Much faster than the
-            // old simple_float::to_chars path at essentially the same footprint.
-            // See discussion #2519.
-            else if constexpr (is_size_optimized(Opts) && is_any_of<V, float, double>) {
-               const auto start = reinterpret_cast<char*>(&b[ix]);
-               const auto end = glz::to_chars<V, /*OptSize=*/true>(start, V(value));
-               ix += size_t(end - start);
-            }
-            else if constexpr (is_any_of<V, float, double>) {
-               const auto start = reinterpret_cast<char*>(&b[ix]);
-               const auto end = glz::to_chars(start, value);
-               ix += size_t(end - start);
-            }
 // float128_t requires std::to_chars for floating-point, unavailable on older Apple platforms (iOS < 16.3)
 #if !defined(_LIBCPP_VERSION) || _LIBCPP_AVAILABILITY_HAS_TO_CHARS_FLOATING_POINT
-            else if constexpr (is_float128<V>) {
-               const auto start = reinterpret_cast<char*>(&b[ix]);
-               const auto [ptr, ec] = std::to_chars(start, &b[0] + b.size(), value, std::chars_format::general);
-               if (ec != std::errc()) {
-                  ctx.error = error_code::unexpected_end;
-                  return;
+               else if constexpr (is_float128<V>) {
+                  const auto start = reinterpret_cast<char*>(&b[ix]);
+                  const auto [ptr, ec] = std::to_chars(start, &b[0] + b.size(), value, std::chars_format::general);
+                  if (ec != std::errc()) {
+                     ctx.error = error_code::unexpected_end;
+                     return;
+                  }
+                  ix += size_t(ptr - start);
                }
-               ix += size_t(ptr - start);
-            }
 #endif
-            else {
-               static_assert(false_v<V>, "type is not supported");
+               else if constexpr (not narrows) {
+                  static_assert(false_v<V>, "type is not supported");
+               }
             }
          }
          else if constexpr (is_any_of<V, int8_t, uint8_t, int16_t, uint16_t>) {

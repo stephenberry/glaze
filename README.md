@@ -423,7 +423,8 @@ To report what a build actually compiled, read `glz::simd_info`:
 ```c++
 std::string report;
 std::ignore = glz::write_json(glz::simd_info, report);
-// {"detected":"AVX512BW","utf8_validation":"AVX512BW","string_escape":"AVX2","float_write":"SSE4.1"}
+// {"detected":"AVX512BW","utf8_validation":"AVX512BW","string_escape":"AVX2",
+//  "float_write":"SSE4.1","structural_skip":"AVX512BW"}
 ```
 
 To disable SIMD optimizations:
@@ -1012,7 +1013,7 @@ This is useful for:
 
 # Input Buffer (Null) Termination
 
-A non-const `std::string` is recommended for input buffers, as this allows Glaze to improve performance with temporary padding and the buffer will be null terminated.
+A `std::string` is recommended for input buffers, because it carries the null terminator the default `null_terminated` option expects. Glaze reads the buffer you give it and does not modify it, so a `const std::string&` or a `std::string_view` covering a whole one is equally fast. A view of only part of a string is not terminated where it ends, so it needs `null_terminated = false`. A buffer that keeps no terminator of its own -- a `std::vector<char>`, or a container shaped like `QByteArray` -- is read with bounds instead, at a small cost.
 
 ## JSON
 

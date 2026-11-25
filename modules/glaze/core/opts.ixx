@@ -26,6 +26,9 @@ using std::size_t;
 
 export namespace glz
 {
+   template <std::uint32_t Format, class T>
+   inline constexpr bool top_level_supported = true;
+
    // Formats
    // Built in formats must be less than 65536
    // User defined formats can be 65536 to 4294967296
@@ -100,8 +103,13 @@ export namespace glz
       no_header = 1 << 3, // whether or not a binary header is needed
       disable_write_unknown =
          1 << 4, // whether to turn off writing unknown fields for a glz::meta specialized for unknown writing
-      is_padded = 1 << 5, // whether or not the read buffer is padded
-      disable_padding = 1 << 6, // to explicitly disable padding for contexts like includers
+      // The caller promises `padding_bytes` of readable memory past the end of the input, which
+      // lets the readers' fixed width loads run past the end of the document rather than bound
+      // themselves against it. Nothing verifies the promise; a buffer without that slack is read
+      // out of bounds. Glaze once set this for itself, after growing a resizable input buffer and
+      // shrinking it back; it no longer touches the caller's buffer, so the flag now means only
+      // what a caller asserts with it. See is_padded_on and docs/options.md.
+      is_padded = 1 << 5,
       write_unchecked = 1 << 7, // the write buffer has sufficient space and does not need to be checked
       // Error rather than write a control character that has no two-character JSON escape. Set by
       // the binary-to-JSON converters, which are emitting someone else's bytes and would rather
@@ -356,7 +364,8 @@ export namespace glz
    // ---
    // bool aligned_arrays = false;
    // When true, BEVE typed arrays for numeric types use alignment padding so that the data payload
-   // begins at a memory offset that is a multiple of the element size. This enables zero-copy
+   // begins at a memory offset that is a multiple of the element size. Complex arrays are written as
+   // aligned complex arrays, padded to their component size. This enables zero-copy
    // access via std::span<T> directly into the message buffer, eliminating copy and allocation overhead.
    // Only applies to BEVE format. The alignment padding is deterministic and does not need to be stored.
 
@@ -986,11 +995,6 @@ export namespace glz
 
    consteval bool check_is_padded(auto&& o) { return o.internal & uint32_t(opts_internal::is_padded); }
 
-   consteval bool check_disable_padding(auto&& o)
-   {
-      return o.internal & uint32_t(opts_internal::disable_padding);
-   }
-
    consteval bool check_write_unchecked(auto&& o) { return o.internal & uint32_t(opts_internal::write_unchecked); }
 
    consteval bool check_reject_control_characters(auto&& o)
@@ -1076,6 +1080,20 @@ export namespace glz
       return ret;
    }
 
+   // Assert that the input has `padding_bytes` of readable memory past its end.
+   //
+   // This is a promise about a buffer the caller owns, taken at its word: the reader cannot check
+   // it, and a buffer without that slack is read out of bounds -- a crash, or silently wrong
+   // values, depending on what follows it in memory. Address Sanitizer catches the over-read, but
+   // only when the allocation ends where the document does -- a std::string's spare capacity
+   // absorbs it, so a broken promise can survive testing. Leaving it off is always correct and costs
+   // only the last chunk of each buffer its unbounded loads, so reach for this only after
+   // measuring, and only where you control the allocation.
+   //
+   // The promise does not travel with the options: a read over a buffer the caller did not hand to
+   // glz::read itself (a file, a directory, an include, a registry request) turns it back off.
+   //
+   // Says nothing about null termination; that is `null_terminated`.
    template <auto Opts>
    constexpr auto is_padded_on()
    {
@@ -1089,22 +1107,6 @@ export namespace glz
    {
       auto ret = Opts;
       ret.internal &= ~uint32_t(opts_internal::is_padded);
-      return ret;
-   }
-
-   template <auto Opts>
-   constexpr auto disable_padding_on()
-   {
-      auto ret = Opts;
-      ret.internal |= uint32_t(opts_internal::disable_padding);
-      return ret;
-   }
-
-   template <auto Opts>
-   constexpr auto disable_padding_off()
-   {
-      auto ret = Opts;
-      ret.internal &= ~uint32_t(opts_internal::disable_padding);
       return ret;
    }
 
@@ -1652,10 +1654,12 @@ export namespace glz
    struct skip_value;
 
    template <class T, uint32_t Format>
-   concept write_supported = requires { to<Format, std::remove_cvref_t<T>>{}; };
+   concept write_supported =
+      requires { to<Format, std::remove_cvref_t<T>>{}; } && top_level_supported<Format, std::remove_cvref_t<T>>;
 
    template <class T, uint32_t Format>
-   concept read_supported = requires { from<Format, std::remove_cvref_t<T>>{}; };
+   concept read_supported =
+      requires { from<Format, std::remove_cvref_t<T>>{}; } && top_level_supported<Format, std::remove_cvref_t<T>>;
 
    // These templates save typing by determining the core type used to select the proper to/from specialization
    // Long term I would like to remove these detail indirections.

@@ -32,17 +32,25 @@ namespace glz
    [[nodiscard]] error_ctx write(T&& value, Buffer& buffer, is_context auto&& ctx)
    {
       using traits = buffer_traits<std::remove_cvref_t<Buffer>>;
+      call_scope scope{ctx};
 
       if constexpr (traits::is_resizable) {
          // A buffer could be size 1, to ensure we have sufficient memory we can't just check `empty()`
          if (buffer.size() < 2 * write_padding_bytes) {
-            buffer.resize(2 * write_padding_bytes);
+            resize_unfilled(buffer, 2 * write_padding_bytes);
          }
       }
       size_t ix = 0; // overwrite index
       to<Opts.format, std::remove_cvref_t<T>>::template op<Opts>(std::forward<T>(value), ctx, buffer, ix);
 
       if (bool(ctx.error)) [[unlikely]] {
+         // Truncate on the way out too: the padding above is grown without being filled, so a
+         // buffer left at its padded length would hand the caller indeterminate bytes. Not
+         // `finalize`, which for a streaming buffer means flushing -- a failed write must not
+         // push the partial document downstream on its way out.
+         if constexpr (traits::is_resizable && not traits::is_output_streaming) {
+            buffer.resize(ix);
+         }
          return {ix, ctx.error, ctx.custom_error_message};
       }
 
@@ -59,7 +67,7 @@ namespace glz
       if constexpr (traits::is_resizable) {
          // A buffer could be size 1, to ensure we have sufficient memory we can't just check `empty()`
          if (buffer.size() < 2 * write_padding_bytes) {
-            buffer.resize(2 * write_padding_bytes);
+            resize_unfilled(buffer, 2 * write_padding_bytes);
          }
       }
       context ctx{};
@@ -67,6 +75,13 @@ namespace glz
       serialize_partial<Opts.format>::template op<Partial, Opts>(std::forward<T>(value), ctx, buffer, ix);
 
       if (bool(ctx.error)) [[unlikely]] {
+         // Truncate on the way out too: the padding above is grown without being filled, so a
+         // buffer left at its padded length would hand the caller indeterminate bytes. Not
+         // `finalize`, which for a streaming buffer means flushing -- a failed write must not
+         // push the partial document downstream on its way out.
+         if constexpr (traits::is_resizable && not traits::is_output_streaming) {
+            buffer.resize(ix);
+         }
          return {ix, ctx.error, ctx.custom_error_message};
       }
 
@@ -112,6 +127,7 @@ namespace glz
       requires write_supported<T, Opts.format>
    [[nodiscard]] error_ctx write(T&& value, Buffer&& buffer, is_context auto&& ctx)
    {
+      call_scope scope{ctx};
       size_t ix = 0;
       to<Opts.format, std::remove_cvref_t<T>>::template op<Opts>(std::forward<T>(value), ctx, buffer, ix);
       if (bool(ctx.error)) [[unlikely]] {

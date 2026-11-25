@@ -6,9 +6,9 @@
 #include <string>
 #include <vector>
 
-#include "glaze/glaze.hpp"
-#include "glaze/yaml.hpp"
-#include "ut/ut.hpp"
+import glaze;
+import glaze.yaml;
+import ut;
 
 using namespace ut;
 

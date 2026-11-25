@@ -2,6 +2,7 @@
 // For the license information refer to glaze.ixx
 // glz:header path="glaze/jsonb.hpp"
 export module glaze.jsonb;
+export import glaze.core.custom;
 
 export import glaze.jsonb.header;
 export import glaze.jsonb.jsonb_to_json;

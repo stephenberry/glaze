@@ -61,7 +61,7 @@ if (ec) {
 - Write functions return an `error_ctx` whose `count` field records bytes written; read functions return the same type.
 - Success is the falsy case: `if (!ec) { /* ok */ }`.
 
-BSON's top-level value is always a document. Primitives (`int`, `std::string`, `double`, …) are rejected at the call site with a `no matching function for call to 'write_bson'` compile error. Wrap them in a struct or map if you need to ship a single value.
+BSON's top-level value is always a document. Primitives (`int`, `std::string`, `double`, …) are rejected at compile time by both `write_bson`/`read_bson` and the generic `glz::write`/`glz::read` with `opts{.format = glz::BSON}`, with a `no matching function` error. Wrap them in a struct or map if you need to ship a single value.
 
 ## Integer Encoding
 
@@ -71,7 +71,7 @@ BSON has two integer element types. Glaze picks between them by the target's ran
 |---|---|
 | `int8_t`, `int16_t`, `int32_t`, `uint8_t`, `uint16_t` | int32 (0x10) |
 | `int64_t`, `uint32_t`, `long`, `long long` | int64 (0x12) |
-| `uint64_t` | int64 (0x12) with range check — values above `INT64_MAX` fail with `error_code::invalid_length` on write |
+| `uint64_t` | int64 (0x12) with range check — values above `INT64_MAX` fail with `error_code::parse_number_failure` on write, matching the read path |
 
 On read, both int32 and int64 wire tags are accepted for any integer target and range-checked at runtime; mismatched sizes return `error_code::parse_number_failure`. Integer wire tags are also accepted into `float`/`double` targets as a widening conversion.
 

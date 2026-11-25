@@ -57,7 +57,7 @@ namespace glz
          bool is_http11;
       };
 
-      inline std::string_view http_status_reason_phrase(int status_code)
+      export inline std::string_view http_status_reason_phrase(int status_code)
       {
          switch (status_code) {
          case 100:

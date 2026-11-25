@@ -1,7 +1,7 @@
 // Glaze Library
 // For the license information refer to glaze.hpp
 
-#include "glaze/yaml.hpp"
+import glaze.yaml;
 
 #include <array>
 #include <chrono>
@@ -23,9 +23,10 @@
 #include <variant>
 #include <vector>
 
-#include "glaze/json/generic.hpp"
-#include "scratch_directory.hpp"
-#include "ut/ut.hpp"
+import glaze.json.generic;
+#include "minimal_buffer.hpp"
+import glaze.tests.scratch_directory;
+import ut;
 
 using std::uint64_t;
 using std::size_t;
@@ -412,6 +413,15 @@ suite yaml_write_tests = [] {
       expect(buffer.find("color: green") != std::string::npos);
    };
 
+   "write_unenumerated_enum_value"_test = [] {
+      const auto unenumerated = static_cast<Color>(7);
+      std::string buffer;
+      expect(glz::write_yaml(unenumerated, buffer) == glz::error_code::unexpected_enum);
+
+      enum_struct obj{"item", unenumerated};
+      expect(glz::write_yaml(obj, buffer) == glz::error_code::unexpected_enum);
+   };
+
    "write_string_with_special_chars"_test = [] {
       simple_struct obj{1, 1.0, "hello: world"};
       std::string buffer;
@@ -789,12 +799,11 @@ suite yaml_block_scalar_tests = [] {
       // Multiline strings should use block scalar or quoted string
    };
 
-   "roundtrip_literal_block_keep_multiple_newlines"_test = [] {
+   "roundtrip_multiple_trailing_newlines"_test = [] {
       std::string original = "line1\nline2\n\n\n";
       std::string yaml;
       auto wec = glz::write_yaml(original, yaml);
       expect(!wec);
-      expect(yaml.find("|+") != std::string::npos);
 
       std::string parsed{};
       auto rec = glz::read_yaml(parsed, yaml);
@@ -830,6 +839,80 @@ name: >
    };
 };
 
+suite yaml_control_character_reader_tests = [] {
+   // YAML's character stream excludes the C0 range apart from \t, \n and \r, plus DEL.
+   // The reader is the conformance gate for these, so every scalar style must reject a
+   // raw one rather than carry it into a value.
+   "read_rejects_raw_control_in_every_scalar_style"_test = [] {
+      const char c1 = char(0x01);
+      const std::vector<std::pair<const char*, std::string>> cases{
+         {"plain", std::string("key: abc") + c1 + "def\n"},
+         {"single-quoted", std::string("key: 'abc") + c1 + "def'\n"},
+         {"double-quoted", std::string("key: \"abc") + c1 + "def\"\n"},
+         {"literal block", std::string("key: |\n  abc") + c1 + "def\n"},
+         {"folded block", std::string("key: >\n  abc") + c1 + "def\n"},
+         {"mapping key", std::string("k") + c1 + ": v\n"},
+      };
+      for (const auto& [style, yaml] : cases) {
+         std::map<std::string, std::string> parsed{};
+         auto ec = glz::read_yaml(parsed, yaml);
+         expect(ec == glz::error_code::invalid_control_character) << style;
+      }
+   };
+
+   "read_rejects_raw_control_in_comments"_test = [] {
+      // A comment's bytes never reach a value, but they are still part of the character
+      // stream, so the document must be rejected either way.
+      const char c1 = char(0x01);
+      for (const auto& yaml : {std::string("# c") + c1 + "\nkey: v\n", std::string("key: v # c") + c1 + "\n"}) {
+         std::map<std::string, std::string> parsed{};
+         auto ec = glz::read_yaml(parsed, yaml);
+         expect(bool(ec)) << "comment control byte must be rejected";
+      }
+
+      // Clean comments are unaffected.
+      std::map<std::string, std::string> ok{};
+      const std::string good = "# fine\nkey: v # also fine\n";
+      auto ec = glz::read_yaml(ok, good);
+      expect(!ec) << glz::format_error(ec, good);
+      expect(ok.at("key") == "v");
+   };
+
+   "read_rejects_raw_del"_test = [] {
+      const std::string yaml = std::string("key: abc") + char(0x7f) + "def\n";
+      std::map<std::string, std::string> parsed{};
+      auto ec = glz::read_yaml(parsed, yaml);
+      expect(ec == glz::error_code::invalid_control_character);
+   };
+
+   "read_accepts_escaped_control_in_double_quoted"_test = [] {
+      // The \xXX escape is how a control character is legitimately carried, and is what
+      // the writer emits under escape_control_characters. It must still be accepted.
+      const std::string yaml = "key: \"abc\\x01def\"\n";
+      std::map<std::string, std::string> parsed{};
+      auto ec = glz::read_yaml(parsed, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(parsed.at("key") == std::string("abc") + char(0x01) + "def");
+   };
+
+   "read_still_accepts_tab_newline_carriage_return"_test = [] {
+      // These three are control characters YAML permits; they must not be swept up.
+      const std::string yaml = "key: \"a\\tb\"\nother: |\n  line1\n  line2\n";
+      std::map<std::string, std::string> parsed{};
+      auto ec = glz::read_yaml(parsed, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(parsed.at("key") == "a\tb");
+      expect(parsed.at("other") == "line1\nline2\n");
+   };
+};
+
+// Opt in to control-character escaping, which is off by default so that the common
+// write path pays nothing for it.
+struct yaml_escape_opts : glz::opts
+{
+   bool escape_control_characters = true;
+};
+
 suite yaml_writer_edge_case_tests = [] {
    "write_string_chomping_strip_marker"_test = [] {
       const std::string original = "line1\nline2";
@@ -857,12 +940,13 @@ suite yaml_writer_edge_case_tests = [] {
       expect(parsed == original);
    };
 
-   "write_string_chomping_keep_marker"_test = [] {
+   "write_string_multiple_trailing_newlines_double_quoted"_test = [] {
+      // Keep chomping (|+) would also keep the blank line a caller writes after a block scalar.
       const std::string original = "line1\nline2\n\n\n";
       std::string yaml;
       auto wec = glz::write_yaml(original, yaml);
       expect(!wec);
-      expect(yaml == "|+\n  line1\n  line2\n  \n  \n");
+      expect(yaml == "\"line1\\nline2\\n\\n\\n\"");
 
       std::string parsed{};
       auto rec = glz::read_yaml(parsed, yaml);
@@ -906,6 +990,110 @@ suite yaml_writer_edge_case_tests = [] {
       std::string parsed{};
       auto rec = glz::read_yaml(parsed, yaml);
       expect(!rec) << glz::format_error(rec, yaml);
+      expect(parsed == original);
+   };
+
+   "write_control_char_raw_by_default"_test = [] {
+      // Escaping control characters is opt-in, so by default the byte is written through
+      // untouched and the plain style is kept. The reader is the conformance gate and
+      // rejects it, so the default write is deliberately not round-trippable here --
+      // the same asymmetry glz::write_json / glz::read_json already have. Callers that
+      // need the round trip enable escape_control_characters.
+      const std::string original = std::string("abc") + char(0x01) + "def";
+      std::string yaml{};
+      auto wec = glz::write_yaml(original, yaml);
+      expect(!wec);
+      expect(yaml == original) << "control byte should pass through unquoted";
+
+      std::string parsed{};
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(rec == glz::error_code::invalid_control_character) << "reader must reject it";
+   };
+
+   "write_control_char_escaped_under_opt_in"_test = [] {
+      // With escape_control_characters the byte forces a quoted style and is escaped.
+      const std::string original = std::string("abc") + char(0x01) + "def";
+      std::string yaml{};
+      auto wec = glz::write<yaml_escape_opts{{.format = glz::YAML}}>(original, yaml);
+      expect(!wec);
+      expect(yaml == "\"abc\\x01def\"");
+
+      std::string parsed{};
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+      expect(parsed == original);
+   };
+
+   "write_embedded_nul_raw_by_default_escaped_under_opt_in"_test = [] {
+      const std::string original = std::string("a\0b", 3);
+
+      std::string plain{};
+      expect(!glz::write_yaml(original, plain));
+      expect(plain == original) << "NUL should pass through by default";
+
+      std::string escaped{};
+      expect(!glz::write<yaml_escape_opts{{.format = glz::YAML}}>(original, escaped));
+      expect(escaped == "\"a\\0b\"");
+
+      std::string parsed{};
+      auto rec = glz::read_yaml(parsed, escaped);
+      expect(!rec) << glz::format_error(rec, escaped);
+      expect(parsed == original);
+   };
+
+   "write_map_key_with_control_char_follows_the_option"_test = [] {
+      std::map<std::string, int> value{{std::string("k") + char(0x1b), 1}};
+
+      std::string plain{};
+      expect(!glz::write_yaml(value, plain));
+      expect(plain == std::string("k") + char(0x1b) + ": 1\n");
+
+      std::string escaped{};
+      expect(!glz::write<yaml_escape_opts{{.format = glz::YAML}}>(value, escaped));
+      expect(escaped == "\"k\\x1b\": 1\n");
+
+      std::map<std::string, int> parsed{};
+      auto rec = glz::read_yaml(parsed, escaped);
+      expect(!rec) << glz::format_error(rec, escaped);
+      expect(parsed == value);
+   };
+
+   "write_del_follows_the_option"_test = [] {
+      // DEL (0x7f) is outside YAML's c-printable set just as the C0 range is, so the
+      // opt-in path escapes it even though it is not < 0x20.
+      const std::string original = std::string("a") + char(0x7f) + "b";
+
+      std::string plain{};
+      expect(!glz::write_yaml(original, plain));
+      expect(plain == original) << "DEL should pass through by default";
+
+      std::string escaped{};
+      expect(!glz::write<yaml_escape_opts{{.format = glz::YAML}}>(original, escaped));
+      expect(escaped == "\"a\\x7fb\"");
+
+      std::string parsed{};
+      auto rec = glz::read_yaml(parsed, escaped);
+      expect(!rec) << glz::format_error(rec, escaped);
+      expect(parsed == original);
+   };
+
+   "write_multiline_with_del_avoids_block_under_opt_in"_test = [] {
+      // A literal block has no escape mechanism, so opting in must abandon the block
+      // style for this value rather than emit the byte raw.
+      const std::string original = std::string("line1\n") + char(0x7f) + "\nline2";
+
+      std::string plain{};
+      expect(!glz::write_yaml(original, plain));
+      expect(plain.find('|') != std::string::npos) << "default still uses a literal block";
+
+      std::string escaped{};
+      expect(!glz::write<yaml_escape_opts{{.format = glz::YAML}}>(original, escaped));
+      expect(escaped == "\"line1\\n\\x7f\\nline2\"");
+      expect(escaped.find('|') == std::string::npos);
+
+      std::string parsed{};
+      auto rec = glz::read_yaml(parsed, escaped);
+      expect(!rec) << glz::format_error(rec, escaped);
       expect(parsed == original);
    };
 
@@ -4377,9 +4565,6 @@ other: *a5)";
       const auto ec_first = glz::read<glz::yaml::yaml_opts{}>(first, runaway, ctx);
       expect(ec_first == glz::error_code::exceeded_max_expansion) << glz::format_error(ec_first, runaway);
 
-      ctx.error = glz::error_code::none; // a reused context carries its error for every format
-      ctx.custom_error_message = {};
-
       const std::string valid = "? {a: 1}\n: 2\n";
       glz::generic second{};
       const auto ec_second = glz::read<glz::yaml::yaml_opts{}>(second, valid, ctx);
@@ -4515,6 +4700,76 @@ ship-to: *id001)";
       expect(!ec) << glz::format_error(ec, view);
       expect(p.first == "answer");
       expect(p.second == 42);
+   };
+
+   "content_left_over_on_a_line_is_rejected"_test = [] {
+      // A node can stop part way along its line: a plain scalar ends at a ':' it is not allowed
+      // to take as a separator, a flow collection ends at its bracket. Both the root tail scan
+      // and the block mapping loop then read the rest of that line as though it were the start of
+      // a new one, which let a leftover ':' pass as an explicit-key continuation and dropped
+      // everything after it -- silently, with no error. `"'q' zz"` read as "q" and `"a: 1 b: 2"`
+      // as its first pair. Whatever the reader could not use has to be an error instead.
+      for (const std::string_view doc :
+           {"'q' zz", "'q' zz\n", "[1, 2] zz\n", "- 'q' zz\n", "outer:\n  'q' zz\n", "a: 1 b: 2\n"}) {
+         glz::generic parsed{};
+         expect(bool(glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, doc))) << doc;
+      }
+
+      // Only what the line may legitimately end with still passes: nothing, whitespace, or a
+      // comment -- and a following line is still a following line.
+      for (const std::string_view doc :
+           {"'q'", "'q'   \n", "'q' # c\n", "[1, 2] # c\n", "a: 1 # c\n", "a: 1\nb: 2\n", "? a : b\n",
+            "- a: 1\n  b: 2\n", "a: 1\n...\n", "a: 1\n---\nb: 2\n", "url: http://x.y/z\n"}) {
+         glz::generic parsed{};
+         expect(!glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, doc)) << doc;
+      }
+   };
+
+   "implicit_key_lookahead_is_bounded"_test = [] {
+      // What bounds those probes is the spec's own bound on how far a ':' may sit from the key it
+      // terminates: at most 1024 characters (7.4.2, 8.2.2). The widest conforming key is 1024
+      // four-byte characters, which puts its ':' at byte offset 4096, and it must still parse.
+      const auto is_mapping = [](size_t characters) {
+         std::string doc;
+         for (size_t i = 0; i < characters; ++i) doc += "\xF0\x9F\x98\x80"; // U+1F600, four bytes
+         doc += ": v";
+         glz::generic parsed{};
+         const auto ec = glz::read_yaml(parsed, doc);
+         expect(!ec) << characters << ' ' << glz::format_error(ec, doc);
+         return parsed.is_object();
+      };
+      expect(is_mapping(1024));
+
+      // One character further and that ':' is past the bound, so it no longer separates a key
+      // from a value. Nothing else on the line can, either, which leaves the line with content
+      // the document has no reading for -- so it is rejected rather than quietly reinterpreted.
+      // The spec does not allow a key this long in the first place.
+      std::string over(glz::yaml::max_implicit_key_lookahead, 'k');
+      over += ": v";
+      for (const std::string& doc : {over, over + "\nsecond: 2\n", "outer:\n  " + over + "\n", "- " + over + "\n"}) {
+         glz::generic parsed{};
+         expect(bool(glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, doc))) << doc.size();
+      }
+   };
+
+   "long_line_columns_are_measured_correctly"_test = [] {
+      // The column of a position is memoized across queries rather than recomputed by walking
+      // back to the line start. Long lines are where that memo does the work, so they are where
+      // a stale one would show: an indent misread by one changes the shape of the result.
+      const std::string key(2000, 'k');
+      const std::string value(20000, 'v');
+
+      glz::generic nested{};
+      const std::string doc = "outer:\n  " + key + ": " + value + "\n  second: 2\n";
+      const auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(nested, doc);
+      expect(!ec) << glz::format_error(ec, doc);
+      expect(nested["outer"][key].as<std::string>() == value);
+      expect(nested["outer"]["second"].as<int>() == 2);
+
+      // A tab in the indentation of a long line is still rejected.
+      glz::generic tabbed{};
+      const std::string tab_doc = "outer:\n\t" + key + ": " + value + "\n";
+      expect(bool(glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(tabbed, tab_doc)));
    };
 };
 
@@ -5225,7 +5480,7 @@ suite yaml_large_writer_document_tests = [] {
       expect(yaml.size() > 4000);
       expect(yaml.find("description: |-") != std::string::npos);
       expect(yaml.find("runbook: |") != std::string::npos);
-      expect(yaml.find("audit_log: |+") != std::string::npos);
+      expect(yaml.find("audit_log: \"entry-a\\nentry-b\\n\\n\\n\"") != std::string::npos);
       expect(yaml.find("'true'") != std::string::npos);
       expect(yaml.find("'123'") != std::string::npos);
       expect(yaml.find("'alpha: beta'") != std::string::npos);
@@ -5240,7 +5495,7 @@ suite yaml_large_writer_document_tests = [] {
       expect(std::get<std::string>(root.at("description").data) ==
              "Large generated writer test document\nWith nested maps and sequences");
       expect(std::get<std::string>(root.at("runbook").data) == "step one\nstep two\n");
-      expect(std::get<std::string>(root.at("audit_log").data) == "entry-a\nentry-b\n\n\n\n");
+      expect(std::get<std::string>(root.at("audit_log").data) == "entry-a\nentry-b\n\n\n");
       expect(std::holds_alternative<std::nullptr_t>(root.at("note").data));
 
       auto& parsed_deployments = std::get<glz::generic::array_t>(root.at("deployments").data);
@@ -5285,7 +5540,7 @@ suite yaml_large_writer_document_tests = [] {
       expect(!wec);
       expect(yaml.size() > 1800);
       expect(yaml.find("description: |-") != std::string::npos);
-      expect(yaml.find("literal: |+") != std::string::npos);
+      expect(yaml.find("literal: \"line one\\n  line two\\nline three\\n\\n\\n\"") != std::string::npos);
       expect(yaml.find("note: |") != std::string::npos);
       expect(yaml.find("'true'") != std::string::npos);
       expect(yaml.find("'123'") != std::string::npos);
@@ -5298,7 +5553,7 @@ suite yaml_large_writer_document_tests = [] {
 
       expect(parsed.title == original.title);
       expect(parsed.description == original.description);
-      expect(parsed.literal == (original.literal + "\n"));
+      expect(parsed.literal == original.literal);
       expect(parsed.multiline_plain == original.multiline_plain);
       expect(parsed.quoted == original.quoted);
       expect(parsed.flags.enabled == original.flags.enabled);
@@ -7053,6 +7308,231 @@ suite generic_colon_in_value_tests = [] {
    };
 };
 
+// Test for issue #2826: quotes in plain scalars must not affect later quoted values
+suite plain_scalar_quotes_preserve_later_quotes = [] {
+   "plain quotes do not affect later mapping values"_test = [] {
+      struct test_case
+      {
+         std::string_view yaml;
+         std::string_view one;
+      };
+
+      const test_case cases[] = {
+         {"one: a'b\ntwo: 'c: d'\n", "a'b"},
+         {"one: a'b\r\ntwo: 'c: d'\r\n", "a'b"},
+         {"one: a'b\rtwo: 'c: d'\r", "a'b"},
+         {"one: a'b\ntwo: 'c: d'", "a'b"},
+         {"one: a\"b\ntwo: \"c: d\"\n", "a\"b"},
+         {"one: a 'b\ntwo: 'c: d'\n", "a 'b"},
+         {"one: a \"b\ntwo: \"c: d\"\n", "a \"b"},
+         {"one: a\"b\\\ntwo: \"c: d\"\n", "a\"b\\"},
+         {"one: a\"b\\\r\ntwo: \"c: d\"\r\n", "a\"b\\"},
+         {"one: a'b\n# comment ' with: a colon\ntwo: 'c: d'\n", "a'b"},
+         {"one: 'a''b'\ntwo: 'c: d'\n", "a'b"},
+         {"one: a'b\ntwo: \"c: d\"\n", "a'b"},
+         {"two: 'c: d'\none: a'b\n", "a'b"},
+         {"one: \"a\\\"b: c\"\ntwo: 'c: d'\n", "a\"b: c"},
+         {"one: \"a\\\"\"\ntwo: 'c: d'\n", "a\""},
+         {"one: \"a\\\\\"\ntwo: 'c: d'\n", "a\\"},
+      };
+
+      const auto check = [&]<class T>() {
+         for (const auto& [yaml, one] : cases) {
+            T parsed{};
+            const auto ec = glz::read_yaml(parsed, yaml);
+            expect(!ec) << glz::format_error(ec, yaml);
+            if (ec) continue;
+
+            expect(parsed.size() == 2u) << yaml;
+            expect(glz::write_json(parsed["one"]).value_or("WRITE_ERROR") == glz::write_json(one).value()) << yaml;
+            expect(glz::write_json(parsed["two"]).value_or("WRITE_ERROR") == R"("c: d")") << yaml;
+         }
+      };
+
+      check.template operator()<glz::generic>();
+      check.template operator()<glz::generic_u64>();
+      check.template operator()<glz::generic_i64>();
+      check.template operator()<std::map<std::string, std::string>>();
+   };
+
+   "plain quotes do not allow inconsistent sibling indentation"_test = [] {
+      const std::string_view yaml = "one: a'b\n two: 'c: d'\n";
+      glz::generic_u64 parsed{};
+      const auto ec = glz::read_yaml(parsed, yaml);
+      expect(ec == glz::error_code::syntax_error);
+   };
+
+   "multiline implicit block keys are rejected"_test = [] {
+      for (const std::string_view yaml : {"key: \"line1\n  line2\": value\n", "key: 'line1\n  line2': value\n",
+                                          "\"line1\n  line2\": value\n", "'line1\n  line2': value\n"}) {
+         glz::generic parsed{};
+         std::map<std::string, std::string> typed{};
+         expect(bool(glz::read_yaml(parsed, yaml))) << yaml;
+         expect(bool(glz::read_yaml(typed, yaml))) << yaml;
+      }
+   };
+
+   "multiline explicit block and flow keys remain supported"_test = [] {
+      for (const std::string_view yaml :
+           {"key:\n  ? \"line1\n    line2\"\n  : value\n", "key:\n  ? 'line1\n    line2'\n  : value\n",
+            "key: {? \"line1\n    line2\": value}\n", "key: {? 'line1\n    line2': value}\n",
+            "key: {\"line1\n    line2\": value}\n"}) {
+         glz::generic parsed{};
+         std::map<std::string, std::map<std::string, std::string>> typed{};
+         const auto ec = glz::read_yaml(parsed, yaml);
+         const auto typed_ec = glz::read_yaml(typed, yaml);
+         expect(!ec) << glz::format_error(ec, yaml);
+         expect(!typed_ec) << glz::format_error(typed_ec, yaml);
+         expect(glz::write_json(parsed).value_or("WRITE_ERROR") == R"({"key":{"line1 line2":"value"}})");
+         expect(glz::write_json(typed).value_or("WRITE_ERROR") == R"({"key":{"line1 line2":"value"}})");
+      }
+   };
+
+   "quote lookahead preserves nested collections and multiline strings"_test = [] {
+      for (const std::string_view yaml :
+           {"outer:\n  one: a'b\n  two: 'c: d'\n", "outer: {\"one\":\"a'b\",\"two\":\"c: d\"}\n",
+            "outer: {\"one\":\"} : payload\",\"two\":\"c: d\"}\n", "outer:\n  one: 'a\n    b'\n  two: 'c: d'\n",
+            "outer:\n  one: \"a\\\n    b\"\n  two: 'c: d'\n"}) {
+         glz::generic parsed{};
+         std::map<std::string, std::map<std::string, std::string>> typed{};
+         const auto ec = glz::read_yaml(parsed, yaml);
+         const auto typed_ec = glz::read_yaml(typed, yaml);
+         expect(!ec) << glz::format_error(ec, yaml);
+         expect(!typed_ec) << glz::format_error(typed_ec, yaml);
+         if (ec || typed_ec) continue;
+
+         expect(glz::write_json(parsed).value_or("GENERIC_WRITE_ERROR") ==
+                glz::write_json(typed).value_or("TYPED_WRITE_ERROR"))
+            << yaml;
+         expect(parsed["outer"]["two"].as<std::string>() == "c: d");
+      }
+   };
+};
+
+// Test for issue #2889: the '' escape in a single-quoted scalar must not fool the implicit-key
+// probes into reading a ':' that is scalar content as a mapping separator.
+suite single_quoted_escape_probe_tests = [] {
+   "'' escape hides a colon from every implicit-key probe"_test = [] {
+      struct test_case
+      {
+         std::string_view yaml;
+         std::string_view json;
+      };
+
+      const test_case cases[] = {
+         // Block mapping value, block mapping key, and a bare document scalar.
+         {"one: 'it''s: here'\n", R"({"one":"it's: here"})"},
+         {"'it''s: here': v\n", R"({"it's: here":"v"})"},
+         {"'it''s: here'\n", R"("it's: here")"},
+         // Block sequence entry.
+         {"- 'a''b: c'\n", R"(["a'b: c"])"},
+         // Flow sequence, alone and beside a sibling.
+         {"[ 'a''b: c' ]\n", R"(["a'b: c"])"},
+         {"[ 'a''b: c', d ]\n", R"(["a'b: c","d"])"},
+         {"one: [ 'x''y: z' ]\n", R"({"one":["x'y: z"]})"},
+         // Flow mapping key.
+         {"{ 'a''b: c': v }\n", R"({"a'b: c":"v"})"},
+         {"one: { 'x''y: z': w }\n", R"({"one":{"x'y: z":"w"}})"},
+         // A trailing '' pair, so the scalar ends on an escape.
+         {"one: 'a: b'''\n", R"({"one":"a: b'"})"},
+         // The double-quoted counterpart, whose escape the probes already handled.
+         {"one: \"a\\\": b\"\n", R"({"one":"a\": b"})"},
+      };
+
+      for (const auto& [yaml, json] : cases) {
+         glz::generic parsed{};
+         const auto ec = glz::read_yaml(parsed, yaml);
+         expect(!ec) << glz::format_error(ec, yaml);
+         if (ec) continue;
+         expect(glz::write_json(parsed).value_or("WRITE_ERROR") == json) << yaml;
+      }
+   };
+
+   "the generic and typed readers agree on the '' escape"_test = [] {
+      const std::string_view yaml = "one: 'it''s: here'\n";
+
+      glz::generic parsed{};
+      std::map<std::string, std::string> typed{};
+      const auto ec = glz::read_yaml(parsed, yaml);
+      const auto typed_ec = glz::read_yaml(typed, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(!typed_ec) << glz::format_error(typed_ec, yaml);
+      if (ec || typed_ec) return;
+      expect(glz::write_json(parsed).value_or("GENERIC_WRITE_ERROR") ==
+             glz::write_json(typed).value_or("TYPED_WRITE_ERROR"));
+   };
+
+   // A quote is an indicator only where a node can begin. Once a plain scalar is under way it runs
+   // to the end of the line, so the spaces and quotes inside it are content and a probe must not
+   // read one as opening a quoted scalar -- least of all as opening one whose '' it then escapes.
+   "quotes inside a plain scalar stay content"_test = [] {
+      struct test_case
+      {
+         std::string_view yaml;
+         std::string_view json;
+      };
+
+      const test_case cases[] = {
+         {"one: a 'b'\n", R"({"one":"a 'b'"})"},
+         {"one: a '''\n", R"({"one":"a '''"})"},
+         {"one: a \"b\"\n", R"({"one":"a \"b\""})"},
+         // The plain key ends at the ": " the quote never protected.
+         {"a 'b: c'\n", R"({"a 'b":"c'"})"},
+         {"a ''': x\n", R"({"a '''":"x"})"},
+         // ',' opens no node outside a flow collection: ns-plain-safe-out admits it as content.
+         {"a,'b: c\n", R"({"a,'b":"c"})"},
+      };
+
+      for (const auto& [yaml, json] : cases) {
+         glz::generic parsed{};
+         const auto ec = glz::read_yaml(parsed, yaml);
+         expect(!ec) << glz::format_error(ec, yaml);
+         if (ec) continue;
+         expect(glz::write_json(parsed).value_or("WRITE_ERROR") == json) << yaml;
+      }
+   };
+
+   // A node begins at the start of the scan, after the indicators that end the node before it, and
+   // after the properties that precede one. Anywhere else -- inside a plain scalar already under
+   // way, or after a closing bracket -- a quote is content, and a probe that opens a scalar there
+   // runs off the end of the line and loses the separator that follows.
+   "brackets and node properties do not move the node start"_test = [] {
+      struct test_case
+      {
+         std::string_view yaml;
+         std::string_view json;
+      };
+
+      const test_case cases[] = {
+         // In block context ns-plain-safe-out admits brackets, so these are plain keys, not flow
+         // collections, and the apostrophes in them are content.
+         {"list[0]'s value: x\n", R"({"list[0]'s value":"x"})"},
+         {"a[b]'c: d\n", R"({"a[b]'c":"d"})"},
+         {"a{b}'c: d\n", R"({"a{b}'c":"d"})"},
+         {"a['][]: v\n", R"({"a['][]":"v"})"},
+         {"- a[b]'c: d\n", R"([{"a[b]'c":"d"}])"},
+         // An anchor or a tag precedes the node, so the scalar after one is still at a node start.
+         {"[ &an 'c]d': v ]\n", R"([{"c]d":"v"}])"},
+         {"[ !!str 'c]d': v ]\n", R"([{"c]d":"v"}])"},
+         {"[ a, &an 'c]d': v ]\n", R"(["a",{"c]d":"v"}])"},
+         // ',' separates flow entries, so a node begins after one.
+         {"[a, 'c]d': e]\n", R"(["a",{"c]d":"e"}])"},
+         // Both halves together: a property in front of a scalar carrying the '' escape.
+         {"one: &an 'it''s: here'\n", R"({"one":"it's: here"})"},
+         {"[ &an 'it''s: here' ]\n", R"(["it's: here"])"},
+         {"k: !!str 'it''s: here'\n", R"({"k":"it's: here"})"},
+      };
+
+      for (const auto& [yaml, json] : cases) {
+         glz::generic parsed{};
+         const auto ec = glz::read_yaml(parsed, yaml);
+         expect(!ec) << glz::format_error(ec, yaml);
+         if (ec) continue;
+         expect(glz::write_json(parsed).value_or("WRITE_ERROR") == json) << yaml;
+      }
+   };
+};
+
 suite generic_malformed_flow_tests = [] {
    "generic_malformed_flow_array_in_value"_test = [] {
       // Unclosed flow array in a block mapping value should produce an error
@@ -7382,6 +7862,23 @@ suite infinity_nan_tests = [] {
       auto rec = glz::read_yaml(parsed, yaml);
       expect(!rec) << glz::format_error(rec, yaml);
       expect(std::isnan(parsed["val"]));
+   };
+
+   // Narrowing a finite double beyond float's range must not produce an infinity, which would be written as null
+   "write_float32_narrowing_beyond_float_range"_test = [] {
+      struct float32_opts : glz::opts
+      {
+         glz::float_precision float_max_write_precision{glz::float_precision::float32};
+      };
+      std::map<std::string, double> original{{"big", 1e100}, {"small", -1e39}};
+      std::string yaml;
+      expect(!glz::write<glz::set_yaml<float32_opts{}>()>(original, yaml));
+      expect(yaml == "big: 1E100\nsmall: -1E39\n") << yaml;
+
+      std::map<std::string, double> parsed;
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+      expect(parsed == original);
    };
 };
 
@@ -9177,7 +9674,39 @@ count: 42
    };
 };
 
+// A glz::custom getter yielding a nullable, to check that skip_null_members drops a null result the
+// same way it drops a plain null member.
+struct yaml_nullable_custom
+{
+   std::optional<int> opt{};
+   int plain{7};
+   const std::optional<int>& get_opt() const { return opt; }
+   void set_opt(std::optional<int> in) { opt = in; }
+};
+
+template <>
+struct glz::meta<yaml_nullable_custom>
+{
+   using T = yaml_nullable_custom;
+   static constexpr auto value = object("opt", custom<&T::set_opt, &T::get_opt>, "plain", &T::plain);
+};
+
 suite yaml_custom_write_tests = [] {
+   "yaml_custom_null_getter_is_skipped"_test = [] {
+      yaml_nullable_custom obj{};
+      std::string yaml;
+      expect(!glz::write_yaml(obj, yaml));
+      expect(yaml == "plain: 7\n") << yaml;
+
+      constexpr glz::yaml::yaml_opts flow{.flow_style = true};
+      expect(!glz::write<flow>(obj, yaml));
+      expect(yaml == "{plain: 7}") << yaml;
+
+      constexpr glz::yaml::yaml_opts keep_nulls{.skip_null_members = false};
+      expect(!glz::write<keep_nulls>(obj, yaml));
+      expect(yaml.find("opt: null") != std::string::npos) << yaml;
+   };
+
    "yaml_custom_lambda_write_inline"_test = [] {
       yaml_custom_lambda_struct obj{"hello", 99};
       std::string yaml;
@@ -10837,6 +11366,11 @@ struct glz::meta<skip_depth_probe>
    static constexpr auto value = object("known", &T::known);
 };
 
+struct yaml_recursive_node
+{
+   std::vector<yaml_recursive_node> c{};
+};
+
 suite recursion_depth_tests = [] {
    "deeply nested flow sequence is bounded"_test = [] {
       const std::string yaml(100000, '[');
@@ -10867,15 +11401,48 @@ suite recursion_depth_tests = [] {
       // limit parses, one level deeper is rejected. The bracket-count-based deep tests above sit far
       // from the boundary and would not catch an off-by-one in the guard. YAML caps lower than the
       // shared limit because a YAML level costs several times the stack a JSON one does.
+      // As in JSON, only collections count: a scalar at the bottom does not cost a level.
       constexpr size_t limit = glz::yaml::max_yaml_recursive_depth;
+      const auto parses = [](const std::string& yaml) {
+         glz::generic value{};
+         auto ec = glz::read_yaml(value, yaml);
+         expect(!ec) << glz::format_error(ec, yaml);
+      };
+      const auto rejects = [](const std::string& yaml) {
+         glz::generic value{};
+         auto ec = glz::read_yaml(value, yaml);
+         expect(ec.ec == glz::error_code::exceeded_max_recursive_depth);
+      };
+      parses(std::string(limit, '[') + std::string(limit, ']'));
+      parses(std::string(limit, '[') + "1" + std::string(limit, ']'));
+      rejects(std::string(limit + 1, '[') + std::string(limit + 1, ']'));
+      rejects(std::string(limit + 1, '[') + "1" + std::string(limit + 1, ']'));
+      std::string mappings{};
+      for (size_t i = 0; i < limit; ++i) mappings += "{k: ";
+      parses(mappings + "v" + std::string(limit, '}'));
+      rejects("{k: " + mappings + "v" + std::string(limit + 1, '}'));
+   };
+
+   "block sequence nesting at the depth limit boundary"_test = [] {
+      constexpr size_t limit = glz::yaml::max_yaml_recursive_depth;
+      const auto nested = [](const size_t sequences) {
+         std::string yaml{};
+         for (size_t i = 0; i < sequences; ++i) {
+            yaml += std::string(2 * i, ' ');
+            yaml += "-\n";
+         }
+         yaml += std::string(2 * sequences, ' ');
+         yaml += "1\n";
+         return yaml;
+      };
       {
-         const std::string yaml = std::string(limit, '[') + std::string(limit, ']');
+         const std::string yaml = nested(limit);
          glz::generic value{};
          auto ec = glz::read_yaml(value, yaml);
          expect(!ec) << glz::format_error(ec, yaml);
       }
       {
-         const std::string yaml = std::string(limit + 1, '[') + std::string(limit + 1, ']');
+         const std::string yaml = nested(limit + 1);
          glz::generic value{};
          auto ec = glz::read_yaml(value, yaml);
          expect(ec.ec == glz::error_code::exceeded_max_recursive_depth);
@@ -10886,8 +11453,8 @@ suite recursion_depth_tests = [] {
       // Block mappings are the expensive shape: every level runs the variant reader's speculative
       // mapping probe, so one level is a chain of large frames rather than a single small one. This
       // is what exhausted the stack before the limit could report itself back when YAML shared the
-      // JSON cap. The innermost scalar is a level of its own, so `limit - 1` mappings is the
-      // deepest document that fits.
+      // JSON cap. The innermost scalar is not a level, so `limit` mappings is the deepest document
+      // that fits.
       constexpr size_t limit = glz::yaml::max_yaml_recursive_depth;
       const auto nested = [](const size_t mappings) {
          std::string yaml{};
@@ -10900,13 +11467,13 @@ suite recursion_depth_tests = [] {
          return yaml;
       };
       {
-         const std::string yaml = nested(limit - 1);
+         const std::string yaml = nested(limit);
          glz::generic value{};
          auto ec = glz::read_yaml(value, yaml);
          expect(!ec) << glz::format_error(ec, yaml);
       }
       {
-         const std::string yaml = nested(limit);
+         const std::string yaml = nested(limit + 1);
          glz::generic value{};
          auto ec = glz::read_yaml(value, yaml);
          expect(ec.ec == glz::error_code::exceeded_max_recursive_depth);
@@ -10942,6 +11509,50 @@ suite recursion_depth_tests = [] {
       yaml += "\nknown: 1";
       skip_depth_probe value{};
       auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(value, yaml);
+      expect(ec.ec == glz::error_code::exceeded_max_recursive_depth);
+   };
+
+   "deeply nested typed recursion is bounded"_test = [] {
+      // A self-recursive struct never passes through the variant reader, so the sequence and
+      // mapping readers' own depth accounting is all that stops flow nesting from overflowing the
+      // stack.
+      std::string yaml{};
+      for (int i = 0; i < 100000; ++i) yaml += "{c: [";
+      yaml_recursive_node value{};
+      auto ec = glz::read_yaml(value, yaml);
+      expect(ec.ec == glz::error_code::exceeded_max_recursive_depth);
+   };
+
+   "typed recursion at the depth limit boundary"_test = [] {
+      // The struct and its vector are a level each, as in JSON.
+      constexpr size_t levels = glz::yaml::max_yaml_recursive_depth / 2;
+      const auto nested = [](const size_t n) {
+         std::string yaml{};
+         for (size_t i = 0; i < n; ++i) yaml += "{c: [";
+         for (size_t i = 0; i < n; ++i) yaml += "]}";
+         return yaml;
+      };
+      {
+         const std::string yaml = nested(levels);
+         yaml_recursive_node value{};
+         auto ec = glz::read_yaml(value, yaml);
+         expect(!ec) << glz::format_error(ec, yaml);
+      }
+      {
+         const std::string yaml = nested(levels + 1);
+         yaml_recursive_node value{};
+         auto ec = glz::read_yaml(value, yaml);
+         expect(ec.ec == glz::error_code::exceeded_max_recursive_depth);
+      }
+   };
+
+   "stacked node properties are bounded"_test = [] {
+      // Each property the variant reader dispatches past re-enters it without opening a collection.
+      std::string yaml{};
+      for (int i = 0; i < 100000; ++i) yaml += "&a ";
+      yaml += "1";
+      glz::generic value{};
+      auto ec = glz::read_yaml(value, yaml);
       expect(ec.ec == glz::error_code::exceeded_max_recursive_depth);
    };
 };
@@ -12519,6 +13130,223 @@ suite yaml_indent_width_tests = [] {
       std::string buffer{};
       expect(!glz::write<opts>(seq_doc_t{}, buffer));
       expect(buffer == "{items: [{a: 1, b: 2}, {a: 3, b: 4}]}") << buffer;
+   };
+};
+
+// Regression coverage for GitHub issue #2854: read_yaml has its own emptiness check, separate from
+// the shared one in core/read.hpp.
+suite contiguous_buffer_without_empty = [] {
+   "read_yaml round trip"_test = [] {
+      test_buffers::qt_style_buffer buffer{};
+      expect(not glz::write_yaml(std::map<std::string, int>{{"a", 1}}, buffer));
+
+      std::map<std::string, int> value{};
+      expect(not glz::read_yaml(value, buffer));
+      expect(value == std::map<std::string, int>{{"a", 1}});
+   };
+
+   "read_yaml on an empty buffer"_test = [] {
+      test_buffers::qt_style_buffer buffer{};
+      std::optional<int> value{42};
+      expect(not glz::read_yaml(value, buffer));
+      expect(not value.has_value());
+   };
+
+   "read through a buffer that is only contiguous"_test = [] {
+      const test_buffers::read_only_buffer buffer{"a: 2"};
+      std::map<std::string, int> value{};
+      expect(not glz::read_yaml(value, buffer));
+      expect(value == std::map<std::string, int>{{"a", 2}});
+   };
+};
+
+// GitHub issue #2878: a string must round trip exactly whatever its line breaks and whitespace.
+// A literal block scalar cannot hold every multi-line string (leading spaces on its first content
+// line, only line breaks, several trailing line breaks), so those are written double-quoted.
+namespace i2878
+{
+   struct holder_t
+   {
+      std::string s{};
+      bool operator==(const holder_t&) const = default;
+   };
+
+   struct outer_t
+   {
+      holder_t inner{};
+      std::optional<std::string> opt{};
+      int after{};
+      bool operator==(const outer_t&) const = default;
+   };
+
+   std::string escaped(std::string_view str)
+   {
+      std::string out{};
+      for (const char c : str) {
+         switch (c) {
+         case '\n':
+            out += "\\n";
+            break;
+         case '\t':
+            out += "\\t";
+            break;
+         default:
+            out += c;
+         }
+      }
+      return out;
+   }
+
+   // Every string of length 0 through `max_length` over `alphabet`.
+   std::vector<std::string> strings_over(std::string_view alphabet, size_t max_length)
+   {
+      std::vector<std::string> result{std::string{}};
+      size_t level_begin = 0;
+      for (size_t length = 1; length <= max_length; ++length) {
+         const size_t level_end = result.size();
+         for (size_t i = level_begin; i < level_end; ++i) {
+            for (const char c : alphabet) {
+               result.push_back(result[i] + c);
+            }
+         }
+         level_begin = level_end;
+      }
+      return result;
+   }
+
+   // Round trips `str` through every position a string can take: the document root, an object
+   // member at two depths, an optional, a sequence element, a map value, a map key, both halves of
+   // a pair, and a member of a mapping nested in a sequence. Returns a description of the first
+   // failure, or an empty string.
+   template <auto Opts>
+   std::string round_trip_failure(const std::string& str)
+   {
+      std::string yaml{};
+      std::string failure{};
+      auto check = [&](const auto& value, std::string_view position) {
+         if (!failure.empty()) {
+            return;
+         }
+         using T = std::remove_cvref_t<decltype(value)>;
+         yaml.clear();
+         if (const auto ec = glz::write<Opts>(value, yaml); ec) {
+            failure = std::string{position} + ": write failed for \"" + escaped(str) + "\"";
+            return;
+         }
+         T parsed{};
+         if (const auto ec = glz::read<Opts>(parsed, yaml); ec) {
+            failure =
+               std::string{position} + ": read failed for \"" + escaped(str) + "\"\n" + glz::format_error(ec, yaml);
+         }
+         else if (!(parsed == value)) {
+            failure = std::string{position} + ": \"" + escaped(str) + "\" did not round trip\n" + yaml;
+         }
+      };
+
+      check(str, "root");
+      check(holder_t{str}, "member");
+      check(outer_t{{str}, str, 1}, "nested member");
+      check(std::vector<std::string>{str, str}, "sequence element");
+      check(std::map<std::string, std::string>{{"a", str}, {"b", "tail"}}, "map value");
+      check(std::map<std::string, int>{{str, 1}}, "map key");
+      check(std::pair<std::string, std::string>{str, str}, "pair");
+      check(std::vector<holder_t>{{str}, {str}}, "mapping in sequence");
+      return failure;
+   }
+
+   template <auto Opts>
+   void expect_all_round_trip(const std::vector<std::string>& strings)
+   {
+      for (const auto& str : strings) {
+         const auto failure = round_trip_failure<Opts>(str);
+         if (!failure.empty()) {
+            expect(false) << failure;
+            return; // one counterexample is enough; the rest would repeat it
+         }
+      }
+   }
+
+   constexpr glz::opts yaml_default{.format = glz::YAML};
+   constexpr glz::yaml::yaml_opts width_four{.indent_width = 4};
+   constexpr glz::yaml::yaml_opts flow{.flow_style = true};
+   constexpr yaml_escape_opts escaping{{.format = glz::YAML}};
+}
+
+suite issue_2878_string_round_trip = [] {
+   using namespace i2878;
+
+   "the reported strings round trip"_test = [] {
+      for (const std::string str : {"\n", "\n newline", "\n\n", "\n\n\nx", "\n\t tab"}) {
+         const auto failure = round_trip_failure<yaml_default>(str);
+         expect(failure.empty()) << failure;
+      }
+   };
+
+   "a literal block is kept where it round trips"_test = [] {
+      expect(glz::write_yaml(holder_t{"a\n  b\n"}).value() == "s: |\n  a\n    b\n\n");
+      expect(glz::write_yaml(holder_t{"\n\tx"}).value() == "s: |-\n  \n  \tx\n\n");
+   };
+
+   "strings a literal block cannot hold are double-quoted"_test = [] {
+      expect(glz::write_yaml(holder_t{"\n"}).value() == "s: \"\\n\"\n");
+      expect(glz::write_yaml(holder_t{"\n newline"}).value() == "s: \"\\n newline\"\n");
+      expect(glz::write_yaml(holder_t{" a\nb"}).value() == "s: \" a\\nb\"\n");
+      expect(glz::write_yaml(holder_t{"a\n\n"}).value() == "s: \"a\\n\\n\"\n");
+   };
+
+   "a key with a line break is double-quoted"_test = [] {
+      expect(glz::write_yaml(std::map<std::string, int>{{"a\nb", 1}}).value() == "\"a\\nb\": 1\n");
+   };
+
+   "every short string over whitespace and line breaks round trips"_test = [] {
+      const auto strings = strings_over("\n \tx", 5);
+      expect_all_round_trip<yaml_default>(strings);
+      expect_all_round_trip<width_four>(strings);
+   };
+
+   "every short string over YAML indicators round trips"_test = [] {
+      const auto strings = strings_over("\n \tx#:-'\"\\", 3);
+      expect_all_round_trip<yaml_default>(strings);
+      expect_all_round_trip<width_four>(strings);
+      expect_all_round_trip<flow>(strings);
+      expect_all_round_trip<escaping>(strings);
+   };
+};
+
+suite yaml_context_reuse = [] {
+   using map_t = std::map<std::string, std::map<std::string, std::vector<int>>>;
+
+   "a context reused after a failed read still reads"_test = [] {
+      const std::string bad = "a:\n  b: [1, 2\n";
+      const std::string good = "a:\n  b: [1, 2]\nc:\n  d: [3]\n";
+
+      glz::yaml::yaml_context ctx{};
+      map_t first{};
+      expect(bool(glz::read<glz::yaml::yaml_opts{}>(first, bad, ctx)));
+      expect(ctx.depth == 0u) << ctx.depth;
+
+      map_t second{};
+      const auto ec = glz::read<glz::yaml::yaml_opts{}>(second, good, ctx);
+      expect(ec == glz::error_code::none) << glz::format_error(ec, good);
+      expect(second == map_t{{"a", {{"b", {1, 2}}}}, {"c", {{"d", {3}}}}});
+   };
+
+   "anchors do not outlive the document that defines them"_test = [] {
+      // An anchor records a span of the buffer it was read from, so one carried into the next read
+      // resolves an alias the new document never defined, by replaying bytes of a buffer that may
+      // no longer exist.
+      // The first buffer is kept alive here so that a leak shows as a wrong answer, not as UB.
+      glz::yaml::yaml_context ctx{};
+      const std::string defines = "a: &k 5\n";
+      glz::generic first{};
+      expect(not glz::read<glz::yaml::yaml_opts{}>(first, defines, ctx));
+
+      const std::string refers = "b: *k\n";
+      glz::generic second{};
+      expect(bool(glz::read<glz::yaml::yaml_opts{}>(second, refers, ctx)));
+
+      glz::generic fresh{};
+      expect(bool(glz::read_yaml(fresh, refers)));
    };
 };
 

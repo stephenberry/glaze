@@ -1,15 +1,16 @@
 // Glaze Library
-// For the license information refer to glaze.hpp
+// For the license information refer to glaze.ixx
+// glz:header path="glaze/yaml/skip.hpp"
+export module glaze.yaml.skip;
 
-#pragma once
-
-#include "glaze/core/context.hpp"
-#include "glaze/core/opts.hpp"
-#include "glaze/yaml/common.hpp"
-
+import std;
+import glaze.core.context;
+import glaze.core.opts;
+import glaze.yaml.common;
 using std::int32_t;
 
-namespace glz::yaml
+
+export namespace glz::yaml
 {
    // Skip a double-quoted string
    template <class It, class End, class Ctx>
@@ -483,7 +484,7 @@ namespace glz::yaml
 
 } // namespace glz::yaml
 
-namespace glz
+export namespace glz
 {
    template <>
    struct skip_value<YAML>

@@ -138,18 +138,22 @@ namespace glz
       inline void beve_to_json_value(auto&& ctx, auto&& it, auto&& end, Buffer& out, auto&& ix,
                                      uint32_t recursive_depth)
       {
-         // Check recursion depth limit
-         if (recursive_depth >= max_recursive_depth_limit) [[unlikely]] {
-            ctx.error = error_code::exceeded_max_recursive_depth;
-            return;
-         }
-
          if (it >= end) [[unlikely]] {
             ctx.error = error_code::syntax_error;
             return;
          }
          const auto tag = uint8_t(*it);
          const auto type = tag & 0b00000'111;
+
+         // `recursive_depth` is the number of levels enclosing this value. Containers, and the
+         // extensions that wrap a value, open another; scalars do not, so as in the readers a scalar
+         // may sit inside the deepest container the limit allows.
+         const bool opens_level = type != tag::null && type != tag::number && type != tag::string;
+         if (opens_level && recursive_depth >= max_recursive_depth_limit) [[unlikely]] {
+            ctx.error = error_code::exceeded_max_recursive_depth;
+            return;
+         }
+
          switch (type) {
          case tag::null: {
             if (tag & tag::boolean) {
@@ -520,9 +524,33 @@ namespace glz
                const auto string_or_boolean = (tag & 0b001'00'000) >> 5;
                switch (string_or_boolean) {
                case 0: {
-                  // boolean array (bit packed)
-                  // TODO: implement
-                  ctx.error = error_code::syntax_error;
+                  // boolean array (bit packed, LSB first)
+                  const auto n = int_from_compressed(ctx, it, end);
+                  if (bool(ctx.error)) [[unlikely]] {
+                     return;
+                  }
+                  const auto num_bytes = (n + 7) / 8;
+                  if (uint64_t(end - it) < num_bytes) [[unlikely]] {
+                     ctx.error = error_code::unexpected_end;
+                     return;
+                  }
+                  if (num_bytes && !packed_bool_padding_is_zero(uint8_t(*(it + (num_bytes - 1))), n)) [[unlikely]] {
+                     ctx.error = error_code::syntax_error;
+                     return;
+                  }
+                  for (size_t i = 0; i < n; ++i) {
+                     if (i != 0) {
+                        if (!emit_char(ctx, ',', out, ix)) return;
+                     }
+                     const bool x = (uint8_t(it[i / 8]) >> (i % 8)) & uint8_t(1);
+                     if (x) {
+                        if (!emit_literal<"true">(ctx, out, ix)) return;
+                     }
+                     else {
+                        if (!emit_literal<"false">(ctx, out, ix)) return;
+                     }
+                  }
+                  it += num_bytes;
                   break;
                }
                case 1: {
@@ -696,47 +724,64 @@ namespace glz
                const auto complex_header = uint8_t(*it);
                ++it;
 
-               const auto complex_type = complex_header & 0b0000000'1;
-               if (complex_type) {
-                  // complex array
-                  const auto number_tag = complex_header & 0b111'00000;
+               // The COMPLEX HEADER carries the component's numerical type (bits 3-4) and BYTE COUNT
+               // (bits 5-7) in the same positions as a number tag.
+               const uint8_t number_tag = tag::number | (complex_header & 0b111'11'000);
+
+               // Writes one complex value as [re,im]
+               auto write_complex = [&]() -> bool {
+                  if (!emit_char(ctx, '[', out, ix)) return false;
+                  beve_to_json_number<Opts>(number_tag, ctx, it, end, out, ix);
+                  if (bool(ctx.error)) [[unlikely]] {
+                     return false;
+                  }
+                  if (!emit_char(ctx, ',', out, ix)) return false;
+                  beve_to_json_number<Opts>(number_tag, ctx, it, end, out, ix);
+                  if (bool(ctx.error)) [[unlikely]] {
+                     return false;
+                  }
+                  return emit_char(ctx, ']', out, ix);
+               };
+
+               // Writes n complex values as [[re,im],...]
+               auto write_complex_array = [&](const size_t n) -> bool {
+                  if (!emit_char(ctx, '[', out, ix)) return false;
+                  for (size_t i = 0; i < n; ++i) {
+                     if (!write_complex()) return false;
+                     if (i != n - 1) {
+                        if (!emit_char(ctx, ',', out, ix)) return false;
+                     }
+                  }
+                  return emit_char(ctx, ']', out, ix);
+               };
+
+               switch (complex_header & glz::extension::complex_subtype_mask) {
+               case glz::extension::complex_number: {
+                  if (!write_complex()) return;
+                  break;
+               }
+               case glz::extension::complex_array: {
                   const auto n = int_from_compressed(ctx, it, end);
                   if (bool(ctx.error)) [[unlikely]] {
                      return;
                   }
-                  if (!emit_char(ctx, '[', out, ix)) return;
-                  for (size_t i = 0; i < n; ++i) {
-                     if (!emit_char(ctx, '[', out, ix)) return;
-                     beve_to_json_number<Opts>(number_tag, ctx, it, end, out, ix);
-                     if (bool(ctx.error)) [[unlikely]] {
-                        return;
-                     }
-                     if (!emit_char(ctx, ',', out, ix)) return;
-                     beve_to_json_number<Opts>(number_tag, ctx, it, end, out, ix);
-                     if (bool(ctx.error)) [[unlikely]] {
-                        return;
-                     }
-                     if (!emit_char(ctx, ']', out, ix)) return;
-                     if (i != n - 1) {
-                        if (!emit_char(ctx, ',', out, ix)) return;
-                     }
-                  }
-                  if (!emit_char(ctx, ']', out, ix)) return;
+                  if (!write_complex_array(n)) return;
+                  break;
                }
-               else {
-                  // complex number
-                  const auto number_tag = complex_header & 0b111'00000;
-                  if (!emit_char(ctx, '[', out, ix)) return;
-                  beve_to_json_number<Opts>(number_tag, ctx, it, end, out, ix);
+               case glz::extension::complex_aligned_array: {
+                  // Alignment is a storage property: the JSON matches an unaligned complex array
+                  const auto n = read_aligned_complex_header(ctx, it, end, complex_header);
                   if (bool(ctx.error)) [[unlikely]] {
                      return;
                   }
-                  if (!emit_char(ctx, ',', out, ix)) return;
-                  beve_to_json_number<Opts>(number_tag, ctx, it, end, out, ix);
-                  if (bool(ctx.error)) [[unlikely]] {
-                     return;
-                  }
-                  if (!emit_char(ctx, ']', out, ix)) return;
+                  if (!write_complex_array(n)) return;
+                  break;
+               }
+               default: {
+                  // Undefined complex sub-type
+                  ctx.error = error_code::syntax_error;
+                  return;
+               }
                }
 
                break;

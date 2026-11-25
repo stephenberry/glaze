@@ -18,11 +18,11 @@
 #include <unordered_map>
 #include <vector>
 
-#include "glaze/glaze.hpp"
-#include "glaze/json/patch.hpp"
-#include "glaze/util/env.hpp"
-#include "glaze/yaml.hpp"
-#include "ut/ut.hpp"
+import glaze;
+import glaze.json.patch;
+import glaze.util.env;
+import glaze.yaml;
+import ut;
 
 using namespace ut;
 namespace fs = std::filesystem;
