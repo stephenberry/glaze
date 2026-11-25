@@ -4413,7 +4413,10 @@ suite error_outputs = [] {
    "error in a binary buffer reports only the index"_test = [] {
       // Binary input held in a std::string has no lines to show, and printing it would write raw
       // bytes to the terminal.
-      const std::string s{"\x03\x08\x04" "a\x01\x00\x00", 7};
+      const std::string s{
+         "\x03\x08\x04"
+         "a\x01\x00\x00",
+         7};
       auto err = glz::format_error(glz::error_ctx{s.size(), glz::error_code::unexpected_end}, s);
       expect(err == "index 7: unexpected_end") << err;
       err = glz::format_error(glz::error_ctx{3, glz::error_code::syntax_error}, s);
