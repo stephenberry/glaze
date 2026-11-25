@@ -1,18 +1,18 @@
 // Tests for chunked transfer-encoding support in glz::http_client
 // Covers synchronous, asynchronous, and streaming paths
 
-#include <atomic>
-#include <chrono>
-#include <future>
-#include <map>
-#include <mutex>
-#include <numeric>
-#include <string>
-#include <thread>
+#include "glaze/ext/asio_include.hpp"
 
-#include "glaze/net/http_client.hpp"
-#include "glaze/net/http_server.hpp"
-#include "ut/ut.hpp"
+import std;
+
+import glaze.net.http_client;
+import glaze.net.http_router;
+import glaze.net.http_server;
+
+import ut;
+
+using std::size_t;
+using std::uint16_t;
 
 #if defined(GLZ_USING_BOOST_ASIO)
 namespace asio
@@ -86,7 +86,7 @@ struct chunked_test_server
       server_.on_error([this](std::error_code ec, std::source_location) {
          if (running_ && ec != make_error_code(asio::error::eof) &&
              ec != make_error_code(asio::error::operation_aborted)) {
-            std::fprintf(stderr, "Server error: %s\n", ec.message().c_str());
+            std::cerr << "Server error: " << ec.message() << '\n';
          }
       });
 

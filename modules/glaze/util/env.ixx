@@ -1,17 +1,14 @@
 // Glaze Library
-// For the license information refer to glaze.hpp
+// For the license information refer to glaze.ixx
+export module glaze.util.env;
 
-#pragma once
-
-#include <cstdlib>
-#include <optional>
-#include <string>
+import std;
 
 namespace glz
 {
    // Copy an environment variable into owned storage.
    // Returns std::nullopt if the variable is not present.
-   inline std::optional<std::string> getenv_copy(const char* name)
+   export inline std::optional<std::string> getenv_copy(const char* name)
    {
 #if defined(_MSC_VER) && !defined(__clang__)
       char* value = nullptr;
@@ -33,7 +30,7 @@ namespace glz
    }
 
    // Like getenv_copy(), but treats empty values as "not set".
-   inline std::optional<std::string> getenv_nonempty(const char* name)
+   export inline std::optional<std::string> getenv_nonempty(const char* name)
    {
       if (auto value = getenv_copy(name); value && !value->empty()) {
          return value;

@@ -1,38 +1,28 @@
 // Glaze Library
-// For the license information refer to glaze.hpp
-
-#pragma once
-
-#include <algorithm>
-#include <array>
-#include <atomic>
-#include <cstring>
-#include <deque>
-#include <functional>
-#include <memory>
-#include <mutex>
-#include <random>
-#include <string>
-#include <string_view>
-#include <unordered_map>
-#include <utility>
-#include <vector>
+// For the license information refer to glaze.ixx
+module;
+#include "glaze/ext/asio_include.hpp"
 
 // Optional OpenSSL support - detected at compile time
 #if defined(GLZ_ENABLE_OPENSSL) && __has_include(<openssl/sha.h>)
 #include <openssl/sha.h>
 #define GLZ_HAS_OPENSSL
+#endif
+
+export module glaze.net.websocket_connection;
+
+import std;
 
 // To deconflict Windows.h
 #ifdef DELETE
 #undef DELETE
 #endif
-#endif
 
-#include "glaze/base64/base64.hpp"
-#include "glaze/ext/glaze_asio.hpp"
-#include "glaze/net/http_router.hpp"
-#include "glaze/util/parse.hpp"
+export import glaze.base64;
+
+import glaze.net.http;
+
+import glaze.util.parse;
 
 using std::uint8_t;
 using std::uint16_t;
@@ -43,10 +33,10 @@ using std::size_t;
 namespace glz
 {
    // WebSocket opcode constants
-   enum class ws_opcode : uint8_t { continuation = 0x0, text = 0x1, binary = 0x2, close = 0x8, ping = 0x9, pong = 0xa };
+   export enum class ws_opcode : uint8_t { continuation = 0x0, text = 0x1, binary = 0x2, close = 0x8, ping = 0x9, pong = 0xa };
 
    // WebSocket close codes
-   enum class ws_close_code : uint16_t {
+   export enum class ws_close_code : uint16_t {
       normal = 1000,
       going_away = 1001,
       protocol_error = 1002,
@@ -225,7 +215,7 @@ namespace glz
       }
 
       // Generate WebSocket accept key from client key
-      inline std::string generate_accept_key(std::string_view client_key)
+      export inline std::string generate_accept_key(std::string_view client_key)
       {
          std::string combined = std::string(client_key) + "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
 
@@ -257,7 +247,7 @@ namespace glz
       }
 
       // Check if a string contains a value (case-insensitive, comma-separated)
-      inline bool header_contains(std::string_view header, std::string_view value)
+      export inline bool header_contains(std::string_view header, std::string_view value)
       {
          while (!header.empty()) {
             // Skip whitespace
@@ -293,11 +283,11 @@ namespace glz
    }
 
    // Forward declarations
-   template <typename SocketType = asio::ip::tcp::socket>
+   export template <typename SocketType = asio::ip::tcp::socket>
    struct websocket_connection;
 
    // Base class for type-erased connection closing
-   struct closeable_connection
+   export struct closeable_connection
    {
       virtual ~closeable_connection() = default;
       virtual void force_close() = 0;
@@ -313,7 +303,7 @@ namespace glz
    //   });
    // Only code that explicitly typed the concrete type or accessed internal members
    // (like socket_) needs to be updated.
-   struct websocket_connection_interface : public closeable_connection
+   export struct websocket_connection_interface : public closeable_connection
    {
       // Send operations
       virtual void send_text(std::string_view message) = 0;
@@ -350,7 +340,7 @@ namespace glz
    //      // ... use msg directly for synchronous processing ...
    //   });
    //
-   struct websocket_server
+   export struct websocket_server
    {
       // Handler types use websocket_connection_interface for type erasure.
       // This allows handlers to work with both TCP (ws://) and SSL (wss://) connections.
@@ -478,7 +468,7 @@ namespace glz
    // Message Handler Lifetime: The std::string_view passed to on_message callbacks
    // is only valid for the duration of the callback. Copy the data if you need to
    // retain it beyond the callback scope.
-   template <typename SocketType>
+   export template <typename SocketType>
    struct websocket_connection : public websocket_connection_interface,
                                  public std::enable_shared_from_this<websocket_connection<SocketType>>
    {

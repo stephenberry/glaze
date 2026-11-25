@@ -8,16 +8,16 @@
 // cases cover the shapes a destination-type walk would have to re-enumerate to find: a view behind
 // a tuple, behind a custom setter, or nested past any fixed depth bound.
 
-#include <map>
-#include <span>
-#include <sstream>
-#include <string>
-#include <string_view>
-#include <tuple>
-#include <vector>
+import std;
 
-#include "glaze/glaze.hpp"
-#include "glaze/json/json_stream.hpp"
+import glaze.beve.read;
+import glaze.core.common;
+import glaze.core.custom;
+import glaze.core.istream_buffer;
+import glaze.core.meta_fwd;
+import glaze.json.json_stream;
+import glaze.json.ndjson;
+import glaze.json.read;
 
 struct lvl5_t
 {

@@ -11,15 +11,17 @@
 //      returned to the pool. Pooling an EOF'd (half-closed) socket would hand the next
 //      request a dead connection.
 
-#include <atomic>
-#include <chrono>
-#include <memory>
-#include <string>
-#include <thread>
-#include <vector>
+#include "glaze/ext/asio_include.hpp"
 
-#include "glaze/net/http_client.hpp"
-#include "ut/ut.hpp"
+import std;
+
+import glaze.net.http_client;
+import glaze.net.http_router;
+
+import ut;
+
+using std::size_t;
+using std::uint16_t;
 
 #if defined(GLZ_USING_BOOST_ASIO)
 namespace asio

@@ -1,37 +1,29 @@
 // Glaze Library
-// For the license information refer to glaze.hpp
+// For the license information refer to glaze.ixx
+module;
+#include "glaze/ext/asio_include.hpp"
 
-#pragma once
+#if defined(GLZ_USING_BOOST_ASIO)
+#include <boost/asio/signal_set.hpp>
+#elif __has_include(<asio/signal_set.hpp>)
+#include <asio/signal_set.hpp>
+#endif
 
-#include <algorithm>
-#include <array>
-#include <atomic>
-#include <cctype>
-#include <charconv>
-#include <chrono>
-#include <condition_variable>
-#include <cstdint>
-#include <cstdio>
-#include <cstring>
-#include <expected>
-#include <functional>
-#include <glaze/glaze.hpp>
-#include <iostream>
-#include <mutex>
-#include <optional>
-#include <source_location>
-#include <thread>
-#include <unordered_map>
+export module glaze.net.http_server;
 
-#include "glaze/ext/glaze_asio.hpp"
-#include "glaze/net/cors.hpp"
-#include "glaze/net/http.hpp"
-#include "glaze/net/http_router.hpp"
-#include "glaze/net/openapi.hpp"
-#include "glaze/net/websocket_connection.hpp"
-#include "glaze/util/compare.hpp"
-#include "glaze/util/itoa.hpp"
-#include "glaze/util/key_transformers.hpp"
+import std;
+
+import glaze.net.cors;
+import glaze.net.http;
+import glaze.net.http_router;
+import glaze.net.http_streaming;
+import glaze.net.openapi;
+import glaze.net.websocket_connection;
+
+import glaze.util.atoi;
+import glaze.util.compare;
+import glaze.util.itoa;
+import glaze.util.key_transformers;
 
 // To deconflict Windows.h
 #ifdef DELETE
@@ -48,7 +40,7 @@ namespace glz
    namespace detail
    {
       // Produces an RFC 7231 §7.1.1.1 IMF-fixdate formatted HTTP date string
-      [[nodiscard]] inline std::string format_http_date(const std::chrono::sys_seconds time)
+      export [[nodiscard]] inline std::string format_http_date(const std::chrono::sys_seconds time)
       {
          static constexpr std::array<std::string_view, 7> weekdays = {"Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"};
          static constexpr std::array<std::string_view, 12> months = {"Jan", "Feb", "Mar", "Apr", "May", "Jun",
@@ -81,7 +73,7 @@ namespace glz
       inline constexpr bool is_ssl_stream<asio::ssl::stream<T>> = true;
 #endif
 
-      inline bool is_valid_ipv4_address(std::string_view address) noexcept
+      export inline bool is_valid_ipv4_address(std::string_view address) noexcept
       {
          // RFC 3986, Section 3.2.2:
          // A host identified by an IPv4 literal address is represented in
@@ -227,7 +219,7 @@ namespace glz
          return true;
       }
 
-      inline bool is_valid_ipv6_address(std::string_view address) noexcept
+      export inline bool is_valid_ipv6_address(std::string_view address) noexcept
       {
          constexpr size_t min_ipv6_length = 2; // "::"
          constexpr size_t max_ipv6_length = 45; // "xxxx:xxxx:xxxx:xxxx:xxxx:xxxx:255.255.255.255"
@@ -479,7 +471,7 @@ namespace glz
       // Deliberately stricter than RFC 3986 authority:
       //  - userinfo is rejected per RFC 9110, Section 4.2.4 (deprecated in http/https URIs)
       //  - IPvFuture literals are rejected by internal policy
-      inline bool is_valid_authority(std::string_view authority) noexcept
+      export inline bool is_valid_authority(std::string_view authority) noexcept
       {
          // RFC 9110, Section 7.2:
          // Host = uri-host [ ":" port ]
@@ -847,7 +839,7 @@ namespace glz
          return false;
       }
 
-      inline std::expected<detail::request_line, int> parse_request_line(std::string_view request_line)
+      export inline std::expected<detail::request_line, int> parse_request_line(std::string_view request_line)
       {
          static constexpr std::string_view http_version_prefix = "HTTP/";
 
@@ -945,60 +937,6 @@ namespace glz
          };
       }
    }
-
-   // Interface for streaming connections (type-erased for HTTP/HTTPS compatibility)
-   struct streaming_connection_interface
-   {
-      using data_sent_handler = std::function<void(std::error_code)>;
-      using disconnect_handler = std::function<void()>;
-
-      virtual ~streaming_connection_interface() = default;
-
-      // Send initial headers for streaming response
-      virtual void send_headers(int status_code, const std::unordered_map<std::string, std::string>& headers = {},
-                                data_sent_handler handler = {}) = 0;
-
-      // Send a chunk of data
-      virtual void send_chunk(std::string_view data, data_sent_handler handler = {}) = 0;
-
-      // Send Server-Sent Event
-      virtual void send_event(std::string_view event_type, std::string_view data, std::string_view id = {},
-                              data_sent_handler handler = {}) = 0;
-
-      // Close the streaming connection
-      virtual void close(disconnect_handler handler = {}) = 0;
-
-      // Set disconnect handler for client disconnection
-      virtual void on_disconnect(disconnect_handler handler) = 0;
-
-      // Check if connection is still alive
-      virtual bool is_open() const = 0;
-
-      // Get remote endpoint info
-      virtual std::string remote_address() const = 0;
-      virtual uint16_t remote_port() const = 0;
-
-      // Check if headers have been sent
-      virtual bool is_headers_sent() const = 0;
-
-      // Get executor for async operations (timers, etc.)
-      virtual asio::any_io_executor get_executor() const = 0;
-
-      // Send JSON as Server-Sent Event (convenience method using send_event)
-      template <class T>
-      void send_json_event(const T& data, std::string_view event_type = "message", std::string_view id = {},
-                           data_sent_handler handler = {})
-      {
-         std::string json_str;
-         auto ec = glz::write_json(data, json_str);
-         if (!ec) {
-            send_event(event_type, json_str, id, handler);
-         }
-         else if (handler) {
-            handler(std::make_error_code(std::errc::invalid_argument));
-         }
-      }
-   };
 
    // Streaming connection handle for server-side streaming
    template <typename SocketType = asio::ip::tcp::socket>
@@ -1280,79 +1218,10 @@ namespace glz
       }
    };
 
-   // Enhanced response class with streaming support
-   struct streaming_response
-   {
-      std::shared_ptr<streaming_connection_interface> stream;
-
-      streaming_response(std::shared_ptr<streaming_connection_interface> conn) : stream(std::move(conn)) {}
-
-      // Send headers and start streaming
-      streaming_response& start_stream(int status_code = 200,
-                                       const std::unordered_map<std::string, std::string>& headers = {})
-      {
-         if (stream) {
-            stream->send_headers(status_code, headers);
-         }
-         return *this;
-      }
-
-      // Send a chunk of data
-      streaming_response& send(std::string_view data)
-      {
-         if (stream) {
-            stream->send_chunk(data);
-         }
-         return *this;
-      }
-
-      // Send JSON data
-      template <class T>
-      streaming_response& send_json(const T& data)
-      {
-         if (stream) {
-            std::string json_str;
-            auto ec = glz::write_json(data, json_str);
-            if (!ec) {
-               stream->send_chunk(json_str);
-            }
-         }
-         return *this;
-      }
-
-      // Send Server-Sent Event
-      streaming_response& send_event(std::string_view event_type, std::string_view data, std::string_view id = {})
-      {
-         if (stream) {
-            stream->send_event(event_type, data, id);
-         }
-         return *this;
-      }
-
-      // Helper for SSE setup
-      streaming_response& as_event_stream()
-      {
-         return start_stream(200, {{"Content-Type", "text/event-stream"},
-                                   {"Cache-Control", "no-cache"},
-                                   {"Access-Control-Allow-Origin", "*"}});
-      }
-
-      // Close the stream
-      void close()
-      {
-         if (stream) {
-            stream->close();
-         }
-      }
-   };
-
-   // streaming_handler is declared in glaze/net/http_router.hpp so the router can
-   // store streaming routes uniformly with normal routes.
-
    // Wrapping middleware types
    // Non-copyable, non-movable wrapper to enforce synchronous execution
    // This prevents accidental storage and async invocation which would cause dangling references
-   struct next_handler final
+   export struct next_handler final
    {
       explicit next_handler(std::function<void()> fn) : fn_(std::move(fn)) {}
 
@@ -1386,7 +1255,7 @@ namespace glz
     * Controls keep-alive (persistent connection) settings for the HTTP server.
     * HTTP/1.1 defaults to keep-alive; this configuration allows tuning or disabling it.
     */
-   struct connection_config
+   export struct connection_config
    {
       /**
        * @brief Enable HTTP/1.1 persistent connections (keep-alive)
@@ -1429,7 +1298,7 @@ namespace glz
    };
 
    // Server implementation using non-blocking asio with WebSocket support
-   template <bool EnableTLS = false>
+   export template <bool EnableTLS = false>
    struct http_server
    {
       // Socket type abstraction
@@ -3402,6 +3271,5 @@ namespace glz
    } // namespace streaming_utils
 
    // Alias for HTTPS server
-   using https_server = http_server<true>;
+   export using https_server = http_server<true>;
 }
-

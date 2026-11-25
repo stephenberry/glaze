@@ -1,12 +1,14 @@
 // Glaze Library
-// For the license information refer to glaze.hpp
+// For the license information refer to glaze.ixx
 
-#include <fstream>
-#include <iostream>
+import std;
 
-#include "glaze/glaze.hpp"
-#include "glaze/net/http_server.hpp"
-#include "ut/ut.hpp"
+import glaze.core.reflect;
+import glaze.json.read;
+import glaze.net.http_router;
+import glaze.net.http_server;
+
+import ut;
 
 using namespace ut;
 

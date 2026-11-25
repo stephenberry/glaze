@@ -1,10 +1,15 @@
 // Glaze Library
-// For the license information refer to glaze.hpp
+// For the license information refer to glaze.ixx
 
-#include <span>
+import std;
 
-#include "glaze/rpc/repe/buffer.hpp"
-#include "ut/ut.hpp"
+import glaze.core.common;
+import glaze.rpc.repe.buffer;
+import glaze.rpc.repe.header;
+
+import glaze.core.context;
+
+import ut;
 
 using namespace ut;
 

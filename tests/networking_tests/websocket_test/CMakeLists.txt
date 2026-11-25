@@ -45,7 +45,7 @@ add_test(NAME ${PROJECT_NAME} COMMAND ${PROJECT_NAME})
 
 # WSS (WebSocket Secure) Test - requires OpenSSL with headers
 find_package(OpenSSL QUIET)
-if(OpenSSL_FOUND)
+if(OpenSSL_FOUND AND (NOT GLAZE_ENABLE_MODULES OR glaze_ENABLE_SSL OR glaze_BUILD_SSL_TESTS))
     # Verify OpenSSL headers are actually usable (not just libraries found)
     include(CheckCXXSourceCompiles)
     set(CMAKE_REQUIRED_INCLUDES ${OPENSSL_INCLUDE_DIR})

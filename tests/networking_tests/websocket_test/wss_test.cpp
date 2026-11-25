@@ -2,21 +2,21 @@
 // Verifies ASIO 1.32+ compatibility for SSL WebSocket client (issue #2164)
 // and WSS server support
 
-#include <atomic>
-#include <chrono>
-#include <fstream>
-#include <iostream>
-#include <thread>
-
 // Enable SSL before including headers
 #ifndef GLZ_ENABLE_SSL
 #define GLZ_ENABLE_SSL
 #endif
 
-#include "glaze/glaze.hpp"
-#include "glaze/net/http_server.hpp"
-#include "glaze/net/websocket_client.hpp"
-#include "ut/ut.hpp"
+#include "glaze/ext/asio_include.hpp"
+
+import std;
+
+import glaze.net.http;
+import glaze.net.http_server;
+import glaze.net.websocket_client;
+import glaze.net.websocket_connection;
+
+import ut;
 
 // OpenSSL includes for certificate generation
 #include <openssl/evp.h>
@@ -35,6 +35,8 @@ extern "C" {
 #endif
 
 using std::size_t;
+using std::uint8_t;
+using std::uint16_t;
 
 using namespace ut;
 using namespace glz;
@@ -117,27 +119,27 @@ namespace
       }
 
       // Write private key
-      FILE* key_file = nullptr;
+      std::FILE* key_file = nullptr;
 #ifdef _MSC_VER
       fopen_s(&key_file, "wss_test_key.pem", "w");
 #else
-      key_file = fopen("wss_test_key.pem", "w");
+      key_file = std::fopen("wss_test_key.pem", "w");
 #endif
       if (key_file) {
          PEM_write_PrivateKey(key_file, pkey, nullptr, nullptr, 0, nullptr, nullptr);
-         fclose(key_file);
+         std::fclose(key_file);
       }
 
       // Write certificate
-      FILE* cert_file = nullptr;
+      std::FILE* cert_file = nullptr;
 #ifdef _MSC_VER
       fopen_s(&cert_file, "wss_test_cert.pem", "w");
 #else
-      cert_file = fopen("wss_test_cert.pem", "w");
+      cert_file = std::fopen("wss_test_cert.pem", "w");
 #endif
       if (cert_file) {
          PEM_write_X509(cert_file, x509);
-         fclose(cert_file);
+         std::fclose(cert_file);
       }
 
       X509_free(x509);

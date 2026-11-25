@@ -1,10 +1,15 @@
-#include <atomic>
-#include <chrono>
-#include <thread>
+#include "glaze/ext/asio_include.hpp"
 
-#include "glaze/net/http_server.hpp"
-#include "glaze/net/websocket_client.hpp"
-#include "ut/ut.hpp"
+import std;
+
+import glaze.net.http;
+import glaze.net.http_server;
+import glaze.net.websocket_client;
+import glaze.net.websocket_connection;
+
+import ut;
+
+using std::uint16_t;
 
 using namespace ut;
 using namespace glz;

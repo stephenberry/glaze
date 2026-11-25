@@ -1,28 +1,28 @@
 // Glaze Library
-// For the license information refer to glaze.hpp
+// For the license information refer to glaze.ixx
 
 // Unit Tests for Glaze HTTP Async Routes and Server API
 // Tests async route handling, server lifecycle, and advanced routing features
 
-#include <atomic>
-#include <chrono>
-#include <future>
-#include <memory>
-#include <string>
-#include <thread>
-#include <vector>
+#include "glaze/ext/asio_include.hpp"
 
-#include "glaze/glaze.hpp"
-#include "glaze/net/http_client.hpp"
-#include "glaze/net/http_router.hpp"
-#include "glaze/net/http_server.hpp"
-#include "ut/ut.hpp"
+import std;
+
+import glaze.core.opts;
+import glaze.json.read;
+import glaze.net.cors;
+import glaze.net.http_client;
+import glaze.net.http_router;
+import glaze.net.http_server;
+
+import ut;
+
+using std::size_t;
+using std::uint16_t;
+using std::uint32_t;
+using std::uint64_t;
 
 #if defined(GLZ_USING_BOOST_ASIO)
-
-using std::uint64_t;
-using std::size_t;
-
 namespace asio
 {
    using namespace boost::asio;

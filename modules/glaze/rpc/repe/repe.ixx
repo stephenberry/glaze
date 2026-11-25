@@ -1,37 +1,33 @@
 // Glaze Library
-// For the license information refer to glaze.hpp
+// For the license information refer to glaze.ixx
+// glz:header path="glaze/rpc/repe/repe.hpp"
+// glz:header std=<concepts>
+// glz:header std=<cstddef>
+// glz:header std=<cstdint>
+// glz:header std=<cstring>
+// glz:header std=<span>
+// glz:header std=<string>
+// glz:header std=<string_view>
+// glz:header std=<tuple>
+// glz:header std=<type_traits>
+// glz:header std=<utility>
+export module glaze.rpc.repe;
 
-#pragma once
+import std;
 
-#include <cstring>
-#include <span>
+import glaze.rpc.registry_fwd;
+import glaze.rpc.repe.header;
 
-#include "glaze/core/opts.hpp"
-#include "glaze/json/write.hpp"
-#include "glaze/rpc/repe/header.hpp"
+import glaze.core.context;
+import glaze.core.opts;
+import glaze.core.reflect;
+import glaze.core.write;
 
+import glaze.json.write;
+
+using std::size_t;
 using std::uint32_t;
 using std::uint64_t;
-using std::size_t;
-
-namespace glz
-{
-   // Single template storage for all protocol-specific storage
-   template <uint32_t P>
-   struct protocol_storage
-   {};
-}
-
-namespace glz::detail
-{
-   struct string_hash
-   {
-      using is_transparent = void;
-      [[nodiscard]] size_t operator()(const char* txt) const { return std::hash<std::string_view>{}(txt); }
-      [[nodiscard]] size_t operator()(std::string_view txt) const { return std::hash<std::string_view>{}(txt); }
-      [[nodiscard]] size_t operator()(const std::string& txt) const { return std::hash<std::string>{}(txt); }
-   };
-}
 
 namespace glz::repe
 {
@@ -236,11 +232,11 @@ namespace glz::repe
       };
    }
 
-   template <auto Opts>
+   export template <auto Opts>
    inline constexpr auto request = detail::request_impl<Opts>{};
 
-   inline constexpr auto request_beve = request<opts{BEVE}>;
-   inline constexpr auto request_json = request<opts{JSON}>;
+   export inline constexpr auto request_beve = request<opts{BEVE}>;
+   export inline constexpr auto request_json = request<opts{JSON}>;
 
    // ============================================================
    // View Types (zero-copy for query/body, stack-copy for header)
@@ -250,7 +246,7 @@ namespace glz::repe
    /// Header is copied (48 bytes via memcpy) for alignment safety
    /// Query and body are views into the original buffer
    /// Lifetime: Query/body views valid only while underlying buffer exists
-   struct request_view
+   export struct request_view
    {
       header hdr{}; // Copied from buffer (stack allocated, 48 bytes)
       std::string_view query{}; // View into buffer
@@ -264,7 +260,7 @@ namespace glz::repe
    };
 
    /// Result of parsing a buffer into a request_view
-   struct parse_result
+   export struct parse_result
    {
       request_view request{};
       error_code ec{error_code::none};
@@ -277,7 +273,7 @@ namespace glz::repe
    /// Query and body are views into the original buffer
    /// @param buffer Raw REPE message bytes
    /// @return parse_result with request_view on success, error_code on failure
-   [[nodiscard]] inline parse_result parse_request(std::span<const char> buffer) noexcept
+   export [[nodiscard]] inline parse_result parse_request(std::span<const char> buffer) noexcept
    {
       parse_result result{};
 
@@ -333,7 +329,7 @@ namespace glz::repe
    /// Can write to either:
    /// - A raw buffer (for span-based zero-copy path)
    /// - A repe::message directly (for message-based calls)
-   struct response_builder
+   export struct response_builder
    {
       std::string* buffer_{};
       message* msg_{};
@@ -551,7 +547,7 @@ namespace glz::repe
    /// Zero-copy state for RPC procedures
    /// Input is a view into the original request buffer
    /// Output writes directly to the response buffer
-   struct state_view final
+   export struct state_view final
    {
       const request_view& in;
       response_builder& out;
@@ -567,7 +563,7 @@ namespace glz::repe
    /// Returns false on error, with the error set in state.out -- except for a notification, which
    /// is left unanswered and so leaves state.out untouched. See the note on the overload above for
    /// why this is not a byte count.
-   template <auto Opts, class Value>
+   export template <auto Opts, class Value>
    bool read_params(Value&& value, state_view& state)
    {
       glz::context ctx{};
@@ -604,7 +600,7 @@ namespace glz::repe
    }
 
    /// Write response with a value (zero-copy to output buffer)
-   template <auto Opts, class Value>
+   export template <auto Opts, class Value>
    void write_response(Value&& value, state_view& state)
    {
       state.out.reset(state.in);
@@ -615,7 +611,7 @@ namespace glz::repe
    }
 
    /// Write response without a value (null body)
-   template <auto Opts>
+   export template <auto Opts>
    void write_response(state_view& state)
    {
       state.out.reset(state.in);

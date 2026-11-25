@@ -1,22 +1,36 @@
 // Glaze Library
-// For the license information refer to glaze.hpp
-
-#pragma once
-
+// For the license information refer to glaze.ixx
+// glz:header path="glaze/rpc/repe/buffer.hpp"
+// glz:header std=<cstddef>
+// glz:header std=<cstdint>
+// glz:header std=<cstring>
+// glz:header std=<limits>
+// glz:header std=<optional>
+// glz:header std=<span>
+// glz:header std=<string>
+// glz:header std=<string_view>
+// glz:header std=<utility>
+module;
 #include <cstddef>
-#include <cstring>
-#include <optional>
-#include <span>
 
-#include "glaze/core/reflect.hpp"
-#include "glaze/json/read.hpp"
-#include "glaze/rpc/repe/header.hpp"
+export module glaze.rpc.repe.buffer;
 
-using std::uint8_t;
+import std;
+
+import glaze.rpc.repe.header;
+
+import glaze.core.read;
+import glaze.core.reflect;
+import glaze.core.context;
+import glaze.core.opts;
+
+import glaze.json.read;
+
+using std::size_t;
 using std::uint16_t;
 using std::uint32_t;
 using std::uint64_t;
-using std::size_t;
+using std::uint8_t;
 
 namespace glz::repe
 {
@@ -26,7 +40,7 @@ namespace glz::repe
 
    /// Finalize message header lengths after modifying query/body
    /// @param msg The message to finalize
-   inline void finalize_header(message& msg)
+   export inline void finalize_header(message& msg)
    {
       msg.header.query_length = msg.query.size();
       msg.header.body_length = msg.body.size();
@@ -37,13 +51,13 @@ namespace glz::repe
    // Error encoding/decoding
    // ============================================================
 
-   inline void encode_error(const error_code ec, message& msg)
+   export inline void encode_error(const error_code ec, message& msg)
    {
       msg.header.ec = ec;
       msg.body.clear();
    }
 
-   template <class ErrorMessage>
+   export template <class ErrorMessage>
       requires(requires(ErrorMessage m) { m.size(); })
    inline void encode_error(const error_code ec, message& msg, ErrorMessage&& error_message)
    {
@@ -59,7 +73,7 @@ namespace glz::repe
       msg.body = error_message;
    }
 
-   template <class ErrorMessage>
+   export template <class ErrorMessage>
       requires(not requires(ErrorMessage m) { m.size(); })
    inline void encode_error(const error_code ec, message& msg, ErrorMessage&& error_message)
    {
@@ -67,7 +81,7 @@ namespace glz::repe
    }
 
    /// Decodes a repe::message when an error has been encountered
-   inline std::string decode_error(message& msg)
+   export inline std::string decode_error(message& msg)
    {
       if (bool(msg.error())) {
          const auto ec = msg.header.ec;
@@ -88,7 +102,7 @@ namespace glz::repe
 
    /// Decodes a repe::message into a structure
    /// Returns a std::string with a formatted error on error
-   template <auto Opts = opts{}, class T>
+   export template <auto Opts = opts{}, class T>
    inline std::optional<std::string> decode_message(T&& value, message& msg)
    {
       if (bool(msg.header.ec)) {
@@ -122,7 +136,7 @@ namespace glz::repe
    /// Serialize a repe::message to a string buffer
    /// @param msg The message to serialize
    /// @return String containing the wire-format bytes (header + query + body)
-   inline std::string to_buffer(const message& msg)
+   export inline std::string to_buffer(const message& msg)
    {
       std::string buffer;
       buffer.resize(sizeof(header) + msg.query.size() + msg.body.size());
@@ -135,7 +149,7 @@ namespace glz::repe
    /// Serialize a repe::message to an existing buffer
    /// @param msg The message to serialize
    /// @param buffer Output buffer (will be resized)
-   inline void to_buffer(const message& msg, std::string& buffer)
+   export inline void to_buffer(const message& msg, std::string& buffer)
    {
       buffer.resize(sizeof(header) + msg.query.size() + msg.body.size());
       std::memcpy(buffer.data(), &msg.header, sizeof(header));
@@ -152,7 +166,7 @@ namespace glz::repe
    /// @param size Size of data in bytes
    /// @param msg Output message
    /// @return error_code::none on success, appropriate error on failure
-   inline error_code from_buffer(const char* data, size_t size, message& msg)
+   export inline error_code from_buffer(const char* data, size_t size, message& msg)
    {
       if (size < sizeof(header)) {
          return error_code::invalid_header;
@@ -190,7 +204,7 @@ namespace glz::repe
    }
 
    /// Deserialize from string_view
-   inline error_code from_buffer(std::string_view data, message& msg)
+   export inline error_code from_buffer(std::string_view data, message& msg)
    {
       return from_buffer(data.data(), data.size(), msg);
    }
@@ -204,7 +218,7 @@ namespace glz::repe
    /// @param size Size of data in bytes
    /// @param hdr Output header
    /// @return error_code::none on success
-   inline error_code parse_header(const char* data, size_t size, header& hdr)
+   export inline error_code parse_header(const char* data, size_t size, header& hdr)
    {
       if (size < sizeof(header)) {
          return error_code::invalid_header;
@@ -220,7 +234,7 @@ namespace glz::repe
    }
 
    /// Parse only the header from string_view
-   inline error_code parse_header(std::string_view data, header& hdr)
+   export inline error_code parse_header(std::string_view data, header& hdr)
    {
       return parse_header(data.data(), data.size(), hdr);
    }
@@ -229,7 +243,7 @@ namespace glz::repe
    /// @param data Pointer to wire-format data
    /// @param size Size of data in bytes
    /// @return The query string, or empty string on error
-   inline std::string_view extract_query(const char* data, size_t size)
+   export inline std::string_view extract_query(const char* data, size_t size)
    {
       if (size < sizeof(header)) {
          return {};
@@ -253,7 +267,7 @@ namespace glz::repe
    }
 
    /// Extract just the query string from string_view
-   inline std::string_view extract_query(std::string_view data) { return extract_query(data.data(), data.size()); }
+   export inline std::string_view extract_query(std::string_view data) { return extract_query(data.data(), data.size()); }
 
    // ============================================================
    // Zero-copy helper functions (for raw buffer call handlers)
@@ -263,7 +277,7 @@ namespace glz::repe
    /// Uses offsetof for robustness against header layout changes
    /// @param data Span of raw message bytes
    /// @return true if this is a notification (no response expected)
-   inline bool is_notify(std::span<const char> data) noexcept
+   export inline bool is_notify(std::span<const char> data) noexcept
    {
       if (data.size() < sizeof(header)) return false;
       uint8_t notify{};
@@ -274,7 +288,7 @@ namespace glz::repe
    /// Extract message ID without full deserialization
    /// @param data Span of raw message bytes
    /// @return The message ID, or 0 if data is too small
-   inline uint64_t extract_id(std::span<const char> data) noexcept
+   export inline uint64_t extract_id(std::span<const char> data) noexcept
    {
       if (data.size() < sizeof(header)) return 0;
       uint64_t id{};
@@ -285,7 +299,7 @@ namespace glz::repe
    /// Quick validation without full parse
    /// @param data Span of raw message bytes
    /// @return error_code::none if valid, appropriate error otherwise
-   inline error_code validate_header_only(std::span<const char> data) noexcept
+   export inline error_code validate_header_only(std::span<const char> data) noexcept
    {
       if (data.size() < sizeof(header)) return error_code::invalid_header;
 
@@ -304,7 +318,7 @@ namespace glz::repe
    /// @param buffer Output buffer (will be resized)
    /// @param error_message The error message text
    /// @param id Optional message ID to include in response
-   template <class ErrorMessage>
+   export template <class ErrorMessage>
    inline void encode_error_buffer(error_code ec, std::string& buffer, ErrorMessage&& error_message, uint64_t id = 0)
    {
       header hdr{};
@@ -331,11 +345,10 @@ namespace glz::repe
    /// @param message The error message text
    /// @param id Optional message ID
    /// @return String containing the complete error response
-   inline std::string make_error_response(error_code ec, std::string_view message, uint64_t id = 0)
+   export inline std::string make_error_response(error_code ec, std::string_view message, uint64_t id = 0)
    {
       std::string buffer;
       encode_error_buffer(ec, buffer, message, id);
       return buffer;
    }
 }
-

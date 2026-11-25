@@ -1,11 +1,8 @@
 // Glaze Library
-// For the license information refer to glaze.hpp
+// For the license information refer to glaze.ixx
+export module glaze.net.url;
 
-#pragma once
-
-#include <string>
-#include <string_view>
-#include <unordered_map>
+import std;
 
 using std::size_t;
 
@@ -37,7 +34,7 @@ namespace glz
     * @param input The URL-encoded string
     * @param output The buffer to write the decoded string to (cleared before writing)
     */
-   inline void url_decode(std::string_view input, std::string& output)
+   export inline void url_decode(std::string_view input, std::string& output)
    {
       output.clear();
       output.reserve(input.size());
@@ -68,7 +65,7 @@ namespace glz
     * @param input The URL-encoded string
     * @return The decoded string
     */
-   [[nodiscard]] inline std::string url_decode(std::string_view input)
+   export [[nodiscard]] inline std::string url_decode(std::string_view input)
    {
       std::string result;
       url_decode(input, result);
@@ -86,7 +83,7 @@ namespace glz
     * @param input The string to encode
     * @param output The buffer to write the encoded string to (cleared before writing)
     */
-   inline void url_encode(std::string_view input, std::string& output)
+   export inline void url_encode(std::string_view input, std::string& output)
    {
       output.clear();
       output.reserve(input.size() * 3); // worst case: every char encoded
@@ -120,7 +117,7 @@ namespace glz
     * @param input The string to encode
     * @return The encoded string
     */
-   [[nodiscard]] inline std::string url_encode(std::string_view input)
+   export [[nodiscard]] inline std::string url_encode(std::string_view input)
    {
       std::string result;
       url_encode(input, result);
@@ -138,7 +135,7 @@ namespace glz
     * @param key_buffer Optional reusable buffer for key decoding (avoids allocations)
     * @param value_buffer Optional reusable buffer for value decoding (avoids allocations)
     */
-   inline void parse_urlencoded(std::string_view query_string, std::unordered_map<std::string, std::string>& output,
+   export inline void parse_urlencoded(std::string_view query_string, std::unordered_map<std::string, std::string>& output,
                                 std::string& key_buffer, std::string& value_buffer)
    {
       output.clear();
@@ -188,7 +185,7 @@ namespace glz
     * @param query_string The query string (without leading '?')
     * @param output The map to write key-value pairs to (cleared before writing)
     */
-   inline void parse_urlencoded(std::string_view query_string, std::unordered_map<std::string, std::string>& output)
+   export inline void parse_urlencoded(std::string_view query_string, std::unordered_map<std::string, std::string>& output)
    {
       std::string key_buffer;
       std::string value_buffer;
@@ -209,7 +206,7 @@ namespace glz
     * @param query_string The query string (without leading '?')
     * @return Map of decoded key-value pairs
     */
-   [[nodiscard]] inline std::unordered_map<std::string, std::string> parse_urlencoded(std::string_view query_string)
+   export [[nodiscard]] inline std::unordered_map<std::string, std::string> parse_urlencoded(std::string_view query_string)
    {
       std::unordered_map<std::string, std::string> result;
       parse_urlencoded(query_string, result);
@@ -219,7 +216,7 @@ namespace glz
    /**
     * @brief Result of splitting a target into path and query string
     */
-   struct target_components
+   export struct target_components
    {
       std::string_view path{};
       std::string_view query_string{};
@@ -236,7 +233,7 @@ namespace glz
     * @param target The full request target (path + optional query string)
     * @return The path and query string components (query string without '?')
     */
-   constexpr target_components split_target(std::string_view target) noexcept
+   export constexpr target_components split_target(std::string_view target) noexcept
    {
       const size_t query_pos = target.find('?');
       if (query_pos == std::string_view::npos) {

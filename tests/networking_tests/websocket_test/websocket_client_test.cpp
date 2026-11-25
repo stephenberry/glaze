@@ -1,24 +1,20 @@
-#include "glaze/net/websocket_client.hpp"
+#include "glaze/ext/asio_include.hpp"
 
-#include <algorithm>
-#include <array>
-#include <atomic>
-#include <cctype>
-#include <chrono>
-#include <iomanip>
-#include <iostream>
-#include <mutex>
-#include <random>
-#include <thread>
-#include <vector>
+import std;
 
-#include "glaze/glaze.hpp"
-#include "glaze/net/http_client.hpp"
-#include "glaze/net/http_server.hpp"
-#include "glaze/net/websocket_connection.hpp"
-#include "ut/ut.hpp"
+import glaze;
+import glaze.net.http_client;
+import glaze.net.http_router;
+import glaze.net.http_server;
+import glaze.net.websocket_client;
+import glaze.net.websocket_connection;
+
+import ut;
 
 using std::size_t;
+using std::int64_t;
+using std::uint8_t;
+using std::uint16_t;
 
 using namespace ut;
 using namespace glz;

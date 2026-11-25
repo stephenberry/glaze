@@ -1,51 +1,32 @@
 // Glaze Library
-// For the license information refer to glaze.hpp
+// For the license information refer to glaze.ixx
+module;
+#include "glaze/ext/asio_include.hpp"
 
-#pragma once
-
-#if defined(_WIN32) && !defined(_WIN32_WINNT) && !defined(_WIN32_WINDOWS)
-// ASIO requires a Windows target macro; if missing, it warns and assumes Windows 7.
-// Set that same default explicitly (0x0601 = Windows 7) only when the build has not
-// already provided _WIN32_WINNT/_WIN32_WINDOWS, so project-defined values still win.
-// This is a fallback only: if Windows/ASIO headers were included earlier, this define
-// may come too late to affect their internal target-version checks.
-#define _WIN32_WINNT 0x0601
-#endif
-
-#if defined(_WIN32) && defined(_WINSOCKAPI_) && !defined(_WINSOCK2API_)
-#error glaze/ext/glaze_asio.hpp cannot be included after Windows.h has included Winsock.h. \
-       Define WIN32_LEAN_AND_MEAN before including Windows.h to prevent Windows.h from including Winsock.h.
-#endif
-
-// Two distinct, intentionally similar macros govern the Asio backend. Do not confuse them:
-//
-//   GLZ_USE_BOOST_ASIO   - INPUT (you set it, or CMake's glaze::asio target sets it).
-//                          Suppresses the standalone <asio.hpp> branch below so the
-//                          Boost branch is taken even when standalone Asio is also on
-//                          the include path. This is the knob that forces Boost.
-//   GLZ_USING_BOOST_ASIO - OUTPUT (this header defines it; never set it yourself).
-//                          Reports that the Boost branch was actually taken. All code
-//                          downstream of this block keys off GLZ_USING_BOOST_ASIO.
-//
-// In short: define GLZ_USE_BOOST_ASIO to choose Boost; read GLZ_USING_BOOST_ASIO to
-// learn what was chosen. cmake/glaze-asio.cmake sets the former on the glaze::asio
-// target so the linked backend and this header can never disagree (issue #2599).
-#if __has_include(<asio.hpp>) && !defined(GLZ_USE_BOOST_ASIO)
-#include <asio.hpp>
-#include <asio/signal_set.hpp>
-#ifdef GLZ_ENABLE_SSL
-#include <asio/ssl.hpp>
-#endif
-#elif __has_include(<boost/asio.hpp>)
-#ifndef GLZ_USING_BOOST_ASIO
-#define GLZ_USING_BOOST_ASIO
-#endif
-#include <boost/asio.hpp>
+#if defined(GLZ_USING_BOOST_ASIO)
 #include <boost/asio/signal_set.hpp>
-#ifdef GLZ_ENABLE_SSL
-#include <boost/asio/ssl.hpp>
+#elif __has_include(<asio/signal_set.hpp>)
+#include <asio/signal_set.hpp>
 #endif
-#else
+
+export module glaze.ext.glaze_asio;
+
+import std;
+
+import glaze.rpc.registry;
+import glaze.rpc.repe.buffer;
+import glaze.rpc.repe;
+
+import glaze.core.common;
+import glaze.core.opts;
+import glaze.core.read;
+import glaze.core.reflect;
+import glaze.rpc.repe.header;
+
+import glaze.core.context;
+
+import glaze.util.buffer_pool;
+import glaze.util.memory_pool;
 
 using std::uint8_t;
 using std::uint16_t;
@@ -53,30 +34,8 @@ using std::uint32_t;
 using std::uint64_t;
 using std::size_t;
 
-static_assert(false, "standalone or boost asio must be included to use glaze/ext/glaze_asio.hpp");
-#endif
-
-#include <algorithm>
-#include <atomic>
-#include <cassert>
-#include <coroutine>
-#include <span>
-
-#include "glaze/rpc/registry.hpp"
-#include "glaze/rpc/repe/buffer.hpp"
-#include "glaze/util/buffer_pool.hpp"
-#include "glaze/util/memory_pool.hpp"
-
 namespace glz
 {
-#if defined(GLZ_USING_BOOST_ASIO)
-   namespace asio
-   {
-      using namespace boost::asio;
-      using error_code = boost::system::error_code;
-      using system_error = boost::system::system_error;
-   }
-#endif
    inline void send_buffer(asio::ip::tcp::socket& socket, repe::message& msg)
    {
       if (msg.header.length == 0) {
@@ -358,7 +317,7 @@ namespace glz
       }
    };
 
-   template <auto Opts = opts{}>
+   export template <auto Opts = opts{}>
    struct asio_client
    {
       std::string host{"localhost"}; // host name
@@ -623,7 +582,7 @@ namespace glz
       }
    };
 
-   template <auto Opts = opts{}>
+   export template <auto Opts = opts{}>
    struct asio_server
    {
       uint16_t port{}; // 0 will select a random free port
@@ -1224,4 +1183,3 @@ namespace glz
       }
    };
 }
-

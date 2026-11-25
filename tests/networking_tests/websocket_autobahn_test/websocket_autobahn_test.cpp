@@ -1,20 +1,16 @@
-#include <atomic>
-#include <charconv>
-#include <chrono>
-#include <cstdint>
-#include <cstdlib>
-#include <format>
-#include <fstream>
-#include <iostream>
-#include <mutex>
-#include <optional>
-#include <string>
-#include <string_view>
-#include <system_error>
-#include <thread>
+#include "glaze/ext/asio_include.hpp"
 
-#include "glaze/net/websocket_client.hpp"
-#include "ut/ut.hpp"
+import std;
+
+import glaze.net.websocket_client;
+import glaze.net.websocket_connection;
+
+import ut;
+
+using std::size_t;
+using std::uint8_t;
+using std::uint32_t;
+using std::uint64_t;
 
 using namespace ut;
 using namespace glz;

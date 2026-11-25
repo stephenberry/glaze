@@ -1,19 +1,23 @@
 // Glaze Library
-// For the license information refer to glaze.hpp
+// For the license information refer to glaze.ixx
 
-#include "ut/ut.hpp"
+import std;
+
+import glaze.core.common;
+import glaze.ext.glaze_asio;
+import glaze.json.write;
+import glaze.rpc.repe.buffer;
+import glaze.rpc.repe.header;
+import glaze.rpc.repe;
+import glaze.core.context;
+import glaze.thread.async_string;
+
+import ut;
 
 using std::size_t;
+using std::uint16_t;
 
 using namespace ut;
-
-#include <iostream>
-#include <latch>
-#include <numeric>
-#include <thread>
-
-#include "glaze/ext/glaze_asio.hpp"
-#include "glaze/thread/async_string.hpp"
 
 // This test code is self-contained and spawns both the server and the client
 

@@ -1,24 +1,24 @@
 // Glaze Library
-// For the license information refer to glaze.hpp
+// For the license information refer to glaze.ixx
+export module glaze.net.http_router;
 
-#pragma once
+import std;
 
-#include <algorithm>
-#include <functional>
-#include <future>
-#include <iostream>
-#include <memory>
-#include <optional>
-#include <source_location>
-#include <string>
-#include <string_view>
-#include <unordered_map>
-#include <vector>
+export import glaze.net.http;
+export import glaze.net.http_streaming;
+import glaze.net.url;
+export import glaze.net.websocket_connection;
 
-#include "glaze/json/generic.hpp"
-#include "glaze/net/http.hpp"
-#include "glaze/net/url.hpp"
-#include "glaze/util/key_transformers.hpp"
+import glaze.json.generic;
+import glaze.util.key_transformers;
+
+import glaze.core.opts;
+import glaze.core.write;
+
+using std::uint8_t;
+using std::uint16_t;
+using std::uint32_t;
+using std::size_t;
 
 // To deconflict Windows.h, which defines a DELETE macro that collides with the
 // http_method::DELETE used in the route helpers below. http.hpp's own undef is
@@ -30,30 +30,6 @@
 
 namespace glz
 {
-   namespace detail
-   {
-      struct request_line
-      {
-         http_method method;
-         std::string_view target;
-         bool is_http11;
-      };
-   }
-
-   // Request context object
-   struct request
-   {
-      http_method method{};
-      std::string target{}; // Full request target (path + query string)
-      std::string path{}; // Path component only (without query string)
-      std::unordered_map<std::string, std::string> params{}; // Path parameters (e.g., :id)
-      std::unordered_map<std::string, std::string> query{}; // Query parameters (e.g., ?limit=10)
-      std::unordered_map<std::string, std::string> headers{};
-      std::string body{};
-      std::string remote_ip{};
-      uint16_t remote_port{};
-   };
-
    // Serialized to the response body when response::body<Opts>(value) fails
    // to write `value`. Declared at namespace scope so glaze's reflection can
    // name the type; function-local types are not reflectable on GCC.
@@ -65,7 +41,7 @@ namespace glz
    };
 
    // Response builder
-   struct response
+   export struct response
    {
       enum header_flag : uint8_t {
          has_content_length = 1,
@@ -183,20 +159,13 @@ namespace glz
       }
    };
 
-   using handler = std::function<void(const request&, response&)>;
+   export using handler = std::function<void(const request&, response&)>;
    using async_handler = std::function<std::future<void>(const request&, response&)>;
-   using error_handler = std::function<void(std::error_code, std::source_location)>;
-
-   // Forward declarations for streaming and WebSocket support.
-   // Full definitions live in glaze/net/http_server.hpp and glaze/net/websocket_connection.hpp.
-   // Forward declarations are sufficient here because streaming_handler holds streaming_response
-   // by reference and websocket_handler holds websocket_server through std::shared_ptr.
-   struct streaming_response;
-   struct websocket_server;
+   export using error_handler = std::function<void(std::error_code, std::source_location)>;
 
    // Streaming handler signature. Streaming routes take over the connection lifecycle
    // (no keep-alive) and write chunked responses through streaming_response.
-   using streaming_handler = std::function<void(request&, streaming_response&)>;
+   export using streaming_handler = std::function<void(request&, streaming_response&)>;
 
    // WebSocket handler value: a websocket_server instance is bound to a path. The HTTP
    // server detects the upgrade handshake (Upgrade: websocket) and dispatches to the
@@ -208,7 +177,7 @@ namespace glz
     *
     * Defines validation rules for route parameters using a validation function.
     */
-   struct param_constraint
+   export struct param_constraint
    {
       /**
        * @brief Human-readable description of the constraint
@@ -229,7 +198,7 @@ namespace glz
    /**
     * @brief An entry for a registered route.
     */
-   struct route_spec
+   export struct route_spec
    {
       std::string description{};
       std::vector<std::string> tags{};
@@ -253,7 +222,7 @@ namespace glz
     * @tparam H The stored handler type. Must be default-constructible (the empty value
     *           returned by match() when no route matches is H{}).
     */
-   template <class H>
+   export template <class H>
    struct route_table
    {
       /**
@@ -402,8 +371,7 @@ namespace glz
             entry.spec = spec;
          }
          catch (const std::exception& e) {
-            std::fprintf(stderr, "Error adding route '%.*s': %s\n", static_cast<int>(path.length()), path.data(),
-                         e.what());
+            std::cerr << "Error adding route '" << path << "': " << e.what() << '\n';
          }
       }
 
@@ -857,7 +825,7 @@ namespace glz
     * Note: http_server::mount() only accepts the default http_router (basic_http_router<>).
     * Custom handler routers are intended for standalone use or with custom server implementations.
     */
-   template <class Handler = std::function<void(const request&, response&)>>
+   export template <class Handler = std::function<void(const request&, response&)>>
       requires std::invocable<Handler, const request&, response&>
    struct basic_http_router
    {
@@ -1160,6 +1128,5 @@ namespace glz
     * if you need to customize the handler type for coroutines, different futures
     * implementations, or callback-based architectures.
     */
-   using http_router = basic_http_router<>;
+   export using http_router = basic_http_router<>;
 }
-

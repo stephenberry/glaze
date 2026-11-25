@@ -1,27 +1,38 @@
 // Glaze Library
-// For the license information refer to glaze.hpp
+// For the license information refer to glaze.ixx
+// glz:header path="glaze/rpc/repe/repe_registry_impl.hpp"
+// glz:header std=<concepts>
+// glz:header std=<cstdint>
+// glz:header std=<functional>
+// glz:header std=<tuple>
+// glz:header std=<type_traits>
+// glz:header std=<unordered_map>
+export module glaze.rpc.repe.repe_registry_impl;
 
-#pragma once
+import std;
 
-#include "glaze/glaze.hpp"
-#include "glaze/rpc/repe/repe.hpp"
+import glaze.rpc.registry_fwd;
+import glaze.rpc.repe;
+
+import glaze.core.common;
+import glaze.core.context;
+import glaze.core.opts;
+
+import glaze.util.string_literal;
+
 
 using std::uint32_t;
 
 namespace glz
 {
-   // Forward declaration of the registry template
-   template <auto Opts, uint32_t Proto>
-   struct registry;
-
-   template <>
+   export template <>
    struct protocol_storage<REPE>
    {
       using type = std::unordered_map<sv, std::function<void(repe::state_view&)>, detail::string_hash, std::equal_to<>>;
    };
 
    // Implementation for REPE protocol
-   template <auto Opts>
+   export template <auto Opts>
    struct registry_impl<Opts, REPE>
    {
       template <class T, class RegistryType>

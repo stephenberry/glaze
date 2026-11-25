@@ -19,7 +19,7 @@ namespace glz
       return (c >= 'a' && c <= 'z') ? static_cast<char>(c - 'a' + 'A') : c;
    }
 
-   inline constexpr char ascii_tolower(char c) noexcept
+   export inline constexpr char ascii_tolower(char c) noexcept
    {
       return (c >= 'A' && c <= 'Z') ? static_cast<char>(c - 'A' + 'a') : c;
    }

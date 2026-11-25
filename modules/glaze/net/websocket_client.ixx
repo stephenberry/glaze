@@ -1,26 +1,26 @@
-#pragma once
+// Glaze Library
+// For the license information refer to glaze.ixx
+module;
+#include "glaze/ext/asio_include.hpp"
 
-#include <algorithm>
-#include <atomic>
-#include <cctype>
-#include <cstdint>
-#include <memory>
-#include <mutex>
-#include <random>
-#include <string>
-#include <variant>
-#include <vector>
+export module glaze.net.websocket_client;
 
-#include "glaze/net/http_client.hpp"
-#include "glaze/net/websocket_connection.hpp"
-#include "glaze/util/itoa.hpp"
+import std;
+
+import glaze.net.http;
+import glaze.net.http_client;
+import glaze.net.websocket_connection;
+
+import glaze.util.atoi;
+import glaze.util.itoa;
 
 using std::uint16_t;
+using std::uint8_t;
 using std::size_t;
 
 namespace glz
 {
-   struct websocket_client
+   export struct websocket_client
    {
       enum class header_validation_error : uint8_t {
          none,
@@ -571,4 +571,3 @@ namespace glz
       const impl& internal() const { return *impl_; }
    };
 }
-

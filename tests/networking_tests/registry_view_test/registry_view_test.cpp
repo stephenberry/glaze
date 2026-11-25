@@ -1,15 +1,18 @@
 // Glaze Library
-// For the license information refer to glaze.hpp
+// For the license information refer to glaze.ixx
 
-#include <cstring>
-#include <functional>
-#include <string>
-#include <variant>
-#include <vector>
+import std;
 
-#include "glaze/rpc/registry.hpp"
-#include "glaze/rpc/repe/plugin_helper.hpp"
-#include "ut/ut.hpp"
+import glaze.core.context;
+import glaze.core.meta_fwd;
+import glaze.core.opts;
+import glaze.rpc.registry;
+import glaze.rpc.repe;
+import glaze.rpc.repe.buffer;
+import glaze.rpc.repe.header;
+import glaze.rpc.repe.plugin_helper;
+
+import ut;
 
 using std::uint64_t;
 

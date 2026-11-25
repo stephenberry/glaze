@@ -1,5 +1,16 @@
 ## TODO: sort
 
+target_sources(glaze_glaze
+  PUBLIC
+    FILE_SET module_support_headers TYPE HEADERS
+    BASE_DIRS "${PROJECT_SOURCE_DIR}/modules"
+    FILES
+      modules/glaze/ext/asio_include.hpp
+      modules/glaze/core/feature_test.hpp
+      modules/glaze/simd/simd.hpp
+      modules/glaze/util/attributes.hpp
+      modules/glaze/util/inline.hpp
+)
 
 # Top-level
 target_sources(glaze_glaze
@@ -99,6 +110,7 @@ target_sources(glaze_glaze
     modules/glaze/util/string_literal.ixx
     modules/glaze/util/expected.ixx
     modules/glaze/util/dump.ixx
+    modules/glaze/util/env.ixx
     modules/glaze/util/convert.ixx
     modules/glaze/util/parse.ixx
     modules/glaze/util/nullable_traits.ixx
@@ -123,6 +135,7 @@ target_sources(glaze_glaze
     modules/glaze/util/buffer_pool.ixx
     modules/glaze/util/progress_bar.ixx
     modules/glaze/util/key_transformers.ixx
+    modules/glaze/util/memory_pool.ixx
     modules/glaze/util/uuid.ixx
     modules/glaze/util/zmij.ixx
 )
@@ -215,6 +228,36 @@ target_sources(glaze_glaze
     modules/glaze/reflection/to_tuple.ixx
     modules/glaze/reflection/get_name.ixx
     modules/glaze/reflection/requires_key.ixx
+)
+
+# rpc
+target_sources(glaze_glaze
+  PUBLIC
+    FILE_SET CXX_MODULES
+    FILES
+    modules/glaze/rpc/jsonrpc_registry_impl.ixx
+    modules/glaze/rpc/registry.ixx
+    modules/glaze/rpc/registry_fwd.ixx
+)
+
+# rpc/repe
+target_sources(glaze_glaze
+  PUBLIC
+    FILE_SET CXX_MODULES
+    FILES
+    modules/glaze/rpc/repe/buffer.ixx
+    modules/glaze/rpc/repe/header.ixx
+    modules/glaze/rpc/repe/plugin_helper.ixx
+    modules/glaze/rpc/repe/repe_registry_impl.ixx
+    modules/glaze/rpc/repe/repe_to_jsonrpc.ixx
+    modules/glaze/rpc/repe/repe.ixx
+)
+target_sources(glaze_glaze
+  PUBLIC
+    FILE_SET rpc_c_headers TYPE HEADERS
+    BASE_DIRS "${PROJECT_SOURCE_DIR}/modules"
+    FILES
+      modules/glaze/rpc/repe/plugin.h
 )
 
 # base64
@@ -371,6 +414,7 @@ target_sources(glaze_glaze
     FILES
     modules/glaze/ext/cli_menu.ixx
     # modules/glaze/ext/eigen.ixx
+    modules/glaze/ext/glaze_asio.ixx
     modules/glaze/ext/jsonrpc.ixx
 )
 
@@ -418,4 +462,23 @@ target_sources(glaze_glaze
     FILE_SET CXX_MODULES
     FILES
     modules/glaze/hash/sweethash.ixx
+)
+
+# net
+target_sources(glaze_glaze
+  PUBLIC
+    FILE_SET CXX_MODULES
+    FILES
+    modules/glaze/net/cors.ixx
+    modules/glaze/net/http_client.ixx
+    modules/glaze/net/http_headers.ixx
+    modules/glaze/net/http_router.ixx
+    modules/glaze/net/http_server.ixx
+    modules/glaze/net/http_streaming.ixx
+    modules/glaze/net/http.ixx
+    modules/glaze/net/openapi.ixx
+    modules/glaze/net/rest_registry_impl.ixx
+    modules/glaze/net/url.ixx
+    modules/glaze/net/websocket_client.ixx
+    modules/glaze/net/websocket_connection.ixx
 )

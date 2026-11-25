@@ -4,6 +4,12 @@
 option(glaze_BUILD_SSL_TESTS "Build SSL/TLS tests (requires OpenSSL headers matching target architecture)" ON)
 option(glaze_BUILD_WEBSOCKET_AUTOBAHN_TEST "Build Autobahn WebSocket compliance test" OFF)
 
+if(GLAZE_ENABLE_MODULES AND glaze_BUILD_SSL_TESTS AND NOT glaze_ENABLE_SSL)
+    find_package(OpenSSL REQUIRED)
+    target_link_libraries(glaze_glaze PUBLIC OpenSSL::SSL OpenSSL::Crypto)
+    target_compile_definitions(glaze_glaze PUBLIC GLZ_ENABLE_SSL)
+endif()
+
 # HTTP Examples
 add_subdirectory(http_examples)
 add_subdirectory(http_server_post_test)
@@ -22,7 +28,9 @@ add_subdirectory(http_chunked_test)
 add_subdirectory(http_content_length_test)
 add_subdirectory(http_client_test)
 add_subdirectory(http_client_pool_test)
-add_subdirectory(http_client_no_ssl_executor_test)
+if(NOT GLAZE_ENABLE_MODULES OR (NOT glaze_ENABLE_SSL AND NOT glaze_BUILD_SSL_TESTS))
+    add_subdirectory(http_client_no_ssl_executor_test)
+endif()
 if(glaze_BUILD_SSL_TESTS)
     add_subdirectory(http_client_ssl_test)
 endif()

@@ -11,16 +11,18 @@
 // and the GET /cl case proves the set-time guard in response::header() keeps a
 // dropped Content-Length from suppressing the auto-generated one (which would
 // otherwise leave the response unframed).
-#include <atomic>
-#include <chrono>
-#include <future>
-#include <string>
-#include <thread>
-#include <ut/ut.hpp>
+#include "glaze/ext/asio_include.hpp"
 
-#include "glaze/net/http.hpp"
-#include "glaze/net/http_client.hpp"
-#include "glaze/net/http_server.hpp"
+import std;
+
+import glaze.net.http;
+import glaze.net.http_client;
+import glaze.net.http_router;
+import glaze.net.http_server;
+
+import ut;
+
+using std::uint16_t;
 
 #if defined(GLZ_USING_BOOST_ASIO)
 namespace asio

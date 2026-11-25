@@ -1,12 +1,15 @@
 // Glaze REST Demo Server
 
-#include <filesystem>
-#include <fstream>
-#include <iostream>
+import std;
 
-#include "glaze/glaze.hpp"
-#include "glaze/net/http_server.hpp"
-#include "glaze/rpc/registry.hpp"
+import glaze.core.common;
+import glaze.core.meta_fwd;
+import glaze.core.opts;
+
+import glaze.net.cors;
+import glaze.net.http_router;
+import glaze.net.http_server;
+import glaze.rpc.registry;
 
 struct User
 {

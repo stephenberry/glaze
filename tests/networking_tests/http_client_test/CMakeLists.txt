@@ -4,9 +4,10 @@ add_executable(${PROJECT_NAME} ${PROJECT_NAME}.cpp)
 
 target_link_libraries(${PROJECT_NAME} PRIVATE glz_test_exceptions)
 
-# Conditionally enable SSL support if OpenSSL is available
-find_package(OpenSSL QUIET)
-if(OpenSSL_FOUND)
+# Conditionally enable SSL support if OpenSSL is available. 
+if(NOT GLAZE_ENABLE_MODULES OR glaze_ENABLE_SSL OR glaze_BUILD_SSL_TESTS)
+  find_package(OpenSSL QUIET)
+  if(OpenSSL_FOUND)
     include(CheckCXXSourceCompiles)
     set(CMAKE_REQUIRED_LIBRARIES OpenSSL::SSL OpenSSL::Crypto)
     check_cxx_source_compiles("
@@ -19,6 +20,7 @@ if(OpenSSL_FOUND)
         target_compile_definitions(${PROJECT_NAME} PRIVATE GLZ_ENABLE_SSL)
         message(STATUS "HTTP client test built with SSL support")
     endif()
+  endif()
 endif()
 
 add_test(NAME ${PROJECT_NAME} COMMAND ${PROJECT_NAME})

@@ -1,10 +1,18 @@
 // Glaze Library
-// For the license information refer to glaze.hpp
+// For the license information refer to glaze.ixx
 
-#include "glaze/rpc/repe/repe_to_jsonrpc.hpp"
+import std;
 
-#include "glaze/rpc/repe/repe.hpp"
-#include "ut/ut.hpp"
+import glaze.core.context;
+import glaze.json.generic;
+import glaze.json.read;
+import glaze.rpc.repe;
+import glaze.rpc.repe.header;
+import glaze.rpc.repe.repe_to_jsonrpc;
+
+import glaze.ext.jsonrpc;
+
+import ut;
 
 using namespace ut;
 

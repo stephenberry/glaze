@@ -6,6 +6,7 @@ import_overrides:
   glaze.base64: "glaze/base64/base64.hpp"
   glaze.compare: "glaze/compare/compare.hpp"
   glaze.exceptions: "glaze/glaze_exceptions.hpp"
+  glaze.rpc.repe: "glaze/rpc/repe/repe.hpp"
   glaze.stencil: "glaze/stencil/stencil.hpp"
   glaze.trace: "glaze/trace/trace.hpp"
   glaze.tuplet: "glaze/tuplet/tuple.hpp"

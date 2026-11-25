@@ -1,15 +1,10 @@
 // Glaze Library
-// For the license information refer to glaze.hpp
+// For the license information refer to glaze.ixx
+export module glaze.net.http;
 
-#pragma once
+import std;
 
-#include <algorithm>
-#include <charconv>
-#include <expected>
-#include <optional>
-#include <string>
-#include <string_view>
-#include <system_error>
+export import glaze.net.url;
 
 // To deconflict Windows.h
 #ifdef DELETE
@@ -21,12 +16,32 @@ using std::size_t;
 namespace glz
 {
    // Default maximum body size for HTTP client and server (100 MB)
-   inline constexpr size_t http_default_max_body_size = 100 * 1024 * 1024;
+   export inline constexpr size_t http_default_max_body_size = 100 * 1024 * 1024;
 
-   enum struct http_method { GET, POST, PUT, DELETE, PATCH, HEAD, OPTIONS };
+   export enum struct http_method { GET, POST, PUT, DELETE, PATCH, HEAD, OPTIONS };
+
+   export struct request
+   {
+      http_method method{};
+      std::string target{}; // Full request target (path + query string)
+      std::string path{}; // Path component only (without query string)
+      std::unordered_map<std::string, std::string> params{}; // Path parameters (e.g., :id)
+      std::unordered_map<std::string, std::string> query{}; // Query parameters (e.g., ?limit=10)
+      std::unordered_map<std::string, std::string> headers{};
+      std::string body{};
+      std::string remote_ip{};
+      std::uint16_t remote_port{};
+   };
 
    namespace detail
    {
+      export struct request_line
+      {
+         http_method method;
+         std::string_view target;
+         bool is_http11;
+      };
+
       inline std::string_view http_status_reason_phrase(int status_code)
       {
          switch (status_code) {
@@ -180,15 +195,18 @@ namespace glz
       };
    } // namespace detail
 
-   inline const std::error_category& http_status_category()
+   export inline const std::error_category& http_status_category()
    {
       static detail::http_status_category_impl instance;
       return instance;
    }
 
-   inline std::error_code make_http_status_error(int status_code) { return {status_code, http_status_category()}; }
+   export inline std::error_code make_http_status_error(int status_code)
+   {
+      return {status_code, http_status_category()};
+   }
 
-   inline std::optional<int> http_status_from(std::error_code ec)
+   export inline std::optional<int> http_status_from(std::error_code ec)
    {
       if (ec.category() == http_status_category()) {
          return ec.value();
@@ -197,7 +215,7 @@ namespace glz
    }
 
    // Utility functions for HTTP methods
-   inline std::string_view to_string(http_method method)
+   export inline std::string_view to_string(http_method method)
    {
       using enum http_method;
       switch (method) {
@@ -220,7 +238,7 @@ namespace glz
       }
    }
 
-   inline std::optional<http_method> from_string(std::string_view method)
+   export inline std::optional<http_method> from_string(std::string_view method)
    {
       using enum http_method;
       if (method == "GET") return GET;
@@ -233,7 +251,7 @@ namespace glz
       return std::nullopt;
    }
 
-   struct HttpStatusLine
+   export struct HttpStatusLine
    {
       std::string_view version{};
       int status_code{};
@@ -246,7 +264,7 @@ namespace glz
    // message body (CWE-113, HTTP request/response splitting). Serializers call
    // this to drop such a field instead of writing a corrupted message; the wire
    // writer is the only layer that can enforce the framing.
-   [[nodiscard]] inline bool header_field_has_crlf(std::string_view name, std::string_view value) noexcept
+   export [[nodiscard]] inline bool header_field_has_crlf(std::string_view name, std::string_view value) noexcept
    {
       return name.find_first_of("\r\n") != std::string_view::npos ||
              value.find_first_of("\r\n") != std::string_view::npos;
@@ -256,7 +274,7 @@ namespace glz
    // A name that is empty or carries any other byte (CR/LF, space, colon, a
    // control char, ...) cannot be written as a well-formed field. This is the
    // single source of truth for field-name validity across the net stack.
-   [[nodiscard]] inline bool valid_header_name(std::string_view name) noexcept
+   export [[nodiscard]] inline bool valid_header_name(std::string_view name) noexcept
    {
       if (name.empty()) {
          return false;
@@ -278,7 +296,7 @@ namespace glz
    // that subset for the wire serializers (which silently drop a bad field),
    // while valid_header_value is the full check used where an invalid field can
    // be reported back to the caller (the WebSocket handshake).
-   [[nodiscard]] inline bool valid_header_value(std::string_view value) noexcept
+   export [[nodiscard]] inline bool valid_header_value(std::string_view value) noexcept
    {
       for (const unsigned char c : value) {
          if (c == '\r' || c == '\n' || c == 0x7f) {
@@ -291,7 +309,7 @@ namespace glz
       return true;
    }
 
-   inline std::expected<HttpStatusLine, std::error_code> parse_http_status_line(std::string_view status_line)
+   export inline std::expected<HttpStatusLine, std::error_code> parse_http_status_line(std::string_view status_line)
    {
       if (status_line.empty()) {
          return std::unexpected(std::make_error_code(std::errc::protocol_error));
@@ -375,6 +393,3 @@ namespace glz
       return HttpStatusLine{.version = version, .status_code = status_code, .status_message = status_message};
    }
 }
-
-// Include URL utilities for convenience (can also be included directly via glaze/net/url.hpp)
-#include "glaze/net/url.hpp"

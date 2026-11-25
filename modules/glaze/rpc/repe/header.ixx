@@ -1,32 +1,33 @@
 // Glaze Library
-// For the license information refer to glaze.hpp
+// For the license information refer to glaze.ixx
+// glz:header path="glaze/rpc/repe/header.hpp"
+// glz:header std=<cstdint>
+// glz:header std=<limits>
+// glz:header std=<string>
+// glz:header std=<string_view>
+export module glaze.rpc.repe.header;
 
-#pragma once
+import std;
 
-#include <cstdint>
-#include <limits>
-#include <string>
-#include <string_view>
+import glaze.core.context;
 
-#include "glaze/core/context.hpp"
-
-using std::uint8_t;
 using std::uint16_t;
 using std::uint32_t;
 using std::uint64_t;
+using std::uint8_t;
 
 namespace glz::repe
 {
    // REPE protocol magic bytes (0x1507 = 5383)
-   inline constexpr uint16_t repe_magic = 0x1507;
+   export inline constexpr uint16_t repe_magic = 0x1507;
 
    // REPE Reserved Query Formats (0-4095 are reserved)
-   enum class query_format : uint16_t { RAW_BINARY = 0, JSON_POINTER = 1 };
+   export enum class query_format : uint16_t { RAW_BINARY = 0, JSON_POINTER = 1 };
 
    // REPE Reserved Body Formats (0-4095 are reserved)
-   enum class body_format : uint16_t { RAW_BINARY = 0, BEVE = 1, JSON = 2, UTF8 = 3 };
+   export enum class body_format : uint16_t { RAW_BINARY = 0, BEVE = 1, JSON = 2, UTF8 = 3 };
 
-   struct header
+   export struct header
    {
       uint64_t length{}; // Total length of [header, query, body]
       //
@@ -53,7 +54,7 @@ namespace glz::repe
    // are 64-bit fields supplied on the wire, so a naive sum can wrap and defeat the
    // subsequent buffer-size validation, producing out-of-bounds query/body views.
    // Returns false if the lengths would overflow, in which case the header is malformed.
-   [[nodiscard]] inline bool checked_message_length(const header& hdr, uint64_t& expected) noexcept
+   export [[nodiscard]] inline bool checked_message_length(const header& hdr, uint64_t& expected) noexcept
    {
       constexpr uint64_t header_size = sizeof(header);
       if (hdr.query_length > (std::numeric_limits<uint64_t>::max)() - header_size) {
@@ -68,7 +69,7 @@ namespace glz::repe
    }
 
    // query and body are heap allocated and we want to be able to reuse memory
-   struct message final
+   export struct message final
    {
       repe::header header{};
       std::string query{};
@@ -80,7 +81,7 @@ namespace glz::repe
    };
 
    // User interface that will be encoded into a REPE header
-   struct user_header final
+   export struct user_header final
    {
       std::string_view query = ""; // The JSON pointer path to call or member to access/assign
       uint64_t id{}; // Identifier
@@ -88,7 +89,7 @@ namespace glz::repe
       bool notify{};
    };
 
-   inline repe::header encode(const user_header& h) noexcept
+   export inline repe::header encode(const user_header& h) noexcept
    {
       repe::header ret{
          .notify = h.notify, //
@@ -99,4 +100,3 @@ namespace glz::repe
       return ret;
    }
 }
-

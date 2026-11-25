@@ -1,16 +1,14 @@
-#pragma once
+// Glaze Library
+// For the license information refer to glaze.ixx
+export module glaze.util.memory_pool;
 
-#include <cstdint>
-#include <deque>
-#include <memory>
-#include <mutex>
-#include <vector>
+import std;
 
 using std::size_t;
 
 namespace glz
 {
-   template <class T>
+   export template <class T>
       requires(std::is_default_constructible_v<T>)
    struct memory_pool final
    {

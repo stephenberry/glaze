@@ -1,16 +1,20 @@
 // Glaze Library
-// For the license information refer to glaze.hpp
+// For the license information refer to glaze.ixx
 
-#include <cstring>
-#include <latch>
-#include <span>
-#include <thread>
+import std;
 
-#include "glaze/glaze.hpp"
-#include "glaze/rpc/registry.hpp"
-#include "glaze/rpc/repe/buffer.hpp"
-#include "glaze/thread/async_string.hpp"
-#include "ut/ut.hpp"
+import glaze;
+
+import glaze.rpc.registry;
+import glaze.rpc.repe;
+import glaze.rpc.repe.buffer;
+import glaze.rpc.repe.header;
+import glaze.thread.async_string;
+import glaze.util.string_literal;
+
+import ut;
+
+using std::uint64_t;
 
 using namespace ut;
 

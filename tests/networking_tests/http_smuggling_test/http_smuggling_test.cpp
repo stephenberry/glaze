@@ -1,11 +1,13 @@
-#include <atomic>
-#include <chrono>
-#include <future>
-#include <string>
-#include <thread>
-#include <ut/ut.hpp>
+#include "glaze/ext/asio_include.hpp"
 
-#include "glaze/net/http_server.hpp"
+import std;
+
+import glaze.net.http_router;
+import glaze.net.http_server;
+
+import ut;
+
+using std::uint16_t;
 
 #if defined(GLZ_USING_BOOST_ASIO)
 namespace asio

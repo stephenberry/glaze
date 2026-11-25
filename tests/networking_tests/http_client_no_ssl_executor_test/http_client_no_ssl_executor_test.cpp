@@ -1,16 +1,18 @@
 // Glaze Library
-// For the license information refer to glaze.hpp
+// For the license information refer to glaze.ixx
 
 #ifdef GLZ_ENABLE_SSL
 #undef GLZ_ENABLE_SSL
 #endif
 
-#include <chrono>
-#include <future>
-#include <thread>
+#include "glaze/ext/asio_include.hpp"
 
-#include "glaze/net/http_client.hpp"
-#include "ut/ut.hpp"
+import std;
+
+import glaze.net.http_client;
+import glaze.net.http_router;
+
+import ut;
 
 #if defined(GLZ_USING_BOOST_ASIO)
 namespace asio

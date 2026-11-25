@@ -1,17 +1,16 @@
-#include <chrono>
-#include <future>
-#include <iostream>
-#include <sstream>
-#include <string>
-#include <thread>
-#include <ut/ut.hpp>
+#include "glaze/ext/asio_include.hpp"
 
-#include "glaze/net/http_server.hpp"
+import std;
 
-#if defined(GLZ_USING_BOOST_ASIO)
+import glaze.net.http_router;
+import glaze.net.http_server;
+
+import ut;
 
 using std::size_t;
+using std::uint16_t;
 
+#if defined(GLZ_USING_BOOST_ASIO)
 namespace asio
 {
    using namespace boost::asio;
@@ -127,7 +126,7 @@ namespace
 
 static void error_handler(std::error_code ec, std::source_location loc)
 {
-   std::fprintf(stderr, "Server error at %s:%d: %s\n", loc.file_name(), loc.line(), ec.message().c_str());
+   std::cerr << "Server error at " << loc.file_name() << ':' << loc.line() << ": " << ec.message() << '\n';
 }
 
 suite http_server_post_suite = [] {

@@ -1,10 +1,8 @@
-#include "glaze/net/http_headers.hpp"
+import std;
 
-#include <ranges>
-#include <string>
-#include <string_view>
-#include <ut/ut.hpp>
-#include <vector>
+import glaze.net.http_headers;
+
+import ut;
 
 using namespace ut;
 using namespace std::string_view_literals;

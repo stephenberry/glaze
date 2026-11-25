@@ -1,11 +1,9 @@
-// Glaze Library - For the license information refer to glaze.hpp
-#pragma once
+// Glaze Library - For the license information refer to glaze.ixx
+export module glaze.net.openapi;
 
-#include <unordered_map>
+import std;
 
-#include "glaze/json.hpp"
-#include "glaze/json/schema.hpp"
-#include "glaze/net/http_router.hpp"
+export import glaze.json;
 
 namespace glz
 {
@@ -27,7 +25,7 @@ namespace glz
       std::optional<std::string> example{};
    };
 
-   struct openapi_request_body
+   export struct openapi_request_body
    {
       std::optional<std::string> description{};
       std::unordered_map<std::string, openapi_media_type> content{};
@@ -43,7 +41,7 @@ namespace glz
       std::optional<glz::schema> schema{};
    };
 
-   struct openapi_response
+   export struct openapi_response
    {
       std::string description{};
       std::optional<std::unordered_map<std::string, openapi_media_type>> content{};
@@ -54,7 +52,7 @@ namespace glz
       std::optional<std::unordered_map<std::string, glz::schema>> schemas{};
    };
 
-   struct openapi_operation
+   export struct openapi_operation
    {
       std::optional<std::vector<std::string>> tags{};
       std::optional<std::string> summary{};
@@ -73,7 +71,7 @@ namespace glz
       std::optional<openapi_operation> patch{};
    };
 
-   struct open_api
+   export struct open_api
    {
       std::string openapi = "3.0.3";
       openapi_info info{};

@@ -2,16 +2,17 @@
 // Tests examples from the Glaze HTTP/REST Documentation
 // See: http-examples.md
 
-#include <mutex>
-#include <random>
-#include <set>
+import std;
 
-#include "glaze/glaze.hpp"
-#include "glaze/net/http_router.hpp"
-#include "glaze/net/http_server.hpp"
-#include "glaze/rpc/registry.hpp"
-#include "ut/ut.hpp"
+import glaze.json.read;
+import glaze.json.write;
+import glaze.net.http_router;
+import glaze.net.http_server;
+import glaze.rpc.registry;
 
+import ut;
+
+using std::int64_t;
 using std::size_t;
 
 using namespace ut;

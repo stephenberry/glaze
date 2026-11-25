@@ -65,6 +65,10 @@ target_include_directories(
       "$<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/modules>"
 )
 
+include(cmake/glaze-asio.cmake)
+glaze_setup_asio()
+target_link_libraries(glaze_glaze PRIVATE "$<BUILD_INTERFACE:glaze::asio>")
+
 include(cmake/modules-files.cmake)
 
 option(glaze_INSTALL "Generate installation rules for glaze" "${PROJECT_IS_TOP_LEVEL}")
@@ -114,11 +118,11 @@ if(glaze_ENABLE_SSL)
   find_package(OpenSSL REQUIRED)
   target_link_libraries(
     glaze_glaze ${warning_guard}
-    INTERFACE
+    ${GLAZE_LIB_TYPE}
       OpenSSL::SSL
       OpenSSL::Crypto
   )
-  target_compile_definitions(glaze_glaze INTERFACE GLZ_ENABLE_SSL)
+  target_compile_definitions(glaze_glaze ${GLAZE_LIB_TYPE} GLZ_ENABLE_SSL)
 endif(glaze_ENABLE_SSL)
 
 option(glaze_ENABLE_REFLECTION26 "Enable C++26 P2996 reflection (requires Bloomberg clang-p2996 or compatible compiler)" OFF)

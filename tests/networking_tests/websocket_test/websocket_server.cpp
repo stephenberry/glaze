@@ -1,14 +1,13 @@
 // Glaze Library
-// For the license information refer to glaze.hpp
+// For the license information refer to glaze.ixx
 
 // Complete example showing Glaze HTTP server with WebSocket support
 
-#include <iostream>
-#include <mutex>
-#include <set>
+import std;
 
-#include "glaze/net/http_server.hpp"
-#include "glaze/net/websocket_connection.hpp"
+import glaze.net.http_router;
+import glaze.net.http_server;
+import glaze.net.websocket_connection;
 
 using namespace glz;
 

@@ -1,9 +1,12 @@
 // Glaze Library
-// For the license information refer to glaze.hpp
+// For the license information refer to glaze.ixx
 
-#include "glaze/net/cors.hpp"
+import std;
 
-#include "ut/ut.hpp"
+import glaze.net.cors;
+import glaze.net.http_router;
+
+import ut;
 
 using namespace ut;
 

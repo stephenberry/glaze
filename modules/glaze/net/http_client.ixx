@@ -1,40 +1,30 @@
 // Glaze Library
-// For the license information refer to glaze.hpp
-
-#pragma once
-
-#include <atomic>
-#include <chrono>
-#include <concepts>
-#include <cstdlib>
-#include <expected>
-#include <functional>
-#include <future>
-#include <glaze/glaze.hpp>
-#include <iostream>
-#include <limits>
-#include <memory>
-#include <mutex>
-#include <optional>
-#include <shared_mutex>
-#include <source_location>
-#include <thread>
-#include <unordered_map>
-#include <vector>
-
-#include "glaze/ext/glaze_asio.hpp"
-#include "glaze/net/http_router.hpp"
-#include "glaze/util/env.hpp"
-#include "glaze/util/itoa.hpp"
-#include "glaze/util/key_transformers.hpp"
+// For the license information refer to glaze.ixx
+module;
+#include "glaze/ext/asio_include.hpp"
 
 #ifdef GLZ_ENABLE_SSL
 #include <openssl/ssl.h> // For SSL_set_tlsext_host_name
 #endif
+export module glaze.net.http_client;
+
+import std;
+
+import glaze.net.http;
+import glaze.net.http_router;
+
+import glaze.json.write;
+
+import glaze.util.env;
+import glaze.util.itoa;
+import glaze.util.key_transformers;
+
+using std::size_t;
+using std::uint16_t;
 
 namespace glz
 {
-   inline int strncasecmp(const char* s1, const char* s2, size_t n)
+   export inline int strncasecmp(const char* s1, const char* s2, size_t n)
    {
       for (size_t i = 0; i < n; ++i) {
          unsigned char c1 = static_cast<unsigned char>(s1[i]);
@@ -51,12 +41,12 @@ namespace glz
    }
 
    // Streaming strategy options
-   enum class stream_read_strategy {
+   export enum class stream_read_strategy {
       bulk_transfer, // Deliver larger chunks, better throughput (default)
       immediate_delivery // Deliver smaller chunks immediately, lower latency
    };
 
-   struct url_parts
+   export struct url_parts
    {
       std::string protocol;
       std::string host;
@@ -74,7 +64,7 @@ namespace glz
 #endif
 
    // SSL error codes for detailed error reporting
-   enum class ssl_error {
+   export enum class ssl_error {
       success = 0,
       ssl_not_supported, // HTTPS requested but SSL support not compiled in
       sni_hostname_failed // Failed to set SNI hostname (SSL_set_tlsext_host_name)
@@ -124,7 +114,7 @@ namespace glz
    }
 
    // Create std::error_code from ssl_error
-   inline std::error_code make_error_code(ssl_error e) noexcept
+   export inline std::error_code make_error_code(ssl_error e) noexcept
    {
       return {static_cast<int>(e), get_ssl_error_category()};
    }
@@ -259,7 +249,7 @@ namespace glz
       // buffer once, so the async chain (and retry) can share it without re-copying the
       // body or re-iterating the headers map. For large idempotent PUT bodies this is
       // the difference between O(1) and O(N) body copies per request through the chain.
-      inline std::string build_http_request_bytes(const std::string& method, const url_parts& url, bool use_https,
+      export inline std::string build_http_request_bytes(const std::string& method, const url_parts& url, bool use_https,
                                                   const std::string& body,
                                                   const std::unordered_map<std::string, std::string>& headers)
       {
@@ -303,7 +293,7 @@ namespace glz
 
 #ifdef GLZ_ENABLE_SSL
       // Configure SNI and hostname verification for client TLS connections.
-      inline bool configure_ssl_client_hostname(ssl_socket& sock, const std::string& host)
+      export inline bool configure_ssl_client_hostname(ssl_socket& sock, const std::string& host)
       {
          if (!SSL_set_tlsext_host_name(sock.native_handle(), host.c_str())) {
             return false;
@@ -313,7 +303,7 @@ namespace glz
          return true;
       }
 
-      enum class ssl_ca_source { explicit_file, env_ssl_cert_file, env_ssl_cert_dir, default_verify_paths };
+      export enum class ssl_ca_source { explicit_file, env_ssl_cert_file, env_ssl_cert_dir, default_verify_paths };
 
       inline std::optional<std::string_view> non_empty_path(std::optional<std::string_view> value)
       {
@@ -345,7 +335,7 @@ namespace glz
          { std::forward<Loader>(loader)() } -> std::convertible_to<std::error_code>;
       };
 
-      template <ssl_ca_path_loader LoadFile, ssl_ca_path_loader LoadDir, ssl_ca_default_loader LoadDefault>
+      export template <ssl_ca_path_loader LoadFile, ssl_ca_path_loader LoadDir, ssl_ca_default_loader LoadDefault>
       inline std::expected<ssl_ca_source, std::error_code> configure_ssl_ca_fallback(
          std::optional<std::string_view> explicit_file, std::optional<std::string_view> env_cert_file,
          std::optional<std::string_view> env_cert_dir, LoadFile&& load_file, LoadDir&& load_dir,
@@ -423,7 +413,7 @@ namespace glz
       }
    }
 
-   inline std::expected<url_parts, std::error_code> parse_url(std::string_view url)
+   export inline std::expected<url_parts, std::error_code> parse_url(std::string_view url)
    {
       // Check minimum length
       if (url.size() < 8) { // Minimum for "http://" + 1 char host
@@ -930,7 +920,7 @@ namespace glz
       ~http_stream_connection() { disconnect(); }
    };
    // deprecated, use stream_request_params_v2 instead
-   struct stream_request_params
+   export struct stream_request_params
    {
       std::string url;
       http_data_handler on_data;
@@ -947,7 +937,7 @@ namespace glz
    };
 
    // Stream request parameters struct
-   struct stream_request_params_v2
+   export struct stream_request_params_v2
    {
       std::string method{"GET"};
       std::string url;
@@ -963,7 +953,7 @@ namespace glz
       std::function<bool(int)> status_is_error{[](int status) { return status >= 400; }};
    };
 
-   struct http_client
+   export struct http_client
    {
       /**
        * @brief Construct an HTTP client
@@ -2782,4 +2772,3 @@ namespace glz
       }
    };
 }
-

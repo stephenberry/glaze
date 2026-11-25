@@ -1,11 +1,18 @@
 // Glaze Library
-// For the license information refer to glaze.hpp
+// For the license information refer to glaze.ixx
+// glz:header path="glaze/rpc/repe/repe_to_jsonrpc.hpp"
+// glz:header std=<cstdint>
+// glz:header std=<functional>
+// glz:header std=<string>
+// glz:header std=<string_view>
+// glz:header std=<variant>
+export module glaze.rpc.repe.repe_to_jsonrpc;
 
-#pragma once
+import std;
 
-#include "glaze/ext/jsonrpc.hpp"
-#include "glaze/glaze.hpp"
-#include "glaze/rpc/repe/header.hpp"
+import glaze;
+import glaze.ext.jsonrpc;
+import glaze.rpc.repe.header;
 
 using std::int64_t;
 using std::uint64_t;
@@ -13,7 +20,7 @@ using std::uint64_t;
 namespace glz::repe
 {
    // Convert REPE error codes to JSON-RPC error codes
-   inline rpc::error_e repe_error_to_jsonrpc(error_code ec)
+   export inline rpc::error_e repe_error_to_jsonrpc(error_code ec)
    {
       switch (ec) {
       case error_code::none:
@@ -33,7 +40,7 @@ namespace glz::repe
    }
 
    // Convert JSON-RPC error codes to REPE error codes
-   inline error_code jsonrpc_error_to_repe(rpc::error_e err)
+   export inline error_code jsonrpc_error_to_repe(rpc::error_e err)
    {
       switch (err) {
       case rpc::error_e::no_error:
@@ -66,7 +73,7 @@ namespace glz::repe
    // members silently override the caller's (last-wins). Callers converting
    // untrusted, wire-sourced messages must validate the body (e.g. with
    // glz::validate_json) at their trust boundary before calling this.
-   inline std::string to_jsonrpc_request(const message& msg)
+   export inline std::string to_jsonrpc_request(const message& msg)
    {
       if (msg.header.body_format != body_format::JSON) {
          return R"({"jsonrpc":"2.0","error":{"code":-32600,"message":"Invalid request","data":"REPE body must be JSON format"},"id":null})";
@@ -117,7 +124,7 @@ namespace glz::repe
    // messages must validate the body (e.g. with glz::validate_json) at their trust
    // boundary before calling this. (Error responses carry msg.body as the error
    // "data" string and are escaped, so this does not apply to them.)
-   inline std::string to_jsonrpc_response(const message& msg)
+   export inline std::string to_jsonrpc_response(const message& msg)
    {
       if (msg.header.body_format != body_format::JSON && msg.header.body_format != body_format::UTF8) {
          return R"({"jsonrpc":"2.0","error":{"code":-32603,"message":"Internal error","data":"REPE body must be JSON or UTF8 format"},"id":null})";
@@ -177,7 +184,7 @@ namespace glz::repe
    }
 
    // Convert JSON-RPC request to REPE message
-   inline expected<message, std::string> from_jsonrpc_request(std::string_view json_request)
+   export inline expected<message, std::string> from_jsonrpc_request(std::string_view json_request)
    {
       auto req = read_json<rpc::generic_request_t>(json_request);
       if (!req) {
@@ -229,7 +236,7 @@ namespace glz::repe
    }
 
    // Convert JSON-RPC response to REPE message
-   inline expected<message, std::string> from_jsonrpc_response(std::string_view json_response)
+   export inline expected<message, std::string> from_jsonrpc_response(std::string_view json_response)
    {
       auto resp = read_json<rpc::generic_response_t>(json_response);
       if (!resp) {

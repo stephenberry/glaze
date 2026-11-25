@@ -1,8 +1,10 @@
-#include <string>
-#include <vector>
+import std;
 
-#include "glaze/util/parse.hpp"
-#include "ut/ut.hpp"
+import glaze.util.parse;
+
+import ut;
+
+using std::size_t;
 
 using namespace ut;
 

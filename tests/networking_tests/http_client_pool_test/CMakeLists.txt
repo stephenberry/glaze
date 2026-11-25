@@ -1,4 +1,3 @@
-cmake_minimum_required(VERSION 3.21)
 project(http_client_pool_test)
 
 add_executable(${PROJECT_NAME} ${PROJECT_NAME}.cpp)

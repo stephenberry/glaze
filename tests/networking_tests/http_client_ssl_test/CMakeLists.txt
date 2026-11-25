@@ -1,5 +1,4 @@
 # HTTP Client SSL Test CMakeLists.txt
-cmake_minimum_required(VERSION 3.21)
 project(http_client_ssl_test)
 
 # Only build if OpenSSL is available

@@ -1,13 +1,11 @@
-// CORS Support for Glaze Library
-// Add this to a new file: glaze/net/cors.hpp
+// Glaze Library
+// For the license information refer to glaze.ixx
+export module glaze.net.cors;
 
-#pragma once
+import std;
 
-#include <algorithm>
-#include <string>
-#include <vector>
-
-#include "glaze/net/http_router.hpp"
+import glaze.net.http;
+import glaze.net.http_router;
 
 using std::size_t;
 
@@ -16,7 +14,7 @@ namespace glz
    /**
     * @brief Configuration for CORS (Cross-Origin Resource Sharing) support
     */
-   struct cors_config
+   export struct cors_config
    {
       /**
        * @brief List of allowed origins
@@ -80,7 +78,7 @@ namespace glz
     * @param origin The origin to check
     * @return true if the origin is allowed, false otherwise
     */
-   inline bool is_origin_allowed(const cors_config& config, std::string_view origin)
+   export inline bool is_origin_allowed(const cors_config& config, std::string_view origin)
    {
       if (origin.empty()) {
          return false;
@@ -139,7 +137,7 @@ namespace glz
     * @param config The CORS configuration to use
     * @return A middleware handler function
     */
-   inline handler create_cors_middleware(const cors_config& config = {})
+   export inline handler create_cors_middleware(const cors_config& config = {})
    {
       return [config](const request& req, response& res) {
          // Get the origin from the request headers
@@ -209,7 +207,7 @@ namespace glz
     *
     * Allows all origins, methods, and headers - suitable for development
     */
-   inline handler simple_cors() { return create_cors_middleware(); }
+   export inline handler simple_cors() { return create_cors_middleware(); }
 
    /**
     * @brief Restrictive CORS middleware
@@ -220,7 +218,7 @@ namespace glz
     * @param allow_credentials Whether to allow credentials
     * @return CORS middleware handler
     */
-   inline handler restrictive_cors(const std::vector<std::string>& origins, bool allow_credentials = false)
+   export inline handler restrictive_cors(const std::vector<std::string>& origins, bool allow_credentials = false)
    {
       cors_config config;
       config.allowed_origins = origins;

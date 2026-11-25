@@ -1,24 +1,34 @@
 // Glaze Library
-// For the license information refer to glaze.hpp
+// For the license information refer to glaze.ixx
+// glz:header path="glaze/rpc/jsonrpc_registry_impl.hpp"
+// glz:header std=<concepts>
+// glz:header std=<cstdint>
+// glz:header std=<functional>
+// glz:header std=<optional>
+// glz:header std=<string>
+// glz:header std=<string_view>
+// glz:header std=<tuple>
+// glz:header std=<type_traits>
+// glz:header std=<unordered_map>
+// glz:header std=<utility>
+export module glaze.rpc.jsonrpc_registry_impl;
 
-#pragma once
+import glaze;
+import glaze.core.opts;
+import glaze.ext.jsonrpc;
+import glaze.rpc.registry_fwd;
+import glaze.util.string_literal;
 
-#include "glaze/core/opts.hpp"
-#include "glaze/ext/jsonrpc.hpp"
-#include "glaze/glaze.hpp"
+import std;
 
 using std::uint32_t;
 
 namespace glz
 {
-   // Forward declaration of the registry template
-   template <auto Opts, uint32_t Proto>
-   struct registry;
-
    namespace jsonrpc
    {
       // State for JSON RPC request handling
-      struct state final
+      export struct state final
       {
          rpc::id_t id{};
          std::string& response;
@@ -111,14 +121,14 @@ namespace glz
    }
 
    // Storage for JSON RPC protocol - similar to REPE but with JSON RPC state
-   template <>
+   export template <>
    struct protocol_storage<JSONRPC>
    {
       using type = std::unordered_map<sv, std::function<void(jsonrpc::state&&)>, detail::string_hash, std::equal_to<>>;
    };
 
    // Implementation for JSON RPC protocol
-   template <auto Opts>
+   export template <auto Opts>
    struct registry_impl<Opts, JSONRPC>
    {
      private:

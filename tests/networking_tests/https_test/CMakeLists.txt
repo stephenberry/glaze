@@ -1,5 +1,4 @@
 # HTTPS Test CMakeLists.txt
-cmake_minimum_required(VERSION 3.21)
 project(https_test)
 
 # Only build if OpenSSL is available

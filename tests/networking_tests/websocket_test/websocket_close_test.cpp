@@ -1,27 +1,21 @@
 // Glaze Library
-// For the license information refer to glaze.hpp
+// For the license information refer to glaze.ixx
 
 // Unit tests for WebSocket close frame and error handling
 
-#include <algorithm>
-#include <array>
-#include <atomic>
-#include <chrono>
-#include <condition_variable>
-#include <cstdint>
-#include <memory>
-#include <mutex>
-#include <optional>
-#include <string>
-#include <string_view>
-#include <thread>
-#include <vector>
+#include "glaze/ext/asio_include.hpp"
 
-#include "glaze/net/http_server.hpp"
-#include "glaze/net/websocket_connection.hpp"
-#include "ut/ut.hpp"
+import std;
+
+import glaze.net.http_router;
+import glaze.net.http_server;
+import glaze.net.websocket_connection;
+
+import ut;
 
 using std::uint64_t;
+using std::uint16_t;
+using std::uint8_t;
 using std::ptrdiff_t;
 using std::size_t;
 

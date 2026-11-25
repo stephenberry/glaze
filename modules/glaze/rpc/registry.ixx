@@ -1,23 +1,55 @@
 // Glaze Library
-// For the license information refer to glaze.hpp
+// For the license information refer to glaze.ixx
+// glz:header path="glaze/rpc/registry.hpp"
+// glz:header std=<algorithm>
+// glz:header std=<cctype>
+// glz:header std=<cstddef>
+// glz:header std=<cstdint>
+// glz:header std=<cstring>
+// glz:header std=<exception>
+// glz:header std=<functional>
+// glz:header std=<optional>
+// glz:header std=<span>
+// glz:header std=<string>
+// glz:header std=<string_view>
+// glz:header std=<type_traits>
+// glz:header std=<utility>
+// glz:header std=<variant>
+// glz:header std=<vector>
+export module glaze.rpc.registry;
 
-#pragma once
+import std;
 
-#include "glaze/glaze.hpp"
-#include "glaze/rpc/repe/buffer.hpp"
-#include "glaze/rpc/repe/repe.hpp"
+import glaze;
+import glaze.ext.jsonrpc;
+import glaze.net.http_router;
+import glaze.net.rest_registry_impl;
+import glaze.rpc.jsonrpc_registry_impl;
+export import glaze.rpc.registry_fwd;
+import glaze.rpc.repe.buffer;
+import glaze.rpc.repe.header;
+import glaze.rpc.repe;
+import glaze.rpc.repe.repe_registry_impl;
 
-using std::uint8_t;
+import glaze.reflection.to_tuple;
+
+import glaze.tuplet;
+
+import glaze.util.itoa;
+import glaze.util.string_literal;
+import glaze.util.type_traits;
+
+using std::size_t;
 using std::uint16_t;
 using std::uint32_t;
 using std::uint64_t;
-using std::size_t;
+using std::uint8_t;
 
 namespace glz
 {
    namespace detail
    {
-      static constexpr std::string_view empty_path = "";
+      export inline constexpr std::string_view empty_path = "";
 
       // Single shared thread_local buffer for error messages (safe for synchronous operations)
       inline std::string& error_buffer()
@@ -106,15 +138,7 @@ namespace glz
       }
    }
 
-   // Forward declaration of implementation template
-   template <auto Opts, uint32_t Protocol>
-   struct registry_impl;
 }
-
-// Include implementation files
-#include "glaze/net/rest_registry_impl.hpp"
-#include "glaze/rpc/jsonrpc_registry_impl.hpp"
-#include "glaze/rpc/repe/repe_registry_impl.hpp"
 
 namespace glz
 {
@@ -143,7 +167,7 @@ namespace glz
    };
 
    // This registry does not support adding methods from RPC calls or adding methods once RPC calls can be made.
-   template <auto Opts = opts{}, uint32_t Proto = REPE>
+   export template <auto Opts = opts{}, uint32_t Proto = REPE>
    struct registry
    {
       // procedure for REPE protocol (zero-copy state_view)
@@ -656,4 +680,3 @@ namespace glz
       }
    };
 }
-

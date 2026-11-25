@@ -1,5 +1,5 @@
 // Glaze Library
-// For the license information refer to glaze.hpp
+// For the license information refer to glaze.ixx
 
 #pragma once
 

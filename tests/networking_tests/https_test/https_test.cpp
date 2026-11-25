@@ -1,23 +1,20 @@
 // Comprehensive HTTPS Server Test for Glaze Library with Built-in Certificate Generation
 // Tests certificate loading, server startup, connections, and API functionality
 
-#include <atomic>
-#include <chrono>
-#include <cstdio>
-#include <fstream>
-#include <future>
-#include <iostream>
-#include <memory>
-#include <thread>
-
 #ifndef GLZ_ENABLE_SSL
 #define GLZ_ENABLE_SSL
 #endif
 
-#include "glaze/glaze.hpp"
-#include "glaze/net/http_client.hpp"
-#include "glaze/net/http_server.hpp"
-#include "ut/ut.hpp"
+#include "glaze/ext/asio_include.hpp"
+
+import std;
+
+import glaze.json.read;
+import glaze.net.http_client;
+import glaze.net.http_router;
+import glaze.net.http_server;
+
+import ut;
 
 // OpenSSL includes for certificate generation
 #include <openssl/bio.h>
@@ -28,6 +25,8 @@
 #include <openssl/rsa.h>
 #include <openssl/x509.h>
 #include <openssl/x509v3.h>
+
+using std::uint16_t;
 
 #ifdef DELETE
 #undef DELETE
@@ -352,8 +351,8 @@ class HTTPSTestServer
       // Set up clean error handler that suppresses expected disconnection errors
       server_.on_error([](std::error_code ec, std::source_location loc) {
          if (!should_suppress_error(ec)) {
-            std::fprintf(stderr, "⚠️  Server error at %s:%d: %s\n", loc.file_name(), static_cast<int>(loc.line()),
-                         ec.message().c_str());
+            std::cerr << "⚠️  Server error at " << loc.file_name() << ':' << loc.line() << ": " << ec.message()
+                      << '\n';
          }
       });
 

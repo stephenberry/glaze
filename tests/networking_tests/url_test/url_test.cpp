@@ -1,11 +1,11 @@
 // Glaze Library
-// For the license information refer to glaze.hpp
+// For the license information refer to glaze.ixx
 
-#include "glaze/net/url.hpp"
+import std;
 
-#include <vector>
+import glaze.net.url;
 
-#include "ut/ut.hpp"
+import ut;
 
 using namespace ut;
 

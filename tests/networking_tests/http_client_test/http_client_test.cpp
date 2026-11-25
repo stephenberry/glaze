@@ -1,21 +1,23 @@
-#include "glaze/net/http_client.hpp"
+#include "glaze/ext/asio_include.hpp"
 
-#include <algorithm>
-#include <atomic>
-#include <cctype>
-#include <chrono>
-#include <future>
-#include <optional>
-#include <string_view>
-#include <thread>
-#include <unordered_map>
-#include <utility>
-#include <vector>
+import std;
 
-#include "glaze/json/write.hpp"
-#include "glaze/net/http_server.hpp"
-#include "glaze/util/key_transformers.hpp"
-#include "ut/ut.hpp"
+import glaze.net.cors;
+import glaze.net.http_client;
+import glaze.net.http_router;
+import glaze.net.http_server;
+
+import glaze.core.common;
+import glaze.core.meta_fwd;
+
+import glaze.json.write;
+
+import glaze.util.expected;
+import glaze.util.key_transformers;
+
+import ut;
+
+using std::uint16_t;
 
 using namespace ut;
 using namespace glz;
@@ -124,8 +126,7 @@ class working_test_server
          // Only log unexpected errors, not normal shutdown errors
          if (running_ && ec != make_error_code(asio::error::eof) &&
              ec != make_error_code(asio::error::operation_aborted)) {
-            std::fprintf(stderr, "Server error at %s:%d: %s\n", loc.file_name(), static_cast<int>(loc.line()),
-                         ec.message().c_str());
+            std::cerr << "Server error at " << loc.file_name() << ':' << loc.line() << ": " << ec.message() << '\n';
          }
       });
 
