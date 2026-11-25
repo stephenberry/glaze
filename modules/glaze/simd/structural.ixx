@@ -4,11 +4,20 @@
 // glz:header std=<cstdint>
 // glz:header std=<string_view>
 module;
-#include "glaze/simd/utf8_validation_includes.hpp"
+#include "glaze/simd/simd_config.hpp"
+#if defined(GLZ_USE_SSE2)
+#include <immintrin.h>
+#elif defined(GLZ_USE_NEON64)
+#include <arm_neon.h>
+#elif defined(GLZ_USE_WASM_SIMD128)
+#include <wasm_simd128.h>
+#endif
+
 export module glaze.simd.structural;
 import std;
 using std::uint64_t;
 using std::uint32_t;
+using std::uint16_t;
 using std::uint8_t;
 
 // Bitmask view of a 64 byte window of JSON, for skipping over a value the program does not model.
@@ -28,11 +37,6 @@ using std::uint8_t;
 // always correct, just branchier.
 
 #include "glaze/util/inline.hpp"
-
-#if defined(GLZ_USE_AVX512BW) || defined(GLZ_USE_AVX2) || defined(GLZ_USE_SSE2) || defined(GLZ_USE_NEON64) || \
-   defined(GLZ_USE_WASM_SIMD128)
-#define GLZ_STRUCTURAL_SIMD
-#endif
 
 #if defined(GLZ_STRUCTURAL_SIMD)
 

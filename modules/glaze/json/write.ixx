@@ -42,7 +42,7 @@ import glaze.core.meta;
 import glaze.core.opts;
 import glaze.core.reflect;
 import glaze.core.seek;
-import glaze.core.to;
+export import glaze.core.to;
 import glaze.core.write;
 import glaze.core.write_chars;
 import glaze.thread.atomic;

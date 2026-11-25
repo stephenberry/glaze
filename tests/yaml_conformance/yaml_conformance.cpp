@@ -1,7 +1,7 @@
 // YAML conformance tests generated from https://github.com/yaml/yaml-test-suite.
 // All conformance cases assert expected parser behavior.
 
-#include <string>
+import std;
 
 import glaze;
 import glaze.json.patch;

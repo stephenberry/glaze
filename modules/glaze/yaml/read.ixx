@@ -37,7 +37,7 @@ import glaze.util.string_literal;
 import glaze.util.tuple;
 import glaze.util.type_traits;
 import glaze.util.variant;
-import glaze.yaml.common;
+export import glaze.yaml.common;
 import glaze.yaml.opts;
 import glaze.yaml.skip;
 

@@ -33,9 +33,9 @@ module;
 // GLZ_ENABLE_SSL is defined, apart from the ssl_error category, which stays available so
 // callers can report "SSL support was not compiled in" without conditional compilation.
 
+#ifdef GLZ_ENABLE_SSL
 #include "glaze/ext/asio_include.hpp"
 
-#ifdef GLZ_ENABLE_SSL
 // Windows is the one platform where OpenSSL cannot find the system trust anchors on its
 // own, so we read them out of the OS certificate store directly (see
 // detail::load_os_ca_certificates). Define GLZ_DISABLE_WINDOWS_CERT_STORE to compile that

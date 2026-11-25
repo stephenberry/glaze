@@ -1,10 +1,7 @@
 // YAML conformance tests generated from https://github.com/yaml/yaml-test-suite.
 // Concrete-struct variant: tests parse behavior into explicit C++ structs.
 
-#include <cmath>
-#include <optional>
-#include <string>
-#include <vector>
+import std;
 
 import glaze;
 import glaze.yaml;

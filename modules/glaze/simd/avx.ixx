@@ -1,6 +1,8 @@
 // Glaze Library
 // For the license information refer to glaze.ixx
 // glz:header path="glaze/simd/avx.hpp"
+// glz:header std=<cstddef>
+// glz:header std=<cstdint>
 module;
 
 #if defined(__x86_64__) || defined(_M_X64)
@@ -24,8 +26,8 @@ using std::size_t;
 
 namespace glz::detail
 {
-   template <class Data, class WriteEscape>
-   export GLZ_ALWAYS_INLINE void avx2_string_escape(const char*& c, const char* e, Data*& data, size_t n,
+   export template <class Data, class WriteEscape>
+   GLZ_ALWAYS_INLINE void avx2_string_escape(const char*& c, const char* e, Data*& data, size_t n,
                                              WriteEscape&& write_escape)
    {
       // AVX2: 32 bytes at a time with direct comparison instructions

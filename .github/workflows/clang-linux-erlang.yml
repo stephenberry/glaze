@@ -59,6 +59,7 @@ jobs:
           -DCMAKE_CXX_STANDARD=${{matrix.std}} \
           -DCMAKE_C_COMPILER=${{env.CC}} \
           -DCMAKE_CXX_COMPILER=${{env.CXX}} \
+          -DCMAKE_CXX_STDLIB_MODULES_JSON=/usr/lib/llvm-${{matrix.clang}}/lib/libc++.modules.json \
           -DCMAKE_CXX_FLAGS="-stdlib=libc++" \
           -DCMAKE_EXE_LINKER_FLAGS="-stdlib=libc++ -lc++abi" \
           -Dglaze_EETF_FORMAT=ON

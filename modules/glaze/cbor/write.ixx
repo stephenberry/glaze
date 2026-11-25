@@ -29,7 +29,7 @@ import glaze.core.chrono;
 import glaze.core.buffer_traits;
 import glaze.core.opts;
 import glaze.core.reflect;
-import glaze.core.to;
+export import glaze.core.to;
 import glaze.core.write;
 import glaze.core.context;
 import glaze.core.common;

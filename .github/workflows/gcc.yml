@@ -77,13 +77,14 @@ jobs:
         apt-get update
         apt-get install -y --no-install-recommends \
           ca-certificates \
-          cmake \
           git \
           libssl-dev \
           python3
         update-ca-certificates
 
     - uses: actions/checkout@v7
+
+    - uses: lukka/get-cmake@4latest
 
     - name: Prepare build directory
       run: cmake -E make_directory "$GITHUB_WORKSPACE/build"
@@ -121,13 +122,16 @@ jobs:
         apt-get update
         apt-get install -y --no-install-recommends \
           ca-certificates \
-          cmake \
           git \
           libssl-dev \
           python3
         update-ca-certificates
 
     - uses: actions/checkout@v7
+
+    - uses: lukka/get-cmake@4a7d025fc60f00db0c7b44ebf783d19b52444830 # v4.4.1
+      with:
+        cmakeVersion: 4.5.0
 
     - name: Prepare build directory
       run: cmake -E make_directory "$GITHUB_WORKSPACE/build"
@@ -167,13 +171,16 @@ jobs:
         apt-get update
         apt-get install -y --no-install-recommends \
           ca-certificates \
-          cmake \
           git \
           libssl-dev \
           python3
         update-ca-certificates
 
     - uses: actions/checkout@v7
+
+    - uses: lukka/get-cmake@4a7d025fc60f00db0c7b44ebf783d19b52444830 # v4.4.1
+      with:
+        cmakeVersion: 4.5.0
 
     - name: Verify reflection support
       run: |
@@ -187,7 +194,8 @@ jobs:
       run: |
         cmake -G Ninja -S "$GITHUB_WORKSPACE" -B "$GITHUB_WORKSPACE/build" \
           -DCMAKE_BUILD_TYPE=${{matrix.build_type}} \
-          -DCMAKE_CXX_FLAGS='-std=c++26 -freflection' \
+          -DCMAKE_CXX_STANDARD=26 \
+          -DCMAKE_CXX_FLAGS='-freflection' \
           -Dglaze_DEVELOPER_MODE=ON \
           -Dglaze_ENABLE_REFLECTION26=ON \
           -Dglaze_BUILD_NETWORKING_TESTS=OFF \

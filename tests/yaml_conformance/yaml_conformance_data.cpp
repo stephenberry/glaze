@@ -6,23 +6,16 @@
 //
 // Requires YAML_TEST_SUITE_DIR to be defined at compile time.
 
-#include <algorithm>
-#include <cctype>
-#include <cstdlib>
-#include <filesystem>
-#include <fstream>
-#include <optional>
-#include <set>
-#include <sstream>
-#include <string>
-#include <unordered_map>
-#include <vector>
+import std;
 
 import glaze;
 import glaze.json.patch;
 import glaze.util.env;
 import glaze.yaml;
 import ut;
+
+using std::size_t;
+using std::uint8_t;
 
 using namespace ut;
 namespace fs = std::filesystem;

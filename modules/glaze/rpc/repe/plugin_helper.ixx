@@ -26,12 +26,11 @@ import glaze.core.context;
 using std::size_t;
 using std::uint64_t;
 
-namespace glz::repe
+export namespace glz::repe
 {
    // Thread-local response buffer for plugin implementations
    // Note: This buffer grows as needed but does not shrink during the thread's lifetime
 
-   export
 #if !defined(GLZ_BUILDING_MODULES)
    inline
 #endif
@@ -39,7 +38,6 @@ namespace glz::repe
 
    // Create an error response with proper REPE format (zero-copy to thread-local buffer)
 
-   export
 #if !defined(GLZ_BUILDING_MODULES)
    inline
 #endif
@@ -51,7 +49,7 @@ namespace glz::repe
    // Zero-copy plugin call implementation
    // Dispatches a REPE request to a registry and returns the response
    // Note: Plugin initialization should be done via repe_plugin_init before any calls
-   export template <typename Registry>
+   template <typename Registry>
    repe_buffer plugin_call(Registry& registry, const char* request, uint64_t request_size)
    {
       // Use zero-copy span-based call - parses request in-place, writes directly to response buffer
