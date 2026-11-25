@@ -144,6 +144,89 @@ namespace glz
 }
 ```
 
+## Tagged Pointers and NaN Boxing
+
+A type that packs its runtime type into its own bits, such as a NaN boxed value or a tagged pointer, has no static layout to reflect, but it does not need to go through `glz::generic` either. Write one `to` and one `from` specialization. The writer branches on the tag and serializes the payload. The reader looks at the first character of the JSON value to choose the type, parses into that type, and packs the result.
+
+```c++
+struct nan_boxed
+{
+   static constexpr uint64_t qnan = 0x7ffc000000000000ull;
+   static constexpr uint64_t tag_null = qnan | 1;
+   static constexpr uint64_t tag_false = qnan | 2;
+   static constexpr uint64_t tag_true = qnan | 3;
+
+   uint64_t bits = tag_null;
+
+   bool is_double() const { return (bits & qnan) != qnan; }
+   bool is_bool() const { return bits == tag_true || bits == tag_false; }
+   double as_double() const { return std::bit_cast<double>(bits); }
+
+   static nan_boxed make(double d) { return {std::bit_cast<uint64_t>(d)}; }
+   static nan_boxed make(bool b) { return {b ? tag_true : tag_false}; }
+};
+
+namespace glz
+{
+   template <>
+   struct to<JSON, nan_boxed>
+   {
+      template <auto Opts>
+      static void op(const nan_boxed& value, is_context auto&& ctx, auto&& b, auto&& ix)
+      {
+         if (value.is_double()) {
+            const double d = value.as_double();
+            serialize<JSON>::op<Opts>(d, ctx, b, ix);
+         }
+         else if (value.is_bool()) {
+            const bool x = value.bits == nan_boxed::tag_true;
+            serialize<JSON>::op<Opts>(x, ctx, b, ix);
+         }
+         else {
+            serialize<JSON>::op<Opts>(nullptr, ctx, b, ix);
+         }
+      }
+   };
+
+   template <>
+   struct from<JSON, nan_boxed>
+   {
+      template <auto Opts>
+      static void op(nan_boxed& value, is_context auto&& ctx, auto&& it, auto&& end)
+      {
+         // Reports an error at the end of the input, so *it is safe to read afterwards
+         if (skip_ws<Opts>(ctx, it, end)) {
+            return;
+         }
+
+         switch (*it) {
+         case 'n': {
+            std::nullptr_t null{};
+            parse<JSON>::op<ws_handled<Opts>()>(null, ctx, it, end);
+            value = nan_boxed{};
+            break;
+         }
+         case 't':
+         case 'f': {
+            bool x{};
+            parse<JSON>::op<ws_handled<Opts>()>(x, ctx, it, end);
+            value = nan_boxed::make(x);
+            break;
+         }
+         default: {
+            double d{};
+            parse<JSON>::op<ws_handled<Opts>()>(d, ctx, it, end);
+            value = nan_boxed::make(d);
+            break;
+         }
+         }
+      }
+   };
+}
+```
+
+A heap allocated payload works the same way. A string case, for example, parses into a `std::string`, moves it to the heap, and stores the tagged pointer. Other formats need their own `to` and `from` specializations.
+
 # Handling Ambiguous Partial Specialization
 
 You may want to custom parse a class that matches an underlying glaze partial specialization for a template like below:
