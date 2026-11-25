@@ -34,34 +34,46 @@ namespace glz
       // std::meta::nonstatic_data_members_of lists only the members a class declares itself, so the members of each
       // base class are appended first: bases in declaration order, each one recursively. A virtual base is a single
       // subobject however many paths lead to it, so its members are appended once, where it is first reached.
+      //
+      // Only public bases and their public members are reflected. A private base is an implementation detail: its
+      // members are reached through the derived type's API, and reflecting them would put state such as
+      // std::enable_shared_from_this's private weak_ptr into the serialized form. The type's own private members
+      // keep the established rule: they are reflected.
       consteval void append_reflected_data_members(std::meta::info type, std::vector<std::meta::info>& members,
-                                                   std::vector<std::meta::info>& virtual_bases)
+                                                   std::vector<std::meta::info>& virtual_bases, bool is_derived)
       {
-         for (const auto base : std::meta::bases_of(type, reflection_access_ctx())) {
-            const auto base_type = std::meta::dealias(std::meta::type_of(base));
-            if (std::meta::is_virtual(base)) {
+         const auto bases = std::meta::bases_of(type, reflection_access_ctx());
+         for (size_t i = 0; i < bases.size(); ++i) {
+            if (!std::meta::is_public(bases[i])) {
+               continue;
+            }
+            const auto base_type = std::meta::dealias(std::meta::type_of(bases[i]));
+            if (std::meta::is_virtual(bases[i])) {
                bool seen = false;
-               for (const auto visited : virtual_bases) {
-                  seen = seen || visited == base_type;
+               for (size_t j = 0; j < virtual_bases.size(); ++j) {
+                  seen = seen || virtual_bases[j] == base_type;
                }
                if (seen) {
                   continue;
                }
                virtual_bases.push_back(base_type);
             }
-            append_reflected_data_members(base_type, members, virtual_bases);
+            append_reflected_data_members(base_type, members, virtual_bases, false);
          }
-         for (const auto member : std::meta::nonstatic_data_members_of(type, reflection_access_ctx())) {
-            members.push_back(member);
+         const auto own = std::meta::nonstatic_data_members_of(type, reflection_access_ctx());
+         for (size_t i = 0; i < own.size(); ++i) {
+            if (is_derived || std::meta::is_public(own[i])) {
+               members.push_back(own[i]);
+            }
          }
       }
 
       // Every non-static data member of type, inherited members first
       consteval std::vector<std::meta::info> reflected_data_members(std::meta::info type)
       {
-         std::vector<std::meta::info> members;
-         std::vector<std::meta::info> virtual_bases;
-         append_reflected_data_members(type, members, virtual_bases);
+         std::vector<std::meta::info> members{};
+         std::vector<std::meta::info> virtual_bases{};
+         append_reflected_data_members(type, members, virtual_bases, true);
          return members;
       }
 
@@ -94,8 +106,12 @@ namespace glz
 
       consteval bool has_base_with_glaze_metadata(std::meta::info type)
       {
-         for (const auto base : std::meta::bases_of(type, reflection_access_ctx())) {
-            const auto base_type = std::meta::dealias(std::meta::type_of(base));
+         const auto bases = std::meta::bases_of(type, reflection_access_ctx());
+         for (size_t i = 0; i < bases.size(); ++i) {
+            if (!std::meta::is_public(bases[i])) {
+               continue; // not reflected, so its metadata is not bypassed
+            }
+            const auto base_type = std::meta::dealias(std::meta::type_of(bases[i]));
             const std::vector<std::meta::info> arguments{base_type};
             const bool has_metadata = std::meta::extract<bool>(std::meta::substitute(^^has_glaze_metadata, arguments));
             if (has_metadata || has_base_with_glaze_metadata(base_type)) {
