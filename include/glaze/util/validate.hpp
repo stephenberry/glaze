@@ -4,6 +4,7 @@
 #pragma once
 
 #include <algorithm>
+#include <cstdint>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -25,12 +26,20 @@ namespace glz
          size_t rear_truncation{};
       };
 
-      // We convert to only single spaces for error messages in order to keep the source info
-      // calculation more efficient and avoid needing to allocate more memory.
-      inline void convert_tabs_to_single_spaces(std::string& input) noexcept
+      // A byte that a terminal would act on rather than print. Tab and carriage return are excluded
+      // because text uses them, and a newline never appears inside a line.
+      constexpr bool is_control_char(const char c) noexcept
+      {
+         const auto u = static_cast<uint8_t>(c);
+         return (u < 0x20 && c != '\t' && c != '\r') || u == 0x7F;
+      }
+
+      // Tabs and control characters become single spaces, so every byte of the context takes one
+      // column and the caret lines up without needing to allocate more memory.
+      inline void convert_to_printable_spaces(std::string& input) noexcept
       {
          for (auto& c : input) {
-            if (c == '\t') {
+            if (c == '\t' || is_control_char(c)) {
                c = ' ';
             }
          }
@@ -77,8 +86,24 @@ namespace glz
 
             // The context runs to the end of the line. Searching from pos itself means that a
             // newline at the error ends the context, instead of pulling in the line after it.
+            // A CRLF line ending leaves its carriage return out of the context.
+            const size_t line_end = (std::min)(text.find('\n', pos), text.size());
             size_t context_begin = offset;
-            size_t context_end = (std::min)(text.find('\n', pos), text.size());
+            size_t context_end = line_end;
+            while (context_end > context_begin && text[context_end - 1] == '\r') {
+               --context_end;
+            }
+
+            // Binary input (BEVE, CBOR, MessagePack, BSON) is often held in a std::string, so it
+            // reaches this text path. A line with control characters is not text: its line and
+            // column mean nothing and printing it would write raw bytes to the terminal, so only
+            // the index is reported. The byte at the error is exempt, because a text reader that
+            // rejects a raw control character reports the error at that character.
+            for (size_t i = offset; i < line_end; ++i) {
+               if (i != pos && is_control_char(text[i])) {
+                  return {.context = "", .index = index};
+               }
+            }
 
             size_t front_truncation = 0;
             size_t rear_truncation = 0;
@@ -100,7 +125,7 @@ namespace glz
             }
 
             std::string context{text.substr(context_begin, context_end - context_begin)};
-            convert_tabs_to_single_spaces(context);
+            convert_to_printable_spaces(context);
             return {line, column, context, index, front_truncation, rear_truncation};
          }
       }
