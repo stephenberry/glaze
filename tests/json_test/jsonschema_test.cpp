@@ -385,6 +385,45 @@ struct recursive_root
    recursive_node root{};
 };
 
+struct reused_leaf
+{
+   int value{};
+};
+
+struct reused_other
+{
+   bool flag{};
+};
+
+// Each container, map and variant is used twice.
+struct reused_wrappers
+{
+   std::vector<reused_leaf> first{};
+   std::vector<reused_leaf> second{};
+   std::map<std::string, reused_leaf> by_key{};
+   std::map<std::string, reused_leaf> by_name{};
+   std::variant<reused_leaf, reused_other> either{};
+   std::variant<reused_leaf, reused_other> or_else{};
+};
+
+// The root type refers to itself through a container.
+struct self_tree
+{
+   std::vector<self_tree> kids{};
+};
+
+struct holds_generic
+{
+   glz::generic value{};
+};
+
+// A named type inside a tuple, optional or not, and an enum alternative of a variant.
+struct named_in_tuple_and_variant
+{
+   std::tuple<std::optional<named_in_vector>, named_mode> pair{};
+   std::variant<named_mode, std::string> mode_or_text{};
+};
+
 struct keep_named_opts : glz::opts
 {
    bool keep_named_type_definitions = true;
@@ -565,6 +604,37 @@ suite schema_tests = [] {
       expect(
          schema ==
          R"({"type":"object","properties":{"root":{"$ref":"#/$defs/recursive_node"}},"additionalProperties":false,"$defs":{"recursive_node":{"type":"object","properties":{"children":{"type":"array","items":{"$ref":"#/$defs/recursive_node"}}},"additionalProperties":false}},"title":"recursive_root"})")
+         << schema;
+   };
+
+   "keep_named_type_definitions writes a container, map or variant used twice in place"_test = [] {
+      const auto schema = glz::write_json_schema<reused_wrappers, keep_named_opts{}>().value_or("error");
+      expect(
+         schema ==
+         R"({"type":"object","properties":{"by_key":{"type":"object","additionalProperties":{"$ref":"#/$defs/reused_leaf"}},"by_name":{"type":"object","additionalProperties":{"$ref":"#/$defs/reused_leaf"}},"either":{"type":"object","oneOf":[{"$ref":"#/$defs/reused_leaf","title":"reused_leaf"},{"$ref":"#/$defs/reused_other","title":"reused_other"}]},"first":{"type":"array","items":{"$ref":"#/$defs/reused_leaf"}},"or_else":{"type":"object","oneOf":[{"$ref":"#/$defs/reused_leaf","title":"reused_leaf"},{"$ref":"#/$defs/reused_other","title":"reused_other"}]},"second":{"type":"array","items":{"$ref":"#/$defs/reused_leaf"}}},"additionalProperties":false,"$defs":{"int32_t":{"type":"integer","minimum":-2147483648,"maximum":2147483647},"reused_leaf":{"type":"object","properties":{"value":{"$ref":"#/$defs/int32_t"}},"additionalProperties":false},"reused_other":{"type":"object","properties":{"flag":{"type":"boolean"}},"additionalProperties":false}},"title":"reused_wrappers"})")
+         << schema;
+   };
+
+   "keep_named_type_definitions writes the container of a recursive root in place"_test = [] {
+      const auto schema = glz::write_json_schema<self_tree, keep_named_opts{}>().value_or("error");
+      expect(
+         schema ==
+         R"({"type":"object","properties":{"kids":{"type":"array","items":{"$ref":"#/$defs/self_tree"}}},"additionalProperties":false,"$defs":{"self_tree":{"type":"object","properties":{"kids":{"type":"array","items":{"$ref":"#/$defs/self_tree"}}},"additionalProperties":false}},"title":"self_tree"})")
+         << schema;
+   };
+
+   "keep_named_type_definitions keeps a definition that refers to itself without a named type"_test = [] {
+      const auto kept = glz::write_json_schema<holds_generic, keep_named_opts{}>().value_or("error");
+      expect(kept == glz::write_json_schema<holds_generic>().value_or("error")) << kept;
+      expect(kept.find(R"("value":{"$ref":"#/$defs/glz::generic"})") != std::string::npos) << kept;
+      expect(kept.find(R"("items":{"$ref":"#/$defs/glz::generic"})") != std::string::npos) << kept;
+   };
+
+   "keep_named_type_definitions refers to named tuple elements and enum alternatives"_test = [] {
+      const auto schema = glz::write_json_schema<named_in_tuple_and_variant, keep_named_opts{}>().value_or("error");
+      expect(
+         schema ==
+         R"({"type":"object","properties":{"mode_or_text":{"type":"string","oneOf":[{"$ref":"#/$defs/named_mode","title":"named_mode"},{"type":"string","title":"std::string"}]},"pair":{"type":"array","prefixItems":[{"anyOf":[{"$ref":"#/$defs/named_in_vector"},{"type":"null"}]},{"$ref":"#/$defs/named_mode"}],"items":false,"maxItems":2}},"additionalProperties":false,"$defs":{"named_in_vector":{"type":"object","properties":{"text":{"type":"string"}},"additionalProperties":false},"named_mode":{"type":"string","oneOf":[{"title":"on","const":"on"},{"title":"off","const":"off"}]}},"title":"named_in_tuple_and_variant"})")
          << schema;
    };
 

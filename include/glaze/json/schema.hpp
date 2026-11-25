@@ -868,7 +868,8 @@ namespace glz
                (*alt.properties)[tag_v<T>].constant = ids[I];
 
                auto& content = (*alt.properties)[content_v<T>];
-               constexpr bool is_complex = glaze_object_t<V> || reflectable<V> || array_t<V> || writable_map_t<V>;
+               constexpr bool is_complex = glaze_object_t<V> || reflectable<V> || array_t<V> || writable_map_t<V> ||
+                                            (check_keep_named_type_definitions(Opts) && glaze_enum_t<V>);
                if constexpr (is_complex) {
                   auto& def = defs[name_v<V>];
                   if (!def.type) {
@@ -950,7 +951,8 @@ namespace glz
                // Exception: tagged variant object alternatives must remain inline because the tag
                // discriminator property is added to the oneOf entry alongside the object's own
                // properties, and additionalProperties:false in a $ref'd schema would reject the tag.
-               constexpr bool is_complex = glaze_object_t<V> || reflectable<V> || array_t<V> || writable_map_t<V>;
+               constexpr bool is_complex = glaze_object_t<V> || reflectable<V> || array_t<V> || writable_map_t<V> ||
+                                            (check_keep_named_type_definitions(Opts) && glaze_enum_t<V>);
                constexpr bool is_tagged_object = (glaze_object_t<V> || reflectable<V>) && !tag_v<T>.empty();
 
                if constexpr (is_complex && !is_tagged_object) {
@@ -984,6 +986,31 @@ namespace glz
          requires glaze_array_t<std::decay_t<T>> || tuple_t<std::decay_t<T>> || is_std_tuple<std::decay_t<T>>
       struct to_json_schema<T>
       {
+         // An element is written in place, except that under keep_named_type_definitions an object or
+         // enum, optional or not, is referred to by its definition.
+         template <class E, auto Opts>
+         static void element(auto& item, auto& defs)
+         {
+            using named_t = unwrap_nullable_t<E>;
+            if constexpr (check_keep_named_type_definitions(Opts) &&
+                          (glaze_object_t<named_t> || reflectable<named_t> || glaze_enum_t<named_t>)) {
+               auto& def = defs[name_v<named_t>];
+               if (!def.type) {
+                  to_json_schema<named_t>::template op<Opts>(def, defs);
+               }
+               constexpr std::string_view ref = join_v<chars<"#/$defs/">, name_v<named_t>>;
+               if constexpr (nullable_t<E>) {
+                  item.anyOf = make_nullable_ref_anyof(ref);
+               }
+               else {
+                  item.ref = ref;
+               }
+            }
+            else {
+               to_json_schema<E>::template op<Opts>(item, defs);
+            }
+         }
+
          template <auto Opts>
          static void op(auto& s, auto& defs)
          {
@@ -1001,13 +1028,11 @@ namespace glz
             for_each<N>([&]<auto I>() {
                if constexpr (glaze_array_t<V>) {
                   using element_t = std::decay_t<member_t<V, decltype(glz::get<I>(meta_v<V>))>>;
-                  auto& item_schema = (*s.prefixItems)[I];
-                  to_json_schema<element_t>::template op<Opts>(item_schema, defs);
+                  element<element_t, Opts>((*s.prefixItems)[I], defs);
                }
                else {
                   using element_t = std::decay_t<glz::tuple_element_t<I, V>>;
-                  auto& item_schema = (*s.prefixItems)[I];
-                  to_json_schema<element_t>::template op<Opts>(item_schema, defs);
+                  element<element_t, Opts>((*s.prefixItems)[I], defs);
                }
             });
             s.items = false;
@@ -1232,7 +1257,7 @@ namespace glz
       };
 
       // Whether a schema definition represents a numeric type (integer or number).
-      // Used to exempt numeric definitions from single-use inlining.
+      // Used to exempt numeric definitions from inlining.
       inline bool is_numeric_schema(const schema& s)
       {
          if (!s.type) return false;
@@ -1304,36 +1329,68 @@ namespace glz
                 });
       }
 
-      // The names of the definitions written where they are used: each one used exactly once, except a
-      // numeric one, which keeps its min/max range in a single named $defs entry, and, when
-      // keep_named_types is set, a named type's.
-      inline std::set<std::string_view> single_use_definitions(const schema& s, bool keep_named_types)
+      inline constexpr std::string_view defs_ref_prefix = "#/$defs/";
+
+      // Whether the definition `start` refers back to itself through definitions in `inlined` alone.
+      // Inlining such a definition would never end.
+      inline bool on_inlined_cycle(const std::map<std::string_view, schema, std::less<>>& defs,
+                                   const std::set<std::string_view>& inlined, const std::string_view start)
       {
-         static constexpr std::string_view prefix = "#/$defs/";
+         std::set<std::string_view> visited;
+         std::vector<std::string_view> pending{start};
+         while (!pending.empty()) {
+            const auto def = defs.find(pending.back());
+            pending.pop_back();
+            std::map<std::string_view, size_t> refs;
+            count_schema_refs(def->second, refs);
+            for (const auto& [ref, _] : refs) {
+               if (!ref.starts_with(defs_ref_prefix)) continue;
+               const auto name = ref.substr(defs_ref_prefix.size());
+               if (!inlined.contains(name)) continue;
+               if (name == start) return true;
+               if (visited.insert(name).second) pending.push_back(name);
+            }
+         }
+         return false;
+      }
+
+      // The names of the definitions written in the places that use them. By default that is each one
+      // used exactly once. With keep_named_types it is each one that is not a named type's, however
+      // often it is used. A numeric definition is never inlined, so its min/max range stays in a single
+      // named $defs entry, and neither is one that refers back to itself through inlined definitions.
+      inline std::set<std::string_view> inlined_definitions(const schema& s, bool keep_named_types)
+      {
          std::map<std::string_view, size_t> counts;
          count_schema_refs(s, counts);
          std::set<std::string_view> inlined;
          for (const auto& [ref, count] : counts) {
-            if (count != 1 || !ref.starts_with(prefix)) continue;
-            const auto name = ref.substr(prefix.size());
+            if (!ref.starts_with(defs_ref_prefix)) continue;
+            const auto name = ref.substr(defs_ref_prefix.size());
             const auto def = s.defs->find(name);
             if (def == s.defs->end() || is_numeric_schema(def->second)) continue;
-            if (keep_named_types && is_named_type_schema(def->second)) continue;
+            if (keep_named_types ? is_named_type_schema(def->second) : count != 1) continue;
             inlined.insert(name);
+         }
+         std::vector<std::string_view> cyclic;
+         for (const auto name : inlined) {
+            if (on_inlined_cycle(*s.defs, inlined, name)) cyclic.push_back(name);
+         }
+         for (const auto name : cyclic) {
+            inlined.erase(name);
          }
          return inlined;
       }
 
-      // Try to inline a single-use $ref node by moving the definition from defs.
-      // Returns true if the node was inlined.
+      // Replace a $ref to an inlined definition with a copy of that definition. A copy, because under
+      // keep_named_type_definitions a definition may be inlined at several places; the original is
+      // pruned from $defs afterwards. Returns true if the node was inlined.
       inline bool try_inline_ref(schema& node, std::map<std::string_view, schema, std::less<>>& defs,
                                  const std::set<std::string_view>& inlined)
       {
-         static constexpr std::string_view prefix = "#/$defs/";
          if (!node.ref) return false;
          auto ref = *node.ref;
-         if (!ref.starts_with(prefix)) return false;
-         auto def_name = ref.substr(prefix.size());
+         if (!ref.starts_with(defs_ref_prefix)) return false;
+         auto def_name = ref.substr(defs_ref_prefix.size());
          if (!inlined.contains(def_name)) return false;
          auto def_it = defs.find(def_name);
          if (def_it == defs.end()) return false;
@@ -1342,33 +1399,32 @@ namespace glz
          schema saved_metadata = std::move(node);
          saved_metadata.ref.reset();
 
-         // Move the definition into this node (safe: single-use means exactly one consumer)
-         node = std::move(def_it->second);
+         node = def_it->second;
 
          // Merge saved sibling metadata into the inlined definition
          merge_schema_attrs(node, saved_metadata);
          return true;
       }
 
-      // Inline single-use $ref entries by moving the definition from $defs into the reference site.
-      inline void inline_single_use_refs(schema& s, std::map<std::string_view, schema, std::less<>>& defs,
-                                         const std::set<std::string_view>& inlined)
+      // Inline the $ref entries to inlined definitions by copying the definition into the reference site.
+      inline void inline_refs(schema& s, std::map<std::string_view, schema, std::less<>>& defs,
+                              const std::set<std::string_view>& inlined)
       {
          if (s.properties) {
             for (auto& [_, prop] : *s.properties) {
-               inline_single_use_refs(prop, defs, inlined);
+               inline_refs(prop, defs, inlined);
                if (try_inline_ref(prop, defs, inlined)) {
-                  // Re-process the newly inlined content for chained single-use refs
-                  inline_single_use_refs(prop, defs, inlined);
+                  // Re-process the newly inlined content for chained inlined refs
+                  inline_refs(prop, defs, inlined);
                }
             }
          }
          if (s.items) {
             if (auto* ptr = std::get_if<std::shared_ptr<schema>>(&*s.items)) {
                if (*ptr) {
-                  inline_single_use_refs(**ptr, defs, inlined);
+                  inline_refs(**ptr, defs, inlined);
                   if (try_inline_ref(**ptr, defs, inlined)) {
-                     inline_single_use_refs(**ptr, defs, inlined);
+                     inline_refs(**ptr, defs, inlined);
                   }
                }
             }
@@ -1376,34 +1432,34 @@ namespace glz
          if (s.additionalProperties) {
             if (auto* ptr = std::get_if<std::shared_ptr<schema>>(&*s.additionalProperties)) {
                if (*ptr) {
-                  inline_single_use_refs(**ptr, defs, inlined);
+                  inline_refs(**ptr, defs, inlined);
                   if (try_inline_ref(**ptr, defs, inlined)) {
-                     inline_single_use_refs(**ptr, defs, inlined);
+                     inline_refs(**ptr, defs, inlined);
                   }
                }
             }
          }
          if (s.oneOf) {
             for (auto& entry : *s.oneOf) {
-               inline_single_use_refs(entry, defs, inlined);
+               inline_refs(entry, defs, inlined);
                if (try_inline_ref(entry, defs, inlined)) {
-                  inline_single_use_refs(entry, defs, inlined);
+                  inline_refs(entry, defs, inlined);
                }
             }
          }
          if (s.anyOf) {
             for (auto& entry : *s.anyOf) {
-               inline_single_use_refs(entry, defs, inlined);
+               inline_refs(entry, defs, inlined);
                if (try_inline_ref(entry, defs, inlined)) {
-                  inline_single_use_refs(entry, defs, inlined);
+                  inline_refs(entry, defs, inlined);
                }
             }
          }
          if (s.prefixItems) {
             for (auto& entry : *s.prefixItems) {
-               inline_single_use_refs(entry, defs, inlined);
+               inline_refs(entry, defs, inlined);
                if (try_inline_ref(entry, defs, inlined)) {
-                  inline_single_use_refs(entry, defs, inlined);
+                  inline_refs(entry, defs, inlined);
                }
             }
          }
@@ -1446,14 +1502,14 @@ namespace glz
       detail::to_json_schema<std::decay_t<T>>::template op<Opts>(s, *s.defs);
       s.title = name_v<T>;
 
-      // Inline single-use $defs entries at their reference sites
-      const auto inlined = detail::single_use_definitions(s, check_keep_named_type_definitions(Opts));
-      // First inline refs within defs entries (for chained single-use types)
+      // Write definitions in the places that use them, where that is wanted
+      const auto inlined = detail::inlined_definitions(s, check_keep_named_type_definitions(Opts));
+      // First inline refs within defs entries (for chained inlined definitions)
       for (auto& [_, def] : *s.defs) {
-         detail::inline_single_use_refs(def, *s.defs, inlined);
+         detail::inline_refs(def, *s.defs, inlined);
       }
       // Then inline refs in the main schema tree
-      detail::inline_single_use_refs(s, *s.defs, inlined);
+      detail::inline_refs(s, *s.defs, inlined);
       detail::prune_inlined_defs(s, inlined);
 
       // Making this static constexpr options to fix MSVC bug

@@ -57,7 +57,7 @@ struct local_schema_t
 
 ## Keeping Named Type Definitions
 
-`write_json_schema` writes a definition its schema uses only once in the place that uses it, and keeps a definition used more than once in `$defs`. A caller that places several types' schemas in one document, such as an OpenAPI document's `components/schemas`, needs each named type to stay a definition it can refer to, so that a generated client has one type per C++ type rather than an anonymous object wherever one is nested. The inheritable option `keep_named_type_definitions` keeps the definition of every object and enum in `$defs`, referred to by `$ref`, even one used once. A container, map, variant or optional used once is still written in place, so a generator writes `phone[]` rather than a wrapper type for `std::vector<phone>`:
+`write_json_schema` writes a definition its schema uses only once in the place that uses it, and keeps a definition used more than once in `$defs`. A caller that places several types' schemas in one document, such as an OpenAPI document's `components/schemas`, needs each named type to stay a definition it can refer to, so that a generated client has one type per C++ type rather than an anonymous object wherever one is nested. The inheritable option `keep_named_type_definitions` keeps the definition of every object and enum in `$defs`, referred to by `$ref`, even one used once. A container, map, variant or optional is written in place however often it is used, so a generator writes `phone[]` rather than a wrapper type for `std::vector<phone>`:
 
 ```c++
 struct address
@@ -124,6 +124,11 @@ auto schema = glz::write_json_schema<person, schema_opts{}>().value();
 ```
 
 Without the option, `address` and `phone` are each written in place and the schema has no `$defs`.
+
+Two exceptions remain under the option:
+
+- An object alternative of an internally tagged variant is written in place, since the tag is merged into it.
+- A definition that refers back to itself without passing through an object or enum, such as `glz::generic`, stays in `$defs`, since writing it in place would never end.
 
 ## Required Fields
 
