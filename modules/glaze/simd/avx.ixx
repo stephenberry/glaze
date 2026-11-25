@@ -14,6 +14,8 @@ import glaze.util.bit;
 
 #include "glaze/util/inline.hpp"
 
+import std;
+
 #if defined(GLZ_USE_AVX2)
 
 using std::int8_t;

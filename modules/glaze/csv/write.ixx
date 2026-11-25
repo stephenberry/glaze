@@ -30,6 +30,7 @@ import glaze.util.expected;
 import glaze.util.for_each;
 import glaze.util.string_literal;
 import glaze.util.type_traits;
+import glaze.util.zmij;
 
 using std::uint32_t;
 using std::size_t;
