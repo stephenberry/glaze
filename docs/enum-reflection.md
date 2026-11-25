@@ -158,6 +158,43 @@ struct glz::meta<HttpStatus> {
 };
 ```
 
+## Reading Old Names
+
+When an enumerator is renamed, documents written before the rename still hold the old name. Add an `enum_unknown_read` to the enum's `glz::meta` to keep reading them:
+
+```cpp
+enum class Color { Red, Green, Blue };
+
+template <>
+struct glz::meta<Color> {
+   using enum Color;
+   static constexpr auto value = glz::enumerate(Red, Green, Blue);
+   static constexpr auto enum_unknown_read = +[](std::string_view name) -> std::optional<Color> {
+      if (name == "Crimson") return Red;
+      if (name == "Cyan") return Blue;
+      return std::nullopt;
+   };
+};
+
+Color c{};
+glz::read_json(c, R"("Crimson")"); // c == Color::Red
+glz::write_json(c);                // "Red"
+glz::read_json(c, R"("Silver")");  // glz::error_code::unexpected_enum
+```
+
+It can be a function pointer, a captureless lambda, or a static member function taking a `std::string_view` and returning a `std::optional` of the enum. It is called only for a string that matched no enumerator, and `std::nullopt` leaves that string as the `unexpected_enum` error it would otherwise be.
+
+- **Reads only.** Writes are unchanged, so a value read through an old name writes its current name. Return an enumerated value, since anything else fails to write.
+- **The name is decoded.** `"Old\"Name"` arrives as `Old"Name`, in every format. The view is valid only during the call. A string with a malformed escape or no closing quote is never shown to the function, and the read fails.
+- **It must not throw.** The readers are `noexcept`.
+- **No cost without it.** An enum that does not declare one compiles to the same code as before, and a name that matches an enumerator never calls it. A JSON or TOML name that does not match is read a second time as a string, so an old name costs more to read than a current one.
+
+Formats that read names honour it: JSON (with JSONC and NDJSON), TOML, YAML, CSV, and MessagePack. BEVE, CBOR, JSONB, and BSON carry enums as numbers and have no name to look up.
+
+It takes a `glz::meta` that names the enumerators. The `reflect_enums` option of [P2996 Reflection](p2996-reflection.md#automatic-enum-string-serialization) does not consult it, and a generated JSON schema lists only the enumerators.
+
+Under a streaming read a name has to fit in the buffer window, as any string does. A name cut off by the edge of the window reports `unexpected_enum` rather than being shown to the function as a shorter name.
+
 ## Choosing a Library
 
 | Library | Compile Time | Range Limits | Notes |
