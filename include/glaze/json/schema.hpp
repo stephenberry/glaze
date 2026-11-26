@@ -237,7 +237,11 @@ namespace glz
          uri_template, //
          json_pointer, //
          relative_json_pointer, //
-         regex
+         regex, //
+         // OpenAPI's formats for an integer a double cannot hold exactly, which a generated client
+         // reads as a 64-bit or big integer rather than a double
+         int64, //
+         uint64
       };
    }
 }
@@ -248,10 +252,10 @@ struct glz::meta<glz::detail::defined_formats>
    static constexpr std::string_view name = "defined_formats";
    using enum glz::detail::defined_formats;
    static constexpr std::array keys{
-      "date-time", "date",          "time", "duration",     "email",        "idn-email",
-      "hostname",  "idn-hostname",  "ipv4", "ipv6",         "uri",          "uri-reference",
-      "iri",       "iri-reference", "uuid", "uri-template", "json-pointer", "relative-json-pointer",
-      "regex"};
+      "date-time", "date",          "time",  "duration",     "email",        "idn-email",
+      "hostname",  "idn-hostname",  "ipv4",  "ipv6",         "uri",          "uri-reference",
+      "iri",       "iri-reference", "uuid",  "uri-template", "json-pointer", "relative-json-pointer",
+      "regex",     "int64",         "uint64"};
 #if defined(__clang__)
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wmissing-braces"
@@ -274,7 +278,9 @@ struct glz::meta<glz::detail::defined_formats>
                                      uri_template, //
                                      json_pointer, //
                                      relative_json_pointer, //
-                                     regex};
+                                     regex, //
+                                     int64, //
+                                     uint64};
 #if defined(__clang__)
 #pragma clang diagnostic pop
 #endif
@@ -493,6 +499,12 @@ namespace glz
          }
       };
 
+      // A double's full range excludes no value a double can hold, so a floating-point type states
+      // its range only when that range is narrower than a double's.
+      template <class V>
+      constexpr bool schema_writes_float_bounds =
+         std::numeric_limits<V>::max_exponent < std::numeric_limits<double>::max_exponent;
+
       template <num_t T>
       struct to_json_schema<T>
       {
@@ -504,17 +516,24 @@ namespace glz
                s.type = sv{"integer"};
                s.minimum = static_cast<std::int64_t>(std::numeric_limits<V>::lowest());
                s.maximum = static_cast<std::uint64_t>((std::numeric_limits<V>::max)());
+               if constexpr (sizeof(V) == 8) {
+                  s.format = std::signed_integral<V> ? defined_formats::int64 : defined_formats::uint64;
+               }
             }
             else {
                s.type = sv{"number"};
-               s.minimum = std::numeric_limits<V>::lowest();
-               s.maximum = (std::numeric_limits<V>::max)();
+               if constexpr (schema_writes_float_bounds<V>) {
+                  s.minimum = std::numeric_limits<V>::lowest();
+                  s.maximum = (std::numeric_limits<V>::max)();
+               }
             }
          }
       };
 
+      // A filesystem path is written as its text, so its schema is a string, though it is also a
+      // range of paths.
       template <class T>
-         requires str_t<T> || char_t<T>
+         requires str_t<T> || char_t<T> || filesystem_path<T>
       struct to_json_schema<T>
       {
          template <auto Opts>
@@ -631,11 +650,16 @@ namespace glz
             s->type = sv{"integer"};
             s->minimum = static_cast<std::int64_t>(std::numeric_limits<V>::lowest());
             s->maximum = static_cast<std::uint64_t>((std::numeric_limits<V>::max)());
+            if constexpr (sizeof(V) == 8) {
+               s->format = std::signed_integral<V> ? defined_formats::int64 : defined_formats::uint64;
+            }
          }
          else if constexpr (std::floating_point<V>) {
             s->type = sv{"number"};
-            s->minimum = std::numeric_limits<V>::lowest();
-            s->maximum = (std::numeric_limits<V>::max)();
+            if constexpr (schema_writes_float_bounds<V>) {
+               s->minimum = std::numeric_limits<V>::lowest();
+               s->maximum = (std::numeric_limits<V>::max)();
+            }
          }
          return s;
       }
@@ -664,6 +688,7 @@ namespace glz
       }
 
       template <array_t T>
+         requires(!filesystem_path<T>)
       struct to_json_schema<T>
       {
          template <auto Opts>
@@ -1023,6 +1048,24 @@ namespace glz
          }
       }
 
+      // Whether the schema of T lists its I-th key as required. Under error_on_missing_keys this is exactly the set
+      // of keys the reader requires (e.g. nullable keys too when skip_null_members is false). Otherwise only
+      // meta<T>::requires_key can mark a key as required.
+      template <class T, size_t I, auto Opts>
+      consteval bool schema_requires_key()
+      {
+         if constexpr (check_error_on_missing_keys(Opts)) {
+            return required_fields<T, Opts>()[I];
+         }
+         else if constexpr (meta_has_requires_key<T>) {
+            using V = std::decay_t<refl_t<T, I>>;
+            return meta<T>::requires_key(reflect<T>::keys[I], nullable_like<V>);
+         }
+         else {
+            return false;
+         }
+      }
+
       auto consteval has_slash(std::string_view str) noexcept -> bool
       {
          return std::ranges::any_of(str, [](const auto character) { return character == '/'; });
@@ -1078,7 +1121,7 @@ namespace glz
                using val_t = std::decay_t<refl_t<T, I>>;
 
                static constexpr sv key = reflect<T>::keys[I];
-               if constexpr (requires_key<T, val_t, Opts>(key)) {
+               if constexpr (schema_requires_key<T, I, Opts>()) {
                   req.emplace_back(key);
                }
 
@@ -1097,12 +1140,16 @@ namespace glz
                         }
                      }
                      // For modify types, try matching by original C++ member name
-                     if constexpr (modify_t<std::decay_t<T>> && I < count_members<std::decay_t<T>>) {
-                        constexpr sv original_name = member_names<std::decay_t<T>>[I];
-                        if constexpr (original_name != key) {
-                           for (size_t i = 0; i < json_schema_size; ++i) {
-                              if (schema_keys[i] == original_name) {
-                                 return i;
+                     // Nested rather than joined with &&, because naming count_members is ill-formed for a
+                     // non-aggregate T even when modify_t<T> is false.
+                     if constexpr (modify_t<std::decay_t<T>>) {
+                        if constexpr (I < count_members<std::decay_t<T>>) {
+                           constexpr sv original_name = member_names<std::decay_t<T>>[I];
+                           if constexpr (original_name != key) {
+                              for (size_t i = 0; i < json_schema_size; ++i) {
+                                 if (schema_keys[i] == original_name) {
+                                    return i;
+                                 }
                               }
                            }
                         }
@@ -1361,12 +1408,22 @@ namespace glz
 
    }
 
-   // Moved definition outside of write_json_schema to fix MSVC bug
-   template <class Opts>
-   struct opts_write_type_info_off : std::decay_t<Opts>
+   namespace detail
    {
-      bool write_type_info = false;
-   };
+      // The options a schema document is written with. A JSON Schema is always plain JSON with unset keywords
+      // omitted, whatever the caller's format or writer flags (e.g. a BEVE registry's options, or
+      // bools_as_numbers), so only prettify carries over. Opts still decides the schema's content, such as its
+      // "required" keys.
+      template <auto Opts>
+      constexpr opts json_schema_write_opts()
+      {
+         opts options{};
+         if constexpr (requires { Opts.prettify; }) {
+            options.prettify = Opts.prettify;
+         }
+         return options;
+      }
+   }
 
    template <class T, auto Opts = opts{}, class Buffer>
    [[nodiscard]] error_ctx write_json_schema(Buffer&& buffer)
@@ -1388,7 +1445,7 @@ namespace glz
       detail::prune_inlined_defs(s, ref_counts);
 
       // Making this static constexpr options to fix MSVC bug
-      static constexpr opts options = opts_write_type_info_off<decltype(Opts)>{{Opts}};
+      static constexpr opts options = detail::json_schema_write_opts<Opts>();
       return write<options>(std::move(s), std::forward<Buffer>(buffer));
    }
 

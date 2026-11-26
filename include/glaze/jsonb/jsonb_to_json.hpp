@@ -209,6 +209,14 @@ namespace glz
       inline void jsonb_to_json_container(is_context auto& ctx, const uint8_t* it, const uint8_t* stop, B& out,
                                           size_t& ix, char open, char close, uint32_t depth)
       {
+         // DoS protection: cap recursion on pathologically nested blobs so untrusted input can't
+         // blow the stack. `depth` is this container's own level, counting from 1, and only
+         // containers take one, so as in the readers a scalar may sit inside the deepest container
+         // the limit allows.
+         if (depth > max_recursive_depth_limit) [[unlikely]] {
+            ctx.error = error_code::exceeded_max_recursive_depth;
+            return;
+         }
          if (!ensure_space(ctx, out, ix + 2 + write_padding_bytes)) return;
          out[ix++] = static_cast<typename std::decay_t<B>::value_type>(open);
          bool first = true;
@@ -254,13 +262,6 @@ namespace glz
       inline void jsonb_to_json_value(is_context auto& ctx, const uint8_t*& it, const uint8_t* end, B& out, size_t& ix,
                                       uint32_t depth)
       {
-         // DoS protection: cap recursion on pathologically nested blobs so untrusted input
-         // can't blow the stack. Only containers bump depth below; scalar emission leaves
-         // it alone. Matches the limit used by CBOR's converter.
-         if (depth >= max_recursive_depth_limit) [[unlikely]] {
-            ctx.error = error_code::exceeded_max_recursive_depth;
-            return;
-         }
          uint8_t tc{};
          uint64_t sz{};
          if (!jsonb::read_header(ctx, it, end, tc, sz)) return;

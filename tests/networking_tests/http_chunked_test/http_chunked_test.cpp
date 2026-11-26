@@ -32,7 +32,7 @@ struct chunked_test_server
    chunked_test_server() : port_(0), running_(false) {}
    ~chunked_test_server() { stop(); }
 
-   bool start()
+   bool start(size_t threads = 1)
    {
       if (running_) return true;
 
@@ -43,9 +43,9 @@ struct chunked_test_server
          port_ = server_.port();
 
          running_ = true;
-         server_thread_ = std::thread([this] {
+         server_thread_ = std::thread([this, threads] {
             try {
-               server_.start(1);
+               server_.start(threads);
             }
             catch (...) {
                running_ = false;
@@ -403,6 +403,25 @@ suite chunked_sync_tests = [] {
       if (result) {
          expect(result->status_code == 200) << "Status should be 200";
          expect(result->response_body == "Hello!") << "Single-byte chunks should reassemble correctly";
+      }
+
+      server.stop();
+   };
+
+   // With several io threads the completions of a stream's writes run concurrently, so
+   // the stream must not close its socket until the terminating chunk is written. One
+   // client serves every request: each stream announces Connection: close, so the client
+   // must not keep the closed connection for the next request.
+   "sync_chunked_on_multithreaded_server"_test = [] {
+      chunked_test_server server;
+      expect(server.start(4)) << "Server should start";
+
+      glz::http_client client;
+      for (int i = 0; i < 200; ++i) {
+         auto result = client.get(server.base_url() + "/many-tiny-chunks");
+         expect(result.has_value()) << "Request " << i << " should succeed";
+         if (!result) break;
+         expect(result->response_body == "Hello!") << "Request " << i << " got: " << result->response_body;
       }
 
       server.stop();
@@ -897,20 +916,32 @@ suite chunked_sync_tests = [] {
       if (server_thread.joinable()) server_thread.join();
    };
 
-   // Wrong method on a streaming-only path with a query string should still fall through
-   // to the regular router and produce 404 (not match a different streaming method by accident).
-   "sync_stream_wrong_method_with_query_returns_404"_test = [] {
+   // Wrong method on a streaming-only path with a query string should not match a different
+   // streaming method by accident; it answers 405 with the streaming route's methods in Allow.
+   "sync_stream_wrong_method_with_query_returns_405"_test = [] {
       chunked_test_server server;
       expect(server.start()) << "Server should start";
 
       glz::http_client client;
-      // /echo-query is registered for GET only; POST with a query string should 404.
+      // /echo-query is registered for GET only; POST with a query string should 405.
       auto result = client.post(server.base_url() + "/echo-query?a=b", std::string{});
 
       expect(result.has_value()) << "Request should complete";
       if (result) {
-         expect(result->status_code == 404)
-            << "POST to a GET-only streaming route should be 404, got: " << result->status_code;
+         expect(result->status_code == 405)
+            << "POST to a GET-only streaming route should be 405, got: " << result->status_code;
+         const auto allow = result->response_headers.first_value("allow");
+         expect(allow.has_value() && *allow == "GET, HEAD, OPTIONS") << "Allow should list GET, HEAD and OPTIONS";
+      }
+
+      // OPTIONS on the streaming-only path is answered with the same Allow list, not 404.
+      auto options = client.options(server.base_url() + "/echo-query");
+      expect(options.has_value()) << "OPTIONS should complete";
+      if (options) {
+         expect(options->status_code != 404) << "OPTIONS on a streaming route should not 404";
+         const auto options_allow = options->response_headers.first_value("allow");
+         expect(options_allow.has_value() && *options_allow == "GET, HEAD, OPTIONS")
+            << "Allow should list GET, HEAD and OPTIONS";
       }
 
       server.stop();

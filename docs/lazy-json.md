@@ -149,6 +149,22 @@ if (result) {
 }
 ```
 
+### Malformed containers
+
+Iteration checks the separators between the elements it walks. If a comma or colon is missing, or the container ends before its closing bracket, the last element yielded is an error element: `has_error()` is true, `error()` is `expected_comma`, `expected_colon` or `unexpected_end`, and `read_into` and `get` return that error. Iteration then ends. So `[1 2]` yields `1` and then an `expected_comma` error, and a truncated `[1,2` yields `1`, `2` and then an `unexpected_end` error.
+
+```cpp
+for (auto item : doc["items"]) {
+    if (item.has_error()) {
+        // the array is malformed at this point
+        break;
+    }
+    // ...
+}
+```
+
+The checks cost nothing on well-formed input, since iteration already reads each separator to find the next element. An empty element, as in `[1,]` or `[1,,2]`, is not an error element, but reading it with `read_into` or `get` fails. The values themselves are not validated beyond what `read_into` or `get` parses, and the other accessors (`size()`, `index()`, `operator[]`) do not check separators. Use `glz::validate_json` when the whole document needs validating.
+
 ## Indexed Views for O(1) Access
 
 For scenarios requiring multiple random accesses or repeated iteration, you can build an index for O(1) element access:
@@ -507,6 +523,8 @@ if (!num) {
 }
 ```
 
+Iterating a malformed container yields an error element last. See [Malformed containers](#malformed-containers).
+
 ## Container Methods
 
 ```cpp
@@ -642,6 +660,8 @@ auto result = glz::lazy_json(json);
 constexpr auto opts = glz::opts{.null_terminated = false};
 auto result = glz::lazy_json<opts>(buffer);
 ```
+
+As with `glz::read`, the option is derived from the buffer type: a resizable buffer that keeps no terminator of its own, such as a `std::vector<char>`, is read with bounds whatever the options say, while a `std::string_view` is taken at your word and needs `null_terminated = false` when the memory it views has no terminator.
 
 ## Memory Layout
 

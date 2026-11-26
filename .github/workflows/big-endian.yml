@@ -28,24 +28,24 @@ concurrency:
 
 jobs:
   build-s390x:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     name: GCC s390x (big-endian, cross-compiled)
 
     steps:
-    - uses: actions/checkout@v6
+    - uses: actions/checkout@v7
 
     - name: Install cross-compiler and QEMU
       run: |
         sudo apt-get update
         sudo apt-get install -y \
           g++-13-s390x-linux-gnu \
-          qemu-user-static \
+          qemu-user \
           libstdc++-13-dev-s390x-cross
 
     - name: Verify cross-compiler
       run: |
         s390x-linux-gnu-g++-13 --version
-        qemu-s390x-static --version
+        qemu-s390x --version
 
     - name: Create CMake toolchain file
       run: |
@@ -81,7 +81,7 @@ jobs:
         }
         EOF
         s390x-linux-gnu-g++-13 -std=c++20 /tmp/check_endian.cpp -o /tmp/check_endian
-        qemu-s390x-static -L /usr/s390x-linux-gnu /tmp/check_endian
+        qemu-s390x -L /usr/s390x-linux-gnu /tmp/check_endian
 
     - name: Configure CMake
       run: |

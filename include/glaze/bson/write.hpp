@@ -13,6 +13,7 @@
 #include <limits>
 #include <string_view>
 
+#include "glaze/bson/common.hpp"
 #include "glaze/bson/header.hpp"
 #include "glaze/core/buffer_traits.hpp"
 #include "glaze/core/chrono.hpp"
@@ -20,6 +21,7 @@
 #include "glaze/core/reflect.hpp"
 #include "glaze/core/to.hpp"
 #include "glaze/core/write.hpp"
+#include "glaze/core/write_wrappers.hpp"
 #include "glaze/file/file_ops.hpp"
 #include "glaze/util/dump.hpp"
 #include "glaze/util/for_each.hpp"
@@ -40,14 +42,12 @@
 //
 // All multi-byte integers and floats on the wire are little-endian.
 //
-// Caveat on cstring fields (BSON spec prohibits embedded 0x00):
+// cstring fields (BSON spec prohibits embedded 0x00):
 //   - std::map<std::string, T> keys
 //   - bson::regex::pattern and bson::regex::options
-// Strings passed in these fields must not contain an embedded NUL; otherwise
-// the resulting wire bytes are malformed and a downstream read will terminate
-// the cstring at the first NUL and fail with a syntax_error when the trailing
-// bytes no longer parse as a valid element stream. Struct field names are
-// safe by construction — they come from reflected identifiers.
+// A NUL in one of these would end the field early, so a reader would truncate the value there and
+// reparse the trailing bytes as further elements. Writing one fails with invalid_control_character.
+// Struct field names and array index keys cannot contain a NUL, so they are not checked.
 //
 // Caveat on nested optionals: std::optional<std::optional<T>> loses the
 // outer/inner distinction on the wire. Both `nullopt` and `optional{nullopt}`
@@ -108,6 +108,13 @@ namespace glz
             std::memcpy(&b[ix], src, n);
             ix += n;
          }
+      }
+
+      // A cstring runs to the next 0x00, so an embedded NUL would splice the trailing bytes into the
+      // element stream (see the cstring note at the top of this file).
+      [[nodiscard]] GLZ_ALWAYS_INLINE bool cstring_has_embedded_null(std::string_view s) noexcept
+      {
+         return s.find('\0') != std::string_view::npos;
       }
 
       // --- Document lifecycle --------------------------------------------------
@@ -235,16 +242,7 @@ namespace glz
       template <class T, auto Opts, size_t I>
       consteval bool should_skip_reflected_field()
       {
-         using V = field_t<T, I>;
-         if constexpr (always_skipped<V>) {
-            return true;
-         }
-         else if constexpr (is_any_function_ptr<V>) {
-            return !check_write_function_pointers(Opts);
-         }
-         else {
-            return false;
-         }
+         return skipped_on_write<Opts, T, I>;
       }
    } // namespace bson_detail
 
@@ -255,6 +253,8 @@ namespace glz
       template <auto Opts, class T, is_context Ctx, class B, class IX>
       GLZ_ALWAYS_INLINE static void op(T&& value, Ctx&& ctx, B&& b, IX&& ix)
       {
+         static_assert(bson_top_level_t<T>,
+                       "BSON can only encode a document (struct, map, or array) without an enclosing element.");
          to<BSON, std::remove_cvref_t<T>>::template op<Opts>(std::forward<T>(value), std::forward<Ctx>(ctx),
                                                              std::forward<B>(b), std::forward<IX>(ix));
       }
@@ -323,7 +323,7 @@ namespace glz
             }
             if constexpr (std::same_as<T, uint64_t>) {
                if (value > static_cast<uint64_t>((std::numeric_limits<int64_t>::max)())) [[unlikely]] {
-                  ctx.error = error_code::invalid_length;
+                  ctx.error = error_code::parse_number_failure;
                   return;
                }
             }
@@ -487,6 +487,11 @@ namespace glz
       template <auto Opts>
       static void op(const bson::regex& value, is_context auto&& ctx, auto&& b, auto& ix) noexcept
       {
+         if (bson_detail::cstring_has_embedded_null(value.pattern) ||
+             bson_detail::cstring_has_embedded_null(value.options)) [[unlikely]] {
+            ctx.error = error_code::invalid_control_character;
+            return;
+         }
          if (!ensure_space(ctx, b, ix + value.pattern.size() + value.options.size() + 2 + write_padding_bytes))
             [[unlikely]] {
             return;
@@ -632,8 +637,7 @@ namespace glz
    //
    // Both the nullable and variant branches recurse back into this helper so
    // alternatives that are themselves nullable, always_null_t, or nested
-   // variants resolve to a concrete (type_byte | value) pair. Only the final
-   // else-branch reads `to<BSON, DT>::type_code` directly.
+   // variants resolve to a concrete (type_byte | value) pair.
    // ==========================================================================
    namespace bson_detail
    {
@@ -644,6 +648,32 @@ namespace glz
 
          if constexpr (always_null_t<DT>) {
             (void)write_element_prefix(ctx, bson::type::null, key, b, ix);
+         }
+         else if constexpr (requires { to<BSON, DT>::type_code; }) {
+            // Checked first so that a user specialization, such as to<BSON, std::variant<...>> or one for
+            // a type that also has a glz::meta value, takes precedence over the generic dispatch below.
+            if (!write_element_prefix(ctx, to<BSON, DT>::type_code, key, b, ix)) [[unlikely]] {
+               return;
+            }
+            to<BSON, DT>::template op<Opts>(std::forward<T>(value), ctx, b, ix);
+         }
+         else if constexpr (transparent_write_wrapper<DT>) {
+            // A glz::custom getter or a whole-type glz::meta value (which may itself be a glz::custom)
+            // has no type byte of its own: it depends on what the wrapper yields, which may be nullable
+            // or a variant. Resolve the wrapper here and dispatch its result like any other member.
+            unwrap_write_value(std::forward<T>(value), ctx, [&]<class Resolved>(Resolved&& resolved) {
+               if constexpr (is_specialization_v<std::remove_cvref_t<Resolved>, custom_t>) {
+                  static_assert(false_v<Resolved>, "glz::custom getter must be invocable on the parent object");
+               }
+               else {
+                  write_member_element<Opts>(key, std::forward<Resolved>(resolved), ctx, b, ix);
+               }
+            });
+         }
+         else if constexpr ((nullable_like<DT> || is_variant<DT>) && requires { to<BSON, DT>{}; }) {
+            // Without this, a user specialization missing type_code would be silently bypassed by the
+            // generic dispatch below.
+            static_assert(false_v<DT>, "a to<BSON, T> specialization must define static constexpr uint8_t type_code");
          }
          else if constexpr (nullable_like<DT>) {
             if (value) {
@@ -657,9 +687,10 @@ namespace glz
             std::visit([&](auto&& alt) { write_member_element<Opts>(key, alt, ctx, b, ix); }, std::forward<T>(value));
          }
          else {
-            if (!write_element_prefix(ctx, to<BSON, DT>::type_code, key, b, ix)) [[unlikely]] {
-               return;
-            }
+            // A value writer always has a type code, so this is a type BSON cannot write: either a
+            // rejection point such as glz::invoke's, or no to<BSON, DT> at all. Calling op directly makes
+            // the compiler report that (the rejection's static_assert, or the missing specialization)
+            // rather than the missing type_code, which some compilers diagnose first.
             to<BSON, DT>::template op<Opts>(std::forward<T>(value), ctx, b, ix);
          }
       }
@@ -683,7 +714,8 @@ namespace glz
       // output under the given options (skip_null_members on an empty optional,
       // skip_default_members on a default-valued field, etc.).
       template <class T, auto Opts, size_t I, class Value, class Tie>
-      GLZ_ALWAYS_INLINE bool should_skip_field_runtime(const Value& value, [[maybe_unused]] const Tie& t) noexcept
+      GLZ_ALWAYS_INLINE bool should_skip_field_runtime(const Value& value, [[maybe_unused]] const Tie& t,
+                                                       [[maybe_unused]] is_context auto& ctx) noexcept
       {
          using val_t = field_t<T, I>;
 
@@ -706,6 +738,12 @@ namespace glz
             else {
                if (!bool(get_member(value, member))) return true;
             }
+         }
+         else if constexpr (Opts.skip_null_members && custom_getter_returns_nullable<val_t>()) {
+            if (custom_getter_is_null(get_member(value, member), ctx)) return true;
+         }
+         else if constexpr (Opts.skip_null_members && glaze_value_is_nullable<val_t>()) {
+            if (is_glaze_value_field_null<T, I>(value, t)) return true;
          }
          if constexpr (check_skip_default_members(Opts) && has_skippable_default<val_t>) {
             if (is_default_value(get_member(value, member))) return true;
@@ -754,7 +792,7 @@ namespace glz
                return;
             }
             else {
-               if (bson_detail::should_skip_field_runtime<T, Opts, I>(value, t)) return;
+               if (bson_detail::should_skip_field_runtime<T, Opts, I>(value, t, ctx)) return;
 
                decltype(auto) member = [&]() -> decltype(auto) {
                   if constexpr (reflectable<T>) {
@@ -808,6 +846,10 @@ namespace glz
                if (skip_member<Opts>(v)) continue;
             }
             const std::string_view key_sv = str_view<std::remove_cvref_t<decltype(k)>>(k);
+            if (bson_detail::cstring_has_embedded_null(key_sv)) [[unlikely]] {
+               ctx.error = error_code::invalid_control_character;
+               return;
+            }
             bson_detail::write_member_element<Opts>(key_sv, v, ctx, b, ix);
          }
 
@@ -884,16 +926,7 @@ namespace glz
    // Public entry points
    // ==========================================================================
 
-   // BSON's wire format requires the top-level value to be a document. Allow
-   // reflected structs, maps with string keys, sequence containers (encoded
-   // as integer-keyed documents), and glaze_array_t. Primitives are rejected
-   // at the call site — they have no valid BSON document encoding on their
-   // own.
-   template <class T>
-   concept bson_top_level_t = glaze_object_t<std::remove_cvref_t<T>> || reflectable<std::remove_cvref_t<T>> ||
-                              writable_map_t<std::remove_cvref_t<T>> || writable_array_t<std::remove_cvref_t<T>> ||
-                              glaze_array_t<std::remove_cvref_t<T>>;
-
+   // Primitives are rejected at the call site (see bson_top_level_t).
    template <auto Opts = opts{}, bson_top_level_t T, class Buffer>
    [[nodiscard]] error_ctx write_bson(T&& value, Buffer&& buffer)
    {
@@ -907,12 +940,15 @@ namespace glz
    }
 
    template <auto Opts = opts{}, bson_top_level_t T>
-   [[nodiscard]] inline error_code write_file_bson(T&& value, const sv file_name, auto&& buffer)
+   [[nodiscard]] inline error_ctx write_file_bson(T&& value, const sv file_name, auto&& buffer)
    {
       const auto ec = write<set_bson<Opts>()>(std::forward<T>(value), buffer);
       if (bool(ec)) [[unlikely]] {
-         return ec.ec;
+         return ec;
       }
-      return buffer_to_file(buffer, file_name);
+      if (auto file_ec = buffer_to_file(buffer, file_name); bool(file_ec)) {
+         return {0, file_ec};
+      }
+      return {};
    }
 }

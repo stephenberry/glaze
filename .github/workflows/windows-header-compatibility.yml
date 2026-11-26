@@ -50,9 +50,9 @@ jobs:
     timeout-minutes: 45
 
     steps:
-    - uses: actions/checkout@v6
+    - uses: actions/checkout@v7
 
-    - uses: erlef/setup-beam@v1.24.0
+    - uses: erlef/setup-beam@v1.24.1
       env:
         ImageOS: win25
       with:

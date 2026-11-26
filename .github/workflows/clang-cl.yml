@@ -40,7 +40,7 @@ jobs:
         cpp_version: [23]
 
     steps:
-    - uses: actions/checkout@v6
+    - uses: actions/checkout@v7
 
     - name: Configure CMake
       run: |
@@ -58,7 +58,7 @@ jobs:
     timeout-minutes: 25
 
     steps:
-    - uses: actions/checkout@v6
+    - uses: actions/checkout@v7
 
     # Ninja and vswhere are both preinstalled on this runner image, and vcvarsall is
     # what hands clang-cl the MSVC headers, libraries and linker, so nothing here has
@@ -66,13 +66,20 @@ jobs:
     # runner itself rather than a third-party action fetching a toolchain at run time.
     # The developer environment only lives as long as the step that calls vcvarsall,
     # so configure, build and test all run inside this one step.
+    # clang-cl is taken from the LLVM bundled with Visual Studio, not the standalone
+    # LLVM the image puts on PATH: the MSVC STL requires a minimum Clang version,
+    # and only the bundled LLVM is updated in step with it.
     - name: Configure, build and test with clang-cl
       shell: cmd
       run: |
-        "%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe" -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath > "%RUNNER_TEMP%\vsinstall.txt" || exit /b 1
+        "%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe" -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 Microsoft.VisualStudio.Component.VC.Llvm.Clang -property installationPath > "%RUNNER_TEMP%\vsinstall.txt" || exit /b 1
         set /p VSINSTALL=<"%RUNNER_TEMP%\vsinstall.txt"
-        if not defined VSINSTALL (echo No Visual Studio installation with the C++ toolset was found & exit /b 1)
+        if not defined VSINSTALL (echo No Visual Studio installation with the C++ toolset and bundled Clang was found & exit /b 1)
+        set "CLANG_CL=%VSINSTALL%\VC\Tools\Llvm\x64\bin\clang-cl.exe"
+        if not exist "%CLANG_CL%" (echo Visual Studio's bundled clang-cl.exe was not found & exit /b 1)
+        "%CLANG_CL%" --version || exit /b 1
+        set "CLANG_CL=%CLANG_CL:\=/%"
         call "%VSINSTALL%\VC\Auxiliary\Build\vcvarsall.bat" x64 || exit /b 1
-        cmake -B build-direct-clang-cl -G Ninja -DCMAKE_C_COMPILER=clang-cl -DCMAKE_CXX_COMPILER=clang-cl -DCMAKE_BUILD_TYPE=%BUILD_TYPE% -DCMAKE_CXX_STANDARD=23 || exit /b 1
+        cmake -B build-direct-clang-cl -G Ninja "-DCMAKE_C_COMPILER=%CLANG_CL%" "-DCMAKE_CXX_COMPILER=%CLANG_CL%" -DCMAKE_BUILD_TYPE=%BUILD_TYPE% -DCMAKE_CXX_STANDARD=23 || exit /b 1
         cmake --build build-direct-clang-cl --parallel || exit /b 1
         ctest --test-dir build-direct-clang-cl --build-config %BUILD_TYPE% --timeout 300 || exit /b 1

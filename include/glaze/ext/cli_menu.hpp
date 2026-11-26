@@ -133,7 +133,8 @@ namespace glz
                               input_sv = input_sv.substr(0, input_sv.size() - 1);
                            }
                            P params{};
-                           const auto ec = glz::read<Opts>(params, input_sv);
+                           // is_padded is the caller's promise about their own buffer, not this one.
+                           const auto ec = glz::read<is_padded_off<Opts>()>(params, input_sv);
                            if (ec) {
                               const auto error = glz::format_error(ec, input_sv);
                               std::printf("%.*s\n", int(error.size()), error.data());
@@ -189,7 +190,8 @@ namespace glz
                         }
                         using R = std::invoke_result_t<Func, Params>;
                         P params{};
-                        const auto ec = glz::read<Opts>(params, input_sv);
+                        // is_padded is the caller's promise about their own buffer, not this one.
+                        const auto ec = glz::read<is_padded_off<Opts>()>(params, input_sv);
                         if (ec) {
                            const auto error = glz::format_error(ec, input_sv);
                            std::printf("%.*s\n", int(error.size()), error.data());

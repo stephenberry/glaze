@@ -12,6 +12,11 @@
 //      request a dead connection. The streaming path shares that pool, so the same rule
 //      applies to it: a stream is only reusable once its response is read to its framed
 //      end, terminal chunk and trailer section included.
+//   4. Interim (1xx) responses ahead of the final one are read and discarded on every
+//      path (RFC 9110 15.2), so the final response is the one returned and the pooled
+//      connection is left at the start of the next response, up to a cap past which the
+//      reply is refused. 101 Switching Protocols is final, and its connection is never
+//      pooled, nor is an HTTP/1.0 one that did not opt into keep-alive.
 
 #include <atomic>
 #include <chrono>
@@ -709,6 +714,317 @@ suite content_length_connection_reuse = [] {
          }
       }
       expect(accept_count->load() == 1) << "a stream read to its framed end should be reused, not reopened; got "
+                                        << accept_count->load() << " connections";
+   };
+};
+
+// Serve a script of raw responses over keep-alive connections, one connection at a time:
+// each request head read on the current connection is answered with the next response in
+// the script, written segment by segment with a short pause between, so the client has to
+// handle a response head that arrives across separate reads. Every wait polls a deadline,
+// so a buggy client fails the test instead of hanging it.
+static std::thread start_script_server(uint16_t& out_port, std::vector<std::vector<std::string>> script,
+                                       std::shared_ptr<std::atomic<int>> accept_count)
+{
+   auto listener = std::make_shared<asio::io_context>();
+   auto acceptor = std::make_shared<asio::ip::tcp::acceptor>(*listener);
+   asio::ip::tcp::endpoint ep(asio::ip::make_address("127.0.0.1"), 0);
+   acceptor->open(ep.protocol());
+   acceptor->set_option(asio::socket_base::reuse_address(true));
+   acceptor->bind(ep);
+   acceptor->listen(2);
+   out_port = acceptor->local_endpoint().port();
+
+   return std::thread([listener, acceptor, script = std::move(script), accept_count] {
+      const auto would_block = [](const asio::error_code& ec) {
+         return ec == asio::error::would_block || ec == asio::error::try_again;
+      };
+      asio::error_code ec;
+      acceptor->non_blocking(true, ec);
+      const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
+      size_t next = 0;
+      while (next < script.size() && std::chrono::steady_clock::now() < deadline) {
+         asio::ip::tcp::socket socket(*listener);
+         acceptor->accept(socket, ec);
+         if (would_block(ec)) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(5));
+            continue;
+         }
+         if (ec) break;
+         accept_count->fetch_add(1);
+         socket.non_blocking(true, ec);
+
+         std::string pending;
+         while (next < script.size() && std::chrono::steady_clock::now() < deadline) {
+            char buf[1024];
+            const size_t n = socket.read_some(asio::buffer(buf), ec);
+            if (would_block(ec)) {
+               std::this_thread::sleep_for(std::chrono::milliseconds(5));
+               continue;
+            }
+            if (ec) break; // the client closed this connection
+            pending.append(buf, n);
+
+            // Requests in these tests carry no body, so a request ends at its head.
+            for (size_t end; next < script.size() && (end = pending.find("\r\n\r\n")) != std::string::npos;) {
+               pending.erase(0, end + 4);
+               socket.non_blocking(false, ec);
+               for (size_t i = 0; i < script[next].size(); ++i) {
+                  if (i > 0) std::this_thread::sleep_for(std::chrono::milliseconds(20));
+                  asio::write(socket, asio::buffer(script[next][i]), ec);
+               }
+               socket.non_blocking(true, ec);
+               ++next;
+            }
+         }
+      }
+   });
+}
+
+// Wait for an async request with a deadline, so a hung request fails the test rather than
+// blocking it.
+template <class Result>
+static Result await_result(std::future<Result>& future)
+{
+   if (future.wait_for(std::chrono::seconds(10)) != std::future_status::ready) {
+      return std::unexpected(std::make_error_code(std::errc::timed_out));
+   }
+   return future.get();
+}
+
+// The first response is preceded by a 100 and a 103 (the 103 carries a field the final
+// response must not inherit); the second follows on the same connection.
+static std::vector<std::vector<std::string>> interim_script()
+{
+   return {{"HTTP/1.1 100 Continue\r\n\r\n",
+            "HTTP/1.1 103 Early Hints\r\nLink: </style.css>; rel=preload\r\n\r\n"
+            "HTTP/1.1 200 OK\r\nContent-Length: 5\r\n\r\nfirst"},
+           {"HTTP/1.1 200 OK\r\nContent-Length: 6\r\n\r\nsecond"}};
+}
+
+// A 101 ends HTTP on its connection, so the follow-up request must open a new one.
+static std::vector<std::vector<std::string>> switching_protocols_script()
+{
+   return {{"HTTP/1.1 101 Switching Protocols\r\nConnection: Upgrade\r\nUpgrade: example\r\n\r\n"},
+           {"HTTP/1.1 200 OK\r\nContent-Length: 5\r\n\r\nafter"}};
+}
+
+// More interim responses than the client accepts ahead of a final one.
+static std::vector<std::vector<std::string>> endless_interim_script()
+{
+   std::string interim;
+   for (size_t i = 0; i <= glz::detail::max_interim_responses; ++i) {
+      interim += "HTTP/1.1 100 Continue\r\n\r\n";
+   }
+   return {{interim + "HTTP/1.1 200 OK\r\nContent-Length: 5\r\n\r\nfinal"}};
+}
+
+// RFC 9112 9.3: an HTTP/1.0 response closes its connection unless it opts into keep-alive,
+// so the follow-up request must open a new one.
+static std::vector<std::vector<std::string>> http10_script()
+{
+   return {{"HTTP/1.0 200 OK\r\nContent-Length: 5\r\n\r\nfirst"},
+           {"HTTP/1.1 200 OK\r\nContent-Length: 6\r\n\r\nsecond"}};
+}
+
+suite interim_responses = [] {
+   "sync_refuses_endless_interim_responses"_test = [] {
+      uint16_t port{};
+      auto accept_count = std::make_shared<std::atomic<int>>(0);
+      auto server = start_script_server(port, endless_interim_script(), accept_count);
+
+      glz::http_client client;
+      auto result = client.get("http://127.0.0.1:" + std::to_string(port) + "/");
+      server.join();
+
+      expect(!result.has_value() && result.error() == std::make_error_code(std::errc::protocol_error))
+         << "too many interim responses should fail the request";
+   };
+
+   "async_refuses_endless_interim_responses"_test = [] {
+      uint16_t port{};
+      auto accept_count = std::make_shared<std::atomic<int>>(0);
+      auto server = start_script_server(port, endless_interim_script(), accept_count);
+
+      glz::http_client client;
+      auto future = client.get_async("http://127.0.0.1:" + std::to_string(port) + "/");
+      auto result = await_result(future);
+      server.join();
+
+      expect(!result.has_value() && result.error() == std::make_error_code(std::errc::protocol_error))
+         << "too many interim responses should fail the request";
+   };
+
+   "stream_refuses_endless_interim_responses"_test = [] {
+      uint16_t port{};
+      auto accept_count = std::make_shared<std::atomic<int>>(0);
+      auto server = start_script_server(port, endless_interim_script(), accept_count);
+
+      glz::http_client client;
+      std::error_code stream_error{};
+      bool connected = false;
+      std::promise<void> stream_done;
+      auto stream_finished = stream_done.get_future();
+      auto conn = client.stream_request_v2({.url = "http://127.0.0.1:" + std::to_string(port) + "/",
+                                            .on_data = [](std::string_view) {},
+                                            .on_error = [&](std::error_code ec) { stream_error = ec; },
+                                            .on_connect = [&](const glz::response&) { connected = true; },
+                                            .on_disconnect = [&] { stream_done.set_value(); }});
+      expect(conn != nullptr) << "stream request should start";
+      expect(stream_finished.wait_for(std::chrono::seconds(10)) == std::future_status::ready) << "stream should end";
+      server.join();
+
+      expect(!connected) << "no final response should be reported";
+      expect(stream_error == std::make_error_code(std::errc::protocol_error))
+         << "too many interim responses should fail the stream, got: " << stream_error.message();
+   };
+
+   "sync_http10_response_not_pooled"_test = [] {
+      uint16_t port{};
+      auto accept_count = std::make_shared<std::atomic<int>>(0);
+      auto server = start_script_server(port, http10_script(), accept_count);
+      const std::string base = "http://127.0.0.1:" + std::to_string(port) + "/";
+
+      glz::http_client client;
+      auto first = client.get(base);
+      auto second = client.get(base);
+      server.join();
+
+      expect(first.has_value() && first->response_body == "first");
+      expect(second.has_value() && second->response_body == "second") << "follow-up request should succeed";
+      expect(accept_count->load() == 2) << "an HTTP/1.0 connection without keep-alive must not be reused, got "
+                                        << accept_count->load() << " connections";
+   };
+
+   "async_http10_response_not_pooled"_test = [] {
+      uint16_t port{};
+      auto accept_count = std::make_shared<std::atomic<int>>(0);
+      auto server = start_script_server(port, http10_script(), accept_count);
+      const std::string base = "http://127.0.0.1:" + std::to_string(port) + "/";
+
+      glz::http_client client;
+      auto first_future = client.get_async(base);
+      auto first = await_result(first_future);
+      auto second_future = client.get_async(base);
+      auto second = await_result(second_future);
+      server.join();
+
+      expect(first.has_value() && first->response_body == "first");
+      expect(second.has_value() && second->response_body == "second") << "follow-up request should succeed";
+      expect(accept_count->load() == 2) << "an HTTP/1.0 connection without keep-alive must not be reused, got "
+                                        << accept_count->load() << " connections";
+   };
+
+   "sync_skips_interim_responses"_test = [] {
+      uint16_t port{};
+      auto accept_count = std::make_shared<std::atomic<int>>(0);
+      auto server = start_script_server(port, interim_script(), accept_count);
+      const std::string base = "http://127.0.0.1:" + std::to_string(port) + "/";
+
+      glz::http_client client;
+      auto first = client.get(base);
+      auto second = client.get(base);
+      server.join();
+
+      expect(first.has_value() && first->status_code == 200 && first->response_body == "first")
+         << "the final response, not an interim one, should be returned";
+      if (first) {
+         expect(!first->response_headers.first_value("link").has_value())
+            << "fields of an interim response must not leak into the final one";
+      }
+      expect(second.has_value() && second->response_body == "second")
+         << "the pooled connection should sit at the start of the next response";
+      expect(accept_count->load() == 1) << "both requests should share one connection, got " << accept_count->load();
+   };
+
+   "async_skips_interim_responses"_test = [] {
+      uint16_t port{};
+      auto accept_count = std::make_shared<std::atomic<int>>(0);
+      auto server = start_script_server(port, interim_script(), accept_count);
+      const std::string base = "http://127.0.0.1:" + std::to_string(port) + "/";
+
+      glz::http_client client;
+      auto first_future = client.get_async(base);
+      auto first = await_result(first_future);
+      auto second_future = client.get_async(base);
+      auto second = await_result(second_future);
+      server.join();
+
+      expect(first.has_value() && first->status_code == 200 && first->response_body == "first")
+         << "the final response, not an interim one, should be returned";
+      if (first) {
+         expect(!first->response_headers.first_value("link").has_value())
+            << "fields of an interim response must not leak into the final one";
+      }
+      expect(second.has_value() && second->response_body == "second")
+         << "the pooled connection should sit at the start of the next response";
+      expect(accept_count->load() == 1) << "both requests should share one connection, got " << accept_count->load();
+   };
+
+   "stream_skips_interim_responses"_test = [] {
+      uint16_t port{};
+      auto accept_count = std::make_shared<std::atomic<int>>(0);
+      auto server = start_script_server(port, interim_script(), accept_count);
+      const std::string base = "http://127.0.0.1:" + std::to_string(port) + "/";
+
+      glz::http_client client;
+      int status = 0;
+      std::string streamed;
+      std::promise<void> stream_done;
+      auto stream_finished = stream_done.get_future();
+      auto conn = client.stream_request_v2({.url = base,
+                                            .on_data = [&](std::string_view data) { streamed.append(data); },
+                                            .on_error = [](std::error_code) {},
+                                            .on_connect = [&](const glz::response& resp) { status = resp.status_code; },
+                                            .on_disconnect = [&] { stream_done.set_value(); }});
+      expect(conn != nullptr) << "stream request should start";
+      expect(stream_finished.wait_for(std::chrono::seconds(10)) == std::future_status::ready)
+         << "stream should reach its end";
+
+      auto second_future = client.get_async(base);
+      auto second = await_result(second_future);
+      server.join();
+
+      expect(status == 200) << "on_connect should see the final status, got " << status;
+      expect(streamed == "first") << "stream body should be the final response's, got: " << streamed;
+      expect(second.has_value() && second->response_body == "second")
+         << "the pooled connection should sit at the start of the next response";
+      expect(accept_count->load() == 1) << "both requests should share one connection, got " << accept_count->load();
+   };
+
+   "sync_switching_protocols_not_pooled"_test = [] {
+      uint16_t port{};
+      auto accept_count = std::make_shared<std::atomic<int>>(0);
+      auto server = start_script_server(port, switching_protocols_script(), accept_count);
+      const std::string base = "http://127.0.0.1:" + std::to_string(port) + "/";
+
+      glz::http_client client;
+      auto first = client.get(base);
+      auto second = client.get(base);
+      server.join();
+
+      expect(first.has_value() && first->status_code == 101) << "101 is a final response";
+      expect(second.has_value() && second->response_body == "after") << "follow-up request should succeed";
+      expect(accept_count->load() == 2) << "the connection that switched protocols must not be reused, got "
+                                        << accept_count->load() << " connections";
+   };
+
+   "async_switching_protocols_not_pooled"_test = [] {
+      uint16_t port{};
+      auto accept_count = std::make_shared<std::atomic<int>>(0);
+      auto server = start_script_server(port, switching_protocols_script(), accept_count);
+      const std::string base = "http://127.0.0.1:" + std::to_string(port) + "/";
+
+      glz::http_client client;
+      auto first_future = client.get_async(base);
+      auto first = await_result(first_future);
+      auto second_future = client.get_async(base);
+      auto second = await_result(second_future);
+      server.join();
+
+      expect(first.has_value() && first->status_code == 101) << "101 is a final response";
+      expect(second.has_value() && second->response_body == "after") << "follow-up request should succeed";
+      expect(accept_count->load() == 2) << "the connection that switched protocols must not be reused, got "
                                         << accept_count->load() << " connections";
    };
 };

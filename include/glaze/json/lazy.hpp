@@ -425,15 +425,17 @@ namespace glz
          context ctx{};
          auto it = data_;
          auto end = json_end();
+         // Seeded as glz::read would; a detached view has no end, which leaves the budget's floor.
+         seed_speculation_budget(ctx, end ? size_t(end - it) : 0);
          parse<JSON>::op<Opts>(value, ctx, it, end);
          // Capture completeness before finalize_read_context, which downgrades
          // partial_read_complete and a depth-zero end_reached to success. Those leave `it`
          // short of the value's true end, so `it` is only the real extent when the parse
          // reported nothing at all.
          const bool consumed_whole_value = ctx.error == error_code::none;
-         finalize_read_context<Opts>(ctx);
+         finalize_read_context(ctx);
          if (bool(ctx.error)) {
-            return error_ctx{static_cast<size_t>(it - data_), ctx.error};
+            return error_ctx{static_cast<size_t>(it - data_), ctx.error, ctx.custom_error_message};
          }
          // Streaming cursor: the value spans [data_, it). Record it so a subsequent iterator
          // advance over this element can jump rather than re-scan. Under partial_read the
@@ -546,7 +548,7 @@ namespace glz
 
       // Factory method for lazy_json
       template <auto O, class Buffer>
-      friend expected<lazy_document<O>, error_ctx> lazy_json(Buffer&&);
+      friend expected<lazy_document<parse_opts_for<O, Buffer>()>, error_ctx> lazy_json(Buffer&&);
 
       // Helper to initialize root_view_ with correct doc_ pointer
       void init_root_view() noexcept { root_view_ = lazy_json_view<Opts>{this, root_data_}; }
@@ -630,7 +632,11 @@ namespace glz
       const char* container_start_{}; // '[' or '{' of the container being iterated
       char close_char_{};
       bool is_object_{};
-      bool at_end_{true};
+      // active: on an element. failed: on the error element for a malformed container, and the
+      // next advance ends. end: past the last element. One byte tested where a bool was, so
+      // well-formed input pays nothing for the failed state.
+      enum class state : uint8_t { active, failed, end };
+      state state_{state::end};
       lazy_json_view<Opts> current_view_{}; // Stored view for parse_pos_ optimization
 
       // Streaming cursor: on reaching the close, publish this container's own extent so an
@@ -641,12 +647,27 @@ namespace glz
       {
          if constexpr (check_lazy_streaming_cursor(Opts)) {
             if (doc_ && container_start_) [[likely]] {
-               // close_pos is the close character, except on a truncated buffer where it is
-               // json_end_ and there is nothing past it to include.
-               const char* const extent_end = (close_pos < json_end_) ? close_pos + 1 : close_pos;
+               // When null_terminated the close is found without a bound check, so it can sit at
+               // json_end_ when the backing storage runs on past the message. Nothing past
+               // json_end_ belongs to the message.
+               const char* const extent_end = (close_pos < json_end_) ? close_pos + 1 : json_end_;
                doc_->consumed_.set(doc_->json_data(), container_start_, extent_end);
             }
          }
+      }
+
+      void finish(const char* close_pos) noexcept
+      {
+         state_ = state::end;
+         record_container_extent(close_pos);
+      }
+
+      // The container is malformed at pos: yield one error element, then end. Only reached from
+      // the branches that already tell a well-formed container apart, so it adds no work there.
+      void fail(const char* pos, error_code ec) noexcept
+      {
+         current_view_ = lazy_json_view<Opts>::make_error(pos >= json_end_ ? error_code::unexpected_end : ec);
+         state_ = state::failed;
       }
 
       // Scan past the element beginning at elem_start, using the parse_pos_ shortcut when keyed
@@ -685,7 +706,10 @@ namespace glz
          return tmp;
       }
 
-      bool operator==(const lazy_iterator& other) const { return at_end_ == other.at_end_; }
+      bool operator==(const lazy_iterator& other) const
+      {
+         return (state_ == state::end) == (other.state_ == state::end);
+      }
       bool operator!=(const lazy_iterator& other) const { return !(*this == other); }
 
      private:
@@ -1194,26 +1218,23 @@ namespace glz
    template <auto Opts>
    inline lazy_iterator<Opts>::lazy_iterator(const lazy_document<Opts>* doc, const char* container_start,
                                              const char* end, bool is_object)
-      : doc_(doc), json_end_(end), container_start_(container_start), is_object_(is_object), at_end_(false)
+      : doc_(doc), json_end_(end), container_start_(container_start), is_object_(is_object), state_(state::active)
    {
       close_char_ = is_object ? '}' : ']';
       const char* pos = container_start + 1; // skip '[' or '{'
       skip_ws(pos);
 
-      // Check for empty container
-      if constexpr (Opts.null_terminated) {
-         if (*pos == close_char_) {
-            at_end_ = true;
-            record_container_extent(pos);
+      // Check for empty container. When null_terminated, an unclosed container reaches the
+      // sentinel here and fails in advance_to_next_element.
+      if constexpr (not Opts.null_terminated) {
+         if (pos >= json_end_) [[unlikely]] {
+            fail(pos, error_code::unexpected_end);
             return;
          }
       }
-      else {
-         if (pos >= json_end_ || *pos == close_char_) {
-            at_end_ = true;
-            record_container_extent(pos);
-            return;
-         }
+      if (*pos == close_char_) {
+         finish(pos);
+         return;
       }
 
       // Position at first element and initialize current_view_
@@ -1229,21 +1250,24 @@ namespace glz
          key = lazy_json_view<Opts>::parse_key(pos, json_end_);
          skip_ws(pos);
 
-         // Skip ':'
-         if (pos < json_end_ && *pos == ':') {
-            ++pos;
-            skip_ws(pos);
+         // Skip ':'. A missing one also catches a key that is not a string, since parse_key
+         // leaves pos on it.
+         if (pos >= json_end_ || *pos != ':') [[unlikely]] {
+            fail(pos, error_code::expected_colon);
+            return;
          }
+         ++pos;
+         skip_ws(pos);
       }
-      // A value that begins at or past json_end_ is a truncated element; stop iterating instead
-      // of handing back a view whose data pointer sits at end (every view op reads *data_, an
-      // out-of-bounds read for a non-null-terminated buffer). This bound is unconditional on
-      // purpose: json_end_ is the authoritative end of the message, whereas null_terminated only
-      // promises a '\0' sentinel exists, not that it sits at json_end_ (it may be trailing buffer
-      // content further on), so '\0' cannot substitute here. It is also the iterator's only
-      // backstop against spinning forever on unclosed null-terminated input.
-      if (pos >= json_end_) {
-         at_end_ = true;
+      // A value that begins at or past json_end_ is a truncated element; fail instead of handing
+      // back a view whose data pointer sits at end (every view op reads *data_, an out-of-bounds
+      // read for a non-null-terminated buffer). This bound is unconditional on purpose: json_end_
+      // is the authoritative end of the message, whereas null_terminated only promises a '\0'
+      // sentinel exists, not that it sits at json_end_ (it may be trailing buffer content further
+      // on), so '\0' cannot substitute here. It is also the iterator's only backstop against
+      // spinning forever on unclosed null-terminated input.
+      if (pos >= json_end_) [[unlikely]] {
+         fail(pos, error_code::unexpected_end);
          return;
       }
       // Store key in current_view_ (will be set properly after this call)
@@ -1253,7 +1277,11 @@ namespace glz
    template <auto Opts>
    inline lazy_iterator<Opts>& lazy_iterator<Opts>::operator++()
    {
-      if (at_end_) return *this;
+      // Also ends iteration after the error element of a malformed container.
+      if (state_ != state::active) [[unlikely]] {
+         state_ = state::end;
+         return *this;
+      }
 
       const char* const elem_start = current_view_.data();
       const char* pos = elem_start;
@@ -1273,27 +1301,26 @@ namespace glz
 
       skip_ws(pos);
 
-      // Check for end
-      if constexpr (Opts.null_terminated) {
-         if (*pos == close_char_) {
-            at_end_ = true;
-            record_container_extent(pos);
+      // Check for end. When null_terminated, a truncated container stops on the sentinel and
+      // fails at the comma check below.
+      if constexpr (not Opts.null_terminated) {
+         if (pos >= json_end_) [[unlikely]] {
+            fail(pos, error_code::unexpected_end);
             return *this;
          }
       }
-      else {
-         if (pos >= json_end_ || *pos == close_char_) {
-            at_end_ = true;
-            record_container_extent(pos);
-            return *this;
-         }
+      if (*pos == close_char_) {
+         finish(pos);
+         return *this;
       }
 
       // Skip comma
-      if (*pos == ',') {
-         ++pos;
-         skip_ws(pos);
+      if (*pos != ',') [[unlikely]] {
+         fail(pos, error_code::expected_comma);
+         return *this;
       }
+      ++pos;
+      skip_ws(pos);
 
       // Advance to next element (updates current_view_)
       advance_to_next_element(pos);
@@ -1596,9 +1623,15 @@ namespace glz
     * @param buffer The JSON text buffer (must remain valid for document lifetime)
     * @return lazy_document on success, error_ctx on failure
     */
-   template <auto Opts = opts{}, class Buffer>
-   [[nodiscard]] inline expected<lazy_document<Opts>, error_ctx> lazy_json(Buffer&& buffer)
+   template <auto Options = opts{}, class Buffer>
+   [[nodiscard]] inline expected<lazy_document<parse_opts_for<Options, Buffer>()>, error_ctx> lazy_json(Buffer&& buffer)
    {
+      // The buffer decides whether the terminator `null_terminated` asserts can be relied on, the
+      // same way it does for glz::read (see parse_opts_for): a std::vector<char> keeps none, so the
+      // document and every view into it run with bounds over one rather than scanning for a
+      // sentinel past its end.
+      static constexpr auto Opts = parse_opts_for<Options, Buffer>();
+
       lazy_document<Opts> doc;
       doc.json_ = buffer.data();
       doc.len_ = buffer.size();

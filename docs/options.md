@@ -41,7 +41,7 @@ These options are **not** in `glz::opts` by default. Add them to a custom option
 | `bool bools_as_numbers` | `false` | Read/write booleans as `1` and `0` |
 | `bool write_function_pointers` | `false` | Serialize function pointers (both member and non-member) in `glz::meta` as their type name (off by default) |
 | `bool concatenate` | `true` | Concatenate ranges of `std::pair` into single objects |
-| `bool allow_conversions` | `true` | Allow type conversions in BEVE (e.g., `double` → `float`) |
+| `bool allow_conversions` | `true` | Allow type conversions in BEVE, MessagePack, and CBOR (e.g., `double` → `float`) |
 | `bool write_type_info` | `true` | Write type info for meta objects in variants |
 | `bool append_arrays` | `false` | Append to arrays instead of replacing contents |
 | `bool shrink_to_fit` | `false` | Shrink dynamic containers after reading |
@@ -92,7 +92,9 @@ For CSV format, use `glz::opts_csv` which provides CSV-specific defaults.
 
 ## How to Use Inheritable Options
 
-Glaze uses C++20 concepts to detect if an option exists. If an option is not present in your options struct, a default value is used. This allows you to create custom option structs with only the options you need.
+Glaze uses C++20 concepts to detect if an inheritable option exists. If an inheritable option is not present in your options struct, its default value is used, so a custom options struct only needs the inheritable options you want to set.
+
+The core options are different: the built-in formats other than CSV read them directly, so a custom options struct must provide all of them. Inheriting from `glz::opts` does this. A struct that leaves some core options out compiles only where nothing reads the missing ones, which depends on the format and the types involved.
 
 ### Creating a Custom Options Struct
 
@@ -152,9 +154,9 @@ Selects the serialization format. Built-in formats include:
 - `glz::NDJSON` (100) - Newline Delimited JSON
 
 #### `null_terminated`
-When `true` (default), Glaze assumes input buffers are null-terminated, enabling certain optimizations. Set to `false` for non-null-terminated buffers with a small performance cost.
+When `true` (default), Glaze relies on the byte just past the end of the input, `data()[size()]`, being `'\0'`, and drops end checks it would otherwise make. A terminator further along does not count: a `std::string_view` over part of a larger string is read past the end of the view into the bytes that follow, and can return wrong values without an error. Set it to `false` for any buffer that does not end in a terminator, at some cost in speed.
 
-`glz::read` derives this for you from the buffer type: a resizable buffer that does not keep a terminator of its own (a `std::vector<char>`, or a container shaped like `QByteArray`) is read with bounds regardless of what you asked for. A non-resizable buffer such as a `std::string_view` is taken at your word, so a view over memory with no terminator needs `null_terminated = false`. See also `is_padded`, a separate promise about readable slack past the end.
+`glz::read`, the `get_view_json` JSON pointer seeks and `glz::lazy_json` derive this for you from the buffer type: a resizable buffer that does not keep a terminator of its own (a `std::vector<char>`, or a container shaped like `QByteArray`) is read with bounds regardless of what you asked for. A non-resizable buffer such as a `std::string_view` is taken at your word, so a view over memory with no terminator needs `null_terminated = false`. See also `is_padded`, a separate promise about readable slack past the end.
 
 #### `comments`
 Enable JSONC-style comment parsing (`//` and `/* */`).
@@ -324,6 +326,8 @@ constexpr auto opts = glz::is_padded_on<glz::opts{}>();
 auto ec = glz::read<opts>(value, std::string_view{buffer.data(), size});
 ```
 
+The promise covers only the buffer you pass to `glz::read`. Where Glaze reads a buffer it filled itself, such as a file loaded by `read_file_json` or another `read_file_*` helper, `read_directory`, or a `glz::file_include`, and wherever a registry reads a request, it leaves `is_padded` off whatever your options say.
+
 > [!WARNING]
 >
 > The reader takes this at its word and cannot check it. A buffer without that slack is read out of bounds, which is undefined behavior: a crash, or silently wrong values, depending on what follows the buffer in memory.
@@ -470,6 +474,7 @@ This option works with JSON, BEVE, CBOR, and MSGPACK formats. See [Nullable Type
 
 #### `float_max_write_precision`
 Limits the precision used when writing floating-point numbers. Options: `full`, `float32`, `float64`, `float128`.
+To set this option, define a custom options struct that inherits from `glz::opts` and includes a `float_max_write_precision` member.
 
 #### `float_format`
 Formats all floating-point numbers using `std::format` syntax (C++23). This provides control over decimal places, scientific notation, and other formatting options.

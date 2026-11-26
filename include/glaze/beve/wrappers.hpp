@@ -3,8 +3,13 @@
 
 #pragma once
 
+#include <cstddef>
+#include <cstdint>
 #include <type_traits>
 
+#include "glaze/beve/header.hpp"
+#include "glaze/beve/read.hpp"
+#include "glaze/beve/write.hpp"
 #include "glaze/core/custom.hpp"
 #include "glaze/core/opts.hpp"
 #include "glaze/core/wrappers.hpp"

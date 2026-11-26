@@ -219,7 +219,7 @@ Write operations return `error_ctx` with a `count` field. See [Writing](./writin
 
 ### Input Buffer Requirements
 
-For optimal performance, use null-terminated buffers (like `std::string`):
+For optimal performance, use null-terminated buffers (like `std::string`). A buffer counts as null-terminated only when the byte at `data()[size()]` is `'\0'`, so a `std::string_view` over part of a string must be read with `null_terminated = false`:
 
 ```cpp
 // Recommended - null terminated
@@ -332,6 +332,8 @@ struct glz::meta<Status> {
 };
 // Now serializes as: "Active", "Inactive", "Pending"
 ```
+
+Writing a value with no enumerated name (e.g. `static_cast<Status>(7)`) fails with `glz::error_code::unexpected_enum`, since readers accept only enumerated names. This applies to JSON, TOML, YAML, and MessagePack. BEVE, CBOR, JSONB, and BSON write enums as numbers.
 
 > [!TIP]
 >

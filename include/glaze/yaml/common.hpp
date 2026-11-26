@@ -58,6 +58,10 @@ namespace glz::yaml
    // reported the limit, but only after the stack was already gone. This cap keeps the deepest
    // accepted YAML document inside roughly the same stack that the shared cap buys JSON, and it
    // stays far above what real documents nest.
+   //
+   // As in JSON, every sequence and mapping is a level and a scalar is not, so a document of exactly
+   // this many nested collections parses whatever sits at the bottom. An anchor or tag that the
+   // variant reader has to re-dispatch past, and each alias replay, costs a level as well.
    inline constexpr size_t max_yaml_recursive_depth = 64;
 
    // How far ahead a probe may look while deciding whether the text at a position is an implicit
@@ -326,6 +330,65 @@ namespace glz::yaml
          memo_verified_end = nullptr;
          memo_first_tab = nullptr;
          memo_first_content = nullptr;
+      }
+
+      // Makes a buffer other than the document the stream for one nested parse, and gives the
+      // document back when it goes out of scope. Line queries walk back from a position towards
+      // `stream_begin`, so parsing a separate buffer under the document's stream compares pointers
+      // into two unrelated arrays and can walk off the start of the one being parsed.
+      class scoped_stream
+      {
+        public:
+         scoped_stream(yaml_context& ctx, const char* begin) noexcept
+            : ctx_(ctx),
+              stream_begin_(ctx.stream_begin),
+              memo_line_begin_(ctx.memo_line_begin),
+              memo_verified_end_(ctx.memo_verified_end),
+              memo_first_tab_(ctx.memo_first_tab),
+              memo_first_content_(ctx.memo_first_content)
+         {
+            ctx.stream_begin = begin;
+            ctx.reset_line_memo();
+         }
+
+         ~scoped_stream()
+         {
+            ctx_.stream_begin = stream_begin_;
+            ctx_.memo_line_begin = memo_line_begin_;
+            ctx_.memo_verified_end = memo_verified_end_;
+            ctx_.memo_first_tab = memo_first_tab_;
+            ctx_.memo_first_content = memo_first_content_;
+         }
+
+         scoped_stream(const scoped_stream&) = delete;
+         scoped_stream& operator=(const scoped_stream&) = delete;
+
+        private:
+         yaml_context& ctx_;
+         const char* stream_begin_;
+         const char* memo_line_begin_;
+         const char* memo_verified_end_;
+         const char* memo_first_tab_;
+         const char* memo_first_content_;
+      };
+
+      // Drop everything a previous read left that describes its document rather than how to read
+      // one; the outermost parse calls this as it takes ownership of a new buffer. Anchors and the
+      // alias spans being replayed point into the previous read's buffer, so carried over they let
+      // a document resolve an alias it never defined, from bytes that may no longer exist. The rest
+      // is block-parsing state that a failed read can abandon mid-flight. Containers are cleared
+      // rather than replaced so a reused context keeps their storage.
+      void reset_read_state() noexcept
+      {
+         indent_stack.clear();
+         anchors.clear();
+         active_alias_spans.clear();
+         sequence_item_value_context = false;
+         forced_block_mapping_indent = -1;
+         sequence_dash_indent = -1;
+         explicit_mapping_key_context = false;
+         allow_indentless_sequence = false;
+         reset_line_memo();
       }
 
       // Set when `%TAG !! ...` remaps the secondary handle away from the core schema.

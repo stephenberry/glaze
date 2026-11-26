@@ -46,7 +46,7 @@ struct multi_pointer_struct
    std::string* string_ptr{};
 };
 
-// For deeply nested pointer test - must be at namespace scope for reflection
+// For deeply nested pointer test
 struct level2
 {
    int value{};

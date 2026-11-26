@@ -63,13 +63,13 @@ namespace glz
 
    // NOTE TO USER:
    // glz::opts are the default options for using Glaze
-   // You can create your own options struct with more or less fields as long as your struct has:
-   // - opts_internal internal{};
-   // - uint32_t format
-   // The recommended approach is to inherit:
+   // To add options, create your own options struct that inherits from glz::opts:
    // struct custom_opts : glz::opts {
    //   bool validate_trailing_whitespace = true;
    // };
+   // The built-in formats other than CSV (see opts_csv) read the fields of glz::opts directly, so a custom options
+   // struct must provide all of them. Inheriting does that. A struct that leaves some out compiles only where
+   // nothing reads the missing fields, which depends on the format and the types being read or written.
 
    struct opts
    {
@@ -308,7 +308,8 @@ namespace glz
    // ---
    // bool aligned_arrays = false;
    // When true, BEVE typed arrays for numeric types use alignment padding so that the data payload
-   // begins at a memory offset that is a multiple of the element size. This enables zero-copy
+   // begins at a memory offset that is a multiple of the element size. Complex arrays are written as
+   // aligned complex arrays, padded to their component size. This enables zero-copy
    // access via std::span<T> directly into the message buffer, eliminating copy and allocation overhead.
    // Only applies to BEVE format. The alignment padding is deterministic and does not need to be stored.
 
@@ -345,6 +346,9 @@ namespace glz
    struct allow_conversions_opt_tag
    {};
 
+   struct float_max_write_precision_opt_tag
+   {};
+
    // Helper for deprecated option static_asserts (dependent false pattern)
    template <class>
    inline constexpr bool deprecated_opts_raw = false;
@@ -378,6 +382,10 @@ namespace glz
 
    template <auto member_ptr>
    concept is_allow_conversions_tag = std::same_as<std::decay_t<decltype(member_ptr)>, allow_conversions_opt_tag>;
+
+   template <auto member_ptr>
+   concept is_float_max_write_precision_tag =
+      std::same_as<std::decay_t<decltype(member_ptr)>, float_max_write_precision_opt_tag>;
 
    consteval bool check_validate_skipped(auto&& Opts)
    {
@@ -469,8 +477,8 @@ namespace glz
       }
    }
 
-   // Not every options struct carries this: the docs invite trimmed-down custom ones, and formats
-   // that never enforced required keys never made their users declare it. Absent means off.
+   // Not every options struct carries this: opts_csv does not, and formats that never enforced
+   // required keys never made their users declare it. Absent means off.
    consteval bool check_error_on_missing_keys(auto&& Opts)
    {
       if constexpr (requires { Opts.error_on_missing_keys; }) {
@@ -1033,6 +1041,9 @@ namespace glz
    // only the last chunk of each buffer its unbounded loads, so reach for this only after
    // measuring, and only where you control the allocation.
    //
+   // The promise does not travel with the options: a read over a buffer the caller did not hand to
+   // glz::read itself (a file, a directory, an include, a registry request) turns it back off.
+   //
    // Says nothing about null termination; that is `null_terminated`.
    template <auto Opts>
    constexpr auto is_padded_on()
@@ -1199,6 +1210,34 @@ namespace glz
                bool structs_as_arrays{};
             };
             return opts_structs_as_arrays{{Opts}, static_cast<bool>(value)};
+         }
+      }
+      else if constexpr (is_allow_conversions_tag<member_ptr>) {
+         if constexpr (requires { Opts.allow_conversions; }) {
+            auto ret = Opts;
+            ret.allow_conversions = static_cast<bool>(value);
+            return ret;
+         }
+         else {
+            struct opts_allow_conversions : std::decay_t<decltype(Opts)>
+            {
+               bool allow_conversions{};
+            };
+            return opts_allow_conversions{{Opts}, static_cast<bool>(value)};
+         }
+      }
+      else if constexpr (is_float_max_write_precision_tag<member_ptr>) {
+         if constexpr (requires { Opts.float_max_write_precision; }) {
+            auto ret = Opts;
+            ret.float_max_write_precision = static_cast<float_precision>(value);
+            return ret;
+         }
+         else {
+            struct opts_float_max_write_precision : std::decay_t<decltype(Opts)>
+            {
+               float_precision float_max_write_precision{};
+            };
+            return opts_float_max_write_precision{{Opts}, static_cast<float_precision>(value)};
          }
       }
       else {
@@ -1584,10 +1623,12 @@ namespace glz
    // Note: specified and is_specified are defined in glaze/core/traits.hpp.
 
    template <class T, uint32_t Format>
-   concept write_supported = requires { to<Format, std::remove_cvref_t<T>>{}; };
+   concept write_supported =
+      requires { to<Format, std::remove_cvref_t<T>>{}; } && top_level_supported<Format, std::remove_cvref_t<T>>;
 
    template <class T, uint32_t Format>
-   concept read_supported = requires { from<Format, std::remove_cvref_t<T>>{}; };
+   concept read_supported =
+      requires { from<Format, std::remove_cvref_t<T>>{}; } && top_level_supported<Format, std::remove_cvref_t<T>>;
 
    // Default context type for a format.
    // Formats that need a richer context (e.g. YAML) specialize this.

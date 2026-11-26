@@ -195,7 +195,7 @@ This is most beneficial when parsing data that exercises the scratch buffer (e.g
 
 > [!NOTE]
 >
-> The context stores error state, so if you reuse a context you should check for errors after each call. The error state is overwritten by each subsequent call.
+> The context stores the error of the last call, so check the result of each call. Every read and write starts from a clean slate: the error, the custom error message, and the nesting depth left by a previous call (including a failed one) are reset, so nothing needs to be cleared between calls.
 
 Custom contexts that inherit from `glz::context` also benefit from scratch buffer reuse:
 
@@ -215,7 +215,7 @@ for (auto& msg : messages) {
 
 It is recommended to use a `std::string` as your input and output buffer, because it carries the null terminator the default `null_terminated` option expects.
 
-Glaze reads the buffer you give it and does not modify it, so a `const std::string&` or a `std::string_view` over one is just as fast. A buffer that keeps no terminator of its own -- a `std::vector<char>`, or a container shaped like `QByteArray` -- is read with bounds instead, which costs the last few bytes of the buffer their chunked path and nothing else.
+Glaze reads the buffer you give it and does not modify it, so a `const std::string&` or a `std::string_view` covering a whole one is just as fast. A view of only part of a string needs `null_terminated = false`, because the byte after the view is not a terminator. A buffer that keeps no terminator of its own -- a `std::vector<char>`, or a container shaped like `QByteArray` -- is read with bounds instead, which is roughly 20% slower on documents dominated by objects and numbers.
 
 > [!NOTE]
 >

@@ -196,6 +196,14 @@ server.get("/files/*path", [](const glz::request& req, glz::response& res) {
 });
 ```
 
+Captured parameters are percent-decoded. A `+` stays a literal plus, since `+` only means a space in query strings and form bodies.
+
+### Unmatched Requests
+
+A request whose path has no route answers `404 Not Found`. A request whose path has routes, but none for its method, answers `405 Method Not Allowed` with an `Allow` header listing the routed methods (normal, streaming, and WebSocket, which counts as `GET`), plus `HEAD` wherever `GET` is listed and `OPTIONS`, which the server answers itself for any routed path. See [CORS preflight handling](advanced-networking.md#automatic-preflight-handling) for `OPTIONS`. A `GET` to a WebSocket route that does not ask to upgrade answers `426 Upgrade Required` with `Upgrade: websocket`.
+
+These responses are built where a route's handler would run: after request hooks and middleware (such as CORS), and before response hooks, so headers those add are kept and hooks see every response. Wrapping middleware only wraps route handlers.
+
 ### Query Parameters
 
 Query parameters are automatically parsed and available in `req.query`:
@@ -258,7 +266,7 @@ glz::param_constraint email_constraint{
 
 Constraints are passed through the route `spec` (`.constraints = ...`).
 
-If a constraint returns `false`, the route is treated as a non-match. In `glz::http_server`, this means the default response is `404 Not Found`. If you want a custom error body/status (for example `400` with validation details), perform the validation in your handler and set the response explicitly.
+If a constraint returns `false`, the route is treated as a non-match. In `glz::http_server`, this means the default response is `404 Not Found` (or `405` when a route for another method matches). If you want a custom error body/status (for example `400` with validation details), perform the validation in your handler and set the response explicitly.
 
 ## Response Handling
 
@@ -325,6 +333,22 @@ server.get("/users/:id", [](const glz::request& req, glz::response& res) {
 });
 ```
 
+### Responses Without a Body
+
+A reply to a `HEAD` request and any `1xx`, `204` or `304` response ends at the empty line after its headers (RFC 9112 6.3), so the server sends no body for them even when the handler set one. A recipient never reads a body from these, and bytes sent there would be read as the start of the next response on a keep-alive connection.
+
+- `HEAD`: `Content-Length` is still generated from the body the handler built, which is the length `GET` would return. A `HEAD` with no route of its own runs the `GET` route (RFC 9110 9.3.2), with `req.method` set to `HEAD`, so a `GET` route answers `HEAD` without registering anything.
+- `1xx`, `204`: no `Content-Length` is sent, one the handler set included (RFC 9110 8.6).
+- `304`: no `Content-Length` is generated; one the handler set is kept, since the handler may know the length of the `200` the `304` stands in for.
+
+```cpp
+server.get("/report", [](const glz::request&, glz::response& res) { res.json(build_report()); });
+// HEAD /report runs the same handler and sends the headers only, with the same Content-Length.
+// Register a HEAD route to answer it differently, for example without building the body.
+```
+
+Streaming routes follow the same rule, and a `HEAD` with no streaming route of its own runs the streaming `GET` route. After `start_stream` with a `1xx`, `204` or `304` status, or on a `HEAD` request, `send` writes nothing and `close` ends the response without a terminating chunk. A send callback on the stream connection receives `std::errc::operation_not_permitted`, so sender loops such as `streaming_utils::send_periodic_data` close the stream right away. `Transfer-Encoding: chunked` is generated only for `HEAD`, where it states the framing `GET` would use. A `1xx` or `204` drops a `Content-Length` or `Transfer-Encoding` the handler passed to `start_stream`.
+
 ## Middleware
 
 ### Adding Middleware
@@ -348,6 +372,10 @@ server.use([](const glz::request& req, glz::response& res) {
 // CORS middleware (built-in)
 server.enable_cors();
 ```
+
+A middleware rejects a request by setting an error status (400 or above). Every middleware still runs, so headers such as CORS reach the rejection, but the route handler and wrapping middleware are skipped and the error response is sent as the middleware left it.
+
+Streaming and WebSocket routes run request hooks and middleware too, before their handler takes the connection, so the same middleware guards them. A rejected request gets the middleware's response, which response hooks see; a rejected WebSocket upgrade also closes the connection, as the client fails it on any reply but `101` (RFC 6455 4.1). An accepted stream sends the headers middleware set along with its own, and a header the handler passes to `start_stream` replaces the middleware's of the same name. An accepted upgrade's `101` does not carry middleware headers. Wrapping middleware and response hooks run only for responses the server sends itself, not for streams or WebSocket connections.
 
 ### Custom Middleware
 
@@ -756,7 +784,8 @@ When keep-alive is disabled, the server sends `Connection: close` with every res
 - **HTTP/1.1 clients**: Keep-alive is enabled by default (per HTTP/1.1 spec)
 - **HTTP/1.0 clients**: Keep-alive is disabled unless client sends `Connection: keep-alive`
 - **Client requests close**: If client sends `Connection: close`, server respects it
-- **Idle timeout**: Connections are closed after the configured timeout of inactivity
+- **Idle timeout**: Connections are closed when a request's headers do not arrive within the configured timeout, whether it is the first request on the connection or the next one on a keep-alive connection
+- **Header size**: Requests whose line and headers exceed `max_request_header_size` (default: 64 KB) are rejected with `431` and the connection is closed
 - **Max requests**: Connections are closed after reaching the request limit (if configured)
 
 The server always sends the appropriate `Connection` header (`keep-alive` or `close`) and a `Keep-Alive` header with timeout information when keep-alive is active.

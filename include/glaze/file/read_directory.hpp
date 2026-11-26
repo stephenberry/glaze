@@ -66,8 +66,9 @@ namespace glz
          return ec;
       }
 
+      // is_padded is the caller's promise about their own buffer; these were sized to the files.
       for (auto& [path, content] : files) {
-         if (auto ec = read<Opts>(value[path], content)) {
+         if (auto ec = read<is_padded_off<Opts>()>(value[path], content)) {
             return ec;
          }
       }

@@ -3,12 +3,14 @@
 
 #include <cstring>
 #include <functional>
+#include <list>
 #include <string>
 #include <variant>
 #include <vector>
 
 #include "glaze/rpc/registry.hpp"
 #include "glaze/rpc/repe/plugin_helper.hpp"
+#include "speculation_guard.hpp"
 #include "ut/ut.hpp"
 
 using namespace ut;
@@ -545,6 +547,56 @@ suite unterminated_buffer_tests = [] {
       expect(!response_buf.empty()) << "A non-notify request must always get a response";
       expect(api.choice.index() == 0);
       expect(std::get<double>(api.choice) == 42.5);
+   };
+};
+
+// Two array alternatives, so every level of the nest tries both (see json_test's ambiguous nest).
+namespace repe_speculation
+{
+   struct node;
+   using two_arrays = std::variant<std::vector<node>, std::list<node>>;
+   struct node
+   {
+      two_arrays child{};
+   };
+
+   struct tree_api
+   {
+      two_arrays tree{};
+   };
+
+   inline std::string ambiguous_nest(size_t levels)
+   {
+      std::string b;
+      for (size_t i = 0; i < levels; ++i) b += R"([{"child":)";
+      b += "[{]"; // malformed leaf
+      for (size_t i = 0; i < levels; ++i) b += "}]";
+      return b;
+   }
+}
+
+suite read_params_speculation_budget_tests = [] {
+   "read_params seeds the speculation budget like glz::read"_test = [] {
+      // read_params parses the body on a context of its own; without the budget a request body of
+      // a few hundred bytes holds the server for seconds, doubling with every level added.
+      using namespace repe_speculation;
+      const auto body = ambiguous_nest(24);
+      glz_test::expect_budgeted_like_read(
+         [&] {
+            two_arrays out{};
+            return glz::read_json(out, body).ec;
+         },
+         [&] {
+            glz::registry<> registry;
+            tree_api api{};
+            registry.on(api);
+            const auto request = exact_buffer(make_request("/tree", body));
+            std::string response_buf;
+            registry.call(std::span<const char>{request.data(), request.size()}, response_buf);
+            auto result = glz::repe::parse_request({response_buf.data(), response_buf.size()});
+            return result.request.error();
+         },
+         glz::error_code::expected_quote);
    };
 };
 

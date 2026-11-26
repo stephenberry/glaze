@@ -167,8 +167,9 @@ struct beve_header {
 | `glz::extension::variant` (1) | Variant (Version 1 only) | Variant index | 1 + compressed_int size |
 | `glz::extension::complex` (3) | Complex number | 2 (real + imag) | 2 |
 | `glz::extension::complex` (3) | Complex array | Element count | 2 + compressed_int size |
+| `glz::extension::complex` (3) | Aligned complex array | Element count (half the nested component count) | 4 + compressed_int size + 1 (padding length byte) |
 
-For complex types, distinguish single complex vs array by checking if `count == 2` and `header_size == 2` (single) or `header_size > 2` (array).
+For complex types, the sub-type is in the low three bits of the complex header, `data[1] & glz::extension::complex_subtype_mask`: `glz::extension::complex_number` (0), `glz::extension::complex_array` (1), or `glz::extension::complex_aligned_array` (2). Other sub-types are rejected with `error_code::syntax_error`.
 
 **Pre-allocation Example**
 
@@ -338,6 +339,8 @@ glz::write<opts>(data, buffer);
 
 Single-byte types (`int8_t`, `uint8_t`) use the standard typed array format since alignment provides no benefit.
 
+Arrays of `std::complex<T>` are written as aligned complex arrays (complex sub-type 2), whose interleaved `re, im` components form a nested aligned typed array. Complex arrays with single-byte components keep the standard complex array format.
+
 ### Zero-Copy Reading with `std::span<const T>`
 
 Read directly into a `std::span<const T>` to get a zero-copy view into the buffer:
@@ -351,6 +354,17 @@ glz::read<glz::opts{.format = glz::BEVE}>(span, buffer);
 ```
 
 The span specialization requires an aligned typed array in the buffer. Reading a standard (non-aligned) typed array into `std::span<const T>` produces an error, since alignment cannot be guaranteed.
+
+`std::span<const std::complex<T>>` works the same way, reading an aligned complex array in place:
+
+```c++
+std::vector<std::complex<double>> iq = {{1.0, 2.0}, {3.0, 4.0}};
+std::string buffer;
+glz::write<opts>(iq, buffer);
+
+std::span<const std::complex<double>> view;
+glz::read<glz::opts{.format = glz::BEVE}>(view, buffer);
+```
 
 > [!IMPORTANT]
 > The buffer must outlive the span. The span points into the buffer's memory.
@@ -556,6 +570,59 @@ If you prefer to keep a custom conversion in your metadata, `glz::cast` works as
 template <>
 struct glz::meta<ModuleID> {
    static constexpr auto value = glz::cast<&ModuleID::value, uint64_t>;
+};
+```
+
+### Keys That Are Not Strings or Numbers
+
+BEVE object keys must be strings or numbers, because the object header declares one key type for every key and the keys themselves carry no header. A key type that does not reduce to a string or number (for example a struct with several members) fails to compile with a `static_assert`. The same applies to the first type of a `std::pair` and to ranges of pairs.
+
+To serialize such a container, specialize `glz::to` and `glz::from` for it and choose the wire layout yourself. For example, write the map as an array of key/value structs:
+
+```c++
+struct Coord {
+   int x{};
+   int y{};
+   bool operator==(const Coord&) const = default;
+};
+
+template <>
+struct std::hash<Coord> { /* ... */ };
+
+using CoordMap = std::unordered_map<Coord, std::string>;
+
+struct CoordEntry {
+   Coord key{};
+   std::string value{};
+};
+
+template <>
+struct glz::to<glz::BEVE, CoordMap> {
+   template <auto Opts>
+   static void op(const CoordMap& value, is_context auto&& ctx, auto&& b, auto& ix) {
+      std::vector<CoordEntry> entries{};
+      entries.reserve(value.size());
+      for (const auto& [k, v] : value) {
+         entries.push_back({k, v});
+      }
+      serialize<BEVE>::op<Opts>(entries, ctx, b, ix);
+   }
+};
+
+template <>
+struct glz::from<glz::BEVE, CoordMap> {
+   template <auto Opts>
+   static void op(CoordMap& value, is_context auto&& ctx, auto&& it, auto end) {
+      std::vector<CoordEntry> entries{};
+      parse<BEVE>::op<Opts>(entries, ctx, it, end);
+      if (bool(ctx.error)) {
+         return;
+      }
+      value.clear();
+      for (auto& e : entries) {
+         value.emplace(std::move(e.key), std::move(e.value));
+      }
+   }
 };
 ```
 

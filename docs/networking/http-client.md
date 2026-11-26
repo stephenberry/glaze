@@ -174,6 +174,37 @@ std::expected<response, std::error_code> patch(
 );
 ```
 
+### HEAD Request
+
+```cpp
+std::expected<response, std::error_code> head(
+    std::string_view url,
+    const glz::http_headers& headers = {}
+);
+```
+
+The response has the headers the equivalent GET would return (including its `Content-Length`) and an empty body.
+
+### DELETE Request
+
+```cpp
+std::expected<response, std::error_code> del(
+    std::string_view url,
+    const glz::http_headers& headers = {}
+);
+```
+
+### OPTIONS Request
+
+```cpp
+std::expected<response, std::error_code> options(
+    std::string_view url,
+    const glz::http_headers& headers = {}
+);
+```
+
+Pass `Origin` and `Access-Control-Request-Method` in `headers` to send a CORS preflight.
+
 ### JSON POST Request
 ```cpp
 template<class T>
@@ -232,6 +263,28 @@ void get_async(
     CompletionHandler&& handler
 );
 ```
+
+### Async HEAD Request
+
+**Future-based:**
+```cpp
+std::future<std::expected<response, std::error_code>> head_async(
+    std::string_view url,
+    const glz::http_headers& headers = {}
+);
+```
+
+**Callback-based:**
+```cpp
+template<typename CompletionHandler>
+void head_async(
+    std::string_view url,
+    const glz::http_headers& headers,
+    CompletionHandler&& handler
+);
+```
+
+As with `head`, the response has the headers the equivalent GET would return and an empty body.
 
 ### Async POST Request
 
@@ -300,6 +353,7 @@ struct stream_request_params_v2 {
     http_data_handler on_data;
     http_error_handler on_error;
     http_progress_handler on_progress;
+    http_progress_handler on_upload_progress;
     http_connect_handler on_connect;
     http_disconnect_handler on_disconnect;
     std::function<bool(int)> status_is_error{[](int status){ return status >= 400; }};
@@ -308,7 +362,7 @@ struct stream_request_params_v2 {
 
 -   `method`: The HTTP method to use. (default is "GET")
 -   `url`: The URL to request.
--   `timeout`: Set connection timeout. (default is 30s)
+-   `timeout`: How long to wait for the response headers (default is 30s). If it runs out first, `on_error` receives `std::errc::timed_out` and `on_disconnect` follows.
 -   `strategy`: Can be `bulk_transfer` (default, larger chunks, better throughput) or `immediate_delivery` (smaller chunks, lower latency)
 -   `max_buffer_size`: Larger buffer can decrease dropouts and increase throughput at cost of memory usage. (default is 1 MiB)
 -   `body`: The HTTP Body to send.
@@ -316,8 +370,9 @@ struct stream_request_params_v2 {
 -   `on_data`: A callback that's called when data is received.
 -   `on_error`: A callback that's called when an error occurs.
 -   `on_progress`: An optional callback reporting download progress; returning `false` cancels the transfer. See [Progress and Cancellation](#progress-and-cancellation).
+-   `on_upload_progress`: An optional callback reporting how much of `body` has been sent; returning `false` cancels the transfer. See [Upload Progress](#upload-progress).
 -   `on_connect`: A callback that's called when the connection is established and the headers are received.
--   `on_disconnect`: A callback that's called when the connection is closed.
+-   `on_disconnect`: A callback that's called once when a started stream ends, for any reason. It is not called when the request returns `nullptr`.
 -   `status_is_error`: Optional predicate to decide whether a status code should trigger `on_error` (defaults to checking for codes ≥ 400).
 
 To override the default behaviour you can supply a predicate:
@@ -331,7 +386,7 @@ auto conn = client.stream_request_v2({
 });
 ```
 
-The `http_stream_connection` object contains a `disconnect()` method that can be used to close the connection.
+The `http_stream_connection` object contains a `disconnect()` method that can be used to close the connection. It may be called from any thread, including from inside `on_data` or `on_progress`. The stream then ends with `on_disconnect`, even if the server has stopped sending, and its socket is closed rather than returned to the pool. A stop is not an error, so `on_error` is not called for it.
 
 ### Progress and Cancellation
 
@@ -365,6 +420,44 @@ auto conn = client.stream_request_v2({
     },
     .on_disconnect = [&] { file.close(); }
 });
+```
+
+### Upload Progress
+
+`on_upload_progress` is the same callback for the request body, which is what an upload needs to show its progress, to let the user cancel, and to notice a link that has stopped carrying it:
+
+-   `transferred`: body bytes the socket has taken so far. A byte the socket has taken is in the operating system's send buffer, not yet acknowledged by the server.
+-   `total`: the size of `body`.
+-   Return `false` to cancel, with the same result as returning `false` from `on_progress`.
+
+The callback runs once with `(0, total)` before the request is written, again each time the socket takes more of the body, and with `(total, total)` once all of it has gone; a request with no body reports `(0, 0)` once. It runs on the client's I/O thread, as `on_progress` does.
+
+The `timeout` runs from the start of the request to the response headers, so a large body sent over a slow link has to fit inside it. The count is what tells a slow upload from a stalled one: when it stops rising, the socket has stopped taking bytes because the server or the link has stopped reading them, and `disconnect()` ends the stream.
+
+Sending a large body, abandoned if none of it leaves for 30 seconds:
+
+```cpp
+std::atomic<bool> moved{false};
+std::atomic<bool> sent_all{false};
+
+auto conn = client.stream_request_v2({
+    .method = "PUT",
+    .url = "https://example.com/upload",
+    .timeout = std::chrono::seconds{600},
+    .body = std::move(payload),
+    .on_data = [](std::string_view) {},
+    .on_error = [](std::error_code ec) { std::cerr << "Upload failed: " << ec.message() << '\n'; },
+    .on_upload_progress = [&](size_t sent, size_t total) {
+        moved = true;
+        sent_all = sent == total;
+        return true;
+    },
+});
+
+// Every 30 seconds, from a timer of your own, until the whole body has gone:
+if (!sent_all && !moved.exchange(false)) {
+    conn->disconnect(); // nothing has left the socket since the last tick
+}
 ```
 
 ### Body Framing
@@ -650,6 +743,8 @@ For streaming requests (`stream_request_v2`), chunked data is delivered incremen
 
 1. **Idle timeout.** Entries returned to the pool more than `pool_idle_timeout` ago are evicted before reuse. The default is 4 seconds, chosen to be just under uvicorn's default 5s `--timeout-keep-alive`. Tune to slightly less than your server's keep-alive idle timeout if it differs.
 2. **Active liveness check.** For plain TCP sockets, a non-blocking `MSG_PEEK` checks whether the peer has already sent FIN or RST. SSL sockets skip the active peek (it would only see ciphertext) and rely on timestamp eviction plus the transparent-retry path.
+
+A connection goes back to the pool only after a complete response that leaves it open, so never after `Connection: close`, an HTTP/1.0 response without `Connection: keep-alive` (RFC 9112 9.3), or `101 Switching Protocols`. Interim (`1xx`) responses ahead of the final one are discarded on every path (RFC 9110 15.2); a reply that sends more than 16 fails with `std::errc::protocol_error`.
 
 ```cpp
 glz::http_client client;

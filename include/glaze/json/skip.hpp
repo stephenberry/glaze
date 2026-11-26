@@ -3,6 +3,10 @@
 
 #pragma once
 
+#include <cstddef>
+#include <span>
+#include <type_traits>
+
 #include "glaze/core/streaming_state.hpp"
 #include "glaze/util/parse.hpp"
 

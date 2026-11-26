@@ -10,6 +10,7 @@
 
 #include "glaze/core/chrono.hpp"
 #include "glaze/core/common.hpp"
+#include "glaze/core/constraint.hpp"
 #include "glaze/core/read.hpp"
 #include "glaze/core/reflect.hpp"
 #include "glaze/file/file_ops.hpp"
@@ -70,10 +71,10 @@ namespace glz
          if constexpr (requires { ctx.stream_begin; }) {
             if (!ctx.stream_begin && it != end) {
                ctx.stream_begin = &*it;
-               // The line memo holds pointers into whatever buffer filled it, so a reused
-               // context must not carry a previous read's into this one.
-               if constexpr (requires { ctx.reset_line_memo(); }) {
-                  ctx.reset_line_memo();
+               // Anchors and the line memo hold pointers into whatever buffer filled them, so a
+               // reused context must not carry a previous read's into this one.
+               if constexpr (requires { ctx.reset_read_state(); }) {
+                  ctx.reset_read_state();
                }
                // Seed the alias replay budget from the document this read was handed. Done here
                // rather than in glz::read so every YAML entry point is covered, and only on the
@@ -179,6 +180,14 @@ namespace glz
                      // But a plain "key: value" pattern here indicates malformed
                      // trailing mapping content after a completed root node.
                      const char first = *line;
+                     // A block sequence entry here has nothing it can belong to: every node
+                     // that could own it has returned, so accepting it would drop it and every
+                     // line after it from the document.
+                     if (first == '-' &&
+                         ((line + 1) == end || yaml::whitespace_or_line_end_table[static_cast<uint8_t>(*(line + 1))])) {
+                        ctx.error = error_code::syntax_error;
+                        return;
+                     }
                      const bool explicit_or_structural_start =
                         (first == ':' || first == '?' || first == '!' || first == '&' || first == '*' || first == '[' ||
                          first == '{' || first == '"' || first == '\'' || first == '-');
@@ -330,10 +339,10 @@ namespace glz
             return true;
          }
 
-         // Replaying an anchor re-enters the reader directly, bypassing the variant reader's
-         // depth guard, so this is the only depth accounting a chain of aliases into a
-         // non-variant target gets. The cycle check above stops the unbounded case; this bounds
-         // a legitimate but deeply chained one.
+         // Replaying an anchor re-enters the reader without opening a collection, so the
+         // sequence and mapping readers' depth accounting never sees a chain of aliases. The
+         // cycle check above stops the unbounded case; this bounds a legitimate but deeply
+         // chained one.
          depth_guard guard{ctx, yaml::max_yaml_recursive_depth};
          if (!guard) [[unlikely]]
             return true;
@@ -1256,14 +1265,15 @@ namespace glz
                   // Terminates the scalar when the dash is at or above the
                   // enclosing sequence's indicator column, meaning it starts
                   // a sibling entry.  A dash deeper than the indicator is
-                  // plain content (yaml-test-suite AB8U).
-                  if (*lookahead == '-') {
+                  // plain content (yaml-test-suite AB8U). Outside a sequence
+                  // the line has already passed the dedent check above, so it
+                  // is a continuation: "k: a\n  - b" reads as "a - b", since a
+                  // node that began as a scalar cannot turn into a sequence.
+                  if (*lookahead == '-' && ctx.sequence_dash_indent >= 0 && line_indent <= ctx.sequence_dash_indent) {
                      auto after_dash = lookahead + 1;
                      if (after_dash == end || *after_dash == ' ' || *after_dash == '\t' || *after_dash == '\n' ||
                          *after_dash == '\r') {
-                        if (ctx.sequence_dash_indent < 0 || line_indent <= ctx.sequence_dash_indent) {
-                           return;
-                        }
+                        return;
                      }
                   }
 
@@ -1948,6 +1958,23 @@ namespace glz
       template <class T>
       concept owning_scalar_target = not string_view_t<T> && std::assignable_from<std::decay_t<T>&, std::string&&>;
 
+      // Whether the node at `it` opens a collection rather than a plain scalar: a flow
+      // sequence or mapping, a block sequence entry, or an explicit mapping key. "-" and "?"
+      // are indicators only when whitespace or the end of the input follows, so "-1" and
+      // "?x" remain plain scalars.
+      template <class It, class End>
+      [[nodiscard]] inline bool plain_scalar_starts_collection(It it, End end) noexcept
+      {
+         if (it == end) return false;
+         const char c = *it;
+         if (c == '[' || c == '{') return true;
+         if (c == '-' || c == '?') {
+            ++it;
+            return it == end || whitespace_or_line_end_table[static_cast<uint8_t>(*it)];
+         }
+         return false;
+      }
+
    } // namespace yaml
 
    // String types
@@ -1985,6 +2012,13 @@ namespace glz
                                      ctx.current_indent() > 0 ? (ctx.current_indent() - 1) : ctx.current_indent());
             break;
          case yaml::scalar_style::plain:
+            // A collection where a string is expected is a type mismatch. Reading it as a
+            // plain scalar would store its source text, and for a block sequence only the
+            // first entry, as the value.
+            if (yaml::plain_scalar_starts_collection(it, end)) [[unlikely]] {
+               ctx.error = error_code::syntax_error;
+               return;
+            }
             // In block context with known indent, use multiline parsing to support
             // plain scalars that span multiple lines (folding behavior)
             if constexpr (!yaml::check_flow_context(Opts)) {
@@ -2022,12 +2056,12 @@ namespace glz
    // std::string rather than std::string_view is deliberate: YAML scalars can require
    // unescaping and line folding, so the reader materializes them into an owning buffer.
 
-   // system_clock::time_point: parse from ISO 8601.
+   // system_clock / utc_clock time_point: parse from ISO 8601 (utc_clock also accepts :60).
    // Time points whose period is exactly `days` (e.g. std::chrono::sys_days) also accept
    // the bare "YYYY-MM-DD" form; full datetimes remain accepted and are floored to days.
    // Coarser periods fall through to the full parser so dates are not silently snapped to
    // a multi-day boundary.
-   template <is_system_time_point T>
+   template <is_calendar_time_point T>
       requires(not custom_read<T>)
    struct from<YAML, T>
    {
@@ -2839,7 +2873,7 @@ namespace glz
          }
          else if constexpr (!resizable<V>) {
             // Fixed-size containers (std::array)
-            while (it != end && !adapter.fixed_capacity_reached(value)) {
+            while (it != end) {
                skip_flow_ws_and_newlines(ctx, it, end);
                if (bool(ctx.error)) [[unlikely]]
                   return;
@@ -2871,6 +2905,12 @@ namespace glz
                   return;
                }
                just_saw_comma = false;
+
+               // An item beyond the last slot is an error, as in JSON.
+               if (adapter.fixed_capacity_reached(value)) [[unlikely]] {
+                  ctx.error = error_code::exceeded_static_array_size;
+                  return;
+               }
 
                from<YAML, value_type>::template op<flow_context_on<Opts>()>(value[adapter.index], ctx, it, end);
 
@@ -2910,19 +2950,6 @@ namespace glz
                   ctx.error = error_code::syntax_error;
                   return;
                }
-            }
-
-            // If we exited because the fixed-size container is full but haven't seen ']',
-            // skip to the closing bracket to consume overflow elements.
-            int bracket_depth = 1;
-            while (it != end && bracket_depth > 0) {
-               if (*it == '[') {
-                  ++bracket_depth;
-               }
-               else if (*it == ']') {
-                  --bracket_depth;
-               }
-               ++it;
             }
          }
          else {
@@ -3202,14 +3229,6 @@ namespace glz
          int32_t pending_item_anchor_indent = sequence_indent;
 
          while (it != end) {
-            // For fixed-size arrays (e.g. std::array), stop when we've filled all elements.
-            // Exclude emplaceable types (e.g. std::set) which are not resizable but grow dynamically.
-            if constexpr (!resizable<V> && !emplaceable<V>) {
-               if (adapter.fixed_capacity_reached(value)) {
-                  return;
-               }
-            }
-
             // Skip blank lines and comments, track indent
             int32_t line_indent = 0;
             int32_t dash_col = -1; // actual column of the '-' on the line
@@ -3460,6 +3479,12 @@ namespace glz
                }
             }
             else if constexpr (!resizable<V>) {
+               // Fixed-size (e.g. std::array): an item beyond the last slot is an error, as in JSON.
+               // Checked only once another item is confirmed, so a full container still ends cleanly.
+               if (adapter.fixed_capacity_reached(value)) [[unlikely]] {
+                  ctx.error = error_code::exceeded_static_array_size;
+                  return;
+               }
                parse_element(value[adapter.index]);
                adapter.commit_fixed_slot();
             }
@@ -4141,6 +4166,12 @@ namespace glz
             return;
          }
 
+         // Each sequence and mapping is a level of nesting (see `yaml::max_yaml_recursive_depth`).
+         // Taken after the preamble so a null or alias in place of the collection costs nothing.
+         depth_guard guard{ctx, yaml::max_yaml_recursive_depth};
+         if (!guard) [[unlikely]]
+            return;
+
          if (*peek == '[') {
             // Flow sequence
             it = peek;
@@ -4185,6 +4216,11 @@ namespace glz
             it = peek;
             return;
          }
+
+         // A level of nesting, taken past the preamble as for sets above.
+         depth_guard guard{ctx, yaml::max_yaml_recursive_depth};
+         if (!guard) [[unlikely]]
+            return;
 
          if (*peek == '[') {
             // Flow sequence - consume whitespace and parse
@@ -4256,6 +4292,10 @@ namespace glz
             ctx.error = error_code::unexpected_end;
             return;
          }
+
+         depth_guard guard{ctx, yaml::max_yaml_recursive_depth};
+         if (!guard) [[unlikely]]
+            return;
 
          if (*it == '[') {
             // Flow sequence
@@ -4331,6 +4371,15 @@ namespace glz
                   break;
                }
 
+               // Published to the element as parse_block_sequence does, so a multi-line plain
+               // scalar element ends at the next "- " entry rather than folding it in.
+               int32_t dash_col = static_cast<int32_t>(it - line_start);
+               if constexpr (std::is_pointer_v<std::decay_t<It>>) {
+                  if (ctx.stream_begin) {
+                     dash_col = ctx.line_prefix_before(&*it).column;
+                  }
+               }
+
                ++it; // Skip '-'
 
                // Check valid sequence indicator
@@ -4340,6 +4389,11 @@ namespace glz
                }
 
                yaml::skip_inline_ws(it, end);
+
+               const bool prev_sequence_item_value_context = ctx.sequence_item_value_context;
+               const int32_t prev_sequence_dash_indent = ctx.sequence_dash_indent;
+               ctx.sequence_item_value_context = true;
+               ctx.sequence_dash_indent = dash_col;
 
                // Parse element at current index
                [&]<size_t... Is>(std::index_sequence<Is...>) {
@@ -4363,6 +4417,9 @@ namespace glz
                      }.template operator()<Is>(),
                      ...);
                }(std::make_index_sequence<N>{});
+
+               ctx.sequence_dash_indent = prev_sequence_dash_indent;
+               ctx.sequence_item_value_context = prev_sequence_item_value_context;
 
                if (bool(ctx.error)) [[unlikely]]
                   return;
@@ -4419,6 +4476,10 @@ namespace glz
 
          using first_type = typename std::remove_cvref_t<T>::first_type;
          using second_type = typename std::remove_cvref_t<T>::second_type;
+
+         depth_guard guard{ctx, yaml::max_yaml_recursive_depth};
+         if (!guard) [[unlikely]]
+            return;
 
          if (*it == '{') {
             // Flow mapping style: {key: value}
@@ -4572,6 +4633,10 @@ namespace glz
                 value, ctx, it, end, preamble, [](yaml::yaml_tag tag) { return yaml::tag_valid_for_map(tag); }))
             return;
 
+         depth_guard guard{ctx, yaml::max_yaml_recursive_depth};
+         if (!guard) [[unlikely]]
+            return;
+
          if (*it == '{') {
             // Flow mapping
             yaml::parse_flow_mapping<Opts, Tag>(value, ctx, it, end);
@@ -4580,6 +4645,8 @@ namespace glz
             // Block mapping - use indent from context (set by parent parser)
             yaml::parse_block_mapping<Opts, Tag>(value, ctx, it, end, ctx.current_indent());
          }
+
+         check_self_constraint<YAML, Opts>(value, ctx);
 
          yaml::finalize_node_anchor(preamble.node_props, ctx, it);
       }
@@ -4598,6 +4665,10 @@ namespace glz
          yaml::node_preamble_state preamble{};
          if (yaml::parse_node_preamble<Opts, yaml::node_property_policy{true, true, false, false}>(
                 value, ctx, it, end, preamble, [](yaml::yaml_tag tag) { return yaml::tag_valid_for_map(tag); }))
+            return;
+
+         depth_guard guard{ctx, yaml::max_yaml_recursive_depth};
+         if (!guard) [[unlikely]]
             return;
 
          using key_t = typename std::remove_cvref_t<T>::key_type;
@@ -4746,6 +4817,7 @@ namespace glz
                   else {
                      static constexpr std::string_view null_value{"null"};
                      auto null_it = null_value.data();
+                     const yaml::yaml_context::scoped_stream literal_stream{ctx, null_value.data()};
                      from<YAML, val_t>::template op<yaml::flow_context_on<Opts>()>(
                         val, ctx, null_it, null_value.data() + null_value.size());
                      return !bool(ctx.error);
@@ -5733,12 +5805,9 @@ namespace glz
          if (bool(ctx.error)) [[unlikely]]
             return;
 
-         // Every nested generic/variant value routes back through this reader, so bounding
-         // depth here caps flow-collection and flow-embedded mapping recursion that the
-         // indent stack does not cover.
-         depth_guard guard{ctx, yaml::max_yaml_recursive_depth};
-         if (!guard) [[unlikely]]
-            return;
+         // No depth is taken here: the sequence and mapping readers this dispatches to count the
+         // levels, so a scalar at the bottom of a document costs nothing, as in JSON. The one way
+         // back into this reader that opens no collection is `redispatch`, which counts itself.
 
          // At root level (indent == -1), skip leading whitespace, newlines, and comments
          // For nested values, only skip inline whitespace to preserve block structure
@@ -6139,7 +6208,7 @@ namespace glz
                                                                                                         end);
                      }
                      else {
-                        from<YAML, V>::template op<Opts>(value, ctx, it, end);
+                        redispatch<Opts>(value, ctx, it, end);
                      }
                      return;
                   }
@@ -6147,7 +6216,7 @@ namespace glz
 
                const bool prev_allow_indentless_sequence = ctx.allow_indentless_sequence;
                ctx.allow_indentless_sequence = value_is_indentless_sequence;
-               from<YAML, V>::template op<Opts>(value, ctx, it, end);
+               redispatch<Opts>(value, ctx, it, end);
                ctx.allow_indentless_sequence = prev_allow_indentless_sequence;
                if (!bool(ctx.error)) {
                   ctx.anchors[std::string(aname)] = {anchor_start, &*it, anchor_indent};
@@ -6261,7 +6330,7 @@ namespace glz
                      if (!starts_block_sequence_entry && yaml::line_could_be_block_mapping(it, end)) {
                         // Re-dispatch from the post-tag token so '&key key: val' is
                         // handled by the anchor-aware key path, not as a map-level anchor.
-                        from<YAML, V>::template op<Opts>(value, ctx, it, end);
+                        redispatch<Opts>(value, ctx, it, end);
                         return;
                      }
                   }
@@ -6405,7 +6474,7 @@ namespace glz
                   }
 
                   // Fall back if no string alternative exists.
-                  from<YAML, V>::template op<Opts>(value, ctx, it, end);
+                  redispatch<Opts>(value, ctx, it, end);
                   return;
                }
                }
@@ -6685,6 +6754,18 @@ namespace glz
             }
          }
       }
+
+      // Dispatches the same node again once a property in front of it (an anchor or a tag) has been
+      // consumed. That opens no collection, so no reader below counts it, yet a document can stack
+      // properties to recurse here without end; each re-dispatch therefore takes a level itself.
+      template <auto Opts, class It>
+      static void redispatch(auto&& value, is_context auto&& ctx, It&& it, auto end) noexcept
+      {
+         depth_guard guard{ctx, yaml::max_yaml_recursive_depth};
+         if (!guard) [[unlikely]]
+            return;
+         op<Opts>(value, ctx, it, end);
+      }
 #ifdef _MSC_VER
 #pragma warning(pop)
 #endif
@@ -6721,7 +6802,8 @@ namespace glz
          return {0, ec};
       }
 
-      return read<set_yaml<Opts>()>(std::forward<T>(value), buffer, ctx);
+      // The buffer was sized to the file, so the caller's is_padded promise does not cover it.
+      return read<is_padded_off<set_yaml<Opts>()>()>(std::forward<T>(value), buffer, ctx);
    }
 
    template <auto Opts = yaml::yaml_opts{}, class T>

@@ -2,10 +2,13 @@
 // For the license information refer to glaze.hpp
 
 #include <concepts>
+#include <list>
 #include <utility>
+#include <variant>
 #include <vector>
 
 #include "glaze/json.hpp"
+#include "speculation_guard.hpp"
 #include "ut/ut.hpp"
 
 using namespace ut;
@@ -148,6 +151,57 @@ struct MinimalUser
 {
    std::string name{};
 };
+
+// A custom reader that rejects a value with a message, to check read_into() keeps the message.
+struct ValidatedAge
+{
+   int age{};
+};
+
+template <>
+struct glz::meta<ValidatedAge>
+{
+   using T = ValidatedAge;
+   static constexpr auto read_age = [](T& s, int age, glz::context& ctx) {
+      if (age < 21) {
+         ctx.error = glz::error_code::constraint_violated;
+         ctx.custom_error_message = "age too young";
+      }
+      else {
+         s.age = age;
+      }
+   };
+   static constexpr auto value = object("age", glz::custom<read_age, &T::age>);
+};
+
+// What iterating a lazy container yields: the well-formed elements, and for a malformed container
+// the error element that reports it. The error element must be the last thing yielded.
+struct iteration_result
+{
+   size_t elements{};
+   glz::error_code error{};
+   size_t after_error{}; // anything yielded after the error element
+};
+
+template <class View>
+iteration_result iterate(View&& view)
+{
+   iteration_result r{};
+   size_t guard{};
+   for (auto&& element : view) {
+      if (++guard > 1000) break; // a regression here would loop forever
+      if (r.error != glz::error_code::none) {
+         ++r.after_error;
+      }
+      else if (element.has_error()) {
+         r.error = element.error();
+      }
+      else {
+         ++r.elements;
+      }
+   }
+   return r;
+}
 
 suite lazy_json_tests = [] {
    "lazy_json_read_basic"_test = [] {
@@ -356,6 +410,29 @@ suite lazy_json_tests = [] {
       auto float_result = doc["value"].get<float>();
       expect(float_result.has_value());
       expect(std::abs(float_result.value() - 2.5f) < 0.001f);
+   };
+
+   // An exponent marker needs at least one digit after it and its optional sign
+   "lazy_json_empty_exponent"_test = [] {
+      for (const std::string_view num : {"1e", "1.0E", "1.0e-", "1e+"}) {
+         std::string scalar{num};
+         auto root = glz::lazy_json(scalar);
+         expect(root.has_value());
+         expect(!root->root().get<double>().has_value()) << num;
+         expect(!root->root().get<float>().has_value()) << num;
+         expect(!root->root().get<int64_t>().has_value()) << num;
+
+         std::string object = R"({"value":)" + scalar + "}";
+         auto doc = glz::lazy_json(object);
+         expect(doc.has_value());
+         expect(!(*doc)["value"].get<double>().has_value()) << num;
+         expect(!(*doc)["value"].get<float>().has_value()) << num;
+      }
+
+      std::string valid = R"({"value":1.5e+2})";
+      auto doc = glz::lazy_json(valid);
+      expect(doc.has_value());
+      expect((*doc)["value"].get<double>().value() == 150.0);
    };
 
    "lazy_json_large_array"_test = [] {
@@ -986,6 +1063,19 @@ suite lazy_json_tests = [] {
       expect(user.name == "Alice");
    };
 
+   "lazy_json_read_into_preserves_custom_error_message"_test = [] {
+      std::string buffer = R"({"person":{"age":18}})";
+
+      auto result = glz::lazy_json(buffer);
+      expect(result.has_value());
+
+      ValidatedAge person{};
+      auto ec = (*result)["person"].read_into(person);
+
+      expect(ec == glz::error_code::constraint_violated);
+      expect(ec.custom_error_message == "age too young") << ec.custom_error_message;
+   };
+
    "lazy_json_read_into_nested"_test = [] {
       std::string buffer = R"({
          "people": [
@@ -1441,12 +1531,35 @@ suite dynamic_key_custom_tests = [] {
       auto& doc = *result;
       expect(doc["z"].has_error());
       (void)doc.root().index(); // the next key parse begins at end after the comma
-      size_t count = 0;
-      for (auto element : doc.root()) {
-         (void)element;
-         ++count;
-      }
-      expect(count == 1u); // only the "a" element is complete
+      const auto r = iterate(doc.root());
+      expect(r.elements == 1u); // only the "a" element is complete
+      expect(r.error == glz::error_code::unexpected_end);
+      expect(r.after_error == 0u);
+   };
+
+   // A std::vector<char> keeps no terminator of its own, so glz::read reads it with bounds whatever
+   // null_terminated says. lazy_json derives the same options from the buffer, so with the default
+   // options a document in a vector must stop at its end rather than scan for a sentinel past it.
+   "lazy_json_vector_buffer_bounds"_test = [] {
+      const std::vector<char> truncated{'{', '"', 'a', '"', ':'};
+      auto result = glz::lazy_json(truncated);
+      expect(result.has_value());
+      expect((*result)["a"].has_error());
+      expect((*result)["x"].has_error());
+
+      const std::vector<char> blank{' ', ' '};
+      auto blank_result = glz::lazy_json(blank);
+      expect(not blank_result.has_value());
+      expect(blank_result.error().ec == glz::error_code::unexpected_end);
+
+      // A complete document in a vector still reads.
+      const std::string_view json = R"({"a":1,"b":"two"})";
+      const std::vector<char> buf{json.begin(), json.end()};
+      auto doc = glz::lazy_json(buf);
+      expect(doc.has_value());
+      expect((*doc)["a"].get<int>().value_or(0) == 1);
+      expect((*doc)["b"].get<std::string_view>().value_or("") == "two");
+      expect((*doc).root().size() == 2u);
    };
 
    "lazy_json_truncated_iterate"_test = [] {
@@ -1454,16 +1567,15 @@ suite dynamic_key_custom_tests = [] {
       const std::string_view sv{buf.data(), buf.size()};
       auto result = glz::lazy_json<glz::opts{.null_terminated = false}>(sv);
       expect(result.has_value());
-      size_t count = 0;
-      for (auto element : (*result).root()) {
-         (void)element;
-         ++count;
-      }
-      expect(count == 0u); // the truncated element is not yielded
+      const auto r = iterate((*result).root());
+      expect(r.elements == 0u); // the truncated element is not yielded as a value
+      expect(r.error == glz::error_code::unexpected_end); // it is reported instead
+      expect(r.after_error == 0u);
    };
 
    // size(), index().size(), and iteration must agree on a truncated object. size() used to
    // count the incomplete "a": pair (returning 1) while index() and iteration reported 0.
+   // Iteration also yields the error element for the truncation, which is not counted.
    "lazy_json_truncated_size_consistency"_test = [] {
       const std::vector<char> buf{'{', '"', 'a', '"', ':'};
       const std::string_view sv{buf.data(), buf.size()};
@@ -1472,11 +1584,9 @@ suite dynamic_key_custom_tests = [] {
       auto& root = (*result).root();
       const size_t by_size = root.size();
       const size_t by_index = root.index().size();
-      size_t by_iter = 0;
-      for (auto element : root) {
-         (void)element;
-         ++by_iter;
-      }
+      const auto r = iterate(root);
+      const size_t by_iter = r.elements;
+      expect(r.error == glz::error_code::unexpected_end);
       expect(by_size == 0u);
       expect(by_index == 0u);
       expect(by_iter == 0u);
@@ -1491,12 +1601,10 @@ suite dynamic_key_custom_tests = [] {
       const std::string json = R"({"a":1)"; // no closing brace
       auto result = glz::lazy_json<glz::opts{}>(json);
       expect(result.has_value());
-      size_t count = 0;
-      for (auto element : (*result).root()) {
-         (void)element;
-         if (++count > 1000) break; // guard: a regression here would loop forever
-      }
-      expect(count == 1u); // only the complete "a" element is yielded, then iteration stops
+      const auto r = iterate((*result).root());
+      expect(r.elements == 1u); // only the complete "a" element is yielded
+      expect(r.error == glz::error_code::unexpected_end); // then the missing '}' is reported
+      expect(r.after_error == 0u); // and iteration stops
    };
 
    // null_terminated only promises a '\0' sentinel exists somewhere the parser may rely on, not
@@ -1511,12 +1619,19 @@ suite dynamic_key_custom_tests = [] {
       expect(result.has_value());
       size_t count = 0;
       std::string_view last_key{};
+      glz::error_code error{};
       for (auto element : (*result).root()) {
-         last_key = element.key();
          if (++count > 10) break; // guard: a '\0'-based stop would iterate into "b" and beyond
+         if (element.has_error()) {
+            error = element.error();
+         }
+         else {
+            last_key = element.key();
+         }
       }
-      expect(count == 1u); // "b" lies past json_end_, so it must not be yielded
-      expect(last_key == "a");
+      expect(count == 2u); // "a", then the error for the message ending after its comma
+      expect(last_key == "a"); // "b" lies past json_end_, so it must not be yielded
+      expect(error == glz::error_code::unexpected_end);
    };
 
    // A successful lookup primes parse_pos_, so a following lookup runs the progressive-scan branch.
@@ -1693,6 +1808,111 @@ suite dynamic_key_custom_tests = [] {
       expect((*result).root().size() == 1u); // '@' scalar, then bounded by json_end_
       expect((*result).root().index().size() == 1u);
       expect((*result).root()[1].has_error()); // nothing past the lone scalar
+   };
+};
+
+// Iteration checks the separators it reads between elements anyway. A missing comma or colon, or a
+// container that ends before its closing bracket, is reported as one error element at the end of
+// the iteration, rather than ending it quietly or carrying on as if the document were valid.
+suite lazy_malformed_container_iteration_tests = [] {
+   struct iteration_case
+   {
+      std::string_view json;
+      size_t elements;
+      glz::error_code error;
+   };
+
+   using enum glz::error_code;
+   const std::vector<iteration_case> cases{
+      {"[]", 0, none},
+      {"[1]", 1, none},
+      {"[ 1 , 2 ,3 ]", 3, none},
+      {"[[1,2],[3]]", 2, none},
+      {"{}", 0, none},
+      {R"({"a":1,"b":[1,2]})", 2, none},
+      {R"({ "a" : 1 , "b" : 2 })", 2, none},
+
+      {"[1 2]", 1, expected_comma},
+      {"[[1,2] [3]]", 1, expected_comma},
+      {"[1;2]", 1, expected_comma},
+      {R"({"a":1 "b":2})", 1, expected_comma},
+      {R"({"a" 1})", 0, expected_colon},
+      {R"({"a":1,"b" 2})", 1, expected_colon},
+      {"{1:2}", 0, expected_colon},
+
+      {"[", 0, unexpected_end},
+      {"[ ", 0, unexpected_end},
+      {"[1", 1, unexpected_end},
+      {"[1,", 1, unexpected_end},
+      {"[1,2", 2, unexpected_end},
+      {"[1,2 ", 2, unexpected_end},
+      {"[[1,2],[3]", 2, unexpected_end},
+      {"{", 0, unexpected_end},
+      {R"({"a")", 0, unexpected_end},
+      {R"({"a":)", 0, unexpected_end},
+      {R"({"a":1)", 1, unexpected_end},
+      {R"({"a":1,)", 1, unexpected_end},
+   };
+
+   // Bounded documents are read out of exactly sized storage, so the sanitizer builds catch a read
+   // past the end. The default options read a std::string, whose terminator sits at the end.
+   auto check = []<auto Opts>(const iteration_case& c) {
+      const std::vector<char> storage{c.json.begin(), c.json.end()};
+      const std::string terminated{c.json};
+      auto doc = [&] {
+         if constexpr (Opts.null_terminated) {
+            return glz::lazy_json<Opts>(terminated);
+         }
+         else {
+            return glz::lazy_json<Opts>(std::string_view{storage.data(), storage.size()});
+         }
+      }();
+      expect(doc.has_value()) << c.json;
+      if (not doc) return;
+      const auto r = iterate((*doc).root());
+      expect(r.elements == c.elements) << c.json;
+      expect(r.error == c.error) << c.json;
+      expect(r.after_error == 0u) << c.json;
+   };
+
+   "lazy_iteration_reports_malformed_containers"_test = [&] {
+      for (const auto& c : cases) {
+         check.template operator()<glz::opts{}>(c);
+         check.template operator()<glz::opts{.null_terminated = false}>(c);
+         check.template operator()<cursor_on>(c);
+         check.template operator()<cursor_on_bounded>(c);
+      }
+   };
+
+   "lazy_iteration_reports_malformed_nested_container"_test = [] {
+      const std::string json = R"({"rows":[1 2],"next":3})";
+      auto doc = glz::lazy_json(json);
+      expect(doc.has_value());
+      const auto r = iterate((*doc)["rows"]);
+      expect(r.elements == 1u);
+      expect(r.error == glz::error_code::expected_comma);
+      expect((*doc)["next"].get<int>().value_or(0) == 3); // the rest of the document still reads
+   };
+
+   "lazy_iteration_error_element_reads_as_error"_test = [] {
+      const std::string json = "[1 2]";
+      auto doc = glz::lazy_json(json);
+      expect(doc.has_value());
+      auto it = (*doc).root().begin();
+      const auto end = (*doc).root().end();
+      int first{};
+      expect(not(*it).read_into(first));
+      expect(first == 1);
+      ++it;
+      expect(it != end); // the error element is yielded
+      int second{};
+      expect((*it).read_into(second).ec == glz::error_code::expected_comma);
+      expect(not(*it).get<int>().has_value());
+      expect((*it).key().empty());
+      ++it;
+      expect(it == end); // and then iteration ends
+      ++it;
+      expect(it == end); // advancing past the end stays there
    };
 };
 
@@ -2420,6 +2640,45 @@ suite lazy_writer_bounds_tests = [] {
       std::string out{};
       expect(not glz::write_json(d->root(), out));
       expect(out == doc) << out;
+   };
+};
+
+// Two array alternatives, so every level of the nest tries both (see json_test's ambiguous nest).
+namespace lazy_speculation
+{
+   struct node;
+   using two_arrays = std::variant<std::vector<node>, std::list<node>>;
+   struct node
+   {
+      two_arrays child{};
+   };
+
+   inline std::string ambiguous_nest(size_t levels)
+   {
+      std::string b;
+      for (size_t i = 0; i < levels; ++i) b += R"([{"child":)";
+      b += "[{]"; // malformed leaf
+      for (size_t i = 0; i < levels; ++i) b += "}]";
+      return b;
+   }
+}
+
+suite lazy_speculation_budget_tests = [] {
+   "read_into seeds the speculation budget like glz::read"_test = [] {
+      // read_into parses on a context of its own; without the budget this nest takes seconds.
+      using namespace lazy_speculation;
+      const auto buffer = ambiguous_nest(24);
+      glz_test::expect_budgeted_like_read(
+         [&] {
+            two_arrays out{};
+            return glz::read_json(out, buffer).ec;
+         },
+         [&] {
+            auto doc = glz::lazy_json(buffer);
+            two_arrays out{};
+            return doc ? doc->root().read_into(out).ec : doc.error().ec;
+         },
+         glz::error_code::expected_quote);
    };
 };
 

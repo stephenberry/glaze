@@ -137,6 +137,29 @@ suite generic_json_tests = [] {
       expect(json[3].holds<glz::generic::null_t>());
    };
 
+   "generic_json_index_lvalue"_test = [] {
+      // https://github.com/stephenberry/glaze/issues/2993
+      glz::generic json{};
+      std::string buffer = R"([1,2,3,4,5])";
+      expect(glz::read_json(json, buffer) == glz::error_code::none);
+      int i = 2;
+      const int ci = 3;
+      size_t s = 4;
+      expect(json[i].get<double>() == 3.0);
+      expect(json[ci].get<double>() == 4.0);
+      expect(json[s].get<double>() == 5.0);
+      // lvalue-indexed access matches rvalue (literal) indexing
+      expect(json[i].get<double>() == json[2].get<double>());
+      expect(json[s].get<double>() == json[4u].get<double>());
+      json[i] = 10.0;
+      expect(json[2].get<double>() == 10.0);
+
+      const glz::generic& cjson = json;
+      expect(cjson[i].get<double>() == 10.0);
+      expect(cjson[ci].get<double>() == 4.0);
+      expect(cjson[s].get<double>() == 5.0);
+   };
+
    "generic_json_roundtrip"_test = [] {
       glz::generic json{};
       std::string buffer = R"([5,"Hello World",{"pi":3.14},null])";
@@ -212,6 +235,100 @@ suite generic_json_tests = [] {
       std::string s{};
       expect(not glz::write_json(glz::generic(*(glz::read_json<glz::generic>("{}"))), s));
       expect(s == "{}");
+   };
+
+   // Assigning an rvalue string, array, or object must move it, not copy it.
+   // A move keeps the source's heap buffer, so its address carries over.
+   "generic move assignment"_test = [] {
+      static_assert(std::is_nothrow_assignable_v<glz::generic&, std::string&&>);
+      static_assert(std::is_nothrow_assignable_v<glz::generic&, glz::generic::array_t&&>);
+      static_assert(std::is_nothrow_assignable_v<glz::generic&, glz::generic::object_t&&>);
+      // std::map may allocate when moved (MSVC), so object assignment is noexcept only when its move is
+      static_assert(std::is_nothrow_assignable_v<glz::generic_sorted&, std::string&&>);
+      static_assert(std::is_nothrow_assignable_v<glz::generic_sorted&, glz::generic_sorted::array_t&&>);
+      static_assert(std::is_nothrow_assignable_v<glz::generic_sorted&, glz::generic_sorted::object_t&&> ==
+                    std::is_nothrow_move_constructible_v<glz::generic_sorted::object_t>);
+
+      glz::generic json{};
+
+      std::string str(64, 'x'); // longer than any small-string buffer
+      const auto* str_buffer = str.data();
+      json = std::move(str);
+      expect(json.get_string().data() == str_buffer);
+
+      glz::generic::array_t arr{1.0, 2.0};
+      const auto* arr_buffer = arr.data();
+      json = std::move(arr);
+      expect(json.get_array().data() == arr_buffer);
+
+      glz::generic::object_t obj{{"key1", glz::generic("value1")}, {"key2", glz::generic("value2")}};
+      const auto* obj_value = &obj.begin()->second;
+      json = std::move(obj);
+      expect(&json.get_object().begin()->second == obj_value);
+      expect(json.dump().value() == R"({"key1":"value1","key2":"value2"})");
+
+      // operator[] moves an rvalue key into a newly inserted member
+      glz::generic object{};
+      std::string key(64, 'k');
+      const auto* key_buffer = key.data();
+      object[std::move(key)] = 1.0;
+      expect(object.get_object().begin()->first.data() == key_buffer);
+   };
+
+   // The assigned value may live inside the target, which replacing the target's value would destroy.
+   "generic assignment from a nested value"_test = [] {
+      constexpr std::string_view object_json =
+         R"({"array":[1,2],"string":"a string too long for a small-string buffer","object":{"k":1}})";
+      constexpr std::string_view array_json = R"([[1,2],{"k":1},"a string too long for a small-string buffer"])";
+      const auto parse = [](std::string_view buffer) {
+         glz::generic json{};
+         expect(not glz::read_json(json, buffer));
+         return json;
+      };
+
+      auto json = parse(object_json);
+      json = std::move(json["array"].get_array());
+      expect(json.dump().value() == "[1,2]");
+
+      json = parse(object_json);
+      json = std::move(json["string"].get_string());
+      expect(json.dump().value() == R"("a string too long for a small-string buffer")");
+
+      json = parse(object_json);
+      json = std::move(json["object"].get_object());
+      expect(json.dump().value() == R"({"k":1})");
+
+      json = parse(object_json);
+      json = std::move(json["object"]);
+      expect(json.dump().value() == R"({"k":1})");
+
+      json = parse(array_json);
+      json = std::move(json[0].get_array());
+      expect(json.dump().value() == "[1,2]");
+
+      json = parse(array_json);
+      json = std::move(json[1].get_object());
+      expect(json.dump().value() == R"({"k":1})");
+
+      json = parse(array_json);
+      json = std::move(json[2].get_string());
+      expect(json.dump().value() == R"("a string too long for a small-string buffer")");
+
+      json = parse(array_json);
+      json = std::move(json[0]);
+      expect(json.dump().value() == "[1,2]");
+
+      json = parse(array_json);
+      json = json[0].get_array();
+      expect(json.dump().value() == "[1,2]");
+
+      json = parse(array_json);
+      json = json[0];
+      expect(json.dump().value() == "[1,2]");
+
+      json = parse(object_json);
+      json = json["object"].get_object();
+      expect(json.dump().value() == R"({"k":1})");
    };
 
    "generic is_object"_test = [] {
@@ -641,7 +758,6 @@ suite json_pointer_extraction_tests = [] {
    };
 };
 
-// Define structs at namespace level for linkage requirements
 struct Thing
 {
    int value1;

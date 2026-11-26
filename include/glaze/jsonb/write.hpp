@@ -361,16 +361,7 @@ namespace glz
       template <class T, auto Opts, size_t I>
       consteval bool should_skip_reflected_field()
       {
-         using V = field_t<T, I>;
-         if constexpr (always_skipped<V>) {
-            return true;
-         }
-         else if constexpr (is_any_function_ptr<V>) {
-            return !check_write_function_pointers(Opts);
-         }
-         else {
-            return false;
-         }
+         return skipped_on_write<Opts, T, I>;
       }
 
       // Write the (key, value) pairs of a reflected struct without an enclosing OBJECT
@@ -599,19 +590,78 @@ namespace glz
    // reflected struct, the writer wraps it as `{tag_v: id, ...inlined fields}`
    // (Glaze's JSON tagged-variant convention). The reader expects the tag to be
    // the first key.
+   //
+   // When the variant also declares `content_v<T>`, every alternative is written as
+   // `{tag_v: id, content_v: value}`, the same adjacent shape as JSON and BEVE. The reader takes
+   // the two keys in either order.
    template <is_variant T>
    struct to<JSONB, T> final
    {
       template <auto Opts>
+      static void write_id(auto&& value, is_context auto&& ctx, auto&& b, auto& ix)
+      {
+         using id_type = std::decay_t<decltype(ids_v<T>[0])>;
+         if constexpr (std::integral<id_type>) {
+            to<JSONB, id_type>::template op<Opts>(ids_v<T>[value.index()], ctx, b, ix);
+         }
+         else {
+            // String id (typically a struct name); emit as a TEXT element.
+            const sv id = ids_v<T>[value.index()];
+            to<JSONB, sv>::template op<Opts>(id, ctx, b, ix);
+         }
+      }
+
+      template <auto Opts>
+      static void write_adjacent(auto&& value, is_context auto&& ctx, auto&& b, auto& ix)
+      {
+         if (variant_missing_id<T>(value, ctx)) [[unlikely]] {
+            return;
+         }
+         size_t header_pos{};
+         if (!jsonb_detail::reserve_container_header(ctx, b, ix, header_pos)) [[unlikely]] {
+            return;
+         }
+         const size_t payload_start = ix;
+
+         static constexpr auto tag = tag_v<T>;
+         jsonb_detail::write_scalar(ctx, jsonb::type::text, tag.data(), tag.size(), b, ix);
+         if (bool(ctx.error)) [[unlikely]]
+            return;
+
+         write_id<Opts>(value, ctx, b, ix);
+         if (bool(ctx.error)) [[unlikely]]
+            return;
+
+         static constexpr auto content = content_v<T>;
+         jsonb_detail::write_scalar(ctx, jsonb::type::text, content.data(), content.size(), b, ix);
+         if (bool(ctx.error)) [[unlikely]]
+            return;
+
+         std::visit([&](auto&& v) { serialize<JSONB>::op<Opts>(v, ctx, b, ix); }, value);
+         if (bool(ctx.error)) [[unlikely]]
+            return;
+
+         const uint64_t payload_size = static_cast<uint64_t>(ix - payload_start);
+         jsonb::patch_header_9(b, header_pos, jsonb::type::object, payload_size);
+      }
+
+      template <auto Opts>
       static void op(auto&& value, is_context auto&& ctx, auto&& b, auto& ix)
       {
-         // Inside op() rather than at class scope: write_supported is `requires { to<Format, T>{}; }`,
-         // so a class-scope assert turns that feature probe into a hard error instead of `false`.
-         static_assert(content_v<T>.empty(),
-                       "Adjacent variant tagging (glz::meta `content`) is implemented for JSON and "
-                       "BEVE but not yet for JSONB. Writing this variant as JSONB would silently fall "
-                       "back to internal tagging and produce a different shape than the other "
-                       "formats, so it is rejected here instead.");
+         // Only variants that declare `content` reach for variant_tagging, which also rejects internal
+         // tagging of non-object alternatives. JSONB has written those bare, and still does.
+         if constexpr (check_write_type_info(Opts) && not content_v<T>.empty()) {
+            static_assert(adjacently_tagged_v<T>);
+            write_adjacent<Opts>(value, ctx, b, ix);
+         }
+         else {
+            write_deduced<Opts>(value, ctx, b, ix);
+         }
+      }
+
+      template <auto Opts>
+      static void write_deduced(auto&& value, is_context auto&& ctx, auto&& b, auto& ix)
+      {
          std::visit(
             [&](auto&& v) {
                using V = std::decay_t<decltype(v)>;
@@ -638,15 +688,7 @@ namespace glz
                   if (bool(ctx.error)) [[unlikely]]
                      return;
 
-                  using id_type = std::decay_t<decltype(ids_v<T>[0])>;
-                  if constexpr (std::integral<id_type>) {
-                     to<JSONB, id_type>::template op<Opts>(ids_v<T>[value.index()], ctx, b, ix);
-                  }
-                  else {
-                     // String id (typically a struct name); emit as a TEXT element.
-                     const sv id = ids_v<T>[value.index()];
-                     to<JSONB, sv>::template op<Opts>(id, ctx, b, ix);
-                  }
+                  write_id<Opts>(value, ctx, b, ix);
                   if (bool(ctx.error)) [[unlikely]]
                      return;
 
@@ -712,7 +754,7 @@ namespace glz
       {}
    };
 
-   // Generic JSON value — dispatch each variant alternative to the matching JSONB element.
+   // Generic JSON value — write the active alternative as its native JSONB element.
    // Without this specialization, glz::generic would fall through to the variant handler and
    // serialize as an [index, value] array rather than as the native element type.
    template <num_mode Mode, template <class> class MapType>
@@ -721,36 +763,7 @@ namespace glz
       template <auto Opts>
       static void op(auto&& value, is_context auto&& ctx, auto&& b, auto& ix)
       {
-         using G = std::decay_t<decltype(value)>;
-         using array_t = typename G::array_t;
-         using object_t = typename G::object_t;
-
-         std::visit(
-            [&](auto&& v) {
-               using V = std::decay_t<decltype(v)>;
-               if constexpr (std::same_as<V, std::nullptr_t>) {
-                  to<JSONB, std::nullptr_t>::template op<Opts>(nullptr, ctx, b, ix);
-               }
-               else if constexpr (std::same_as<V, bool>) {
-                  to<JSONB, bool>::template op<Opts>(v, ctx, b, ix);
-               }
-               else if constexpr (std::same_as<V, std::string>) {
-                  to<JSONB, std::string>::template op<Opts>(v, ctx, b, ix);
-               }
-               else if constexpr (std::same_as<V, array_t>) {
-                  // Container dispatch: array of generic_json — handled by writable_array_t.
-                  to<JSONB, array_t>::template op<Opts>(v, ctx, b, ix);
-               }
-               else if constexpr (std::same_as<V, object_t>) {
-                  // Map<string, generic_json> — writable_map_t handles it.
-                  to<JSONB, object_t>::template op<Opts>(v, ctx, b, ix);
-               }
-               else {
-                  // Numeric types: uint64_t, int64_t, double depending on Mode.
-                  to<JSONB, V>::template op<Opts>(v, ctx, b, ix);
-               }
-            },
-            value.data);
+         std::visit([&](auto&& v) { serialize<JSONB>::op<Opts>(v, ctx, b, ix); }, value.data);
       }
    };
 
@@ -769,12 +782,15 @@ namespace glz
    }
 
    template <auto Opts = opts{}, write_supported<JSONB> T>
-   [[nodiscard]] inline error_code write_file_jsonb(T&& value, const sv file_name, auto&& buffer)
+   [[nodiscard]] inline error_ctx write_file_jsonb(T&& value, const sv file_name, auto&& buffer)
    {
       const auto ec = write<set_jsonb<Opts>()>(std::forward<T>(value), buffer);
       if (bool(ec)) [[unlikely]] {
-         return ec.ec;
+         return ec;
       }
-      return buffer_to_file(buffer, file_name);
+      if (auto file_ec = buffer_to_file(buffer, file_name); bool(file_ec)) {
+         return {0, file_ec};
+      }
+      return {};
    }
 }

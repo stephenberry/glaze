@@ -325,8 +325,17 @@ namespace glz
 
 namespace glz
 {
+   // A pointer to memory of unknown size. Writes into it cannot check bounds; the caller guarantees room.
+   // A char[N] is deliberately not one: decaying it would discard the extent, so it is a byte_array_buffer.
    template <class Buffer>
-   concept raw_buffer = std::same_as<std::decay_t<Buffer>, char*> && non_const_buffer<Buffer>;
+   concept raw_buffer = std::same_as<std::remove_cvref_t<Buffer>, char*> && non_const_buffer<Buffer>;
+
+   // A C array of bytes, such as `char buf[512]`. Its extent is its capacity, so it is a bounded output buffer
+   // like std::array. It has no members, so the write entry points serialize into it through a std::span.
+   template <class Buffer>
+   concept byte_array_buffer = std::is_bounded_array_v<std::remove_reference_t<Buffer>> &&
+                               (sizeof(std::remove_extent_t<std::remove_reference_t<Buffer>>) == sizeof(char)) &&
+                               non_const_buffer<std::remove_extent_t<std::remove_reference_t<Buffer>>>;
 
    // A resizable buffer MUST be vector_like to safely support resize and memcpy operations
    // vector_like requires: resize(), operator[], data() (for contiguous storage), and reference typedef
@@ -335,8 +344,9 @@ namespace glz
    concept safe_resizable_buffer = !resizable<Buffer> || vector_like<Buffer>;
 
    template <class Buffer>
-   concept output_buffer = range<Buffer> && (sizeof(range_value_t<Buffer>) == sizeof(char)) &&
-                           non_const_buffer<Buffer> && safe_resizable_buffer<Buffer>;
+   concept output_buffer = (range<Buffer> && (sizeof(range_value_t<Buffer>) == sizeof(char)) &&
+                            non_const_buffer<Buffer> && safe_resizable_buffer<Buffer>) ||
+                           byte_array_buffer<Buffer>;
 
    template <class Range>
    concept contiguous_byte_range = contiguous<Range> && byte_like<range_value_t<Range>>;

@@ -29,6 +29,7 @@ endfunction()
 
 add_glz_json_test(${PROJECT_NAME} ${JSON_TEST_SOURCES})
 add_glz_json_test(json_variant_support_test ${JSON_VARIANT_SUPPORT_SOURCES})
+add_glz_json_test(bounded_tuple_test bounded_tuple_test.cpp)
 
 set_tests_properties(json_test json_test_non_null PROPERTIES TIMEOUT 60)
 
@@ -63,6 +64,14 @@ add_executable(variant_ambiguous_test variant_ambiguous_test.cpp)
 target_link_libraries(variant_ambiguous_test PRIVATE glz_test_common)
 
 add_test(NAME variant_ambiguous_test COMMAND variant_ambiguous_test)
+
+## Variants with more than 64 alternatives
+
+add_executable(json_wide_variant_test json_wide_variant_test.cpp)
+
+target_link_libraries(json_wide_variant_test PRIVATE glz_test_common)
+
+add_test(NAME json_wide_variant_test COMMAND json_wide_variant_test)
 
 ## Value-based skip test - test for issue #1994
 

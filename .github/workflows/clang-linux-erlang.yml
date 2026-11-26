@@ -28,12 +28,12 @@ concurrency:
 
 jobs:
   build:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
 
     strategy:
       fail-fast: false
       matrix:
-        clang: [17, 18]
+        clang: [19]
         build_type: [Debug]
         std: [23]
 
@@ -42,13 +42,15 @@ jobs:
       CXX: clang++-${{matrix.clang}}
 
     steps:
-    - uses: actions/checkout@v6
+    - uses: actions/checkout@v7
 
-    - name: Install dependencies
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y libc++-dev libc++abi-dev
-        sudo apt-get install erlang-dev
+    - name: Install Clang
+      uses: ./.github/actions/install-clang
+      with:
+        version: ${{matrix.clang}}
+
+    - name: Install Erlang
+      run: sudo apt-get install -y erlang-dev
 
     - name: Configure CMake
       run: |

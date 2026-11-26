@@ -49,6 +49,10 @@ if (!ec) {
 }
 ```
 
+> [!IMPORTANT]
+>
+> Text formats also accept a null-terminated C string (`const char*`), whose length is found with `strlen`. Binary formats (BEVE, CBOR, MessagePack, BSON, JSONB, EETF) may contain zero bytes anywhere, so they reject a C string at compile time. Pass the buffer itself, such as `glz::read_cbor(obj, buffer)` rather than `buffer.data()`, or a `std::string_view`/`std::span` with an explicit size.
+
 ### Reading Multiple Values
 
 The `count` field enables reading multiple values from a single buffer:

@@ -39,7 +39,7 @@ namespace glz
       // truncated reads to none, which is worse than leaking. Those need their own truncation
       // accounting before they can join.
       end_reached,
-      partial_read_complete, // A non-error code for short circuiting partial reads
+      partial_read_complete, // A non-error code for short circuiting partial reads; see parse_failed
       no_read_input, //
       data_must_be_null_terminated, //
       parse_number_failure, //
@@ -95,7 +95,7 @@ namespace glz
       elements_not_convertible_to_design, //
       unknown_distribution, //
       invalid_distribution_elements, //
-      hostname_failure, //
+      hostname_failure, // unused: retained so that later codes keep their values
       includer_error, //
       // Feature support
       feature_not_supported, //
@@ -123,6 +123,18 @@ namespace glz
       // same response, so they share a code; custom_error_message names which one ran away.
       exceeded_max_expansion
    };
+
+   // Whether a parse failed, as opposed to having stopped. end_reached and partial_read_complete
+   // are truthy so that they unwind the parse like any error, but the value they end on was read:
+   // a caller that commits a parsed value (a custom setter, a cast, an atomic store) must still
+   // commit it and let the code propagate. The top level settles both, so callers never see them.
+   //
+   // This is the one place that lists them. Neither has an ordinal test: partial_read_complete
+   // sorts above end_reached, and the REPE codes sort below it.
+   [[nodiscard]] constexpr bool parse_failed(const error_code ec) noexcept
+   {
+      return ec != error_code::none && ec != error_code::end_reached && ec != error_code::partial_read_complete;
+   }
 
    // Unified error context for all read/write operations
    // Provides error information and byte count processed
@@ -160,6 +172,18 @@ namespace glz
       // NOTE: The default constructor is valid for std::string_view, so we use this rather than {}
       // because debuggers like jumping to std::string_view initialization calls
       std::string scratch{}; // Reusable scratch buffer for intermediate parsing (key lookup, etc.)
+      // A file include (glz::file_include) merges an external document into
+      // the object that names it, which makes that document a fragment: some of the object's keys
+      // come from it and the rest come from the including document. With error_on_missing_keys the
+      // check therefore belongs to the including object, over the union of both. These carry the
+      // including object's key bits across the nested read: an object publishes its bits in
+      // key_bits while it parses, an includer member hands them to the read of its file in
+      // include_key_bits, and that file's top level merges its own keys into them instead of
+      // running a check of its own. include_key_type identifies the type the bits belong to so an
+      // included document of some other type never reinterprets them. See glz::include_key_scope.
+      void* key_bits{};
+      void* include_key_bits{};
+      const void* include_key_type{};
    };
 
    // Concept for any context type (base or streaming)
@@ -224,6 +248,38 @@ namespace glz
       indent_guard& operator=(const indent_guard&) = delete;
    };
 
+   // Opened by the read and write entry points (glz::read, glz::read_streaming, glz::write) for the
+   // call they make on a caller's context. A context is meant to be reused across calls, and part
+   // of what a call leaves in it describes that call alone. Settling that here, once, is what lets
+   // the readers and writers leave it behind on any of their many ways out of an error:
+   //   - error and custom_error_message report the previous call, so they are cleared on entry.
+   //     Left set, the error made the next call return it without reading anything.
+   //   - depth is restored on exit. The JSON readers (see enter_depth) and writers count it by hand
+   //     and return from an error without unwinding it, so a failed call left it raised: every
+   //     later non-null-terminated read settled to unexpected_end, every later prettified write was
+   //     indented further in, and every later read started that much closer to the recursion
+   //     limit. Restored rather than zeroed because a file include reads its file through glz::read
+   //     on the including document's context, and its levels have to count on top of its parent's
+   //     for a cycle of includes to still meet the limit.
+   // Per-read budgets are reseeded where they are seeded (speculation_budget in glz::read, the YAML
+   // expansion budgets in its outermost parse), since only those places know the input's size.
+   template <class Ctx>
+   struct call_scope
+   {
+      Ctx& ctx;
+      uint32_t depth;
+
+      explicit call_scope(Ctx& c) noexcept : ctx(c), depth(c.depth)
+      {
+         ctx.error = error_code::none;
+         ctx.custom_error_message = {};
+      }
+      ~call_scope() { ctx.depth = depth; }
+
+      call_scope(const call_scope&) = delete;
+      call_scope& operator=(const call_scope&) = delete;
+   };
+
    // A variant read is speculative: an alternative is parsed to find out whether it fits, and a
    // rejected one is rewound and the next tried. Nest that -- a variant whose alternatives contain
    // variants -- and the re-parses multiply, so a failure at the bottom of an ambiguous nest costs
@@ -248,9 +304,22 @@ namespace glz
    // a constant ~8 ms at any depth instead of 55 seconds at depth 12 and forever beyond that.
    inline constexpr size_t min_speculative_parse_bytes = 1 << 20;
 
+   // Seed the per-read speculation budget for `input_bytes` of input. glz::read does this for every
+   // read, and so must any public entry point that runs a reader over caller input on a context of
+   // its own (a lazy view's read_into, read_jmespath, REPE read_params): an unseeded context is not
+   // policed (see charge_speculation), so its variant resolution keeps the exponential cost above.
+   GLZ_ALWAYS_INLINE void seed_speculation_budget(is_context auto& ctx, const size_t input_bytes) noexcept
+   {
+      if constexpr (requires { ctx.speculation_budget; }) {
+         const size_t proportional = max_speculative_parse_factor * input_bytes;
+         ctx.speculation_budget =
+            (proportional > min_speculative_parse_bytes ? proportional : min_speculative_parse_bytes) + 2;
+      }
+   }
+
    // Charge `consumed` bytes of speculative parsing. Returns false once the budget is spent, at which
    // point the caller must stop trying alternatives. A zero budget means unlimited: a context that
-   // never went through glz::read (a nested or hand-rolled parse) is not policed.
+   // was never seeded (a nested or hand-rolled parse) is not policed.
    [[nodiscard]] GLZ_ALWAYS_INLINE bool charge_speculation(is_context auto& ctx, const size_t consumed) noexcept
    {
       if constexpr (requires { ctx.speculation_budget; }) {
@@ -281,8 +350,9 @@ namespace glz
    // Manual counterpart of depth_guard for the JSON/NDJSON readers described above: counts one
    // nesting level and returns true when the limit is reached, in which case the caller must return
    // immediately. The level is given back with a plain `--ctx.depth` at each syntactic close, so a
-   // bail-out leaves it counted, which is what keeps a truncated buffer from finalizing as success.
-   // Readers that rewind and retry (variant alternatives) must restore ctx.depth with the iterator.
+   // bail-out leaves it counted, which is what keeps a truncated buffer from finalizing as success;
+   // call_scope puts it back once the read has been finalized. Readers that rewind and retry
+   // (variant alternatives) must restore ctx.depth with the iterator.
    [[nodiscard]] GLZ_ALWAYS_INLINE bool enter_depth(is_context auto& ctx) noexcept
    {
       if (ctx.depth >= max_recursive_depth_limit) [[unlikely]] {

@@ -371,6 +371,70 @@ struct non_default_t
    non_default_t(int) {}
 };
 
+// Aggregates whose members cannot all be initialized from {} (https://github.com/stephenberry/glaze/issues/2982)
+struct non_default_only
+{
+   non_default_t a;
+};
+static_assert(glz::detail::count_members<non_default_only> == 1);
+
+struct non_default_last
+{
+   int a{};
+   int b{};
+   non_default_t c;
+};
+static_assert(glz::detail::count_members<non_default_last> == 3);
+
+struct non_default_first
+{
+   non_default_t a;
+   int b{};
+   std::string c{};
+};
+static_assert(glz::detail::count_members<non_default_first> == 3);
+
+struct non_default_middle
+{
+   int a{};
+   non_default_t b;
+   int c{};
+};
+static_assert(glz::detail::count_members<non_default_middle> == 3);
+
+struct const_member_first
+{
+   const int a;
+   int b{};
+};
+static_assert(glz::detail::count_members<const_member_first> == 2);
+
+struct non_default_value
+{
+   int value;
+   constexpr non_default_value(int v) : value(v) {}
+};
+
+template <>
+struct glz::meta<non_default_value>
+{
+   static constexpr auto value = &non_default_value::value;
+};
+
+struct non_default_value_middle
+{
+   int a{};
+   non_default_value b;
+   std::string c{};
+};
+
+suite non_default_member_tests = [] {
+   "write aggregate with non-default-constructible member"_test = [] {
+      const non_default_value_middle obj{1, non_default_value{2}, "three"};
+      expect(glz::write_json(obj).value_or("error") == R"({"a":1,"b":2,"c":"three"})");
+   };
+};
+
 struct nested_t
 {
    std::optional<std::string> str{};
@@ -754,7 +818,7 @@ suite json_schema = [] {
       // when you update this string
       expect(
          schema ==
-         R"({"type":"object","properties":{"array":{"type":"array","items":{"type":"string"},"maxItems":4},"b":{"type":"boolean"},"c":{"type":"string"},"color":{"type":"string","oneOf":[{"title":"Red","const":"Red"},{"title":"Green","const":"Green"},{"title":"Blue","const":"Blue"}]},"d":{"$ref":"#/$defs/double"},"i":{"$ref":"#/$defs/int32_t"},"map":{"type":"object","additionalProperties":{"$ref":"#/$defs/int32_t"}},"optional":{"anyOf":[{"$ref":"#/$defs/V3"},{"type":"null"}]},"thing":{"$ref":"#/$defs/sub_thing"},"thing2array":{"type":"array","items":{"type":"object","properties":{"a":{"$ref":"#/$defs/double"},"b":{"type":"string"},"c":{"$ref":"#/$defs/double"},"d":{"$ref":"#/$defs/double"},"e":{"$ref":"#/$defs/double"},"f":{"$ref":"#/$defs/float"},"g":{"$ref":"#/$defs/double"},"h":{"$ref":"#/$defs/double"}},"additionalProperties":false},"maxItems":1},"thing_ptr":{"anyOf":[{"$ref":"#/$defs/sub_thing"},{"type":"null"}]},"vb":{"type":"array","items":{"type":"boolean"}},"vec3":{"$ref":"#/$defs/V3"},"vector":{"type":"array","items":{"$ref":"#/$defs/V3"}}},"additionalProperties":false,"$defs":{"V3":{"type":"object","properties":{"x":{"$ref":"#/$defs/double"},"y":{"$ref":"#/$defs/double"},"z":{"$ref":"#/$defs/double"}},"additionalProperties":false},"double":{"type":"number","minimum":-1.7976931348623157E308,"maximum":1.7976931348623157E308},"float":{"type":"number","minimum":-3.4028234663852886E38,"maximum":3.4028234663852886E38},"int32_t":{"type":"integer","minimum":-2147483648,"maximum":2147483647},"sub_thing":{"type":"object","properties":{"a":{"$ref":"#/$defs/double"},"b":{"type":"string"}},"additionalProperties":false}},"title":"Thing"})")
+         R"({"type":"object","properties":{"array":{"type":"array","items":{"type":"string"},"maxItems":4},"b":{"type":"boolean"},"c":{"type":"string"},"color":{"type":"string","oneOf":[{"title":"Red","const":"Red"},{"title":"Green","const":"Green"},{"title":"Blue","const":"Blue"}]},"d":{"$ref":"#/$defs/double"},"i":{"$ref":"#/$defs/int32_t"},"map":{"type":"object","additionalProperties":{"$ref":"#/$defs/int32_t"}},"optional":{"anyOf":[{"$ref":"#/$defs/V3"},{"type":"null"}]},"thing":{"$ref":"#/$defs/sub_thing"},"thing2array":{"type":"array","items":{"type":"object","properties":{"a":{"$ref":"#/$defs/double"},"b":{"type":"string"},"c":{"$ref":"#/$defs/double"},"d":{"$ref":"#/$defs/double"},"e":{"$ref":"#/$defs/double"},"f":{"$ref":"#/$defs/float"},"g":{"$ref":"#/$defs/double"},"h":{"$ref":"#/$defs/double"}},"additionalProperties":false},"maxItems":1},"thing_ptr":{"anyOf":[{"$ref":"#/$defs/sub_thing"},{"type":"null"}]},"vb":{"type":"array","items":{"type":"boolean"}},"vec3":{"$ref":"#/$defs/V3"},"vector":{"type":"array","items":{"$ref":"#/$defs/V3"}}},"additionalProperties":false,"$defs":{"V3":{"type":"object","properties":{"x":{"$ref":"#/$defs/double"},"y":{"$ref":"#/$defs/double"},"z":{"$ref":"#/$defs/double"}},"additionalProperties":false},"double":{"type":"number"},"float":{"type":"number","minimum":-3.4028234663852886E38,"maximum":3.4028234663852886E38},"int32_t":{"type":"integer","minimum":-2147483648,"maximum":2147483647},"sub_thing":{"type":"object","properties":{"a":{"$ref":"#/$defs/double"},"b":{"type":"string"}},"additionalProperties":false}},"title":"Thing"})")
          << schema;
    };
 };
@@ -1486,6 +1550,99 @@ suite rename_tests = [] {
       expect(not glz::read_json(obj, buffer));
       expect(obj.first == 11);
       expect(obj.second == 12);
+   };
+};
+
+namespace
+{
+   struct anonymous_namespace_t
+   {
+      int id{};
+      std::string name{};
+   };
+}
+
+suite types_without_linkage = [] {
+   // https://github.com/stephenberry/glaze/issues/3040
+   "anonymous namespace"_test = [] {
+      static_assert(glz::member_names<anonymous_namespace_t>[1] == "name");
+
+      anonymous_namespace_t obj{.id = 1, .name = "one"};
+      std::string buffer{};
+      expect(not glz::write_json(obj, buffer));
+      expect(buffer == R"({"id":1,"name":"one"})") << buffer;
+
+      obj = {};
+      expect(not glz::read_json(obj, buffer));
+      expect(obj.id == 1);
+      expect(obj.name == "one");
+   };
+
+   "local struct"_test = [] {
+      struct local_t
+      {
+         int i = 287;
+         std::string hello = "Hello World";
+         std::array<uint64_t, 3> arr = {1, 2, 3};
+      };
+      static_assert(glz::member_names<local_t>[2] == "arr");
+
+      local_t obj{};
+      std::string buffer{};
+      expect(not glz::write_json(obj, buffer));
+      expect(buffer == R"({"i":287,"hello":"Hello World","arr":[1,2,3]})") << buffer;
+
+      buffer = R"({"i":5,"hello":"world","arr":[4,5,6]})";
+      expect(not glz::read_json(obj, buffer));
+      expect(obj.i == 5);
+      expect(obj.hello == "world");
+      expect(obj.arr == std::array<uint64_t, 3>{4, 5, 6});
+   };
+
+   "local struct with non-default-constructible member"_test = [] {
+      struct no_default_t
+      {
+         int value;
+         constexpr explicit no_default_t(int v) : value(v) {}
+      };
+      struct local_t
+      {
+         const no_default_t member;
+         int count{};
+      };
+      static_assert(glz::member_names<local_t>[0] == "member");
+      static_assert(glz::member_names<local_t>[1] == "count");
+   };
+
+   "local struct with non-literal members"_test = [] {
+      struct local_t
+      {
+         int i = 287;
+         std::map<std::string, int> map{{"one", 1}, {"two", 2}};
+      };
+      static_assert(glz::member_names<local_t>[1] == "map");
+
+      local_t obj{};
+      std::string buffer{};
+      expect(not glz::write_json(obj, buffer));
+      expect(buffer == R"({"i":287,"map":{"one":1,"two":2}})") << buffer;
+
+      buffer = R"({"i":5,"map":{"three":3}})";
+      expect(not glz::read_json(obj, buffer));
+      expect(obj.i == 5);
+      expect(obj.map.at("three") == 3);
+
+      struct not_literal_t
+      {
+         int value;
+         explicit not_literal_t(int v) : value(v) {}
+      };
+      struct with_not_literal_t
+      {
+         const not_literal_t member;
+         int count{};
+      };
+      static_assert(glz::member_names<with_not_literal_t>[0] == "member");
    };
 };
 

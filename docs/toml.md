@@ -286,6 +286,51 @@ glz::write_toml(c, toml);  // Regular write_toml, but products uses inline synta
 
 This is useful when you want a more compact representation or when the array contains simple objects with few fields.
 
+## Custom Read/Write
+
+`glz::custom<Read, Write>` works for TOML exactly as it does for JSON. It binds a key to a setter used on read and a getter used on write, so a member can be transformed, validated, or hidden behind an accessor:
+
+```cpp
+struct settings
+{
+   uint64_t port{};
+
+   void set_port(const std::string& s) { port = std::stoull(s); }
+   uint64_t get_port() const { return port; }
+};
+
+template <>
+struct glz::meta<settings>
+{
+   using T = settings;
+   static constexpr auto value = object("port", custom<&T::set_port, &T::get_port>);
+};
+```
+
+```toml
+port = "8080"   # read as a string, stored as a uint64_t
+```
+
+Member pointers, member functions, `std::function` members, and lambdas are all accepted, along with the three-parameter lambda form that also takes a `glz::context&` so a setter can report its own error:
+
+```cpp
+static constexpr auto read_port = [](settings& s, int port, glz::context& ctx) {
+   if (port < 1024) {
+      ctx.error = glz::error_code::constraint_violated;
+      ctx.custom_error_message = "port is reserved";
+   }
+   else {
+      s.port = port;
+   }
+};
+```
+
+Use `glz::skip{}` as the read handler for a key that is written but never read back.
+
+A custom getter that exposes a nested object is written as a `[table]`, matching the layout of a plain field of the same type. A custom getter that exposes a sequence of objects is written as an inline array rather than `[[array_of_tables]]`, because the reader cannot feed an array-of-tables section back into a setter.
+
+TOML has no null, so a custom getter returning a disengaged `std::optional` (or a null pointer) omits its key entirely, exactly as a plain nullable field does.
+
 ## Using the Generic API
 
 The convenience wrappers call into the generic `glz::read`/`glz::write` pipeline. You can reuse the same options struct you already use for JSON while switching the format to TOML:
@@ -361,6 +406,23 @@ if (write_ec) {
 ```
 
 Both `glz::read` and `glz::write` return `error_ctx`, so remember to check the result in production code.
+
+## Empty Documents
+
+A TOML document with no keys is valid, and that includes an empty buffer. A struct keeps its current values, as it does for a document holding only comments, so a struct whose members are all empty `std::optional`s reads back the `""` it writes. `glz::generic` and a variant with a map alternative become an empty table, and an empty document read with `error_on_missing_keys` returns `missing_key` if the struct has required keys.
+
+A target that cannot hold a document, such as an `int`, a `std::string` or a `std::vector`, still returns `glz::error_code::no_read_input` for an empty buffer.
+
+## Duplicate Keys
+
+As TOML v1.0.0 requires, a key may be defined only once. Reading a document that repeats one returns `glz::error_code::syntax_error`, and the first value is kept. This covers a repeated line, a repeated dotted key, the same key under a repeated `[table]` header, a repeated key inside an inline table, and any later line that extends a value already written whole, such as `[a]` after `a = { ... }` or `[[arr]]` after `arr = [ ... ]`:
+
+```toml
+role = "user"
+role = "admin"  # syntax_error
+```
+
+This is judged against the document, not the destination. A key a map held before the read is overwritten, so a map member with default entries, or a second read into the same object, behaves as it does for JSON. Other keys in the map are left as they are.
 
 ## File Helpers and Buffers
 
@@ -703,6 +765,10 @@ For integers in `glz::generic_u64` mode:
 - Numbers starting with `-` are stored as `int64_t`
 - Positive numbers are stored as `uint64_t`
 
+A generic type or a variant with a map alternative also takes a whole TOML document at the root. A document is recognized by a `key = value` line or by a `[table]` or `[[array of tables]]` header, and the tables go into the map alternative, including arrays of tables and their sub-tables. A bare array such as `[1, 2, 3]` still reads as an array.
+
+The text of a one element array can also be a header. `[1]`, `["a"]` and `[[1]]` read as arrays when they are all there is, and as headers when anything follows them, so `[1]` on its own is the array and `[1]` followed by `x = 2` is the table `{"1": {"x": 2}}`. A key that could not be an array element, such as `[server]`, is always a header.
+
 ### Writing Generic Types
 
 Generic types can be written back to TOML:
@@ -776,7 +842,7 @@ auto ec = glz::read_toml(config, toml);
 
 ### Limitations
 
-- **Null values**: TOML has no native null type. When writing `std::nullptr_t` or a variant holding null, an empty string `""` is written.
+- **Null values**: TOML has no native null type. A struct field or map entry holding null (an empty `std::optional`, a null pointer, or a variant or `glz::generic` holding null) is omitted along with its key. In an array or tuple, the null alternative of a variant (such as a `glz::generic` null) is written as an empty string `""`, while an empty typed nullable such as `std::optional<int>` fails the write with `glz::error_code::feature_not_supported`. The reader never produces a null: a missing value (`a =`, `{u = }`, `[1, , 2]`) is a `syntax_error`.
 - **Type coercion**: The parser does not coerce types. If the variant has no matching alternative for the detected type, an error is returned.
 - **Array of tables in maps**: The `[[array_of_tables]]` syntax is not fully supported when reading into map types. Use struct-based types for this pattern.
 

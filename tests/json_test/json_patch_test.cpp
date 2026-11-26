@@ -1,7 +1,11 @@
 // Glaze Library
 // For the license information refer to glaze.hpp
 
+#include <cstdint>
 #include <cstdlib>
+#include <limits>
+#include <string>
+#include <string_view>
 
 #include "glaze/json/patch.hpp"
 #include "ut/ut.hpp"
@@ -514,6 +518,202 @@ suite json_patch_tests = [] {
 
       auto ec = glz::patch(*doc, ops);
       expect(ec.ec == glz::error_code::nonexistent_json_ptr);
+   };
+
+   // RFC 6901 section 4: array-index = %x30 / ( %x31-39 *(%x30-39) ). Leading zeros are not a valid
+   // index, so every operation must reject them, not just the ones that resolve through the parent.
+   "leading zero array index rejected by every op"_test = [] {
+      constexpr std::string_view doc = R"(["foo","bar"])";
+
+      expect(!glz::patch_json(doc, R"([{"op":"add","path":"/01","value":"X"}])").has_value());
+      expect(!glz::patch_json(doc, R"([{"op":"remove","path":"/01"}])").has_value());
+      expect(!glz::patch_json(doc, R"([{"op":"move","from":"/01","path":"/0"}])").has_value());
+      expect(!glz::patch_json(doc, R"([{"op":"replace","path":"/01","value":"X"}])").has_value());
+      expect(!glz::patch_json(doc, R"([{"op":"test","path":"/01","value":"bar"}])").has_value());
+      expect(!glz::patch_json(doc, R"([{"op":"test","path":"/00","value":"foo"}])").has_value());
+      expect(!glz::patch_json(doc, R"([{"op":"copy","from":"/01","path":"/0"}])").has_value());
+
+      // The equivalent well-formed indices still work
+      expect(glz::patch_json(doc, R"([{"op":"test","path":"/1","value":"bar"}])").has_value());
+      expect(glz::patch_json(doc, R"([{"op":"test","path":"/0","value":"foo"}])").has_value());
+
+      auto replaced = glz::patch_json(doc, R"([{"op":"replace","path":"/1","value":"X"}])");
+      expect(replaced.has_value());
+      expect(*replaced == R"(["foo","X"])");
+   };
+
+   "leading zero array index rejected by the pointer API"_test = [] {
+      auto doc = glz::read_json<glz::generic>(R"({"a":[0,1,2,3,4,5,6,7,8,9,10],"b":[{"c":[7,8]}],"o":{"01":"y"}})");
+      expect(doc.has_value());
+
+      const auto found = [&](std::string_view ptr) {
+         return glz::navigate_to(&*doc, ptr) != nullptr && glz::seek([](auto&&) {}, *doc, ptr);
+      };
+
+      expect(found("/a/0"));
+      expect(found("/a/1"));
+      expect(found("/a/10"));
+      expect(found("/b/0/c/1"));
+
+      expect(!glz::navigate_to(&*doc, "/a/00"));
+      expect(!glz::navigate_to(&*doc, "/a/01"));
+      expect(!glz::navigate_to(&*doc, "/a/010"));
+      expect(!glz::navigate_to(&*doc, "/b/00/c/1"));
+      expect(!glz::seek([](auto&&) {}, *doc, "/a/00"));
+      expect(!glz::seek([](auto&&) {}, *doc, "/a/01"));
+      expect(!glz::seek([](auto&&) {}, *doc, "/a/010"));
+      expect(!glz::seek([](auto&&) {}, *doc, "/b/00/c/1"));
+
+      // The rule is about array indices only: a padded number is still an ordinary object key
+      expect(found("/o/01"));
+
+      // "-" names the end of the array, which is never an existing element, and an index that
+      // overflows size_t is not a member either
+      expect(!glz::navigate_to(&*doc, "/a/-"));
+      expect(!glz::seek([](auto&&) {}, *doc, "/a/-"));
+      expect(!glz::navigate_to(&*doc, "/a/99999999999999999999999"));
+      expect(!glz::seek([](auto&&) {}, *doc, "/a/99999999999999999999999"));
+   };
+
+   // RFC 6901 section 3: '~' is only valid as "~0" or "~1". A trailing '~' is an invalid pointer,
+   // not a literal '~' in the key, so it must fail in every segment, not only the last one.
+   "trailing tilde rejected by every op"_test = [] {
+      constexpr std::string_view doc = R"({"a~":{"b":1}})";
+
+      auto parsed = glz::read_json<glz::generic>(doc);
+      expect(parsed.has_value());
+      expect(!glz::navigate_to(&*parsed, "/a~"));
+      expect(!glz::navigate_to(&*parsed, "/a~/b"));
+      expect(!glz::seek([](auto&&) {}, *parsed, "/a~"));
+
+      expect(!glz::patch_json(doc, R"([{"op":"test","path":"/a~","value":{"b":1}}])").has_value());
+      expect(!glz::patch_json(doc, R"([{"op":"replace","path":"/a~/b","value":99}])").has_value());
+      expect(!glz::patch_json(doc, R"([{"op":"copy","from":"/a~","path":"/c"}])").has_value());
+      expect(!glz::patch_json(doc, R"([{"op":"add","path":"/a~/c","value":2}])").has_value());
+      expect(!glz::patch_json(doc, R"([{"op":"remove","path":"/a~/b"}])").has_value());
+
+      // The escaped form of the same key still works
+      auto replaced = glz::patch_json(doc, R"([{"op":"replace","path":"/a~0/b","value":99}])");
+      expect(replaced.has_value());
+      expect(*replaced == R"({"a~":{"b":99}})");
+   };
+
+   // RFC 6902: "-" is only meaningful as the target of "add"; every other op must fail on it
+   "end of array token accepted only by add"_test = [] {
+      constexpr std::string_view doc = R"(["foo","bar"])";
+
+      auto added = glz::patch_json(doc, R"([{"op":"add","path":"/-","value":"X"}])");
+      expect(added.has_value());
+      expect(*added == R"(["foo","bar","X"])");
+
+      expect(!glz::patch_json(doc, R"([{"op":"remove","path":"/-"}])").has_value());
+      expect(!glz::patch_json(doc, R"([{"op":"replace","path":"/-","value":"X"}])").has_value());
+      expect(!glz::patch_json(doc, R"([{"op":"test","path":"/-","value":"bar"}])").has_value());
+      expect(!glz::patch_json(doc, R"([{"op":"move","from":"/-","path":"/0"}])").has_value());
+      expect(!glz::patch_json(doc, R"([{"op":"copy","from":"/-","path":"/0"}])").has_value());
+   };
+
+   // RFC 6902 section 4.4: "from" must not be a PROPER prefix of "path". Moving a location onto
+   // itself is a no-op, not an error.
+   "move to the same location is a no-op"_test = [] {
+      auto same = glz::patch_json(R"({"foo":1})", R"([{"op":"move","from":"/foo","path":"/foo"}])");
+      expect(same.has_value());
+      expect(*same == R"({"foo":1})");
+
+      auto nested = glz::patch_json(R"({"a":{"b":1}})", R"([{"op":"move","from":"/a/b","path":"/a/b"}])");
+      expect(nested.has_value());
+      expect(*nested == R"({"a":{"b":1}})");
+
+      auto element = glz::patch_json(R"([1,2,3])", R"([{"op":"move","from":"/1","path":"/1"}])");
+      expect(element.has_value());
+      expect(*element == R"([1,2,3])");
+
+      // A location still cannot be moved into one of its own children
+      expect(!glz::patch_json(R"({"a":{"b":{"c":1}}})", R"([{"op":"move","from":"/a","path":"/a/b"}])").has_value());
+      expect(!glz::patch_json(R"({"a":{"b":{"c":1}}})", R"([{"op":"move","from":"/a","path":"/a/b/c"}])").has_value());
+      expect(!glz::patch_json(R"({"foo":1})", R"([{"op":"move","from":"","path":"/foo"}])").has_value());
+
+      // A sibling that merely shares a prefix is not a child
+      auto sibling = glz::patch_json(R"({"foo":1})", R"([{"op":"move","from":"/foo","path":"/foobar"}])");
+      expect(sibling.has_value());
+      expect(*sibling == R"({"foobar":1})");
+   };
+
+   // A "value" member that is present and null is a real value, distinct from an absent one
+   "null is a valid operation value"_test = [] {
+      auto added = glz::patch_json(R"({"foo":1})", R"([{"op":"add","path":"/bar","value":null}])");
+      expect(added.has_value());
+      expect(*added == R"({"foo":1,"bar":null})");
+
+      auto replaced = glz::patch_json(R"({"foo":"bar"})", R"([{"op":"replace","path":"/foo","value":null}])");
+      expect(replaced.has_value());
+      expect(*replaced == R"({"foo":null})");
+
+      auto in_array = glz::patch_json(R"([""])", R"([{"op":"replace","path":"/0","value":null}])");
+      expect(in_array.has_value());
+      expect(*in_array == R"([null])");
+
+      auto tested = glz::patch_json(R"({"foo":null})", R"([{"op":"test","path":"/foo","value":null}])");
+      expect(tested.has_value());
+
+      // Testing null against a non-null value still fails
+      expect(!glz::patch_json(R"({"foo":1})", R"([{"op":"test","path":"/foo","value":null}])").has_value());
+
+      // An absent value is still an error for the operations that require one
+      expect(!glz::patch_json(R"({"foo":1})", R"([{"op":"add","path":"/bar"}])").has_value());
+      expect(!glz::patch_json(R"({"foo":1})", R"([{"op":"replace","path":"/foo"}])").has_value());
+      expect(!glz::patch_json(R"({"foo":1})", R"([{"op":"test","path":"/foo"}])").has_value());
+
+      // Operations that take no value are unaffected
+      expect(glz::patch_json(R"({"foo":1})", R"([{"op":"remove","path":"/foo"}])").has_value());
+      expect(glz::patch_json(R"({"foo":1})", R"([{"op":"move","from":"/foo","path":"/bar"}])").has_value());
+      expect(glz::patch_json(R"({"foo":1})", R"([{"op":"copy","from":"/foo","path":"/bar"}])").has_value());
+   };
+
+   "operation value round-trips through the typed API"_test = [] {
+      // An absent value is skipped when writing; a null value is written as null
+      for (const auto src : {R"([{"op":"remove","path":"/a"}])", R"([{"op":"add","path":"/a","value":null}])",
+                             R"([{"op":"add","path":"/a","value":{"b":[1,2]}}])"}) {
+         auto ops = glz::read_json<glz::patch_document>(src);
+         expect(ops.has_value()) << src;
+         if (ops) {
+            auto out = glz::write_json(*ops);
+            expect(out.has_value() && *out == src) << src;
+         }
+      }
+
+      // A hand-built operation can express a null value, and std::nullopt still means absent
+      auto doc = glz::read_json<glz::generic>(R"({"a":1})");
+      expect(doc.has_value());
+      glz::patch_document with_null{{glz::patch_op_type::replace, "/a", glz::generic{}, std::nullopt}};
+      expect(!glz::patch(*doc, with_null));
+      expect(glz::write_json(*doc).value_or("") == R"({"a":null})");
+
+      glz::patch_document absent{{glz::patch_op_type::replace, "/a", std::nullopt, std::nullopt}};
+      expect(glz::patch(*doc, absent).ec == glz::error_code::missing_key);
+   };
+
+   // RFC 6902 section 4: every operation requires "op" and "path"
+   "op and path are required"_test = [] {
+      expect(!glz::patch_json(R"({})", R"([{"op":"add","value":"bar"}])").has_value());
+      expect(!glz::patch_json(R"({})", R"([{"path":"/a","value":"bar"}])").has_value());
+      expect(!glz::patch_json(R"({"a":1})", R"([{"op":"remove"}])").has_value());
+
+      // A path that is present but empty is still the whole document, which is legal
+      auto root = glz::patch_json(R"({"a":1})", R"([{"op":"add","path":"","value":{"b":2}}])");
+      expect(root.has_value());
+      expect(*root == R"({"b":2})");
+   };
+
+   // RFC 6902 section 4 / appendix A.11: members that are not defined for an operation are ignored
+   "unrecognized operation members are ignored"_test = [] {
+      auto tested = glz::patch_json(R"({"foo":1})", R"([{"op":"test","path":"/foo","value":1,"spurious":1}])");
+      expect(tested.has_value());
+      expect(*tested == R"({"foo":1})");
+
+      auto added = glz::patch_json(R"({"foo":"bar"})", R"([{"op":"add","path":"/baz","value":"qux","xyz":123}])");
+      expect(added.has_value());
+      expect(*added == R"({"foo":"bar","baz":"qux"})");
    };
 
    // ============================================================================
@@ -1190,6 +1390,62 @@ suite generic_u64_patch_tests = [] {
                                                       R"([{"op":"replace","path":"/a","value":18446744073709551615}])");
       expect(result.has_value());
       expect(*result == R"({"a":18446744073709551615})");
+   };
+};
+
+suite numeric_equality_across_alternatives = [] {
+   "test compares numbers by value in generic_i64"_test = [] {
+      const auto passes = [](const std::string_view doc, const std::string_view value) {
+         const std::string patch = R"([{"op":"test","path":"/a","value":)" + std::string{value} + "}]";
+         return glz::patch_json<glz::generic_i64>(std::string{doc}, patch).has_value();
+      };
+      expect(passes(R"({"a":1})", "1.0"));
+      expect(passes(R"({"a":1.0})", "1"));
+      expect(passes(R"({"a":-3})", "-3.0"));
+      expect(!passes(R"({"a":1})", "1.5"));
+      expect(!passes(R"({"a":1})", "2.0"));
+   };
+
+   "test compares numbers by value in generic_u64"_test = [] {
+      const auto passes = [](const std::string_view doc, const std::string_view value) {
+         const std::string patch = R"([{"op":"test","path":"/a","value":)" + std::string{value} + "}]";
+         return glz::patch_json<glz::generic_u64>(std::string{doc}, patch).has_value();
+      };
+      expect(passes(R"({"a":1})", "1.0"));
+      expect(passes(R"({"a":-1})", "-1.0"));
+      expect(!passes(R"({"a":-1})", "1.0"));
+   };
+
+   "an integer equals a double only when no rounding is involved"_test = [] {
+      const auto equal = [](const auto integer, const double number) {
+         glz::generic_u64 a{};
+         glz::generic_u64 b{};
+         a.data = integer;
+         b.data = number;
+         return glz::equal(a, b) && glz::equal(b, a);
+      };
+      // 2^53 + 1 rounds to 2^53 as a double
+      expect(!equal(int64_t{9007199254740993}, 9007199254740992.0));
+      expect(equal(int64_t{9007199254740992}, 9007199254740992.0));
+      // 2^63 and 2^64 are just outside the integer types, and rounding the limits up would hide it
+      expect(!equal((std::numeric_limits<int64_t>::max)(), 9223372036854775808.0));
+      expect(!equal((std::numeric_limits<uint64_t>::max)(), 18446744073709551616.0));
+      expect(equal((std::numeric_limits<int64_t>::min)(), -9223372036854775808.0));
+      expect(!equal(uint64_t{1}, std::numeric_limits<double>::quiet_NaN()));
+      expect(!equal(uint64_t{1}, std::numeric_limits<double>::infinity()));
+      expect(!equal(int64_t{-1}, -std::numeric_limits<double>::infinity()));
+   };
+
+   "a number never equals a value of another JSON type"_test = [] {
+      glz::generic_i64 number{};
+      number.data = int64_t{1};
+      glz::generic_i64 boolean{};
+      boolean.data = true;
+      glz::generic_i64 string{};
+      string.data = std::string{"1"};
+      expect(!glz::equal(number, boolean));
+      expect(!glz::equal(boolean, number));
+      expect(!glz::equal(number, string));
    };
 };
 

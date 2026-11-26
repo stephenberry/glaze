@@ -14,6 +14,7 @@
 #include "glaze/core/chrono.hpp"
 #include "glaze/core/common.hpp"
 #include "glaze/core/custom_meta.hpp"
+#include "glaze/core/filesystem_path.hpp"
 #include "glaze/core/opts.hpp"
 #include "glaze/core/read.hpp"
 #include "glaze/core/reflect.hpp"
@@ -103,7 +104,7 @@ namespace glz
                   if constexpr (glz::tuple_size_v<TupleType> == 2) {
                      std::decay_t<glz::tuple_element_t<1, TupleType>> input{};
                      parse<JSON>::op<Opts>(input, ctx, it, end);
-                     if (bool(ctx.error)) [[unlikely]]
+                     if (parse_failed(ctx.error)) [[unlikely]]
                         return;
                      // Convert `sv` key to the method's first parameter type when needed
                      using KeyParam = std::decay_t<glz::tuple_element_t<0, TupleType>>;
@@ -984,7 +985,16 @@ namespace glz
                   }
 
                   auto n = size_t(it - start);
-                  resize_unfilled(value, n + string_padding_bytes);
+
+                  // The padding lets the chunked copy below run up to the closing quote. Skip it when it
+                  // would be the only reason to allocate, as for a string that fits the small string
+                  // buffer but not with eight bytes to spare.
+                  bool pad = true;
+                  if constexpr (requires { value.capacity(); }) {
+                     const auto capacity = size_t(value.capacity());
+                     pad = capacity >= n + string_padding_bytes || capacity < n;
+                  }
+                  resize_unfilled(value, pad ? n + string_padding_bytes : n);
 
                   auto* p = value.data();
 
@@ -993,13 +1003,17 @@ namespace glz
                   // did not fill.
                   auto* const written_begin = p;
 
+                  // Without the padding, copy a chunk only while eight bytes remain before the quote.
+                  // Unescaping never puts the output ahead of the input, so no store lands past the end.
+                  const auto* const copy_end = pad ? it : it - (std::min)(n, size_t(7));
+
                   // Copy eight bytes at a time for as long as eight bytes are there to read, then
                   // finish the span below. The chunked form reads past the character it is looking
                   // at, so on an unpadded buffer it has to stop short of the end; splitting it this
                   // way keeps it for the body of every string rather than giving it up whenever the
                   // string happens to finish near the end of the buffer -- which, for a document
                   // that is itself one string, is every string.
-                  while (start < it && start <= chunk_limit) {
+                  while (start < copy_end && start <= chunk_limit) {
                      std::memcpy(p, start, 8);
                      uint64_t swar;
                      std::memcpy(&swar, p, 8);
@@ -1305,7 +1319,16 @@ namespace glz
                   }
 
                   auto n = size_t(it - start);
-                  resize_unfilled(value, n + string_padding_bytes);
+
+                  // The padding lets the chunked copy below run up to the closing quote. Skip it when it
+                  // would be the only reason to allocate, as for a string that fits the small string
+                  // buffer but not with eight bytes to spare.
+                  bool pad = true;
+                  if constexpr (requires { value.capacity(); }) {
+                     const auto capacity = size_t(value.capacity());
+                     pad = capacity >= n + string_padding_bytes || capacity < n;
+                  }
+                  resize_unfilled(value, pad ? n + string_padding_bytes : n);
 
                   auto* p = reinterpret_cast<char*>(value.data());
 
@@ -1314,13 +1337,17 @@ namespace glz
                   // did not fill.
                   auto* const written_begin = p;
 
+                  // Without the padding, copy a chunk only while eight bytes remain before the quote.
+                  // Unescaping never puts the output ahead of the input, so no store lands past the end.
+                  const auto* const copy_end = pad ? it : it - (std::min)(n, size_t(7));
+
                   // Copy eight bytes at a time for as long as eight bytes are there to read, then
                   // finish the span below. The chunked form reads past the character it is looking
                   // at, so on an unpadded buffer it has to stop short of the end; splitting it this
                   // way keeps it for the body of every string rather than giving it up whenever the
                   // string happens to finish near the end of the buffer -- which, for a document
                   // that is itself one string, is every string.
-                  while (start < it && start <= chunk_limit) {
+                  while (start < copy_end && start <= chunk_limit) {
                      std::memcpy(p, start, 8);
                      uint64_t swar;
                      std::memcpy(&swar, p, 8);
@@ -2575,8 +2602,10 @@ namespace glz
             const auto index = decode_hash_with_size<JSON, T, HashInfo, HashInfo.type>::op(
                ctx.scratch.data(), ctx.scratch.data() + ctx.scratch.size(), ctx.scratch.size());
 
+            // The hash narrows a string to one candidate flag but does not reject strings that are not
+            // flag names, so the name itself has to match.
             constexpr auto N = reflect<T>::size;
-            if (index < N) [[likely]] {
+            if (index < N && std::string_view{ctx.scratch} == reflect<T>::keys[index]) [[likely]] {
                visit<N>([&]<size_t I>() { get_member(value, get<I>(reflect<T>::values)) = true; }, index);
             }
             else [[unlikely]] {
@@ -2631,13 +2660,20 @@ namespace glz
             return;
          }
 
-         const auto current_file = ctx.current_file;
-         ctx.current_file = string_file_path;
+         auto outer_file = std::exchange(ctx.current_file, string_file_path);
+         const bool outer_padded = ctx.padded_input;
 
          // We need to allocate a new buffer here because we could call another includer that uses the buffer
          std::string nested_buffer = buffer;
-         static constexpr auto NestedOpts = opt_true<Opts, &opts::null_terminated>;
+         // is_padded is the caller's promise about their own buffer; this one was sized to the file.
+         static constexpr auto NestedOpts = opt_true<is_padded_off<Opts>(), &opts::null_terminated>;
+         // The included file fills in part of the object we belong to, so its keys count toward
+         // that object's missing key check rather than being required all over again here.
+         const include_key_scope include_keys{ctx, &include_key_tag<std::remove_cvref_t<decltype(value.value)>>};
          const auto ecode = glz::read<NestedOpts>(value.value, nested_buffer, ctx);
+         // The nested read set these for the included file; the parse resumes over the caller's.
+         ctx.current_file = std::move(outer_file);
+         ctx.padded_input = outer_padded;
          if (bool(ctx.error)) [[unlikely]] {
             ctx.error = error_code::includer_error;
             auto& error_msg = error_buffer();
@@ -2645,8 +2681,6 @@ namespace glz
             ctx.custom_error_message = error_msg;
             return;
          }
-
-         ctx.current_file = current_file;
       }
    };
 
@@ -2872,6 +2906,41 @@ namespace glz
                }
             }();
 
+            // A file include merges an external document into this object, so with
+            // error_on_missing_keys the keys have to be counted across both documents (see
+            // context::key_bits). While this object parses, its bits are published for its
+            // includer members to hand down; and if this parse is itself an included document,
+            // it claims the bits of the object that included us and merges into them at the
+            // closing brace instead of running a check of its own.
+            static constexpr bool tracks_include_keys = [] {
+               // Nested so that reflecting over the members is only asked for when it can matter
+               if constexpr ((glaze_object_t<T> || reflectable<T>) && Opts.error_on_missing_keys) {
+                  return has_includer_member<T>;
+               }
+               else {
+                  return false;
+               }
+            }();
+            [[maybe_unused]] bit_array<num_members>* include_bits{};
+            if constexpr (tracks_include_keys) {
+               if (ctx.include_key_type == &include_key_tag<T>) {
+                  include_bits = static_cast<bit_array<num_members>*>(ctx.include_key_bits);
+                  ctx.include_key_bits = nullptr;
+                  ctx.include_key_type = nullptr;
+               }
+            }
+            [[maybe_unused]] const std::conditional_t<tracks_include_keys,
+                                                      key_bits_scope<std::remove_reference_t<decltype(ctx)>>,
+                                                      inert_key_bits_scope> published_bits{
+               ctx, [&]() -> void* {
+                  if constexpr (tracks_include_keys) {
+                     return &fields;
+                  }
+                  else {
+                     return nullptr;
+                  }
+               }()};
+
             size_t read_count{}; // for partial_read
 
             bool first = true;
@@ -2915,8 +2984,19 @@ namespace glz
                if (*it == '}') {
                   --ctx.depth;
                   if constexpr ((glaze_object_t<T> || reflectable<T>) && Opts.error_on_missing_keys) {
+                     const bool defer_to_includer = [&] {
+                        if constexpr (tracks_include_keys) {
+                           if (include_bits) {
+                              // An included document is a fragment: hand the keys it supplied to
+                              // the object that included it, which checks the union of both.
+                              *include_bits |= fields;
+                              return true;
+                           }
+                        }
+                        return false;
+                     }();
                      constexpr auto req_fields = required_fields<T, Opts>();
-                     if ((req_fields & fields) != req_fields) {
+                     if (not defer_to_includer && (req_fields & fields) != req_fields) {
                         for (size_t i = 0; i < num_members; ++i) {
                            if (not fields[i] && req_fields[i]) {
                               ctx.custom_error_message = reflect<T>::keys[i];
@@ -3793,6 +3873,18 @@ namespace glz
       template <auto Options>
       static void read_deduced(auto&& value, is_context auto&& ctx, auto&& it, auto end)
       {
+         // In the reader rather than on the variant, because the choice only exists here: writing such
+         // a variant is unambiguous, and code that only writes one has nothing to fix.
+         using indistinguishable = variant_indistinguishable_alternatives<T>;
+         static_assert(not indistinguishable::found ||
+                          detail::variant_alternatives_are_indistinguishable<T, typename indistinguishable::first,
+                                                                             typename indistinguishable::second>::value,
+                       "Two alternatives of this variant have the same keys holding the same types and no "
+                       "discriminator, so reading JSON into it cannot tell them apart: every read would silently "
+                       "produce the first, whichever was written. Declare `tag` and `ids` in glz::meta for the "
+                       "variant, or remove one of the two. They are the last two template arguments of "
+                       "variant_alternatives_are_indistinguishable in the instantiation backtrace.");
+
          constexpr auto Opts = ws_handled_off<Options>();
          if constexpr (variant_is_auto_deducible<T>()) {
             if constexpr (not check_ws_handled(Options)) {
@@ -4864,16 +4956,12 @@ namespace glz
       {
          ctx.scratch.clear();
          parse<JSON>::op<Opts>(ctx.scratch, ctx, it, end);
-         if constexpr (Opts.null_terminated) {
-            if (bool(ctx.error)) [[unlikely]]
-               return;
+         if (parse_failed(ctx.error)) [[unlikely]] {
+            return;
          }
-         else {
-            if (size_t(ctx.error) > size_t(error_code::end_reached)) [[unlikely]] {
-               return;
-            }
+         if (!detail::assign_utf8_path(value, ctx.scratch)) [[unlikely]] {
+            ctx.error = error_code::invalid_utf8;
          }
-         value = ctx.scratch;
       }
    };
 
@@ -4884,13 +4972,14 @@ namespace glz
    // Duration: parsed generically (from the bare rep count) by the
    // from<uint32_t Format, is_duration T> specialization in core/chrono.hpp.
 
-   // system_clock::time_point: parse from ISO 8601 string.
+   // system_clock / utc_clock time_point: parse from ISO 8601 string (utc_clock also accepts a
+   // leap second, :60).
    // Time points whose Duration period is exactly `days` (e.g. std::chrono::sys_days)
    // also accept the bare "YYYY-MM-DD" date form; full ISO 8601 datetimes are still
    // accepted in that case and floored to days precision. Coarser periods (weeks,
    // months, years) intentionally fall through to the full ISO 8601 parser so that
    // user-supplied dates are not silently snapped to a multi-day boundary.
-   template <is_system_time_point T>
+   template <is_calendar_time_point T>
       requires(not custom_read<T>)
    struct from<JSON, T>
    {
@@ -5052,7 +5141,8 @@ namespace glz
          return {0, ec};
       }
 
-      return read<set_json<Opts>()>(value, buffer, ctx);
+      // The buffer was sized to the file, so the caller's is_padded promise does not cover it.
+      return read<is_padded_off<set_json<Opts>()>()>(value, buffer, ctx);
    }
 
    template <auto Opts = opts{}, read_supported<JSON> T, is_buffer Buffer>
@@ -5067,7 +5157,8 @@ namespace glz
          return {0, ec};
       }
 
-      constexpr auto Options = opt_true<set_json<Opts>(), &opts::comments>;
+      // The buffer was sized to the file, so the caller's is_padded promise does not cover it.
+      constexpr auto Options = opt_true<is_padded_off<set_json<Opts>()>(), &opts::comments>;
       return read<Options>(value, buffer, ctx);
    }
 }

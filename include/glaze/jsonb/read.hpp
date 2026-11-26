@@ -12,6 +12,7 @@
 #include <utility>
 
 #include "glaze/core/chrono.hpp"
+#include "glaze/core/constraint.hpp"
 #include "glaze/core/opts.hpp"
 #include "glaze/core/read.hpp"
 #include "glaze/core/reflect.hpp"
@@ -590,7 +591,12 @@ namespace glz
                      static constexpr auto Length = TargetKey.size();
                      if ((Length == key_len) && compare<Length>(TargetKey.data(), key_data)) [[likely]] {
                         matched = true;
-                        if constexpr (reflectable<DT>) {
+                        // An `else` branch rather than an early return, so a skipped field's reader is
+                        // never instantiated -- see `skipped_by_meta`.
+                        if constexpr (skipped_by_meta<DT, I, operation::parse>) {
+                           skip_value<JSONB>::op<Opts>(ctx, it, stop);
+                        }
+                        else if constexpr (reflectable<DT>) {
                            parse<JSONB>::op<Opts>(get_member(value, get<I>(to_tie(value))), ctx, it, stop);
                         }
                         else {
@@ -697,8 +703,11 @@ namespace glz
                   }
                }
                ctx.error = error_code::missing_key;
+               return;
             }
          }
+
+         check_self_constraint<JSONB, Opts>(value, ctx);
       }
    }
 
@@ -1047,6 +1056,10 @@ namespace glz
       template <is_variant T>
       consteval bool variant_jsonb_auto_deducible()
       {
+         // Adjacent tagging names the alternative outright, so nothing has to be deduced.
+         if (not content_v<T>.empty()) {
+            return true;
+         }
          constexpr auto N = std::variant_size_v<T>;
          size_t bools = 0, ints = 0, floats = 0, strings = 0, arrays = 0, objects = 0, nulls = 0;
          [&]<size_t... I>(std::index_sequence<I...>) {
@@ -1079,15 +1092,117 @@ namespace glz
       template <auto Opts>
       static void op(auto& value, is_context auto& ctx, auto& it, auto end)
       {
-         // Inside op() rather than at class scope: read_supported is `requires { from<Format, T>{}; }`,
-         // so a class-scope assert turns that feature probe into a hard error instead of `false`.
-         static_assert(content_v<T>.empty(),
-                       "Adjacent variant tagging (glz::meta `content`) is implemented for JSON and "
-                       "BEVE but not yet for JSONB. Reading this variant as JSONB would silently "
-                       "expect the internally tagged shape, so it is rejected here instead.");
          depth_guard g{ctx};
          if (!g) return;
 
+         // Only variants that declare `content` reach for variant_tagging, which also rejects internal
+         // tagging of non-object alternatives. JSONB has written those bare, and still reads them.
+         if constexpr (not content_v<T>.empty()) {
+            static_assert(adjacently_tagged_v<T>);
+            read_adjacent<Opts>(value, ctx, it, end);
+         }
+         else {
+            read_deduced<Opts>(value, ctx, it, end);
+         }
+      }
+
+      // Adjacent tagging: {tag: id, content: value}, with the keys in either order. Nothing is deduced,
+      // so this works for alternatives of any shape, including several that share one. Unlike JSON a
+      // JSONB object is length-prefixed and its values can be stepped over, so one walk finds both
+      // keys, and a rejected object leaves `value` as it was.
+      template <auto Opts>
+      static void read_adjacent(auto& value, is_context auto& ctx, auto& it, auto end)
+      {
+         uint8_t obj_tc{};
+         uint64_t obj_sz{};
+         if (!jsonb::read_header(ctx, it, end, obj_tc, obj_sz)) return;
+         if (obj_tc != jsonb::type::object) [[unlikely]] {
+            ctx.error = error_code::syntax_error;
+            return;
+         }
+         if (static_cast<uint64_t>(end - it) < obj_sz) [[unlikely]] {
+            ctx.error = error_code::unexpected_end;
+            return;
+         }
+         const auto stop = it + obj_sz;
+
+         using id_type = std::decay_t<decltype(ids_v<T>[0])>;
+         std::string scratch;
+         size_t index = std::variant_size_v<T>;
+         bool tag_seen = false;
+         auto content_it = it;
+         bool content_seen = false;
+
+         while (it < stop) {
+            sv key{};
+            if (!jsonb_detail::read_string_key(ctx, it, stop, scratch, key)) return;
+            if (it >= stop) [[unlikely]] {
+               ctx.error = error_code::syntax_error;
+               return;
+            }
+
+            if (!tag_seen && key == tag_v<T>) {
+               size_t id_index{};
+               if constexpr (std::integral<id_type>) {
+                  id_type id{};
+                  parse<JSONB>::op<Opts>(id, ctx, it, stop);
+                  if (bool(ctx.error)) [[unlikely]]
+                     return;
+                  id_index = variant_id_to_index<T>::op(id);
+               }
+               else {
+                  sv id{};
+                  if (!jsonb_detail::read_string_key(ctx, it, stop, scratch, id)) return;
+                  id_index = variant_id_to_index<T>::op(id.data(), id.data() + id.size(), id.size());
+               }
+               index = variant_index_from_id<T>(id_index);
+               tag_seen = true;
+               continue;
+            }
+            if (!content_seen && key == content_v<T>) {
+               content_it = it;
+               content_seen = true;
+            }
+            else if constexpr (Opts.error_on_unknown_keys) {
+               // Only the two declared keys belong in an adjacently tagged object, and each only
+               // once. Anything else is the caller reading data this variant did not describe.
+               ctx.error = error_code::unknown_key;
+               return;
+            }
+            skip_value<JSONB>::op<Opts>(ctx, it, stop);
+            if (bool(ctx.error)) [[unlikely]]
+               return;
+         }
+
+         if (!tag_seen) [[unlikely]] {
+            ctx.error = error_code::missing_key;
+            ctx.custom_error_message = variant_ids_string_v<T>;
+            return;
+         }
+         if (index >= std::variant_size_v<T>) [[unlikely]] {
+            ctx.error = error_code::no_matching_variant_type;
+            ctx.custom_error_message = variant_ids_string_v<T>;
+            return;
+         }
+         if (!content_seen) [[unlikely]] {
+            ctx.error = error_code::missing_key;
+            ctx.custom_error_message = content_v<T>;
+            return;
+         }
+
+         if (value.index() != index) {
+            emplace_runtime_variant(value, index);
+         }
+         it = content_it;
+         std::visit([&](auto& v) { parse<JSONB>::op<Opts>(v, ctx, it, stop); }, value);
+         if (bool(ctx.error)) [[unlikely]]
+            return;
+         it = stop; // the content entry need not be the last one
+      }
+
+      template <auto Opts>
+      static void read_deduced(auto& value, is_context auto& ctx, auto& it, auto end)
+      {
          if (it >= end) [[unlikely]] {
             ctx.error = error_code::unexpected_end;
             return;
@@ -1359,24 +1474,38 @@ namespace glz
          }
          case jsonb::type::int_:
          case jsonb::type::int5: {
-            // Prefer the widest integer alternative available in this Mode, fall back to double.
+            // Which alternative an integer lands in follows the JSON reader, where the alternatives
+            // are tried in declaration order: the widest exact one for the mode, falling back to the
+            // next when the magnitude or the sign does not fit. JSONB stores an integer as its ASCII
+            // text, so a mismatch shows up as a parse failure and the element is re-read from the
+            // start rather than partially consumed.
+            const auto start = it;
+            const auto try_alternative = [&]<class V>(std::type_identity<V>) {
+               ctx.error = error_code::none;
+               ctx.custom_error_message = {}; // else the rejected attempt's message outlives its error
+               it = start;
+               V v{};
+               from<JSONB, V>::template op<Opts>(v, ctx, it, end);
+               if (bool(ctx.error)) return false;
+               value.data = v;
+               return true;
+            };
+
             if constexpr (Mode == num_mode::u64) {
-               uint64_t u{};
-               from<JSONB, uint64_t>::template op<Opts>(u, ctx, it, end);
-               if (bool(ctx.error)) return;
-               value.data = u;
+               // A negative value has no unsigned alternative, and a magnitude past uint64_t has no
+               // integer alternative at all, so the search runs to the end of the list either way.
+               if (!try_alternative(std::type_identity<uint64_t>{}) &&
+                   !try_alternative(std::type_identity<int64_t>{})) {
+                  try_alternative(std::type_identity<double>{});
+               }
             }
             else if constexpr (Mode == num_mode::i64) {
-               int64_t i{};
-               from<JSONB, int64_t>::template op<Opts>(i, ctx, it, end);
-               if (bool(ctx.error)) return;
-               value.data = i;
+               if (!try_alternative(std::type_identity<int64_t>{})) {
+                  try_alternative(std::type_identity<double>{}); // past int64_t's range
+               }
             }
             else {
-               double d{};
-               from<JSONB, double>::template op<Opts>(d, ctx, it, end);
-               if (bool(ctx.error)) return;
-               value.data = d;
+               try_alternative(std::type_identity<double>{});
             }
             return;
          }
@@ -1466,7 +1595,8 @@ namespace glz
       if (bool(file_error)) [[unlikely]] {
          return error_ctx{0, file_error};
       }
-      auto ec = read<set_jsonb<Opts>()>(value, buffer, ctx);
+      // The buffer was sized to the file, so the caller's is_padded promise does not cover it.
+      auto ec = read<is_padded_off<set_jsonb<Opts>()>()>(value, buffer, ctx);
       return jsonb_detail::enforce_exact_fill(buffer, ec);
    }
 }

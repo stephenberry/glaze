@@ -322,6 +322,26 @@ suite etf_tests = [] {
       expect(!glz::eetf_to_json(buffer, json));
       expect(json == R"([1.2,3.4,5.6])") << json;
    };
+
+   "truncated string term into a byte sequence"_test = [] {
+      // ERL_STRING_EXT "abc" with the buffer ending one byte early, inside a larger allocation the
+      // way a frame cut out of a receive buffer would be. decode_token fails on it, and its scratch
+      // string is then one byte longer than the sequence it would be copied into.
+      const std::array<char, 7> storage{char(glz::eetf_magic_version), char(ERL_STRING_EXT), 0, 3, 'a', 'b', 'c'};
+      const std::string_view truncated{storage.data(), storage.size() - 1};
+
+      // Under AddressSanitizer the overrun shows as a heap-buffer-overflow WRITE.
+      std::vector<std::uint8_t> bytes{};
+      expect(glz::read_term(bytes, truncated).ec == glz::error_code::unexpected_end);
+
+      struct
+      {
+         std::array<std::uint8_t, 3> bytes{};
+         std::uint8_t next = 0x55;
+      } fixed{};
+      expect(glz::read_term(fixed.bytes, truncated).ec == glz::error_code::unexpected_end);
+      expect(fixed.next == 0x55) << "the read wrote past the end of the array";
+   };
 };
 
 struct eetf_escape_opts : glz::eetf::eetf_opts
@@ -330,6 +350,28 @@ struct eetf_escape_opts : glz::eetf::eetf_opts
 };
 
 suite eetf_to_json_tests = [] {
+   "eetf_to_json binds at the same level as the readers"_test = [] {
+      // Only containers take a level, so a scalar fits inside the deepest container the limit allows.
+      constexpr auto limit = glz::max_recursive_depth_limit;
+      const auto build = [](size_t levels, std::string_view innermost) {
+         std::string b{char(131)}; // format version
+         for (size_t i = 0; i < levels; ++i) {
+            b += std::string_view{"l\0\0\0\1", 5}; // LIST_EXT of one element
+         }
+         b += innermost;
+         b.append(levels, 'j'); // each list's NIL_EXT tail
+         return b;
+      };
+      const std::string one{'a', char(1)}; // SMALL_INTEGER_EXT
+      const std::string empty{'j'}; // NIL_EXT, written as []
+
+      std::string json{};
+      expect(not glz::eetf_to_json(build(limit, one), json));
+      expect(json == std::string(limit, '[') + "1" + std::string(limit, ']'));
+      expect(not glz::eetf_to_json(build(limit - 1, empty), json));
+      expect(glz::eetf_to_json(build(limit, empty), json) == glz::error_code::exceeded_max_recursive_depth);
+   };
+
    "eetf_to_json true"_test = [] {
       bool b = true;
       std::string buffer{};

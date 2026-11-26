@@ -19,9 +19,17 @@
 #endif
 #endif
 
-#if __cpp_exceptions
-#include <stdexcept>
+#if !__cpp_exceptions
+#include <cstdlib>
 #endif
+
+#include <cstddef>
+#include <map>
+#include <stdexcept>
+#include <string>
+#include <string_view>
+#include <variant>
+#include <vector>
 
 namespace glz
 {
@@ -29,17 +37,26 @@ namespace glz
    {
       GLZ_THROW_OR_ABORT(std::runtime_error(msg));
    }
-}
 
-#include <cstddef>
-#include <map>
-#include <variant>
-#include <vector>
+   // Thrown when a glz::generic holds a different type than the one requested.
+   // Derives from std::bad_variant_access so existing handlers for std::get failures still catch it.
+   struct bad_generic_access : std::bad_variant_access
+   {
+      explicit bad_generic_access(const std::string& msg) : message(msg) {}
+
+      const char* what() const noexcept override { return message.what(); }
+
+     private:
+      std::runtime_error message; // nothrow-copyable message storage
+   };
+}
 
 #include "glaze/containers/ordered_small_map.hpp"
 #include "glaze/core/context.hpp"
 #include "glaze/forward.hpp"
 #include "glaze/util/expected.hpp"
+#include "glaze/util/inline.hpp"
+#include "glaze/util/type_traits.hpp"
 
 #if defined(_MSC_VER) && !defined(__clang__)
 // Turn off broken MSVC warning for "declaration of 'v' hides previous local declaration"
@@ -139,13 +156,19 @@ namespace glz
       template <class T>
       [[nodiscard]] T& get()
       {
-         return std::get<T>(data);
+         if (auto* v = std::get_if<T>(&data)) [[likely]] {
+            return *v;
+         }
+         type_mismatch<T>("get");
       }
 
       template <class T>
       [[nodiscard]] const T& get() const
       {
-         return std::get<T>(data);
+         if (auto* v = std::get_if<T>(&data)) [[likely]] {
+            return *v;
+         }
+         type_mismatch<T>("get");
       }
 
       template <class T>
@@ -202,27 +225,45 @@ namespace glz
          return std::holds_alternative<T>(data);
       }
 
-      generic_json& operator[](std::integral auto&& index) { return std::get<array_t>(data)[index]; }
+      generic_json& operator[](std::integral auto index)
+      {
+         if (auto* array = std::get_if<array_t>(&data)) [[likely]] {
+            return (*array)[index];
+         }
+         type_mismatch<array_t>("index");
+      }
 
-      const generic_json& operator[](std::integral auto&& index) const { return std::get<array_t>(data)[index]; }
+      const generic_json& operator[](std::integral auto index) const
+      {
+         if (auto* array = std::get_if<array_t>(&data)) [[likely]] {
+            return (*array)[index];
+         }
+         type_mismatch<array_t>("index");
+      }
 
       generic_json& operator[](std::convertible_to<std::string_view> auto&& key)
       {
          if (holds<null_t>()) data = object_t{};
-         auto& object = std::get<object_t>(data);
-         auto iter = object.find(key);
-         if (iter == object.end()) {
-            iter = object.insert(std::make_pair(std::string(key), generic_json{})).first;
+         auto* object = std::get_if<object_t>(&data);
+         if (!object) [[unlikely]] {
+            key_type_mismatch(key);
+         }
+         auto iter = object->find(key);
+         if (iter == object->end()) {
+            iter = object->insert(std::make_pair(std::string(std::forward<decltype(key)>(key)), generic_json{})).first;
          }
          return iter->second;
       }
 
       const generic_json& operator[](std::convertible_to<std::string_view> auto&& key) const
       {
-         auto& object = std::get<object_t>(data);
-         auto iter = object.find(key);
-         if (iter == object.end()) {
-            glaze_error("Key not found.");
+         auto* object = std::get_if<object_t>(&data);
+         if (!object) [[unlikely]] {
+            key_type_mismatch(key);
+         }
+         auto iter = object->find(key);
+         if (iter == object->end()) [[unlikely]] {
+            key_not_found(key);
          }
          return iter->second;
       }
@@ -270,9 +311,23 @@ namespace glz
          return *this;
       }
 
+      // Plain assignment is safe here: std::variant copies a string into a temporary before replacing a different
+      // alternative, and a string held by `data` cannot contain `value`. It also reuses the existing buffer.
       generic_json& operator=(const std::string& value)
       {
          data = value;
+         return *this;
+      }
+
+      // A moved string, array, or object, or a copied array or object, may live inside this value, as in
+      // `json = std::move(json["child"].get_array())`. Replacing `data` can destroy it before it is read, so these
+      // overloads build the new value first and then move it into `data`. They are noexcept when that move is, which
+      // depends on the map type for objects (std::map can allocate when moved on MSVC).
+
+      generic_json& operator=(std::string&& value) noexcept(std::is_nothrow_move_constructible_v<std::string> &&
+                                                            std::is_nothrow_assignable_v<val_t&, std::string>)
+      {
+         data = std::string(std::move(value));
          return *this;
       }
 
@@ -296,13 +351,27 @@ namespace glz
 
       generic_json& operator=(const array_t& value)
       {
-         data = value;
+         data = array_t(value);
+         return *this;
+      }
+
+      generic_json& operator=(array_t&& value) noexcept(std::is_nothrow_move_constructible_v<array_t> &&
+                                                        std::is_nothrow_assignable_v<val_t&, array_t>)
+      {
+         data = array_t(std::move(value));
          return *this;
       }
 
       generic_json& operator=(const object_t& value)
       {
-         data = value;
+         data = object_t(value);
+         return *this;
+      }
+
+      generic_json& operator=(object_t&& value) noexcept(std::is_nothrow_move_constructible_v<object_t> &&
+                                                         std::is_nothrow_assignable_v<val_t&, object_t>)
+      {
+         data = object_t(std::move(value));
          return *this;
       }
 
@@ -310,7 +379,11 @@ namespace glz
          requires(assignable_generic_type<generic_json<Mode, MapType>, T>)
       generic_json& operator=(T&& value);
 
-      [[nodiscard]] generic_json& at(std::convertible_to<std::string_view> auto&& key) { return operator[](key); }
+      [[nodiscard]] generic_json& at(std::convertible_to<std::string_view> auto&& key)
+      {
+         return const_cast<generic_json&>(
+            static_cast<const generic_json&>(*this).operator[](std::forward<decltype(key)>(key)));
+      }
 
       [[nodiscard]] const generic_json& at(std::convertible_to<std::string_view> auto&& key) const
       {
@@ -337,9 +410,23 @@ namespace glz
 
       generic_json() = default;
       generic_json(const generic_json& other) : data(other.data) {}
-      generic_json& operator=(const generic_json&) = default;
       generic_json(generic_json&& other) noexcept : data(std::move(other.data)) {}
-      generic_json& operator=(generic_json&&) = default;
+
+      // `other` may live inside this value, as in `json = json[0]` or `json = std::move(json["child"])`, so its
+      // value is taken out before `data` is replaced.
+      generic_json& operator=(const generic_json& other)
+      {
+         val_t value = other.data;
+         data = std::move(value);
+         return *this;
+      }
+
+      generic_json& operator=(generic_json&& other) noexcept(std::is_nothrow_move_assignable_v<val_t>)
+      {
+         val_t value = std::move(other.data);
+         data = std::move(value);
+         return *this;
+      }
 
       template <class T>
          requires std::convertible_to<T, val_t> && (!std::derived_from<std::decay_t<T>, generic_json>)
@@ -544,6 +631,70 @@ namespace glz
          else {
             return 0;
          }
+      }
+
+     private:
+      template <class T>
+      static constexpr std::string_view alternative_name() noexcept
+      {
+         if constexpr (std::same_as<T, null_t>) {
+            return "null";
+         }
+         else if constexpr (std::same_as<T, bool>) {
+            return "bool";
+         }
+         else if constexpr (std::same_as<T, double>) {
+            return "double";
+         }
+         else if constexpr (std::same_as<T, int64_t>) {
+            return "int64_t";
+         }
+         else if constexpr (std::same_as<T, uint64_t>) {
+            return "uint64_t";
+         }
+         else if constexpr (std::same_as<T, std::string>) {
+            return "string";
+         }
+         else if constexpr (std::same_as<T, array_t>) {
+            return "array";
+         }
+         else if constexpr (std::same_as<T, object_t>) {
+            return "object";
+         }
+         else {
+            static_assert(false_v<T>, "not an alternative of glz::generic");
+         }
+      }
+
+      std::string_view held_type_name() const noexcept
+      {
+         if (data.valueless_by_exception()) [[unlikely]] {
+            return "valueless";
+         }
+         return std::visit([](const auto& v) { return alternative_name<std::decay_t<decltype(v)>>(); }, data);
+      }
+
+      template <class Expected>
+      [[noreturn]] GLZ_NO_INLINE void type_mismatch(std::string_view operation) const
+      {
+         std::string msg{"glz::generic "};
+         msg.append(operation).append(": expected ").append(alternative_name<Expected>());
+         msg.append(", but holds ").append(held_type_name());
+         GLZ_THROW_OR_ABORT(bad_generic_access(msg));
+      }
+
+      [[noreturn]] GLZ_NO_INLINE void key_type_mismatch(std::string_view key) const
+      {
+         std::string msg{"glz::generic key \""};
+         msg.append(key).append("\": expected object, but holds ").append(held_type_name());
+         GLZ_THROW_OR_ABORT(bad_generic_access(msg));
+      }
+
+      [[noreturn]] GLZ_NO_INLINE static void key_not_found(std::string_view key)
+      {
+         std::string msg{"glz::generic key not found: \""};
+         msg.append(key).push_back('"');
+         GLZ_THROW_OR_ABORT(std::runtime_error(msg));
       }
    };
 

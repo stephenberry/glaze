@@ -6,8 +6,13 @@
 // RFC 6902 JSON Patch implementation
 // https://datatracker.ietf.org/doc/html/rfc6902
 
-#include <charconv>
+#include <cmath>
+#include <concepts>
+#include <cstdint>
+#include <limits>
 #include <optional>
+#include <utility>
+#include <variant>
 
 #include "glaze/json/generic.hpp"
 
@@ -87,6 +92,28 @@ struct glz::meta<glz::patch_op_type>
    static constexpr auto value = enumerate(add, remove, replace, move, copy, test);
 };
 
+// "value" is read through a custom setter so that a member which is present and JSON null is kept
+// distinct from a member that is absent: GenericType represents null itself, so reading into it
+// always engages the optional, while an absent member never calls the setter and stays nullopt.
+// Reading straight into std::optional<GenericType> would collapse both cases to nullopt and make
+// {"op":"add","path":"/a","value":null} indistinguishable from a malformed operation missing its
+// value. The getter hands back the optional so an absent value is still skipped when writing.
+template <class GenericType>
+struct glz::meta<glz::patch_op_t<GenericType>>
+{
+   using T = glz::patch_op_t<GenericType>;
+
+   static constexpr auto read_value = [](T& op, GenericType input) { op.value = std::move(input); };
+   static constexpr auto write_value = [](const T& op) -> const std::optional<GenericType>& { return op.value; };
+
+   static constexpr auto value =
+      glz::object("op", &T::op, "path", &T::path, "value", glz::custom<read_value, write_value>, "from", &T::from);
+
+   // RFC 6902 section 4: every operation carries "op" and "path". "value" and "from" are required
+   // only for particular operations, which apply_operation checks, so they are not required here.
+   static constexpr bool requires_key(const std::string_view key, const bool) { return key == "op" || key == "path"; }
+};
+
 namespace glz
 {
    // ============================================================================
@@ -139,13 +166,61 @@ namespace glz
       return result;
    }
 
+   namespace detail
+   {
+      template <class T>
+      concept generic_number = std::same_as<T, double> || std::same_as<T, int64_t> || std::same_as<T, uint64_t>;
+
+      // Exact: the integer is never rounded to a double, so 2^53 + 1 does not equal 2^53.
+      template <std::integral I>
+      [[nodiscard]] inline bool integer_equals_double(const I integer, const double number) noexcept
+      {
+         // The limits below are exact powers of two, and max rounds up to the first value past the type.
+         constexpr auto lower = static_cast<double>((std::numeric_limits<I>::min)());
+         constexpr auto upper = static_cast<double>((std::numeric_limits<I>::max)());
+         if (!(number >= lower && number < upper) || std::trunc(number) != number) {
+            return false;
+         }
+         return static_cast<I>(number) == integer;
+      }
+
+      // Generic numbers are held as whichever alternative their text selected, so 1 and 1.0 are different
+      // alternatives of the same value.
+      template <generic_number A, generic_number B>
+      [[nodiscard]] inline bool numbers_equal(const A a, const B b) noexcept
+      {
+         if constexpr (std::same_as<A, B>) {
+            return a == b;
+         }
+         else if constexpr (std::same_as<A, double>) {
+            return integer_equals_double(b, a);
+         }
+         else if constexpr (std::same_as<B, double>) {
+            return integer_equals_double(a, b);
+         }
+         else {
+            return std::cmp_equal(a, b);
+         }
+      }
+   }
+
    // Deep equality comparison for generic values
    template <class GenericType>
       requires is_generic_json<GenericType>
    [[nodiscard]] bool equal(const GenericType& a, const GenericType& b) noexcept
    {
       if (a.data.index() != b.data.index()) {
-         return false;
+         // RFC 6902 section 4.6: numbers are equal when their values are numerically equal
+         return std::visit(
+            []<class A, class B>(const A& val_a, const B& val_b) -> bool {
+               if constexpr (detail::generic_number<A> && detail::generic_number<B>) {
+                  return detail::numbers_equal(val_a, val_b);
+               }
+               else {
+                  return false;
+               }
+            },
+            a.data, b.data);
       }
 
       // After index check, we know both variants hold the same type
@@ -205,26 +280,6 @@ namespace glz
          }
 
          return std::pair<std::string_view, std::string>{parent, std::move(*token)};
-      }
-
-      // Parse array index from string, returns nullopt for "-" (append) or invalid
-      [[nodiscard]] inline std::optional<size_t> parse_array_index(std::string_view token)
-      {
-         if (token.empty()) return std::nullopt;
-
-         // "-" means append to end
-         if (token == "-") return std::nullopt;
-
-         // Leading zeros are not allowed (except "0" itself)
-         if (token.size() > 1 && token[0] == '0') return std::nullopt;
-
-         size_t index = 0;
-         auto [ptr, ec] = std::from_chars(token.data(), token.data() + token.size(), index);
-         if (ec != std::errc{} || ptr != token.data() + token.size()) {
-            return std::nullopt;
-         }
-
-         return index;
       }
    } // namespace detail
 
@@ -324,7 +379,7 @@ namespace glz
                      arr.push_back(std::move(value));
                      return {};
                   }
-                  auto index_opt = detail::parse_array_index(*segment);
+                  auto index_opt = detail::parse_json_ptr_array_index(*segment);
                   if (!index_opt || *index_opt > arr.size()) {
                      return error_ctx{0, error_code::nonexistent_json_ptr};
                   }
@@ -353,7 +408,7 @@ namespace glz
                   current = &it->second;
                }
                else if (current->is_array()) {
-                  auto index_opt = detail::parse_array_index(*segment);
+                  auto index_opt = detail::parse_json_ptr_array_index(*segment);
                   if (!index_opt) {
                      return error_ctx{0, error_code::nonexistent_json_ptr};
                   }
@@ -390,7 +445,7 @@ namespace glz
             return {};
          }
 
-         auto index_opt = detail::parse_array_index(token);
+         auto index_opt = detail::parse_json_ptr_array_index(token);
          if (!index_opt) {
             return error_ctx{0, error_code::nonexistent_json_ptr};
          }
@@ -438,7 +493,7 @@ namespace glz
       else if (parent->is_array()) {
          auto& arr = parent->get_array();
 
-         auto index_opt = detail::parse_array_index(token);
+         auto index_opt = detail::parse_json_ptr_array_index(token);
          if (!index_opt) {
             return unexpected(error_ctx{0, error_code::nonexistent_json_ptr});
          }
@@ -509,8 +564,9 @@ namespace glz
       [[nodiscard]] error_ctx apply_move(GenericType& doc, std::string_view from, std::string_view path,
                                          const patch_opts& opts)
       {
-         // Check for move into self (path cannot start with from)
-         if (path.starts_with(from) && (path.size() == from.size() || path[from.size()] == '/')) {
+         // RFC 6902 section 4.4: "from" MUST NOT be a proper prefix of "path", i.e. a location
+         // cannot be moved into one of its own children. Moving to the same location is a no-op.
+         if (path.size() > from.size() && path.starts_with(from) && path[from.size()] == '/') {
             return error_ctx{0, error_code::syntax_error};
          }
 
@@ -790,12 +846,17 @@ namespace glz
          return unexpected(document.error());
       }
 
-      auto ops = read_json<patch_document_t<GenericType>>(patch_json_str);
-      if (!ops) {
-         return unexpected(ops.error());
+      // RFC 6902 section 4: "op" and "path" are required on every operation, and members that are
+      // not explicitly defined for an operation are ignored. error_on_missing_keys requires exactly
+      // the non-nullable members, which are "op" and "path"; "value" and "from" stay optional.
+      // (glz::opts is qualified because the patch_opts parameter above is named opts)
+      constexpr glz::opts read_opts{.error_on_unknown_keys = false, .error_on_missing_keys = true};
+      patch_document_t<GenericType> ops{};
+      if (const auto ec = read<read_opts>(ops, patch_json_str); ec) {
+         return unexpected(ec);
       }
 
-      auto ec = patch(*document, *ops, opts);
+      auto ec = patch(*document, ops, opts);
       if (ec) {
          return unexpected(ec);
       }

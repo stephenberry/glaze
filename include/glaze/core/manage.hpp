@@ -34,10 +34,24 @@ namespace glz
       template <auto Opts>
       static void op(auto&& value, is_context auto&& ctx, auto&& it, auto end)
       {
+         parse<Format>::template op<Opts>(get_member(value.val, value.member), ctx, it, end);
+         call_from(value, ctx);
+      }
+
+      // The caller has already consumed the value's type tag and passes it in: MessagePack does
+      // this for every value, BEVE inside no_header contexts.
+      template <auto Opts>
+      static void op(auto&& value, const uint8_t tag, is_context auto&& ctx, auto&& it, auto end)
+      {
+         parse<Format>::template op<no_header_on<Opts>()>(get_member(value.val, value.member), tag, ctx, it, end);
+         call_from(value, ctx);
+      }
+
+     private:
+      static void call_from(auto&& value, is_context auto&& ctx)
+      {
          using V = std::decay_t<decltype(value)>;
          using From = typename V::from_t;
-
-         parse<Format>::template op<Opts>(get_member(value.val, value.member), ctx, it, end);
 
          if constexpr (std::is_member_pointer_v<From>) {
             if constexpr (std::is_member_function_pointer_v<From>) {

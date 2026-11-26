@@ -13,10 +13,11 @@ namespace glz
 {
    // For writing to a std::string, std::vector<char>, std::deque<char> and the like
    template <auto Opts, class T, output_buffer Buffer>
-      requires write_supported<T, Opts.format>
+      requires(write_supported<T, Opts.format> && not byte_array_buffer<Buffer>)
    [[nodiscard]] error_ctx write(T&& value, Buffer& buffer, is_context auto&& ctx)
    {
       using traits = buffer_traits<std::remove_cvref_t<Buffer>>;
+      call_scope scope{ctx};
 
       if constexpr (traits::is_resizable) {
          // A buffer could be size 1, to ensure we have sufficient memory we can't just check `empty()`
@@ -43,7 +44,7 @@ namespace glz
    }
 
    template <auto& Partial, auto Opts, class T, output_buffer Buffer>
-      requires write_supported<T, Opts.format>
+      requires(write_supported<T, Opts.format> && not byte_array_buffer<Buffer>)
    [[nodiscard]] error_ctx write(T&& value, Buffer& buffer)
    {
       using traits = buffer_traits<std::remove_cvref_t<Buffer>>;
@@ -71,6 +72,24 @@ namespace glz
 
       traits::finalize(buffer, ix);
       return {ix, error_code::none, ctx.custom_error_message};
+   }
+
+   // A C array has no members to serialize through. A span over it keeps the extent as the capacity, so it is
+   // bounds checked exactly like std::array.
+   template <auto Opts, class T, byte_array_buffer Buffer>
+      requires write_supported<T, Opts.format>
+   [[nodiscard]] error_ctx write(T&& value, Buffer& buffer, is_context auto&& ctx)
+   {
+      auto view = std::span{buffer};
+      return write<Opts>(std::forward<T>(value), view, ctx);
+   }
+
+   template <auto& Partial, auto Opts, class T, byte_array_buffer Buffer>
+      requires write_supported<T, Opts.format>
+   [[nodiscard]] error_ctx write(T&& value, Buffer& buffer)
+   {
+      auto view = std::span{buffer};
+      return write<Partial, Opts>(std::forward<T>(value), view);
    }
 
    template <auto& Partial, auto Opts, class T, raw_buffer Buffer>
@@ -111,6 +130,7 @@ namespace glz
       requires write_supported<T, Opts.format>
    [[nodiscard]] error_ctx write(T&& value, Buffer&& buffer, is_context auto&& ctx)
    {
+      call_scope scope{ctx};
       size_t ix = 0;
       to<Opts.format, std::remove_cvref_t<T>>::template op<Opts>(std::forward<T>(value), ctx, buffer, ix);
       if (bool(ctx.error)) [[unlikely]] {

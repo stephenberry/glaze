@@ -1204,31 +1204,41 @@ namespace glz
       }
    }
 
+   namespace detail
+   {
+      // An empty name means the value is not enumerated. Readers reject such values, so writing one is an error.
+      template <auto Opts, class B>
+      GLZ_ALWAYS_INLINE void write_enum_name(const sv name, is_context auto& ctx, B& b, auto& ix)
+      {
+         if (name.empty()) [[unlikely]] {
+            ctx.error = error_code::unexpected_enum;
+            return;
+         }
+         // TODO: Assumes people dont use strings with chars that need to be escaped for their enum names
+         // TODO: Could create a pre quoted map for better performance
+         if (!ensure_space(ctx, b, ix + name.size() + 2 + write_padding_bytes)) [[unlikely]] {
+            return;
+         }
+         if constexpr (not check_unquoted(Opts)) {
+            dump<false>('"', b, ix);
+         }
+         dump<false>(name, b, ix);
+         if constexpr (not check_unquoted(Opts)) {
+            dump<false>('"', b, ix);
+         }
+      }
+   }
+
    template <class T>
       requires((glaze_enum_t<T> || (meta_keys<T> && std::is_enum_v<std::decay_t<T>>)) && not custom_write<T>)
    struct to<JSON, T>
    {
-      static constexpr bool can_error = false;
+      static constexpr bool can_error = true;
 
-      template <auto Opts, class... Args>
-      GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, Args&&... args)
+      template <auto Opts, class B>
+      GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, B&& b, auto& ix)
       {
-         const sv str = get_enum_name(value);
-         if (!str.empty()) {
-            // TODO: Assumes people dont use strings with chars that need to be escaped for their enum names
-            // TODO: Could create a pre quoted map for better performance
-            if constexpr (not check_unquoted(Opts)) {
-               dump('"', args...);
-            }
-            dump_maybe_empty(str, args...);
-            if constexpr (not check_unquoted(Opts)) {
-               dump('"', args...);
-            }
-         }
-         else [[unlikely]] {
-            // Value doesn't have a mapped string, serialize as underlying number
-            serialize<JSON>::op<Opts>(static_cast<std::underlying_type_t<T>>(value), ctx, std::forward<Args>(args)...);
-         }
+         detail::write_enum_name<Opts>(get_enum_name(value), ctx, b, ix);
       }
    };
 
@@ -1238,35 +1248,21 @@ namespace glz
       requires(!meta_keys<T> && std::is_enum_v<std::decay_t<T>> && !glaze_enum_t<T> && !custom_write<T>)
    struct to<JSON, T>
    {
-      static constexpr bool can_error = false;
+      // Only the reflect_enums path can error, and it exists only with P2996
+      static constexpr bool can_error = GLZ_REFLECTION26;
 
-      template <auto Opts, class... Args>
-      GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, Args&&... args)
+      template <auto Opts, class B>
+      GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, B&& b, auto& ix)
       {
 #if GLZ_REFLECTION26
          if constexpr (check_reflect_enums(Opts)) {
-            // P2996 reflection using reflect_constant_array and expansion statements
-            const sv name = enum_to_string(value);
-            if (!name.empty()) {
-               if constexpr (not check_unquoted(Opts)) {
-                  dump('"', args...);
-               }
-               dump_maybe_empty(name, args...);
-               if constexpr (not check_unquoted(Opts)) {
-                  dump('"', args...);
-               }
-            }
-            else [[unlikely]] {
-               serialize<JSON>::op<Opts>(static_cast<std::underlying_type_t<std::decay_t<T>>>(value), ctx,
-                                         std::forward<Args>(args)...);
-            }
+            detail::write_enum_name<Opts>(enum_to_string(value), ctx, b, ix);
          }
          else
 #endif
          {
             // Fallback: serialize as underlying number
-            serialize<JSON>::op<Opts>(static_cast<std::underlying_type_t<std::decay_t<T>>>(value), ctx,
-                                      std::forward<Args>(args)...);
+            serialize<JSON>::op<Opts>(static_cast<std::underlying_type_t<std::decay_t<T>>>(value), ctx, b, ix);
          }
       }
    };
@@ -1326,6 +1322,19 @@ namespace glz
 
             std::memcpy(&b[ix], value.str.data(), n);
             ix += n;
+         }
+         else {
+            // An empty raw_json holds no JSON document, but a value is required wherever one is
+            // written. Dumping nothing truncates the enclosing document (`{"key":}`), so the empty
+            // state serializes as null. This covers a member that was never filled as well as one
+            // cleared or assigned an empty string.
+            if (!ensure_space(ctx, b, ix + 4 + write_padding_bytes)) [[unlikely]] {
+               return;
+            }
+
+            static constexpr char null_v[]{'n', 'u', 'l', 'l'};
+            std::memcpy(&b[ix], null_v, 4);
+            ix += 4;
          }
       }
    };
@@ -1631,8 +1640,7 @@ namespace glz
             }
 
             using val_t = detail::iterator_second_type<T>; // the type of value in each [key, value] pair
-            constexpr bool write_function_pointers = check_write_function_pointers(Opts);
-            if constexpr (!always_skipped<val_t> && (write_function_pointers || !is_any_function_ptr<val_t>)) {
+            if constexpr (!never_written<Opts, val_t>) {
                if constexpr (null_t<val_t> && Opts.skip_null_members) {
                   auto write_first_entry = [&](auto&& it) {
                      auto&& [key, entry_val] = *it;
@@ -2214,47 +2222,80 @@ namespace glz
       requires is_specialization_v<T, arr>
    struct to<JSON, T>
    {
-      template <auto Opts, class... Args>
-      static void op(auto&& value, is_context auto&& ctx, Args&&... args)
+      template <auto Opts, class B>
+      static void op(auto&& value, is_context auto&& ctx, B&& b, auto& ix)
       {
          using V = std::decay_t<decltype(value.value)>;
          static constexpr auto N = glz::tuple_size_v<V>;
 
-         dump('[', args...);
+         if (bool(ctx.error)) [[unlikely]] {
+            return;
+         }
+         if constexpr (has_bounded_capacity<B> && not check_write_unchecked(Opts)) {
+            if (!ensure_space(ctx, b, ix + 1)) [[unlikely]] {
+               return;
+            }
+         }
+         dump('[', b, ix);
          if constexpr (N > 0 && Opts.prettify) {
             if constexpr (check_new_lines_in_arrays(Opts)) {
                ctx.depth += check_indentation_width(Opts);
-               dump_newline_indent(check_indentation_char(Opts), ctx.depth, args...);
+               if constexpr (has_bounded_capacity<B> && not check_write_unchecked(Opts)) {
+                  if (!ensure_space(ctx, b, ix + ctx.depth + 1)) [[unlikely]] {
+                     return;
+                  }
+               }
+               dump_newline_indent(check_indentation_char(Opts), ctx.depth, b, ix);
             }
          }
          for_each<N>([&]<size_t I>() {
+            if (bool(ctx.error)) [[unlikely]] {
+               return;
+            }
             if constexpr (glaze_array_t<V>) {
-               serialize<JSON>::op<Opts>(get_member(value.value, glz::get<I>(meta_v<T>)), ctx, args...);
+               serialize<JSON>::op<Opts>(get_member(value.value, glz::get<I>(meta_v<T>)), ctx, b, ix);
             }
             else {
-               serialize<JSON>::op<Opts>(glz::get<I>(value.value), ctx, args...);
+               serialize<JSON>::op<Opts>(glz::get<I>(value.value), ctx, b, ix);
             }
             constexpr bool needs_comma = I < N - 1;
             if constexpr (needs_comma) {
-               write_array_entry_separator<Opts>(ctx, args...);
+               if (bool(ctx.error)) [[unlikely]] {
+                  return;
+               }
+               write_array_entry_separator<Opts>(ctx, b, ix);
             }
          });
+         if (bool(ctx.error)) [[unlikely]] {
+            return;
+         }
          if constexpr (N > 0 && Opts.prettify) {
             if constexpr (check_new_lines_in_arrays(Opts)) {
                ctx.depth -= check_indentation_width(Opts);
-               dump_newline_indent(check_indentation_char(Opts), ctx.depth, args...);
+               if constexpr (has_bounded_capacity<B> && not check_write_unchecked(Opts)) {
+                  if (!ensure_space(ctx, b, ix + ctx.depth + 2)) [[unlikely]] {
+                     return;
+                  }
+               }
+               dump_newline_indent(check_indentation_char(Opts), ctx.depth, b, ix);
             }
          }
-         dump(']', args...);
+         if constexpr (has_bounded_capacity<B> && not check_write_unchecked(Opts)) {
+            if (!ensure_space(ctx, b, ix + 1)) [[unlikely]] {
+               return;
+            }
+         }
+         dump(']', b, ix);
       }
    };
 
+   // Recognize standard tuples before tuple_t probes their first element.
    template <class T>
-      requires glaze_array_t<T> || tuple_t<std::decay_t<T>> || is_std_tuple<T>
+      requires glaze_array_t<T> || is_std_tuple<T> || tuple_t<std::decay_t<T>>
    struct to<JSON, T>
    {
-      template <auto Opts, class... Args>
-      static void op(auto&& value, is_context auto&& ctx, Args&&... args)
+      template <auto Opts, class B>
+      static void op(auto&& value, is_context auto&& ctx, B&& b, auto& ix)
       {
          static constexpr auto N = []() constexpr {
             if constexpr (glaze_array_t<std::decay_t<T>>) {
@@ -2265,38 +2306,70 @@ namespace glz
             }
          }();
 
-         dump('[', args...);
+         if (bool(ctx.error)) [[unlikely]] {
+            return;
+         }
+         if constexpr (has_bounded_capacity<B> && not check_write_unchecked(Opts)) {
+            if (!ensure_space(ctx, b, ix + 1)) [[unlikely]] {
+               return;
+            }
+         }
+         dump('[', b, ix);
          if constexpr (N > 0 && Opts.prettify) {
             if constexpr (check_new_lines_in_arrays(Opts)) {
                ctx.depth += check_indentation_width(Opts);
-               dump_newline_indent(check_indentation_char(Opts), ctx.depth, args...);
+               if constexpr (has_bounded_capacity<B> && not check_write_unchecked(Opts)) {
+                  if (!ensure_space(ctx, b, ix + ctx.depth + 1)) [[unlikely]] {
+                     return;
+                  }
+               }
+               dump_newline_indent(check_indentation_char(Opts), ctx.depth, b, ix);
             }
          }
          using V = std::decay_t<T>;
          for_each<N>([&]<size_t I>() {
+            if (bool(ctx.error)) [[unlikely]] {
+               return;
+            }
             if constexpr (glaze_array_t<V>) {
-               serialize<JSON>::op<Opts>(get_member(value, glz::get<I>(meta_v<T>)), ctx, args...);
+               serialize<JSON>::op<Opts>(get_member(value, glz::get<I>(meta_v<T>)), ctx, b, ix);
             }
             else if constexpr (is_std_tuple<T>) {
                using Value = core_t<decltype(std::get<I>(value))>;
-               to<JSON, Value>::template op<Opts>(std::get<I>(value), ctx, args...);
+               to<JSON, Value>::template op<Opts>(std::get<I>(value), ctx, b, ix);
             }
             else {
                using Value = core_t<decltype(glz::get<I>(value))>;
-               to<JSON, Value>::template op<Opts>(glz::get<I>(value), ctx, args...);
+               to<JSON, Value>::template op<Opts>(glz::get<I>(value), ctx, b, ix);
             }
             constexpr bool needs_comma = I < N - 1;
             if constexpr (needs_comma) {
-               write_array_entry_separator<Opts>(ctx, args...);
+               if (bool(ctx.error)) [[unlikely]] {
+                  return;
+               }
+               write_array_entry_separator<Opts>(ctx, b, ix);
             }
          });
+         if (bool(ctx.error)) [[unlikely]] {
+            return;
+         }
          if constexpr (N > 0 && Opts.prettify) {
             if constexpr (check_new_lines_in_arrays(Opts)) {
                ctx.depth -= check_indentation_width(Opts);
-               dump_newline_indent(check_indentation_char(Opts), ctx.depth, args...);
+               if constexpr (has_bounded_capacity<B> && not check_write_unchecked(Opts)) {
+                  if (!ensure_space(ctx, b, ix + ctx.depth + 2)) [[unlikely]] {
+                     return;
+                  }
+               }
+               dump_newline_indent(check_indentation_char(Opts), ctx.depth, b, ix);
             }
          }
-         dump(']', args...);
+         if constexpr (has_bounded_capacity<B> && not check_write_unchecked(Opts)) {
+            if (!ensure_space(ctx, b, ix + 1)) [[unlikely]] {
+               return;
+            }
+         }
+         dump(']', b, ix);
       }
    };
 
@@ -2348,9 +2421,7 @@ namespace glz
                return;
             }
 
-            // skip
-            constexpr bool write_function_pointers = check_write_function_pointers(Opts);
-            if constexpr (always_skipped<val_t> || (!write_function_pointers && is_any_function_ptr<val_t>)) {
+            if constexpr (never_written<Opts, val_t>) {
                return;
             }
             else {
@@ -2540,12 +2611,9 @@ namespace glz
                for_each<N>([&]<size_t I>() {
                   using val_t = field_t<T, I>;
 
-                  // `meta<T>::skip` joins the other compile-time exclusions here rather than returning
-                  // early, so that a skipped field's writer is never instantiated -- see
-                  // `skipped_by_meta`.
-                  constexpr bool write_function_pointers = check_write_function_pointers(Opts);
-                  if constexpr (skipped_by_meta<T, I, operation::serialize> || always_skipped<val_t> ||
-                                (!write_function_pointers && is_any_function_ptr<val_t>)) {
+                  // Compile-time exclusions gate the field here rather than returning early, so that a
+                  // skipped field's writer is never instantiated -- see `skipped_by_meta`.
+                  if constexpr (skipped_on_write<Opts, T, I>) {
                      return;
                   }
                   else {
@@ -2739,6 +2807,9 @@ namespace glz
 
             // Options is required here, because it must be the top level
             if constexpr (not check_closing_handled(Options)) {
+               if (bool(ctx.error)) [[unlikely]] {
+                  return;
+               }
                if constexpr (Options.prettify) {
                   ctx.depth -= check_indentation_width(Options);
                   if constexpr (not check_write_unchecked(Options)) {
@@ -2754,6 +2825,11 @@ namespace glz
                   ++ix;
                }
                else {
+                  if constexpr (has_bounded_capacity<B> && not check_write_unchecked(Options)) {
+                     if (!ensure_space(ctx, b, ix + 1)) [[unlikely]] {
+                        return;
+                     }
+                  }
                   dump<not(fixed_padding<T> || check_write_unchecked(Options))>('}', b, ix);
                }
             }
@@ -2768,11 +2844,11 @@ namespace glz
    // Duration: serialized generically (as the bare rep count) by the
    // to<uint32_t Format, is_duration T> specialization in core/chrono.hpp.
 
-   // system_clock::time_point: serialize as ISO 8601 string.
-   // Zero-allocation implementation writing directly to buffer. The layout is shared with
+   // system_clock / utc_clock time_point: serialize as ISO 8601 string (a utc_clock leap second
+   // as :60). Zero-allocation implementation writing directly to buffer. The layout is shared with
    // every other text format via chrono_detail::write_iso_time_point; JSON supplies the
    // quoting (a JSON scalar is a quoted string unless the caller opted out via `unquoted`).
-   template <is_system_time_point T>
+   template <is_calendar_time_point T>
       requires(not custom_write<T>)
    struct to<JSON, T>
    {
@@ -2860,7 +2936,7 @@ namespace glz
    // Returns error_code::unknown_key if any key doesn't exist in the struct
 
    template <auto Opts = opts{}, class T, class Keys, output_buffer Buffer>
-      requires((glaze_object_t<T> || reflectable<T>) && range<Keys>)
+      requires((glaze_object_t<T> || reflectable<T>) && range<Keys> && not byte_array_buffer<Buffer>)
    [[nodiscard]] error_ctx write_json_partial(T&& value, const Keys& keys, Buffer&& buffer)
    {
       using traits = buffer_traits<std::remove_cvref_t<Buffer>>;
@@ -2901,6 +2977,15 @@ namespace glz
          return {ix, ctx.error, ctx.custom_error_message};
       }
       return {ix, error_code::none, ctx.custom_error_message};
+   }
+
+   // A C array has no members to serialize through; a span over it keeps the extent as the capacity.
+   template <auto Opts = opts{}, class T, class Keys, byte_array_buffer Buffer>
+      requires((glaze_object_t<T> || reflectable<T>) && range<Keys>)
+   [[nodiscard]] error_ctx write_json_partial(T&& value, const Keys& keys, Buffer& buffer)
+   {
+      auto view = std::span{buffer};
+      return write_json_partial<Opts>(std::forward<T>(value), keys, view);
    }
 
    template <auto Opts = opts{}, class T, class Keys>
@@ -2921,7 +3006,7 @@ namespace glz
    // Returns error_code::unknown_key if any exclude key doesn't exist in the struct
 
    template <auto Opts = opts{}, class T, class Keys, output_buffer Buffer>
-      requires((glaze_object_t<T> || reflectable<T>) && range<Keys>)
+      requires((glaze_object_t<T> || reflectable<T>) && range<Keys> && not byte_array_buffer<Buffer>)
    [[nodiscard]] error_ctx write_json_exclude(T&& value, const Keys& exclude_keys, Buffer&& buffer)
    {
       using traits = buffer_traits<std::remove_cvref_t<Buffer>>;
@@ -2962,6 +3047,15 @@ namespace glz
          return {ix, ctx.error, ctx.custom_error_message};
       }
       return {ix, error_code::none, ctx.custom_error_message};
+   }
+
+   // A C array has no members to serialize through; a span over it keeps the extent as the capacity.
+   template <auto Opts = opts{}, class T, class Keys, byte_array_buffer Buffer>
+      requires((glaze_object_t<T> || reflectable<T>) && range<Keys>)
+   [[nodiscard]] error_ctx write_json_exclude(T&& value, const Keys& exclude_keys, Buffer& buffer)
+   {
+      auto view = std::span{buffer};
+      return write_json_exclude<Opts>(std::forward<T>(value), exclude_keys, view);
    }
 
    template <auto Opts = opts{}, class T, class Keys>

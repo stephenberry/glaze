@@ -647,6 +647,20 @@ namespace glz
       }
    }();
 
+   // The names of the types separated by commas, e.g. "int,double" for <int, double>. Class
+   // templates such as meta<std::tuple<T...>> use this to initialize static members. It is a
+   // variable template rather than an immediately invoked lambda because MSVC has resolved a call
+   // to one of those lambdas in a static data member initializer to an unrelated closure type.
+   template <class... T>
+   inline constexpr std::string_view comma_separated_names_v = "";
+
+   template <class T>
+   inline constexpr std::string_view comma_separated_names_v<T> = name_v<T>;
+
+   template <class T, class U, class... Rest>
+   inline constexpr std::string_view comma_separated_names_v<T, U, Rest...> =
+      join_v<name_v<T>, chars<",">, comma_separated_names_v<U, Rest...>>;
+
    // Opts-aware type name: returns qualified or unqualified based on qualified_type_names option.
    // For traditional: always returns qualified names (existing behavior).
    // For P2996: currently always returns unqualified names (display_string_of).

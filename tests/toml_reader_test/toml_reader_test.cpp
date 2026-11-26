@@ -15,6 +15,7 @@
 #include <vector>
 
 #include "glaze/toml.hpp"
+#include "speculation_guard.hpp"
 #include "ut/ut.hpp"
 
 using namespace ut;
@@ -644,17 +645,16 @@ namespace ambiguous_nest
       std::variant<left, right> v{};
    };
 
-   // Calibrated: unbounded retrying costs ~4x per two levels, so this depth takes ~10s in a debug
-   // build without the budget against a flat ~50ms with it. Below about 18 the budget saturates
-   // before the nest does and both cost the same, so lowering this stops the test discriminating.
-   inline constexpr int depth = 22;
+   // The depth of the nest that resolves. Unbounded retrying costs ~4x per two levels, so the one
+   // that does not resolve is checked at depths below and past where the budget binds instead.
+   inline constexpr size_t depth = 22;
 
-   inline std::string nest(const std::string_view bottom)
+   inline std::string nest(const std::string_view bottom, const size_t levels = depth)
    {
       std::string toml = "v = ";
-      for (int i = 0; i < depth; ++i) toml += "{ child = [ { v = ";
+      for (size_t i = 0; i < levels; ++i) toml += "{ child = [ { v = ";
       toml += bottom;
-      for (int i = 0; i < depth; ++i) toml += " } ] }";
+      for (size_t i = 0; i < levels; ++i) toml += " } ] }";
       return toml;
    }
 }
@@ -670,14 +670,15 @@ suite variant_alternative_budget_tests = [] {
    "an ambiguous nest that does not resolve is bounded"_test = [] {
       // Retrying every alternative at every level is 2^depth. The speculation budget stops it, and
       // a level that discovered the budget was spent only after running one more retry would still
-      // parse its subtree twice per level -- so this must stay fast, not merely terminate.
-      const std::string toml = ambiguous_nest::nest("{ zzz = 1 }");
-      ambiguous_nest::node value{};
-      const auto start = std::chrono::steady_clock::now();
-      const auto ec = glz::read_toml(value, toml);
-      const auto elapsed = std::chrono::steady_clock::now() - start;
-      expect(bool(ec));
-      expect(elapsed < std::chrono::seconds(3));
+      // parse its subtree twice per level -- so past the budget the cost must stop growing with
+      // depth, not merely terminate. See speculation_guard.hpp for what is timed.
+      glz_test::expect_bounded_by_speculation_budget(
+         [](size_t levels) { return ambiguous_nest::nest("{ zzz = 1 }", levels); },
+         [](const std::string& buffer, glz::context& ctx) {
+            ambiguous_nest::node value{};
+            return glz::read<glz::opts{.format = glz::TOML}>(value, buffer, ctx);
+         },
+         glz::error_code::unknown_key, 8, 20, 80);
    };
 };
 

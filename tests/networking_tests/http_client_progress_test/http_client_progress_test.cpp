@@ -10,7 +10,12 @@
 //      peer's close, which is what makes the total meaningful in the first place and
 //      what leaves the socket reusable. Responses that carry no body at all - a HEAD
 //      reply, a 304 - end at once however they are framed.
+//   5. on_upload_progress reports how much of the request body the socket has taken,
+//      against the body's size, and returning false from it cancels the same way. A
+//      peer that stops reading stops the count below the total, which is how a caller
+//      tells a stalled upload from a slow one.
 
+#include <array>
 #include <atomic>
 #include <chrono>
 #include <functional>
@@ -142,6 +147,88 @@ namespace
 
       outcome.finished = finished.wait_for(std::chrono::seconds(5)) == std::future_status::ready;
       outcome.reusable = conn->response_complete.load();
+      return outcome;
+   }
+
+   // Reads one request's head, then reads its body to the end of the connection, keeping it,
+   // and answers with an empty 200 when the whole declared body has arrived. A client that
+   // stops part way closes the connection, which ends the read with whatever had arrived.
+   std::thread serve_upload(const listening_socket& listener, std::shared_ptr<std::string> received)
+   {
+      return std::thread([ctx = listener.ctx, acceptor = listener.acceptor, received] {
+         asio::ip::tcp::socket socket(*ctx);
+         asio::error_code ec;
+         acceptor->accept(socket, ec);
+         if (ec) return;
+
+         asio::streambuf request;
+         const size_t head_end = asio::read_until(socket, request, "\r\n\r\n", ec);
+         if (ec) return;
+         const std::string head(asio::buffers_begin(request.data()),
+                                asio::buffers_begin(request.data()) + static_cast<std::ptrdiff_t>(head_end));
+         request.consume(head_end);
+         size_t declared = 0;
+         if (const auto at = head.find("Content-Length: "); at != std::string::npos) {
+            declared = std::stoul(head.substr(at + 16));
+         }
+
+         received->assign(asio::buffers_begin(request.data()), asio::buffers_end(request.data()));
+         std::array<char, 65536> chunk{};
+         while (received->size() < declared) {
+            const size_t n = socket.read_some(asio::buffer(chunk), ec);
+            received->append(chunk.data(), n);
+            if (ec) break;
+         }
+
+         if (received->size() == declared) {
+            const std::string response = "HTTP/1.1 200 OK\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
+            asio::write(socket, asio::buffer(response), ec);
+         }
+         socket.shutdown(asio::ip::tcp::socket::shutdown_both, ec);
+         socket.close(ec);
+      });
+   }
+
+   // Everything a test might want to assert about one upload, collected on the I/O thread
+   // and read back on the test thread once the stream has ended.
+   struct upload_outcome
+   {
+      std::vector<std::pair<size_t, size_t>> reports;
+      int error_calls{};
+      std::error_code error;
+      int disconnects{};
+      bool finished{};
+   };
+
+   upload_outcome run_upload(glz::http_client& client, const std::string& url, std::string method, std::string body,
+                             std::function<bool(size_t, size_t)> keep_going = {})
+   {
+      upload_outcome outcome;
+      std::promise<void> done;
+      auto finished = done.get_future();
+
+      glz::stream_request_params_v2 params{};
+      params.method = std::move(method);
+      params.url = url;
+      params.body = std::move(body);
+      params.on_data = [](std::string_view) {};
+      params.on_error = [&](std::error_code ec) {
+         ++outcome.error_calls;
+         outcome.error = ec;
+      };
+      params.on_upload_progress = [&](size_t sent, size_t total) {
+         outcome.reports.emplace_back(sent, total);
+         return keep_going ? keep_going(sent, total) : true;
+      };
+      params.on_disconnect = [&] {
+         if (++outcome.disconnects == 1) done.set_value();
+      };
+
+      auto conn = client.stream_request_v2(params);
+      expect(conn != nullptr) << "stream request should start";
+      if (!conn) return outcome;
+
+      outcome.finished = finished.wait_for(std::chrono::seconds(10)) == std::future_status::ready;
       return outcome;
    }
 }
@@ -544,6 +631,150 @@ suite bodiless_responses = [] {
       expect(outcome.data_calls == 0) << "a HEAD reply carries no body";
       expect(outcome.error_calls == 0) << "got: " << outcome.error.message();
       expect(outcome.reusable) << "a HEAD reply leaves the socket at the start of the next response";
+   };
+};
+
+suite upload_progress = [] {
+   // The count starts at zero against the body's size, rises between the socket's writes and
+   // ends at the size, so a caller sees the upload move and sees it finish.
+   "upload_progress_rises_to_the_body_size"_test = [] {
+      listening_socket listener;
+      auto received = std::make_shared<std::string>();
+      auto server = serve_upload(listener, received);
+
+      std::string body(1024 * 1024, 'u');
+      for (size_t i = 0; i < body.size(); i += 4096) {
+         body[i] = static_cast<char>('a' + (i / 4096) % 26);
+      }
+
+      glz::http_client client;
+      const auto outcome = run_upload(client, listener.base_url(), "POST", body);
+      server.join();
+
+      expect(outcome.finished) << "the upload should end";
+      expect(outcome.error_calls == 0) << "got: " << outcome.error.message();
+      expect(*received == body) << "the server should receive the whole body, got " << received->size() << " of "
+                                << body.size();
+      expect(outcome.reports.size() > 2) << "expected reports between the socket's writes, got "
+                                         << outcome.reports.size();
+      if (!outcome.reports.empty()) {
+         expect(outcome.reports.front() == std::pair<size_t, size_t>{0, body.size()})
+            << "the first report comes before anything is written";
+         expect(outcome.reports.back() == std::pair<size_t, size_t>{body.size(), body.size()})
+            << "the last report accounts for the whole body";
+      }
+      size_t previous = 0;
+      for (const auto& [sent, total] : outcome.reports) {
+         expect(total == body.size()) << "every report carries the body's size";
+         expect(sent >= previous) << "the count never goes backwards";
+         expect(sent <= total) << "the count never passes the body's size";
+         previous = sent;
+      }
+   };
+
+   // A request with no body has nothing to send, and says so once.
+   "a_request_without_a_body_reports_once"_test = [] {
+      listening_socket listener;
+      auto received = std::make_shared<std::string>();
+      auto server = serve_upload(listener, received);
+
+      glz::http_client client;
+      const auto outcome = run_upload(client, listener.base_url(), "GET", "");
+      server.join();
+
+      expect(outcome.finished) << "the request should end";
+      expect(outcome.error_calls == 0) << "got: " << outcome.error.message();
+      expect(outcome.reports == std::vector<std::pair<size_t, size_t>>{{0, 0}})
+         << "expected exactly (0, 0), got " << outcome.reports.size() << " reports";
+   };
+
+   // Returning false stops the upload where it is: the rest of the body is never sent, the
+   // stream ends with on_disconnect, and a stop is not an error.
+   "returning_false_cancels_the_upload"_test = [] {
+      listening_socket listener;
+      auto received = std::make_shared<std::string>();
+      auto server = serve_upload(listener, received);
+
+      const std::string body(8 * 1024 * 1024, 'c');
+      glz::http_client client;
+      const auto outcome =
+         run_upload(client, listener.base_url(), "PUT", body, [](size_t sent, size_t) { return sent == 0; });
+      server.join();
+
+      expect(outcome.finished) << "a cancelled upload should end";
+      expect(outcome.disconnects == 1) << "on_disconnect should arrive exactly once";
+      expect(outcome.error_calls == 0) << "a cancel is not an error, got: " << outcome.error.message();
+      expect(!outcome.reports.empty() && outcome.reports.back().first > 0 && outcome.reports.back().first < body.size())
+         << "the cancel should land part way through the body";
+      expect(received->size() < body.size())
+         << "the rest of the body should not be sent, got " << received->size() << " of " << body.size();
+   };
+
+   // A peer that stops reading stops the count below the body's size, and disconnect() ends a
+   // stream whose write is waiting on that peer. This is the signal a caller needs to bound an
+   // upload by its progress rather than by one deadline for the whole body.
+   "a_peer_that_stops_reading_stops_the_count"_test = [] {
+      listening_socket listener;
+      auto release = std::make_shared<std::promise<void>>();
+      auto server = std::thread([ctx = listener.ctx, acceptor = listener.acceptor, released = release->get_future()] {
+         asio::ip::tcp::socket socket(*ctx);
+         asio::error_code ec;
+         acceptor->accept(socket, ec);
+         if (ec) return;
+         released.wait(); // never reads, so the client's writes fill both socket buffers and stop
+         socket.close(ec);
+      });
+
+      const std::string body(64 * 1024 * 1024, 's');
+      std::atomic<size_t> latest{0};
+      std::atomic<int> errors{0};
+      std::promise<void> done;
+      auto finished = done.get_future();
+
+      glz::stream_request_params_v2 params{};
+      params.method = "PUT";
+      params.url = listener.base_url();
+      params.body = body;
+      params.on_data = [](std::string_view) {};
+      params.on_error = [&](std::error_code) { ++errors; };
+      params.on_upload_progress = [&](size_t sent, size_t) {
+         latest = sent;
+         return true;
+      };
+      params.on_disconnect = [&] { done.set_value(); };
+
+      glz::http_client client;
+      auto conn = client.stream_request_v2(params);
+      expect(conn != nullptr) << "stream request should start";
+      if (!conn) {
+         release->set_value();
+         server.join();
+         return;
+      }
+
+      // Wait for the count to settle: two reads 200 ms apart that agree.
+      size_t settled = 0;
+      const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(10);
+      while (std::chrono::steady_clock::now() < deadline) {
+         const size_t before = latest.load();
+         std::this_thread::sleep_for(std::chrono::milliseconds(200));
+         if (before > 0 && latest.load() == before) {
+            settled = before;
+            break;
+         }
+      }
+
+      expect(settled > 0) << "some of the body should leave before the buffers fill";
+      expect(settled < body.size()) << "a peer that reads nothing cannot take the whole body";
+
+      conn->disconnect();
+      const bool ended = finished.wait_for(std::chrono::seconds(5)) == std::future_status::ready;
+      release->set_value();
+      server.join();
+
+      expect(ended) << "disconnect() should end a stream whose write is waiting on the peer";
+      expect(errors == 0) << "a stop is not an error";
+      expect(latest.load() < body.size()) << "the count should never reach the size";
    };
 };
 

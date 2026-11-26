@@ -27,6 +27,8 @@ Glaze's `meta<T>` template supports two members for enum serialization:
 
 Enum reflection libraries can provide these at compile-time, enabling a single generic template that handles all enums automatically.
 
+Only values listed in `value` can be written to string formats. A value the library does not reflect, such as one outside its range or flags combined with `|`, fails with `glz::error_code::unexpected_enum`.
+
 ## Library Options
 
 ### magic_enum

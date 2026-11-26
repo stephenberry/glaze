@@ -4,7 +4,9 @@
 #include "glaze/net/http_router.hpp"
 
 #include <cassert>
+#include <memory>
 #include <regex>
+#include <vector>
 
 #include "glaze/rpc/registry.hpp"
 #include "ut/ut.hpp"
@@ -324,6 +326,81 @@ suite http_router_functionality_tests = [] {
 using fn_ptr_handler = void (*)(const glz::request&, glz::response&);
 using custom_std_function = std::function<void(const glz::request&, glz::response&)>;
 
+suite allowed_methods_tests = [] {
+   using enum glz::http_method;
+
+   "lists_normal_and_streaming_methods"_test = [] {
+      glz::http_router router;
+      router.put("/items/:id", [](const glz::request&, glz::response&) {});
+      router.get("/items/:id", [](const glz::request&, glz::response&) {});
+      router.stream_post("/items/:id", [](glz::request&, glz::streaming_response&) {});
+
+      const auto found = router.allowed_methods("/items/7?full=1");
+      expect(found.methods == glz::http_method_set{GET, POST, PUT});
+      expect(found.methods.to_string() == "GET, POST, PUT");
+      expect(found.params.at("id") == "7");
+   };
+
+   "empty_for_unknown_path_or_failed_constraint"_test = [] {
+      glz::http_router router;
+      glz::route_spec spec;
+      spec.constraints["id"] = {
+         .validation = [](std::string_view v) { return !v.empty() && v[0] >= '0' && v[0] <= '9'; }};
+      router.get("/items/:id", [](const glz::request&, glz::response&) {}, spec);
+
+      expect(router.allowed_methods("/nothing").methods.empty());
+      expect(router.allowed_methods("/items/abc").methods.empty());
+      expect(router.allowed_methods("/items/1").methods == glz::http_method_set{GET});
+   };
+
+   // Constraints are per method, so one path can match some of its methods' routes only.
+   "respects_per_method_constraints"_test = [] {
+      glz::http_router router;
+      glz::route_spec numeric;
+      numeric.constraints["id"] = {
+         .validation = [](std::string_view v) { return !v.empty() && v[0] >= '0' && v[0] <= '9'; }};
+      router.get("/items/:id", [](const glz::request&, glz::response&) {});
+      router.del("/items/:id", [](const glz::request&, glz::response&) {}, numeric);
+
+      expect(router.allowed_methods("/items/abc").methods == glz::http_method_set{GET});
+      expect(router.allowed_methods("/items/12").methods == glz::http_method_set{GET, DELETE});
+   };
+
+   // Each method takes the first branch that answers it, so the set unites direct,
+   // static, parameter, and wildcard routes that all match the path.
+   "unites_every_matching_branch"_test = [] {
+      glz::http_router router;
+      router.get("/files/readme", [](const glz::request&, glz::response&) {});
+      router.put("/files/:name", [](const glz::request&, glz::response&) {});
+      router.post("/files/*rest", [](const glz::request&, glz::response&) {});
+      router.patch("/files/readme/extra", [](const glz::request&, glz::response&) {});
+
+      const auto found = router.allowed_methods("/files/readme");
+      expect(found.methods == glz::http_method_set{GET, POST, PUT});
+      expect(found.params.empty()) << "the direct route is found first and captures nothing";
+
+      expect(router.allowed_methods("/files/other").methods == glz::http_method_set{POST, PUT});
+      expect(router.allowed_methods("/files/a/b").methods == glz::http_method_set{POST});
+      expect(router.allowed_methods("/files/a/b").params.at("rest") == "a/b");
+   };
+
+   // A path served only by an explicit OPTIONS route still has routes.
+   "includes_options_routes"_test = [] {
+      glz::http_router router;
+      router.route(OPTIONS, "/probe", [](const glz::request&, glz::response&) {});
+
+      expect(router.allowed_methods("/probe").methods == glz::http_method_set{OPTIONS});
+   };
+
+   // Traversal captures are refused here exactly as match() refuses them.
+   "refuses_unsafe_captures"_test = [] {
+      glz::http_router router;
+      router.get("/files/*path", [](const glz::request&, glz::response&) {});
+      expect(router.allowed_methods("/files/a/%2e%2e/b").methods.empty());
+      expect(router.allowed_methods("/files/a/b").methods == glz::http_method_set{GET});
+   };
+};
+
 suite templated_router_tests = [] {
    "is_async_enabled_default_router"_test = [] {
       // Default http_router should have async enabled
@@ -431,12 +508,32 @@ suite path_param_decoding_tests = [] {
       expect(handler != nullptr);
       expect(params["path"] == "my docs/file name.txt");
    };
+
+   // RFC 3986: a '+' in a path is a literal plus, unlike in a query string.
+   "param_preserves_literal_plus"_test = [] {
+      glz::http_router router;
+      router.get("/users/:name", [](const glz::request&, glz::response&) {});
+
+      auto [handler, params] = router.match(glz::http_method::GET, "/users/a+b%2Bc%20d?q=x+y");
+      expect(handler != nullptr);
+      expect(params["name"] == "a+b+c d");
+   };
+
+   "wildcard_preserves_literal_plus"_test = [] {
+      glz::http_router router;
+      router.get("/files/*path", [](const glz::request&, glz::response&) {});
+
+      auto [handler, params] = router.match(glz::http_method::GET, "/files/a+b/report+1.txt");
+      expect(handler != nullptr);
+      expect(params["path"] == "a+b/report+1.txt");
+   };
 };
 
-// Route captures must not resolve to a ".." traversal component. The target is
-// split on literal '/' before percent-decoding, so a "%2e%2e%2f" reaches the
-// capture as "../" only here; leaving it in place lets a handler that resolves
-// the capture as a path escape its base directory.
+// Route captures must not resolve to a ".." traversal component or start at a
+// root. The target is split on literal '/' before percent-decoding, so a
+// "%2e%2e%2f" reaches the capture as "../", and a leading "%2f" as "/", only
+// here; leaving either in place lets a handler that resolves the capture as a
+// path escape its base directory.
 suite path_traversal_tests = [] {
    "wildcard_rejects_encoded_traversal"_test = [] {
       glz::http_router router;
@@ -499,6 +596,131 @@ suite path_traversal_tests = [] {
       auto [handler, params] = router.match(glz::http_method::GET, "/files/a..b%5creport.pdf");
       expect(handler != nullptr);
       expect(params["path"] == "a..b\\report.pdf");
+   };
+
+   "wildcard_rejects_encoded_rooted_path"_test = [] {
+      glz::http_router router;
+      router.get("/files/*path", [](const glz::request&, glz::response&) {});
+
+      // A leading "%2f" decodes to "/etc/passwd", which replaces the base
+      // directory it is joined onto instead of extending it.
+      auto [handler, params] = router.match(glz::http_method::GET, "/files/%2Fetc/passwd");
+      expect(handler == nullptr);
+   };
+
+   "param_rejects_encoded_rooted_path"_test = [] {
+      glz::http_router router;
+      router.get("/download/:file", [](const glz::request&, glz::response&) {});
+
+      auto [handler, params] = router.match(glz::http_method::GET, "/download/%2fetc%2fpasswd");
+      expect(handler == nullptr);
+   };
+
+   "wildcard_rejects_encoded_backslash_rooted_path"_test = [] {
+      glz::http_router router;
+      router.get("/files/*path", [](const glz::request&, glz::response&) {});
+
+      // A leading '\' roots the path on Windows the same way.
+      auto [handler, params] = router.match(glz::http_method::GET, "/files/%5Cwindows%5Cwin.ini");
+      expect(handler == nullptr);
+   };
+
+   "param_rejects_encoded_backslash_rooted_path"_test = [] {
+      glz::http_router router;
+      router.get("/download/:file", [](const glz::request&, glz::response&) {});
+
+      auto [handler, params] = router.match(glz::http_method::GET, "/download/%5csecret");
+      expect(handler == nullptr);
+   };
+
+   "wildcard_rejects_encoded_windows_drive_path"_test = [] {
+      glz::http_router router;
+      router.get("/files/*path", [](const glz::request&, glz::response&) {});
+
+      auto [handler, params] = router.match(glz::http_method::GET, "/files/C%3A%5CWindows%5Cwin.ini");
+      expect(handler == nullptr);
+   };
+
+   "param_rejects_encoded_windows_drive_relative_path"_test = [] {
+      glz::http_router router;
+      router.get("/download/:file", [](const glz::request&, glz::response&) {});
+
+      auto [handler, params] = router.match(glz::http_method::GET, "/download/D%3Asecret.txt");
+      expect(handler == nullptr);
+   };
+
+   "wildcard_allows_encoded_slash_after_first_segment"_test = [] {
+      glz::http_router router;
+      router.get("/files/*path", [](const glz::request&, glz::response&) {});
+
+      // Only the start of the capture can root it; a "%2f" past the first
+      // segment stays under the base directory.
+      auto [handler, params] = router.match(glz::http_method::GET, "/files/docs/%2Freport.pdf");
+      expect(handler != nullptr);
+      expect(params["path"] == "docs//report.pdf");
+   };
+
+   "param_allows_encoded_slash_within_value"_test = [] {
+      glz::http_router router;
+      router.get("/download/:file", [](const glz::request&, glz::response&) {});
+
+      auto [handler, params] = router.match(glz::http_method::GET, "/download/a%2Fb");
+      expect(handler != nullptr);
+      expect(params["file"] == "a/b");
+   };
+
+   "param_allows_colon_outside_drive_prefix"_test = [] {
+      glz::http_router router;
+      router.get("/keys/:key", [](const glz::request&, glz::response&) {});
+
+      // Only a single letter followed by ':' at the start is a drive prefix.
+      auto [handler, params] = router.match(glz::http_method::GET, "/keys/ab:c");
+      expect(handler != nullptr);
+      expect(params["key"] == "ab:c");
+
+      auto [handler2, params2] = router.match(glz::http_method::GET, "/keys/1:2");
+      expect(handler2 != nullptr);
+      expect(params2["key"] == "1:2");
+   };
+
+   "wildcard_allows_drive_like_segment_after_first"_test = [] {
+      glz::http_router router;
+      router.get("/files/*path", [](const glz::request&, glz::response&) {});
+
+      auto [handler, params] = router.match(glz::http_method::GET, "/files/notes/C:x");
+      expect(handler != nullptr);
+      expect(params["path"] == "notes/C:x");
+   };
+
+   // A "%00" decodes to a NUL byte. A capture opened as a path reaches the
+   // filesystem as a C string that ends at the NUL, so "report.txt%00.pdf"
+   // opens "report.txt" after an extension check on the std::string saw ".pdf".
+   "param_rejects_encoded_nul"_test = [] {
+      glz::http_router router;
+      router.get("/download/:file", [](const glz::request&, glz::response&) {});
+
+      auto [handler, params] = router.match(glz::http_method::GET, "/download/report.txt%00.pdf");
+      expect(handler == nullptr);
+   };
+
+   "wildcard_rejects_encoded_nul"_test = [] {
+      glz::http_router router;
+      router.get("/files/*path", [](const glz::request&, glz::response&) {});
+
+      auto [handler, params] = router.match(glz::http_method::GET, "/files/docs/report.txt%00.pdf");
+      expect(handler == nullptr);
+
+      auto [handler2, params2] = router.match(glz::http_method::GET, "/files/%00");
+      expect(handler2 == nullptr);
+   };
+
+   "param_allows_other_encoded_bytes"_test = [] {
+      glz::http_router router;
+      router.get("/download/:file", [](const glz::request&, glz::response&) {});
+
+      auto [handler, params] = router.match(glz::http_method::GET, "/download/my%20report%2B1.pdf");
+      expect(handler != nullptr);
+      expect(params["file"] == "my report+1.pdf");
    };
 };
 
@@ -646,6 +868,167 @@ suite service_composition_tests = [] {
       // Sub-endpoint should work
       auto [tasks_handler, tasks_params] = registry.endpoints.match(glz::http_method::GET, "/getAllTasks");
       expect(tasks_handler != nullptr);
+   };
+};
+
+// Schema generation uses the registry's options (GitHub issue #3080)
+
+struct SchemaPair
+{
+   int first{};
+   int second{};
+};
+
+struct SchemaOrder
+{
+   SchemaPair pair{};
+   std::optional<std::string> note{};
+};
+
+struct SchemaService
+{
+   SchemaOrder echo(SchemaOrder order) { return order; }
+};
+
+template <>
+struct glz::meta<SchemaService>
+{
+   using T = SchemaService;
+   static constexpr auto value = object(&T::echo);
+};
+
+// A custom options type derived from glz::opts, with a field of its own
+struct schema_derived_opts : glz::opts
+{
+   bool custom_flag = true;
+};
+
+// A standalone options type that does not derive from glz::opts
+struct schema_standalone_opts
+{
+   uint32_t format = glz::JSON;
+   bool null_terminated = true;
+   bool comments = false;
+   bool error_on_unknown_keys = true;
+   bool skip_null_members = true;
+   bool prettify = false;
+   bool minified = false;
+   bool error_on_missing_keys = true;
+   bool partial_read = false;
+   uint32_t internal{};
+};
+
+template <auto Opts>
+void expect_registry_schemas_use_opts()
+{
+   SchemaService service;
+   glz::registry<Opts, glz::REST> registry;
+   registry.on(service);
+   const auto& spec = registry.endpoints.normal_routes.routes.at("/echo").at(glz::http_method::POST).spec;
+   const auto expected = glz::write_json_schema<SchemaOrder, Opts>().value();
+   expect(expected != glz::write_json_schema<SchemaOrder>().value()); // the options change the schema
+   expect(spec.request_body_schema == expected);
+   expect(spec.response_schema == expected);
+}
+
+suite rest_schema_options_tests = [] {
+   "rest_schemas_use_derived_registry_opts"_test = [] {
+      expect_registry_schemas_use_opts<schema_derived_opts{{.error_on_missing_keys = true}}>();
+   };
+
+   "rest_schemas_use_standalone_registry_opts"_test = [] {
+      expect_registry_schemas_use_opts<schema_standalone_opts{}>();
+   };
+};
+
+// A write the registry rejects must leave the registered value as it was. The read assigns each
+// member as it goes, so before this was staged a failing self_constraint or a parse error
+// answered with an error yet kept every member read ahead of the failure.
+struct guarded_account
+{
+   std::string username = "alice";
+   std::string password = "correct horse battery";
+   std::string confirm_password = "correct horse battery";
+   int age = 30;
+};
+
+template <>
+struct glz::meta<guarded_account>
+{
+   using T = guarded_account;
+   static constexpr auto strong = [](const T& v) {
+      return v.password.size() >= 12 && v.password == v.confirm_password;
+   };
+   static constexpr auto value = object(&T::username, &T::password, &T::confirm_password, &T::age);
+   static constexpr auto self_constraint = glz::self_constraint<strong, "Weak or mismatched password">;
+};
+
+struct guarded_service
+{
+   guarded_account account{};
+};
+
+suite rest_rejected_write_tests = [] {
+   "rejected_put_keeps_value"_test = [] {
+      glz::registry<glz::opts{}, glz::REST> registry;
+      guarded_service service{};
+      registry.on(service);
+
+      auto put = [&](std::string body) {
+         auto [handler, params] = registry.endpoints.match(glz::http_method::PUT, "/account");
+         expect(handler != nullptr);
+         glz::request req{};
+         req.method = glz::http_method::PUT;
+         req.target = "/account";
+         req.body = std::move(body);
+         glz::response res{};
+         handler(req, res);
+         return res.status_code;
+      };
+
+      expect(put(R"({"password":"short","confirm_password":"other"})") == 400);
+      expect(service.account.password == "correct horse battery") << service.account.password;
+      expect(service.account.confirm_password == "correct horse battery") << service.account.confirm_password;
+
+      expect(put(R"({"username":"mallory","age":"old"})") == 400);
+      expect(service.account.username == "alice") << service.account.username;
+
+      // A valid write still lands
+      expect(put(R"({"username":"bob","age":40})") == 204);
+      expect(service.account.username == "bob");
+      expect(service.account.age == 40);
+   };
+};
+
+// A member that cannot really be copied (a container of std::unique_ptr) is read in place rather than failing to
+// compile.
+struct move_only_store
+{
+   std::vector<std::unique_ptr<int>> items{};
+   int count{};
+};
+
+struct move_only_service
+{
+   move_only_store store{};
+};
+
+suite rest_move_only_tests = [] {
+   "move_only_members_register"_test = [] {
+      glz::registry<glz::opts{}, glz::REST> registry;
+      move_only_service service{};
+      registry.on(service);
+
+      auto [handler, params] = registry.endpoints.match(glz::http_method::PUT, "/store");
+      expect(handler != nullptr);
+      glz::request req{};
+      req.method = glz::http_method::PUT;
+      req.target = "/store";
+      req.body = R"({"count":8})";
+      glz::response res{};
+      handler(req, res);
+      expect(res.status_code == 204);
+      expect(service.store.count == 8);
    };
 };
 

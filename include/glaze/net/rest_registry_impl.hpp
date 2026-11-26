@@ -7,6 +7,7 @@
 #include "glaze/glaze.hpp"
 #include "glaze/json/schema.hpp"
 #include "glaze/net/http_router.hpp"
+#include "glaze/rpc/read_and_commit.hpp"
 #include "glaze/rpc/repe/repe.hpp" // For protocol_storage template
 
 namespace glz
@@ -41,12 +42,13 @@ namespace glz
          return rest_path;
       }
 
-      // Helper to generate JSON schema for a type
+      // Helper to generate JSON schema for a type, using the registry's options (e.g. error_on_missing_keys marks
+      // keys as required)
       template <class T>
       static std::string generate_schema_for_type()
       {
          std::string schema_str;
-         auto ec = write_json_schema<T>(schema_str);
+         auto ec = write_json_schema<T, Opts>(schema_str);
          if (ec) {
             return "{}";
          }
@@ -115,7 +117,11 @@ namespace glz
             PUT, rest_path,
             [&value](const request& req, response& res) {
                // Parse the JSON request body
-               auto ec = read<Opts>(value, req.body);
+               error_ctx ec{};
+               detail::read_and_commit(value, [&](auto& target) {
+                  ec = read<Opts>(target, req.body);
+                  return !ec;
+               });
                if (ec) {
                   res.status(400).body("Invalid request body: " + format_error(ec, req.body));
                   return;
@@ -195,7 +201,11 @@ namespace glz
             PUT, rest_path,
             [&obj](const request& req, response& res) {
                // Parse the JSON request body
-               auto ec = read<Opts>(obj, req.body);
+               error_ctx ec{};
+               detail::read_and_commit(obj, [&](auto& target) {
+                  ec = read<Opts>(target, req.body);
+                  return !ec;
+               });
                if (ec) {
                   res.status(400).body("Invalid request body: " + format_error(ec, req.body));
                   return;
@@ -222,7 +232,11 @@ namespace glz
             PUT, rest_path,
             [&value](const request& req, response& res) {
                // Parse the JSON request body
-               auto ec = read<Opts>(value, req.body);
+               error_ctx ec{};
+               detail::read_and_commit(value, [&](auto& target) {
+                  ec = read<Opts>(target, req.body);
+                  return !ec;
+               });
                if (ec) {
                   res.status(400).body("Invalid request body: " + format_error(ec, req.body));
                   return;
@@ -249,7 +263,11 @@ namespace glz
             PUT, rest_path,
             [&var](const request& req, response& res) {
                // Parse the JSON request body
-               auto ec = read<Opts>(var, req.body);
+               error_ctx ec{};
+               detail::read_and_commit(var, [&](auto& target) {
+                  ec = read<Opts>(target, req.body);
+                  return !ec;
+               });
                if (ec) {
                   res.status(400).body("Invalid request body: " + format_error(ec, req.body));
                   return;

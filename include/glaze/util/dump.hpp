@@ -15,6 +15,8 @@
 #include "glaze/core/buffer_traits.hpp"
 #include "glaze/core/opts.hpp"
 #include "glaze/util/convert.hpp"
+#include "glaze/util/inline.hpp"
+#include "glaze/util/string_literal.hpp"
 
 namespace glz
 {

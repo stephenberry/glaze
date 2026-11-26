@@ -23,3 +23,11 @@ add_executable(lazy_beve_test lazy_beve_test.cpp)
 target_link_libraries(lazy_beve_test PRIVATE glz_test_common)
 
 add_test(NAME lazy_beve_test COMMAND lazy_beve_test)
+
+## Variants with more than 64 alternatives
+
+add_executable(beve_wide_variant_test beve_wide_variant_test.cpp)
+
+target_link_libraries(beve_wide_variant_test PRIVATE glz_test_common)
+
+add_test(NAME beve_wide_variant_test COMMAND beve_wide_variant_test)

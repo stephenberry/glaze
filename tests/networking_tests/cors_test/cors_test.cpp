@@ -74,4 +74,97 @@ suite cors_origin_tests = [] {
    };
 };
 
+namespace
+{
+   glz::response run_preflight(const glz::cors_config& config, std::string_view origin)
+   {
+      auto middleware = glz::create_cors_middleware(config);
+      glz::request req{};
+      req.method = glz::http_method::OPTIONS;
+      req.headers.set("origin", std::string(origin));
+      req.headers.set("access-control-request-method", "POST");
+      glz::response res{};
+      middleware(req, res);
+      return res;
+   }
+}
+
+suite cors_preflight_tests = [] {
+   // The rejection text used to be written before the origin was checked and only the
+   // status was replaced afterwards, so an allowed preflight answered 204 with a body.
+   "allowed_preflight_has_no_body"_test = [] {
+      glz::cors_config config;
+      config.allowed_origins = {"https://app.example"};
+
+      auto res = run_preflight(config, "https://app.example");
+      expect(res.status_code == 204);
+      expect(res.response_body.empty()) << "got: " << res.response_body;
+      expect(res.response_headers.first_value("access-control-allow-origin") == "https://app.example");
+      expect(res.response_headers.contains("access-control-allow-methods"));
+   };
+
+   "allowed_preflight_with_custom_status_has_no_body"_test = [] {
+      glz::cors_config config;
+      config.allowed_origins = {"https://app.example"};
+      config.options_success_status = 200;
+
+      auto res = run_preflight(config, "https://app.example");
+      expect(res.status_code == 200);
+      expect(res.response_body.empty()) << "got: " << res.response_body;
+   };
+
+   "rejected_preflight_keeps_403_and_message"_test = [] {
+      glz::cors_config config;
+      config.allowed_origins = {"https://app.example"};
+
+      auto res = run_preflight(config, "https://evil.example");
+      expect(res.status_code == 403);
+      expect(res.response_body == "CORS: Origin not allowed");
+      expect(!res.response_headers.contains("access-control-allow-origin"));
+   };
+};
+
+suite cors_vary_tests = [] {
+   // Without Vary: Origin a shared cache stores the answer for one origin and serves it
+   // to the next, with the wrong Access-Control-Allow-Origin or none at all.
+   "reflected_origin_varies_on_origin"_test = [] {
+      glz::cors_config config;
+      config.allowed_origins = {"https://app.example", "https://admin.example"};
+
+      auto res = run_cors(config, "https://app.example");
+      expect(res.response_headers.first_value("access-control-allow-origin") == "https://app.example");
+      expect(res.response_headers.contains_token("vary", "Origin"));
+   };
+
+   "rejected_origin_varies_on_origin"_test = [] {
+      glz::cors_config config;
+      config.allowed_origins = {"https://app.example"};
+
+      auto res = run_cors(config, "https://evil.example");
+      expect(!res.response_headers.contains("access-control-allow-origin"));
+      expect(res.response_headers.contains_token("vary", "Origin"));
+   };
+
+   "wildcard_without_origin_varies_on_origin"_test = [] {
+      auto middleware = glz::create_cors_middleware();
+      glz::request req{};
+      req.method = glz::http_method::GET;
+      glz::response res{};
+      middleware(req, res);
+      expect(!res.response_headers.contains("access-control-allow-origin"));
+      expect(res.response_headers.contains_token("vary", "Origin"));
+   };
+
+   "preflight_echoing_request_headers_varies_on_them"_test = [] {
+      glz::cors_config config;
+      config.allowed_origins = {"https://app.example"};
+      config.allowed_headers.clear();
+
+      auto res = run_preflight(config, "https://app.example");
+      expect(res.status_code == 204);
+      expect(res.response_headers.contains_token("vary", "Origin"));
+      expect(res.response_headers.contains_token("vary", "Access-Control-Request-Headers"));
+   };
+};
+
 int main() {}

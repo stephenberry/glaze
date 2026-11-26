@@ -321,6 +321,11 @@ struct Person
    Address address{};
 };
 
+struct path_holder
+{
+   std::filesystem::path file{};
+};
+
 #if 0
 struct invalid_name
 {
@@ -386,7 +391,17 @@ suite schema_tests = [] {
       };
       test(std::int64_t{});
       test(std::uint8_t{});
-      // double todo parse_number_failure when reading "minimum":-1.7976931348623157E308
+   };
+
+   "a double's whole range is no bound, and a float's narrower range is one"_test = [] {
+      expect(glz::write_json_schema<double>().value_or("error") == R"({"type":"number","title":"double"})");
+      // A long double's range is at least a double's, so it states no bounds either.
+      // The title is the compiler's spelling of the type, which differs between compilers.
+      const auto long_double_schema = glz::write_json_schema<long double>().value_or("error");
+      expect(long_double_schema == R"({"type":"number","title":")" + std::string(glz::name_v<long double>) + R"("})")
+         << long_double_schema;
+      expect(glz::write_json_schema<float>().value_or("error") ==
+             R"({"type":"number","title":"float","minimum":-3.4028234663852886E38,"maximum":3.4028234663852886E38})");
    };
 
    "always nullable type is constant null"_test = [] {
@@ -444,6 +459,25 @@ suite schema_tests = [] {
       expect(obj.maxItems.value() == 42);
    };
 
+   "a 64-bit integer names the format that keeps it exact, and a narrower one names none"_test = [] {
+      expect(
+         glz::write_json_schema<std::int64_t>().value_or("error") ==
+         R"({"type":"integer","title":"int64_t","format":"int64","minimum":-9223372036854775808,"maximum":9223372036854775807})");
+      expect(glz::write_json_schema<std::uint64_t>().value_or("error") ==
+             R"({"type":"integer","title":"uint64_t","format":"uint64","minimum":0,"maximum":18446744073709551615})");
+      expect(glz::write_json_schema<std::int32_t>().value_or("error") ==
+             R"({"type":"integer","title":"int32_t","minimum":-2147483648,"maximum":2147483647})");
+   };
+
+   "a filesystem path is described as the string it is written as"_test = [] {
+      const std::string path_name{glz::name_v<std::filesystem::path>};
+      expect(glz::write_json_schema<std::filesystem::path>().value_or("error") ==
+             R"({"type":"string","title":")" + path_name + R"("})");
+      expect(
+         glz::write_json_schema<path_holder>().value_or("error") ==
+         R"({"type":"object","properties":{"file":{"type":"string"}},"additionalProperties":false,"title":"path_holder"})");
+   };
+
    "required_key meta is correctly used"_test = [] {
       std::string schema_str = glz::write_json_schema<required_meta>().value_or("error");
       expect(
@@ -469,6 +503,28 @@ suite schema_tests = [] {
          schema_str_nreq ==
          R"({"type":"object","properties":{"important":{"$ref":"#/$defs/int32_t"},"unimportant":{"anyOf":[{"$ref":"#/$defs/int32_t"},{"type":"null"}]}},"additionalProperties":false,"$defs":{"int32_t":{"type":"integer","minimum":-2147483648,"maximum":2147483647}},"title":"error_on_missing_keys_test"})")
          << schema_str_nreq;
+   };
+
+   "schema is JSON without nulls whatever the format and skip_null_members options"_test = [] {
+      using T = error_on_missing_keys_test;
+      const auto expected = glz::write_json_schema<T>().value_or("error");
+      expect(glz::write_json_schema<T, glz::opts{.format = glz::BEVE}>().value_or("error") == expected);
+      expect(glz::write_json_schema<T, glz::opts{.skip_null_members = false}>().value_or("error") == expected);
+   };
+
+   "required keys match what the reader requires"_test = [] {
+      using T = error_on_missing_keys_test;
+      // With skip_null_members = false, error_on_missing_keys requires nullable keys too
+      constexpr glz::opts opts{.skip_null_members = false, .error_on_missing_keys = true};
+      glz::schema obj{};
+      const auto schema = glz::write_json_schema<T, opts>().value_or("error");
+      expect(!glz::read<glz::opts{.error_on_unknown_keys = false}>(obj, schema));
+      expect(obj.required.has_value() && *obj.required == std::vector<std::string_view>{"unimportant", "important"})
+         << schema;
+
+      T value{};
+      expect(glz::read<opts>(value, R"({"important":1})") == glz::error_code::missing_key);
+      expect(!glz::read<opts>(value, R"({"unimportant":null,"important":1})"));
    };
 
    // Demonstrates using error_on_missing_keys to mark all non-nullable fields as required in JSON schema
@@ -645,7 +701,7 @@ suite value_type_variant_schema = [] {
       auto schema = glz::write_json_schema<std::vector<double>>().value();
       expect(
          schema ==
-         R"({"type":"array","items":{"$ref":"#/$defs/double"},"$defs":{"double":{"type":"number","minimum":-1.7976931348623157E308,"maximum":1.7976931348623157E308}},"title":"std::vector<double>"})")
+         R"({"type":"array","items":{"$ref":"#/$defs/double"},"$defs":{"double":{"type":"number"}},"title":"std::vector<double>"})")
          << schema;
    };
 
@@ -1173,6 +1229,38 @@ suite schema_round_trip_test = [] {
       expect(!ec);
       expect(re_serialized == schema_str)
          << "round-trip mismatch:\n  original: " << schema_str << "\n  re-serialized: " << re_serialized;
+   };
+};
+
+// A non-aggregate type with glz::meta and glz::json_schema (https://github.com/stephenberry/glaze/issues/3126)
+struct non_aggregate_schema_vec2
+{
+   double x{};
+   double y{};
+   non_aggregate_schema_vec2() = default;
+   non_aggregate_schema_vec2(double x, double y) : x(x), y(y) {}
+};
+static_assert(!std::is_aggregate_v<non_aggregate_schema_vec2>);
+
+template <>
+struct glz::meta<non_aggregate_schema_vec2>
+{
+   static constexpr auto value = object("x", &non_aggregate_schema_vec2::x, "y", &non_aggregate_schema_vec2::y);
+};
+
+template <>
+struct glz::json_schema<non_aggregate_schema_vec2>
+{
+   schema x{.description = "x component"};
+};
+
+suite non_aggregate_schema_test = [] {
+   "non-aggregate meta type with json_schema"_test = [] {
+      const auto schema = glz::write_json_schema<non_aggregate_schema_vec2>().value_or("error");
+      expect(
+         schema ==
+         R"({"type":"object","properties":{"x":{"$ref":"#/$defs/double","description":"x component"},"y":{"$ref":"#/$defs/double"}},"additionalProperties":false,"$defs":{"double":{"type":"number"}},"title":"non_aggregate_schema_vec2"})")
+         << schema;
    };
 };
 

@@ -116,10 +116,11 @@ namespace glz
    // into the caller's string. None of them can be assumed to carry the '\0' sentinel a
    // null_terminated read relies on when it drops its end checks, so the registry reads with that
    // option off no matter what the user asked for. The bound belongs here, where the buffer shape
-   // is known, rather than in every caller that hands the registry bytes it does not own.
+   // is known, rather than in every caller that hands the registry bytes it does not own. For the
+   // same reason none of them can be assumed to carry is_padded slack, so that comes off too.
    template <auto Opts>
    inline constexpr auto registry_read_opts = [] {
-      auto o = Opts;
+      auto o = is_padded_off<Opts>();
       if constexpr (requires { o.null_terminated = false; }) {
          o.null_terminated = false;
       }

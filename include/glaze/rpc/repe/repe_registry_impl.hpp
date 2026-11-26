@@ -4,6 +4,7 @@
 #pragma once
 
 #include "glaze/glaze.hpp"
+#include "glaze/rpc/read_and_commit.hpp"
 #include "glaze/rpc/repe/repe.hpp"
 
 namespace glz
@@ -27,7 +28,7 @@ namespace glz
       {
          reg.endpoints[path] = [&value](repe::state_view& state) mutable {
             if (state.has_body()) {
-               if (!read_params<Opts>(value, state)) {
+               if (!detail::read_and_commit(value, [&](auto& target) { return read_params<Opts>(target, state); })) {
                   return;
                }
             }
@@ -105,7 +106,7 @@ namespace glz
       {
          reg.endpoints[path] = [&obj](repe::state_view& state) mutable {
             if (state.has_body()) {
-               if (!read_params<Opts>(obj, state)) {
+               if (!detail::read_and_commit(obj, [&](auto& target) { return read_params<Opts>(target, state); })) {
                   return;
                }
             }
@@ -128,7 +129,7 @@ namespace glz
       {
          reg.endpoints[path] = [value](repe::state_view& state) mutable {
             if (state.has_body()) {
-               if (!read_params<Opts>(value, state)) {
+               if (!detail::read_and_commit(value, [&](auto& target) { return read_params<Opts>(target, state); })) {
                   return;
                }
             }
@@ -151,7 +152,7 @@ namespace glz
       {
          reg.endpoints[path] = [&var](repe::state_view& state) mutable {
             if (state.has_body()) {
-               if (!read_params<Opts>(var, state)) {
+               if (!detail::read_and_commit(var, [&](auto& target) { return read_params<Opts>(target, state); })) {
                   return;
                }
             }

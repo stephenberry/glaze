@@ -20,8 +20,20 @@ namespace glz
 
          using enum json_type;
 
-         std::vector<json_type> state(64);
+         // Indexed by nesting level, with level 0 the top. Sized for the depth the readers accept (see
+         // enter_depth), so that every document glz::validate_jsonc passes can be prettified.
+         std::array<json_type, max_recursive_depth_limit + 1> state{};
          int64_t indent{};
+
+         // Enters one level of nesting, failing past the readers' limit.
+         const auto open_level = [&](const json_type type) {
+            if (size_t(indent) >= max_recursive_depth_limit) [[unlikely]] {
+               ctx.error = error_code::exceeded_max_recursive_depth;
+               return false;
+            }
+            state[++indent] = type;
+            return true;
+         };
 
          // Set while the output cursor sits on a line that a `//` comment has commented out. Only
          // the comment-enabled path can set it, so the plain JSON writer keeps the code it had.
@@ -58,7 +70,7 @@ namespace glz
          // A break that fails is reported rather than swallowed: on a bounded destination that ran
          // out, carrying on would leave `line_comment_open` set and put this write *inside* the
          // comment, which is not a truncated document but a wrong one.
-         const auto emit = [&](const auto& x) {
+         const auto put = [&](const auto& x) {
             if constexpr (Opts.comments) {
                if (line_comment_open) [[unlikely]] {
                   if (not new_line()) [[unlikely]] {
@@ -77,13 +89,13 @@ namespace glz
                   return;
                }
                // non-empty: the scanner reports an empty view as an error
-               if (not emit(value)) [[unlikely]] {
+               if (not put(value)) [[unlikely]] {
                   return;
                }
                break;
             }
             case Comma: {
-               if (not emit(',')) [[unlikely]] {
+               if (not put(',')) [[unlikely]] {
                   return;
                }
                ++it;
@@ -98,7 +110,7 @@ namespace glz
                         return;
                      }
                   }
-                  else if (not emit(use_tabs ? '\t' : ' ')) [[unlikely]] {
+                  else if (not put(use_tabs ? '\t' : ' ')) [[unlikely]] {
                      return;
                   }
                }
@@ -107,33 +119,27 @@ namespace glz
             case Number: {
                const auto value = read_json_number<Opts.null_terminated>(it, end);
                // non-empty: a Number match is one valid character
-               if (not emit(value)) [[unlikely]] {
+               if (not put(value)) [[unlikely]] {
                   return;
                }
                break;
             }
             case Colon: {
                static constexpr sv colon = use_tabs ? sv{":\t"} : sv{": "};
-               if (not emit(colon)) [[unlikely]] {
+               if (not put(colon)) [[unlikely]] {
                   return;
                }
                ++it;
                break;
             }
             case Array_Start: {
-               if (not emit('[')) [[unlikely]] {
+               if (not put('[')) [[unlikely]] {
                   return;
                }
                ++it;
-               ++indent;
-               if (size_t(indent) >= state.size()) [[unlikely]] {
-                  state.resize(state.size() * 2);
-                  if (state.size() >= max_recursive_depth_limit) [[unlikely]] {
-                     ctx.error = error_code::exceeded_max_recursive_depth;
-                     return;
-                  }
+               if (not open_level(Array_Start)) [[unlikely]] {
+                  return;
                }
-               state[indent] = Array_Start;
                if constexpr (check_new_lines_in_arrays(Opts)) {
                   if constexpr (not Opts.null_terminated) {
                      if (it != end && *it != ']') {
@@ -159,7 +165,7 @@ namespace glz
                   return;
                }
                // This break is the one the bracket wanted anyway, and it closes an open line
-               // comment on its way, leaving the emit below nothing to close.
+               // comment on its way, leaving the put below nothing to close.
                if constexpr (check_new_lines_in_arrays(Opts)) {
                   if (it[-1] != '[') {
                      if (not new_line()) [[unlikely]] {
@@ -167,7 +173,7 @@ namespace glz
                      }
                   }
                }
-               if (not emit(']')) [[unlikely]] {
+               if (not put(']')) [[unlikely]] {
                   return;
                }
                ++it;
@@ -179,7 +185,7 @@ namespace glz
                if (not match_literal<"null">(ctx, it, end)) [[unlikely]] {
                   return;
                }
-               if (not emit("null")) [[unlikely]] {
+               if (not put("null")) [[unlikely]] {
                   return;
                }
                break;
@@ -189,7 +195,7 @@ namespace glz
                   if (not match_literal<"true">(ctx, it, end)) [[unlikely]] {
                      return;
                   }
-                  if (not emit("true")) [[unlikely]] {
+                  if (not put("true")) [[unlikely]] {
                      return;
                   }
                   break;
@@ -198,26 +204,20 @@ namespace glz
                   if (not match_literal<"false">(ctx, it, end)) [[unlikely]] {
                      return;
                   }
-                  if (not emit("false")) [[unlikely]] {
+                  if (not put("false")) [[unlikely]] {
                      return;
                   }
                   break;
                }
             }
             case Object_Start: {
-               if (not emit('{')) [[unlikely]] {
+               if (not put('{')) [[unlikely]] {
                   return;
                }
                ++it;
-               ++indent;
-               if (size_t(indent) >= state.size()) [[unlikely]] {
-                  state.resize(state.size() * 2);
-                  if (state.size() >= max_recursive_depth_limit) [[unlikely]] {
-                     ctx.error = error_code::exceeded_max_recursive_depth;
-                     return;
-                  }
+               if (not open_level(Object_Start)) [[unlikely]] {
+                  return;
                }
-               state[indent] = Object_Start;
                if constexpr (not Opts.null_terminated) {
                   if (it != end && *it != '}') {
                      if (not new_line()) [[unlikely]] {
@@ -246,7 +246,7 @@ namespace glz
                      return;
                   }
                }
-               if (not emit('}')) [[unlikely]] {
+               if (not put('}')) [[unlikely]] {
                   return;
                }
                ++it;
@@ -259,7 +259,7 @@ namespace glz
                      return;
                   }
                   // non-empty: an empty view comes with an error
-                  if (not emit(comment.text)) [[unlikely]] {
+                  if (not put(comment.text)) [[unlikely]] {
                      return;
                   }
                   line_comment_open = comment.line;
@@ -290,6 +290,7 @@ namespace glz
       // Returns the number of bytes written, which is what a bounded output has no other way to
       // learn: it has no size to be shrunk to the result the way a resizable one does.
       template <auto Opts, contiguous In, output_buffer Out>
+         requires(not byte_array_buffer<Out>)
       inline size_t prettify_json(is_context auto&& ctx, In&& in, Out&& out)
       {
          if constexpr (resizable<Out>) {
@@ -316,6 +317,14 @@ namespace glz
             out.resize(ix);
          }
          return ix;
+      }
+
+      // A C array has no members to serialize through; a span over it keeps the extent as the capacity.
+      template <auto Opts, contiguous In, byte_array_buffer Out>
+      inline size_t prettify_json(is_context auto&& ctx, In&& in, Out& out)
+      {
+         auto view = std::span{out};
+         return prettify_json<Opts>(ctx, std::forward<In>(in), view);
       }
    }
 

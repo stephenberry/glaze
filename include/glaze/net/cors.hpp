@@ -151,13 +151,21 @@ namespace glz
          bool is_preflight = (req.method == http_method::OPTIONS) &&
                              (req.headers.find("access-control-request-method") != req.headers.end());
 
-         if (is_preflight && config.handle_preflight) {
+         const bool origin_allowed = !origin.empty() && is_origin_allowed(config, origin);
+
+         // The CORS headers below depend on the request's Origin: it is echoed back, or the
+         // headers are left out for a missing or rejected origin. A shared cache that is not
+         // told so serves one origin's answer to the next (Fetch Standard, "CORS protocol and
+         // HTTP caches"), so every response this middleware handles names Origin in Vary.
+         res.add_header("Vary", "Origin");
+
+         if (is_preflight && config.handle_preflight && !origin_allowed) {
             // Origin not allowed, but it's a preflight request - respond with 403
             res.status(403).body("CORS: Origin not allowed");
          }
 
          // Always add CORS headers if origin is allowed
-         if (!origin.empty() && is_origin_allowed(config, origin)) {
+         if (origin_allowed) {
             // Determine which origin to send back
             std::string allowed_origin = "*";
             const bool contains_wildcard = std::find(config.allowed_origins.begin(), config.allowed_origins.end(),
@@ -187,9 +195,13 @@ namespace glz
                if (!config.allowed_headers.empty()) {
                   res.header("Access-Control-Allow-Headers", join_strings(config.allowed_headers, ", "));
                }
-               else if (auto requested_headers = req.headers.find("access-control-request-headers");
-                        requested_headers != req.headers.end()) {
-                  res.header("Access-Control-Allow-Headers", requested_headers->value);
+               else {
+                  // Echoed from the request, so this answer varies with it too.
+                  res.add_header("Vary", "Access-Control-Request-Headers");
+                  if (auto requested_headers = req.headers.find("access-control-request-headers");
+                      requested_headers != req.headers.end()) {
+                     res.header("Access-Control-Allow-Headers", requested_headers->value);
+                  }
                }
 
                // Add max age
