@@ -379,7 +379,11 @@ namespace glz
    // Helpers shared by array/object readers: read a key for reflected objects.
    namespace jsonb_detail
    {
-      template <class It>
+      // KeyView is set when the caller stores key_out as the map's key_type without copying
+      // (a std::string_view key). A literal key then views the input buffer, which outlives the
+      // read, but an escaped key is decoded into scratch, which the next key reuses, so a view of
+      // it would dangle. Refuse an escaped key in that case, matching the string value reader.
+      template <bool KeyView = false, class It>
       inline bool read_string_key(is_context auto& ctx, It& it, It end, std::string& scratch, sv& key_out)
       {
          uint8_t tc{};
@@ -395,11 +399,17 @@ namespace glz
             return true;
          }
          if (tc == jsonb::type::textj || tc == jsonb::type::text5) {
-            decode_text(ctx, tc, it, end, static_cast<size_t>(sz), scratch);
-            if (bool(ctx.error)) return false;
-            it += sz;
-            key_out = sv{scratch.data(), scratch.size()};
-            return true;
+            if constexpr (KeyView) {
+               ctx.error = error_code::syntax_error;
+               return false;
+            }
+            else {
+               decode_text(ctx, tc, it, end, static_cast<size_t>(sz), scratch);
+               if (bool(ctx.error)) return false;
+               it += sz;
+               key_out = sv{scratch.data(), scratch.size()};
+               return true;
+            }
          }
          ctx.error = error_code::syntax_error;
          return false;
@@ -494,10 +504,13 @@ namespace glz
          const auto stop = it + sz;
 
          value.clear();
+         // A view key_type (std::string_view) stores the key bytes without copying, so an escaped
+         // key decoded into key_scratch cannot be kept past the next key's decode.
+         constexpr bool key_view = string_view_t<Key>;
          std::string key_scratch;
          while (it < stop) {
             sv key{};
-            if (!jsonb_detail::read_string_key(ctx, it, stop, key_scratch, key)) return;
+            if (!jsonb_detail::read_string_key<key_view>(ctx, it, stop, key_scratch, key)) return;
 
             if (it >= stop) [[unlikely]] {
                ctx.error = error_code::syntax_error;

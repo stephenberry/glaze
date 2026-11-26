@@ -3211,4 +3211,77 @@ suite jsonb_self_constraint_tests = [] {
    };
 };
 
+// A JSONB object read into a std::string_view-keyed map stored the key as a view. A literal
+// key (TEXT/TEXTRAW) views the input buffer and is fine, but an escaped key (TEXTJ/TEXT5) is
+// decoded into a per-object scratch string that the next key's decode reallocates, so the stored
+// view dangled: reading a second escaped key freed the first key's bytes while the map still
+// compared against them (heap use-after-free under ASan). The string value reader already refuses
+// escaped text into a view; the map key reader must do the same.
+suite view_key_escape_guard = [] {
+   auto put_hdr = [](std::string& blob, uint8_t type, uint64_t size) {
+      if (size <= 11) {
+         blob.push_back(static_cast<char>((size << 4) | type));
+      }
+      else if (size <= 0xFF) {
+         blob.push_back(static_cast<char>((0xCu << 4) | type));
+         blob.push_back(static_cast<char>(size));
+      }
+      else {
+         blob.push_back(static_cast<char>((0xDu << 4) | type));
+         blob.push_back(static_cast<char>((size >> 8) & 0xFF));
+         blob.push_back(static_cast<char>(size & 0xFF));
+      }
+   };
+
+   "escaped key rejected for a string_view-keyed map"_test = [&] {
+      // OBJECT { TEXTJ("A"*32): INT 1, TEXTJ("B"*200): INT 2 }. The second key forces the
+      // scratch buffer to reallocate, freeing the first key's bytes.
+      std::string body;
+      put_hdr(body, 8, 32);
+      body.append(32, 'A');
+      put_hdr(body, 3, 1);
+      body.push_back('1');
+      put_hdr(body, 8, 200);
+      body.append(200, 'B');
+      put_hdr(body, 3, 1);
+      body.push_back('2');
+      std::string blob;
+      put_hdr(blob, 12, body.size());
+      blob += body;
+
+      std::map<std::string_view, int> m;
+      expect(bool(glz::read_jsonb(m, blob))); // rejected, not a use-after-free
+      expect(m.empty());
+
+      // The same blob into an owning-key map still decodes both escaped keys.
+      std::map<std::string, int> owning;
+      expect(not glz::read_jsonb(owning, blob));
+      expect(owning.size() == 2);
+      expect(owning.at(std::string(32, 'A')) == 1);
+      expect(owning.at(std::string(200, 'B')) == 2);
+   };
+
+   "literal key still allowed for a string_view-keyed map"_test = [&] {
+      // OBJECT { TEXT("aa"): INT 1, TEXT("bb"): INT 2 } -- literal keys view the input buffer.
+      std::string body;
+      put_hdr(body, 7, 2);
+      body += "aa";
+      put_hdr(body, 3, 1);
+      body.push_back('1');
+      put_hdr(body, 7, 2);
+      body += "bb";
+      put_hdr(body, 3, 1);
+      body.push_back('2');
+      std::string blob;
+      put_hdr(blob, 12, body.size());
+      blob += body;
+
+      std::map<std::string_view, int> m;
+      expect(not glz::read_jsonb(m, blob));
+      expect(m.size() == 2);
+      expect(m.at("aa") == 1);
+      expect(m.at("bb") == 2);
+   };
+};
+
 int main() { return 0; }
