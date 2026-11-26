@@ -14263,4 +14263,73 @@ suite yaml_self_constraint_tests = [] {
    };
 };
 
+namespace
+{
+   // Reads `yaml` into glz::generic and returns it as JSON, or "error" when the read fails.
+   std::string yaml_to_json(const std::string& yaml)
+   {
+      glz::generic value{};
+      if (glz::read_yaml(value, yaml)) {
+         return "error";
+      }
+      std::string json{};
+      if (glz::write_json(value, json)) {
+         return "error";
+      }
+      return json;
+   }
+}
+
+suite yaml_plain_scalar_with_typed_prefix_tests = [] {
+   "block plain scalar that starts with a number and has a comma is a string"_test = [] {
+      expect(yaml_to_json("a: 4,5\n") == R"({"a":"4,5"})");
+      expect(yaml_to_json("a: 7,13,1,3\n") == R"({"a":"7,13,1,3"})");
+      expect(yaml_to_json("a: 0x1F,2\n") == R"({"a":"0x1F,2"})");
+      expect(yaml_to_json("a: .inf,\n") == R"({"a":".inf,"})");
+   };
+
+   "block plain scalar that starts with a number and has more words is a string"_test = [] {
+      expect(yaml_to_json("a: 10 ms\n") == R"({"a":"10 ms"})");
+      expect(yaml_to_json("a: 4 x\n") == R"({"a":"4 x"})");
+      expect(yaml_to_json("a: -4 x\n") == R"({"a":"-4 x"})");
+      expect(yaml_to_json("a: +4 y\n") == R"({"a":"+4 y"})");
+   };
+
+   "block plain scalar that starts with a bool or null and has more text is a string"_test = [] {
+      expect(yaml_to_json("a: true,false\n") == R"({"a":"true,false"})");
+      expect(yaml_to_json("a: true x\n") == R"({"a":"true x"})");
+      expect(yaml_to_json("a: null,1\n") == R"({"a":"null,1"})");
+      expect(yaml_to_json("a: ~x\n") == R"({"a":"~x"})");
+   };
+
+   "a hash without whitespace before it does not start a comment"_test = [] {
+      expect(yaml_to_json("a: 4#x\n") == R"({"a":"4#x"})");
+   };
+
+   "a typed token followed by whitespace and a comment keeps its type"_test = [] {
+      expect(yaml_to_json("a: 4 # c\n") == R"({"a":4})");
+      expect(yaml_to_json("a: 4  \n") == R"({"a":4})");
+      expect(yaml_to_json("a: true # c\n") == R"({"a":true})");
+      expect(yaml_to_json("a: ~\n") == R"({"a":null})");
+   };
+
+   "flow sequence keeps the comma as an item separator"_test = [] {
+      expect(yaml_to_json("a: [4,5]\n") == R"({"a":[4,5]})");
+      expect(yaml_to_json("a: [true,false]\n") == R"({"a":[true,false]})");
+      expect(yaml_to_json("a: [~, 4]\n") == R"({"a":[null,4]})");
+      expect(yaml_to_json("a: {k: 4, j: 5}\n") == R"({"a":{"k":4,"j":5}})");
+   };
+
+   "flow sequence item with a number and more words is a string"_test = [] {
+      expect(yaml_to_json("a: [10 ms, 5]\n") == R"({"a":["10 ms",5]})");
+   };
+
+   "plain scalars that already read as strings are unchanged"_test = [] {
+      expect(yaml_to_json("a: x,y\n") == R"({"a":"x,y"})");
+      expect(yaml_to_json("a: 4x\n") == R"({"a":"4x"})");
+      expect(yaml_to_json("a: 4:5\n") == R"({"a":"4:5"})");
+      expect(yaml_to_json("a: \"4,5\"\n") == R"({"a":"4,5"})");
+   };
+};
+
 int main() { return 0; }

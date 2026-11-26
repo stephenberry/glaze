@@ -5930,16 +5930,32 @@ namespace glz
             using V = std::remove_cvref_t<T>;
             using counts = yaml_variant_type_count<V>;
             const char c = *it;
-            auto is_plain_scalar_boundary = [](const char ch) {
-               switch (ch) {
-               case ' ':
-               case '\t':
+            // True when a bool, null or number token that ends at `ptr` is the whole plain scalar.
+            // Only whitespace, a comment, a mapping value indicator or the end of the line may follow,
+            // and in flow context also `,`, `]` and `}`. Any other text continues the scalar, which
+            // makes the whole scalar a string: "4,5" and "10 ms" in block context.
+            auto scalar_ends_at = [&](auto ptr) {
+               while (ptr != end && (*ptr == ' ' || *ptr == '\t')) {
+                  ++ptr;
+               }
+               if (ptr == end) {
+                  return true;
+               }
+               switch (*ptr) {
                case '\n':
                case '\r':
+                  return true;
+               case '#':
+                  // A comment needs whitespace before it
+                  return ptr[-1] == ' ' || ptr[-1] == '\t';
+               case ':': {
+                  auto next = ptr + 1;
+                  return (next == end) || *next == ' ' || *next == '\t' || *next == '\n' || *next == '\r';
+               }
                case ',':
                case ']':
                case '}':
-                  return true;
+                  return yaml::check_flow_context(Opts);
                default:
                   return false;
                }
@@ -6004,16 +6020,7 @@ namespace glz
                }
                return false;
             };
-            auto is_word_boundary = [&](const auto ptr) {
-               if (ptr == end) {
-                  return true;
-               }
-               if (*ptr == ':') {
-                  auto next = ptr + 1;
-                  return (next == end) || *next == ' ' || *next == '\t' || *next == '\n' || *next == '\r';
-               }
-               return is_plain_scalar_boundary(*ptr);
-            };
+            auto is_word_boundary = [&](const auto ptr) { return scalar_ends_at(ptr); };
 
             switch (c) {
             case '&': {
@@ -6629,6 +6636,11 @@ namespace glz
             case '~':
                // Null indicator
                if constexpr (counts::n_null > 0) {
+                  if (!scalar_ends_at(it + 1)) {
+                     // "~x" is a string
+                     parse_block_mapping_or_string<V, Opts>(value, ctx, it, end);
+                     return;
+                  }
                   constexpr auto first_idx = yaml_variant_first_index_v<V, is_yaml_variant_null>;
                   using NullType = std::variant_alternative_t<first_idx, V>;
                   if (!std::holds_alternative<NullType>(value)) value = NullType{};
@@ -6648,8 +6660,17 @@ namespace glz
                }
                if constexpr (counts::n_num > 0) {
                   if ((end - it >= 2) && (std::isdigit(static_cast<unsigned char>(it[1])) || it[1] == '.')) {
-                     process_yaml_variant_alternatives<V, is_yaml_variant_num>::template op<Opts>(value, ctx, it, end);
-                     return;
+                     auto start_it = it;
+                     auto temp_ctx = ctx.make_speculative();
+                     process_yaml_variant_alternatives<V, is_yaml_variant_num>::template op<Opts>(value, temp_ctx, it,
+                                                                                                  end);
+                     ctx.alias_expansion_budget = temp_ctx.alias_expansion_budget; // charged even if rejected
+                     ctx.key_expansion_budget = temp_ctx.key_expansion_budget;
+                     if (!bool(temp_ctx.error) && scalar_ends_at(it)) {
+                        ctx.anchors = std::move(temp_ctx.anchors);
+                        return; // Successfully parsed as number
+                     }
+                     it = start_it; // Restore and fall through to string
                   }
                }
                parse_block_mapping_or_string<V, Opts>(value, ctx, it, end);
@@ -6665,7 +6686,7 @@ namespace glz
                                                                                                end);
                   ctx.alias_expansion_budget = temp_ctx.alias_expansion_budget; // charged even if rejected
                   ctx.key_expansion_budget = temp_ctx.key_expansion_budget;
-                  if (!bool(temp_ctx.error)) {
+                  if (!bool(temp_ctx.error) && scalar_ends_at(it)) {
                      ctx.anchors = std::move(temp_ctx.anchors);
                      return; // Successfully parsed as number
                   }
@@ -6688,7 +6709,7 @@ namespace glz
                                                                                                   end);
                      ctx.alias_expansion_budget = temp_ctx.alias_expansion_budget; // charged even if rejected
                      ctx.key_expansion_budget = temp_ctx.key_expansion_budget;
-                     if (!bool(temp_ctx.error)) {
+                     if (!bool(temp_ctx.error) && scalar_ends_at(it)) {
                         ctx.anchors = std::move(temp_ctx.anchors);
                         return; // Successfully parsed as number
                      }
