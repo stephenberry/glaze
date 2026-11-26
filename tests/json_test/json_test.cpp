@@ -1745,6 +1745,40 @@ suite container_types = [] {
          expect(map2[it.first] == it.second);
       }
    };
+   "multimap preserves duplicate keys"_test = [] {
+      const std::multimap<std::string, int> source{{"a", 1}, {"a", 3}, {"b", 2}};
+      std::multimap<std::string, int> result{{"old", 0}};
+      std::string buffer;
+      expect(not glz::write_json(source, buffer));
+      expect(buffer == R"({"a":1,"a":3,"b":2})");
+      expect(not glz::read_json(result, buffer));
+      expect(result == source);
+      expect(not glz::read_json(result, "{}"));
+      expect(result.empty());
+   };
+   "unordered_multimap roundtrip"_test = [] {
+      const std::unordered_multimap<int, std::string> source{{42, "one"}, {42, "two"}, {7, "three"}};
+      std::unordered_multimap<int, std::string> result;
+      std::string buffer;
+      expect(not glz::write_json(source, buffer));
+      expect(not glz::read_json(result, buffer));
+      expect(result == source);
+   };
+   "multimap array roundtrip"_test = [] {
+      struct array_opts : glz::opts
+      {
+         bool concatenate = false;
+      };
+      const std::multimap<std::string, int> source{{"a", 1}, {"a", 3}, {"b", 2}};
+      std::multimap<std::string, int> result;
+      std::string buffer;
+      expect(not glz::write<array_opts{}>(source, buffer));
+      expect(buffer == R"([{"a":1},{"a":3},{"b":2}])");
+      expect(not glz::read<array_opts{}>(result, buffer));
+      expect(result == source);
+      expect(not glz::read_json(result, buffer));
+      expect(result == source);
+   };
    "unordered_map int keys roundtrip"_test = [] {
       std::unordered_map<int, int> map;
       for (auto i = 0; i < 20; ++i) {
