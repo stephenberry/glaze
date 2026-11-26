@@ -8,8 +8,11 @@
 #include <cwchar>
 #include <filesystem>
 #include <iterator>
+#include <map>
 #include <ranges>
+#include <tuple>
 #include <type_traits>
+#include <unordered_map>
 
 #include "glaze/core/chrono.hpp"
 #include "glaze/core/common.hpp"
@@ -1982,7 +1985,14 @@ namespace glz
       }
    };
 
-   // for set types
+   template <class T>
+   constexpr bool json_multimap =
+      is_specialization_v<T, std::multimap> || is_specialization_v<T, std::unordered_multimap>;
+
+   template <class T>
+   struct json_object_reader;
+
+   // For set types and multimaps.
    template <class T>
       requires(readable_array_t<T> && !emplace_backable<T> && !resizable<T> && emplaceable<T>)
    struct from<JSON, T>
@@ -1997,6 +2007,25 @@ namespace glz
             }
          }
 
+         if constexpr (json_multimap<T> && check_concatenate(Options)) {
+            if (check_opening_handled(Options) || *it == '{') {
+               json_object_reader<T>::template op<ws_handled<Options>()>(value, ctx, it, end);
+               return;
+            }
+         }
+
+         if constexpr (json_multimap<T>) {
+            read_array<Opts, std::pair<typename T::key_type, typename T::mapped_type>>(value, ctx, it, end);
+         }
+         else {
+            read_array<Opts, range_value_t<T>>(value, ctx, it, end);
+         }
+      }
+
+     private:
+      template <auto Opts, class V>
+      static void read_array(auto& value, is_context auto&& ctx, auto&& it, auto end)
+      {
          if (match_invalid_end<'[', Opts>(ctx, it, end)) {
             return;
          }
@@ -2017,7 +2046,6 @@ namespace glz
          }
 
          while (true) {
-            using V = range_value_t<T>;
             V v;
             parse<JSON>::op<Opts>(v, ctx, it, end);
             if (bool(ctx.error)) [[unlikely]]
@@ -2786,13 +2814,19 @@ namespace glz
    }
 
    template <class T>
-      requires((readable_map_t<T> || glaze_object_t<T> || reflectable<T>) && not custom_read<T>)
-   struct from<JSON, T>
+   struct json_object_reader
    {
       template <auto Options, string_literal tag = "">
       static void op(auto&& value, is_context auto&& ctx, auto&& it, auto end)
       {
-         static constexpr auto num_members = reflect<T>::size;
+         static constexpr auto num_members = [] {
+            if constexpr (json_multimap<T>) {
+               return size_t{0};
+            }
+            else {
+               return size_t{reflect<T>::size};
+            }
+         }();
 
          static constexpr auto Opts = opening_handled_off<ws_handled_off<Options>()>();
          if constexpr (!check_opening_handled(Options)) {
@@ -2821,6 +2855,10 @@ namespace glz
             return;
          }
          const size_t ws_size = size_t(it - ws_start);
+
+         if constexpr (json_multimap<T>) {
+            value.clear();
+         }
 
          if constexpr ((glaze_object_t<T> || reflectable<T>) && num_members == 0 && Opts.error_on_unknown_keys) {
             if constexpr (not tag.sv().empty()) {
@@ -3187,10 +3225,16 @@ namespace glz
                   }
                }
                else {
-                  // For types like std::map, std::unordered_map
+                  // For associative containers.
+                  constexpr bool partial_map_read = Opts.partial_read && !json_multimap<T>;
 
                   auto reading = [&](auto&& key) {
-                     if constexpr (Opts.partial_read) {
+                     if constexpr (json_multimap<T>) {
+                        auto element =
+                           value.emplace(std::piecewise_construct, std::forward_as_tuple(key), std::tuple{});
+                        parse<JSON>::op<ws_handled<Opts>()>(element->second, ctx, it, end);
+                     }
+                     else if constexpr (partial_map_read) {
                         if (auto element = value.find(key); element != value.end()) {
                            ++read_count;
                            parse<JSON>::op<ws_handled<Opts>()>(element->second, ctx, it, end);
@@ -3217,7 +3261,7 @@ namespace glz
                      }
 
                      reading(ctx.scratch);
-                     if constexpr (Opts.partial_read) {
+                     if constexpr (partial_map_read) {
                         if (read_count == value.size()) {
                            return;
                         }
@@ -3236,7 +3280,7 @@ namespace glz
                      }
 
                      reading(key);
-                     if constexpr (Opts.partial_read) {
+                     if constexpr (partial_map_read) {
                         if (read_count == value.size()) {
                            return;
                         }
@@ -3264,7 +3308,7 @@ namespace glz
                      }
 
                      reading(key_value);
-                     if constexpr (Opts.partial_read) {
+                     if constexpr (partial_map_read) {
                         if (read_count == value.size()) {
                            return;
                         }
@@ -3300,6 +3344,11 @@ namespace glz
          }
       }
    };
+
+   template <class T>
+      requires((readable_map_t<T> || glaze_object_t<T> || reflectable<T>) && not custom_read<T>)
+   struct from<JSON, T> : json_object_reader<T>
+   {};
 
    template <is_variant T>
    consteval auto variant_is_auto_deducible()

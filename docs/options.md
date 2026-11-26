@@ -430,6 +430,10 @@ When `true` (default), includes type discriminator information for variant types
 #### `concatenate`
 When `true` (default), ranges of `std::pair` are written as a single object with pairs as key-value entries.
 
+Reading a JSON object into a `std::multimap` or `std::unordered_multimap` replaces its contents and inserts
+one entry per member, including repeated keys. With `concatenate = false`, these containers round-trip as
+arrays of single-member objects, for example `[{"a":1},{"a":2}]`.
+
 #### `allow_conversions`
 When `true` (default), BEVE allows implicit type conversions (e.g., reading a `double` into a `float`).
 
