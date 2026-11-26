@@ -163,7 +163,7 @@ namespace glz::detail
    inline error_ctx apply_merge_patch_impl(
       generic& target,
       const generic& patch,
-      uint32_t depth = 0
+      std::uint32_t depth = 0
    )
    {
       if (depth >= max_recursive_depth_limit) [[unlikely]] {
@@ -462,7 +462,7 @@ If the patch is not an object, it replaces the entire document:
    patch.data = glz::generic::object_t{};
 
    glz::generic* current = &patch;
-   for (size_t i = 0; i < glz::max_recursive_depth_limit + 10; ++i) {
+   for (std::size_t i = 0; i < glz::max_recursive_depth_limit + 10; ++i) {
       current->get_object()["nested"].data = glz::generic::object_t{};
       current = &current->get_object()["nested"];
    }

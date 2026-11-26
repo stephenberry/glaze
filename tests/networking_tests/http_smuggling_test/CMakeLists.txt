@@ -1,4 +1,3 @@
-cmake_minimum_required(VERSION 3.31)
 project(http_smuggling_test)
 
 add_executable(${PROJECT_NAME} ${PROJECT_NAME}.cpp)

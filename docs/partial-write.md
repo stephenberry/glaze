@@ -151,7 +151,7 @@ Three overloads are available:
 error_ctx write_json_partial(T&& value, const Keys& keys, Buffer&& buffer);
 
 // 2. Write to raw buffer (char*)
-expected<size_t, error_ctx> write_json_partial(T&& value, const Keys& keys, Buffer&& buffer);
+expected<std::size_t, error_ctx> write_json_partial(T&& value, const Keys& keys, Buffer&& buffer);
 
 // 3. Return a new string
 expected<std::string, error_ctx> write_json_partial(T&& value, const Keys& keys);
@@ -293,7 +293,7 @@ Three overloads are available:
 error_ctx write_json_exclude(T&& value, const Keys& exclude_keys, Buffer&& buffer);
 
 // 2. Write to raw buffer (char*)
-expected<size_t, error_ctx> write_json_exclude(T&& value, const Keys& exclude_keys, Buffer&& buffer);
+expected<std::size_t, error_ctx> write_json_exclude(T&& value, const Keys& exclude_keys, Buffer&& buffer);
 
 // 3. Return a new string
 expected<std::string, error_ctx> write_json_exclude(T&& value, const Keys& exclude_keys);

@@ -2,10 +2,10 @@
 // For the license information refer to glaze.hpp
 // P2996 Reflection Test - Verifies C++26 P2996 reflection works with Glaze
 
-#include <cstdint>
+import std;
 
-#include "glaze/glaze.hpp"
-#include "ut/ut.hpp"
+import glaze;
+import ut;
 
 using namespace ut;
 
@@ -24,7 +24,7 @@ struct SingleArrayStruct
 
 struct MixedArrayStruct
 {
-   uint16_t ints[2];
+   std::uint16_t ints[2];
    float floats[3];
    std::string name;
 };

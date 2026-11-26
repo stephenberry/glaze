@@ -5,6 +5,8 @@
 #include <string>
 #include <vector>
 
+using std::size_t;
+
 extern "C" int LLVMFuzzerTestOneInput(const uint8_t* Data, size_t Size)
 {
    // use a vector with null termination instead of a std::string to avoid

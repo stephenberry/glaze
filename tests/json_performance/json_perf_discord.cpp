@@ -1,10 +1,17 @@
+// Glaze Library
+// For the license information refer to glaze.ixx
+
 // Discord message performance tests - split from json_performance.cpp for faster compilation
 // This file contains large struct definitions that cause significant template instantiation
-#include <optional>
 
-#include "glaze/glaze.hpp"
-#include "json_perf_common.hpp"
-#include "ut/ut.hpp"
+import std;
+import glaze;
+import ut;
+
+import glaze.tests.json_perf_common;
+
+using std::int64_t;
+using std::size_t;
 
 using namespace ut;
 using namespace glz::perf;

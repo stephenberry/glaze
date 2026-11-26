@@ -6,13 +6,10 @@
 // unwrapping, TOML recursed on it forever at runtime (a stack overflow instead of a diagnostic).
 // GLZ_REJECT_FORMAT selects the format, and GLZ_REJECT_POSITION where the custom type appears.
 
-#include <map>
-#include <optional>
-#include <string>
-#include <vector>
+import std;
 
-#include "glaze/toml.hpp"
-#include "glaze/yaml.hpp"
+import glaze.toml;
+import glaze.yaml;
 
 struct uninvocable_getter
 {

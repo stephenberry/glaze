@@ -36,12 +36,12 @@ struct custom_api : glz::api {
     return path == "/count";
   }
 
-  bool read(const uint32_t format, const sv path, const sv data) noexcept override {
+  bool read(const std::uint32_t format, const sv path, const sv data) noexcept override {
     // Custom deserialization logic
     return true;
   }
 
-  bool write(const uint32_t format, const sv path, std::string& data) noexcept override {
+  bool write(const std::uint32_t format, const sv path, std::string& data) noexcept override {
     // Custom serialization logic
     return true;
   }
@@ -454,30 +454,30 @@ Glaze generates type names following these rules:
 
 ```c++
 // Fundamental types
-glz::name_v<int>           // "int32_t"
+glz::name_v<int>           // "std::int32_t"
 glz::name_v<double>        // "double"
 glz::name_v<bool>          // "bool"
 
 // CV-qualifiers and references
-glz::name_v<const int>     // "const int32_t"
-glz::name_v<int&>          // "int32_t&"
-glz::name_v<const int&>    // "const int32_t&"
-glz::name_v<int&&>         // "int32_t&&"
+glz::name_v<const int>     // "const std::int32_t"
+glz::name_v<int&>          // "std::int32_t&"
+glz::name_v<const int&>    // "const std::int32_t&"
+glz::name_v<int&&>         // "std::int32_t&&"
 
 // Pointers
-glz::name_v<int*>          // "int32_t*"
-glz::name_v<const int*>    // "const int32_t*"
+glz::name_v<int*>          // "std::int32_t*"
+glz::name_v<const int*>    // "const std::int32_t*"
 
 // Containers
-glz::name_v<std::vector<int>>                           // "std::vector<int32_t>"
-glz::name_v<std::map<std::string, int>>                 // "std::map<std::string,int32_t>"
-glz::name_v<std::unordered_map<uint64_t, std::string>>  // "std::unordered_map<uint64_t,std::string>"
+glz::name_v<std::vector<int>>                           // "std::vector<std::int32_t>"
+glz::name_v<std::map<std::string, int>>                 // "std::map<std::string,std::int32_t>"
+glz::name_v<std::unordered_map<std::uint64_t, std::string>>  // "std::unordered_map<std::uint64_t,std::string>"
 
 // Functions
-glz::name_v<std::function<int(double)>>                 // "std::function<int32_t(double)>"
+glz::name_v<std::function<int(double)>>                 // "std::function<std::int32_t(double)>"
 glz::name_v<std::function<void()>>                      // "std::function<void()>"
 glz::name_v<std::function<double(const int&, const double&)>>
-  // "std::function<double(const int32_t&,const double&)>"
+  // "std::function<double(const std::int32_t&,const double&)>"
 ```
 
 ### Debugging Type Mismatches

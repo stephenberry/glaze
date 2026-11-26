@@ -1,3 +1,4 @@
+import std;
 // Glaze Library
 // For the license information refer to glaze.hpp
 

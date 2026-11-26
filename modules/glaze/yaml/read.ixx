@@ -1,0 +1,6840 @@
+// Glaze Library
+// For the license information refer to glaze.ixx
+// glz:header path="glaze/yaml/read.hpp"
+// glz:header std=<cctype>
+// glz:header std=<charconv>
+// glz:header std=<concepts>
+// glz:header std=<string>
+export module glaze.yaml.read;
+
+import std;
+
+import glaze.concepts.container_concepts;
+import glaze.core.constraint;
+import glaze.core.chrono;
+import glaze.core.common;
+import glaze.core.context;
+import glaze.core.meta;
+import glaze.core.opts;
+import glaze.core.read;
+import glaze.core.reflect;
+import glaze.core.tuple;
+
+import glaze.file.file_ops;
+
+import glaze.json.generic;
+
+import glaze.reflection.to_tuple;
+
+import glaze.util.bit_array;
+import glaze.util.expected;
+import glaze.util.fast_float;
+import glaze.util.for_each;
+import glaze.util.glaze_fast_float;
+import glaze.util.nullable_traits;
+import glaze.util.parse;
+import glaze.util.string_literal;
+import glaze.util.tuple;
+import glaze.util.type_traits;
+import glaze.util.variant;
+export import glaze.yaml.common;
+import glaze.yaml.opts;
+import glaze.yaml.skip;
+
+using std::int32_t;
+
+#include "glaze/util/inline.hpp"
+
+using std::size_t;
+using std::uint8_t;
+using std::uint32_t;
+using std::uint64_t;
+
+export namespace glz::yaml
+{
+   // Store `key_node` as the string form of a mapping key: scalars keep their own text, everything
+   // else is canonicalized to JSON. That JSON is charged against the read's key budget, because a
+   // structured key nested as the key of another has its escapes doubled at every level and grows
+   // multiplicatively in the input. Every site that turns a parsed node into a key goes through
+   // here so the budget cannot be bypassed by adding one more.
+   // `empty_on_null` distinguishes the callers that spell a null key as the empty string (an
+   // explicit "? " with no key node) from the alias-replay sites, where the replayed span always
+   // names a node and a null one is written out as "null" like any other non-scalar.
+   template <bool empty_on_null = true, class Ctx>
+   [[nodiscard]] bool materialize_key(std::string& key, glz::generic& key_node, Ctx& ctx)
+   {
+      if constexpr (empty_on_null) {
+         if (key_node.is_null()) {
+            key.clear();
+            return true;
+         }
+      }
+      if (auto* s = key_node.template get_if<std::string>()) {
+         key = *s;
+         return true;
+      }
+      key.clear();
+      (void)glz::write_json(key_node, key);
+      if constexpr (requires { ctx.charge_key_expansion(size_t{}); }) {
+         if (!ctx.charge_key_expansion(key.size())) [[unlikely]] {
+            ctx.error = error_code::exceeded_max_expansion;
+            ctx.custom_error_message = "complex key expansion";
+            return false;
+         }
+      }
+      return true;
+   }
+}
+
+export namespace glz
+{
+   template <>
+   struct parse<YAML>
+   {
+      template <auto Opts, class T, is_context Ctx, class It0, class It1>
+      static void op(T&& value, Ctx&& ctx, It0&& it, It1 end)
+      {
+         if constexpr (requires { ctx.stream_begin; }) {
+            if (!ctx.stream_begin && it != end) {
+               ctx.stream_begin = &*it;
+               // Anchors and the line memo hold pointers into whatever buffer filled them, so a
+               // reused context must not carry a previous read's into this one.
+               if constexpr (requires { ctx.reset_read_state(); }) {
+                  ctx.reset_read_state();
+               }
+               // Seed the alias replay budget from the document this read was handed. Done here
+               // rather than in glz::read so every YAML entry point is covered, and only on the
+               // outermost parse so a nested document does not hand itself a fresh budget.
+               if constexpr (requires { ctx.alias_expansion_budget; } && requires { size_t(end - it); }) {
+                  const size_t scaled = size_t(end - it) * yaml::max_alias_expansion_factor;
+                  ctx.alias_expansion_budget =
+                     scaled > yaml::min_alias_expansion_bytes ? scaled : yaml::min_alias_expansion_bytes;
+               }
+               // Same treatment for the text complex keys materialize, seeded on its own budget so
+               // exhausting one reports which of the two ran away.
+               if constexpr (requires { ctx.key_expansion_budget; } && requires { size_t(end - it); }) {
+                  const size_t scaled = size_t(end - it) * yaml::max_key_expansion_factor;
+                  ctx.key_expansion_budget =
+                     scaled > yaml::min_key_expansion_bytes ? scaled : yaml::min_key_expansion_bytes;
+               }
+            }
+         }
+         // Skip YAML directives and document start marker (---) if present
+         yaml::skip_document_start(it, end, ctx);
+         if (bool(ctx.error)) [[unlikely]] {
+            return;
+         }
+
+         using V = std::remove_cvref_t<T>;
+         if (it == end) {
+            // An empty document is a valid YAML null document.
+            if constexpr (requires { value = nullptr; }) {
+               value = nullptr;
+               return;
+            }
+            else if constexpr (nullable_like<V>) {
+               value = {};
+               return;
+            }
+            else {
+               ctx.error = error_code::unexpected_end;
+               return;
+            }
+         }
+
+         // A bare document boundary marker at root denotes an empty document.
+         // Examples: "---\n---\n", "# comment\n...\n"
+         if (yaml::at_document_start(it, end) || yaml::at_document_end(it, end)) {
+            if constexpr (requires { value = nullptr; }) {
+               value = nullptr;
+               return;
+            }
+            else if constexpr (nullable_like<V>) {
+               value = {};
+               return;
+            }
+            else {
+               ctx.error = error_code::unexpected_end;
+               return;
+            }
+         }
+
+         from<YAML, V>::template op<Opts>(std::forward<T>(value), std::forward<Ctx>(ctx), std::forward<It0>(it), end);
+
+         // A directive line (%YAML/%TAG/...) is only valid in the document prefix.
+         // If parsing stopped before the end and we encounter a directive in the
+         // remaining tail, treat it as malformed stream structure. This is a document-level
+         // concern, so only enforce it at the document root: a nested call (e.g. a tagged
+         // variant handing a custom alternative its body) is mid-document and its tail
+         // belongs to an enclosing node, not this value.
+         if constexpr (!check_partial_read(Opts)) {
+            if (!bool(ctx.error) && ctx.current_indent() < 0) {
+               auto is_document_start = [&](auto pos) {
+                  if (end - pos >= 3 && pos[0] == '-' && pos[1] == '-' && pos[2] == '-') {
+                     auto after = pos + 3;
+                     return after == end || *after == ' ' || *after == '\t' || *after == '\n' || *after == '\r' ||
+                            *after == '#';
+                  }
+                  return false;
+               };
+
+               // The scan below reads the tail a line at a time, which only means anything if the
+               // tail starts at one. A root node can stop mid-line -- a plain scalar ends at a
+               // ':' it is not allowed to take as a separator, a flow collection ends at its
+               // bracket -- and what sits after it there is leftover content on that line, not
+               // the opening of a new one. Only inline whitespace and a comment may follow. Let
+               // the line scan see anything else and it misreads it: a leftover ':' passes as an
+               // explicit-key continuation and the remainder of the document falls on the floor.
+               if constexpr (requires { ctx.line_prefix_before(it); }) {
+                  if (it != end && ctx.line_prefix_before(it).has_content) {
+                     auto rest = it;
+                     while (rest != end && (*rest == ' ' || *rest == '\t')) ++rest;
+                     if (rest != end && *rest != '\n' && *rest != '\r' && *rest != '#') {
+                        ctx.error = error_code::syntax_error;
+                        return;
+                     }
+                  }
+               }
+
+               auto tail_scan = it;
+               bool seen_document_end_marker = false;
+               while (tail_scan != end) {
+                  auto line = tail_scan;
+                  while (line != end && (*line == ' ' || *line == '\t')) ++line;
+                  if (line != tail_scan && line != end && *line != '\n' && *line != '\r' && *line != '#') {
+                     // Indented tail usually belongs to continuation content.
+                     // But a plain "key: value" pattern here indicates malformed
+                     // trailing mapping content after a completed root node.
+                     const char first = *line;
+                     // A block sequence entry here has nothing it can belong to: every node
+                     // that could own it has returned, so accepting it would drop it and every
+                     // line after it from the document.
+                     if (first == '-' &&
+                         ((line + 1) == end || yaml::whitespace_or_line_end_table[static_cast<uint8_t>(*(line + 1))])) {
+                        ctx.error = error_code::syntax_error;
+                        return;
+                     }
+                     const bool explicit_or_structural_start =
+                        (first == ':' || first == '?' || first == '!' || first == '&' || first == '*' || first == '[' ||
+                         first == '{' || first == '"' || first == '\'' || first == '-');
+                     if (!explicit_or_structural_start) {
+                        auto scan = line;
+                        while (scan != end && *scan != '\n' && *scan != '\r') {
+                           if (*scan == ':') {
+                              auto after = scan + 1;
+                              if (after == end || *after == ' ' || *after == '\t' || *after == '\n' || *after == '\r') {
+                                 ctx.error = error_code::syntax_error;
+                                 return;
+                              }
+                           }
+                           ++scan;
+                        }
+                     }
+                     return;
+                  }
+                  if (line == end) {
+                     return;
+                  }
+                  if (*line == ':' || *line == '?') {
+                     return; // Explicit key/value continuation.
+                  }
+                  if (*line == '\n' || *line == '\r') {
+                     tail_scan = line;
+                     yaml::skip_newline(tail_scan, end);
+                     continue;
+                  }
+                  if (*line == '#') {
+                     while (tail_scan != end && *tail_scan != '\n' && *tail_scan != '\r') ++tail_scan;
+                     yaml::skip_newline(tail_scan, end);
+                     continue;
+                  }
+                  if (yaml::at_document_end(line, end)) {
+                     seen_document_end_marker = true;
+                     while (tail_scan != end && *tail_scan != '\n' && *tail_scan != '\r') ++tail_scan;
+                     yaml::skip_newline(tail_scan, end);
+                     continue;
+                  }
+                  if (is_document_start(line)) {
+                     // Additional documents are accepted, but document-start lines
+                     // that use non-standard tag handles (e.g. !prefix!Type) are
+                     // malformed in this single-document reader unless re-declared
+                     // for that document. Reject this shape in the stream tail.
+                     auto header = line + 3;
+                     while (header != end && (*header == ' ' || *header == '\t')) ++header;
+                     if (header != end && *header == '!') {
+                        auto tag_end = header + 1;
+                        while (tag_end != end && *tag_end != ' ' && *tag_end != '\t' && *tag_end != '\n' &&
+                               *tag_end != '\r' && *tag_end != '#') {
+                           ++tag_end;
+                        }
+                        std::string_view tag_token(header, static_cast<size_t>(tag_end - header));
+                        const auto second_bang = tag_token.find('!', 1);
+                        if (second_bang != std::string_view::npos) {
+                           std::string_view handle = tag_token.substr(0, second_bang + 1);
+                           if (handle != "!" && handle != "!!") {
+                              ctx.error = error_code::syntax_error;
+                              return;
+                           }
+                        }
+                     }
+                     return; // Additional documents are allowed in the stream tail.
+                  }
+                  if (line != end && *line == '%') {
+                     // YAML directives are only valid in document prefixes. A directive
+                     // encountered mid-document (without a prior ...) is malformed.
+                     if (!seen_document_end_marker) {
+                        ctx.error = error_code::syntax_error;
+                        return;
+                     }
+                     return;
+                  }
+                  if (seen_document_end_marker) {
+                     return; // Implicit next document after explicit document end marker.
+                  }
+                  ctx.error = error_code::syntax_error;
+                  return;
+               }
+            }
+         }
+      }
+   };
+
+   // glaze_value_t - unwrap custom value types
+   template <class T>
+      requires(glaze_value_t<T> && !custom_read<T>)
+   struct from<YAML, T>
+   {
+      template <auto Opts, class Value, is_context Ctx, class It0, class It1>
+      static void op(Value&& value, Ctx&& ctx, It0&& it, It1 end)
+      {
+         using V = std::decay_t<decltype(get_member(std::declval<Value>(), meta_wrapper_v<T>))>;
+         from<YAML, V>::template op<Opts>(get_member(std::forward<Value>(value), meta_wrapper_v<T>),
+                                          std::forward<Ctx>(ctx), std::forward<It0>(it), end);
+      }
+   };
+
+   // Silently consume any value bound to a glz::skip sentinel. Reached when a
+   // type opts out of serialization via meta::value = glz::skip{}.
+   template <>
+   struct from<YAML, skip>
+   {
+      template <auto Opts>
+      GLZ_ALWAYS_INLINE static void op(auto&&, is_context auto&& ctx, auto&&... args) noexcept
+      {
+         skip_value<YAML>::template op<Opts>(ctx, args...);
+      }
+   };
+
+   namespace yaml
+   {
+      // Handle YAML alias (*name) by replaying the stored anchor span.
+      // Returns true if alias was handled (caller should return).
+      // Returns false if current char is not '*' (caller continues normally).
+      template <auto Opts, class T, class Ctx, class It, class End>
+      bool handle_alias(T&& value, Ctx& ctx, It& it, [[maybe_unused]] End end) noexcept
+      {
+         if (it == end || *it != '*') return false;
+
+         ++it; // skip '*'
+         auto name = parse_anchor_name(it, end);
+         if (name.empty()) {
+            ctx.error = error_code::syntax_error;
+            return true;
+         }
+
+         auto anchor_it = ctx.anchors.find(name);
+         if (anchor_it == ctx.anchors.end()) {
+            ctx.error = error_code::syntax_error; // undefined alias
+            return true;
+         }
+
+         // Copied rather than referenced: the replay below can replace ctx.anchors wholesale
+         // (a speculative parse hands its own map back), which would dangle a reference here.
+         const auto span = anchor_it->second;
+
+         // Empty anchor span (anchor on null/empty node) — leave value as default
+         if (span.begin == span.end) {
+            return true;
+         }
+
+         // An anchor is invisible to itself while it expands. A span that aliases the name it
+         // defines -- reachable because a mapping key's anchor is registered over the key text
+         // before that text is parsed -- would otherwise replay itself forever.
+         if (ctx.alias_span_is_replaying(span.begin, span.end)) [[unlikely]] {
+            ctx.error = error_code::syntax_error; // cyclic alias
+            return true;
+         }
+
+         // Replaying an anchor re-enters the reader without opening a collection, so the
+         // sequence and mapping readers' depth accounting never sees a chain of aliases. The
+         // cycle check above stops the unbounded case; this bounds a legitimate but deeply
+         // chained one.
+         depth_guard guard{ctx, yaml::max_yaml_recursive_depth};
+         if (!guard) [[unlikely]]
+            return true;
+
+         if (!ctx.charge_alias_expansion(static_cast<size_t>(span.end - span.begin))) [[unlikely]] {
+            ctx.error = error_code::exceeded_max_expansion;
+            ctx.custom_error_message = "alias expansion";
+            return true;
+         }
+
+         auto replay_it = span.begin;
+         auto replay_end = span.end;
+
+         // Save indent context and set up for replay
+         auto saved_indent_stack = std::move(ctx.indent_stack);
+         ctx.indent_stack.clear();
+         if (span.base_indent > 0) {
+            ctx.push_indent(span.base_indent - 1);
+         }
+
+         ctx.active_alias_spans.emplace_back(span.begin, span.end);
+
+         using V = std::remove_cvref_t<T>;
+         from<YAML, V>::template op<Opts>(std::forward<T>(value), ctx, replay_it, replay_end);
+
+         ctx.active_alias_spans.pop_back();
+
+         // Restore indent context
+         ctx.indent_stack = std::move(saved_indent_stack);
+         return true;
+      }
+
+      template <class It, class End>
+      inline bool alias_token_is_mapping_key(It it, End end) noexcept
+      {
+         if (it == end || *it != '*') return false;
+         ++it; // skip '*'
+         auto name = parse_anchor_name(it, end);
+         if (name.empty()) return false;
+         skip_inline_ws(it, end);
+         return (it != end && *it == ':') &&
+                ((it + 1) == end || whitespace_or_line_end_table[static_cast<uint8_t>(*(it + 1))]);
+      }
+
+      struct node_property_state
+      {
+         bool has_anchor = false;
+         std::string anchor_name{};
+         const char* anchor_start{};
+         int32_t anchor_indent = 0;
+      };
+
+      struct node_property_policy
+      {
+         bool allow_alias = true;
+         bool alias_can_be_mapping_key = false;
+         bool allow_empty_after_anchor = false;
+         bool disallow_anchor_on_alias = false;
+      };
+
+      struct node_preamble_state
+      {
+         yaml_tag tag = yaml_tag::none;
+         node_property_state node_props{};
+      };
+
+      // Parse alias/anchor node properties shared across YAML value parsers.
+      // Returns true when caller should stop (alias consumed, tolerated empty anchor, or syntax/error).
+      template <auto Opts, node_property_policy Policy = node_property_policy{}, class T, class Ctx, class It,
+                class End>
+      inline bool parse_node_properties(T&& value, Ctx& ctx, It& it, End end, node_property_state& state) noexcept
+      {
+         state.has_anchor = false;
+         state.anchor_name.clear();
+         state.anchor_start = nullptr;
+         state.anchor_indent = ctx.current_indent();
+
+         if constexpr (Policy.allow_alias) {
+            if constexpr (Policy.alias_can_be_mapping_key) {
+               if (!alias_token_is_mapping_key(it, end)) {
+                  if (handle_alias<Opts>(std::forward<T>(value), ctx, it, end)) return true;
+               }
+            }
+            else {
+               if (handle_alias<Opts>(std::forward<T>(value), ctx, it, end)) return true;
+            }
+         }
+
+         if (it != end && *it == '&') {
+            ++it;
+            auto name = parse_anchor_name(it, end);
+            if (name.empty()) {
+               ctx.error = error_code::syntax_error;
+               return true;
+            }
+            skip_inline_ws(it, end);
+            if (it == end) {
+               if constexpr (!Policy.allow_empty_after_anchor) {
+                  ctx.error = error_code::unexpected_end;
+               }
+               return true;
+            }
+            if constexpr (Policy.disallow_anchor_on_alias) {
+               if (*it == '*') {
+                  ctx.error = error_code::syntax_error;
+                  return true;
+               }
+            }
+            state.has_anchor = true;
+            state.anchor_name = std::string(name);
+            state.anchor_start = &*it;
+         }
+
+         return false;
+      }
+
+      template <class Ctx, class It>
+      inline void finalize_node_anchor(node_property_state& state, Ctx& ctx, It it) noexcept
+      {
+         if (state.has_anchor && !bool(ctx.error)) {
+            ctx.anchors[std::move(state.anchor_name)] = {state.anchor_start, &*it, state.anchor_indent};
+         }
+      }
+
+      template <auto Opts, node_property_policy PropertyPolicy = node_property_policy{}, bool AllowEmptyInput = false,
+                class T, class Ctx, class It, class End, class TagValidator>
+      inline bool parse_node_preamble(T&& value, Ctx& ctx, It& it, End end, node_preamble_state& preamble,
+                                      TagValidator&& tag_validator) noexcept
+      {
+         skip_inline_ws(it, end);
+
+         if (it == end) [[unlikely]] {
+            if constexpr (!AllowEmptyInput) {
+               ctx.error = error_code::unexpected_end;
+            }
+            return true;
+         }
+
+         preamble.tag = parse_yaml_tag(it, end, ctx);
+         if (preamble.tag == yaml_tag::unknown) [[unlikely]] {
+            ctx.error = error_code::syntax_error;
+            return true;
+         }
+         if (!tag_validator(preamble.tag)) [[unlikely]] {
+            ctx.error = error_code::syntax_error;
+            return true;
+         }
+
+         skip_inline_ws(it, end);
+
+         if (it == end) [[unlikely]] {
+            if constexpr (!AllowEmptyInput) {
+               ctx.error = error_code::unexpected_end;
+            }
+            return true;
+         }
+
+         if (parse_node_properties<Opts, PropertyPolicy>(std::forward<T>(value), ctx, it, end, preamble.node_props)) {
+            return true;
+         }
+
+         return false;
+      }
+
+      // SWAR-optimized double-quoted string parsing
+      // Uses 8-byte chunks for fast scanning and copying
+      template <class Ctx, class It, class End>
+      inline void parse_double_quoted_string(std::string& value, Ctx& ctx, It& it, End end)
+      {
+         static constexpr size_t string_padding_bytes = 8;
+
+         if (it == end || *it != '"') [[unlikely]] {
+            ctx.error = error_code::expected_quote;
+            return;
+         }
+
+         ++it; // skip opening quote
+         auto start = it;
+
+         // Pass 1: Find closing quote byte-by-byte (need to handle newlines and escapes)
+         while (it != end && *it != '"') {
+            if (*it == '\\') {
+               ++it;
+               if (it == end) [[unlikely]] {
+                  ctx.error = error_code::unexpected_end;
+                  return;
+               }
+            }
+            else if (forbidden_control_table[uint8_t(*it)]) [[unlikely]] {
+               // A raw control byte is invalid; the \xXX escape form above is how such a
+               // character is legitimately carried in a double-quoted scalar.
+               ctx.error = error_code::invalid_control_character;
+               return;
+            }
+            ++it;
+         }
+
+         if (it == end) [[unlikely]] {
+            ctx.error = error_code::unexpected_end;
+            return;
+         }
+
+         // Allocate buffer with room for potential expansion and SWAR padding
+         // Some YAML escapes expand: \L, \P -> 3 bytes UTF-8
+         const auto input_len = static_cast<size_t>(it - start);
+         value.resize(input_len + (input_len / 2) + string_padding_bytes);
+         auto* dst = value.data();
+         auto* const dst_start = dst;
+
+         // Pass 2: Copy and process escapes and line folding
+         auto src = start;
+         const auto* const src_end = &*it;
+         // Track position past which we should not trim. Escape-produced characters
+         // (even whitespace like \t) are content and must not be trimmed by line folding.
+         auto* last_non_trimmable = dst;
+
+         while (src < src_end) {
+            // Check for newline - needs line folding
+            if (*src == '\n' || *src == '\r') {
+               // Trim trailing LITERAL whitespace from output before processing newline.
+               // Escape-produced whitespace (e.g. from \t) is preserved.
+               dst = (std::max)(last_non_trimmable, dst_start);
+
+               // Skip the newline
+               if (*src == '\r' && (src + 1) < src_end && *(src + 1) == '\n') {
+                  src += 2; // CRLF
+               }
+               else {
+                  ++src;
+               }
+
+               // Skip leading indentation on the next line.
+               int indent_count = 0;
+               if (!yaml::skip_folded_line_indent(src, src_end, ctx, &indent_count)) return;
+               if (indent_count == 0 && yaml::starts_with_document_marker(src, src_end)) {
+                  ctx.error = error_code::syntax_error;
+                  return;
+               }
+
+               // Check if this is a blank line (another newline follows)
+               if (src < src_end && (*src == '\n' || *src == '\r')) {
+                  // Blank line(s) - output newlines for each blank line
+                  while (src < src_end && (*src == '\n' || *src == '\r')) {
+                     *dst++ = '\n';
+                     // Skip the newline
+                     if (*src == '\r' && (src + 1) < src_end && *(src + 1) == '\n') {
+                        src += 2; // CRLF
+                     }
+                     else {
+                        ++src;
+                     }
+                     int blank_indent_count = 0;
+                     if (!yaml::skip_folded_line_indent(src, src_end, ctx, &blank_indent_count)) return;
+                     if (blank_indent_count == 0 && yaml::starts_with_document_marker(src, src_end)) {
+                        ctx.error = error_code::syntax_error;
+                        return;
+                     }
+                  }
+                  // Don't add space - we're now at content after blank line(s)
+               }
+               else {
+                  // Single newline - fold to space
+                  *dst++ = ' ';
+               }
+               last_non_trimmable = dst;
+               continue;
+            }
+
+            if (*src == '\\') {
+               ++src;
+               if (src >= src_end) [[unlikely]] {
+                  // Shouldn't happen - we validated in pass 1
+                  ctx.error = error_code::syntax_error;
+                  return;
+               }
+
+               const auto esc = uint8_t(*src);
+
+               // Check for escaped newline (line continuation - no space)
+               if (esc == '\n' || esc == '\r') {
+                  // Skip the newline
+                  if (esc == '\r' && (src + 1) < src_end && *(src + 1) == '\n') {
+                     src += 2; // CRLF
+                  }
+                  else {
+                     ++src;
+                  }
+
+                  int indent_count = 0;
+                  if (!yaml::skip_folded_line_indent(src, src_end, ctx, &indent_count)) return;
+                  if (indent_count == 0 && yaml::starts_with_document_marker(src, src_end)) {
+                     ctx.error = error_code::syntax_error;
+                     return;
+                  }
+                  // No output - this is line continuation without space
+                  last_non_trimmable = dst;
+                  continue;
+               }
+
+               // Check simple escape table first
+               if (yaml_escape_is_simple[esc]) {
+                  *dst++ = yaml_unescape_table[esc];
+                  ++src;
+               }
+               // Handle escapes requiring special processing
+               else if (yaml_escape_needs_special[esc]) {
+                  ++src; // skip escape char
+                  switch (esc) {
+                  case 'x': {
+                     // \xXX - 2 hex digits
+                     if (static_cast<size_t>(src_end - src) < 2) [[unlikely]] {
+                        ctx.error = error_code::syntax_error;
+                        return;
+                     }
+                     const uint32_t hi = digit_hex_table[uint8_t(src[0])];
+                     const uint32_t lo = digit_hex_table[uint8_t(src[1])];
+                     if ((hi | lo) & 0xF0) [[unlikely]] {
+                        ctx.error = error_code::syntax_error;
+                        return;
+                     }
+                     const uint32_t codepoint = (hi << 4) | lo;
+                     src += 2;
+                     dst += code_point_to_utf8(codepoint, dst);
+                     break;
+                  }
+                  case 'u': {
+                     // \uXXXX - 4 hex digits
+                     if (static_cast<size_t>(src_end - src) < 4) [[unlikely]] {
+                        ctx.error = error_code::syntax_error;
+                        return;
+                     }
+                     const uint32_t codepoint = hex_to_u32(src);
+                     if (codepoint == 0xFFFFFFFFu || (codepoint >= 0xD800 && codepoint <= 0xDFFF)) [[unlikely]] {
+                        ctx.error = error_code::syntax_error;
+                        return;
+                     }
+                     src += 4;
+                     dst += code_point_to_utf8(codepoint, dst);
+                     break;
+                  }
+                  case 'U': {
+                     // \UXXXXXXXX - 8 hex digits
+                     if (static_cast<size_t>(src_end - src) < 8) [[unlikely]] {
+                        ctx.error = error_code::syntax_error;
+                        return;
+                     }
+                     const uint32_t hi = hex_to_u32(src);
+                     const uint32_t lo = hex_to_u32(src + 4);
+                     if ((hi | lo) == 0xFFFFFFFFu) [[unlikely]] {
+                        ctx.error = error_code::syntax_error;
+                        return;
+                     }
+                     const uint32_t codepoint = (hi << 16) | lo;
+                     src += 8;
+                     if (codepoint >= 0xD800 && codepoint <= 0xDFFF) [[unlikely]] {
+                        ctx.error = error_code::syntax_error;
+                        return;
+                     }
+                     if (codepoint <= 0x10FFFF) {
+                        dst += code_point_to_utf8(codepoint, dst);
+                     }
+                     break;
+                  }
+                  case 'N': {
+                     // Next line U+0085
+                     dst += code_point_to_utf8(0x0085, dst);
+                     break;
+                  }
+                  case '_': {
+                     // Non-breaking space U+00A0
+                     dst += code_point_to_utf8(0x00A0, dst);
+                     break;
+                  }
+                  case 'L': {
+                     // Line separator U+2028
+                     dst += code_point_to_utf8(0x2028, dst);
+                     break;
+                  }
+                  case 'P': {
+                     // Paragraph separator U+2029
+                     dst += code_point_to_utf8(0x2029, dst);
+                     break;
+                  }
+                  default:
+                     break;
+                  }
+               }
+               else {
+                  // Preserve unknown escapes for compatibility, but reject a subset that
+                  // YAML test-suite marks as malformed in double-quoted scalars.
+                  if (esc == '.' || esc == '\'') {
+                     ctx.error = error_code::syntax_error;
+                     return;
+                  }
+                  *dst++ = '\\';
+                  *dst++ = static_cast<char>(esc);
+                  ++src;
+               }
+               // All escape-produced characters are content, not trimmable
+               last_non_trimmable = dst;
+            }
+            else {
+               const char ch = *src++;
+               *dst++ = ch;
+               // Only update non-trimmable for non-whitespace literal characters
+               if (ch != ' ' && ch != '\t') {
+                  last_non_trimmable = dst;
+               }
+            }
+         }
+
+         // Resize to actual length
+         value.resize(static_cast<size_t>(dst - dst_start));
+         ++it; // skip closing quote
+      }
+
+      // Single-quoted string parsing with line folding
+      // Only escape is '' -> ' (doubled single quote)
+      // Line breaks are folded: single newline -> space, blank line -> newline
+      template <class Ctx, class It, class End>
+      inline void parse_single_quoted_string(std::string& value, Ctx& ctx, It& it, End end)
+      {
+         static constexpr size_t string_padding_bytes = 8;
+
+         if (it == end || *it != '\'') [[unlikely]] {
+            ctx.error = error_code::expected_quote;
+            return;
+         }
+
+         ++it; // skip opening quote
+         auto start = it;
+
+         // Pass 1: Find closing quote (handling '' escapes)
+         while (it != end) {
+            if (*it == '\'') {
+               if ((it + 1) != end && *(it + 1) == '\'') {
+                  it += 2; // Skip escaped quote
+               }
+               else {
+                  break; // Found closing quote
+               }
+            }
+            else {
+               if (forbidden_control_table[uint8_t(*it)]) [[unlikely]] {
+                  ctx.error = error_code::invalid_control_character;
+                  return;
+               }
+               ++it;
+            }
+         }
+
+         if (it == end) [[unlikely]] {
+            ctx.error = error_code::unexpected_end;
+            return;
+         }
+
+         const auto input_len = static_cast<size_t>(it - start);
+         value.resize(input_len + string_padding_bytes);
+         auto* dst = value.data();
+         auto* const dst_start = dst;
+         auto src = start;
+         const auto* const src_end = &*it;
+
+         // Pass 2: Process content with line folding and '' escapes
+         while (src < src_end) {
+            // Check for newline - needs line folding
+            if (*src == '\n' || *src == '\r') {
+               // Trim trailing whitespace from output before processing newline
+               while (dst > dst_start && (*(dst - 1) == ' ' || *(dst - 1) == '\t')) {
+                  --dst;
+               }
+
+               // Skip the newline
+               if (*src == '\r' && (src + 1) < src_end && *(src + 1) == '\n') {
+                  src += 2; // CRLF
+               }
+               else {
+                  ++src;
+               }
+
+               // Skip leading indentation on the next line.
+               int indent_count = 0;
+               if (!yaml::skip_folded_line_indent(src, src_end, ctx, &indent_count)) return;
+               if (indent_count == 0 && yaml::starts_with_document_marker(src, src_end)) {
+                  ctx.error = error_code::syntax_error;
+                  return;
+               }
+
+               // Check if this is a blank line (another newline follows)
+               if (src < src_end && (*src == '\n' || *src == '\r')) {
+                  // Blank line(s) - output newlines for each blank line
+                  while (src < src_end && (*src == '\n' || *src == '\r')) {
+                     *dst++ = '\n';
+                     // Skip the newline
+                     if (*src == '\r' && (src + 1) < src_end && *(src + 1) == '\n') {
+                        src += 2; // CRLF
+                     }
+                     else {
+                        ++src;
+                     }
+                     int blank_indent_count = 0;
+                     if (!yaml::skip_folded_line_indent(src, src_end, ctx, &blank_indent_count)) return;
+                     if (blank_indent_count == 0 && yaml::starts_with_document_marker(src, src_end)) {
+                        ctx.error = error_code::syntax_error;
+                        return;
+                     }
+                  }
+                  // Don't add space - we're now at content after blank line(s)
+               }
+               else {
+                  // Single newline - fold to space
+                  *dst++ = ' ';
+               }
+               continue;
+            }
+
+            if (*src == '\'') {
+               // Must be '' (escaped quote) - we validated this in pass 1
+               *dst++ = '\'';
+               src += 2;
+            }
+            else {
+               *dst++ = *src++;
+            }
+         }
+
+         value.resize(static_cast<size_t>(dst - dst_start));
+         ++it; // skip closing quote
+      }
+
+      template <class Ctx, class It, class End>
+      inline void skip_flow_ws_and_newlines(Ctx& ctx, It& it, End end, bool* saw_line_break = nullptr)
+      {
+         bool at_line_start = false;
+         bool saw_separation_ws = false;
+         bool line_has_indent = false;
+         while (it != end) {
+            if (*it == ' ') {
+               ++it;
+               saw_separation_ws = true;
+               if (at_line_start) line_has_indent = true;
+               continue;
+            }
+            if (*it == '\t') {
+               if (at_line_start && !line_has_indent) {
+                  auto probe = it;
+                  while (probe != end && (*probe == ' ' || *probe == '\t')) ++probe;
+                  if (probe != end && *probe != '\n' && *probe != '\r' && *probe != '#') {
+                     const char c = *probe;
+                     const bool allowed_flow_delim = (c == ']' || c == '}' || c == '[' || c == '{' || c == ',');
+                     if (!allowed_flow_delim) {
+                        ctx.error = error_code::syntax_error;
+                        return;
+                     }
+                  }
+               }
+               ++it;
+               saw_separation_ws = true;
+               if (at_line_start) line_has_indent = true;
+               continue;
+            }
+            if (*it == '\n' || *it == '\r') {
+               skip_newline(it, end);
+               if (saw_line_break) *saw_line_break = true;
+               at_line_start = true;
+               saw_separation_ws = true;
+               line_has_indent = false;
+               continue;
+            }
+            if (*it == '#') {
+               // In flow style, comments require separation from the previous token.
+               // Allow comment-only lines and comments after inline whitespace, but
+               // reject adjacency forms like ",#comment" (CVW2).
+               bool separated_by_prev_ws = false;
+               if constexpr (std::is_pointer_v<std::decay_t<It>>) {
+                  if (ctx.stream_begin && it > ctx.stream_begin) {
+                     const char prev = *(it - 1);
+                     separated_by_prev_ws = (prev == ' ' || prev == '\t');
+                  }
+               }
+               if (!(at_line_start || saw_separation_ws || separated_by_prev_ws)) {
+                  break;
+               }
+               skip_comment(it, end);
+               if (it != end && (*it == '\n' || *it == '\r')) {
+                  skip_newline(it, end);
+                  if (saw_line_break) *saw_line_break = true;
+                  at_line_start = true;
+                  saw_separation_ws = true;
+                  continue;
+               }
+               continue;
+            }
+
+            // In block context, multiline flow nodes require indentation on content
+            // continuation lines (except structural tokens).
+            if (at_line_start && ctx.current_indent() >= 0 && !line_has_indent) {
+               const char c = *it;
+               const bool structural = (c == ']' || c == '}' || c == ',');
+               if (!structural) {
+                  ctx.error = error_code::syntax_error;
+                  return;
+               }
+            }
+            break;
+         }
+      }
+
+      template <class Ctx, class It, class End>
+      inline void validate_flow_node_adjacent_tail(Ctx& ctx, It& it, End end)
+      {
+         if (it == end) return;
+         const char c = *it;
+         // After a flow collection closes, the next character must be a structural
+         // separator or whitespace/comment. Adjacent plain content is malformed.
+         if (c == ' ' || c == '\t' || c == '\n' || c == '\r' || c == '#' || c == ',' || c == ']' || c == '}' ||
+             c == ':') {
+            return;
+         }
+         ctx.error = error_code::syntax_error;
+      }
+
+      // At root level, a closed flow collection must be followed only by:
+      // inline spaces, optional inline comment, newline-separated comments/blank lines,
+      // or stream separators (--- / ...). This catches malformed trailing content such as:
+      // "[a] ]", "[a]#comment" (without separation), or "[a]\ntrailing".
+      template <class Ctx, class It, class End>
+      inline void validate_root_flow_tail_after_close(Ctx& ctx, It& it, End end)
+      {
+         auto is_document_start = [&](auto pos) {
+            if (end - pos >= 3 && pos[0] == '-' && pos[1] == '-' && pos[2] == '-') {
+               auto after = pos + 3;
+               return after == end || *after == ' ' || *after == '\t' || *after == '\n' || *after == '\r' ||
+                      *after == '#';
+            }
+            return false;
+         };
+
+         bool at_line_start = false;
+         auto tail = it;
+         while (tail != end) {
+            auto line = tail;
+            skip_inline_ws(line, end);
+
+            if (line == end) {
+               return;
+            }
+
+            if (*line == '\n' || *line == '\r') {
+               tail = line;
+               skip_newline(tail, end);
+               at_line_start = true;
+               continue;
+            }
+
+            if (*line == '#') {
+               if (!at_line_start && line == it) {
+                  ctx.error = error_code::syntax_error;
+                  return;
+               }
+               tail = line;
+               skip_comment(tail, end);
+               if (tail != end && (*tail == '\n' || *tail == '\r')) {
+                  skip_newline(tail, end);
+                  at_line_start = true;
+                  continue;
+               }
+               return;
+            }
+
+            if (at_line_start && (at_document_end(line, end) || is_document_start(line))) {
+               return;
+            }
+
+            ctx.error = error_code::syntax_error;
+            return;
+         }
+      }
+
+      // Parse a plain scalar (unquoted)
+      template <class Ctx, class It, class End>
+      inline void parse_plain_scalar(std::string& value, Ctx& ctx, It& it, End end, bool in_flow)
+      {
+         value.clear();
+
+         while (it != end) {
+            // Copy the run of ordinary content in bulk. Only a byte the table marks
+            // needs the dispatch below, so the control-character rejection rides on a
+            // lookup the scan already performs rather than costing a test per byte.
+            {
+               const auto run_start = it;
+               while (it != end && !plain_scalar_dispatch_table[uint8_t(*it)]) {
+                  ++it;
+               }
+               if (it != run_start) {
+                  value.append(run_start, it);
+               }
+               if (it == end) break;
+            }
+
+            const char c = *it;
+
+            // YAML's character stream excludes these outright, so reject rather than
+            // carry the byte into the value.
+            if (forbidden_control_table[uint8_t(c)]) [[unlikely]] {
+               ctx.error = error_code::invalid_control_character;
+               return;
+            }
+
+            // End conditions
+            if (c == '\n' || c == '\r') {
+               if (in_flow) {
+                  auto continuation = it;
+                  skip_newline(continuation, end);
+                  bool continuation_is_comment = false;
+
+                  while (continuation != end) {
+                     while (continuation != end && (*continuation == ' ' || *continuation == '\t')) {
+                        ++continuation;
+                     }
+                     if (continuation != end && *continuation == '#') {
+                        // Comment lines terminate plain flow scalars; the caller
+                        // will consume comments/separators outside this scalar.
+                        continuation_is_comment = true;
+                        break;
+                     }
+                     break;
+                  }
+
+                  if (continuation_is_comment || continuation == end || *continuation == ',' || *continuation == ']' ||
+                      *continuation == '}' || *continuation == ':') {
+                     break;
+                  }
+
+                  while (!value.empty() && (value.back() == ' ' || value.back() == '\t')) {
+                     value.pop_back();
+                  }
+                  if (!value.empty()) {
+                     value.push_back(' ');
+                  }
+                  it = continuation;
+                  continue;
+               }
+               break;
+            }
+
+            // Per YAML spec: # only starts a comment when preceded by whitespace
+            // "foo#bar" is a valid plain scalar, but "foo #bar" has a comment
+            if (c == '#') {
+               // Check if preceded by whitespace (comment indicator)
+               if (value.empty() || value.back() == ' ' || value.back() == '\t') {
+                  break; // This is a comment
+               }
+               // Otherwise # is part of the scalar value
+            }
+
+            // Flow indicators end plain scalars in flow context
+            if (in_flow && (c == ',' || c == ']' || c == '}')) break;
+
+            // Colon followed by space/newline ends plain scalar
+            if (c == ':') {
+               if ((it + 1) == end || *(it + 1) == ' ' || *(it + 1) == '\t' || *(it + 1) == '\n' || *(it + 1) == '\r') {
+                  break;
+               }
+               if (in_flow && (*(it + 1) == ',' || *(it + 1) == ']' || *(it + 1) == '}')) {
+                  break;
+               }
+            }
+
+            value.push_back(c);
+            ++it;
+         }
+
+         // Trim trailing whitespace
+         while (!value.empty() && (value.back() == ' ' || value.back() == '\t')) {
+            value.pop_back();
+         }
+
+         if (in_flow && (value == "---" || value == "..." || value == "-")) {
+            ctx.error = error_code::syntax_error;
+         }
+      }
+
+      // Is the plain scalar that just ended at `it` a mapping key rather than a scalar node?
+      // A trailing ": " (or ':' at a line end) means the node being read is the mapping that
+      // starts with this key, so "null: 1" is a mapping, not the null scalar.
+      template <class It, class End>
+      inline bool plain_scalar_is_mapping_key(It it, End end) noexcept
+      {
+         skip_inline_ws(it, end);
+         if (it == end || *it != ':') return false;
+         const auto after = it + 1;
+         return after == end || whitespace_or_line_end_table[static_cast<uint8_t>(*after)];
+      }
+
+      // Does a block node's content start on a line after `it`? Content indented past the
+      // enclosing block belongs to the node that begins at this line break, so an empty plain
+      // scalar there means "not started yet", not "empty". This is the shape an alias to a
+      // block node replays as: the recorded anchor span begins at the line break following
+      // the anchor name, since the content's own indentation is part of the span.
+      template <class Ctx, class It, class End>
+      inline bool block_node_content_follows(Ctx& ctx, It it, End end) noexcept
+      {
+         while (it != end) {
+            if (*it == '\n' || *it == '\r') {
+               skip_newline(it, end);
+               continue;
+            }
+
+            int32_t line_indent = 0;
+            auto line = it;
+            while (line != end && (*line == ' ' || *line == '\t')) {
+               ++line_indent;
+               ++line;
+            }
+
+            if (line == end) return false;
+            if (*line == '\n' || *line == '\r') { // blank line
+               it = line;
+               continue;
+            }
+            if (*line == '#') { // comment line
+               skip_comment(line, end);
+               it = line;
+               continue;
+            }
+
+            return line_indent > ctx.current_indent();
+         }
+         return false;
+      }
+
+      // Parse a multiline plain scalar with folding (for block context)
+      // This handles plain scalars that span multiple lines, where continuation
+      // lines are indented more than the base indent level.
+      // Per YAML spec:
+      // - Continuation lines must be more indented than the base indent
+      // - A single newline between lines becomes a single space
+      // - Blank lines are preserved as literal newlines
+      template <class Ctx, class It, class End>
+      inline void parse_plain_scalar_multiline(std::string& value, Ctx& ctx, It& it, End end, int32_t base_indent)
+      {
+         value.clear();
+
+         while (it != end) {
+            {
+               const auto run_start = it;
+               while (it != end && !plain_scalar_block_dispatch_table[uint8_t(*it)]) {
+                  ++it;
+               }
+               if (it != run_start) {
+                  value.append(run_start, it);
+               }
+               if (it == end) break;
+            }
+
+            const char c = *it;
+
+            if (forbidden_control_table[uint8_t(c)]) [[unlikely]] {
+               ctx.error = error_code::invalid_control_character;
+               return;
+            }
+
+            // Check for newline - potential continuation
+            if (c == '\n' || c == '\r') {
+               // Trim trailing whitespace from current line
+               while (!value.empty() && (value.back() == ' ' || value.back() == '\t')) {
+                  value.pop_back();
+               }
+
+               // Count consecutive blank lines
+               int blank_lines = 0;
+               auto lookahead = it;
+
+               while (lookahead != end) {
+                  // Skip the newline
+                  if (*lookahead == '\r' && (lookahead + 1) != end && *(lookahead + 1) == '\n') {
+                     ++lookahead;
+                  }
+                  if (lookahead != end && (*lookahead == '\n' || *lookahead == '\r')) {
+                     ++lookahead;
+                  }
+                  else {
+                     break;
+                  }
+
+                  // Check if this is a blank line or comment-only line
+                  int32_t line_indent = 0;
+
+                  while (lookahead != end && (*lookahead == ' ' || *lookahead == '\t')) {
+                     ++line_indent;
+                     ++lookahead;
+                  }
+
+                  if (lookahead == end || *lookahead == '\n' || *lookahead == '\r') {
+                     // Blank line
+                     ++blank_lines;
+                     continue;
+                  }
+
+                  if (*lookahead == '#') {
+                     // Comments end plain scalars per YAML spec
+                     return;
+                  }
+
+                  // Found content - check indentation
+                  // Continuation lines must not dedent below the parent block.
+                  if (line_indent < base_indent) {
+                     // Dedented - end of scalar
+                     return;
+                  }
+
+                  // Document boundary markers at column 0 start/stop documents and
+                  // must terminate a top-level plain scalar continuation.
+                  if (line_indent == 0 && (at_document_start(lookahead, end) || at_document_end(lookahead, end))) {
+                     return;
+                  }
+
+                  // Sequence indicator (- followed by space/newline/end).
+                  // Terminates the scalar when the dash is at or above the
+                  // enclosing sequence's indicator column, meaning it starts
+                  // a sibling entry.  A dash deeper than the indicator is
+                  // plain content (yaml-test-suite AB8U). Outside a sequence
+                  // the line has already passed the dedent check above, so it
+                  // is a continuation: "k: a\n  - b" reads as "a - b", since a
+                  // node that began as a scalar cannot turn into a sequence.
+                  if (*lookahead == '-' && ctx.sequence_dash_indent >= 0 && line_indent <= ctx.sequence_dash_indent) {
+                     auto after_dash = lookahead + 1;
+                     if (after_dash == end || *after_dash == ' ' || *after_dash == '\t' || *after_dash == '\n' ||
+                         *after_dash == '\r') {
+                        return;
+                     }
+                  }
+
+                  if (ctx.explicit_mapping_key_context) {
+                     // In explicit mapping keys ("? key"), a following explicit
+                     // key/value indicator starts a new mapping entry.
+                     if (*lookahead == '?' || *lookahead == ':') {
+                        auto after = lookahead + 1;
+                        if (after == end || *after == ' ' || *after == '\t' || *after == '\n' || *after == '\r') {
+                           return;
+                        }
+                     }
+
+                     // Node-property indicators at the start of a continuation
+                     // line begin a new key node in explicit-key context.
+                     if (*lookahead == '&' || *lookahead == '*' || *lookahead == '!') {
+                        return;
+                     }
+                  }
+
+                  // In a "- item" value context, an anchor/tag/alias at the start
+                  // of a continuation candidate starts a new node, not scalar content.
+                  if (ctx.sequence_item_value_context &&
+                      (*lookahead == '&' || *lookahead == '*' || *lookahead == '!')) {
+                     return;
+                  }
+
+                  // Check for mapping key indicator (content followed by : and space)
+                  // This is a heuristic - we look for ": " pattern which indicates a mapping key
+                  {
+                     auto scan = lookahead;
+                     while (scan != end && *scan != '\n' && *scan != '\r') {
+                        if (*scan == ':') {
+                           auto after_colon = scan + 1;
+                           if (after_colon == end || *after_colon == ' ' || *after_colon == '\t' ||
+                               *after_colon == '\n' || *after_colon == '\r') {
+                              // This looks like a mapping key - end the scalar
+                              return;
+                           }
+                        }
+                        ++scan;
+                     }
+                  }
+
+                  // This is a continuation line
+                  // Add appropriate line breaks for blank lines
+                  for (int i = 0; i < blank_lines; ++i) {
+                     value.push_back('\n');
+                  }
+
+                  // Add a space to fold the newline (unless we added literal newlines for blank lines)
+                  if (blank_lines == 0 && !value.empty()) {
+                     value.push_back(' ');
+                  }
+
+                  // Move iterator to the content position
+                  it = lookahead;
+                  break;
+               }
+
+               // If we exhausted the lookahead, we're done
+               if (lookahead == end) {
+                  return;
+               }
+
+               continue; // Process the character at the new position
+            }
+
+            // Per YAML spec: # only starts a comment when preceded by whitespace
+            if (c == '#') {
+               if (value.empty() || value.back() == ' ' || value.back() == '\t') {
+                  break; // This is a comment
+               }
+            }
+
+            // Colon followed by space/newline ends plain scalar (potential nested mapping)
+            if (c == ':') {
+               if ((it + 1) == end || *(it + 1) == ' ' || *(it + 1) == '\t' || *(it + 1) == '\n' || *(it + 1) == '\r') {
+                  break;
+               }
+            }
+
+            value.push_back(c);
+            ++it;
+         }
+
+         // Trim trailing whitespace
+         while (!value.empty() && (value.back() == ' ' || value.back() == '\t')) {
+            value.pop_back();
+         }
+      }
+
+      // Parse a block scalar (| or >)
+      template <class Ctx, class It, class End>
+      inline void parse_block_scalar(std::string& value, Ctx& ctx, It& it, End end, int32_t base_indent)
+      {
+         if (it == end) [[unlikely]] {
+            ctx.error = error_code::unexpected_end;
+            return;
+         }
+
+         const char indicator = *it;
+         ++it;
+         const auto header_start = it;
+
+         // Chomping indicator: - (strip), + (keep), or none (clip)
+         char chomping = ' '; // default: clip
+         int explicit_indent = 0;
+         bool seen_chomping = false;
+         bool seen_indent = false;
+
+         while (it != end && *it != '\n' && *it != '\r') {
+            if (*it == '-' || *it == '+') {
+               if (seen_chomping) {
+                  ctx.error = error_code::syntax_error;
+                  return;
+               }
+               seen_chomping = true;
+               chomping = *it;
+            }
+            else if (*it >= '1' && *it <= '9') {
+               if (seen_indent) {
+                  // YAML indentation indicator is a single digit [1-9].
+                  ctx.error = error_code::syntax_error;
+                  return;
+               }
+               seen_indent = true;
+               explicit_indent = *it - '0';
+            }
+            else if (*it == '0') {
+               // Indentation indicator 0 is invalid by spec.
+               ctx.error = error_code::syntax_error;
+               return;
+            }
+            else if (*it == ' ' || *it == '\t') {
+               // Skip whitespace
+            }
+            else if (*it == '#') {
+               // Block scalar comments require separation whitespace.
+               if (it == header_start || (*(it - 1) != ' ' && *(it - 1) != '\t')) {
+                  ctx.error = error_code::syntax_error;
+                  return;
+               }
+               // Skip comment
+               while (it != end && *it != '\n' && *it != '\r') {
+                  ++it;
+               }
+               break;
+            }
+            else {
+               ctx.error = error_code::syntax_error;
+               return;
+            }
+            ++it;
+         }
+
+         // Skip newline after indicator
+         if (!skip_newline(it, end)) {
+            // Empty block scalar
+            value.clear();
+            return;
+         }
+
+         value.clear();
+
+         // Determine content indentation
+         int32_t content_indent = -1;
+         int32_t leading_blank_indent_max = -1;
+         bool first_line = true;
+         bool previous_line_starts_with_tab = false;
+         bool previous_line_more_indented = false;
+         std::string trailing_newlines;
+
+         while (it != end) {
+            auto line_start = it;
+            int32_t line_indent = measure_indent<false>(it, end, ctx);
+            if (bool(ctx.error)) [[unlikely]]
+               return;
+
+            // Check for blank line
+            if (it == end || *it == '\n' || *it == '\r') {
+               // In literal mode, a line with more spaces than content_indent
+               // has whitespace content that must be preserved.
+               if (content_indent >= 0 && line_indent > content_indent && indicator == '|') {
+                  it = line_start;
+                  for (int32_t i = 0; i < content_indent && it != end && *it == ' '; ++i) {
+                     ++it;
+                  }
+                  // Fall through to content processing below
+               }
+               else {
+                  if (content_indent < 0) {
+                     leading_blank_indent_max = (std::max)(leading_blank_indent_max, line_indent);
+                  }
+                  trailing_newlines.push_back('\n');
+                  skip_newline(it, end);
+                  continue;
+               }
+            }
+
+            // Top-level zero-indented block scalars must stop at document boundary markers.
+            if (base_indent < 0 && line_indent == 0 && (at_document_start(it, end) || at_document_end(it, end))) {
+               it = line_start;
+               break;
+            }
+
+            // First content line determines indentation
+            if (content_indent < 0) {
+               if (explicit_indent > 0) {
+                  content_indent = base_indent + explicit_indent;
+               }
+               else {
+                  content_indent = line_indent;
+               }
+
+               if (content_indent <= base_indent) {
+                  it = line_start;
+                  break;
+               }
+               if (leading_blank_indent_max > content_indent) {
+                  ctx.error = error_code::syntax_error;
+                  return;
+               }
+            }
+
+            // Check if we've dedented
+            if (line_indent < content_indent) {
+               it = line_start;
+               break;
+            }
+
+            // Skip to content_indent level
+            it = line_start;
+            for (int32_t i = 0; i < content_indent && it != end && *it == ' '; ++i) {
+               ++it;
+            }
+
+            const bool current_line_starts_with_tab = (it != end && *it == '\t');
+            const bool current_line_more_indented = (line_indent > content_indent);
+
+            // Add previous newlines
+            if (first_line) {
+               // Leading blank lines are part of block scalar content
+               value += trailing_newlines;
+            }
+            else {
+               if (indicator == '|') {
+                  // Literal: preserve newlines
+                  value += trailing_newlines;
+               }
+               else {
+                  // Folded: single newline becomes space, paragraph breaks keep one newline.
+                  // Folding does not apply adjacent to "more indented" or tab-leading lines.
+                  const size_t break_count = trailing_newlines.size();
+                  const bool adjacent_special = previous_line_starts_with_tab || current_line_starts_with_tab ||
+                                                previous_line_more_indented || current_line_more_indented;
+                  if (break_count == 1) {
+                     if (adjacent_special) {
+                        value.push_back('\n');
+                     }
+                     else {
+                        value.push_back(' ');
+                     }
+                  }
+                  else if (break_count > 1) {
+                     const size_t preserve_count = adjacent_special ? break_count : (break_count - 1);
+                     value.append(preserve_count, '\n');
+                  }
+               }
+            }
+            trailing_newlines.clear();
+            first_line = false;
+            previous_line_starts_with_tab = current_line_starts_with_tab;
+            previous_line_more_indented = current_line_more_indented;
+
+            // Read line content
+            while (it != end && *it != '\n' && *it != '\r') {
+               if (forbidden_control_table[uint8_t(*it)]) [[unlikely]] {
+                  // Block scalars have no escape mechanism, so the byte cannot be valid here.
+                  ctx.error = error_code::invalid_control_character;
+                  return;
+               }
+               value.push_back(*it);
+               ++it;
+            }
+
+            trailing_newlines.push_back('\n');
+            skip_newline(it, end);
+         }
+
+         // Apply chomping
+         if (chomping == '-') {
+            // Strip: remove all trailing newlines
+         }
+         else if (chomping == '+') {
+            // Keep: preserve all trailing newlines
+            value += trailing_newlines;
+         }
+         else {
+            // Clip: single trailing newline
+            if (!value.empty()) {
+               value.push_back('\n');
+            }
+         }
+      }
+
+      // Parse a YAML key (unquoted or quoted)
+      template <class Ctx, class It, class End>
+      inline bool parse_yaml_key(std::string& key, Ctx& ctx, It& it, End end, bool in_flow)
+      {
+         key.clear();
+         skip_inline_ws(it, end);
+
+         if (it == end) {
+            ctx.error = error_code::unexpected_end;
+            return false;
+         }
+
+         auto validate_key_tag = [&](const yaml_tag tag) {
+            if (tag == yaml_tag::unknown) {
+               ctx.error = error_code::syntax_error;
+               return false;
+            }
+            if (!tag_valid_for_string(tag)) {
+               ctx.error = error_code::syntax_error;
+               return false;
+            }
+            return true;
+         };
+
+         // Tags on keys (e.g. "!!str : value")
+         auto key_tag = parse_yaml_tag(it, end, ctx);
+         if (!validate_key_tag(key_tag)) {
+            return false;
+         }
+         skip_inline_ws(it, end);
+         if (it == end) {
+            ctx.error = error_code::unexpected_end;
+            return false;
+         }
+
+         // Handle alias as key (*name resolves to anchor value)
+         if (*it == '*') {
+            ++it;
+            auto name = parse_anchor_name(it, end);
+            if (name.empty()) {
+               ctx.error = error_code::syntax_error;
+               return false;
+            }
+            auto anchor_it = ctx.anchors.find(name);
+            if (anchor_it == ctx.anchors.end()) {
+               ctx.error = error_code::syntax_error; // undefined alias
+               return false;
+            }
+            auto& span = anchor_it->second;
+            if (span.begin == span.end) {
+               key.clear(); // empty anchor
+            }
+            else if (!ctx.charge_alias_expansion(static_cast<size_t>(span.end - span.begin))) [[unlikely]] {
+               // A key alias replays its anchor the same way a value alias does, and a complex
+               // key hands the span to the full reader, so it is charged the same way.
+               ctx.error = error_code::exceeded_max_expansion;
+               ctx.custom_error_message = "alias expansion";
+               return false;
+            }
+            else {
+               // Replay the anchor span to extract the key string
+               auto replay_it = span.begin;
+               auto replay_end = span.end;
+               if (*replay_it == '"') {
+                  parse_double_quoted_string(key, ctx, replay_it, replay_end);
+               }
+               else if (*replay_it == '\'') {
+                  parse_single_quoted_string(key, ctx, replay_it, replay_end);
+               }
+               else if (*replay_it == '[' || *replay_it == '{') {
+                  // Canonicalize complex alias keys (flow seq/map) to a stable string form.
+                  glz::generic key_node{};
+                  auto temp_ctx = ctx.make_speculative();
+                  from<YAML, glz::generic>::template op<flow_context_on<opts{.error_on_unknown_keys = false}>()>(
+                     key_node, temp_ctx, replay_it, replay_end);
+                  ctx.alias_expansion_budget = temp_ctx.alias_expansion_budget; // charged even if rejected
+                  ctx.key_expansion_budget = temp_ctx.key_expansion_budget;
+                  if (bool(temp_ctx.error)) [[unlikely]] {
+                     ctx.error = temp_ctx.error;
+                     ctx.custom_error_message = temp_ctx.custom_error_message;
+                     return false;
+                  }
+                  ctx.anchors = std::move(temp_ctx.anchors);
+
+                  if (!yaml::materialize_key<false>(key, key_node, ctx)) [[unlikely]] {
+                     return false;
+                  }
+               }
+               else {
+                  bool parse_structured_alias_key = false;
+                  if (*replay_it == '-' &&
+                      ((replay_it + 1) == replay_end ||
+                       yaml::whitespace_or_line_end_table[static_cast<uint8_t>(*(replay_it + 1))])) {
+                     parse_structured_alias_key = true;
+                  }
+                  else {
+                     auto scan = replay_it;
+                     while (scan != replay_end) {
+                        if (*scan == ':') {
+                           const auto after_colon = scan + 1;
+                           if (after_colon == replay_end ||
+                               yaml::whitespace_or_line_end_table[static_cast<uint8_t>(*after_colon)]) {
+                              parse_structured_alias_key = true;
+                              break;
+                           }
+                        }
+                        if (*scan == '\n' || *scan == '\r') {
+                           break;
+                        }
+                        ++scan;
+                     }
+                  }
+                  if (!parse_structured_alias_key) {
+                     for (auto p = replay_it; p != replay_end; ++p) {
+                        if (*p == '\n' || *p == '\r') {
+                           parse_structured_alias_key = true;
+                           break;
+                        }
+                     }
+                  }
+
+                  if (parse_structured_alias_key) {
+                     glz::generic key_node{};
+                     auto temp_ctx = ctx.make_speculative();
+                     from<YAML, glz::generic>::template op<opts{.error_on_unknown_keys = false}>(key_node, temp_ctx,
+                                                                                                 replay_it, replay_end);
+                     ctx.alias_expansion_budget = temp_ctx.alias_expansion_budget; // charged even if rejected
+                     ctx.key_expansion_budget = temp_ctx.key_expansion_budget;
+                     if (bool(temp_ctx.error)) [[unlikely]] {
+                        ctx.error = temp_ctx.error;
+                        ctx.custom_error_message = temp_ctx.custom_error_message;
+                        return false;
+                     }
+                     ctx.anchors = std::move(temp_ctx.anchors);
+
+                     if (!yaml::materialize_key<false>(key, key_node, ctx)) [[unlikely]] {
+                        return false;
+                     }
+                  }
+                  else {
+                     parse_plain_scalar(key, ctx, replay_it, replay_end, false);
+                  }
+               }
+            }
+            return !bool(ctx.error);
+         }
+
+         // Handle anchor on key (&name before key text)
+         bool has_key_anchor = false;
+         std::string key_anchor_name;
+         if (*it == '&') {
+            ++it;
+            auto name = parse_anchor_name(it, end);
+            if (name.empty()) {
+               ctx.error = error_code::syntax_error;
+               return false;
+            }
+            skip_inline_ws(it, end);
+            if (it == end) {
+               ctx.error = error_code::unexpected_end;
+               return false;
+            }
+            // Anchor on alias is invalid per YAML spec
+            if (*it == '*') {
+               ctx.error = error_code::syntax_error;
+               return false;
+            }
+            has_key_anchor = true;
+            key_anchor_name = std::string(name);
+         }
+
+         // Allow node-property order "&anchor !!str key: value" for mapping keys.
+         if (*it == '!') {
+            if (key_tag != yaml_tag::none) {
+               // Duplicate tag properties on the same key node are malformed.
+               ctx.error = error_code::syntax_error;
+               return false;
+            }
+            key_tag = parse_yaml_tag(it, end, ctx);
+            if (!validate_key_tag(key_tag)) {
+               return false;
+            }
+            skip_inline_ws(it, end);
+            if (it == end) {
+               ctx.error = error_code::unexpected_end;
+               return false;
+            }
+         }
+
+         const char* key_start = &*it;
+         bool quoted_key_spans_lines = false;
+
+         if (*it == '"') {
+            auto quoted_start = it;
+            parse_double_quoted_string(key, ctx, it, end);
+            if (!bool(ctx.error)) {
+               for (auto p = quoted_start; p != it; ++p) {
+                  if (*p == '\n' || *p == '\r') {
+                     quoted_key_spans_lines = true;
+                     break;
+                  }
+               }
+            }
+         }
+         else if (*it == '\'') {
+            auto quoted_start = it;
+            parse_single_quoted_string(key, ctx, it, end);
+            if (!bool(ctx.error)) {
+               for (auto p = quoted_start; p != it; ++p) {
+                  if (*p == '\n' || *p == '\r') {
+                     quoted_key_spans_lines = true;
+                     break;
+                  }
+               }
+            }
+         }
+         else {
+            // Plain key - read until colon
+            while (it != end) {
+               // Bulk-copy the ordinary run; only dispatch bytes need the checks below.
+               {
+                  const auto run_start = it;
+                  while (it != end && !plain_scalar_dispatch_table[uint8_t(*it)]) {
+                     ++it;
+                  }
+                  if (it != run_start) {
+                     key.append(run_start, it);
+                  }
+                  if (it == end) break;
+               }
+
+               const char c = *it;
+               if (c == ':') {
+                  // Check if this ends the key
+                  if ((it + 1) == end || *(it + 1) == ' ' || *(it + 1) == '\t' || *(it + 1) == '\n' ||
+                      *(it + 1) == '\r') {
+                     break;
+                  }
+                  if (in_flow && (*(it + 1) == ',' || *(it + 1) == ']' || *(it + 1) == '}')) {
+                     break;
+                  }
+               }
+               if (c == '\n' || c == '\r') {
+                  if (!in_flow) break;
+
+                  auto continuation = it;
+                  skip_newline(continuation, end);
+                  int32_t continuation_indent = 0;
+                  while (continuation != end && (*continuation == ' ' || *continuation == '\t')) {
+                     if (*continuation == ' ') ++continuation_indent;
+                     ++continuation;
+                  }
+
+                  if (continuation == end) {
+                     break;
+                  }
+
+                  if (*continuation == '#') {
+                     it = continuation;
+                     skip_comment(it, end);
+                     if (it != end && (*it == '\n' || *it == '\r')) {
+                        skip_newline(it, end);
+                        continue;
+                     }
+                     break;
+                  }
+
+                  // A continuation line starting with flow terminators or ':' does
+                  // not belong to the key content.
+                  if (*continuation == ',' || *continuation == ']' || *continuation == '}' || *continuation == ':') {
+                     break;
+                  }
+
+                  if (ctx.explicit_mapping_key_context) {
+                     if (*continuation == '?' || *continuation == ':') {
+                        auto after = continuation + 1;
+                        if (after == end || *after == ' ' || *after == '\t' || *after == '\n' || *after == '\r') {
+                           break;
+                        }
+                     }
+
+                     if (*continuation == '&' || *continuation == '*' || *continuation == '!') {
+                        break;
+                     }
+
+                     if (*continuation == '-') {
+                        auto after = continuation + 1;
+                        if (after == end || *after == ' ' || *after == '\t' || *after == '\n' || *after == '\r') {
+                           break;
+                        }
+                     }
+
+                     if (ctx.current_indent() >= 0 && continuation_indent <= ctx.current_indent()) {
+                        break;
+                     }
+
+                     // A continuation line that contains an implicit mapping-key
+                     // indicator (": " / ":\n") starts a new entry, not key text.
+                     {
+                        auto scan = continuation;
+                        while (scan != end && *scan != '\n' && *scan != '\r') {
+                           if (*scan == ':') {
+                              auto after_colon = scan + 1;
+                              const bool tight_key_colon =
+                                 (scan == continuation) || (*(scan - 1) != ' ' && *(scan - 1) != '\t');
+                              if (tight_key_colon &&
+                                  (after_colon == end || *after_colon == ' ' || *after_colon == '\t' ||
+                                   *after_colon == '\n' || *after_colon == '\r')) {
+                                 break;
+                              }
+                           }
+                           ++scan;
+                        }
+                        if (scan != end && *scan == ':') {
+                           break;
+                        }
+                     }
+                  }
+
+                  if (!key.empty() && key.back() != ' ') {
+                     key.push_back(' ');
+                  }
+                  it = continuation;
+                  continue;
+               }
+               if (in_flow && (c == ',' || c == ']' || c == '}')) break;
+               if (c == '#') {
+                  if (key.empty() || key.back() == ' ' || key.back() == '\t') break;
+               }
+
+               if (forbidden_control_table[uint8_t(c)]) [[unlikely]] {
+                  ctx.error = error_code::invalid_control_character;
+                  return false;
+               }
+               key.push_back(c);
+               ++it;
+            }
+
+            // Trim trailing whitespace from key
+            while (!key.empty() && (key.back() == ' ' || key.back() == '\t')) {
+               key.pop_back();
+            }
+
+            // Empty keys are valid YAML (":" in block or flow mappings).
+         }
+
+         if (bool(ctx.error)) return false;
+
+         // Implicit mapping keys must be single-line in both block and flow styles.
+         if (quoted_key_spans_lines && !in_flow) {
+            ctx.error = error_code::syntax_error;
+            return false;
+         }
+
+         // Store anchor on key if present
+         if (has_key_anchor) {
+            ctx.anchors[std::move(key_anchor_name)] = {key_start, &*it, ctx.current_indent()};
+         }
+
+         return true;
+      }
+
+      // A YAML scalar cannot generally be viewed in place in the input buffer: a
+      // double-quoted scalar may carry escapes, a plain scalar may fold across lines, and a
+      // block scalar joins them. The reader therefore decodes into an owning buffer and
+      // hands that buffer to the target, so the target must be able to take ownership of it.
+      //
+      // This is deliberately narrower than str_t. A std::string_view is assignable from the
+      // decoded buffer, so without this constraint it compiled and then pointed at freed
+      // memory once the buffer died. A std::array<char, N> is not assignable at all, so it
+      // reported as supported and then failed to compile deep inside the reader. Both are
+      // now reported unsupported by read_supported<T, YAML>, which is the honest answer.
+      //
+      // Writing is unaffected: a non-owning string is a perfectly good source, so
+      // write_supported<std::string_view, YAML> remains true.
+      template <class T>
+      concept owning_scalar_target = not string_view_t<T> && std::assignable_from<std::decay_t<T>&, std::string&&>;
+
+      // Whether the node at `it` opens a collection rather than a plain scalar: a flow
+      // sequence or mapping, a block sequence entry, or an explicit mapping key. "-" and "?"
+      // are indicators only when whitespace or the end of the input follows, so "-1" and
+      // "?x" remain plain scalars.
+      template <class It, class End>
+      [[nodiscard]] inline bool plain_scalar_starts_collection(It it, End end) noexcept
+      {
+         if (it == end) return false;
+         const char c = *it;
+         if (c == '[' || c == '{') return true;
+         if (c == '-' || c == '?') {
+            ++it;
+            return it == end || whitespace_or_line_end_table[static_cast<uint8_t>(*it)];
+         }
+         return false;
+      }
+
+   } // namespace yaml
+
+   // String types
+   template <str_t T>
+      requires(yaml::owning_scalar_target<T>)
+   struct from<YAML, T>
+   {
+      template <auto Opts, class It>
+      static void op(auto&& value, is_context auto&& ctx, It&& it, auto end) noexcept
+      {
+         if (bool(ctx.error)) [[unlikely]]
+            return;
+
+         yaml::node_preamble_state preamble{};
+         if (yaml::parse_node_preamble<Opts, yaml::node_property_policy{true, false, false, true}>(
+                value, ctx, it, end, preamble, [](yaml::yaml_tag tag) { return yaml::tag_valid_for_string(tag); }))
+            return;
+
+         std::string str;
+         const auto style = yaml::detect_scalar_style(*it);
+
+         switch (style) {
+         case yaml::scalar_style::double_quoted:
+            yaml::parse_double_quoted_string(str, ctx, it, end);
+            break;
+         case yaml::scalar_style::single_quoted:
+            yaml::parse_single_quoted_string(str, ctx, it, end);
+            break;
+         case yaml::scalar_style::literal_block:
+         case yaml::scalar_style::folded_block:
+            // For same-line mapping/sequence values, parsing context is typically pushed
+            // one column past the key/item indicator; block scalar indentation is relative
+            // to the parent line indent.
+            yaml::parse_block_scalar(str, ctx, it, end,
+                                     ctx.current_indent() > 0 ? (ctx.current_indent() - 1) : ctx.current_indent());
+            break;
+         case yaml::scalar_style::plain:
+            // A collection where a string is expected is a type mismatch. Reading it as a
+            // plain scalar would store its source text, and for a block sequence only the
+            // first entry, as the value.
+            if (yaml::plain_scalar_starts_collection(it, end)) [[unlikely]] {
+               ctx.error = error_code::syntax_error;
+               return;
+            }
+            // In block context with known indent, use multiline parsing to support
+            // plain scalars that span multiple lines (folding behavior)
+            if constexpr (!yaml::check_flow_context(Opts)) {
+               if (ctx.current_indent() >= 0) {
+                  yaml::parse_plain_scalar_multiline(str, ctx, it, end, ctx.current_indent());
+               }
+               else {
+                  // Top-level plain scalars may continue on same-indent or indented lines.
+                  yaml::parse_plain_scalar_multiline(str, ctx, it, end, int32_t(0));
+               }
+            }
+            else {
+               yaml::parse_plain_scalar(str, ctx, it, end, true);
+            }
+            break;
+         }
+
+         if (!bool(ctx.error)) {
+            value = std::move(str);
+            yaml::finalize_node_anchor(preamble.node_props, ctx, it);
+         }
+      }
+   };
+
+   // ============================================
+   // std::chrono calendar types
+   // ============================================
+   //
+   // Parsed from an ISO 8601 scalar using the shared chrono_detail parsers. Reading goes
+   // through the str_t reader above, so every YAML scalar style is accepted regardless of
+   // which one the writer emits: plain (what Glaze writes), single-quoted, double-quoted
+   // and block. That keeps hand-written and third-party YAML readable, since many
+   // generators quote timestamps.
+   //
+   // std::string rather than std::string_view is deliberate: YAML scalars can require
+   // unescaping and line folding, so the reader materializes them into an owning buffer.
+
+   // system_clock / utc_clock time_point: parse from ISO 8601 (utc_clock also accepts :60).
+   // Time points whose period is exactly `days` (e.g. std::chrono::sys_days) also accept
+   // the bare "YYYY-MM-DD" form; full datetimes remain accepted and are floored to days.
+   // Coarser periods fall through to the full parser so dates are not silently snapped to
+   // a multi-day boundary.
+   template <is_calendar_time_point T>
+      requires(not custom_read<T>)
+   struct from<YAML, T>
+   {
+      template <auto Opts, class It>
+      static void op(auto&& value, is_context auto&& ctx, It&& it, auto end) noexcept
+      {
+         std::string str;
+         from<YAML, std::string>::template op<Opts>(str, ctx, it, end);
+         if (bool(ctx.error)) [[unlikely]]
+            return;
+
+         using Duration = typename std::remove_cvref_t<T>::duration;
+         using Period = typename Duration::period;
+         if constexpr (std::ratio_equal_v<Period, std::ratio<86400>>) {
+            if (str.size() == 10) {
+               std::chrono::year_month_day ymd{};
+               chrono_detail::parse_ymd(str, ymd, ctx.error);
+               if (bool(ctx.error)) [[unlikely]]
+                  return;
+               value = std::chrono::time_point_cast<Duration>(std::chrono::sys_days{ymd});
+               return;
+            }
+         }
+         chrono_detail::parse_iso8601(str, value, ctx.error);
+      }
+   };
+
+   // year_month_day: parse from "YYYY-MM-DD"
+   template <is_year_month_day T>
+      requires(not custom_read<T>)
+   struct from<YAML, T>
+   {
+      template <auto Opts, class It>
+      static void op(auto&& value, is_context auto&& ctx, It&& it, auto end) noexcept
+      {
+         std::string str;
+         from<YAML, std::string>::template op<Opts>(str, ctx, it, end);
+         if (bool(ctx.error)) [[unlikely]]
+            return;
+         chrono_detail::parse_ymd(str, value, ctx.error);
+      }
+   };
+
+   // Boolean types
+   template <bool_t T>
+   struct from<YAML, T>
+   {
+      template <auto Opts, class It>
+      static void op(auto&& value, is_context auto&& ctx, It&& it, auto end) noexcept
+      {
+         if (bool(ctx.error)) [[unlikely]]
+            return;
+
+         yaml::node_preamble_state preamble{};
+         if (yaml::parse_node_preamble<Opts>(value, ctx, it, end, preamble,
+                                             [](yaml::yaml_tag tag) { return yaml::tag_valid_for_bool(tag); }))
+            return;
+
+         // Parse as plain scalar first
+         std::string str;
+         yaml::parse_plain_scalar(str, ctx, it, end, yaml::check_flow_context(Opts));
+
+         if (str == "true" || str == "True" || str == "TRUE" || str == "yes" || str == "Yes" || str == "YES" ||
+             str == "on" || str == "On" || str == "ON") {
+            value = true;
+         }
+         else if (str == "false" || str == "False" || str == "FALSE" || str == "no" || str == "No" || str == "NO" ||
+                  str == "off" || str == "Off" || str == "OFF") {
+            value = false;
+         }
+         else {
+            ctx.error = error_code::expected_true_or_false;
+         }
+
+         yaml::finalize_node_anchor(preamble.node_props, ctx, it);
+      }
+   };
+
+   // Numeric types
+   template <num_t T>
+   struct from<YAML, T>
+   {
+      template <auto Opts, class It>
+      static void op(auto&& value, is_context auto&& ctx, It&& it, auto end) noexcept
+      {
+         if (bool(ctx.error)) [[unlikely]]
+            return;
+
+         yaml::node_preamble_state preamble{};
+         if (yaml::parse_node_preamble<Opts>(value, ctx, it, end, preamble, [](yaml::yaml_tag tag) {
+                if constexpr (std::floating_point<std::remove_cvref_t<T>>) {
+                   return yaml::tag_valid_for_float(tag);
+                }
+                else {
+                   return yaml::tag_valid_for_int(tag);
+                }
+             }))
+            return;
+
+         auto finalize = [&] { yaml::finalize_node_anchor(preamble.node_props, ctx, it); };
+
+         // Check for special float values
+         if constexpr (std::floating_point<std::remove_cvref_t<T>>) {
+            auto start = it;
+
+            // Check for .inf, .nan, -.inf, etc.
+            if (*it == '.') {
+               ++it;
+               if (it + 3 <= end && (std::string_view(it, 3) == "inf" || std::string_view(it, 3) == "Inf" ||
+                                     std::string_view(it, 3) == "INF")) {
+                  value = std::numeric_limits<std::remove_cvref_t<T>>::infinity();
+                  it += 3;
+                  finalize();
+                  return;
+               }
+               if (it + 3 <= end && (std::string_view(it, 3) == "nan" || std::string_view(it, 3) == "NaN" ||
+                                     std::string_view(it, 3) == "NAN")) {
+                  value = std::numeric_limits<std::remove_cvref_t<T>>::quiet_NaN();
+                  it += 3;
+                  finalize();
+                  return;
+               }
+               it = start;
+            }
+
+            if (*it == '-' || *it == '+') {
+               const char sign = *it;
+               ++it;
+               if (it != end && *it == '.') {
+                  ++it;
+                  if (it + 3 <= end && (std::string_view(it, 3) == "inf" || std::string_view(it, 3) == "Inf" ||
+                                        std::string_view(it, 3) == "INF")) {
+                     if (sign == '-') {
+                        value = -std::numeric_limits<std::remove_cvref_t<T>>::infinity();
+                     }
+                     else {
+                        value = std::numeric_limits<std::remove_cvref_t<T>>::infinity();
+                     }
+                     it += 3;
+                     finalize();
+                     return;
+                  }
+               }
+               it = start;
+            }
+         }
+
+         // Parse as plain scalar and convert
+         auto start = it;
+
+         // Find end of number - use same rules as plain scalar for colons
+         while (it != end) {
+            const char c = *it;
+            if (c == ' ' || c == '\t' || c == '\n' || c == '\r' || c == ',' || c == ']' || c == '}' || c == '#') {
+               break;
+            }
+            // Colon only ends number if followed by space/tab/newline/end (YAML mapping indicator)
+            if (c == ':') {
+               if ((it + 1) == end || *(it + 1) == ' ' || *(it + 1) == '\t' || *(it + 1) == '\n' || *(it + 1) == '\r') {
+                  break;
+               }
+            }
+            ++it;
+         }
+
+         const std::string_view num_str(&*start, static_cast<size_t>(it - start));
+
+         if (num_str.empty()) {
+            ctx.error = error_code::parse_number_failure;
+            return;
+         }
+
+         // Handle hex, octal, binary
+         if constexpr (std::integral<std::remove_cvref_t<T>>) {
+            if (num_str.size() > 2 && num_str[0] == '0') {
+               int base = 10;
+               size_t offset = 0;
+
+               if (num_str[1] == 'x' || num_str[1] == 'X') {
+                  base = 16;
+                  offset = 2;
+               }
+               else if (num_str[1] == 'o' || num_str[1] == 'O') {
+                  base = 8;
+                  offset = 2;
+               }
+               else if (num_str[1] == 'b' || num_str[1] == 'B') {
+                  base = 2;
+                  offset = 2;
+               }
+
+               if (base != 10) {
+                  const auto digits = num_str.substr(offset);
+                  const bool has_underscores = (digits.find('_') != std::string_view::npos);
+
+                  std::string clean_storage;
+                  std::string_view clean_view;
+
+                  if (has_underscores) {
+                     clean_storage.reserve(digits.size());
+                     for (char c : digits) {
+                        if (c != '_') {
+                           clean_storage.push_back(c);
+                        }
+                     }
+                     clean_view = clean_storage;
+                  }
+                  else {
+                     clean_view = digits;
+                  }
+
+                  auto [ptr, ec] =
+                     std::from_chars(clean_view.data(), clean_view.data() + clean_view.size(), value, base);
+                  if (ec != std::errc{}) {
+                     ctx.error = error_code::parse_number_failure;
+                  }
+                  finalize();
+                  return;
+               }
+            }
+         }
+         else if constexpr (std::floating_point<std::remove_cvref_t<T>>) {
+            bool negative = false;
+            std::string_view digits = num_str;
+
+            if (!digits.empty() && (digits.front() == '+' || digits.front() == '-')) {
+               negative = (digits.front() == '-');
+               digits.remove_prefix(1);
+            }
+
+            if (digits.size() > 2 && digits[0] == '0') {
+               int base = 10;
+               size_t offset = 0;
+
+               if (digits[1] == 'x' || digits[1] == 'X') {
+                  base = 16;
+                  offset = 2;
+               }
+               else if (digits[1] == 'o' || digits[1] == 'O') {
+                  base = 8;
+                  offset = 2;
+               }
+               else if (digits[1] == 'b' || digits[1] == 'B') {
+                  base = 2;
+                  offset = 2;
+               }
+
+               if (base != 10) {
+                  auto raw_digits = digits.substr(offset);
+                  const bool has_underscores = (raw_digits.find('_') != std::string_view::npos);
+
+                  std::string clean_storage;
+                  std::string_view clean_view;
+                  if (has_underscores) {
+                     clean_storage.reserve(raw_digits.size());
+                     for (char c : raw_digits) {
+                        if (c != '_') {
+                           clean_storage.push_back(c);
+                        }
+                     }
+                     clean_view = clean_storage;
+                  }
+                  else {
+                     clean_view = raw_digits;
+                  }
+
+                  uint64_t parsed_int{};
+                  auto [ptr, ec] =
+                     std::from_chars(clean_view.data(), clean_view.data() + clean_view.size(), parsed_int, base);
+                  if (ec != std::errc{} || ptr != (clean_view.data() + clean_view.size())) {
+                     ctx.error = error_code::parse_number_failure;
+                     finalize();
+                     return;
+                  }
+
+                  const auto as_float = static_cast<std::remove_cvref_t<T>>(parsed_int);
+                  value = negative ? -as_float : as_float;
+                  finalize();
+                  return;
+               }
+            }
+         }
+
+         // Standard number parsing - only allocate if underscores present
+         const bool has_underscores = (num_str.find('_') != std::string_view::npos);
+
+         std::string clean_storage;
+         std::string_view clean_view;
+
+         if (has_underscores) {
+            clean_storage.reserve(num_str.size());
+            for (char c : num_str) {
+               if (c != '_') {
+                  clean_storage.push_back(c);
+               }
+            }
+            clean_view = clean_storage;
+         }
+         else {
+            clean_view = num_str;
+         }
+
+         // YAML allows leading '+' for positive numbers, but C++ from_chars doesn't
+         // Strip leading '+' if present
+         auto parse_view = clean_view;
+         if (!parse_view.empty() && parse_view.front() == '+') {
+            parse_view.remove_prefix(1);
+            if (parse_view.empty()) {
+               ctx.error = error_code::parse_number_failure;
+               return;
+            }
+         }
+
+         if constexpr (std::floating_point<std::remove_cvref_t<T>>) {
+            auto result = glz::fast_float::from_chars(parse_view.data(), parse_view.data() + parse_view.size(), value);
+            // Check both for errors and that all input was consumed (e.g., "12:30" is not a valid number)
+            if (result.ec != std::errc{} || result.ptr != parse_view.data() + parse_view.size()) {
+               ctx.error = error_code::parse_number_failure;
+            }
+         }
+         else {
+            auto [ptr, ec] = std::from_chars(parse_view.data(), parse_view.data() + parse_view.size(), value);
+            // Check both for errors and that all input was consumed
+            if (ec != std::errc{} || ptr != parse_view.data() + parse_view.size()) {
+               ctx.error = error_code::parse_number_failure;
+            }
+         }
+
+         finalize();
+      }
+   };
+
+   // Nullable types: std::optional, std::unique_ptr, std::shared_ptr, raw pointers
+   template <nullable_like T>
+   struct from<YAML, T>
+   {
+      template <auto Opts, class It>
+      static void op(auto&& value, is_context auto&& ctx, It&& it, auto end) noexcept
+      {
+         if (bool(ctx.error)) [[unlikely]]
+            return;
+
+         // Save position before consuming whitespace so we can restore it
+         // if the speculative null check fails. The indentation whitespace is
+         // structurally significant for block-style inner values (sequences, mappings).
+         auto before_ws = it;
+
+         yaml::skip_inline_ws(it, end);
+
+         if (it == end) {
+            value = {};
+            return;
+         }
+
+         // Check for tag - but don't consume it yet if it's not a null tag
+         auto tag_start = it;
+         const auto tag = yaml::parse_yaml_tag(it, end, ctx);
+         if (tag == yaml::yaml_tag::unknown) [[unlikely]] {
+            ctx.error = error_code::syntax_error;
+            return;
+         }
+
+         // If it's explicitly a null tag, set to null
+         if (tag == yaml::yaml_tag::null_tag) {
+            yaml::skip_inline_ws(it, end);
+            // Skip the null value if present
+            if (it != end && !yaml::flow_context_end_table[static_cast<uint8_t>(*it)]) {
+               std::string str;
+               yaml::parse_plain_scalar(str, ctx, it, end, yaml::check_flow_context(Opts));
+            }
+            value = {};
+            return;
+         }
+
+         // If no tag or a non-null tag, reset and check value
+         if (tag == yaml::yaml_tag::none) {
+            it = tag_start;
+         }
+
+         yaml::skip_inline_ws(it, end);
+
+         // Handle alias for the whole nullable value
+         if (yaml::handle_alias<Opts>(value, ctx, it, end)) return;
+         // Anchors (&name) pass through to the inner type handler
+
+         // Check for null value (without tag). The probe runs on a copy: a null-looking
+         // token only settles the node when the token really is this node's scalar, and
+         // otherwise the inner parser has to start from where this began.
+         if (tag == yaml::yaml_tag::none) {
+            std::string str;
+            auto probe = it;
+            yaml::parse_plain_scalar(str, ctx, probe, end, yaml::check_flow_context(Opts));
+
+            bool is_null = yaml::is_yaml_null(str);
+            if (is_null) {
+               if (yaml::plain_scalar_is_mapping_key(probe, end)) {
+                  // "null: 1" is a mapping whose first key happens to look null.
+                  is_null = false;
+               }
+               else if (str.empty() && !yaml::check_flow_context(Opts) &&
+                        yaml::block_node_content_follows(ctx, probe, end)) {
+                  // A block node whose content begins on a following line reads as an
+                  // empty scalar here. In flow context an empty node really is null.
+                  is_null = false;
+               }
+            }
+
+            if (is_null) {
+               it = probe;
+               value = {};
+               return;
+            }
+
+            // Not null - reset to before whitespace consumption so the inner
+            // parser can measure indentation correctly for block-style values.
+            it = before_ws;
+         }
+
+         if (!value) {
+            if (!nullable_emplace<Opts>(value, ctx)) {
+               return;
+            }
+         }
+
+         using V = std::remove_cvref_t<decltype(*value)>;
+         from<YAML, V>::template op<Opts>(*value, ctx, it, end);
+      }
+   };
+
+   // Always-null literal types (std::nullptr_t, std::monostate, std::nullopt_t)
+   template <always_null_t T>
+   struct from<YAML, T>
+   {
+      template <auto Opts, class It>
+      static void op(auto&&, is_context auto&& ctx, It&& it, auto end) noexcept
+      {
+         if (bool(ctx.error)) [[unlikely]]
+            return;
+
+         yaml::skip_inline_ws(it, end);
+
+         if (it == end) [[unlikely]] {
+            ctx.error = error_code::unexpected_end;
+            return;
+         }
+
+         // Check for null values: null, Null, NULL, ~
+         if (*it == '~') {
+            ++it;
+            return;
+         }
+
+         // Parse as plain scalar and check if it's a null keyword
+         auto start = it;
+         while (it != end && !yaml::plain_scalar_end_or_control_table[static_cast<uint8_t>(*it)]) {
+            ++it;
+         }
+
+         std::string_view str{start, static_cast<size_t>(it - start)};
+         if (!yaml::is_yaml_null(str)) {
+            ctx.error = error_code::syntax_error;
+         }
+      }
+   };
+
+   // Enum with glz::meta - reads string representation
+   template <class T>
+      requires(is_named_enum<T>)
+   struct from<YAML, T>
+   {
+      template <auto Opts, class It>
+      static void op(auto& value, is_context auto&& ctx, It&& it, auto end) noexcept
+      {
+         if (bool(ctx.error)) [[unlikely]]
+            return;
+
+         yaml::node_preamble_state preamble{};
+         if (yaml::parse_node_preamble<Opts>(value, ctx, it, end, preamble,
+                                             [](yaml::yaml_tag tag) { return yaml::tag_valid_for_string(tag); }))
+            return;
+
+         // Parse as string (quoted or plain)
+         std::string str;
+         const auto style = yaml::detect_scalar_style(*it);
+
+         if (style == yaml::scalar_style::double_quoted) {
+            yaml::parse_double_quoted_string(str, ctx, it, end);
+         }
+         else if (style == yaml::scalar_style::single_quoted) {
+            yaml::parse_single_quoted_string(str, ctx, it, end);
+         }
+         else {
+            yaml::parse_plain_scalar(str, ctx, it, end, yaml::check_flow_context(Opts));
+         }
+
+         if (bool(ctx.error)) [[unlikely]]
+            return;
+
+         constexpr auto N = reflect<T>::size;
+
+         if constexpr (N == 1) {
+            static constexpr auto key = glz::get<0>(reflect<T>::keys);
+            if (str == key) {
+               value = glz::get<0>(reflect<T>::values);
+            }
+            else {
+               ctx.error = error_code::unexpected_enum;
+            }
+         }
+         else {
+            static constexpr auto HashInfo = hash_info<T>;
+            const auto index = decode_hash_with_size<YAML, T, HashInfo, HashInfo.type>::op(
+               str.data(), str.data() + str.size(), str.size());
+
+            if (index >= N) [[unlikely]] {
+               ctx.error = error_code::unexpected_enum;
+               return;
+            }
+
+            visit<N>(
+               [&]<size_t I>() {
+                  static constexpr auto key = glz::get<I>(reflect<T>::keys);
+                  if (str == key) [[likely]] {
+                     value = glz::get<I>(reflect<T>::values);
+                  }
+                  else {
+                     ctx.error = error_code::unexpected_enum;
+                  }
+               },
+               index);
+         }
+
+         yaml::finalize_node_anchor(preamble.node_props, ctx, it);
+      }
+   };
+
+   // Raw enum (without glz::meta) - reads as underlying numeric type
+   template <class T>
+      requires(std::is_enum_v<T> && !glaze_enum_t<T> && !meta_keys<T> && !custom_read<T>)
+   struct from<YAML, T>
+   {
+      template <auto Opts, class It>
+      static void op(auto& value, is_context auto&& ctx, It&& it, auto end) noexcept
+      {
+         std::underlying_type_t<std::decay_t<T>> x{};
+         from<YAML, decltype(x)>::template op<Opts>(x, ctx, it, end);
+         value = static_cast<std::decay_t<T>>(x);
+      }
+   };
+
+   namespace yaml
+   {
+      // A parent that hands a block-style value the lines below it pushes an indent for the
+      // value to judge itself against. What that indent must be depends on how the value
+      // reads a block mapping, so the two predicates below classify the value type. Both
+      // treat wrappers as transparent: glaze_value_t and nullable types (std::optional,
+      // smart/raw pointers) delegate the block parse to what they hold, unchanged.
+
+      // Maps -- and variants, which may resolve to one -- run parse_block_mapping_loop in
+      // discover mode: they find their own key column and judge dedent against the pushed
+      // indent as a strict parent. The parent must therefore push the column *outside* the
+      // value (nested_indent - 1).
+      template <class T>
+      constexpr bool discovers_own_block_mapping_indent()
+      {
+         using V = std::remove_cvref_t<T>;
+         if constexpr (readable_map_t<V> || is_variant<V>) {
+            return true;
+         }
+         else if constexpr (glaze_value_t<V>) {
+            return discovers_own_block_mapping_indent<
+               std::decay_t<decltype(get_member(std::declval<V&>(), meta_wrapper_v<V>))>>();
+         }
+         else if constexpr (nullable_like<V>) {
+            return discovers_own_block_mapping_indent<std::remove_cvref_t<decltype(*std::declval<V&>())>>();
+         }
+         else {
+            return false;
+         }
+      }
+
+      // Structs read the pushed indent as their own key column: from<YAML, T> for objects
+      // passes ctx.current_indent() straight through as parse_block_mapping's mapping_indent.
+      // The parent must push the column *of* the value (nested_indent), otherwise a key one
+      // column short of its siblings still clears the dedent check and is folded in.
+      //
+      // Every other value type (scalars, sequences) reads the pushed indent as an enclosing
+      // baseline and is not covered by either predicate.
+      template <class T>
+      constexpr bool receives_block_mapping_column()
+      {
+         using V = std::remove_cvref_t<T>;
+         // A pair is a single-entry mapping and reads the pushed indent as its own key column,
+         // exactly like a struct -- see from<YAML, pair_t>.
+         if constexpr (glaze_object_t<V> || reflectable<V> || pair_t<V>) {
+            return true;
+         }
+         else if constexpr (glaze_value_t<V>) {
+            return receives_block_mapping_column<
+               std::decay_t<decltype(get_member(std::declval<V&>(), meta_wrapper_v<V>))>>();
+         }
+         else if constexpr (nullable_like<V>) {
+            return receives_block_mapping_column<std::remove_cvref_t<decltype(*std::declval<V&>())>>();
+         }
+         else {
+            return false;
+         }
+      }
+
+      // Reading a YAML sequence node into a container OVERWRITES its previous
+      // contents rather than appending to them, matching the JSON parser
+      // (see json/read.hpp). Growable containers are cleared up front so that
+      // pre-existing elements do not leak into the parsed result; fixed-size
+      // containers (e.g. std::array) are overwritten element-by-element and are
+      // intentionally left untouched here.
+      template <auto Opts, class V>
+      inline void clear_sequence_before_read(V& value)
+      {
+         if constexpr (emplace_backable<V> && requires { value.clear(); }) {
+            // vector-like: honor the append_arrays option, matching json/read.hpp
+            if constexpr (!check_append_arrays(Opts)) {
+               value.clear();
+            }
+         }
+         else if constexpr (emplaceable<V> && requires { value.clear(); }) {
+            // set-like: json/read.hpp clears unconditionally; append_arrays does not apply
+            value.clear();
+         }
+      }
+
+      // Parse flow sequence [item, item, ...]
+      template <auto Opts, class T, class Ctx, class It, class End>
+      inline void parse_flow_sequence(T&& value, Ctx& ctx, It& it, End end)
+      {
+         using V = std::remove_cvref_t<T>;
+         using value_type = typename V::value_type;
+
+         struct sequence_container_adapter
+         {
+            size_t index = 0;
+
+            inline bool fixed_capacity_reached(const V& container) const noexcept
+            {
+               if constexpr (!resizable<V>) {
+                  return index >= container.size();
+               }
+               else {
+                  (void)container;
+                  return false;
+               }
+            }
+
+            inline void commit_fixed_slot() noexcept { ++index; }
+
+            inline void append(V& container, value_type&& element) noexcept
+            {
+               if constexpr (emplace_backable<V>) {
+                  container.emplace_back(std::move(element));
+               }
+               else if constexpr (emplaceable<V>) {
+                  container.emplace(std::move(element));
+               }
+            }
+         };
+
+         if (it == end || *it != '[') [[unlikely]] {
+            ctx.error = error_code::syntax_error;
+            return;
+         }
+
+         // Overwrite (do not append to) any pre-existing contents. Must happen
+         // before the empty-array early return below so that `[]` also clears.
+         clear_sequence_before_read<Opts>(value);
+
+         ++it; // Skip '['
+         // Skip whitespace and newlines after opening bracket (YAML allows multi-line flow sequences)
+         skip_flow_ws_and_newlines(ctx, it, end);
+         if (bool(ctx.error)) [[unlikely]]
+            return;
+
+         // Handle empty array
+         if (it != end && *it == ']') {
+            ++it;
+            validate_flow_node_adjacent_tail(ctx, it, end);
+            if (bool(ctx.error)) [[unlikely]]
+               return;
+            if constexpr (!yaml::check_flow_context(Opts)) {
+               if (ctx.current_indent() < 0) {
+                  validate_root_flow_tail_after_close(ctx, it, end);
+               }
+            }
+            return;
+         }
+
+         bool just_saw_comma = false;
+         sequence_container_adapter adapter{};
+
+         if constexpr (emplace_backable<V> || emplaceable<V>) {
+            // Dynamic containers append items (vector-like and set-like)
+            while (it != end) {
+               skip_flow_ws_and_newlines(ctx, it, end);
+               if (bool(ctx.error)) [[unlikely]]
+                  return;
+
+               if (it == end) [[unlikely]] {
+                  ctx.error = error_code::unexpected_end;
+                  return;
+               }
+
+               if (*it == ']') {
+                  if (just_saw_comma) {
+                     ++it;
+                     validate_flow_node_adjacent_tail(ctx, it, end);
+                     if (bool(ctx.error)) [[unlikely]]
+                        return;
+                     if constexpr (!yaml::check_flow_context(Opts)) {
+                        if (ctx.current_indent() < 0) {
+                           validate_root_flow_tail_after_close(ctx, it, end);
+                        }
+                     }
+                     return;
+                  }
+                  ctx.error = error_code::syntax_error;
+                  return;
+               }
+
+               if (*it == ',' || *it == '#') {
+                  ctx.error = error_code::syntax_error;
+                  return;
+               }
+               just_saw_comma = false;
+
+               value_type element{};
+               from<YAML, value_type>::template op<flow_context_on<Opts>()>(element, ctx, it, end);
+
+               if (bool(ctx.error)) [[unlikely]]
+                  return;
+
+               bool saw_line_break_before_separator = false;
+               skip_flow_ws_and_newlines(ctx, it, end, &saw_line_break_before_separator);
+               if (bool(ctx.error)) [[unlikely]]
+                  return;
+
+               if (it != end && *it == ':') {
+                  // In flow sequences, implicit key-value pairs must be on a single line.
+                  if (saw_line_break_before_separator) {
+                     ctx.error = error_code::syntax_error;
+                     return;
+                  }
+                  if constexpr (std::same_as<std::remove_cvref_t<value_type>, glz::generic>) {
+                     glz::generic key_node = std::move(element);
+                     ++it;
+                     skip_inline_ws(it, end);
+
+                     glz::generic mapped{};
+                     from<YAML, glz::generic>::template op<flow_context_on<Opts>()>(mapped, ctx, it, end);
+                     if (bool(ctx.error)) [[unlikely]]
+                        return;
+
+                     std::string key;
+                     if (!yaml::materialize_key(key, key_node, ctx)) [[unlikely]]
+                        return;
+
+                     glz::generic pair{};
+                     pair[key] = std::move(mapped);
+                     element = std::move(pair);
+
+                     skip_flow_ws_and_newlines(ctx, it, end);
+                     if (bool(ctx.error)) [[unlikely]]
+                        return;
+                  }
+                  else {
+                     ctx.error = error_code::syntax_error;
+                     return;
+                  }
+               }
+
+               adapter.append(value, std::move(element));
+
+               if (it == end) [[unlikely]] {
+                  ctx.error = error_code::unexpected_end;
+                  return;
+               }
+
+               if (*it == ']') {
+                  ++it;
+                  validate_flow_node_adjacent_tail(ctx, it, end);
+                  if (bool(ctx.error)) [[unlikely]]
+                     return;
+                  if constexpr (!yaml::check_flow_context(Opts)) {
+                     if (ctx.current_indent() < 0) {
+                        validate_root_flow_tail_after_close(ctx, it, end);
+                     }
+                  }
+                  return;
+               }
+               else if (*it == ',') {
+                  ++it;
+                  just_saw_comma = true;
+                  skip_flow_ws_and_newlines(ctx, it, end);
+                  if (bool(ctx.error)) [[unlikely]]
+                     return;
+               }
+               else {
+                  ctx.error = error_code::syntax_error;
+                  return;
+               }
+            }
+         }
+         else if constexpr (!resizable<V>) {
+            // Fixed-size containers (std::array)
+            while (it != end) {
+               skip_flow_ws_and_newlines(ctx, it, end);
+               if (bool(ctx.error)) [[unlikely]]
+                  return;
+
+               if (it == end) [[unlikely]] {
+                  ctx.error = error_code::unexpected_end;
+                  return;
+               }
+
+               if (*it == ']') {
+                  if (just_saw_comma) {
+                     ++it;
+                     validate_flow_node_adjacent_tail(ctx, it, end);
+                     if (bool(ctx.error)) [[unlikely]]
+                        return;
+                     if constexpr (!yaml::check_flow_context(Opts)) {
+                        if (ctx.current_indent() < 0) {
+                           validate_root_flow_tail_after_close(ctx, it, end);
+                        }
+                     }
+                     return;
+                  }
+                  ctx.error = error_code::syntax_error;
+                  return;
+               }
+
+               if (*it == ',' || *it == '#') {
+                  ctx.error = error_code::syntax_error;
+                  return;
+               }
+               just_saw_comma = false;
+
+               // An item beyond the last slot is an error, as in JSON.
+               if (adapter.fixed_capacity_reached(value)) [[unlikely]] {
+                  ctx.error = error_code::exceeded_static_array_size;
+                  return;
+               }
+
+               from<YAML, value_type>::template op<flow_context_on<Opts>()>(value[adapter.index], ctx, it, end);
+
+               if (bool(ctx.error)) [[unlikely]]
+                  return;
+
+               adapter.commit_fixed_slot();
+               skip_flow_ws_and_newlines(ctx, it, end);
+               if (bool(ctx.error)) [[unlikely]]
+                  return;
+
+               if (it == end) [[unlikely]] {
+                  ctx.error = error_code::unexpected_end;
+                  return;
+               }
+
+               if (*it == ']') {
+                  ++it;
+                  validate_flow_node_adjacent_tail(ctx, it, end);
+                  if (bool(ctx.error)) [[unlikely]]
+                     return;
+                  if constexpr (!yaml::check_flow_context(Opts)) {
+                     if (ctx.current_indent() < 0) {
+                        validate_root_flow_tail_after_close(ctx, it, end);
+                     }
+                  }
+                  return;
+               }
+               else if (*it == ',') {
+                  ++it;
+                  just_saw_comma = true;
+                  skip_flow_ws_and_newlines(ctx, it, end);
+                  if (bool(ctx.error)) [[unlikely]]
+                     return;
+               }
+               else {
+                  ctx.error = error_code::syntax_error;
+                  return;
+               }
+            }
+         }
+         else {
+            ctx.error = error_code::syntax_error;
+            return;
+         }
+      }
+
+      // Parse flow mapping {key: value, ...}
+      template <auto Opts, string_literal Tag = "", class T, class Ctx, class It, class End>
+      inline void parse_flow_mapping(T&& value, Ctx& ctx, It& it, End end)
+      {
+         using U = std::remove_cvref_t<T>;
+         static constexpr auto N = reflect<U>::size;
+         static constexpr auto HashInfo = hash_info<U>;
+         static constexpr sv variant_tag = Tag.sv();
+
+         decltype(auto) fields = [&]() -> decltype(auto) {
+            if constexpr (Opts.error_on_missing_keys) {
+               return bit_array<N>{};
+            }
+            else {
+               return nullptr;
+            }
+         }();
+
+         if (it == end || *it != '{') [[unlikely]] {
+            ctx.error = error_code::syntax_error;
+            return;
+         }
+
+         ++it; // Skip '{'
+         skip_flow_ws_and_newlines(ctx, it, end);
+         if (bool(ctx.error)) [[unlikely]]
+            return;
+
+         // Handle empty mapping
+         if (it != end && *it == '}') {
+            ++it;
+         }
+         else {
+            while (it != end) {
+               skip_flow_ws_and_newlines(ctx, it, end);
+               if (bool(ctx.error)) [[unlikely]]
+                  return;
+
+               if (it != end && *it == '}') {
+                  ++it;
+                  validate_flow_node_adjacent_tail(ctx, it, end);
+                  break;
+               }
+
+               // Parse key using scratch buffer to avoid allocation
+               ctx.scratch.clear();
+               if (!parse_yaml_key(ctx.scratch, ctx, it, end, true)) {
+                  return;
+               }
+
+               // Separation between flow key and ':' may include comments/newlines.
+               // In flow context, newlines are allowed between key and ':'.
+               skip_flow_ws_and_newlines(ctx, it, end);
+               if (bool(ctx.error)) [[unlikely]]
+                  return;
+
+               // Expect colon
+               if (it == end || *it != ':') {
+                  ctx.error = error_code::syntax_error;
+                  return;
+               }
+               ++it;
+               skip_flow_ws_and_newlines(ctx, it, end);
+               if (bool(ctx.error)) [[unlikely]]
+                  return;
+
+               // Look up key and parse value
+               const auto index = decode_hash_with_size<YAML, U, HashInfo, HashInfo.type>::op(
+                  ctx.scratch.data(), ctx.scratch.data() + ctx.scratch.size(), ctx.scratch.size());
+
+               const bool key_matches = index < N && std::string_view{ctx.scratch} == reflect<U>::keys[index];
+
+               if (key_matches) [[likely]] {
+                  if constexpr (Opts.error_on_missing_keys) {
+                     fields[index] = true;
+                  }
+                  visit<N>(
+                     [&]<size_t I>() {
+                        if (I == index) {
+                           // A field that `meta::skip` excludes from parsing still owns its key, so
+                           // the entry is consumed and discarded rather than rejected as unknown.
+                           // The branch is `if constexpr`/`else` so the skipped field's parser is
+                           // never instantiated -- see `skipped_by_meta`.
+                           if constexpr (skipped_by_meta<U, I, operation::parse>) {
+                              skip_yaml_value<Opts>(ctx, it, end, 0, true);
+                           }
+                           else {
+                              decltype(auto) member = [&]() -> decltype(auto) {
+                                 if constexpr (reflectable<U>) {
+                                    return get<I>(to_tie(value));
+                                 }
+                                 else {
+                                    return get_member(value, get<I>(reflect<U>::values));
+                                 }
+                              }();
+
+                              using member_type = std::decay_t<decltype(member)>;
+                              from<YAML, member_type>::template op<flow_context_on<Opts>()>(member, ctx, it, end);
+                           }
+                        }
+                        return !bool(ctx.error);
+                     },
+                     index);
+               }
+               else if constexpr (not variant_tag.empty()) {
+                  // A tagged variant's discriminator key is "unknown" to the resolved struct (unless
+                  // the struct declares it as a field). The variant resolver already consumed it to
+                  // choose this alternative, so it is skipped rather than rejected.
+                  if constexpr (Opts.error_on_unknown_keys) {
+                     if (std::string_view{ctx.scratch} != variant_tag) {
+                        ctx.error = error_code::unknown_key;
+                        return;
+                     }
+                  }
+                  skip_yaml_value<Opts>(ctx, it, end, 0, true);
+               }
+               else if constexpr (Opts.error_on_unknown_keys) {
+                  ctx.error = error_code::unknown_key;
+                  return;
+               }
+               else { // else used to fix MSVC unreachable code warning
+                  skip_yaml_value<Opts>(ctx, it, end, 0, true);
+               }
+
+               if (bool(ctx.error)) [[unlikely]]
+                  return;
+
+               // In flow context, newlines are treated as whitespace (YAML spec).
+               // Use skip_flow_ws_and_newlines so that a newline between a value
+               // and its separator (comma or closing brace) is accepted.
+               skip_flow_ws_and_newlines(ctx, it, end);
+               if (bool(ctx.error)) [[unlikely]]
+                  return;
+
+               if (it != end && *it == '}') {
+                  ++it;
+                  validate_flow_node_adjacent_tail(ctx, it, end);
+                  break;
+               }
+               else if (it != end && *it == ',') {
+                  ++it;
+               }
+               else {
+                  ctx.error = error_code::syntax_error;
+                  return;
+               }
+            }
+         }
+
+         if constexpr (Opts.error_on_missing_keys) {
+            if (bool(ctx.error)) return;
+            constexpr auto req_fields = required_fields<U, Opts>();
+            if ((req_fields & fields) != req_fields) {
+               for (size_t i = 0; i < N; ++i) {
+                  if (not fields[i] && req_fields[i]) {
+                     ctx.custom_error_message = reflect<U>::keys[i];
+                     break;
+                  }
+               }
+               ctx.error = error_code::missing_key;
+            }
+         }
+      }
+
+      // Detects a plain "key: value" mapping indicator in an inline block-map
+      // value segment, while ignoring quoted strings and nested flow collections.
+      // The separator it looks for terminates an implicit key, so the scan is bounded by the
+      // longest implicit key the spec allows rather than by the length of the line.
+      template <class It, class End>
+      inline bool inline_value_has_plain_mapping_indicator(It pos, End end) noexcept
+      {
+         const auto stop = yaml::implicit_key_scan_end(pos, end);
+         // See `line_could_be_block_mapping` for why a quote is an indicator only where a node can
+         // begin. The value segment is itself a node position, so the scan starts at one.
+         bool at_node_start = true;
+         int flow_depth = 0;
+         while (pos != stop) {
+            const char c = *pos;
+            if (c == '\n' || c == '\r' || c == '#') return false;
+            if (c == ' ' || c == '\t') {
+               ++pos;
+               continue;
+            }
+            const bool node_start = std::exchange(at_node_start, false);
+
+            if ((c == '"' || c == '\'') && node_start) {
+               // A quote in a plain scalar must not make the probe scan a later line, and the
+               // '' escape must not be mistaken for the end of a single-quoted scalar.
+               if (not yaml::skip_probe_quoted_scalar(pos, stop)) return false;
+               continue;
+            }
+            if ((c == '[' || c == '{') && (node_start || flow_depth > 0)) {
+               ++flow_depth;
+               at_node_start = true;
+               ++pos;
+               continue;
+            }
+            if ((c == ']' || c == '}') && flow_depth > 0) {
+               --flow_depth;
+               ++pos;
+               continue;
+            }
+            if (c == ':' && flow_depth == 0) {
+               const auto next = pos + 1;
+               return (next == end) || *next == ' ' || *next == '\t' || *next == '\n' || *next == '\r';
+            }
+            if (flow_depth > 0 && (c == ',' || c == ':')) {
+               at_node_start = true;
+               ++pos;
+               continue;
+            }
+            if (node_start && yaml::skip_probe_node_property(pos, stop)) {
+               at_node_start = true;
+               continue;
+            }
+            ++pos;
+         }
+         return false;
+      }
+
+      // Parse block sequence
+      // - item1
+      // - item2
+      template <auto Opts, class T, class Ctx, class It, class End>
+      inline void parse_block_sequence(T&& value, Ctx& ctx, It& it, End end, int32_t sequence_indent)
+      {
+         using V = std::remove_cvref_t<T>;
+         using value_type = typename V::value_type;
+
+         struct sequence_container_adapter
+         {
+            size_t index = 0;
+
+            inline bool fixed_capacity_reached(const V& container) const noexcept
+            {
+               if constexpr (!resizable<V>) {
+                  return index >= container.size();
+               }
+               else {
+                  (void)container;
+                  return false;
+               }
+            }
+
+            inline void commit_fixed_slot() noexcept { ++index; }
+
+            inline void append(V& container, value_type&& element) noexcept
+            {
+               if constexpr (emplace_backable<V>) {
+                  container.emplace_back(std::move(element));
+               }
+               else if constexpr (emplaceable<V>) {
+                  container.emplace(std::move(element));
+               }
+            }
+         };
+
+         // Overwrite (do not append to) any pre-existing contents. A block
+         // sequence is only entered once a '-' item is confirmed, so clearing
+         // up front correctly (re)assigns the container to the parsed sequence.
+         clear_sequence_before_read<Opts>(value);
+
+         sequence_container_adapter adapter{};
+
+         // Track if this is the first item (for handling whitespace-consumed case)
+         bool first_item = true;
+         bool has_pending_item_anchor = false;
+         std::string pending_item_anchor_name{};
+         int32_t pending_item_anchor_indent = sequence_indent;
+
+         while (it != end) {
+            // Skip blank lines and comments, track indent
+            int32_t line_indent = 0;
+            int32_t dash_col = -1; // actual column of the '-' on the line
+            auto line_start = it;
+
+            while (it != end) {
+               if (*it == '#') {
+                  skip_comment(it, end);
+                  skip_newline(it, end);
+                  line_start = it;
+                  line_indent = 0;
+               }
+               else if (*it == '\n' || *it == '\r') {
+                  skip_newline(it, end);
+                  line_start = it;
+                  line_indent = 0;
+               }
+               else if (*it == ' ') {
+                  line_start = it;
+                  line_indent = 0;
+                  while (it != end && *it == ' ') {
+                     ++line_indent;
+                     ++it;
+                  }
+
+                  bool saw_tab = false;
+                  while (it != end && (*it == ' ' || *it == '\t')) {
+                     saw_tab = saw_tab || (*it == '\t');
+                     ++it;
+                  }
+
+                  if (it == end || *it == '\n' || *it == '\r' || *it == '#') {
+                     // Blank or comment line - continue to next line
+                     if (it != end && *it == '#') {
+                        skip_comment(it, end);
+                     }
+                     line_indent = 0;
+                     continue;
+                  }
+
+                  if (saw_tab) {
+                     ctx.error = error_code::syntax_error;
+                     return;
+                  }
+                  break; // Found content
+               }
+               else if (*it == '\t') {
+                  line_start = it;
+                  while (it != end && (*it == ' ' || *it == '\t')) ++it;
+                  if (it == end || *it == '\n' || *it == '\r' || *it == '#') {
+                     if (it != end && *it == '#') {
+                        skip_comment(it, end);
+                     }
+                     line_indent = 0;
+                     continue;
+                  }
+                  ctx.error = error_code::syntax_error;
+                  return;
+               }
+               else {
+                  // At content (no leading space on this line)
+                  // If first item and at '-', whitespace was consumed by caller;
+                  // treat as having correct indentation
+                  if (first_item && *it == '-') {
+                     line_indent = sequence_indent;
+                     if constexpr (std::is_pointer_v<std::decay_t<It>>) {
+                        if (ctx.stream_begin && it > ctx.stream_begin) {
+                           auto probe = it;
+                           int32_t leading_ws = 0;
+                           bool saw_tab = false;
+                           while (probe > ctx.stream_begin && (*(probe - 1) == ' ' || *(probe - 1) == '\t')) {
+                              --probe;
+                              ++leading_ws;
+                              saw_tab = saw_tab || (*probe == '\t');
+                           }
+                           if (probe == ctx.stream_begin || *(probe - 1) == '\n' || *(probe - 1) == '\r') {
+                              if (saw_tab) {
+                                 ctx.error = error_code::syntax_error;
+                                 return;
+                              }
+                              line_indent = (std::max)(line_indent, leading_ws);
+                           }
+                        }
+                     }
+                  }
+                  break;
+               }
+            }
+
+            if (it == end) break;
+
+            // Check for document end marker
+            if (at_document_end(it, end)) break;
+
+            // Check for dedent
+            if (line_indent < sequence_indent) {
+               it = line_start;
+               return;
+            }
+
+            if (*it == '&') {
+               // Standalone anchor lines before "- item" are only supported for
+               // indentless mapping values. At top-level block sequences these are
+               // malformed in yaml-test-suite cases.
+               if (!ctx.allow_indentless_sequence) {
+                  ctx.error = error_code::syntax_error;
+                  return;
+               }
+
+               ++it;
+               auto pending_name = parse_anchor_name(it, end);
+               if (pending_name.empty()) {
+                  ctx.error = error_code::syntax_error;
+                  return;
+               }
+               skip_inline_ws(it, end);
+               if (it != end && *it == '#') {
+                  skip_comment(it, end);
+               }
+
+               has_pending_item_anchor = true;
+               pending_item_anchor_name = std::string(pending_name);
+               pending_item_anchor_indent = line_indent;
+
+               if (it == end || (*it != '\n' && *it != '\r')) {
+                  ctx.error = error_code::syntax_error;
+                  return;
+               }
+
+               skip_newline(it, end);
+               continue;
+            }
+
+            // Expect dash for sequence item
+            if (*it != '-') {
+               it = line_start;
+               return;
+            }
+
+            // Compute the actual column of this sequence dash.
+            // This is needed by plain-scalar multiline folding to distinguish
+            // sibling "- item" entries from deeper "- " continuation content.
+            dash_col = line_indent;
+            if constexpr (std::is_pointer_v<std::decay_t<It>>) {
+               if (ctx.stream_begin) {
+                  dash_col = ctx.line_prefix_before(&*it).column;
+               }
+            }
+
+            ++it; // Skip '-'
+
+            // Check for valid sequence item indicator (- followed by space or newline)
+            if (it != end && !yaml::whitespace_or_line_end_table[static_cast<uint8_t>(*it)]) {
+               // Not a sequence item (could be a number like -5)
+               it = line_start;
+               return;
+            }
+
+            bool saw_tab_after_dash = false;
+            while (it != end && (*it == ' ' || *it == '\t')) {
+               saw_tab_after_dash = saw_tab_after_dash || (*it == '\t');
+               ++it;
+            }
+            // A tab-separated nested "- " marker is not valid block indentation.
+            if (saw_tab_after_dash && it != end && *it == '-') {
+               const auto after_dash = it + 1;
+               if (after_dash == end || yaml::whitespace_or_line_end_table[static_cast<uint8_t>(*after_dash)]) {
+                  ctx.error = error_code::syntax_error;
+                  return;
+               }
+            }
+
+            // Get reference to element to parse into
+            auto parse_element = [&](auto& element) {
+               const char* element_start = (it != end) ? &*it : nullptr;
+
+               // Check what follows
+               if (it != end && !yaml::line_end_or_comment_table[static_cast<uint8_t>(*it)]) {
+                  // Content on same line as dash - set indent to one less than content column
+                  // This allows nested block mappings to continue parsing keys at the content indent
+                  // For "- key: val", if dash is at column 0, content is at column 2
+                  // We set parent indent to 1 so keys at column 2 pass the "indent > parent" check
+                  if (!ctx.push_indent(line_indent + 1)) [[unlikely]]
+                     return;
+                  const bool prev_sequence_item_value_context = ctx.sequence_item_value_context;
+                  const int32_t prev_sequence_dash_indent = ctx.sequence_dash_indent;
+                  ctx.sequence_item_value_context = true;
+                  ctx.sequence_dash_indent = dash_col;
+                  from<YAML, value_type>::template op<Opts>(element, ctx, it, end);
+                  ctx.sequence_dash_indent = prev_sequence_dash_indent;
+                  ctx.sequence_item_value_context = prev_sequence_item_value_context;
+                  ctx.pop_indent();
+               }
+               else {
+                  // Value on next line - nested block
+                  skip_ws_and_comment(it, end);
+                  skip_newline(it, end);
+
+                  // Get indent of nested content
+                  auto nested_start = it;
+                  int32_t nested_indent = measure_indent(it, end, ctx);
+                  if (bool(ctx.error)) [[unlikely]]
+                     return;
+                  it = nested_start;
+
+                  // Content is nested only if indented more than the current line.
+                  // When line_indent is negative (root level), use 0 as the baseline.
+                  // This prevents content at column 0 from being treated as nested.
+                  const int32_t effective_line_indent = (line_indent < 0) ? 0 : line_indent;
+                  if (nested_indent > effective_line_indent) {
+                     // Save and set indent for nested parsing.
+                     // A struct element reads the pushed indent as its own key column; every
+                     // other element type reads it as the enclosing baseline, so it gets one
+                     // less than the content indent and its content passes "indent > parent".
+                     const int32_t element_indent =
+                        receives_block_mapping_column<value_type>() ? nested_indent : nested_indent - 1;
+                     if (!ctx.push_indent(element_indent)) [[unlikely]]
+                        return;
+                     const bool prev_sequence_item_value_context = ctx.sequence_item_value_context;
+                     const int32_t prev_sequence_dash_indent = ctx.sequence_dash_indent;
+                     ctx.sequence_item_value_context = true;
+                     ctx.sequence_dash_indent = dash_col;
+                     from<YAML, value_type>::template op<Opts>(element, ctx, it, end);
+                     ctx.sequence_dash_indent = prev_sequence_dash_indent;
+                     ctx.sequence_item_value_context = prev_sequence_item_value_context;
+                     ctx.pop_indent();
+                  }
+                  // else: empty element (default constructed)
+               }
+
+               if (has_pending_item_anchor && !bool(ctx.error)) {
+                  const char* element_end = (it != end) ? &*it : element_start;
+                  ctx.anchors[std::move(pending_item_anchor_name)] = {element_start, element_end,
+                                                                      pending_item_anchor_indent};
+                  has_pending_item_anchor = false;
+               }
+            };
+
+            if constexpr (emplace_backable<V>) {
+               auto& element = value.emplace_back();
+               parse_element(element);
+            }
+            else if constexpr (emplaceable<V>) {
+               value_type element{};
+               parse_element(element);
+               if (!bool(ctx.error)) {
+                  adapter.append(value, std::move(element));
+               }
+            }
+            else if constexpr (!resizable<V>) {
+               // Fixed-size (e.g. std::array): an item beyond the last slot is an error, as in JSON.
+               // Checked only once another item is confirmed, so a full container still ends cleanly.
+               if (adapter.fixed_capacity_reached(value)) [[unlikely]] {
+                  ctx.error = error_code::exceeded_static_array_size;
+                  return;
+               }
+               parse_element(value[adapter.index]);
+               adapter.commit_fixed_slot();
+            }
+            else {
+               ctx.error = error_code::syntax_error;
+               return;
+            }
+
+            first_item = false;
+
+            if (bool(ctx.error)) [[unlikely]]
+               return;
+
+            // Note: after parsing nested block content, iterator may already be
+            // at the start of the next line. The outer loop will handle it.
+         }
+      }
+
+      // Detect whether there is nested block content after a `key:` with no same-line value.
+      // Called with `it` positioned after the colon and any trailing inline whitespace.
+      // Peeks ahead past blank lines and comment-only lines to find the first content line.
+      // Returns the indent of that content if it's nested (> effective line_indent), else -1.
+      // On return, `it` is positioned right after the key line's newline.
+      // If return >= 0, caller should call skip_to_content() to advance to the content.
+      //
+      // High-level state machine:
+      // 1) Validate that we are at end-of-key line and move to the next line.
+      // 2) Scan forward to first real content line, skipping blank/comment lines.
+      //    Also skip "property-only" lines (YAML node properties with no value yet).
+      // 3) Measure indent and validate tab/structural edge cases.
+      // 4) Return nested indent when content is truly nested, otherwise -1.
+      template <class Ctx, class It, class End>
+      int32_t detect_nested_value_indent(Ctx& ctx, It& it, End end, int32_t line_indent)
+      {
+         skip_ws_and_comment(it, end);
+         if (it == end || (*it != '\n' && *it != '\r')) {
+            return -1;
+         }
+         skip_newline(it, end);
+         auto content_start = it;
+
+         // Peek ahead to find the first content line (skip blank/comment lines)
+         auto peek = it;
+         while (peek != end) {
+            if (*peek == '\n' || *peek == '\r') {
+               skip_newline(peek, end);
+            }
+            else if (*peek == '#') {
+               skip_comment(peek, end);
+            }
+            else if (*peek == ' ') {
+               auto line_start = peek;
+               while (peek != end && *peek == ' ') ++peek;
+               if (peek == end || *peek == '\n' || *peek == '\r') {
+                  continue; // blank line with trailing spaces
+               }
+               if (*peek == '#') {
+                  skip_comment(peek, end);
+                  continue; // comment-only line
+               }
+               // YAML allows node properties to appear on standalone lines before the
+               // actual node value, for example:
+               //   key:
+               //     !tag
+               //     &anchor
+               //     actual: value
+               // This loop recognizes chains of properties (`!tag`, `&anchor`, optional
+               // inline spaces/comments) and treats those lines as non-content so they do
+               // not incorrectly define nested indentation.
+               {
+                  auto prop = peek;
+                  bool saw_property = false;
+                  while (prop != end) {
+                     if (*prop == '!') {
+                        const auto tag = parse_yaml_tag(prop, end, ctx);
+                        if (tag == yaml_tag::unknown) break;
+                        saw_property = true;
+                        skip_inline_ws(prop, end);
+                        continue;
+                     }
+                     if (*prop == '&') {
+                        ++prop;
+                        auto aname = parse_anchor_name(prop, end);
+                        if (aname.empty()) break;
+                        saw_property = true;
+                        skip_inline_ws(prop, end);
+                        continue;
+                     }
+                     break;
+                  }
+                  if (saw_property) {
+                     auto tail = prop;
+                     skip_inline_ws(tail, end);
+                     if (tail == end || *tail == '\n' || *tail == '\r' || *tail == '#') {
+                        if (tail != end && *tail == '#') {
+                           skip_comment(tail, end);
+                        }
+                        if (tail != end && (*tail == '\n' || *tail == '\r')) {
+                           skip_newline(tail, end);
+                        }
+                        peek = tail;
+                        continue;
+                     }
+                  }
+               }
+               peek = line_start; // content found, restore to measure properly
+               break;
+            }
+            else {
+               break; // content at column 0
+            }
+         }
+
+         // Measure indent of the content line
+         int32_t content_indent = measure_indent<false>(peek, end, ctx);
+         if (bool(ctx.error)) [[unlikely]]
+            return -1;
+
+         // Tabs in indentation-like positions are only allowed when they are plain
+         // scalar content. Structural lines (mapping keys/entries) remain errors.
+         if (peek != end && *peek == '\t') {
+            auto probe = peek;
+            while (probe != end && (*probe == ' ' || *probe == '\t')) ++probe;
+            if (probe != end && *probe != '\n' && *probe != '\r' && *probe != '#') {
+               const bool looks_sequence_entry =
+                  (*probe == '-') &&
+                  ((probe + 1) == end || yaml::whitespace_or_line_end_table[static_cast<uint8_t>(*(probe + 1))]);
+               const bool looks_explicit_entry =
+                  (*probe == '?' || *probe == ':') &&
+                  ((probe + 1) == end || yaml::whitespace_or_line_end_table[static_cast<uint8_t>(*(probe + 1))]);
+               bool looks_mapping_key = false;
+               auto scan = probe;
+               while (scan != end && *scan != '\n' && *scan != '\r') {
+                  if (*scan == ':') {
+                     const auto after = scan + 1;
+                     if (after == end || yaml::whitespace_or_line_end_table[static_cast<uint8_t>(*after)]) {
+                        looks_mapping_key = true;
+                        break;
+                     }
+                  }
+                  ++scan;
+               }
+               if (looks_sequence_entry || looks_explicit_entry || looks_mapping_key) {
+                  ctx.error = error_code::syntax_error;
+                  return -1;
+               }
+            }
+         }
+
+         const int32_t effective_line_indent = (line_indent < 0) ? 0 : line_indent;
+         if (content_indent > effective_line_indent && peek != end && *peek != '\n' && *peek != '\r') {
+            it = content_start;
+            return content_indent;
+         }
+
+         // YAML allows "indentless sequences" as mapping values:
+         // key:
+         // - item
+         if (content_indent == effective_line_indent && peek != end && *peek == '-') {
+            const auto after_dash = peek + 1;
+            if (after_dash == end || yaml::whitespace_or_line_end_table[static_cast<uint8_t>(*after_dash)]) {
+               it = content_start;
+               return content_indent;
+            }
+         }
+
+         it = content_start;
+         return -1;
+      }
+
+      // Skip blank lines and comment-only lines.
+      // Leaves `it` at the start of indentation whitespace of the first content line.
+      template <class It, class End>
+      void skip_to_content(It& it, End end)
+      {
+         while (it != end) {
+            if (*it == '\n' || *it == '\r') {
+               skip_newline(it, end);
+            }
+            else if (*it == '#') {
+               skip_comment(it, end);
+            }
+            else if (*it == ' ') {
+               auto line_start = it;
+               while (it != end && *it == ' ') ++it;
+               if (it == end || *it == '\n' || *it == '\r') {
+                  continue; // blank line with trailing spaces
+               }
+               if (*it == '#') {
+                  skip_comment(it, end);
+                  continue; // comment-only line
+               }
+               it = line_start; // content found, restore to start of indent
+               return;
+            }
+            else {
+               return; // content at column 0
+            }
+         }
+      }
+
+      // Skip the value of a block-mapping entry the reader does not store, whether it is inline (on
+      // the key's line) or begins on a following, more-indented line (a nested block sequence or
+      // mapping). `key_indent` is the column of the entry's key; deeper lines belong to the value.
+      //
+      // An implicit "key: value" pair inside a flow collection ([a: 1, b: 2]) also reaches this
+      // through parse_block_mapping's flow arm, and there the value ends at ',', ']' or '}' rather
+      // than at a column. Skipping such a value as a block scalar would run straight through those
+      // delimiters and swallow the rest of the collection, so the flow context is passed on to the
+      // scalar skipper -- mirroring the parse path, which reads the same value in flow context.
+      template <auto Opts, class Ctx, class It, class End>
+      inline void skip_unknown_block_value(Ctx& ctx, It& it, End end, int32_t key_indent) noexcept
+      {
+         constexpr bool in_flow = yaml::check_flow_context(Opts);
+
+         if (it != end && !yaml::line_end_or_comment_table[static_cast<uint8_t>(*it)]) {
+            skip_yaml_value<Opts>(ctx, it, end, in_flow ? 0 : key_indent, in_flow);
+         }
+         else {
+            const int32_t nested_indent = detect_nested_value_indent(ctx, it, end, key_indent);
+            if (nested_indent >= 0) {
+               skip_to_content(it, end);
+               // Every line of a value that begins below its key sits at nested_indent or deeper,
+               // and the first line shallower than that ends it -- so the block is judged against
+               // nested_indent - 1 rather than against the key's column. The two differ when the
+               // key began mid-line ("- key:" as a sequence entry), where the column reaching this
+               // function is the enclosing mapping's, which every line of the value is deeper than;
+               // measuring against it would swallow the entries that follow the skipped one. This
+               // mirrors the parse path, which pushes the same detected indent for the member.
+               //
+               // An indentless sequence sits at its key's own column rather than deeper, so the
+               // key's column is the floor: there the sequence's dashes and the skipped key's
+               // siblings share a column, and only the dash tells them apart.
+               const int32_t value_indent = (nested_indent - 1) > key_indent ? (nested_indent - 1) : key_indent;
+               skip_yaml_value<Opts>(ctx, it, end, in_flow ? 0 : value_indent, in_flow);
+            }
+         }
+      }
+
+      // Shared loop for block mapping parsing.
+      // Handles blank/comment skipping, indent detection, dedent, and trailing whitespace.
+      // process_entry(ctx, it, end, line_indent) should parse key+colon+value and return
+      // true to continue or false to stop.
+      //
+      // mapping_indent >= 0: caller knows the key indent (struct case, first key may be mid-line)
+      // mapping_indent < 0: discover from first key (map case)
+      template <auto Opts, class Ctx, class It, class End, class ProcessEntry>
+      void parse_block_mapping_loop(Ctx& ctx, It& it, End end, int32_t mapping_indent, ProcessEntry&& process_entry)
+      {
+         // A tagged-variant custom alternative hands its body (at the variant's own column) to a
+         // discover-mode reader. Honor the known indent it published so continuation/dedent are
+         // judged against the outer parent, not the body itself. One-shot: reset on observation.
+         if (ctx.forced_block_mapping_indent >= 0) {
+            if (mapping_indent < 0) {
+               mapping_indent = ctx.forced_block_mapping_indent;
+            }
+            ctx.forced_block_mapping_indent = -1;
+         }
+         const int32_t parent_indent = ctx.current_indent();
+         const bool discover_indent = (mapping_indent < 0);
+         bool first_key = !discover_indent;
+         bool discovered_first_key_mid_line = false;
+         int32_t discovered_first_key_visual_indent = 0;
+
+         while (it != end) {
+            auto line_start = it;
+            int32_t line_indent = first_key ? mapping_indent : 0;
+
+            // Skip blank lines and comments, measure indent
+            while (it != end) {
+               if (*it == '#') {
+                  skip_comment(it, end);
+                  skip_newline(it, end);
+                  first_key = false;
+                  line_indent = 0;
+               }
+               else if (*it == '\n' || *it == '\r') {
+                  skip_newline(it, end);
+                  first_key = false;
+                  line_indent = 0;
+               }
+               else if (*it == ' ') {
+                  line_start = it;
+                  line_indent = 0;
+                  while (it != end && *it == ' ') {
+                     ++line_indent;
+                     ++it;
+                  }
+
+                  bool saw_tab = false;
+                  while (it != end && (*it == ' ' || *it == '\t')) {
+                     saw_tab = saw_tab || (*it == '\t');
+                     ++it;
+                  }
+
+                  if (it == end || *it == '\n' || *it == '\r' || *it == '#') {
+                     first_key = false;
+                     line_indent = 0;
+                     continue; // Blank or comment line
+                  }
+
+                  if (saw_tab) {
+                     ctx.error = error_code::syntax_error;
+                     return;
+                  }
+
+                  // Early dedent check
+                  if (mapping_indent >= 0 && line_indent < mapping_indent) {
+                     it = line_start;
+                     return;
+                  }
+
+                  first_key = false;
+                  break; // Found content
+               }
+               else if (*it == '\t') {
+                  line_start = it;
+                  while (it != end && (*it == ' ' || *it == '\t')) ++it;
+                  if (it == end || *it == '\n' || *it == '\r' || *it == '#') {
+                     first_key = false;
+                     line_indent = 0;
+                     continue; // Blank or comment-only line with tab indentation
+                  }
+                  ctx.error = error_code::syntax_error;
+                  return;
+               }
+               else {
+                  line_start = it;
+                  break; // Content at column 0
+               }
+            }
+
+            if (it == end) break;
+
+            // Document boundaries terminate the current mapping in both discovered
+            // and fixed-indent modes.
+            if (at_document_end(it, end) || at_document_start(it, end)) break;
+
+            // Dedent checks (skip on first key for struct case)
+            // Must check BEFORE establishing mapping_indent so the first discovered key
+            // isn't rejected by the parent_indent check (mapping_indent is still -1).
+            if (!first_key) {
+               // Parent indent check for nested maps (only after mapping_indent established)
+               if (discover_indent && mapping_indent >= 0 && parent_indent >= 0 && line_indent <= parent_indent) {
+                  it = line_start;
+                  return;
+               }
+               if (mapping_indent >= 0 && line_indent < mapping_indent) {
+                  it = line_start;
+                  return;
+               }
+            }
+
+            // Establish mapping indent from first key (map case)
+            bool established_mapping_indent_this_line = false;
+            if (mapping_indent < 0) {
+               mapping_indent = line_indent;
+               established_mapping_indent_this_line = true;
+               discovered_first_key_visual_indent = line_indent;
+               if constexpr (std::is_pointer_v<std::decay_t<It>>) {
+                  if (ctx.stream_begin && line_start > ctx.stream_begin) {
+                     const auto prefix = ctx.line_prefix_before(line_start);
+                     if (prefix.has_tab) {
+                        ctx.error = error_code::syntax_error;
+                        return;
+                     }
+
+                     discovered_first_key_mid_line = prefix.has_content;
+                     if (mapping_indent == 0 && prefix.column > 0) {
+                        discovered_first_key_visual_indent = prefix.column;
+                     }
+                  }
+               }
+            }
+
+            // In discovered-indent block mappings, sibling keys must stay at the same
+            // indent level, except when the first key started mid-line (e.g. "--- k: v").
+            if (discover_indent && mapping_indent >= 0 && !established_mapping_indent_this_line &&
+                !discovered_first_key_mid_line) {
+               if (mapping_indent == 0 && discovered_first_key_visual_indent > 0) {
+                  if (line_indent > discovered_first_key_visual_indent) {
+                     ctx.error = error_code::syntax_error;
+                     return;
+                  }
+                  if (line_indent < discovered_first_key_visual_indent) {
+                     it = line_start;
+                     return;
+                  }
+               }
+               else if (line_indent > mapping_indent &&
+                        (parent_indent < 0 || mapping_indent > 0 ||
+                         (parent_indent >= 0 && mapping_indent == 0 && line_indent > (parent_indent + 1)))) {
+                  ctx.error = error_code::syntax_error;
+                  return;
+               }
+            }
+
+            // Sequence indicator check (struct case only - map parser lets key parsing
+            // handle '- ' which produces appropriate errors for misindented items)
+            if (!discover_indent && *it == '-' &&
+                ((it + 1) == end || *(it + 1) == ' ' || *(it + 1) == '\t' || *(it + 1) == '\n')) {
+               it = line_start;
+               return;
+            }
+
+            // Skip indented comment lines
+            if (*it == '#') {
+               skip_comment(it, end);
+               first_key = false;
+               continue;
+            }
+
+            // Skip blank/empty lines after indent
+            if (*it == '\n' || *it == '\r') {
+               first_key = false;
+               continue;
+            }
+
+            // While parsing an explicit mapping key node ('? key-node'),
+            // a subsequent standalone ':' at the same indentation starts
+            // the outer value indicator and must terminate this key-node map.
+            // Keep same-line ': x' on the first key-node line valid.
+            if (ctx.explicit_mapping_key_context && !established_mapping_indent_this_line && *it == ':') {
+               const auto after_colon = it + 1;
+               const int32_t explicit_value_indicator_indent = (parent_indent < 0) ? 0 : (parent_indent + 1);
+               if ((after_colon == end || yaml::whitespace_or_line_end_table[static_cast<uint8_t>(*after_colon)]) &&
+                   line_indent == explicit_value_indicator_indent) {
+                  it = line_start;
+                  return;
+               }
+            }
+
+            // Process this mapping entry (key + colon + value)
+            int32_t effective_line_indent = line_indent;
+            if (discover_indent && established_mapping_indent_this_line &&
+                discovered_first_key_visual_indent > effective_line_indent &&
+                !(discovered_first_key_mid_line && parent_indent < 0)) {
+               // The first discovered key has no indentation of its own left to measure: it may
+               // begin mid-line (a sequence entry's "- key: value"), or the caller may have already
+               // consumed the line's indentation before handing the mapping over. Pass its visual
+               // column so the entry judges its value against the key's real indent -- otherwise a
+               // key with an empty value takes the following sibling line for nested content
+               // (issue #2827) and same-line block scalars compute the wrong indentation.
+               // The exception is a ROOT mapping whose first key begins mid-line, which means node
+               // properties sit ahead of it (`!!str &a1 "foo":`): those belong to the document node
+               // rather than to the key's column, so the measured indent stands. Conformance tests
+               // 7FWL and HMQ5 pin that case.
+               effective_line_indent = discovered_first_key_visual_indent;
+            }
+
+            if (!process_entry(ctx, it, end, effective_line_indent)) {
+               return;
+            }
+            first_key = false;
+
+            if (bool(ctx.error)) [[unlikely]]
+               return;
+
+            if constexpr (yaml::check_flow_context(Opts)) {
+               // In flow context, an implicit "key: value" pair used as a sequence entry
+               // ends at ',', ']', or '}'. Let the enclosing flow parser consume it.
+               auto flow_end = it;
+               skip_flow_ws_and_newlines(ctx, flow_end, end);
+               if (bool(ctx.error)) [[unlikely]]
+                  return;
+               if (flow_end != end && (*flow_end == ',' || *flow_end == ']' || *flow_end == '}')) {
+                  it = flow_end;
+                  return;
+               }
+            }
+
+            // Trailing whitespace handling (peek-ahead pattern).
+            // After parsing, iterator may be at leading indent of next line.
+            // Don't consume it - let the outer loop handle indent measurement.
+            if (it != end) {
+               if (*it == ' ' || *it == '\t') {
+                  auto peek = it;
+                  skip_inline_ws(peek, end);
+                  if (peek != end && *peek != '\n' && *peek != '\r' && *peek != '#') {
+                     continue; // At leading indent of new line
+                  }
+               }
+               skip_inline_ws(it, end);
+               if (it != end && *it == '#') {
+                  if constexpr (std::is_pointer_v<std::decay_t<It>>) {
+                     if (it > line_start) {
+                        const char prev = *(it - 1);
+                        if (prev != ' ' && prev != '\t' && prev != '\n' && prev != '\r') {
+                           ctx.error = error_code::syntax_error;
+                           return;
+                        }
+                     }
+                  }
+               }
+               skip_comment(it, end);
+               if (it != end && (*it == '\n' || *it == '\r')) {
+                  skip_newline(it, end);
+               }
+               else if (it != end) {
+                  // The entry stopped part way along its line with something other than
+                  // whitespace or a comment after it -- a ':' its value could not take as a
+                  // separator, say. The next pass measures indent as though this were the start
+                  // of a line, so what is left of the real one is lost; reject it instead.
+                  if constexpr (requires { ctx.line_prefix_before(it); }) {
+                     if (ctx.line_prefix_before(it).has_content) {
+                        ctx.error = error_code::syntax_error;
+                        return;
+                     }
+                  }
+               }
+            }
+         }
+      }
+
+      // Parse block mapping for struct/object types
+      // key1: value1
+      // key2: value2
+      template <auto Opts, string_literal Tag = "", class T, class Ctx, class It, class End>
+      inline void parse_block_mapping(T&& value, Ctx& ctx, It& it, End end, int32_t mapping_indent)
+      {
+         using U = std::remove_cvref_t<T>;
+         static constexpr auto N = reflect<U>::size;
+         static constexpr auto HashInfo = hash_info<U>;
+
+         decltype(auto) fields = [&]() -> decltype(auto) {
+            if constexpr (Opts.error_on_missing_keys) {
+               return bit_array<N>{};
+            }
+            else {
+               return nullptr;
+            }
+         }();
+
+         // Clamp to >= 0 so the shared loop uses struct mode (discover_indent = false)
+         if (mapping_indent < 0) mapping_indent = 0;
+
+         parse_block_mapping_loop<Opts>(
+            ctx, it, end, mapping_indent, [&](Ctx& ctx, It& it, End end, int32_t line_indent) -> bool {
+               // Parse key using scratch buffer to avoid allocation
+               ctx.scratch.clear();
+               if (!parse_yaml_key(ctx.scratch, ctx, it, end, false)) {
+                  return false;
+               }
+
+               skip_inline_ws(it, end);
+
+               // Expect colon
+               if (it == end || *it != ':') {
+                  ctx.error = error_code::syntax_error;
+                  return false;
+               }
+               ++it;
+               skip_inline_ws(it, end);
+
+               // Look up key
+               const auto index = decode_hash_with_size<YAML, U, HashInfo, HashInfo.type>::op(
+                  ctx.scratch.data(), ctx.scratch.data() + ctx.scratch.size(), ctx.scratch.size());
+
+               const bool key_matches = index < N && std::string_view{ctx.scratch} == reflect<U>::keys[index];
+
+               if (key_matches) [[likely]] {
+                  if constexpr (Opts.error_on_missing_keys) {
+                     fields[index] = true;
+                  }
+                  visit<N>(
+                     [&]<size_t I>() {
+                        if (I == index) {
+                           // A field that `meta::skip` excludes from parsing still owns its key, so
+                           // the entry is consumed and discarded rather than rejected as unknown.
+                           // The branch is `if constexpr`/`else` so the skipped field's parser is
+                           // never instantiated -- see `skipped_by_meta`.
+                           if constexpr (skipped_by_meta<U, I, operation::parse>) {
+                              skip_unknown_block_value<Opts>(ctx, it, end, line_indent);
+                           }
+                           else {
+                              decltype(auto) member = [&]() -> decltype(auto) {
+                                 if constexpr (reflectable<U>) {
+                                    return get<I>(to_tie(value));
+                                 }
+                                 else {
+                                    return get_member(value, get<I>(reflect<U>::values));
+                                 }
+                              }();
+
+                              using member_type = std::decay_t<decltype(member)>;
+
+                              // Check if value is on same line or next line
+                              if (it != end && !yaml::line_end_or_comment_table[static_cast<uint8_t>(*it)]) {
+                                 if (!ctx.push_indent(line_indent + 1)) [[unlikely]]
+                                    return false;
+                                 from<YAML, member_type>::template op<Opts>(member, ctx, it, end);
+                                 ctx.pop_indent();
+                              }
+                              else {
+                                 int32_t nested_indent = detect_nested_value_indent(ctx, it, end, line_indent);
+                                 if (nested_indent >= 0) {
+                                    skip_to_content(it, end);
+                                    if constexpr (discovers_own_block_mapping_indent<member_type>()) {
+                                       if (!ctx.push_indent(nested_indent - 1)) [[unlikely]]
+                                          return false;
+                                    }
+                                    else {
+                                       if (!ctx.push_indent(nested_indent)) [[unlikely]]
+                                          return false;
+                                    }
+                                    const bool prev_allow_indentless_sequence = ctx.allow_indentless_sequence;
+                                    ctx.allow_indentless_sequence = (nested_indent <= line_indent);
+                                    from<YAML, member_type>::template op<Opts>(member, ctx, it, end);
+                                    ctx.allow_indentless_sequence = prev_allow_indentless_sequence;
+                                    ctx.pop_indent();
+                                 }
+                              }
+                           }
+                        }
+                        return !bool(ctx.error);
+                     },
+                     index);
+               }
+               else if constexpr (not Tag.sv().empty()) {
+                  // A tagged variant's discriminator key is "unknown" to the resolved struct (unless
+                  // the struct declares it as a field). The variant resolver already consumed it to
+                  // choose this alternative, so it is skipped rather than rejected - even under
+                  // error_on_unknown_keys. The mapping's true column is on the indent stack
+                  // (established by the variant op), so this generic skip does not fold a following
+                  // sibling entry into the discriminator's inline value.
+                  if constexpr (Opts.error_on_unknown_keys) {
+                     if (std::string_view{ctx.scratch} != Tag.sv()) {
+                        ctx.error = error_code::unknown_key;
+                        return false;
+                     }
+                  }
+                  skip_unknown_block_value<Opts>(ctx, it, end, line_indent);
+               }
+               else if constexpr (Opts.error_on_unknown_keys) {
+                  ctx.error = error_code::unknown_key;
+                  return false;
+               }
+               else {
+                  skip_unknown_block_value<Opts>(ctx, it, end, line_indent);
+               }
+
+               return !bool(ctx.error);
+            });
+
+         if constexpr (Opts.error_on_missing_keys) {
+            if (bool(ctx.error)) return;
+            constexpr auto req_fields = required_fields<U, Opts>();
+            if ((req_fields & fields) != req_fields) {
+               for (size_t i = 0; i < N; ++i) {
+                  if (not fields[i] && req_fields[i]) {
+                     ctx.custom_error_message = reflect<U>::keys[i];
+                     break;
+                  }
+               }
+               ctx.error = error_code::missing_key;
+            }
+         }
+      }
+
+   } // namespace yaml
+
+   // Set types (std::set, std::unordered_set, etc.)
+   template <class T>
+      requires(readable_array_t<T> && !emplace_backable<T> && emplaceable<T>)
+   struct from<YAML, T>
+   {
+      template <auto Opts, class It>
+      static void op(auto&& value, is_context auto&& ctx, It&& it, auto end)
+      {
+         if (bool(ctx.error)) [[unlikely]]
+            return;
+
+         // Peek ahead to check for tag (don't consume indentation for block sequences)
+         auto peek = it;
+         yaml::node_preamble_state preamble{};
+         if (yaml::parse_node_preamble<Opts>(value, ctx, peek, end, preamble,
+                                             [](yaml::yaml_tag tag) { return yaml::tag_valid_for_seq(tag); })) {
+            it = peek;
+            return;
+         }
+
+         // Each sequence and mapping is a level of nesting (see `yaml::max_yaml_recursive_depth`).
+         // Taken after the preamble so a null or alias in place of the collection costs nothing.
+         depth_guard guard{ctx, yaml::max_yaml_recursive_depth};
+         if (!guard) [[unlikely]]
+            return;
+
+         if (*peek == '[') {
+            // Flow sequence
+            it = peek;
+            yaml::parse_flow_sequence<Opts>(value, ctx, it, end);
+         }
+         else if (*peek == '-') {
+            // Block sequence
+            if (preamble.tag != yaml::yaml_tag::none || preamble.node_props.has_anchor) {
+               it = peek;
+            }
+            int32_t seq_indent = ctx.current_indent();
+            if (*it == '-' && ctx.current_indent() >= 0) {
+               seq_indent = ctx.allow_indentless_sequence ? (ctx.current_indent() > 0 ? (ctx.current_indent() - 1) : 0)
+                                                          : (ctx.current_indent() + 1);
+            }
+            yaml::parse_block_sequence<Opts>(value, ctx, it, end, seq_indent);
+         }
+         else {
+            ctx.error = error_code::syntax_error;
+         }
+
+         yaml::finalize_node_anchor(preamble.node_props, ctx, it);
+      }
+   };
+
+   // Arrays
+   template <class T>
+      requires(readable_array_t<T> && (emplace_backable<T> || !resizable<T>) && !emplaceable<T>)
+   struct from<YAML, T>
+   {
+      template <auto Opts, class It>
+      static void op(auto&& value, is_context auto&& ctx, It&& it, auto end)
+      {
+         if (bool(ctx.error)) [[unlikely]]
+            return;
+
+         // Peek ahead to check for tag (don't consume indentation for block sequences)
+         auto peek = it;
+         yaml::node_preamble_state preamble{};
+         if (yaml::parse_node_preamble<Opts>(value, ctx, peek, end, preamble,
+                                             [](yaml::yaml_tag tag) { return yaml::tag_valid_for_seq(tag); })) {
+            it = peek;
+            return;
+         }
+
+         // A level of nesting, taken past the preamble as for sets above.
+         depth_guard guard{ctx, yaml::max_yaml_recursive_depth};
+         if (!guard) [[unlikely]]
+            return;
+
+         if (*peek == '[') {
+            // Flow sequence - consume whitespace and parse
+            it = peek;
+            yaml::parse_flow_sequence<Opts>(value, ctx, it, end);
+         }
+         else if (*peek == '-') {
+            // Block sequence - don't consume leading whitespace, let parse_block_sequence handle it
+            // But if there was a tag, we need to advance past it
+            if (preamble.tag != yaml::yaml_tag::none || preamble.node_props.has_anchor) {
+               it = peek;
+            }
+            int32_t seq_indent = ctx.current_indent();
+            if (*it == '-' && ctx.current_indent() >= 0) {
+               seq_indent = ctx.allow_indentless_sequence ? (ctx.current_indent() > 0 ? (ctx.current_indent() - 1) : 0)
+                                                          : (ctx.current_indent() + 1);
+            }
+            yaml::parse_block_sequence<Opts>(value, ctx, it, end, seq_indent);
+         }
+         else {
+            ctx.error = error_code::syntax_error;
+         }
+
+         yaml::finalize_node_anchor(preamble.node_props, ctx, it);
+      }
+   };
+
+   // Tuples (std::tuple, glaze_array_t, tuple_t)
+   template <class T>
+      requires(glaze_array_t<T> || tuple_t<T> || is_std_tuple<T>)
+   struct from<YAML, T>
+   {
+      template <auto Opts, class It>
+      static void op(auto&& value, is_context auto&& ctx, It&& it, auto end)
+      {
+         if (bool(ctx.error)) [[unlikely]]
+            return;
+
+         static constexpr auto N = []() constexpr {
+            if constexpr (glaze_array_t<T>) {
+               return reflect<T>::size;
+            }
+            else {
+               return glz::tuple_size_v<T>;
+            }
+         }();
+
+         yaml::skip_inline_ws(it, end);
+
+         if (it == end) [[unlikely]] {
+            ctx.error = error_code::unexpected_end;
+            return;
+         }
+
+         // Check for tag
+         const auto tag = yaml::parse_yaml_tag(it, end, ctx);
+         if (tag == yaml::yaml_tag::unknown) [[unlikely]] {
+            ctx.error = error_code::syntax_error;
+            return;
+         }
+         if (!yaml::tag_valid_for_seq(tag)) [[unlikely]] {
+            ctx.error = error_code::syntax_error;
+            return;
+         }
+
+         yaml::skip_inline_ws(it, end);
+
+         if (it == end) [[unlikely]] {
+            ctx.error = error_code::unexpected_end;
+            return;
+         }
+
+         depth_guard guard{ctx, yaml::max_yaml_recursive_depth};
+         if (!guard) [[unlikely]]
+            return;
+
+         if (*it == '[') {
+            // Flow sequence
+            ++it; // Skip '['
+            // Skip whitespace and newlines (YAML allows multi-line flow sequences)
+            yaml::skip_ws_and_newlines(it, end);
+
+            for_each<N>([&]<size_t I>() {
+               if (bool(ctx.error)) [[unlikely]]
+                  return;
+
+               if (it != end && *it == ']') {
+                  if constexpr (check_error_on_missing_array_elements(Opts)) {
+                     ctx.error = error_code::array_element_not_found;
+                  }
+                  return; // Early termination
+               }
+
+               if constexpr (I != 0) {
+                  if (it == end || *it != ',') {
+                     ctx.error = error_code::syntax_error;
+                     return;
+                  }
+                  ++it; // Skip ','
+                  yaml::skip_ws_and_newlines(it, end);
+               }
+
+               if constexpr (is_std_tuple<T>) {
+                  using element_t = std::tuple_element_t<I, std::remove_cvref_t<T>>;
+                  from<YAML, element_t>::template op<yaml::flow_context_on<Opts>()>(std::get<I>(value), ctx, it, end);
+               }
+               else if constexpr (glaze_array_t<T>) {
+                  using element_t = std::decay_t<decltype(get_member(value, glz::get<I>(meta_v<T>)))>;
+                  from<YAML, element_t>::template op<yaml::flow_context_on<Opts>()>(
+                     get_member(value, glz::get<I>(meta_v<T>)), ctx, it, end);
+               }
+               else {
+                  using element_t = std::decay_t<decltype(glz::get<I>(value))>;
+                  from<YAML, element_t>::template op<yaml::flow_context_on<Opts>()>(glz::get<I>(value), ctx, it, end);
+               }
+
+               yaml::skip_ws_and_newlines(it, end);
+            });
+
+            if (bool(ctx.error)) [[unlikely]]
+               return;
+
+            if (it == end || *it != ']') {
+               ctx.error = error_code::syntax_error;
+               return;
+            }
+            ++it; // Skip ']'
+         }
+         else if (*it == '-') {
+            // Block sequence
+            size_t index = 0;
+
+            while (it != end && index < N) {
+               // Skip whitespace and measure indent
+               auto line_start = it;
+               yaml::skip_inline_ws(it, end);
+
+               if (it == end) break;
+
+               // Skip blank lines
+               if (*it == '\n' || *it == '\r') {
+                  yaml::skip_newline(it, end);
+                  continue;
+               }
+
+               if (*it != '-') {
+                  it = line_start;
+                  break;
+               }
+
+               // Published to the element as parse_block_sequence does, so a multi-line plain
+               // scalar element ends at the next "- " entry rather than folding it in.
+               int32_t dash_col = static_cast<int32_t>(it - line_start);
+               if constexpr (std::is_pointer_v<std::decay_t<It>>) {
+                  if (ctx.stream_begin) {
+                     dash_col = ctx.line_prefix_before(&*it).column;
+                  }
+               }
+
+               ++it; // Skip '-'
+
+               // Check valid sequence indicator
+               if (it != end && !yaml::whitespace_or_line_end_table[static_cast<uint8_t>(*it)]) {
+                  it = line_start;
+                  break;
+               }
+
+               yaml::skip_inline_ws(it, end);
+
+               const bool prev_sequence_item_value_context = ctx.sequence_item_value_context;
+               const int32_t prev_sequence_dash_indent = ctx.sequence_dash_indent;
+               ctx.sequence_item_value_context = true;
+               ctx.sequence_dash_indent = dash_col;
+
+               // Parse element at current index
+               [&]<size_t... Is>(std::index_sequence<Is...>) {
+                  (
+                     [&]<size_t I>() {
+                        if (I == index) {
+                           if constexpr (is_std_tuple<T>) {
+                              using element_t = std::tuple_element_t<I, std::remove_cvref_t<T>>;
+                              from<YAML, element_t>::template op<Opts>(std::get<I>(value), ctx, it, end);
+                           }
+                           else if constexpr (glaze_array_t<T>) {
+                              using element_t = std::decay_t<decltype(get_member(value, glz::get<I>(meta_v<T>)))>;
+                              from<YAML, element_t>::template op<Opts>(get_member(value, glz::get<I>(meta_v<T>)), ctx,
+                                                                       it, end);
+                           }
+                           else {
+                              using element_t = std::decay_t<decltype(glz::get<I>(value))>;
+                              from<YAML, element_t>::template op<Opts>(glz::get<I>(value), ctx, it, end);
+                           }
+                        }
+                     }.template operator()<Is>(),
+                     ...);
+               }(std::make_index_sequence<N>{});
+
+               ctx.sequence_dash_indent = prev_sequence_dash_indent;
+               ctx.sequence_item_value_context = prev_sequence_item_value_context;
+
+               if (bool(ctx.error)) [[unlikely]]
+                  return;
+
+               ++index;
+
+               // Skip to next line
+               yaml::skip_ws_and_comment(it, end);
+               if (it != end && (*it == '\n' || *it == '\r')) {
+                  yaml::skip_newline(it, end);
+               }
+            }
+         }
+         else {
+            ctx.error = error_code::syntax_error;
+         }
+      }
+   };
+
+   // Pairs (std::pair)
+   template <pair_t T>
+   struct from<YAML, T>
+   {
+      template <auto Opts, class It>
+      static void op(auto&& value, is_context auto&& ctx, It&& it, auto end)
+      {
+         if (bool(ctx.error)) [[unlikely]]
+            return;
+
+         yaml::skip_inline_ws(it, end);
+
+         if (it == end) [[unlikely]] {
+            ctx.error = error_code::unexpected_end;
+            return;
+         }
+
+         // Check for tag - pairs are treated as single-entry mappings
+         const auto tag = yaml::parse_yaml_tag(it, end, ctx);
+         if (tag == yaml::yaml_tag::unknown) [[unlikely]] {
+            ctx.error = error_code::syntax_error;
+            return;
+         }
+         if (!yaml::tag_valid_for_map(tag)) [[unlikely]] {
+            ctx.error = error_code::syntax_error;
+            return;
+         }
+
+         yaml::skip_inline_ws(it, end);
+
+         if (it == end) [[unlikely]] {
+            ctx.error = error_code::unexpected_end;
+            return;
+         }
+
+         using first_type = typename std::remove_cvref_t<T>::first_type;
+         using second_type = typename std::remove_cvref_t<T>::second_type;
+
+         depth_guard guard{ctx, yaml::max_yaml_recursive_depth};
+         if (!guard) [[unlikely]]
+            return;
+
+         if (*it == '{') {
+            // Flow mapping style: {key: value}
+            ++it; // Skip '{'
+            yaml::skip_inline_ws(it, end);
+
+            if (it != end && *it == '}') {
+               ++it;
+               return; // Empty pair
+            }
+
+            if (it == end) [[unlikely]] {
+               ctx.error = error_code::unexpected_end;
+               return;
+            }
+
+            // Parse key
+            if constexpr (str_t<first_type>) {
+               // Skip anchor on key
+               if (*it == '&') {
+                  ++it;
+                  yaml::parse_anchor_name(it, end);
+                  yaml::skip_inline_ws(it, end);
+                  if (it == end) [[unlikely]] {
+                     ctx.error = error_code::unexpected_end;
+                     return;
+                  }
+               }
+               std::string key_str;
+               const auto style = yaml::detect_scalar_style(*it);
+               if (style == yaml::scalar_style::double_quoted) {
+                  yaml::parse_double_quoted_string(key_str, ctx, it, end);
+               }
+               else if (style == yaml::scalar_style::single_quoted) {
+                  yaml::parse_single_quoted_string(key_str, ctx, it, end);
+               }
+               else {
+                  yaml::parse_plain_scalar(key_str, ctx, it, end, true);
+               }
+               if (bool(ctx.error)) [[unlikely]]
+                  return;
+               value.first = std::move(key_str);
+            }
+            else {
+               from<YAML, first_type>::template op<yaml::flow_context_on<Opts>()>(value.first, ctx, it, end);
+            }
+
+            if (bool(ctx.error)) [[unlikely]]
+               return;
+
+            yaml::skip_inline_ws(it, end);
+
+            // Expect colon
+            if (it == end || *it != ':') {
+               ctx.error = error_code::syntax_error;
+               return;
+            }
+            ++it;
+            yaml::skip_inline_ws(it, end);
+
+            // Parse value
+            from<YAML, second_type>::template op<yaml::flow_context_on<Opts>()>(value.second, ctx, it, end);
+
+            if (bool(ctx.error)) [[unlikely]]
+               return;
+
+            yaml::skip_inline_ws(it, end);
+
+            if (it == end || *it != '}') {
+               ctx.error = error_code::syntax_error;
+               return;
+            }
+            ++it; // Skip '}'
+         }
+         else {
+            // Block mapping style: key: value
+            // Parse key
+            if constexpr (str_t<first_type>) {
+               std::string key_str;
+               if (!yaml::parse_yaml_key(key_str, ctx, it, end, false)) {
+                  return;
+               }
+               value.first = std::move(key_str);
+            }
+            else {
+               from<YAML, first_type>::template op<Opts>(value.first, ctx, it, end);
+            }
+
+            if (bool(ctx.error)) [[unlikely]]
+               return;
+
+            yaml::skip_inline_ws(it, end);
+
+            // Expect colon
+            if (it == end || *it != ':') {
+               ctx.error = error_code::syntax_error;
+               return;
+            }
+            ++it;
+            yaml::skip_inline_ws(it, end);
+
+            // Parse value. A pair is a single-entry mapping, so its value half follows the same
+            // same-line / next-line layout rules as a map entry (see parse_map_value in the map
+            // reader). Without the next-line arm a nested value -- a container, object, or another
+            // pair, all of which the writer indents onto the following line -- fails to parse.
+            // Like a struct, a pair reads the pushed indent as its own key column
+            // (receives_block_mapping_column), so every dispatcher agrees on what was pushed.
+            const int32_t line_indent = (ctx.current_indent() < 0) ? 0 : ctx.current_indent();
+
+            if (it != end && !yaml::line_end_or_comment_table[static_cast<uint8_t>(*it)]) {
+               if (!ctx.push_indent(line_indent + 1)) [[unlikely]]
+                  return;
+               from<YAML, second_type>::template op<Opts>(value.second, ctx, it, end);
+               ctx.pop_indent();
+            }
+            else {
+               const int32_t nested_indent = yaml::detect_nested_value_indent(ctx, it, end, line_indent);
+               if (nested_indent >= 0) {
+                  yaml::skip_to_content(it, end);
+                  // A struct value reads the pushed indent as its own key column;
+                  // every other value type reads it as the enclosing baseline.
+                  const int32_t value_indent =
+                     yaml::receives_block_mapping_column<second_type>() ? nested_indent : nested_indent - 1;
+                  if (!ctx.push_indent(value_indent)) [[unlikely]]
+                     return;
+                  from<YAML, second_type>::template op<Opts>(value.second, ctx, it, end);
+                  ctx.pop_indent();
+               }
+            }
+         }
+      }
+   };
+
+   // Objects (glaze_object_t and reflectable)
+   template <class T>
+      requires((glaze_object_t<T> || reflectable<T>) && !custom_read<T>)
+   struct from<YAML, T>
+   {
+      // Tag is the discriminator key of an enclosing tagged variant (empty when not tagged).
+      // When set, the mapping parsers skip an entry whose key equals the tag, since the
+      // variant resolver has already consumed it to select this alternative.
+      template <auto Opts, string_literal Tag = "", class It>
+      static void op(auto&& value, is_context auto&& ctx, It&& it, auto end)
+      {
+         if (bool(ctx.error)) [[unlikely]]
+            return;
+
+         yaml::node_preamble_state preamble{};
+         if (yaml::parse_node_preamble<Opts, yaml::node_property_policy{true, true, true, false}, true>(
+                value, ctx, it, end, preamble, [](yaml::yaml_tag tag) { return yaml::tag_valid_for_map(tag); }))
+            return;
+
+         depth_guard guard{ctx, yaml::max_yaml_recursive_depth};
+         if (!guard) [[unlikely]]
+            return;
+
+         if (*it == '{') {
+            // Flow mapping
+            yaml::parse_flow_mapping<Opts, Tag>(value, ctx, it, end);
+         }
+         else {
+            // Block mapping - use indent from context (set by parent parser)
+            yaml::parse_block_mapping<Opts, Tag>(value, ctx, it, end, ctx.current_indent());
+         }
+
+         check_self_constraint<YAML, Opts>(value, ctx);
+
+         yaml::finalize_node_anchor(preamble.node_props, ctx, it);
+      }
+   };
+
+   // Maps (std::map, std::unordered_map, etc.)
+   template <readable_map_t T>
+   struct from<YAML, T>
+   {
+      template <auto Opts, class It>
+      static void op(auto&& value, is_context auto&& ctx, It&& it, auto end)
+      {
+         if (bool(ctx.error)) [[unlikely]]
+            return;
+
+         yaml::node_preamble_state preamble{};
+         if (yaml::parse_node_preamble<Opts, yaml::node_property_policy{true, true, false, false}>(
+                value, ctx, it, end, preamble, [](yaml::yaml_tag tag) { return yaml::tag_valid_for_map(tag); }))
+            return;
+
+         depth_guard guard{ctx, yaml::max_yaml_recursive_depth};
+         if (!guard) [[unlikely]]
+            return;
+
+         using key_t = typename std::remove_cvref_t<T>::key_type;
+         using val_t = typename std::remove_cvref_t<T>::mapped_type;
+
+         // Reading a YAML mapping MERGES into the target: an entry overwrites the
+         // value of a key that existed before the read and adds new keys, while
+         // pre-existing keys the document does not mention are preserved (like a
+         // struct/object read, and like json/read.hpp's per-key value[key]).
+         // Within a single document a repeated key keeps its FIRST value -- YAML
+         // mappings disallow duplicate keys and the conformance suite expects
+         // first-wins, which falls out of emplace into an empty map. Any
+         // pre-existing entry the document leaves untouched is restored on scope
+         // exit (including error paths). When the target starts empty (the common
+         // case) this is a no-op with negligible cost.
+         std::remove_cvref_t<T> preexisting_entries;
+         if (!value.empty()) {
+            preexisting_entries = std::move(value);
+            value.clear();
+         }
+         struct merge_restore_guard
+         {
+            std::remove_cvref_t<T>& target;
+            std::remove_cvref_t<T>& saved;
+            ~merge_restore_guard()
+            {
+               // emplace is a no-op for keys the document already wrote, so only
+               // untouched pre-existing entries are put back.
+               for (auto& entry : saved) {
+                  target.emplace(entry.first, std::move(entry.second));
+               }
+            }
+         } merge_restore{value, preexisting_entries};
+
+         const bool treat_as_block_mapping =
+            !yaml::check_flow_context(Opts) && *it == '{' && yaml::inline_value_has_plain_mapping_indicator(it, end);
+
+         if (*it == '{' && !treat_as_block_mapping) {
+            // Flow mapping
+            ++it;
+            // Skip whitespace and newlines after opening brace
+            yaml::skip_ws_and_newlines(it, end);
+
+            if (it != end && *it == '}') {
+               ++it;
+               yaml::validate_flow_node_adjacent_tail(ctx, it, end);
+               if (bool(ctx.error)) [[unlikely]]
+                  return;
+               yaml::finalize_node_anchor(preamble.node_props, ctx, it);
+               return;
+            }
+
+            while (it != end) {
+               // Skip whitespace and newlines at start of each iteration
+               yaml::skip_ws_and_newlines(it, end);
+
+               if (it != end && *it == '}') {
+                  ++it;
+                  yaml::validate_flow_node_adjacent_tail(ctx, it, end);
+                  if (bool(ctx.error)) [[unlikely]]
+                     return;
+                  break;
+               }
+
+               bool explicit_flow_key = false;
+               auto explicit_probe = it;
+               yaml::skip_inline_ws(explicit_probe, end);
+               if (explicit_probe != end && *explicit_probe == '?') {
+                  const auto after_q = explicit_probe + 1;
+                  if (after_q == end || yaml::whitespace_or_line_end_table[static_cast<uint8_t>(*after_q)] ||
+                      *after_q == ',' || *after_q == '}') {
+                     explicit_flow_key = true;
+                     it = explicit_probe + 1;
+                     yaml::skip_flow_ws_and_newlines(ctx, it, end);
+                     if (bool(ctx.error)) [[unlikely]]
+                        return;
+                  }
+               }
+               // Parse key
+               key_t key{};
+               if constexpr (std::same_as<std::remove_cvref_t<key_t>, std::string>) {
+                  if (explicit_flow_key && it != end && (*it == ':' || *it == ',' || *it == '}')) {
+                     key.clear();
+                  }
+                  else {
+                     auto key_probe = it;
+                     yaml::skip_inline_ws(key_probe, end);
+
+                     // Use full node parsing only for structurally complex flow keys.
+                     // Plain/quoted/alias keys stay on parse_yaml_key() for compatibility.
+                     bool parse_complex_flow_key = false;
+                     if (key_probe != end) {
+                        if (*key_probe == '[' || *key_probe == '{') {
+                           parse_complex_flow_key = true;
+                        }
+                        else if (*key_probe == '&') {
+                           ++key_probe;
+                           yaml::parse_anchor_name(key_probe, end);
+                           yaml::skip_inline_ws(key_probe, end);
+                           if (key_probe != end && (*key_probe == '[' || *key_probe == '{')) {
+                              parse_complex_flow_key = true;
+                           }
+                        }
+                     }
+
+                     if (parse_complex_flow_key) {
+                        glz::generic key_node{};
+                        from<YAML, glz::generic>::template op<yaml::flow_context_on<Opts>()>(key_node, ctx, it, end);
+                        if (bool(ctx.error)) [[unlikely]]
+                           return;
+                        if (!yaml::materialize_key(key, key_node, ctx)) [[unlikely]]
+                           return;
+                     }
+                     else {
+                        if (!yaml::parse_yaml_key(key, ctx, it, end, true)) {
+                           return;
+                        }
+                     }
+                  }
+               }
+               else {
+                  if (explicit_flow_key && it != end && (*it == ':' || *it == ',' || *it == '}')) {
+                     ctx.error = error_code::syntax_error;
+                     return;
+                  }
+                  from<YAML, key_t>::template op<yaml::flow_context_on<Opts>()>(key, ctx, it, end);
+                  if (bool(ctx.error)) [[unlikely]]
+                     return;
+               }
+
+               // Separation between flow key and ':' may include comments/newlines.
+               // In flow context, newlines are allowed between key and ':'.
+               yaml::skip_flow_ws_and_newlines(ctx, it, end);
+               if (bool(ctx.error)) [[unlikely]]
+                  return;
+
+               auto parse_implicit_null = [&](val_t& val) -> bool {
+                  if constexpr (nullable_like<std::remove_cvref_t<val_t>>) {
+                     val = {};
+                     return true;
+                  }
+                  else if constexpr (std::same_as<std::remove_cvref_t<val_t>, glz::generic>) {
+                     val = glz::generic{};
+                     return true;
+                  }
+                  else {
+                     static constexpr std::string_view null_value{"null"};
+                     auto null_it = null_value.data();
+                     const yaml::yaml_context::scoped_stream literal_stream{ctx, null_value.data()};
+                     from<YAML, val_t>::template op<yaml::flow_context_on<Opts>()>(
+                        val, ctx, null_it, null_value.data() + null_value.size());
+                     return !bool(ctx.error);
+                  }
+               };
+
+               if (it != end && (*it == ',' || *it == '}')) {
+                  val_t val{};
+                  if (!parse_implicit_null(val)) [[unlikely]]
+                     return;
+
+                  value.emplace(std::move(key), std::move(val));
+
+                  if (*it == '}') {
+                     ++it;
+                     yaml::validate_flow_node_adjacent_tail(ctx, it, end);
+                     if (bool(ctx.error)) [[unlikely]]
+                        return;
+                     break;
+                  }
+
+                  ++it; // skip comma
+                  yaml::skip_ws_and_newlines(it, end);
+                  continue;
+               }
+
+               if (it == end || *it != ':') {
+                  ctx.error = error_code::syntax_error;
+                  return;
+               }
+               ++it;
+
+               yaml::skip_flow_ws_and_newlines(ctx, it, end);
+               if (bool(ctx.error)) [[unlikely]]
+                  return;
+
+               // Omitted value after an explicit ':' maps to an implicit null.
+               if (it != end && (*it == ',' || *it == '}')) {
+                  val_t val{};
+                  if (!parse_implicit_null(val)) [[unlikely]]
+                     return;
+
+                  value.emplace(std::move(key), std::move(val));
+
+                  if (*it == '}') {
+                     ++it;
+                     yaml::validate_flow_node_adjacent_tail(ctx, it, end);
+                     if (bool(ctx.error)) [[unlikely]]
+                        return;
+                     break;
+                  }
+
+                  ++it; // skip comma
+                  yaml::skip_ws_and_newlines(it, end);
+                  continue;
+               }
+
+               // Parse value
+               val_t val{};
+               from<YAML, val_t>::template op<yaml::flow_context_on<Opts>()>(val, ctx, it, end);
+               if (bool(ctx.error)) [[unlikely]]
+                  return;
+
+               value.emplace(std::move(key), std::move(val));
+
+               yaml::skip_inline_ws(it, end);
+
+               if (it != end && *it == '}') {
+                  ++it;
+                  yaml::validate_flow_node_adjacent_tail(ctx, it, end);
+                  if (bool(ctx.error)) [[unlikely]]
+                     return;
+                  break;
+               }
+               else if (it != end && *it == ',') {
+                  ++it;
+                  // Skip whitespace and newlines after comma
+                  yaml::skip_ws_and_newlines(it, end);
+               }
+               else if (it != end && (*it == '\n' || *it == '\r')) {
+                  // Newlines may precede either the closing brace or the
+                  // separator comma for the next entry.
+                  yaml::skip_ws_and_newlines(it, end);
+                  if (it != end && *it == '}') {
+                     ++it;
+                     yaml::validate_flow_node_adjacent_tail(ctx, it, end);
+                     if (bool(ctx.error)) [[unlikely]]
+                        return;
+                     break;
+                  }
+                  if (it != end && *it == ',') {
+                     ++it;
+                     yaml::skip_ws_and_newlines(it, end);
+                     continue;
+                  }
+                  ctx.error = error_code::syntax_error;
+                  return;
+               }
+               else {
+                  ctx.error = error_code::syntax_error;
+                  return;
+               }
+            }
+         }
+         else {
+            // Block mapping - use shared loop with map-specific callback
+            yaml::parse_block_mapping_loop<Opts>(
+               ctx, it, end, int32_t(-1), [&](auto& ctx, auto& it, auto end, int32_t line_indent) -> bool {
+                  auto parse_map_value = [&](val_t& val) -> bool {
+                     if (it != end && !yaml::line_end_or_comment_table[static_cast<uint8_t>(*it)]) {
+                        bool line_starts_with_explicit_value_indicator = false;
+
+                        // Inline mapping values in block context cannot start with a
+                        // plain "key: value" pair on the same line (e.g. "a: b: c").
+                        // Such constructs are malformed unless wrapped in flow
+                        // delimiters ({...} / [...]) or quoted.
+                        if constexpr (std::is_pointer_v<std::decay_t<decltype(it)>>) {
+                           if (ctx.stream_begin) {
+                              auto is_line_content_start = [&](auto pos) {
+                                 return !ctx.line_prefix_before(pos).has_content;
+                              };
+
+                              auto line_has_explicit_value_indicator = [&](auto pos) {
+                                 const char* line = ctx.line_begin_of(pos);
+                                 while (line != end && (*line == ' ' || *line == '\t')) ++line;
+                                 return line != end && *line == ':';
+                              };
+
+                              if (!is_line_content_start(it) &&
+                                  yaml::inline_value_has_plain_mapping_indicator(it, end) &&
+                                  !line_has_explicit_value_indicator(it)) {
+                                 ctx.error = error_code::syntax_error;
+                                 return false;
+                              }
+                              line_starts_with_explicit_value_indicator = line_has_explicit_value_indicator(it);
+                           }
+                        }
+
+                        if (*it == '-' &&
+                            ((it + 1) == end || yaml::whitespace_or_line_end_table[static_cast<uint8_t>(*(it + 1))]) &&
+                            !line_starts_with_explicit_value_indicator) {
+                           // "key: - item" is not valid block sequence syntax.
+                           ctx.error = error_code::syntax_error;
+                           return false;
+                        }
+
+                        if (!ctx.push_indent(line_indent + 1)) [[unlikely]]
+                           return false;
+                        from<YAML, val_t>::template op<Opts>(val, ctx, it, end);
+                        ctx.pop_indent();
+                     }
+                     else {
+                        int32_t nested_indent = yaml::detect_nested_value_indent(ctx, it, end, line_indent);
+                        if (nested_indent >= 0) {
+                           yaml::skip_to_content(it, end);
+                           if (it != end && *it == ':' && (it + 1) != end && *(it + 1) == '\t') {
+                              ctx.error = error_code::syntax_error;
+                              return false;
+                           }
+                           // A struct value reads the pushed indent as its own key column;
+                           // every other value type reads it as the enclosing baseline.
+                           const int32_t value_indent =
+                              yaml::receives_block_mapping_column<val_t>() ? nested_indent : nested_indent - 1;
+                           if (!ctx.push_indent(value_indent)) [[unlikely]]
+                              return false;
+                           from<YAML, val_t>::template op<Opts>(val, ctx, it, end);
+                           ctx.pop_indent();
+                        }
+                     }
+                     return !bool(ctx.error);
+                  };
+
+                  // Explicit key entry form:
+                  // ? key
+                  // : value
+                  if (*it == '?' && ((it + 1) != end) && *(it + 1) == '\t') {
+                     ctx.error = error_code::syntax_error;
+                     return false;
+                  }
+                  if (*it == '?' && ((it + 1) == end || *(it + 1) == ' ' || *(it + 1) == '\n' || *(it + 1) == '\r')) {
+                     ++it; // skip '?'
+                     yaml::skip_inline_ws(it, end);
+
+                     const int32_t explicit_value_indicator_indent =
+                        (ctx.current_indent() < 0) ? 0 : (ctx.current_indent() + 1);
+
+                     key_t key{};
+                     if constexpr (std::same_as<std::remove_cvref_t<key_t>, std::string>) {
+                        auto to_string_key = [&](glz::generic& key_node) {
+                           return yaml::materialize_key(key, key_node, ctx);
+                        };
+
+                        auto key_it = it;
+                        yaml::skip_inline_ws(key_it, end);
+
+                        auto content = key_it;
+                        yaml::skip_to_content(content, end);
+                        bool handled_anchor_only_empty_key = false;
+
+                        // Anchor on an empty explicit key node:
+                        //   ? &a
+                        //   : value
+                        if (content != end && *content == '&') {
+                           auto anchor_probe = content + 1;
+                           auto anchor_name = yaml::parse_anchor_name(anchor_probe, end);
+                           if (!anchor_name.empty()) {
+                              auto after_anchor = anchor_probe;
+                              yaml::skip_inline_ws(after_anchor, end);
+
+                              auto value_indicator = after_anchor;
+                              if (value_indicator != end && *value_indicator == ':') {
+                                 key.clear();
+                                 ctx.anchors[std::string(anchor_name)] = {content, content, ctx.current_indent()};
+                                 it = value_indicator;
+                                 handled_anchor_only_empty_key = true;
+                              }
+                              else {
+                                 if (value_indicator != end && *value_indicator == '#') {
+                                    yaml::skip_comment(value_indicator, end);
+                                 }
+                                 if (value_indicator != end && (*value_indicator == '\n' || *value_indicator == '\r')) {
+                                    yaml::skip_newline(value_indicator, end);
+                                    auto value_line = value_indicator;
+                                    int32_t value_indent = yaml::measure_indent(value_line, end, ctx);
+                                    if (bool(ctx.error)) [[unlikely]]
+                                       return false;
+                                    if (value_line != end && *value_line == ':' &&
+                                        value_indent == explicit_value_indicator_indent) {
+                                       key.clear();
+                                       ctx.anchors[std::string(anchor_name)] = {content, content, ctx.current_indent()};
+                                       it = value_line;
+                                       handled_anchor_only_empty_key = true;
+                                    }
+                                    else if (value_line != end && *value_line == ':') {
+                                       // In explicit-key form ("? &a"), a following ':'
+                                       // starts the outer value indicator only at the same
+                                       // indentation. A deeper-indented ': value' is malformed.
+                                       ctx.error = error_code::syntax_error;
+                                       return false;
+                                    }
+                                 }
+                              }
+                           }
+                        }
+
+                        const bool key_content_spans_lines = [&] {
+                           auto scan = key_it;
+                           while (scan != content && scan != end) {
+                              if (*scan == '\n' || *scan == '\r') return true;
+                              ++scan;
+                           }
+                           return false;
+                        }();
+
+                        if (handled_anchor_only_empty_key) {
+                           // 'it' already points to the explicit value indicator ':'
+                        }
+                        else if (content == end || (*content == ':' && key_content_spans_lines)) {
+                           key.clear();
+                           it = content;
+                        }
+                        else {
+                           // Explicit mapping keys ('? key-node') are full YAML nodes.
+                           // Parse the key node structurally (not via plain-key scanning)
+                           // so inputs like '? []: x' and '? JSON: like' are interpreted
+                           // as complex keys, not split into implicit key/value pairs.
+                           auto key_node_it = content;
+                           auto key_node_end = end;
+                           if constexpr (std::is_pointer_v<std::decay_t<It>>) {
+                              // In explicit-key form, a following standalone ':'
+                              // line (same or lower indentation) belongs to the
+                              // outer mapping value, not the key node itself.
+                              auto scan = content;
+                              while (scan != end) {
+                                 while (scan != end && *scan != '\n' && *scan != '\r') {
+                                    ++scan;
+                                 }
+                                 if (scan == end) {
+                                    break;
+                                 }
+
+                                 yaml::skip_newline(scan, end);
+                                 auto line_start = scan;
+
+                                 int32_t indicator_indent = 0;
+                                 while (scan != end && *scan == ' ') {
+                                    ++indicator_indent;
+                                    ++scan;
+                                 }
+
+                                 if (scan != end && *scan == ':') {
+                                    const auto after_colon = scan + 1;
+                                    if ((after_colon == end ||
+                                         yaml::whitespace_or_line_end_table[static_cast<uint8_t>(*after_colon)]) &&
+                                        indicator_indent <= line_indent) {
+                                       key_node_end = line_start;
+                                       break;
+                                    }
+                                 }
+                              }
+                           }
+
+                           glz::generic key_node{};
+                           const bool prev_explicit_mapping_key_context = ctx.explicit_mapping_key_context;
+                           ctx.explicit_mapping_key_context = true;
+                           from<YAML, glz::generic>::template op<Opts>(key_node, ctx, key_node_it, key_node_end);
+                           ctx.explicit_mapping_key_context = prev_explicit_mapping_key_context;
+                           if (bool(ctx.error)) [[unlikely]]
+                              return false;
+                           it = key_node_it;
+                           if (!to_string_key(key_node)) [[unlikely]]
+                              return false;
+                        }
+                     }
+                     else {
+                        if (it != end && !yaml::line_end_or_comment_table[static_cast<uint8_t>(*it)]) {
+                           from<YAML, key_t>::template op<Opts>(key, ctx, it, end);
+                           if (bool(ctx.error)) [[unlikely]]
+                              return false;
+                        }
+                     }
+
+                     yaml::skip_inline_ws(it, end);
+                     yaml::skip_comment(it, end);
+
+                     // Value indicator may appear on the next line at the same indent.
+                     if (it != end && (*it == '\n' || *it == '\r')) {
+                        auto probe = it;
+                        bool found_value_indicator = false;
+
+                        while (probe != end && (*probe == '\n' || *probe == '\r')) {
+                           yaml::skip_newline(probe, end);
+
+                           auto value_line = probe;
+                           int32_t value_indent = yaml::measure_indent(value_line, end, ctx);
+                           if (bool(ctx.error)) [[unlikely]]
+                              return false;
+
+                           if (value_line == end || *value_line == '\n' || *value_line == '\r') {
+                              probe = value_line;
+                              continue; // blank line
+                           }
+                           if (*value_line == '#') {
+                              yaml::skip_comment(value_line, end);
+                              probe = value_line;
+                              continue; // comment-only line
+                           }
+                           if (*value_line == ':' && value_indent == explicit_value_indicator_indent) {
+                              it = value_line;
+                              found_value_indicator = true;
+                           }
+                           break;
+                        }
+
+                        if (found_value_indicator) {
+                           yaml::skip_inline_ws(it, end);
+                        }
+                     }
+
+                     val_t val{};
+                     if (it != end && *it == ':') {
+                        ++it;
+                        if (it != end && *it == '\t') {
+                           ctx.error = error_code::syntax_error;
+                           return false;
+                        }
+                        if (it != end && (*it == '\n' || *it == '\r')) {
+                           auto probe = it;
+                           yaml::skip_newline(probe, end);
+                           while (probe != end && *probe == ' ') ++probe;
+                           if (probe != end && *probe == ':' && ((probe + 1) != end) && *(probe + 1) == '\t') {
+                              ctx.error = error_code::syntax_error;
+                              return false;
+                           }
+                        }
+                        yaml::skip_inline_ws(it, end);
+                        if (!parse_map_value(val)) [[unlikely]]
+                           return false;
+                     }
+
+                     value.emplace(std::move(key), std::move(val));
+                     return true;
+                  }
+
+                  key_t key{};
+                  if constexpr (std::same_as<std::remove_cvref_t<key_t>, std::string>) {
+                     auto key_probe = it;
+                     yaml::skip_inline_ws(key_probe, end);
+                     const bool complex_flow_key = (key_probe != end && (*key_probe == '[' || *key_probe == '{'));
+                     if (complex_flow_key) {
+                        glz::generic key_node{};
+                        from<YAML, glz::generic>::template op<yaml::flow_context_on<Opts>()>(key_node, ctx, it, end);
+                        if (bool(ctx.error)) [[unlikely]]
+                           return false;
+                        if (!yaml::materialize_key(key, key_node, ctx)) [[unlikely]]
+                           return false;
+                     }
+                     else {
+                        if (!yaml::parse_yaml_key(key, ctx, it, end, false)) {
+                           return false;
+                        }
+                     }
+                  }
+                  else {
+                     from<YAML, key_t>::template op<Opts>(key, ctx, it, end);
+                     if (bool(ctx.error)) [[unlikely]]
+                        return false;
+                  }
+
+                  yaml::skip_inline_ws(it, end);
+
+                  if (it == end || *it != ':') {
+                     ctx.error = error_code::syntax_error;
+                     return false;
+                  }
+                  ++it;
+                  yaml::skip_inline_ws(it, end);
+
+                  val_t val{};
+                  if (!parse_map_value(val)) [[unlikely]]
+                     return false;
+
+                  value.emplace(std::move(key), std::move(val));
+                  return true;
+               });
+         }
+
+         yaml::finalize_node_anchor(preamble.node_props, ctx, it);
+      }
+   };
+
+   // ============================================================================
+   // YAML Variant type category traits
+   // ============================================================================
+
+   template <class T>
+   concept yaml_variant_bool_type = bool_t<remove_meta_wrapper_t<T>>;
+
+   template <class T>
+   concept yaml_variant_num_type = num_t<remove_meta_wrapper_t<T>>;
+
+   template <class T>
+   concept yaml_variant_str_type = str_t<remove_meta_wrapper_t<T>>;
+
+   template <class T>
+   concept yaml_variant_object_type =
+      glaze_object_t<T> || reflectable<T> || writable_map_t<T> || readable_map_t<T> || is_memory_object<T>;
+
+   template <class T>
+   concept yaml_variant_array_type =
+      array_t<remove_meta_wrapper_t<T>> || glaze_array_t<T> || tuple_t<T> || is_std_tuple<T>;
+
+   template <class T>
+   concept yaml_variant_null_type = null_t<T>;
+
+   // Type traits wrapping concepts for template template parameter use
+   template <class T>
+   struct is_yaml_variant_bool : std::bool_constant<yaml_variant_bool_type<T>>
+   {};
+   template <class T>
+   struct is_yaml_variant_num : std::bool_constant<yaml_variant_num_type<T>>
+   {};
+   template <class T>
+   struct is_yaml_variant_str : std::bool_constant<yaml_variant_str_type<T>>
+   {};
+   template <class T>
+   struct is_yaml_variant_object : std::bool_constant<yaml_variant_object_type<T>>
+   {};
+   template <class T>
+   struct is_yaml_variant_array : std::bool_constant<yaml_variant_array_type<T>>
+   {};
+   template <class T>
+   struct is_yaml_variant_null : std::bool_constant<yaml_variant_null_type<T>>
+   {};
+
+   // Count types in variant matching a trait
+   template <class Variant, template <class> class Trait>
+   struct yaml_variant_count_impl;
+
+   template <template <class> class Trait, class... Ts>
+   struct yaml_variant_count_impl<std::variant<Ts...>, Trait>
+   {
+      static constexpr size_t value = (size_t(Trait<Ts>::value) + ... + 0);
+   };
+
+   template <class Variant, template <class> class Trait>
+   constexpr size_t yaml_variant_count_v = yaml_variant_count_impl<Variant, Trait>::value;
+
+   // Get first index matching trait (or variant_npos if none)
+   template <class Variant, template <class> class Trait>
+   struct yaml_variant_first_index_impl;
+
+   template <template <class> class Trait, class... Ts>
+   struct yaml_variant_first_index_impl<std::variant<Ts...>, Trait>
+   {
+      static constexpr size_t find()
+      {
+         size_t result = std::variant_npos;
+         size_t idx = 0;
+         ((Trait<Ts>::value && result == std::variant_npos ? (result = idx, ++idx) : ++idx), ...);
+         return result;
+      }
+      static constexpr size_t value = find();
+   };
+
+   template <class Variant, template <class> class Trait>
+   constexpr size_t yaml_variant_first_index_v = yaml_variant_first_index_impl<Variant, Trait>::value;
+
+   // Precomputed type counts for a variant (similar to JSON's variant_type_count)
+   template <class T>
+   struct yaml_variant_type_count
+   {
+      static constexpr auto n_bool = yaml_variant_count_v<T, is_yaml_variant_bool>;
+      static constexpr auto n_num = yaml_variant_count_v<T, is_yaml_variant_num>;
+      static constexpr auto n_str = yaml_variant_count_v<T, is_yaml_variant_str>;
+      static constexpr auto n_object = yaml_variant_count_v<T, is_yaml_variant_object>;
+      static constexpr auto n_array = yaml_variant_count_v<T, is_yaml_variant_array>;
+      static constexpr auto n_null = yaml_variant_count_v<T, is_yaml_variant_null>;
+   };
+
+   // Check if variant is auto-deducible based on type composition
+   template <is_variant T>
+   consteval auto yaml_variant_is_auto_deducible()
+   {
+      using counts = yaml_variant_type_count<T>;
+      return counts::n_bool < 2 && counts::n_str < 2 && counts::n_object < 2 && counts::n_array < 2 &&
+             counts::n_null < 2;
+   }
+
+   // Process YAML variant alternatives by iterating directly over variant indices
+   template <class Variant, template <class> class Trait>
+   struct process_yaml_variant_alternatives
+   {
+      template <auto Opts>
+      static void op(auto&& value, is_context auto&& ctx, auto&& it, auto end)
+      {
+         constexpr auto category_count = yaml_variant_count_v<Variant, Trait>;
+
+         if constexpr (category_count == 0) {
+            ctx.error = error_code::no_matching_variant_type;
+         }
+         else if constexpr (category_count == 1) {
+            // Only one type in this category, use it directly
+            constexpr auto first_idx = yaml_variant_first_index_v<Variant, Trait>;
+            using V = std::variant_alternative_t<first_idx, Variant>;
+            if (!std::holds_alternative<V>(value)) value = V{};
+            from<YAML, V>::template op<Opts>(std::get<V>(value), ctx, it, end);
+         }
+         else {
+            // Multiple types in this category, try each one
+            constexpr auto N = std::variant_size_v<Variant>;
+            bool found_match{};
+            size_t match_idx = 0;
+            // Only the last alternative propagates its error, so an alternative that exhausted an
+            // expansion budget would otherwise be reported as no_matching_variant_type -- a wrong
+            // diagnosis for a document that is hostile rather than merely the wrong shape. Held
+            // aside and used only if nothing matched, so an alternative that does succeed later
+            // (one that materializes no key text can still parse under a latched budget) is
+            // unaffected.
+            error_code expansion_error{};
+            std::string_view expansion_message{};
+
+            for_each<N>([&]<size_t I>() {
+               if (found_match) {
+                  return;
+               }
+               using V = std::variant_alternative_t<I, Variant>;
+               if constexpr (Trait<V>::value) {
+                  auto copy_it = it;
+                  if (!std::holds_alternative<V>(value)) {
+                     value = V{};
+                  }
+
+                  auto temp_ctx = ctx.make_speculative();
+                  from<YAML, V>::template op<Opts>(std::get<V>(value), temp_ctx, it, end);
+
+                  // Charged whether or not the alternative fit: a rejected probe still replayed
+                  // whatever aliases it reached, and an attempt that is never billed is an
+                  // attempt that can be repeated for free.
+                  ctx.alias_expansion_budget = temp_ctx.alias_expansion_budget;
+                  ctx.key_expansion_budget = temp_ctx.key_expansion_budget;
+
+                  if (!bool(temp_ctx.error)) {
+                     found_match = true;
+                     ctx.anchors = std::move(temp_ctx.anchors);
+                  }
+                  else {
+                     it = copy_it;
+                     if (temp_ctx.error == error_code::exceeded_max_expansion && expansion_error == error_code::none) {
+                        expansion_error = temp_ctx.error;
+                        expansion_message = temp_ctx.custom_error_message;
+                     }
+                     if (match_idx + 1 < category_count) {
+                        // Not the last type, continue trying
+                     }
+                     else {
+                        // Last type failed, propagate error
+                        ctx.error = temp_ctx.error;
+                        ctx.custom_error_message = temp_ctx.custom_error_message;
+                     }
+                  }
+                  ++match_idx;
+               }
+            });
+
+            if (!found_match && !bool(ctx.error)) {
+               if (expansion_error != error_code::none) {
+                  ctx.error = expansion_error;
+                  ctx.custom_error_message = expansion_message;
+               }
+               else {
+                  ctx.error = error_code::no_matching_variant_type;
+               }
+            }
+         }
+      }
+   };
+
+   // Quick check for implicit single-pair flow mappings used as sequence entries
+   // (e.g. `"k":v`, `{k: v}:v`, `k: v`) up to the next top-level flow delimiter, and no further
+   // than the longest implicit key the spec allows.
+   template <class It, class End>
+   inline bool line_could_be_flow_mapping(It it, End end)
+   {
+      const auto stop = yaml::implicit_key_scan_end(it, end);
+      int flow_depth = 0;
+      // See `line_could_be_block_mapping` for why the quote guard is the state of the node rather
+      // than the preceding character.
+      bool at_node_start = true;
+      bool prev_was_whitespace = true;
+      bool key_supports_adjacent_value = false;
+
+      while (it != stop) {
+         const char c = *it;
+         if (c == '\n' || c == '\r') {
+            return false;
+         }
+         if (c == ' ' || c == '\t') {
+            prev_was_whitespace = true;
+            key_supports_adjacent_value = false; // "Adjacent" admits no separation at all
+            ++it;
+            continue;
+         }
+         if (flow_depth == 0 && (c == ',' || c == ']' || c == '}')) {
+            return false;
+         }
+         // As in `line_could_be_block_mapping`, content clears both flags and a branch opts back in.
+         const bool after_whitespace = std::exchange(prev_was_whitespace, false);
+         const bool node_start = std::exchange(at_node_start, false);
+         const bool adjacent_value_ok = std::exchange(key_supports_adjacent_value, false);
+
+         if (c == '#' && flow_depth == 0 && after_whitespace) {
+            return false;
+         }
+         if ((c == '"' || c == '\'') && node_start) {
+            if (not yaml::skip_probe_quoted_scalar(it, stop)) {
+               return false;
+            }
+            key_supports_adjacent_value = true;
+            continue;
+         }
+         if (c == '[' || c == '{') {
+            ++flow_depth;
+            at_node_start = true;
+            ++it;
+            continue;
+         }
+         if (c == ']' || c == '}') {
+            --flow_depth; // Depth zero returned above, so this closes a collection we opened
+            if (flow_depth == 0) {
+               key_supports_adjacent_value = true;
+            }
+            ++it;
+            continue;
+         }
+         if (c == ':' && flow_depth == 0) {
+            const auto next = it + 1;
+            if (next == end || *next == ' ' || *next == '\t' || *next == '\n' || *next == '\r') {
+               return true;
+            }
+            // A ':' run together with its key is a separator only after a JSON-like key.
+            return adjacent_value_ok;
+         }
+         // Inside a flow collection ',' separates entries and ':' ends a key, so a node begins
+         // after either.
+         if (c == ',' || c == ':') {
+            at_node_start = true;
+            ++it;
+            continue;
+         }
+         if (node_start && yaml::skip_probe_node_property(it, stop)) {
+            at_node_start = true;
+            continue;
+         }
+         ++it;
+      }
+
+      return false;
+   }
+
+   // Speculatively try parsing as a block mapping into a variant.
+   // Returns true if successful, false otherwise (restoring iterator on failure).
+   // Uses quick line-based lookahead to short-circuit obvious non-mappings,
+   // then falls back to full parse attempt for potential mappings.
+   // If the line looks like a block mapping (has "key: " pattern) but parsing
+   // fails with a syntax error, that error is propagated (not silently caught)
+   // to avoid hiding malformed content.
+   template <class Variant, auto Opts>
+   inline bool try_parse_block_mapping_into_variant(auto&& value, auto&& ctx, auto&& it, auto end)
+   {
+      using counts = yaml_variant_type_count<Variant>;
+      if constexpr (counts::n_object == 0) {
+         return false;
+      }
+      else {
+         // Quick check: if no viable mapping separator in the current span,
+         // avoid expensive speculative parse.
+         const bool could_be_mapping = [&] {
+            if constexpr (yaml::check_flow_context(Opts)) {
+               return line_could_be_flow_mapping(it, end);
+            }
+            else {
+               return yaml::line_could_be_block_mapping(it, end);
+            }
+         }();
+         if (!could_be_mapping) {
+            return false;
+         }
+         // Full parse attempt - use a temporary context that inherits indent from parent
+         auto temp_ctx = ctx.make_speculative();
+         process_yaml_variant_alternatives<Variant, is_yaml_variant_object>::template op<Opts>(value, temp_ctx, it,
+                                                                                               end);
+         ctx.alias_expansion_budget = temp_ctx.alias_expansion_budget; // charged even if rejected
+         ctx.key_expansion_budget = temp_ctx.key_expansion_budget;
+         if (!bool(temp_ctx.error)) {
+            ctx.anchors = std::move(temp_ctx.anchors);
+            return true;
+         }
+         // The line matched "key: value" pattern but parsing failed.
+         // This indicates malformed content (e.g., unclosed flow collection),
+         // so propagate the error rather than silently falling back to string.
+         ctx.error = temp_ctx.error;
+         ctx.custom_error_message = temp_ctx.custom_error_message;
+         return false;
+      }
+   }
+
+   // Try block mapping first, then fall back to string.
+   // Common pattern in YAML variant parsing for ambiguous scalars.
+#ifdef _MSC_VER
+#pragma warning(push)
+#pragma warning(disable : 4702) // unreachable code from if constexpr
+#endif
+   template <class Variant, auto Opts>
+   inline void parse_block_mapping_or_string(auto&& value, auto&& ctx, auto&& it, auto end)
+   {
+      if constexpr (yaml::check_flow_context(Opts)) {
+         // In flow context, only treat plain content as an implicit "key: value"
+         // when a mapping separator appears before the next top-level flow delimiter.
+         auto could_be_implicit_flow_pair = [&](auto pos) {
+            // Bounded by the longest implicit key the spec allows: unbounded, this probe runs
+            // once per entry per nesting level over the whole remaining flow collection.
+            const auto stop = yaml::implicit_key_scan_end(pos, end);
+            // See `line_could_be_block_mapping` for why a quote is an indicator only where a node
+            // can begin. Brackets need no such guard here: ns-plain-safe-in keeps them out of a
+            // flow-context plain scalar, so every one of them is an indicator.
+            bool at_node_start = true;
+            int depth = 0;
+            while (pos != stop) {
+               const char c = *pos;
+               if (c == ' ' || c == '\t') {
+                  ++pos;
+                  continue;
+               }
+               const bool node_start = std::exchange(at_node_start, false);
+
+               if ((c == '"' || c == '\'') && node_start) {
+                  if (not yaml::skip_probe_quoted_scalar(pos, stop)) return false;
+                  continue;
+               }
+               if (c == '[' || c == '{') {
+                  ++depth;
+                  at_node_start = true;
+                  ++pos;
+                  continue;
+               }
+               if (c == ']' || c == '}') {
+                  if (depth == 0) return false;
+                  --depth;
+                  ++pos;
+                  continue;
+               }
+               if (c == ',' && depth == 0) return false;
+               if (c == ':' && depth == 0) {
+                  auto next = pos + 1;
+                  return next == end || *next == ' ' || *next == '\t' || *next == '\n' || *next == '\r';
+               }
+               // Inside a nested collection ',' separates entries and ':' ends a key.
+               if (c == ',' || c == ':') {
+                  at_node_start = true;
+                  ++pos;
+                  continue;
+               }
+               if (node_start && yaml::skip_probe_node_property(pos, stop)) {
+                  at_node_start = true;
+                  continue;
+               }
+               ++pos;
+            }
+            return false;
+         };
+
+         if (could_be_implicit_flow_pair(it) || line_could_be_flow_mapping(it, end)) {
+            if (try_parse_block_mapping_into_variant<Variant, Opts>(value, ctx, it, end)) {
+               return;
+            }
+            if (bool(ctx.error)) {
+               return;
+            }
+         }
+
+         process_yaml_variant_alternatives<Variant, is_yaml_variant_str>::template op<Opts>(value, ctx, it, end);
+         return;
+      }
+
+      if (try_parse_block_mapping_into_variant<Variant, Opts>(value, ctx, it, end)) {
+         return;
+      }
+      // If an error was set (e.g., malformed flow collection in value), don't try to parse as string
+      if (bool(ctx.error)) {
+         return;
+      }
+      process_yaml_variant_alternatives<Variant, is_yaml_variant_str>::template op<Opts>(value, ctx, it, end);
+   }
+
+   // Column (visual indent) of `it` within its current line, for contiguous buffers. The variant
+   // op is entered after the parent has consumed the leading indentation, so the indent stack no
+   // longer reflects the mapping's true column; recovering it from the buffer gives a single
+   // context-independent value (root, struct member, sequence item all differ) that drives both the
+   // tag scan and the indent under which the chosen alternative is parsed.
+   template <class Ctx, class It>
+   inline int32_t tagged_mapping_visual_indent(const Ctx& ctx, It it, int32_t fallback) noexcept
+   {
+      if constexpr (std::is_pointer_v<std::decay_t<It>>) {
+         if (ctx.stream_begin && it >= ctx.stream_begin) {
+            return ctx.line_prefix_before(it).column;
+         }
+      }
+      return fallback;
+   }
+
+   // Walk a tagged variant's mapping (block or flow), invoking on_tag(ctx, it, end, line_indent,
+   // in_flow) for the entry whose key equals `tag` and skipping every other entry's value. The
+   // whole mapping is consumed, so on completion the iterator sits just past it. on_tag is
+   // responsible for consuming the tag entry's value. Used both to resolve the alternative
+   // (running on copies of the iterator/context) and to consume the mapping when the resolved
+   // alternative is not an object (running on the caller's iterator/context).
+   template <auto Opts, class Ctx, class It, class End, class OnTag>
+   inline void walk_tagged_mapping(Ctx& ctx, It& it, End end, sv tag, int32_t mapping_indent, OnTag&& on_tag)
+   {
+      auto skip_entry_value = [&](Ctx& ctx, It& it, End end, int32_t line_indent, bool in_flow) {
+         if (in_flow) {
+            yaml::skip_yaml_value<Opts>(ctx, it, end, 0, true);
+         }
+         else {
+            yaml::skip_unknown_block_value<Opts>(ctx, it, end, line_indent);
+         }
+      };
+
+      if constexpr (yaml::check_flow_context(Opts)) {
+         // Flow mapping {tag: id, ...}
+         if (it == end || *it != '{') return;
+         ++it;
+         yaml::skip_flow_ws_and_newlines(ctx, it, end);
+         while (it != end && *it != '}') {
+            ctx.scratch.clear();
+            if (!yaml::parse_yaml_key(ctx.scratch, ctx, it, end, true)) return;
+            yaml::skip_flow_ws_and_newlines(ctx, it, end);
+            if (it == end || *it != ':') {
+               ctx.error = error_code::syntax_error;
+               return;
+            }
+            ++it;
+            yaml::skip_flow_ws_and_newlines(ctx, it, end);
+            if (std::string_view{ctx.scratch} == tag) {
+               on_tag(ctx, it, end, 0, true);
+            }
+            else {
+               skip_entry_value(ctx, it, end, 0, true);
+            }
+            if (bool(ctx.error)) return;
+            yaml::skip_flow_ws_and_newlines(ctx, it, end);
+            if (it != end && *it == ',') {
+               ++it;
+               yaml::skip_flow_ws_and_newlines(ctx, it, end);
+            }
+         }
+         if (it != end && *it == '}') ++it;
+      }
+      else {
+         // A '{' in block context still introduces a flow mapping value.
+         if (it != end && *it == '{') {
+            walk_tagged_mapping<yaml::flow_context_on<Opts>()>(ctx, it, end, tag, mapping_indent, on_tag);
+            return;
+         }
+         if (mapping_indent < 0) mapping_indent = 0;
+         yaml::parse_block_mapping_loop<Opts>(ctx, it, end, mapping_indent,
+                                              [&](Ctx& ctx, It& it, End end, int32_t line_indent) -> bool {
+                                                 ctx.scratch.clear();
+                                                 if (!yaml::parse_yaml_key(ctx.scratch, ctx, it, end, false))
+                                                    return false;
+                                                 yaml::skip_inline_ws(it, end);
+                                                 if (it == end || *it != ':') {
+                                                    ctx.error = error_code::syntax_error;
+                                                    return false;
+                                                 }
+                                                 ++it;
+                                                 yaml::skip_inline_ws(it, end);
+                                                 if (std::string_view{ctx.scratch} == tag) {
+                                                    on_tag(ctx, it, end, line_indent, false);
+                                                 }
+                                                 else {
+                                                    skip_entry_value(ctx, it, end, line_indent, false);
+                                                 }
+                                                 return !bool(ctx.error);
+                                              });
+      }
+   }
+
+   // Resolve a tagged variant's alternative index by scanning the mapping for the discriminator
+   // key (tag_v<V>). Operates on a speculative context and a copy of the iterator so the caller's
+   // parse position is left untouched -- the context is the caller's to own, because what the
+   // scan spends of the alias budget is real work the caller has to account for. Returns
+   // ids_v<V>.size() (the not-found sentinel) when the tag key is absent or its value matches no
+   // known id.
+   template <class V, auto Opts, class Ctx, class It, class End>
+   inline size_t scan_variant_tag_index(Ctx& ctx, It it, End end, int32_t mapping_indent)
+   {
+      using id_type = std::decay_t<decltype(ids_v<V>[0])>;
+      size_t resolved = ids_v<V>.size();
+      // The id is read with the flow-ness of the entry it appears in: a plain scalar in a flow
+      // mapping ends at ',' or '}', whereas in a block mapping it runs to end of line.
+      auto read_id = [&]<auto O>(Ctx& ctx, It& it, End end) {
+         if constexpr (std::integral<id_type>) {
+            id_type id{};
+            from<YAML, id_type>::template op<O>(id, ctx, it, end);
+            if (!bool(ctx.error)) {
+               resolved = variant_id_to_index<V>::op(id);
+            }
+         }
+         else {
+            std::string id{};
+            from<YAML, std::string>::template op<O>(id, ctx, it, end);
+            if (!bool(ctx.error)) {
+               resolved = variant_id_to_index<V>::op(id.data(), id.data() + id.size(), id.size());
+            }
+         }
+      };
+      walk_tagged_mapping<Opts>(ctx, it, end, tag_v<V>, mapping_indent,
+                                [&](Ctx& ctx, It& it, End end, int32_t, bool in_flow) {
+                                   if (in_flow) {
+                                      read_id.template operator()<yaml::flow_context_on<Opts>()>(ctx, it, end);
+                                   }
+                                   else {
+                                      read_id.template operator()<Opts>(ctx, it, end);
+                                   }
+                                });
+      return resolved;
+   }
+
+   // Variant support
+   template <is_variant T>
+      requires(not custom_read<T>)
+   struct from<YAML, T>
+   {
+      template <auto Opts, class It>
+      static void op(auto&& value, is_context auto&& ctx, It&& it, auto end) noexcept
+      {
+         // Inside op() rather than at class scope: read_supported is `requires { from<Format, T>{}; }`,
+         // so a class-scope assert turns that feature probe into a hard error instead of `false`.
+         static_assert(content_v<std::remove_cvref_t<T>>.empty(),
+                       "Adjacent variant tagging (glz::meta `content`) is implemented for JSON and "
+                       "BEVE but not yet for YAML. Reading this variant as YAML would silently expect "
+                       "the internally tagged shape, so it is rejected here instead.");
+         if (bool(ctx.error)) [[unlikely]]
+            return;
+
+         // No depth is taken here: the sequence and mapping readers this dispatches to count the
+         // levels, so a scalar at the bottom of a document costs nothing, as in JSON. The one way
+         // back into this reader that opens no collection is `redispatch`, which counts itself.
+
+         // At root level (indent == -1), skip leading whitespace, newlines, and comments
+         // For nested values, only skip inline whitespace to preserve block structure
+         if (ctx.current_indent() < 0) {
+            yaml::skip_ws_newlines_comments(it, end);
+         }
+         else {
+            yaml::skip_inline_ws(it, end);
+         }
+
+         if (it == end) [[unlikely]] {
+            ctx.error = error_code::unexpected_end;
+            return;
+         }
+
+         // Tagged variants: a discriminator key (meta::tag) selects the alternative, with the
+         // matching meta::ids entry naming each type. This mirrors the JSON behavior so the
+         // same variant definitions round-trip across both formats.
+         if constexpr (not tag_v<std::remove_cvref_t<T>>.empty()) {
+            using V = std::remove_cvref_t<T>;
+            const bool value_is_mapping =
+               (*it == '{') || (!yaml::check_flow_context(Opts) && yaml::line_could_be_block_mapping(it, end));
+            if (value_is_mapping) {
+               // The mapping's keys sit at the column of `it`. Recover that column from the buffer:
+               // the indent stack carries the parent context's indent (a struct member, a sequence
+               // item, etc. each push a different offset), not this mapping's true column (see helper).
+               const int32_t mapping_column = tagged_mapping_visual_indent(ctx, it, ctx.current_indent() + 1);
+               auto tag_ctx = ctx.make_speculative();
+               const size_t index = scan_variant_tag_index<V, Opts>(tag_ctx, it, end, mapping_column);
+               ctx.alias_expansion_budget = tag_ctx.alias_expansion_budget; // charged even if no tag matched
+               ctx.key_expansion_budget = tag_ctx.key_expansion_budget;
+               if (index < ids_v<V>.size()) {
+                  static constexpr auto tag_literal = string_literal_from_view<tag_v<V>.size()>(tag_v<V>);
+                  emplace_runtime_variant(value, index);
+                  // Establish the mapping's true column on the indent stack for the alternative parse.
+                  // The chosen object is then parsed - and the discriminator's inline value skipped -
+                  // at a consistent indent in every context, so a tag on the first key does not fold
+                  // the following sibling entries into its value (no special-casing needed downstream).
+                  if (!ctx.push_indent(mapping_column)) [[unlikely]] {
+                     ctx.error = error_code::exceeded_max_recursive_depth;
+                     return;
+                  }
+                  std::visit(
+                     [&](auto&& alt) {
+                        using Alt = std::remove_cvref_t<decltype(alt)>;
+                        if constexpr ((glaze_object_t<Alt> || reflectable<Alt>) && not custom_read<Alt>) {
+                           // Parse the mapping into the resolved struct; the tag key is skipped.
+                           from<YAML, Alt>::template op<Opts, tag_literal>(alt, ctx, it, end);
+                        }
+                        else if constexpr (custom_read<Alt>) {
+                           // Custom alternatives read the mapping body themselves and cannot skip an
+                           // interior tag key the way reflected objects do, so the tag must be the
+                           // first key (glaze always writes it first). Consume that leading "tag: id"
+                           // entry, then hand the remaining mapping to the custom handler.
+                           if constexpr (yaml::check_flow_context(Opts)) {
+                              ctx.error = error_code::feature_not_supported;
+                              ctx.custom_error_message =
+                                 "custom variant alternatives are not supported in YAML flow style";
+                           }
+                           else {
+                              ctx.scratch.clear();
+                              if (yaml::parse_yaml_key(ctx.scratch, ctx, it, end, false)) {
+                                 if (std::string_view{ctx.scratch} != tag_v<V>) {
+                                    ctx.error = error_code::feature_not_supported;
+                                    ctx.custom_error_message =
+                                       "the tag must be the first key for a custom variant alternative";
+                                 }
+                                 else {
+                                    yaml::skip_inline_ws(it, end);
+                                    if (it == end || *it != ':') {
+                                       ctx.error = error_code::syntax_error;
+                                    }
+                                    else {
+                                       ++it;
+                                       yaml::skip_inline_ws(it, end);
+                                       yaml::skip_unknown_block_value<Opts>(ctx, it, end, mapping_column);
+                                       if (!bool(ctx.error)) {
+                                          // If nothing but trailing whitespace/comments remains, the tag
+                                          // was the whole mapping: leave the alternative default.
+                                          auto probe = it;
+                                          yaml::skip_ws_newlines_comments(probe, end);
+                                          if (probe == end) {
+                                             it = probe;
+                                          }
+                                          else {
+                                             // Publish the mapping's column so the custom handler's block
+                                             // mapping (which would otherwise discover its own indent) reads
+                                             // the remaining entries at the variant's indent and dedents
+                                             // correctly in every context (root, sequence, nested).
+                                             ctx.forced_block_mapping_indent = mapping_column;
+                                             from<YAML, Alt>::template op<Opts>(alt, ctx, it, end);
+                                             ctx.forced_block_mapping_indent = -1;
+                                          }
+                                       }
+                                    }
+                                 }
+                              }
+                           }
+                        }
+                        else {
+                           // Non-object alternative (e.g. std::monostate): the emplaced default is
+                           // the value, but the mapping must still be consumed.
+                           walk_tagged_mapping<Opts>(
+                              ctx, it, end, tag_v<V>, mapping_column,
+                              [&](auto&& c, auto&& i, auto&& e, int32_t line_indent, bool in_flow) {
+                                 yaml::skip_yaml_value<Opts>(c, i, e, in_flow ? 0 : line_indent, in_flow);
+                              });
+                        }
+                     },
+                     value);
+                  ctx.pop_indent();
+                  return;
+               }
+               // No resolvable tag key was found. Fall through to structural deduction:
+               // if the alternatives are distinguishable by their fields this still succeeds,
+               // otherwise the deduction path reports no_matching_variant_type.
+            }
+         }
+
+         if constexpr (yaml_variant_is_auto_deducible<std::remove_cvref_t<T>>()) {
+            using V = std::remove_cvref_t<T>;
+            using counts = yaml_variant_type_count<V>;
+            const char c = *it;
+            auto is_plain_scalar_boundary = [](const char ch) {
+               switch (ch) {
+               case ' ':
+               case '\t':
+               case '\n':
+               case '\r':
+               case ',':
+               case ']':
+               case '}':
+                  return true;
+               default:
+                  return false;
+               }
+            };
+
+            auto has_indented_block_continuation = [&](auto word_end) {
+               if constexpr (yaml::check_flow_context(Opts)) {
+                  return false;
+               }
+               if (ctx.current_indent() < 0) {
+                  return false;
+               }
+               if (word_end == end || (*word_end != '\n' && *word_end != '\r')) {
+                  return false;
+               }
+
+               auto look = word_end;
+               yaml::skip_newline(look, end);
+               while (look != end) {
+                  int32_t line_indent = 0;
+                  while (look != end && *look == ' ') {
+                     ++line_indent;
+                     ++look;
+                  }
+                  if (look != end && *look == '\t') {
+                     return false;
+                  }
+                  if (look == end || *look == '\n' || *look == '\r') {
+                     if (look != end) {
+                        yaml::skip_newline(look, end);
+                        continue;
+                     }
+                     return false;
+                  }
+                  if (*look == '#') {
+                     yaml::skip_comment(look, end);
+                     if (look != end && (*look == '\n' || *look == '\r')) {
+                        yaml::skip_newline(look, end);
+                        continue;
+                     }
+                     return false;
+                  }
+
+                  // If the next non-empty line is an implicit mapping entry,
+                  // don't treat it as scalar continuation for auto-deduced
+                  // booleans/nulls.
+                  {
+                     auto scan = look;
+                     while (scan != end && *scan != '\n' && *scan != '\r') {
+                        if (*scan == ':') {
+                           auto after_colon = scan + 1;
+                           if (after_colon == end || *after_colon == ' ' || *after_colon == '\t' ||
+                               *after_colon == '\n' || *after_colon == '\r') {
+                              return false;
+                           }
+                        }
+                        ++scan;
+                     }
+                  }
+
+                  return line_indent > ctx.current_indent();
+               }
+               return false;
+            };
+            auto is_word_boundary = [&](const auto ptr) {
+               if (ptr == end) {
+                  return true;
+               }
+               if (*ptr == ':') {
+                  auto next = ptr + 1;
+                  return (next == end) || *next == ' ' || *next == '\t' || *next == '\n' || *next == '\r';
+               }
+               return is_plain_scalar_boundary(*ptr);
+            };
+
+            switch (c) {
+            case '&': {
+               // Anchor before value: parse name, then re-dispatch
+               ++it;
+               auto aname = yaml::parse_anchor_name(it, end);
+               if (aname.empty()) {
+                  ctx.error = error_code::syntax_error;
+                  return;
+               }
+               yaml::skip_inline_ws(it, end);
+               bool anchor_on_same_line = true;
+               bool value_is_indentless_sequence = false;
+               if (it == end || *it == '\n' || *it == '\r' || *it == '#') {
+                  // Anchor followed by end-of-line. Check if the value continues on the
+                  // next line (indented past current context) or if this is an empty node.
+                  bool value_on_next_line = false;
+                  if (it != end) {
+                     auto peek = it;
+                     // Skip comment if present
+                     if (*peek == '#') {
+                        while (peek != end && *peek != '\n' && *peek != '\r') ++peek;
+                     }
+                     // Skip newline
+                     if (peek != end && (*peek == '\n' || *peek == '\r')) {
+                        yaml::skip_newline(peek, end);
+                        // Skip blank lines
+                        while (peek != end && (*peek == '\n' || *peek == '\r')) {
+                           yaml::skip_newline(peek, end);
+                        }
+                        // Measure indent of next content line
+                        int32_t next_indent = 0;
+                        while (peek != end && *peek == ' ') {
+                           ++next_indent;
+                           ++peek;
+                        }
+                        if (peek != end && *peek != '\n' && *peek != '\r') {
+                           const bool indentless_sequence =
+                              (!ctx.sequence_item_value_context) && (*peek == '-') &&
+                              ((peek + 1) == end ||
+                               yaml::whitespace_or_line_end_table[static_cast<uint8_t>(*(peek + 1))]) &&
+                              (next_indent == ctx.current_indent() ||
+                               (ctx.current_indent() > 0 && (next_indent + 1) == ctx.current_indent()));
+                           value_is_indentless_sequence = indentless_sequence;
+                           const bool same_indent_property_node =
+                              (next_indent == ctx.current_indent()) &&
+                              (*peek == '!' || *peek == '&' || *peek == '*' || *peek == '[' || *peek == '{' ||
+                               *peek == '"' || *peek == '\'' || *peek == '|' || *peek == '>');
+                           value_on_next_line =
+                              (next_indent > ctx.current_indent()) || indentless_sequence || same_indent_property_node;
+                        }
+                     }
+                  }
+                  if (!value_on_next_line) {
+                     // Anchor on empty/null node — store empty span, leave value as default
+                     ctx.anchors[std::string(aname)] = {&*it, &*it, ctx.current_indent()};
+                     return;
+                  }
+                  // Value is on next line — advance past newline/blank lines to the content
+                  if (*it == '#') {
+                     while (it != end && *it != '\n' && *it != '\r') ++it;
+                  }
+                  if (it != end) yaml::skip_newline(it, end);
+                  while (it != end && (*it == '\n' || *it == '\r')) {
+                     yaml::skip_newline(it, end);
+                  }
+                  yaml::skip_inline_ws(it, end);
+                  anchor_on_same_line = false;
+               }
+
+               if constexpr (!yaml::check_flow_context(Opts)) {
+                  if (anchor_on_same_line && *it == '-' &&
+                      ((it + 1) == end || yaml::whitespace_or_line_end_table[static_cast<uint8_t>(*(it + 1))])) {
+                     // "&anchor - item" is malformed in block context.
+                     ctx.error = error_code::syntax_error;
+                     return;
+                  }
+               }
+
+               // Anchor on alias (&anchor *alias) is invalid per YAML spec.
+               // But alias-as-key (&anchor *alias : value) is valid.
+               if (it != end && *it == '*' && !yaml::alias_token_is_mapping_key(it, end)) {
+                  ctx.error = error_code::syntax_error;
+                  return;
+               }
+
+               if constexpr (!yaml::check_flow_context(Opts)) {
+                  if (!anchor_on_same_line && it != end && *it == '&') {
+                     auto probe = it + 1;
+                     auto nested_anchor_name = yaml::parse_anchor_name(probe, end);
+                     if (nested_anchor_name.empty()) {
+                        ctx.error = error_code::syntax_error;
+                        return;
+                     }
+                     yaml::skip_inline_ws(probe, end);
+                     // Allow nested anchor usage only when it clearly starts a
+                     // nested mapping entry ("&k key: value"). Otherwise this is
+                     // a second anchor on the same node (4JVG-style), which is invalid.
+                     if (!yaml::line_could_be_block_mapping(probe, end)) {
+                        ctx.error = error_code::syntax_error;
+                        return;
+                     }
+                  }
+               }
+
+               const char* anchor_start = &*it;
+               const int32_t anchor_indent = ctx.current_indent();
+
+               if constexpr (!yaml::check_flow_context(Opts)) {
+                  // Check if the anchor is on a block-mapping key (&name key: value).
+                  // Only when the anchor and key are on the SAME line — if the value was on the
+                  // next line, the anchor applies to the entire next-line content.
+                  if (anchor_on_same_line && yaml::line_could_be_block_mapping(it, end)) {
+                     auto key_start = it;
+                     if (*key_start == '!') {
+                        const auto key_tag = yaml::parse_yaml_tag(key_start, end, ctx);
+                        if (key_tag == yaml::yaml_tag::unknown || !yaml::tag_valid_for_string(key_tag)) {
+                           ctx.error = error_code::syntax_error;
+                           return;
+                        }
+                        yaml::skip_inline_ws(key_start, end);
+                        if (key_start == end) {
+                           ctx.error = error_code::unexpected_end;
+                           return;
+                        }
+                        if (*key_start == '\n' || *key_start == '\r') {
+                           ctx.error = error_code::syntax_error;
+                           return;
+                        }
+
+                        // Re-apply the anchor-on-alias rule now that the tag is consumed. The
+                        // check above ran before the tag, so "&anchor !tag *alias" reached the
+                        // key-span registration below while the untagged spelling was rejected;
+                        // an alias node carries no other properties either way.
+                        if (*key_start == '*' && !yaml::alias_token_is_mapping_key(key_start, end)) {
+                           ctx.error = error_code::syntax_error;
+                           return;
+                        }
+                     }
+
+                     // Find the key span by scanning to the key-value separator
+                     auto key_scan = key_start;
+                     auto key_end = key_start;
+                     if (*key_scan == '"' || *key_scan == '\'') {
+                        // Quoted key: skip to closing quote
+                        const char quote = *key_scan;
+                        ++key_scan;
+                        while (key_scan != end && *key_scan != quote) {
+                           if (*key_scan == '\\' && quote == '"') {
+                              ++key_scan;
+                              if (key_scan != end) ++key_scan;
+                           }
+                           else {
+                              ++key_scan;
+                           }
+                        }
+                        if (key_scan == end) {
+                           ctx.error = error_code::syntax_error;
+                           return;
+                        }
+                        ++key_scan; // past closing quote
+                        key_end = key_scan;
+                        yaml::skip_inline_ws(key_scan, end);
+                     }
+                     else {
+                        // Plain key: scan to ':'
+                        while (key_scan != end) {
+                           if (*key_scan == ':') {
+                              auto next = key_scan + 1;
+                              if (next == end || *next == ' ' || *next == '\t' || *next == '\n' || *next == '\r') {
+                                 break;
+                              }
+                           }
+                           ++key_scan;
+                        }
+                        key_end = key_scan;
+                        while (key_end != key_start && (*(key_end - 1) == ' ' || *(key_end - 1) == '\t')) {
+                           --key_end;
+                        }
+                     }
+                     if (key_scan == end || *key_scan != ':') {
+                        ctx.error = error_code::syntax_error;
+                        return;
+                     }
+                     // Store anchor with just the key text span
+                     ctx.anchors[std::string(aname)] = {&*key_start, &*key_end, anchor_indent};
+                     it = key_start;
+                     // Parse as an object alternative so complex keys (e.g. flow collections) stay in mapping context.
+                     if constexpr (counts::n_object > 0) {
+                        process_yaml_variant_alternatives<V, is_yaml_variant_object>::template op<Opts>(value, ctx, it,
+                                                                                                        end);
+                     }
+                     else {
+                        redispatch<Opts>(value, ctx, it, end);
+                     }
+                     return;
+                  }
+               }
+
+               const bool prev_allow_indentless_sequence = ctx.allow_indentless_sequence;
+               ctx.allow_indentless_sequence = value_is_indentless_sequence;
+               redispatch<Opts>(value, ctx, it, end);
+               ctx.allow_indentless_sequence = prev_allow_indentless_sequence;
+               if (!bool(ctx.error)) {
+                  ctx.anchors[std::string(aname)] = {anchor_start, &*it, anchor_indent};
+               }
+               return;
+            }
+            case '*': {
+               // In block context, "*alias : value" starts a mapping with an alias key.
+               if constexpr (!yaml::check_flow_context(Opts)) {
+                  if (yaml::alias_token_is_mapping_key(it, end)) {
+                     if constexpr (counts::n_object > 0) {
+                        process_yaml_variant_alternatives<V, is_yaml_variant_object>::template op<Opts>(value, ctx, it,
+                                                                                                        end);
+                        return;
+                     }
+                     else {
+                        ctx.error = error_code::syntax_error;
+                        return;
+                     }
+                  }
+               }
+
+               // Alias value: look up anchor and replay
+               yaml::handle_alias<Opts>(value, ctx, it, end);
+               return;
+            }
+            case '!': {
+               // Tag - parse it and dispatch based on tag type
+               const auto tag = yaml::parse_yaml_tag(it, end, ctx);
+               if (tag == yaml::yaml_tag::unknown) {
+                  ctx.error = error_code::syntax_error;
+                  return;
+               }
+               yaml::skip_inline_ws(it, end);
+               if (it != end && *it == '#') {
+                  yaml::skip_comment(it, end);
+               }
+               if (it != end && (*it == '\n' || *it == '\r')) {
+                  auto content = it;
+                  yaml::skip_newline(content, end);
+                  yaml::skip_to_content(content, end);
+
+                  bool consume_following_content = false;
+                  auto content_token = content;
+                  if (content != end) {
+                     auto indent_probe = content;
+                     const int32_t content_indent = yaml::measure_indent<false>(indent_probe, end, ctx);
+                     if (bool(ctx.error)) [[unlikely]]
+                        return;
+                     content_token = indent_probe;
+
+                     // A tag at the end of a sequence/map entry has an empty value
+                     // unless the next non-empty content is nested under the current node.
+                     bool tagged_indentless_sequence = false;
+                     if (tag == yaml::yaml_tag::seq && indent_probe != end && *indent_probe == '-') {
+                        const auto after_dash = indent_probe + 1;
+                        if (after_dash == end ||
+                            yaml::whitespace_or_line_end_table[static_cast<uint8_t>(*after_dash)]) {
+                           tagged_indentless_sequence =
+                              (content_indent == ctx.current_indent()) ||
+                              (ctx.current_indent() > 0 && (content_indent + 1) == ctx.current_indent());
+                        }
+                     }
+
+                     consume_following_content = (ctx.current_indent() < 0) ||
+                                                 (content_indent > ctx.current_indent()) || tagged_indentless_sequence;
+                  }
+
+                  if (consume_following_content) {
+                     it = content_token;
+                  }
+                  else {
+                     if (tag == yaml::yaml_tag::str) {
+                        if constexpr (counts::n_str > 0) {
+                           constexpr auto first_idx = yaml_variant_first_index_v<V, is_yaml_variant_str>;
+                           using StrType = std::variant_alternative_t<first_idx, V>;
+                           value = StrType{};
+                           return;
+                        }
+                     }
+                     if (tag == yaml::yaml_tag::null_tag) {
+                        if constexpr (counts::n_null > 0) {
+                           constexpr auto first_idx = yaml_variant_first_index_v<V, is_yaml_variant_null>;
+                           using NullType = std::variant_alternative_t<first_idx, V>;
+                           if (!std::holds_alternative<NullType>(value)) value = NullType{};
+                           return;
+                        }
+                     }
+                     if (tag == yaml::yaml_tag::none) {
+                        if constexpr (counts::n_null > 0) {
+                           constexpr auto first_idx = yaml_variant_first_index_v<V, is_yaml_variant_null>;
+                           using NullType = std::variant_alternative_t<first_idx, V>;
+                           if (!std::holds_alternative<NullType>(value)) value = NullType{};
+                           return;
+                        }
+                     }
+                  }
+               }
+               if constexpr (!yaml::check_flow_context(Opts)) {
+                  // In block context, a comma immediately after a tag token is malformed
+                  // (e.g., "!!str, value"). Flow context has legitimate ", ] }" usage.
+                  if (it != end && *it == ',') {
+                     ctx.error = error_code::syntax_error;
+                     return;
+                  }
+                  if constexpr (counts::n_object > 0) {
+                     // Tagged keys like "!!str key: value" must parse as mappings.
+                     const bool starts_block_sequence_entry =
+                        (it != end && *it == '-') &&
+                        ((it + 1) == end || yaml::whitespace_or_line_end_table[static_cast<uint8_t>(*(it + 1))]);
+                     if (!starts_block_sequence_entry && yaml::line_could_be_block_mapping(it, end)) {
+                        // Re-dispatch from the post-tag token so '&key key: val' is
+                        // handled by the anchor-aware key path, not as a map-level anchor.
+                        redispatch<Opts>(value, ctx, it, end);
+                        return;
+                     }
+                  }
+               }
+               if (it == end) {
+                  if (tag == yaml::yaml_tag::str) {
+                     if constexpr (counts::n_str > 0) {
+                        constexpr auto first_idx = yaml_variant_first_index_v<V, is_yaml_variant_str>;
+                        using StrType = std::variant_alternative_t<first_idx, V>;
+                        value = StrType{};
+                        return;
+                     }
+                  }
+                  if (tag == yaml::yaml_tag::none) {
+                     if constexpr (counts::n_null > 0) {
+                        constexpr auto first_idx = yaml_variant_first_index_v<V, is_yaml_variant_null>;
+                        using NullType = std::variant_alternative_t<first_idx, V>;
+                        if (!std::holds_alternative<NullType>(value)) value = NullType{};
+                        return;
+                     }
+                  }
+                  ctx.error = error_code::unexpected_end;
+                  return;
+               }
+               switch (tag) {
+               case yaml::yaml_tag::str:
+                  process_yaml_variant_alternatives<V, is_yaml_variant_str>::template op<Opts>(value, ctx, it, end);
+                  return;
+               case yaml::yaml_tag::int_tag:
+               case yaml::yaml_tag::float_tag:
+                  if constexpr (counts::n_num > 0) {
+                     process_yaml_variant_alternatives<V, is_yaml_variant_num>::template op<Opts>(value, ctx, it, end);
+                     return;
+                  }
+                  else { // else used to fix MSVC unreachable code warning
+                     ctx.error = error_code::syntax_error;
+                     return;
+                  }
+               case yaml::yaml_tag::bool_tag:
+                  if constexpr (counts::n_bool > 0) {
+                     process_yaml_variant_alternatives<V, is_yaml_variant_bool>::template op<Opts>(value, ctx, it, end);
+                     return;
+                  }
+                  else { // else used to fix MSVC unreachable code warning
+                     ctx.error = error_code::syntax_error;
+                     return;
+                  }
+               case yaml::yaml_tag::null_tag:
+                  if constexpr (counts::n_null > 0) {
+                     constexpr auto first_idx = yaml_variant_first_index_v<V, is_yaml_variant_null>;
+                     using NullType = std::variant_alternative_t<first_idx, V>;
+                     if (!std::holds_alternative<NullType>(value)) value = NullType{};
+                     from<YAML, NullType>::template op<Opts>(std::get<NullType>(value), ctx, it, end);
+                     return;
+                  }
+                  else { // else used to fix MSVC unreachable code warning
+                     ctx.error = error_code::syntax_error;
+                     return;
+                  }
+               case yaml::yaml_tag::map:
+                  if constexpr (counts::n_object > 0) {
+                     process_yaml_variant_alternatives<V, is_yaml_variant_object>::template op<Opts>(value, ctx, it,
+                                                                                                     end);
+                     return;
+                  }
+                  else { // else used to fix MSVC unreachable code warning
+                     ctx.error = error_code::syntax_error;
+                     return;
+                  }
+               case yaml::yaml_tag::seq:
+                  if constexpr (counts::n_array > 0) {
+                     const bool prev_allow_indentless_sequence = ctx.allow_indentless_sequence;
+                     if constexpr (!yaml::check_flow_context(Opts)) {
+                        if (it != end && *it == '-') {
+                           ctx.allow_indentless_sequence = true;
+                        }
+                     }
+                     process_yaml_variant_alternatives<V, is_yaml_variant_array>::template op<Opts>(value, ctx, it,
+                                                                                                    end);
+                     ctx.allow_indentless_sequence = prev_allow_indentless_sequence;
+                     return;
+                  }
+                  else { // else used to fix MSVC unreachable code warning
+                     ctx.error = error_code::syntax_error;
+                     return;
+                  }
+               default: {
+                  // Explicit unknown/non-core tags disable implicit scalar resolution.
+                  // Preserve collection kinds, otherwise treat as string content.
+                  if (it != end && *it == '*') {
+                     yaml::handle_alias<Opts>(value, ctx, it, end);
+                     return;
+                  }
+
+                  if constexpr (counts::n_array > 0) {
+                     if (it != end && *it == '[') {
+                        process_yaml_variant_alternatives<V, is_yaml_variant_array>::template op<Opts>(value, ctx, it,
+                                                                                                       end);
+                        return;
+                     }
+                  }
+                  if constexpr (counts::n_object > 0) {
+                     if (it != end && *it == '{') {
+                        process_yaml_variant_alternatives<V, is_yaml_variant_object>::template op<Opts>(value, ctx, it,
+                                                                                                        end);
+                        return;
+                     }
+                  }
+
+                  if constexpr (!yaml::check_flow_context(Opts)) {
+                     if constexpr (counts::n_array > 0) {
+                        const bool starts_block_sequence_entry =
+                           (it != end && *it == '-') &&
+                           ((it + 1) == end || yaml::whitespace_or_line_end_table[static_cast<uint8_t>(*(it + 1))]);
+                        if (starts_block_sequence_entry) {
+                           process_yaml_variant_alternatives<V, is_yaml_variant_array>::template op<Opts>(value, ctx,
+                                                                                                          it, end);
+                           return;
+                        }
+                     }
+                     if constexpr (counts::n_object > 0) {
+                        const bool starts_explicit_mapping_indicator =
+                           (it != end && (*it == '?' || *it == ':')) &&
+                           ((it + 1) == end || yaml::whitespace_or_line_end_table[static_cast<uint8_t>(*(it + 1))]);
+                        if (starts_explicit_mapping_indicator) {
+                           process_yaml_variant_alternatives<V, is_yaml_variant_object>::template op<Opts>(value, ctx,
+                                                                                                           it, end);
+                           return;
+                        }
+                        if (yaml::line_could_be_block_mapping(it, end)) {
+                           process_yaml_variant_alternatives<V, is_yaml_variant_object>::template op<Opts>(value, ctx,
+                                                                                                           it, end);
+                           return;
+                        }
+                     }
+                  }
+
+                  if constexpr (counts::n_str > 0) {
+                     process_yaml_variant_alternatives<V, is_yaml_variant_str>::template op<Opts>(value, ctx, it, end);
+                     return;
+                  }
+
+                  // Fall back if no string alternative exists.
+                  redispatch<Opts>(value, ctx, it, end);
+                  return;
+               }
+               }
+               return;
+            }
+            case '{':
+               if constexpr (!yaml::check_flow_context(Opts)) {
+                  // In block context, "{...}: value" can be a complex mapping key.
+                  if (ctx.current_indent() < 0 && yaml::line_could_be_block_mapping(it, end)) {
+                     process_yaml_variant_alternatives<V, is_yaml_variant_object>::template op<Opts>(value, ctx, it,
+                                                                                                     end);
+                     return;
+                  }
+               }
+               // Flow mapping - object type
+               process_yaml_variant_alternatives<V, is_yaml_variant_object>::template op<Opts>(value, ctx, it, end);
+               return;
+            case '[':
+               if constexpr (!yaml::check_flow_context(Opts)) {
+                  // In block context, "[...]: value" can be a complex mapping key.
+                  if (ctx.current_indent() < 0 && yaml::line_could_be_block_mapping(it, end)) {
+                     process_yaml_variant_alternatives<V, is_yaml_variant_object>::template op<Opts>(value, ctx, it,
+                                                                                                     end);
+                     return;
+                  }
+               }
+               // Flow sequence - array type
+               process_yaml_variant_alternatives<V, is_yaml_variant_array>::template op<Opts>(value, ctx, it, end);
+               return;
+            case '?':
+               // Explicit mapping key indicator ("? key")
+               if ((end - it >= 2) && it[1] == '\t') {
+                  ctx.error = error_code::syntax_error;
+                  return;
+               }
+               if ((end - it >= 2) && (it[1] == ' ' || it[1] == '\n' || it[1] == '\r')) {
+                  if constexpr (counts::n_object > 0) {
+                     process_yaml_variant_alternatives<V, is_yaml_variant_object>::template op<Opts>(value, ctx, it,
+                                                                                                     end);
+                     return;
+                  }
+               }
+               parse_block_mapping_or_string<V, Opts>(value, ctx, it, end);
+               return;
+            case '%':
+               // Reserved directive indicator is not a plain scalar start.
+               ctx.error = error_code::syntax_error;
+               return;
+            case '"':
+            case '\'':
+               // Could be a quoted string OR a quoted key in a block mapping
+               // Try block mapping first (e.g., "key": value), then fall back to string
+               parse_block_mapping_or_string<V, Opts>(value, ctx, it, end);
+               return;
+            case 't':
+            case 'T':
+               // Could be "true", "True", "TRUE", or a key/string starting with t/T
+               if constexpr (counts::n_bool > 0) {
+                  if ((end - it >= 4) && ((it[1] == 'r' && it[2] == 'u' && it[3] == 'e') ||
+                                          (it[1] == 'R' && it[2] == 'U' && it[3] == 'E'))) {
+                     // Check what follows the word "true"
+                     const auto after_true = it + 4;
+                     const bool at_word_boundary = is_word_boundary(after_true);
+
+                     if (at_word_boundary) {
+                        if (has_indented_block_continuation(after_true)) {
+                           parse_block_mapping_or_string<V, Opts>(value, ctx, it, end);
+                           return;
+                        }
+                        // Check if this is a key (followed by ": ") rather than a boolean value
+                        // "true: value" should parse as {true: value}, not as the boolean true
+                        if ((end - it > 4) && it[4] == ':' &&
+                            (end - it == 5 || it[5] == ' ' || it[5] == '\t' || it[5] == '\n' || it[5] == '\r')) {
+                           // This is "true:" followed by space/tab/newline/end - treat as key
+                           parse_block_mapping_or_string<V, Opts>(value, ctx, it, end);
+                           return;
+                        }
+                        process_yaml_variant_alternatives<V, is_yaml_variant_bool>::template op<Opts>(value, ctx, it,
+                                                                                                      end);
+                        return;
+                     }
+                     // "true" is followed by more characters (e.g., "True\b") - treat as string
+                  }
+               }
+               parse_block_mapping_or_string<V, Opts>(value, ctx, it, end);
+               return;
+            case 'f':
+            case 'F':
+               // Could be "false", "False", "FALSE", or a key/string starting with f/F
+               if constexpr (counts::n_bool > 0) {
+                  if ((end - it >= 5) && ((it[1] == 'a' && it[2] == 'l' && it[3] == 's' && it[4] == 'e') ||
+                                          (it[1] == 'A' && it[2] == 'L' && it[3] == 'S' && it[4] == 'E'))) {
+                     // Check what follows the word "false"
+                     const auto after_false = it + 5;
+                     const bool at_word_boundary = is_word_boundary(after_false);
+
+                     if (at_word_boundary) {
+                        if (has_indented_block_continuation(after_false)) {
+                           parse_block_mapping_or_string<V, Opts>(value, ctx, it, end);
+                           return;
+                        }
+                        // Check if this is a key (followed by ": ") rather than a boolean value
+                        // "false: value" should parse as {false: value}, not as the boolean false
+                        if ((end - it > 5) && it[5] == ':' &&
+                            (end - it == 6 || it[6] == ' ' || it[6] == '\t' || it[6] == '\n' || it[6] == '\r')) {
+                           // This is "false:" followed by space/tab/newline/end - treat as key
+                           parse_block_mapping_or_string<V, Opts>(value, ctx, it, end);
+                           return;
+                        }
+                        process_yaml_variant_alternatives<V, is_yaml_variant_bool>::template op<Opts>(value, ctx, it,
+                                                                                                      end);
+                        return;
+                     }
+                     // "false" is followed by more characters (e.g., "False\b") - treat as string
+                  }
+               }
+               parse_block_mapping_or_string<V, Opts>(value, ctx, it, end);
+               return;
+            case 'n':
+            case 'N':
+               // Could be "null", "Null", "NULL", or a key/string starting with n/N
+               if constexpr (counts::n_null > 0) {
+                  if ((end - it >= 4) && ((it[1] == 'u' && it[2] == 'l' && it[3] == 'l') ||
+                                          (it[1] == 'U' && it[2] == 'L' && it[3] == 'L'))) {
+                     // Check what follows the word "null"
+                     const auto after_null = it + 4;
+                     const bool at_word_boundary = is_word_boundary(after_null);
+
+                     if (at_word_boundary) {
+                        if (has_indented_block_continuation(after_null)) {
+                           parse_block_mapping_or_string<V, Opts>(value, ctx, it, end);
+                           return;
+                        }
+                        // Check if this is a key (followed by ": ") rather than a null value
+                        // "null: value" should parse as {null: value}, not as the null type
+                        if ((end - it > 4) && it[4] == ':' &&
+                            (end - it == 5 || it[5] == ' ' || it[5] == '\t' || it[5] == '\n' || it[5] == '\r')) {
+                           // This is "null:" followed by space/tab/newline/end - treat as key
+                           parse_block_mapping_or_string<V, Opts>(value, ctx, it, end);
+                           return;
+                        }
+                        constexpr auto first_idx = yaml_variant_first_index_v<V, is_yaml_variant_null>;
+                        using NullType = std::variant_alternative_t<first_idx, V>;
+                        if (!std::holds_alternative<NullType>(value)) value = NullType{};
+                        from<YAML, NullType>::template op<Opts>(std::get<NullType>(value), ctx, it, end);
+                        return;
+                     }
+                     // "null" is followed by more characters (e.g., "Null\b") - treat as string
+                  }
+               }
+               parse_block_mapping_or_string<V, Opts>(value, ctx, it, end);
+               return;
+            case '~':
+               // Null indicator
+               if constexpr (counts::n_null > 0) {
+                  constexpr auto first_idx = yaml_variant_first_index_v<V, is_yaml_variant_null>;
+                  using NullType = std::variant_alternative_t<first_idx, V>;
+                  if (!std::holds_alternative<NullType>(value)) value = NullType{};
+                  from<YAML, NullType>::template op<Opts>(std::get<NullType>(value), ctx, it, end);
+                  return;
+               }
+               break; // Fall through to try other types
+            case '-':
+               // Could be negative number or block sequence indicator
+               if (((it + 1) == end) || yaml::whitespace_or_line_end_table[static_cast<uint8_t>(it[1])]) {
+                  // Block sequence indicator "- "
+                  if constexpr (counts::n_array > 0) {
+                     process_yaml_variant_alternatives<V, is_yaml_variant_array>::template op<Opts>(value, ctx, it,
+                                                                                                    end);
+                     return;
+                  }
+               }
+               if constexpr (counts::n_num > 0) {
+                  if ((end - it >= 2) && (std::isdigit(static_cast<unsigned char>(it[1])) || it[1] == '.')) {
+                     process_yaml_variant_alternatives<V, is_yaml_variant_num>::template op<Opts>(value, ctx, it, end);
+                     return;
+                  }
+               }
+               parse_block_mapping_or_string<V, Opts>(value, ctx, it, end);
+               return;
+            case '+':
+            case '.':
+               // Could be a number (.5, +5, .inf, etc.) or a string (.c, .cpp, +name, etc.)
+               // Try parsing as number speculatively, fall back to string on failure
+               if constexpr (counts::n_num > 0) {
+                  auto start_it = it;
+                  auto temp_ctx = ctx.make_speculative();
+                  process_yaml_variant_alternatives<V, is_yaml_variant_num>::template op<Opts>(value, temp_ctx, it,
+                                                                                               end);
+                  ctx.alias_expansion_budget = temp_ctx.alias_expansion_budget; // charged even if rejected
+                  ctx.key_expansion_budget = temp_ctx.key_expansion_budget;
+                  if (!bool(temp_ctx.error)) {
+                     ctx.anchors = std::move(temp_ctx.anchors);
+                     return; // Successfully parsed as number
+                  }
+                  it = start_it; // Restore and fall through to string
+               }
+               parse_block_mapping_or_string<V, Opts>(value, ctx, it, end);
+               return;
+            default:
+               // Check for digit (0-9) - numeric or block mapping key starting with digit
+               if (c >= '0' && c <= '9') {
+                  // Try block mapping first (e.g., "123key: value")
+                  if (try_parse_block_mapping_into_variant<V, Opts>(value, ctx, it, end)) {
+                     return;
+                  }
+                  // Try numeric value speculatively - values like "12:30" look numeric but aren't
+                  if constexpr (counts::n_num > 0) {
+                     auto start_it = it;
+                     auto temp_ctx = ctx.make_speculative();
+                     process_yaml_variant_alternatives<V, is_yaml_variant_num>::template op<Opts>(value, temp_ctx, it,
+                                                                                                  end);
+                     ctx.alias_expansion_budget = temp_ctx.alias_expansion_budget; // charged even if rejected
+                     ctx.key_expansion_budget = temp_ctx.key_expansion_budget;
+                     if (!bool(temp_ctx.error)) {
+                        ctx.anchors = std::move(temp_ctx.anchors);
+                        return; // Successfully parsed as number
+                     }
+                     it = start_it; // Restore and fall through to string
+                  }
+                  // Fall through to string
+                  process_yaml_variant_alternatives<V, is_yaml_variant_str>::template op<Opts>(value, ctx, it, end);
+                  return;
+               }
+               // Plain scalar - try block mapping, then string
+               parse_block_mapping_or_string<V, Opts>(value, ctx, it, end);
+               return;
+            }
+         }
+
+         // For non-auto-deducible variants or fallback, try each type until one succeeds
+         constexpr auto N = std::variant_size_v<std::remove_cvref_t<T>>;
+
+         // This fold discards each alternative's error and reports only that nothing fit, which
+         // misdiagnoses a document that exhausted an expansion budget as merely the wrong shape.
+         // Kept aside and used only if no alternative parsed, so a later one that does parse
+         // (possible under a latched budget if it materializes no key text) is unaffected.
+         error_code expansion_error{};
+         std::string_view expansion_message{};
+
+         auto try_parse = [&]<size_t I>() -> bool {
+            using V = std::variant_alternative_t<I, std::remove_cvref_t<T>>;
+            auto start = it;
+
+            V v{};
+            auto temp_ctx = ctx.make_speculative();
+            from<YAML, V>::template op<Opts>(v, temp_ctx, it, end);
+            ctx.alias_expansion_budget = temp_ctx.alias_expansion_budget; // charged even if rejected
+            ctx.key_expansion_budget = temp_ctx.key_expansion_budget;
+
+            if (!bool(temp_ctx.error)) {
+               value = std::move(v);
+               ctx.anchors = std::move(temp_ctx.anchors);
+               return true;
+            }
+
+            if (temp_ctx.error == error_code::exceeded_max_expansion && expansion_error == error_code::none) {
+               expansion_error = temp_ctx.error;
+               expansion_message = temp_ctx.custom_error_message;
+            }
+            it = start;
+            return false;
+         };
+
+         bool parsed = false;
+         [&]<size_t... Is>(std::index_sequence<Is...>) {
+            ((parsed = parsed || try_parse.template operator()<Is>()), ...);
+         }(std::make_index_sequence<N>{});
+
+         if (!parsed) {
+            if (expansion_error != error_code::none) {
+               ctx.error = expansion_error;
+               ctx.custom_error_message = expansion_message;
+            }
+            else {
+               ctx.error = error_code::no_matching_variant_type;
+            }
+         }
+      }
+
+      // Dispatches the same node again once a property in front of it (an anchor or a tag) has been
+      // consumed. That opens no collection, so no reader below counts it, yet a document can stack
+      // properties to recurse here without end; each re-dispatch therefore takes a level itself.
+      template <auto Opts, class It>
+      static void redispatch(auto&& value, is_context auto&& ctx, It&& it, auto end) noexcept
+      {
+         depth_guard guard{ctx, yaml::max_yaml_recursive_depth};
+         if (!guard) [[unlikely]]
+            return;
+         op<Opts>(value, ctx, it, end);
+      }
+#ifdef _MSC_VER
+#pragma warning(pop)
+#endif
+   };
+
+   // Convenience functions
+
+   template <auto Opts = yaml::yaml_opts{}, class T, contiguous Buffer>
+   [[nodiscard]] error_ctx read_yaml(T&& value, Buffer&& buffer) noexcept
+   {
+      if (buffer.size() == 0) {
+         using V = std::remove_cvref_t<T>;
+         if constexpr (requires { value = nullptr; }) {
+            value = nullptr;
+            return {};
+         }
+         else if constexpr (nullable_like<V>) {
+            value = {};
+            return {};
+         }
+      }
+      yaml::yaml_context ctx{};
+      return read<set_yaml<Opts>()>(std::forward<T>(value), std::forward<Buffer>(buffer), ctx);
+   }
+
+   template <auto Opts = yaml::yaml_opts{}, class T, is_buffer Buffer>
+   [[nodiscard]] error_ctx read_file_yaml(T&& value, const sv file_path, Buffer&& buffer) noexcept
+   {
+      yaml::yaml_context ctx{};
+      ctx.current_file = file_path;
+      const auto ec = file_to_buffer(buffer, ctx.current_file);
+
+      if (bool(ec)) {
+         return {0, ec};
+      }
+
+      // The buffer was sized to the file, so the caller's is_padded promise does not cover it.
+      return read<is_padded_off<set_yaml<Opts>()>()>(std::forward<T>(value), buffer, ctx);
+   }
+
+   template <auto Opts = yaml::yaml_opts{}, class T>
+   [[nodiscard]] error_ctx read_file_yaml(T&& value, const sv file_path) noexcept
+   {
+      return read_file_yaml<Opts>(value, file_path, std::string{});
+   }
+
+} // namespace glz

@@ -9,15 +9,12 @@
 // regression in the consteval fallbacks (check_optimization_level / check_linear_search /
 // is_size_optimized) fails the build instead of silently re-bloating embedded binaries.
 
-#include <bit>
-#include <cstdint>
-#include <cstdio>
-#include <string>
-#include <string_view>
-#include <type_traits>
-#include <vector>
+import std;
+import glaze;
 
-#include "glaze/glaze.hpp"
+using std::int64_t;
+using std::uint32_t;
+using std::uint64_t;
 
 namespace
 {

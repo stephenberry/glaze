@@ -1,3 +1,4 @@
+import std;
 // Each case below must FAIL to compile, with the message its ctest entry expects.
 //
 // glz::invoke is a read-only, JSON-only wrapper. Before every format rejected it, a format without a
@@ -5,16 +6,15 @@
 // the wrapper's internals, both without complaint. GLZ_REJECT_FORMAT selects the format, and
 // GLZ_REJECT_WRITE or GLZ_REJECT_READ the direction.
 
-#include <string>
 
-#include "glaze/beve.hpp"
-#include "glaze/bson.hpp"
-#include "glaze/cbor.hpp"
-#include "glaze/json.hpp"
-#include "glaze/jsonb.hpp"
-#include "glaze/msgpack.hpp"
-#include "glaze/toml.hpp"
-#include "glaze/yaml.hpp"
+import glaze.beve;
+import glaze.bson;
+import glaze.cbor;
+import glaze.json;
+import glaze.jsonb;
+import glaze.msgpack;
+import glaze.toml;
+import glaze.yaml;
 
 struct holds_invoke
 {

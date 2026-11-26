@@ -1,3 +1,4 @@
+import std;
 // Glaze Library
 // For the license information refer to glaze.hpp
 
@@ -10,11 +11,8 @@
 
 #pragma once
 
-#include <optional>
-#include <string>
-#include <variant>
 
-#include "ut/ut.hpp"
+import ut;
 
 namespace custom_formats
 {

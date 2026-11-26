@@ -1,32 +1,21 @@
 // Glaze Library
-// For the license information refer to glaze.hpp
+// For the license information refer to glaze.ixx
 
-#include "glaze/msgpack.hpp"
+import glaze.tests.speculation_guard;
+import glaze.msgpack;
 
-#include <algorithm>
-#include <array>
-#include <bitset>
-#include <chrono>
-#include <compare>
-#include <cstddef>
-#include <cstring>
-#include <deque>
-#include <filesystem>
-#include <list>
-#include <map>
-#include <optional>
-#include <set>
-#include <string>
-#include <string_view>
-#include <unordered_map>
-#include <utility>
-#include <variant>
-#include <vector>
+import glaze.json;
 
-#include "glaze/json/generic.hpp"
-#include "glaze/json/ptr.hpp"
-#include "speculation_guard.hpp"
-#include "ut/ut.hpp"
+import std;
+import ut;
+
+using std::int8_t;
+using std::int32_t;
+using std::int64_t;
+using std::uint8_t;
+using std::uint32_t;
+using std::uint64_t;
+using std::size_t;
 
 using namespace ut;
 
@@ -1018,7 +1007,7 @@ suite msgpack_variant_tagging = [] {
    };
 
    // Untagged resolution is speculative, so an ambiguous nest re-parses each subtree per alternative
-   // at every level. The speculation budget caps that; see speculation_guard.hpp for what is timed.
+   // at every level. The speculation budget caps that; see speculation_guard.ixx for what is timed.
    "an ambiguous nest is bounded rather than exponential"_test = [] {
       const auto build = [](size_t levels) {
          std::string buffer;

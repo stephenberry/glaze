@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.31)
+cmake_minimum_required(VERSION 4.5)
 
 project(glaze_windows_header_compatibility LANGUAGES CXX)
 
@@ -28,10 +28,12 @@ endif()
 
 message(STATUS "Using Erlang ei include directory: ${ERLANG_EI_INCLUDE_DIR}")
 
+set(GLAZE_GENERATE_HEADERS ON)
+set(glaze_include_dir "${CMAKE_CURRENT_BINARY_DIR}/glaze/include")
 add_subdirectory("${GLAZE_SOURCE_DIR}" "${CMAKE_CURRENT_BINARY_DIR}/glaze")
 
-file(GLOB_RECURSE glaze_public_headers CONFIGURE_DEPENDS RELATIVE "${GLAZE_SOURCE_DIR}/include"
-  "${GLAZE_SOURCE_DIR}/include/glaze/*.hpp"
+file(GLOB_RECURSE glaze_public_headers CONFIGURE_DEPENDS RELATIVE "${glaze_include_dir}"
+  "${glaze_include_dir}/glaze/*.hpp"
 )
 
 list(LENGTH glaze_public_headers glaze_public_header_count)
@@ -54,7 +56,7 @@ endif()
 set(glaze_winsock_seeds "")
 foreach(header IN LISTS glaze_public_headers)
   string(MAKE_C_IDENTIFIER "${header}" header_id)
-  file(STRINGS "${GLAZE_SOURCE_DIR}/include/${header}" include_lines REGEX "^[ \t]*#[ \t]*include")
+  file(STRINGS "${glaze_include_dir}/${header}" include_lines REGEX "^[ \t]*#[ \t]*include")
 
   set(glaze_header_deps_${header_id} "")
   foreach(line IN LISTS include_lines)
@@ -225,10 +227,4 @@ find_package(Eigen3 CONFIG REQUIRED)
 find_package(asio CONFIG REQUIRED)
 target_link_libraries(${PROJECT_NAME} PRIVATE Eigen3::Eigen asio::asio)
 
-if(TARGET glaze::glaze)
-  target_link_libraries(${PROJECT_NAME} PRIVATE glaze::glaze)
-elseif(TARGET glaze)
-  target_link_libraries(${PROJECT_NAME} PRIVATE glaze)
-else()
-  target_include_directories(${PROJECT_NAME} PRIVATE "${GLAZE_SOURCE_DIR}/include")
-endif()
+target_link_libraries(${PROJECT_NAME} PRIVATE glaze::glaze)

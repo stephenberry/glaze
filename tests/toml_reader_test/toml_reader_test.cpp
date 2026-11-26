@@ -5,18 +5,16 @@
 // that GCC compiles it near its memory ceiling, and the ambiguous-nest case below instantiates a
 // reader per level of a 24-deep variant nest. Kept together they push cc1plus into an OOM.
 
-#include <chrono>
-#include <cstdint>
-#include <map>
-#include <memory>
-#include <optional>
-#include <string>
-#include <variant>
-#include <vector>
+import std;
 
-#include "glaze/toml.hpp"
-#include "speculation_guard.hpp"
-#include "ut/ut.hpp"
+import glaze.tests.speculation_guard;
+
+using std::size_t;
+
+
+import glaze.toml;
+
+import ut;
 
 using namespace ut;
 
@@ -671,7 +669,7 @@ suite variant_alternative_budget_tests = [] {
       // Retrying every alternative at every level is 2^depth. The speculation budget stops it, and
       // a level that discovered the budget was spent only after running one more retry would still
       // parse its subtree twice per level -- so past the budget the cost must stop growing with
-      // depth, not merely terminate. See speculation_guard.hpp for what is timed.
+      // depth, not merely terminate. See speculation_guard.ixx for what is timed.
       glz_test::expect_bounded_by_speculation_budget(
          [](size_t levels) { return ambiguous_nest::nest("{ zzz = 1 }", levels); },
          [](const std::string& buffer, glz::context& ctx) {

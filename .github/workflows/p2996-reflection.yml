@@ -21,11 +21,11 @@ env:
   P2996_IMAGE: vsavkov/clang-p2996:amd64
   # Library path for runtime linking
   P2996_LIB_PATH: /opt/p2996/clang/lib/x86_64-unknown-linux-gnu
-  # The image is Ubuntu 24.04, whose apt cmake is 3.28 — older than the 3.31 Glaze
+  # The image is Ubuntu 24.04, whose apt cmake is 3.28 — older than the 4.5 Glaze
   # requires. Install an official Kitware build instead of apt's.
   # Downloaded to a file rather than piped into tar: a retry restarts the transfer
   # from the first byte, which would corrupt a stream tar is already reading.
-  CMAKE_TARBALL: https://github.com/Kitware/CMake/releases/download/v4.4.2/cmake-4.4.2-linux-x86_64.tar.gz
+  CMAKE_TARBALL: https://github.com/Kitware/CMake/releases/download/v4.5.0/cmake-4.5.0-linux-x86_64.tar.gz
 
 concurrency:
   # Supersede an in-flight run when a branch is pushed again, so a fixup commit
@@ -48,20 +48,6 @@ jobs:
     - name: Verify P2996 compiler
       run: docker run --rm ${{ env.P2996_IMAGE }} clang++ --version
 
-    - name: Test P2996 reflection
-      run: |
-        docker run --rm \
-          -v ${{ github.workspace }}:/glaze \
-          -w /glaze \
-          ${{ env.P2996_IMAGE }} \
-          /bin/sh -c "
-            clang++ -std=c++26 -freflection -fexpansion-statements -stdlib=libc++ \
-              -I/glaze/include -I/glaze/tests -DGLZ_REFLECTION26=1 \
-              -Wl,-rpath,${{ env.P2996_LIB_PATH }} \
-              -o /tmp/p2996_test /glaze/tests/p2996_test/p2996_test.cpp && \
-            /tmp/p2996_test
-          "
-
     # libeigen3-dev is Eigen 3.4.0 on Ubuntu 24.04 and ships a CMake config, so
     # tests/eigen_test takes its find_package branch. Without it that test falls back
     # to cloning gitlab.com, which is a second forge to depend on and the one that
@@ -76,13 +62,14 @@ jobs:
           -w /glaze \
           ${{ env.P2996_IMAGE }} \
           /bin/sh -c "
-            apt-get update && apt-get install -y curl libeigen3-dev &&
+            apt-get update && apt-get install -y curl libeigen3-dev ninja-build &&
             curl -fsSL --retry 5 --retry-delay 2 --retry-all-errors -o /tmp/cmake.tar.gz ${{ env.CMAKE_TARBALL }} &&
             tar xzf /tmp/cmake.tar.gz --strip-components=1 -C /usr/local &&
             cmake --version &&
-            cmake -B build \
+            cmake -G Ninja -B build \
               -DCMAKE_CXX_COMPILER=clang++ \
-              -DCMAKE_CXX_FLAGS='-std=c++26 -freflection -fexpansion-statements -stdlib=libc++' \
+              -DCMAKE_CXX_STANDARD=26 \
+              -DCMAKE_CXX_FLAGS='-freflection -fexpansion-statements -stdlib=libc++' \
               -DCMAKE_EXE_LINKER_FLAGS='-Wl,-rpath,${{ env.P2996_LIB_PATH }}' \
               -DCMAKE_BUILD_TYPE=Release \
               -Dglaze_DEVELOPER_MODE=ON \

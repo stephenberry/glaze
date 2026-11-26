@@ -1,15 +1,24 @@
-#include <algorithm>
-#include <cstdint>
-#include <glaze/json.hpp>
-#include <glaze/json/schema.hpp>
-#include <string>
-#include <ut/ut.hpp>
+// Glaze Library
+// For the license information refer to glaze.ixx
+
+import std;
+
+import glaze.json;
+import glaze.tuplet;
+import glaze.util.variant;
+
+import ut;
+
+using std::uint8_t;
+using std::int64_t;
+using std::uint64_t;
+using std::size_t;
 
 using namespace ut;
 
 struct schema_obj
 {
-   std::int64_t variable{2};
+   int64_t variable{2};
 };
 
 template <>
@@ -35,7 +44,7 @@ struct glz::json_schema<schema_obj>
       .exclusiveMaximum = 2L,
       .multipleOf = 3L,
       .minProperties = 4UL,
-      .maxProperties = (std::numeric_limits<std::uint64_t>::max)(),
+      .maxProperties = (std::numeric_limits<uint64_t>::max)(),
       // .required = , // read of std::span is not supported
       .minItems = 1UL,
       .maxItems = 2UL,
@@ -107,11 +116,11 @@ suite schema_attributes = [] {
    };
    "minLength"_test = [] {
       const test_case test{};
-      expect_property<&glz::schema::minLength>(test, "variable", std::uint64_t{1});
+      expect_property<&glz::schema::minLength>(test, "variable", uint64_t{1});
    };
    "maxLength"_test = [] {
       const test_case test{};
-      expect_property<&glz::schema::maxLength>(test, "variable", std::uint64_t{2});
+      expect_property<&glz::schema::maxLength>(test, "variable", uint64_t{2});
    };
    "pattern"_test = [] {
       const test_case test{};
@@ -123,47 +132,47 @@ suite schema_attributes = [] {
    };
    "minimum"_test = [] {
       const test_case test{};
-      expect_property<&glz::schema::minimum>(test, "variable", std::int64_t{1});
+      expect_property<&glz::schema::minimum>(test, "variable", int64_t{1});
    };
    "maximum"_test = [] {
       const test_case test{};
-      expect_property<&glz::schema::maximum>(test, "variable", std::int64_t{2});
+      expect_property<&glz::schema::maximum>(test, "variable", int64_t{2});
    };
    "exclusiveMinimum"_test = [] {
       const test_case test{};
-      expect_property<&glz::schema::exclusiveMinimum>(test, "variable", std::int64_t{1});
+      expect_property<&glz::schema::exclusiveMinimum>(test, "variable", int64_t{1});
    };
    "exclusiveMaximum"_test = [] {
       const test_case test{};
-      expect_property<&glz::schema::exclusiveMaximum>(test, "variable", std::int64_t{2});
+      expect_property<&glz::schema::exclusiveMaximum>(test, "variable", int64_t{2});
    };
    "multipleOf"_test = [] {
       const test_case test{};
-      expect_property<&glz::schema::multipleOf>(test, "variable", std::int64_t{3});
+      expect_property<&glz::schema::multipleOf>(test, "variable", int64_t{3});
    };
    "minProperties"_test = [] {
       const test_case test{};
-      expect_property<&glz::schema::minProperties>(test, "variable", std::uint64_t{4});
+      expect_property<&glz::schema::minProperties>(test, "variable", uint64_t{4});
    };
    "maxProperties"_test = [] {
       const test_case test{};
-      expect_property<&glz::schema::maxProperties>(test, "variable", (std::numeric_limits<std::uint64_t>::max)());
+      expect_property<&glz::schema::maxProperties>(test, "variable", (std::numeric_limits<uint64_t>::max)());
    };
    "minItems"_test = [] {
       const test_case test{};
-      expect_property<&glz::schema::minItems>(test, "variable", std::uint64_t{1});
+      expect_property<&glz::schema::minItems>(test, "variable", uint64_t{1});
    };
    "maxItems"_test = [] {
       const test_case test{};
-      expect_property<&glz::schema::maxItems>(test, "variable", std::uint64_t{2});
+      expect_property<&glz::schema::maxItems>(test, "variable", uint64_t{2});
    };
    "minContains"_test = [] {
       const test_case test{};
-      expect_property<&glz::schema::minContains>(test, "variable", std::uint64_t{1});
+      expect_property<&glz::schema::minContains>(test, "variable", uint64_t{1});
    };
    "maxContains"_test = [] {
       const test_case test{};
-      expect_property<&glz::schema::maxContains>(test, "variable", std::uint64_t{2});
+      expect_property<&glz::schema::maxContains>(test, "variable", uint64_t{2});
    };
    "uniqueItems"_test = [] {
       const test_case test{};
@@ -182,7 +191,7 @@ suite schema_attributes = [] {
 
 struct one_number
 {
-   std::int64_t some_var{42};
+   int64_t some_var{42};
 };
 
 template <>
@@ -193,7 +202,7 @@ struct glz::meta<one_number>
 
 struct const_one_number
 {
-   static constexpr std::int64_t some_var{1337};
+   static constexpr int64_t some_var{1337};
 };
 
 template <>
@@ -202,7 +211,7 @@ struct glz::meta<const_one_number>
    static constexpr auto value = &const_one_number::some_var;
 };
 
-enum struct color : std::uint8_t { red = 0, green, blue };
+enum struct color : uint8_t { red = 0, green, blue };
 
 template <>
 struct glz::meta<color>
@@ -447,7 +456,7 @@ suite schema_tests = [] {
    };
 
    "fixed array has fixed size"_test = [] {
-      std::string schema_str = glz::write_json_schema<std::array<std::int64_t, 42>>().value_or("error");
+      std::string schema_str = glz::write_json_schema<std::array<int64_t, 42>>().value_or("error");
       schematic_substitute obj{};
       auto err = read_json_ignore_unknown(obj, schema_str);
       expect(!err) << format_error(err, schema_str);
@@ -462,11 +471,11 @@ suite schema_tests = [] {
    "a 64-bit integer names the format that keeps it exact, and a narrower one names none"_test = [] {
       expect(
          glz::write_json_schema<std::int64_t>().value_or("error") ==
-         R"({"type":"integer","title":"int64_t","format":"int64","minimum":-9223372036854775808,"maximum":9223372036854775807})");
+         R"({"type":"integer","title":"std::int64_t","format":"int64","minimum":-9223372036854775808,"maximum":9223372036854775807})");
       expect(glz::write_json_schema<std::uint64_t>().value_or("error") ==
-             R"({"type":"integer","title":"uint64_t","format":"uint64","minimum":0,"maximum":18446744073709551615})");
+             R"({"type":"integer","title":"std::uint64_t","format":"uint64","minimum":0,"maximum":18446744073709551615})");
       expect(glz::write_json_schema<std::int32_t>().value_or("error") ==
-             R"({"type":"integer","title":"int32_t","minimum":-2147483648,"maximum":2147483647})");
+             R"({"type":"integer","title":"std::int32_t","minimum":-2147483648,"maximum":2147483647})");
    };
 
    "a filesystem path is described as the string it is written as"_test = [] {
@@ -482,7 +491,7 @@ suite schema_tests = [] {
       std::string schema_str = glz::write_json_schema<required_meta>().value_or("error");
       expect(
          schema_str ==
-         R"({"type":"object","properties":{"a":{"$ref":"#/$defs/int32_t"},"b":{"$ref":"#/$defs/int32_t"},"reserved_1":{"$ref":"#/$defs/int32_t"},"reserved_2":{"$ref":"#/$defs/int32_t"}},"additionalProperties":false,"$defs":{"int32_t":{"type":"integer","minimum":-2147483648,"maximum":2147483647}},"required":["a","b"],"title":"required_meta"})");
+         R"({"type":"object","properties":{"a":{"$ref":"#/$defs/std::int32_t"},"b":{"$ref":"#/$defs/std::int32_t"},"reserved_1":{"$ref":"#/$defs/std::int32_t"},"reserved_2":{"$ref":"#/$defs/std::int32_t"}},"additionalProperties":false,"$defs":{"std::int32_t":{"type":"integer","minimum":-2147483648,"maximum":2147483647}},"required":["a","b"],"title":"required_meta"})");
    };
 
    "Opts.error_on_missing_keys as fallback"_test = [] {
@@ -496,12 +505,12 @@ suite schema_tests = [] {
       // std::optional<T> is canonicalized to anyOf:[ref-to-T, null] and never appears in $defs.
       expect(
          schema_str_req ==
-         R"({"type":"object","properties":{"important":{"$ref":"#/$defs/int32_t"},"unimportant":{"anyOf":[{"$ref":"#/$defs/int32_t"},{"type":"null"}]}},"additionalProperties":false,"$defs":{"int32_t":{"type":"integer","minimum":-2147483648,"maximum":2147483647}},"required":["important"],"title":"error_on_missing_keys_test"})")
+         R"({"type":"object","properties":{"important":{"$ref":"#/$defs/std::int32_t"},"unimportant":{"anyOf":[{"$ref":"#/$defs/std::int32_t"},{"type":"null"}]}},"additionalProperties":false,"$defs":{"std::int32_t":{"type":"integer","minimum":-2147483648,"maximum":2147483647}},"required":["important"],"title":"error_on_missing_keys_test"})")
          << schema_str_req;
 
       expect(
          schema_str_nreq ==
-         R"({"type":"object","properties":{"important":{"$ref":"#/$defs/int32_t"},"unimportant":{"anyOf":[{"$ref":"#/$defs/int32_t"},{"type":"null"}]}},"additionalProperties":false,"$defs":{"int32_t":{"type":"integer","minimum":-2147483648,"maximum":2147483647}},"title":"error_on_missing_keys_test"})")
+         R"({"type":"object","properties":{"important":{"$ref":"#/$defs/std::int32_t"},"unimportant":{"anyOf":[{"$ref":"#/$defs/std::int32_t"},{"type":"null"}]}},"additionalProperties":false,"$defs":{"std::int32_t":{"type":"integer","minimum":-2147483648,"maximum":2147483647}},"title":"error_on_missing_keys_test"})")
          << schema_str_nreq;
    };
 
@@ -629,7 +638,7 @@ suite value_type_variant_schema = [] {
       auto schema = glz::write_json_schema<tuple_t>().value();
       expect(
          schema ==
-         R"({"type":"array","prefixItems":[{"type":"integer","minimum":-2147483648,"maximum":2147483647},{"type":"string"},{"type":"boolean"}],"items":false,"title":"std::tuple<int32_t,std::string,bool>","maxItems":3})")
+         R"({"type":"array","prefixItems":[{"type":"integer","minimum":-2147483648,"maximum":2147483647},{"type":"string"},{"type":"boolean"}],"items":false,"title":"std::tuple<std::int32_t,std::string,bool>","maxItems":3})")
          << schema;
    };
 
@@ -683,7 +692,7 @@ suite value_type_variant_schema = [] {
       auto schema = glz::write_json_schema<std::vector<int>>().value();
       expect(
          schema ==
-         R"({"type":"array","items":{"$ref":"#/$defs/int32_t"},"$defs":{"int32_t":{"type":"integer","minimum":-2147483648,"maximum":2147483647}},"title":"std::vector<int32_t>"})")
+         R"({"type":"array","items":{"$ref":"#/$defs/std::int32_t"},"$defs":{"std::int32_t":{"type":"integer","minimum":-2147483648,"maximum":2147483647}},"title":"std::vector<std::int32_t>"})")
          << schema;
    };
 
@@ -1133,7 +1142,7 @@ suite optional_never_referenced_test = [] {
       auto schema = glz::write_json_schema<issue_2498::HoldsNamed>().value();
       expect(eq(
          schema,
-         R"({"type":"object","properties":{"n":{"anyOf":[{"type":"object","properties":{"x":{"$ref":"#/$defs/int32_t"}},"additionalProperties":false},{"type":"null"}]}},"additionalProperties":false,"$defs":{"int32_t":{"type":"integer","minimum":-2147483648,"maximum":2147483647}},"title":"issue_2498::HoldsNamed"})"))
+         R"({"type":"object","properties":{"n":{"anyOf":[{"type":"object","properties":{"x":{"$ref":"#/$defs/std::int32_t"}},"additionalProperties":false},{"type":"null"}]}},"additionalProperties":false,"$defs":{"std::int32_t":{"type":"integer","minimum":-2147483648,"maximum":2147483647}},"title":"issue_2498::HoldsNamed"})"))
          << schema;
    };
 

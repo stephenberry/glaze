@@ -4,18 +4,17 @@
 // the writes still queued instead of leaving their handlers uncalled, as does a send made
 // after close().
 
-#include <array>
-#include <atomic>
-#include <charconv>
-#include <chrono>
-#include <memory>
-#include <mutex>
-#include <string>
-#include <thread>
-#include <vector>
+#include "glaze/ext/asio_include.hpp"
 
-#include "glaze/net/http_server.hpp"
-#include "ut/ut.hpp"
+import std;
+
+import glaze.net.http_server;
+import glaze.net.http;
+import glaze.net.http_streaming;
+import ut;
+
+using std::size_t;
+using std::uint16_t;
 
 #if defined(GLZ_USING_BOOST_ASIO)
 namespace asio

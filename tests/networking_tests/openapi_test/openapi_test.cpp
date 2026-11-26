@@ -1,11 +1,19 @@
-#include <chrono>
-#include <thread>
+#include "glaze/ext/asio_include.hpp"
+#ifdef DELETE
+#undef DELETE
+#endif
 
-#include "glaze/glaze.hpp"
-#include "glaze/net/http_client.hpp"
-#include "glaze/net/http_server.hpp"
-#include "glaze/rpc/registry.hpp"
-#include "ut/ut.hpp"
+import std;
+
+import glaze;
+import glaze.net.http_client;
+import glaze.net.http_router;
+import glaze.net.http_server;
+import glaze.rpc.registry;
+
+import ut;
+
+using std::uint16_t;
 
 using namespace ut;
 

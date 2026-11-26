@@ -1,15 +1,18 @@
 // Glaze Library
-// For the license information refer to glaze.hpp
+// For the license information refer to glaze.ixx
 
-#include "glaze/net/http_router.hpp"
+import std;
 
-#include <cassert>
-#include <memory>
-#include <regex>
-#include <vector>
+import glaze.core.common;
+import glaze.core.constraint;
+import glaze.core.custom;
+import glaze.core.meta_fwd;
+import glaze.core.opts;
+import glaze.net.http_router;
+import glaze.rpc.registry;
 
-#include "glaze/rpc/registry.hpp"
-#include "ut/ut.hpp"
+import ut;
+using std::uint32_t;
 
 using namespace ut;
 

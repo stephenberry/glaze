@@ -3,13 +3,13 @@
 // A binary document may hold a zero byte anywhere, so a C string's strlen length would truncate it.
 // GLZ_REJECT_FORMAT selects the format.
 
-#include <string>
+import std;
 
-#include "glaze/beve.hpp"
-#include "glaze/bson.hpp"
-#include "glaze/cbor.hpp"
-#include "glaze/jsonb.hpp"
-#include "glaze/msgpack.hpp"
+import glaze.beve;
+import glaze.bson;
+import glaze.cbor;
+import glaze.jsonb;
+import glaze.msgpack;
 
 struct holds_int
 {

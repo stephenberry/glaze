@@ -1,9 +1,20 @@
 // Glaze Library
-// For the license information refer to glaze.hpp
+// For the license information refer to glaze.ixx
 
-#include "glaze/glaze.hpp"
-#include "minimal_buffer.hpp"
-#include "ut/ut.hpp"
+import glaze;
+
+import glaze.core.context;
+import glaze.stencil.stencilcount;
+
+import glaze.stencil;
+
+import glaze.tests.minimal_buffer;
+
+import std;
+import ut;
+
+using std::uint32_t;
+using std::size_t;
 
 using namespace ut;
 
@@ -681,8 +692,6 @@ suite mustache_list_template_tests = [] {
       expect(result.find("☐") != std::string::npos) << "Unchecked box should be present";
    };
 };
-
-#include "glaze/stencil/stencilcount.hpp"
 
 struct stencilcount_point
 {

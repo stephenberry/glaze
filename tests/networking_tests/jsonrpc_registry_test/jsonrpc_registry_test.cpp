@@ -1,13 +1,15 @@
 // Glaze Library
-// For the license information refer to glaze.hpp
+// For the license information refer to glaze.ixx
 
-#include <memory>
-#include <string_view>
-#include <vector>
+import std;
 
-#include "glaze/glaze.hpp"
-#include "glaze/rpc/registry.hpp"
-#include "ut/ut.hpp"
+import glaze;
+import glaze.ext.jsonrpc;
+import glaze.rpc.registry;
+
+import ut;
+
+using std::size_t;
 
 using namespace ut;
 

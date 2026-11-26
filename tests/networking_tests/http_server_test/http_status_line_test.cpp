@@ -1,13 +1,16 @@
+#include "glaze/ext/asio_include.hpp"
+import glaze.net.http;
+import glaze.net.http_router;
+import std;
+
+using std::uint16_t;
+
 // The server's response writers take their reason phrases from the shared
 // glz::detail::http_status_reason_phrase table, so every registered status code
 // carries its phrase and an unregistered one carries none (RFC 9112 4).
-#include <chrono>
-#include <future>
-#include <string>
-#include <thread>
-#include <ut/ut.hpp>
+import ut;
 
-#include "glaze/net/http_server.hpp"
+import glaze.net.http_server;
 
 #if defined(GLZ_USING_BOOST_ASIO)
 namespace asio

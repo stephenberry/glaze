@@ -1,11 +1,17 @@
 // Glaze Library
-// For the license information refer to glaze.hpp
+// For the license information refer to glaze.ixx
 
-#include "glaze/compare/compare.hpp"
+import std;
 
-#include "glaze/compare/approx.hpp"
-#include "glaze/util/compare.hpp"
-#include "ut/ut.hpp"
+import glaze.compare;
+import glaze.compare.approx;
+
+import glaze.core.meta;
+import glaze.core.common;
+
+import glaze.util.compare;
+
+import ut;
 
 using namespace ut;
 

@@ -1,3 +1,7 @@
+import std;
+
+using std::uint32_t;
+
 // Glaze Library
 // For the license information refer to glaze.hpp
 
@@ -6,19 +10,16 @@
 // and a skipped member's reader and writer are never instantiated, so skipping is also how a member
 // with no representation in a format is kept out of it.
 
-#include <string>
-#include <string_view>
-#include <ut/ut.hpp>
-#include <vector>
+import ut;
 
-#include "glaze/beve.hpp"
-#include "glaze/bson.hpp"
-#include "glaze/cbor.hpp"
-#include "glaze/json.hpp"
-#include "glaze/jsonb.hpp"
-#include "glaze/msgpack.hpp"
-#include "glaze/toml.hpp"
-#include "glaze/yaml.hpp"
+import glaze.beve;
+import glaze.bson;
+import glaze.cbor;
+import glaze.json;
+import glaze.jsonb;
+import glaze.msgpack;
+import glaze.toml;
+import glaze.yaml;
 
 using namespace ut;
 

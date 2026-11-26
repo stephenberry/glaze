@@ -11,9 +11,9 @@ struct my_struct
 {
    glz::volatile_array<uint16_t, 4> a{};
    bool b{};
-   int32_t c{};
+   std::int32_t c{};
    double d{};
-   uint32_t e{};
+   std::uint32_t e{};
 };
 ```
 

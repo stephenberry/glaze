@@ -57,9 +57,9 @@ Apply limits to all strings/arrays in a parse operation:
 // Define custom options with allocation limits
 struct secure_opts : glz::opts
 {
-   uint32_t format = glz::BEVE;
-   size_t max_string_length = 1024;    // Max 1KB per string
-   size_t max_array_size = 10000;      // Max 10,000 elements per array
+   std::uint32_t format = glz::BEVE;
+   std::size_t max_string_length = 1024;    // Max 1KB per string
+   std::size_t max_array_size = 10000;      // Max 10,000 elements per array
 };
 
 std::vector<std::string> data;
@@ -107,9 +107,9 @@ For applications that need to set limits dynamically at runtime (e.g., based on 
 ```cpp
 struct secure_context : glz::context
 {
-   size_t max_string_length = 0;  // 0 = no limit
-   size_t max_array_size = 0;
-   size_t max_map_size = 0;
+   std::size_t max_string_length = 0;  // 0 = no limit
+   std::size_t max_array_size = 0;
+   std::size_t max_map_size = 0;
 };
 
 // Set limits dynamically based on user tier
@@ -143,7 +143,7 @@ Both mechanisms can be used together—either can reject a value that exceeds it
 1. **Limit input buffer size**: Control the maximum message size your application accepts at the network layer, before passing data to Glaze.
 
 ```cpp
-constexpr size_t MAX_MESSAGE_SIZE = 1024 * 1024; // 1 MB limit
+constexpr std::size_t MAX_MESSAGE_SIZE = 1024 * 1024; // 1 MB limit
 
 void handle_message(const std::span<const std::byte> data) {
     if (data.size() > MAX_MESSAGE_SIZE) {

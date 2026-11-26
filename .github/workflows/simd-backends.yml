@@ -80,7 +80,7 @@ jobs:
 
       - name: Configure
         run: |
-          cmake -B build \
+          cmake -G Ninja -B build \
             -DCMAKE_BUILD_TYPE=Release \
             -DCMAKE_CXX_STANDARD=23 \
             -DCMAKE_CXX_FLAGS="${{ matrix.flags }} ${{ matrix.expect }}" \
@@ -112,7 +112,7 @@ jobs:
 
       - name: Configure
         run: |
-          cmake -B build \
+          cmake -G Ninja -B build \
             -DCMAKE_BUILD_TYPE=Release \
             -DCMAKE_CXX_STANDARD=23 \
             -DCMAKE_CXX_FLAGS="-DGLZ_EXPECT_DETECTED=NEON64 -DGLZ_EXPECT_UTF8_VALIDATION=NEON64 -DGLZ_EXPECT_STRING_ESCAPE=NEON" \
@@ -169,7 +169,7 @@ jobs:
         # Escaping stays AVX2: Glaze has no AVX-512 escape helper. That divergence is the reason
         # this job pins all three rather than just the validator.
         run: |
-          cmake -B build \
+          cmake -G Ninja -B build \
             -DCMAKE_BUILD_TYPE=Release \
             -DCMAKE_CXX_STANDARD=23 \
             -DCMAKE_CXX_FLAGS="-mavx512f -mavx512bw -mavx512vl -DGLZ_EXPECT_DETECTED=AVX512BW -DGLZ_EXPECT_UTF8_VALIDATION=AVX512BW -DGLZ_EXPECT_STRING_ESCAPE=AVX2" \

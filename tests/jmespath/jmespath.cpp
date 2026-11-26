@@ -1,15 +1,19 @@
 // Glaze Library
-// For the license information refer to glaze.hpp
+// For the license information refer to glaze.ixx
 
-#include "glaze/json/jmespath.hpp"
+import std;
+import glaze;
 
-#include <list>
-#include <variant>
-#include <vector>
+import glaze.tuplet;
 
-#include "glaze/glaze.hpp"
-#include "speculation_guard.hpp"
-#include "ut/ut.hpp"
+import glaze.util.tuple;
+import glaze.util.string_literal;
+
+import glaze.tests.speculation_guard;
+import ut;
+
+using std::uint16_t;
+using std::size_t;
 
 using namespace ut;
 

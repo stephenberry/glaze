@@ -1,3 +1,10 @@
+#include "glaze/ext/asio_include.hpp"
+import glaze.net.http;
+import std;
+
+using std::size_t;
+using std::uint16_t;
+
 // Verifies that glz::http_server bounds what one connection can make it hold before
 // a request's headers are complete:
 //   1. A header section that does not end within max_request_header_size is answered
@@ -6,14 +13,10 @@
 //   2. The idle timeout covers a connection's first request too, and releases the
 //      connection even when the peer ignores the server's FIN, so a request that
 //      completes after the deadline never reaches a handler.
-#include <array>
-#include <atomic>
-#include <chrono>
-#include <string>
-#include <thread>
-#include <ut/ut.hpp>
+import ut;
 
-#include "glaze/net/http_server.hpp"
+import glaze.net.http_router;
+import glaze.net.http_server;
 
 #if defined(GLZ_USING_BOOST_ASIO)
 namespace asio

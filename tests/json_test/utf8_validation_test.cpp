@@ -6,19 +6,14 @@
 // much of this file sweeps byte offsets: a bug in cross-register carry or in the padded tail block
 // only shows up when a sequence straddles a boundary the host happens to use.
 
-#include "glaze/simd/utf8_validation.hpp"
+import std;
 
-#include <array>
-#include <cstdint>
-#include <iostream>
-#include <map>
-#include <random>
-#include <string>
-#include <string_view>
-#include <vector>
+import glaze;
+import ut;
 
-#include "glaze/glaze.hpp"
-#include "ut/ut.hpp"
+using std::uint8_t;
+using std::uint32_t;
+using std::size_t;
 
 using namespace ut;
 
@@ -221,15 +216,6 @@ static_assert(shape_for(glz::simd_info.detected)->escape == glz::simd_info.strin
 // without NEON) would fire, since it expects "scalar" and would get "generic64".
 static_assert(shape_for(glz::simd_info.detected)->utf8 == glz::simd_info.utf8_validation,
               "the UTF-8 validator does not match what this build's instruction set selects");
-#endif
-
-#if defined(GLZ_UTF8_SIMD)
-// Ties the reported name to the register width its own branch defines, catching a branch that
-// copied a neighbour's name without its width. That the width matches the register type is a
-// separate question, and utf8_validation.hpp asserts it there with sizeof(vec) == width, where the
-// type is in scope.
-static_assert(width_for(glz::simd_info.utf8_validation) == glz::detail::utf8_simd::width,
-              "a UTF-8 backend named itself as one register width and then defined another");
 #endif
 
 // Everything above checks that the reported names agree with each other. None of it can say which

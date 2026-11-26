@@ -1,12 +1,12 @@
 // YAML conformance tests generated from https://github.com/yaml/yaml-test-suite.
 // All conformance cases assert expected parser behavior.
 
-#include <string>
+import std;
 
-#include "glaze/glaze.hpp"
-#include "glaze/json/patch.hpp"
-#include "glaze/yaml.hpp"
-#include "ut/ut.hpp"
+import glaze;
+import glaze.json.patch;
+import glaze.yaml;
+import ut;
 
 using namespace ut;
 

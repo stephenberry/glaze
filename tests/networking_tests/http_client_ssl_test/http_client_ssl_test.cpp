@@ -1,25 +1,17 @@
 // HTTP Client TLS/HTTPS Test for Glaze Library
 // Tests HTTPS requests and SSL configuration
 
-#include <atomic>
-#include <chrono>
-#include <cstdio>
-#include <cstdlib>
-#include <fstream>
-#include <future>
-#include <iostream>
-#include <iterator>
-#include <memory>
-#include <optional>
-#include <string>
-#include <string_view>
-#include <thread>
+#include "glaze/ext/asio_include.hpp"
 
-#include "glaze/glaze.hpp"
-#include "glaze/net/http_client.hpp"
-#include "glaze/net/http_server.hpp"
-#include "glaze/util/env.hpp"
-#include "ut/ut.hpp"
+import std;
+
+import glaze.json.read;
+import glaze.net.http_client;
+import glaze.net.http_router;
+import glaze.net.http_server;
+import glaze.net.ssl;
+import glaze.util.env;
+import glaze.ext.glaze_asio;
 
 // OpenSSL includes for certificate generation
 #include <openssl/bio.h>
@@ -31,11 +23,11 @@
 #include <openssl/x509.h>
 #include <openssl/x509v3.h>
 
+import ut;
+
 #ifdef DELETE
 #undef DELETE
 #endif
-
-#include "glaze/ext/glaze_asio.hpp"
 
 #if defined(GLZ_USING_BOOST_ASIO)
 namespace asio
@@ -46,6 +38,9 @@ namespace asio
 #endif
 
 using namespace ut;
+
+using std::size_t;
+using std::uint16_t;
 
 namespace
 {

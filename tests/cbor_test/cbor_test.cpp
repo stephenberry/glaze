@@ -1,29 +1,24 @@
 // Glaze Library
-// For the license information refer to glaze.hpp
+// For the license information refer to glaze.ixx
 
-#include "glaze/cbor.hpp"
+import std;
 
-#include <bit>
-#include <bitset>
-#include <chrono>
-#include <complex>
-#include <deque>
-#include <expected>
-#include <filesystem>
-#include <list>
-#include <map>
-#include <random>
-#include <set>
-#include <span>
-#include <unordered_map>
-#include <unordered_set>
-#include <vector>
+import glaze;
 
-#include "glaze/base64/base64.hpp"
-#include "glaze/glaze_exceptions.hpp"
-#include "glaze/json/generic.hpp"
-#include "speculation_guard.hpp"
-#include "ut/ut.hpp"
+import glaze.base64;
+import glaze.exceptions;
+
+import glaze.tests.speculation_guard;
+
+import ut;
+
+using std::uint8_t;
+using std::uint16_t;
+using std::int32_t;
+using std::uint32_t;
+using std::int64_t;
+using std::uint64_t;
+using std::size_t;
 
 using namespace ut;
 
@@ -1528,7 +1523,7 @@ void container_roundtrip_tests()
 {
    "vector_int_random"_test = [] {
       std::vector<int> vec(100);
-      for (auto& item : vec) item = rand();
+      for (auto& item : vec) item = std::rand();
       std::string buffer{};
       std::vector<int> vec2{};
       expect(not glz::write_cbor(vec, buffer));
@@ -1551,7 +1546,7 @@ void container_roundtrip_tests()
 
    "vector_double_random"_test = [] {
       std::vector<double> vec(100);
-      for (auto& item : vec) item = rand() / (1.0 + rand());
+      for (auto& item : vec) item = std::rand() / (1.0 + std::rand());
       std::string buffer{};
       std::vector<double> vec2{};
       expect(not glz::write_cbor(vec, buffer));
@@ -1565,7 +1560,7 @@ void container_roundtrip_tests()
       std::mt19937 g{};
       for (auto i = 0; i < 20; ++i) {
          std::shuffle(str.begin(), str.end(), g);
-         map1[str] = rand();
+         map1[str] = std::rand();
       }
       std::string buffer{};
       std::map<std::string, int> map2{};
@@ -1579,7 +1574,7 @@ void container_roundtrip_tests()
    "map_int_keys_random"_test = [] {
       std::map<int, int> map1;
       for (auto i = 0; i < 20; ++i) {
-         map1[rand()] = rand();
+         map1[std::rand()] = std::rand();
       }
       std::string buffer{};
       std::map<int, int> map2{};
@@ -1593,7 +1588,7 @@ void container_roundtrip_tests()
    "unordered_map_int_keys_random"_test = [] {
       std::unordered_map<int, int> map1;
       for (auto i = 0; i < 20; ++i) {
-         map1[rand()] = rand();
+         map1[std::rand()] = std::rand();
       }
       std::string buffer{};
       std::unordered_map<int, int> map2{};
@@ -2295,8 +2290,8 @@ void typed_array_kind_tests()
       round_trip(std::vector<uint16_t>{1, 2});
       round_trip(std::vector<uint32_t>{1, 2});
       round_trip(std::vector<uint64_t>{1, 2});
-      round_trip(std::vector<int8_t>{-1, 2});
-      round_trip(std::vector<int16_t>{-1, 2});
+      round_trip(std::vector<std::int8_t>{-1, 2});
+      round_trip(std::vector<std::int16_t>{-1, 2});
       round_trip(std::vector<int32_t>{-1, 2});
       round_trip(std::vector<int64_t>{-1, 2});
       round_trip(std::vector<float>{1.5f, -2.5f});
@@ -3721,7 +3716,7 @@ void chrono_tests()
       std::string buffer;
       buffer.push_back(static_cast<char>(0xC1)); // tag 1
       buffer.push_back(static_cast<char>(0x1B)); // uint64_follows
-      const uint64_t huge = static_cast<uint64_t>(INT64_MAX);
+      const uint64_t huge = static_cast<uint64_t>(std::numeric_limits<int64_t>::max());
       for (int i = 7; i >= 0; --i) {
          buffer.push_back(static_cast<char>((huge >> (i * 8)) & 0xFF));
       }
@@ -5162,7 +5157,7 @@ suite cbor_variant_tagging = [] {
    };
 
    // Untagged resolution is speculative, so an ambiguous nest re-parses each subtree per alternative
-   // at every level. The speculation budget caps that; see speculation_guard.hpp for what is timed.
+   // at every level. The speculation budget caps that; see speculation_guard.ixx for what is timed.
    "an ambiguous nest is bounded rather than exponential"_test = [] {
       const auto build = [](size_t levels) {
          std::string buffer;

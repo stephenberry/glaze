@@ -4,6 +4,14 @@
 option(glaze_BUILD_SSL_TESTS "Build SSL/TLS tests (requires OpenSSL headers matching target architecture)" ON)
 option(glaze_BUILD_WEBSOCKET_AUTOBAHN_TEST "Build Autobahn WebSocket compliance test" OFF)
 
+# Named modules are compiled once, so SSL must be enabled on the module target,
+# not only on the individual SSL test translation units.
+if(NOT GLAZE_GENERATE_HEADERS AND glaze_BUILD_SSL_TESTS AND NOT glaze_ENABLE_SSL)
+    find_package(OpenSSL REQUIRED)
+    target_link_libraries(glaze_glaze PUBLIC OpenSSL::SSL OpenSSL::Crypto)
+    target_compile_definitions(glaze_glaze PUBLIC GLZ_ENABLE_SSL)
+endif()
+
 # The SSL tests below turn on GLZ_ENABLE_SSL per target and link OpenSSL themselves, rather
 # than going through the glaze_ENABLE_SSL option, so they do not inherit that option's link
 # libraries either. glaze/net/ssl.hpp reads the Windows ROOT certificate store through
@@ -38,7 +46,9 @@ add_subdirectory(http_client_test)
 add_subdirectory(http_client_pool_test)
 add_subdirectory(http_client_progress_test)
 add_subdirectory(http_client_redirect_test)
-add_subdirectory(http_client_no_ssl_executor_test)
+if(GLAZE_GENERATE_HEADERS OR (NOT glaze_ENABLE_SSL AND NOT glaze_BUILD_SSL_TESTS))
+    add_subdirectory(http_client_no_ssl_executor_test)
+endif()
 if(glaze_BUILD_SSL_TESTS)
     add_subdirectory(http_client_ssl_test)
 endif()

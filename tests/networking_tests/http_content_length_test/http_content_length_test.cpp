@@ -18,16 +18,17 @@
 //      reply is refused. 101 Switching Protocols is final, and its connection is never
 //      pooled, nor is an HTTP/1.0 one that did not opt into keep-alive.
 
-#include <atomic>
-#include <chrono>
-#include <future>
-#include <memory>
-#include <string>
-#include <thread>
-#include <vector>
+#include "glaze/ext/asio_include.hpp"
 
-#include "glaze/net/http_client.hpp"
-#include "ut/ut.hpp"
+import std;
+
+import glaze.net.http_client;
+import glaze.net.http_router;
+
+import ut;
+
+using std::size_t;
+using std::uint16_t;
 
 #if defined(GLZ_USING_BOOST_ASIO)
 namespace asio

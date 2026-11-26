@@ -6,25 +6,24 @@
 // can answer with an exact set of response bytes - including deliberately malformed
 // Location fields that a well-behaved server would never emit.
 
-#include <atomic>
-#include <chrono>
-#include <functional>
-#include <future>
-#include <memory>
-#include <mutex>
-#include <optional>
-#include <string>
-#include <string_view>
-#include <thread>
-#include <unordered_map>
-#include <vector>
+#include "glaze/ext/asio_include.hpp"
 
-#include "glaze/ext/glaze_asio.hpp"
-#include "glaze/net/http_client.hpp"
-#include "ut/ut.hpp"
+import std;
+
+import glaze.ext.glaze_asio;
+import glaze.net.http;
+import glaze.net.http_client;
+import glaze.net.http_router;
+
+import glaze.util.compare;
+
+import ut;
 
 using namespace ut;
 using namespace glz;
+
+using std::size_t;
+using std::uint16_t;
 
 namespace
 {

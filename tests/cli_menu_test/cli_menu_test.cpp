@@ -1,7 +1,12 @@
 // Glaze Library
-// For the license information refer to glaze.hpp
+// For the license information refer to glaze.ixx
 
-#include "glaze/ext/cli_menu.hpp"
+import std;
+import glaze.core.common;
+import glaze.core.meta;
+import glaze.core.reflect;
+import glaze.ext.cli_menu;
+import glaze.util.help;
 
 struct my_functions
 {

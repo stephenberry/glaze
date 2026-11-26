@@ -1,14 +1,23 @@
 // Glaze Library
-// For the license information refer to glaze.hpp
+// For the license information refer to glaze.ixx
 
-#include <concepts>
-#include <map>
-#include <memory>
-#include <variant>
+import std;
 
-#include "glaze/glaze.hpp"
-#include "speculation_guard.hpp"
-#include "ut/ut.hpp"
+import glaze;
+
+import glaze.tests.speculation_guard;
+import ut;
+
+using std::int8_t;
+using std::int16_t;
+using std::int32_t;
+using std::int64_t;
+using std::uint8_t;
+using std::uint16_t;
+using std::uint32_t;
+using std::uint64_t;
+
+using std::size_t;
 
 using namespace ut;
 

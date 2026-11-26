@@ -2,14 +2,9 @@
 // ctest entry, so a guard that stops firing turns into a failing test rather than into a read that
 // silently produces the wrong alternative.
 
-#include <array>
-#include <map>
-#include <memory>
-#include <string>
-#include <string_view>
-#include <variant>
+import std;
 
-#include "glaze/glaze.hpp"
+import glaze;
 
 struct a_t
 {

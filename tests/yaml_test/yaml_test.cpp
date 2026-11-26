@@ -1,33 +1,19 @@
 // Glaze Library
 // For the license information refer to glaze.hpp
 
-#include "glaze/yaml.hpp"
+import glaze.yaml;
 
-#include <array>
-#include <chrono>
-#include <cmath>
-#include <concepts>
-#include <cstdio>
-#include <deque>
-#include <forward_list>
-#include <limits>
-#include <list>
-#include <map>
-#include <memory>
-#include <optional>
-#include <set>
-#include <string>
-#include <tuple>
-#include <unordered_map>
-#include <unordered_set>
-#include <utility>
-#include <variant>
-#include <vector>
+import std;
 
-#include "glaze/json/generic.hpp"
-#include "minimal_buffer.hpp"
-#include "scratch_directory.hpp"
-#include "ut/ut.hpp"
+import glaze.json.generic;
+
+import glaze.tests.minimal_buffer;
+import glaze.tests.scratch_directory;
+
+import ut;
+
+using std::uint64_t;
+using std::size_t;
 
 using namespace ut;
 

@@ -1,15 +1,19 @@
 // Glaze Library
-// For the license information refer to glaze.hpp
+// For the license information refer to glaze.ixx
+import std;
 
-#include <iostream>
-#include <tuple>
+import glaze.api.impl;
+import glaze.api.std.deque;
+import glaze.api.std.span;
+import glaze.api.std.unordered_set;
 
-#include "glaze/api/impl.hpp"
-#include "glaze/api/std/deque.hpp"
-#include "glaze/api/std/span.hpp"
-#include "glaze/api/std/unordered_map.hpp"
-#include "glaze/api/std/unordered_set.hpp"
-#include "ut/ut.hpp"
+import glaze.version;
+
+import ut;
+
+using std::uint32_t;
+using std::uint64_t;
+using std::size_t;
 
 struct my_struct
 {
@@ -94,7 +98,7 @@ struct glz::meta<my_api2>
    static constexpr glz::version_t version{0, 0, 1};
 };
 
-glz::iface_fn glz_iface() noexcept { return glz::make_iface<my_api, my_api2>(); }
+extern "C" glz::iface_fn glz_iface() noexcept { return glz::make_iface<my_api, my_api2>(); }
 
 void tests()
 {
@@ -168,7 +172,7 @@ void tests()
    "vector type name"_test = [] {
       {
          std::string_view v = glz::name_v<std::vector<std::vector<int>*>>;
-         expect(v == "std::vector<std::vector<int32_t>*>");
+         expect(v == "std::vector<std::vector<std::int32_t>*>");
       }
       {
          std::string_view v = glz::name_v<std::vector<float>>;
@@ -179,7 +183,7 @@ void tests()
    "unordered type name"_test = [] {
       {
          std::string_view u = glz::name_v<std::unordered_map<uint64_t, std::string_view>>;
-         expect(u == "std::unordered_map<uint64_t,std::string_view>");
+         expect(u == "std::unordered_map<std::uint64_t,std::string_view>");
       }
    };
 
@@ -232,10 +236,10 @@ void tests()
 
    "function type name"_test = [] {
       std::string_view f = glz::name_v<std::function<double(const int&, const double&)>>;
-      expect(f == "std::function<double(const int32_t&,const double&)>");
+      expect(f == "std::function<double(const std::int32_t&,const double&)>");
 
       f = glz::name_v<std::function<int(const my_struct&)>>;
-      expect(f == R"(std::function<int32_t(const my_struct&)>)") << f;
+      expect(f == R"(std::function<std::int32_t(const my_struct&)>)") << f;
    };
 
    "function type io"_test = [&] {

@@ -15,19 +15,16 @@
 //      peer that stops reading stops the count below the total, which is how a caller
 //      tells a stalled upload from a slow one.
 
-#include <array>
-#include <atomic>
-#include <chrono>
-#include <functional>
-#include <future>
-#include <memory>
-#include <string>
-#include <thread>
-#include <utility>
-#include <vector>
+#include "glaze/ext/asio_include.hpp"
 
-#include "glaze/net/http_client.hpp"
-#include "ut/ut.hpp"
+import std;
+
+import glaze.net.http_client;
+
+import ut;
+
+using std::size_t;
+using std::uint16_t;
 
 #if defined(GLZ_USING_BOOST_ASIO)
 namespace asio

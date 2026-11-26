@@ -1,16 +1,13 @@
 // Glaze Library
 // For the license information refer to glaze.hpp
 
-#include <algorithm>
-#include <array>
-#include <span>
-#include <string>
-#include <string_view>
-#include <tuple>
-#include <vector>
+import std;
 
-#include "glaze/json/write.hpp"
-#include "ut/ut.hpp"
+import glaze.json;
+import glaze.core.tuple;
+import ut;
+
+using std::size_t;
 
 using namespace ut;
 

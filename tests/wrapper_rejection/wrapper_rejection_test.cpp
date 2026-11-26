@@ -1,20 +1,24 @@
 // Glaze Library
 // For the license information refer to glaze.hpp
 
+import std;
+
+import glaze.core.common;
+
+using std::uint32_t;
+
 // A wrapper (a glaze_wrapper such as glz::quoted or glz::invoke) is a view onto a member, not a struct.
 // A format with no specialization for one must not reflect it, which writes the wrapper's internals
 // (often an empty object) and reads into them. These checks hold that line for the wrappers that only
 // some formats support. Writing or reading glz::invoke in a format that cannot is a compile error with
 // its own message, covered by the rejection cases next to this file.
 
-#include <functional>
-#include <string>
 
-#include "glaze/beve.hpp"
-#include "glaze/cbor.hpp"
-#include "glaze/json.hpp"
-#include "glaze/json/raw_string.hpp"
-#include "glaze/msgpack.hpp"
+import glaze.beve;
+import glaze.cbor;
+import glaze.json;
+import glaze.json.raw_string;
+import glaze.msgpack;
 
 struct invoke_host
 {

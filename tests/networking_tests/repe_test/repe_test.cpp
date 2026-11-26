@@ -1,22 +1,21 @@
 // Glaze Library
-// For the license information refer to glaze.hpp
+// For the license information refer to glaze.ixx
 
-#include <cstring>
-#include <latch>
-#include <map>
-#include <memory>
-#include <optional>
-#include <span>
-#include <thread>
-#include <tuple>
-#include <variant>
-#include <vector>
+import std;
 
-#include "glaze/glaze.hpp"
-#include "glaze/rpc/registry.hpp"
-#include "glaze/rpc/repe/buffer.hpp"
-#include "glaze/thread/async_string.hpp"
-#include "ut/ut.hpp"
+import glaze;
+
+import glaze.rpc.read_and_commit;
+import glaze.rpc.registry;
+import glaze.rpc.repe;
+import glaze.rpc.repe.buffer;
+import glaze.rpc.repe.header;
+import glaze.thread.async_string;
+import glaze.util.string_literal;
+
+import ut;
+
+using std::uint64_t;
 
 using namespace ut;
 
@@ -223,7 +222,7 @@ suite structs_of_functions = [] {
       response = call_json(server, {""});
       expect(
          response.body ==
-         R"({"i":42,"hello":"std::function<std::string_view()>","world":"std::function<std::string_view()>","get_number":"std::function<int32_t()>","void_func":"std::function<void()>","max":"std::function<double(std::vector<double>&)>"})")
+         R"({"i":42,"hello":"std::function<std::string_view()>","world":"std::function<std::string_view()>","get_number":"std::function<std::int32_t()>","void_func":"std::function<void()>","max":"std::function<double(std::vector<double>&)>"})")
          << response.body;
    };
 
@@ -264,13 +263,13 @@ suite structs_of_functions = [] {
       response = call_json(server, {"/my_functions"});
       expect(
          response.body ==
-         R"({"i":0,"hello":"std::function<std::string_view()>","world":"std::function<std::string_view()>","get_number":"std::function<int32_t()>","void_func":"std::function<void()>","max":"std::function<double(std::vector<double>&)>"})")
+         R"({"i":0,"hello":"std::function<std::string_view()>","world":"std::function<std::string_view()>","get_number":"std::function<std::int32_t()>","void_func":"std::function<void()>","max":"std::function<double(std::vector<double>&)>"})")
          << response.body;
 
       response = call_json(server, {""});
       expect(
          response.body ==
-         R"({"my_functions":{"i":0,"hello":"std::function<std::string_view()>","world":"std::function<std::string_view()>","get_number":"std::function<int32_t()>","void_func":"std::function<void()>","max":"std::function<double(std::vector<double>&)>"},"meta_functions":{"hello":"std::function<std::string_view()>","world":"std::function<std::string_view()>","get_number":"std::function<int32_t()>"},"append_awesome":"std::function<std::string(const std::string&)>","my_string":""})")
+         R"({"my_functions":{"i":0,"hello":"std::function<std::string_view()>","world":"std::function<std::string_view()>","get_number":"std::function<std::int32_t()>","void_func":"std::function<void()>","max":"std::function<double(std::vector<double>&)>"},"meta_functions":{"hello":"std::function<std::string_view()>","world":"std::function<std::string_view()>","get_number":"std::function<std::int32_t()>"},"append_awesome":"std::function<std::string(const std::string&)>","my_string":""})")
          << response.body;
    };
 
@@ -418,14 +417,14 @@ suite structs_of_functions_beve = [] {
       expect(!glz::beve_to_json(response.body, res));
       expect(
          res ==
-         R"({"i":0,"hello":"std::function<std::string_view()>","world":"std::function<std::string_view()>","get_number":"std::function<int32_t()>","void_func":"std::function<void()>","max":"std::function<double(std::vector<double>&)>"})")
+         R"({"i":0,"hello":"std::function<std::string_view()>","world":"std::function<std::string_view()>","get_number":"std::function<std::int32_t()>","void_func":"std::function<void()>","max":"std::function<double(std::vector<double>&)>"})")
          << res;
 
       response = call_beve(server, {""});
       expect(!glz::beve_to_json(response.body, res));
       expect(
          res ==
-         R"({"my_functions":{"i":0,"hello":"std::function<std::string_view()>","world":"std::function<std::string_view()>","get_number":"std::function<int32_t()>","void_func":"std::function<void()>","max":"std::function<double(std::vector<double>&)>"},"meta_functions":{"hello":"std::function<std::string_view()>","world":"std::function<std::string_view()>","get_number":"std::function<int32_t()>"},"append_awesome":"std::function<std::string(const std::string&)>","my_string":""})")
+         R"({"my_functions":{"i":0,"hello":"std::function<std::string_view()>","world":"std::function<std::string_view()>","get_number":"std::function<std::int32_t()>","void_func":"std::function<void()>","max":"std::function<double(std::vector<double>&)>"},"meta_functions":{"hello":"std::function<std::string_view()>","world":"std::function<std::string_view()>","get_number":"std::function<std::int32_t()>"},"append_awesome":"std::function<std::string(const std::string&)>","my_string":""})")
          << res;
    };
 
@@ -549,14 +548,14 @@ suite multi_threading_tests = [] {
 
       registry.on(obj);
 
-      static constexpr size_t N = 10'000;
+      static constexpr std::size_t N = 10'000;
 
       repe::message read_msg{};
       repe::request_json({"/str"}, read_msg);
 
       std::thread reader_str([&] {
-         size_t response_counter{};
-         for (size_t i = 0; i < N; ++i) {
+         std::size_t response_counter{};
+         for (std::size_t i = 0; i < N; ++i) {
             repe::message response{};
             registry.call(read_msg, response);
             response_counter += response.body.size();
@@ -568,8 +567,8 @@ suite multi_threading_tests = [] {
       repe::request_json({"/integer"}, read_integer);
 
       std::thread reader_integer([&] {
-         size_t response_counter{};
-         for (size_t i = 0; i < N; ++i) {
+         std::size_t response_counter{};
+         for (std::size_t i = 0; i < N; ++i) {
             repe::message response{};
             registry.call(read_integer, response);
             response_counter += response.body.size();
@@ -581,8 +580,8 @@ suite multi_threading_tests = [] {
       repe::request_json({""}, read_full);
 
       std::thread reader_full([&] {
-         size_t response_counter{};
-         for (size_t i = 0; i < N; ++i) {
+         std::size_t response_counter{};
+         for (std::size_t i = 0; i < N; ++i) {
             repe::message response{};
             registry.call(read_full, response);
             response_counter += response.body.size();
@@ -593,9 +592,9 @@ suite multi_threading_tests = [] {
       std::latch latch{1};
 
       std::thread writer_str([&] {
-         size_t response_counter{};
+         std::size_t response_counter{};
          std::string message;
-         for (size_t i = 0; i < N; ++i) {
+         for (std::size_t i = 0; i < N; ++i) {
             message.append("x");
             repe::message write_msg{};
             repe::request_json({"/str"}, write_msg, message);
@@ -611,8 +610,8 @@ suite multi_threading_tests = [] {
       });
 
       std::thread writer_integer([&] {
-         size_t response_counter{};
-         for (size_t i = 0; i < N; ++i) {
+         std::size_t response_counter{};
+         for (std::size_t i = 0; i < N; ++i) {
             repe::message write_msg{};
             repe::request_json({"/integer"}, write_msg, i);
             repe::message response{};
@@ -967,7 +966,7 @@ suite deeply_nested_tests = [] {
 
       expect(
          response.body ==
-         R"e({"middle":{"inner":{"val":99,"get_val":"int32_t (inner_t::*)()"},"name":"modified_mid","get_name":"std::string_view (middle_t::*)()"},"score":1.23,"set_score":"void (outer_t::*)(double)"})e")
+         R"e({"middle":{"inner":{"val":99,"get_val":"std::int32_t (inner_t::*)()"},"name":"modified_mid","get_name":"std::string_view (middle_t::*)()"},"score":1.23,"set_score":"void (outer_t::*)(double)"})e")
          << response.body;
    };
 

@@ -1,23 +1,21 @@
 
 // Glaze Library
-// For the license information refer to glaze.hpp
+// For the license information refer to glaze.ixx
 
-#include <array>
-#include <cstdint>
-#include <map>
-#include <memory>
-#include <optional>
-#include <string>
-#include <string_view>
-#include <tuple>
-#include <utility>
-#include <variant>
-#include <vector>
+import std;
 
-#include "glaze/containers/flat_map.hpp"
-#include "glaze/json.hpp"
-#include "json_test_shared_types.hpp"
-#include "ut/ut.hpp"
+import glaze.containers.flat_map;
+import glaze.json;
+import glaze.tests.json.json_test_shared_types;
+import ut;
+
+using std::uint8_t;
+using std::int8_t;
+using std::uint16_t;
+using std::int32_t;
+using std::uint32_t;
+using std::uint64_t;
+using std::size_t;
 
 using namespace ut;
 
@@ -165,17 +163,9 @@ suite tagged_variant_tests = [] {
 #if !defined(_MSC_VER)
    "tagged_variant_schema_tests"_test = [] {
       auto s = glz::write_json_schema<tagged_variant>().value_or("error");
-      // P2996 reflection: Bloomberg Clang returns unqualified names, GCC returns qualified names
-      // Accept both forms for the title
-      auto expected_qualified =
-         R"({"type":"object","$defs":{"int32_t":{"type":"integer","minimum":-2147483648,"maximum":2147483647}},"oneOf":[{"type":"object","properties":{"action":{"const":"PUT"},"data":{"type":"object","additionalProperties":{"$ref":"#/$defs/int32_t"}}},"additionalProperties":false,"required":["action"],"title":"PUT"},{"type":"object","properties":{"action":{"const":"DELETE"},"data":{"type":"string"}},"additionalProperties":false,"required":["action"],"title":"DELETE"}],"title":"std::variant<put_action, delete_action>"})";
-#if GLZ_REFLECTION26
-      auto expected_unqualified =
-         R"({"type":"object","$defs":{"int32_t":{"type":"integer","minimum":-2147483648,"maximum":2147483647}},"oneOf":[{"type":"object","properties":{"action":{"const":"PUT"},"data":{"type":"object","additionalProperties":{"$ref":"#/$defs/int32_t"}}},"additionalProperties":false,"required":["action"],"title":"PUT"},{"type":"object","properties":{"action":{"const":"DELETE"},"data":{"type":"string"}},"additionalProperties":false,"required":["action"],"title":"DELETE"}],"title":"variant<put_action, delete_action>"})";
-      expect(s == expected_qualified || s == expected_unqualified) << s;
-#else
-      expect(s == expected_qualified) << s;
-#endif
+      const auto expected = std::string{R"({"type":"object","$defs":{"std::int32_t":{"type":"integer","minimum":-2147483648,"maximum":2147483647}},"oneOf":[{"type":"object","properties":{"action":{"const":"PUT"},"data":{"type":"object","additionalProperties":{"$ref":"#/$defs/std::int32_t"}}},"additionalProperties":false,"required":["action"],"title":"PUT"},{"type":"object","properties":{"action":{"const":"DELETE"},"data":{"type":"string"}},"additionalProperties":false,"required":["action"],"title":"DELETE"}],"title":")"} +
+                            std::string{glz::name_v<tagged_variant>} + R"("})";
+      expect(s == expected) << s;
    };
 #endif
 
@@ -187,11 +177,11 @@ suite tagged_variant_tests = [] {
       std::string b = R"({"num":["float", 3.14]})";
       expect(ec == glz::error_code::none) << glz::format_error(ec, b);
       expect(std::get<float>(obj.num) == 3.14f);
-      expect(not glz::read_json(obj, R"({"num":["uint64_t", 5]})"));
+      expect(not glz::read_json(obj, R"({"num":["std::uint64_t", 5]})"));
       expect(std::get<uint64_t>(obj.num) == 5);
-      expect(not glz::read_json(obj, R"({"num":["int8_t", -3]})"));
+      expect(not glz::read_json(obj, R"({"num":["std::int8_t", -3]})"));
       expect(std::get<int8_t>(obj.num) == -3);
-      expect(not glz::read_json(obj, R"({"num":["int32_t", -2]})"));
+      expect(not glz::read_json(obj, R"({"num":["std::int32_t", -2]})"));
       expect(std::get<int32_t>(obj.num) == -2);
 
       obj.num = 5.0;
@@ -200,26 +190,19 @@ suite tagged_variant_tests = [] {
       expect(s == R"({"num":["double",5]})");
       obj.num = uint64_t{3};
       expect(not glz::write_json(obj, s));
-      expect(s == R"({"num":["uint64_t",3]})");
+      expect(s == R"({"num":["std::uint64_t",3]})");
       obj.num = int8_t{-5};
       expect(not glz::write_json(obj, s));
-      expect(s == R"({"num":["int8_t",-5]})");
+      expect(s == R"({"num":["std::int8_t",-5]})");
    };
 
 #if !defined(_MSC_VER)
    "shared_ptr variant schema"_test = [] {
       const auto schema = glz::write_json_schema<std::shared_ptr<tagged_variant2>>().value_or("error");
-      // P2996 reflection: Bloomberg Clang returns unqualified names, GCC returns qualified names
-      // Accept both forms for the title
-      auto expected_qualified =
-         R"({"type":["object","null"],"$defs":{"int32_t":{"type":"integer","minimum":-2147483648,"maximum":2147483647}},"oneOf":[{"type":"object","properties":{"data":{"type":"object","additionalProperties":{"$ref":"#/$defs/int32_t"}},"type":{"const":"put_action"}},"additionalProperties":false,"required":["type"],"title":"put_action"},{"type":"object","properties":{"data":{"type":"string"},"type":{"const":"delete_action"}},"additionalProperties":false,"required":["type"],"title":"delete_action"},{"type":"object","properties":{"type":{"const":"std::monostate"}},"additionalProperties":false,"required":["type"],"title":"std::monostate"}],"title":"std::shared_ptr<std::variant<put_action, delete_action, std::monostate>>"})";
-#if GLZ_REFLECTION26
-      auto expected_unqualified =
-         R"({"type":["object","null"],"$defs":{"int32_t":{"type":"integer","minimum":-2147483648,"maximum":2147483647}},"oneOf":[{"type":"object","properties":{"data":{"type":"object","additionalProperties":{"$ref":"#/$defs/int32_t"}},"type":{"const":"put_action"}},"additionalProperties":false,"required":["type"],"title":"put_action"},{"type":"object","properties":{"data":{"type":"string"},"type":{"const":"delete_action"}},"additionalProperties":false,"required":["type"],"title":"delete_action"},{"type":"object","properties":{"type":{"const":"std::monostate"}},"additionalProperties":false,"required":["type"],"title":"std::monostate"}],"title":"std::shared_ptr<variant<put_action, delete_action, monostate>>"})";
-      expect(schema == expected_qualified || schema == expected_unqualified) << schema;
-#else
-      expect(schema == expected_qualified) << schema;
-#endif
+      // An unnamed variant's title follows the toolchain's spelling of its type.
+      const auto expected = std::string{R"({"type":["object","null"],"$defs":{"std::int32_t":{"type":"integer","minimum":-2147483648,"maximum":2147483647}},"oneOf":[{"type":"object","properties":{"data":{"type":"object","additionalProperties":{"$ref":"#/$defs/std::int32_t"}},"type":{"const":"put_action"}},"additionalProperties":false,"required":["type"],"title":"put_action"},{"type":"object","properties":{"data":{"type":"string"},"type":{"const":"delete_action"}},"additionalProperties":false,"required":["type"],"title":"delete_action"},{"type":"object","properties":{"type":{"const":"std::monostate"}},"additionalProperties":false,"required":["type"],"title":"std::monostate"}],"title":")"} +
+                            std::string{glz::name_v<std::shared_ptr<tagged_variant2>>} + R"("})";
+      expect(schema == expected) << schema;
    };
 #endif
 };
@@ -329,10 +312,10 @@ suite variant_tests = [] {
    };
 
    "variant write/read enum"_test = [] {
-      std::variant<Color, std::uint16_t> var{Color::Red};
+      std::variant<Color, uint16_t> var{Color::Red};
       auto res{glz::write_json(var).value_or("error")};
       expect(res == "\"Red\"") << res;
-      auto read{glz::read_json<std::variant<Color, std::uint16_t>>(res)};
+      auto read{glz::read_json<std::variant<Color, uint16_t>>(res)};
       expect(read.has_value());
       expect(std::holds_alternative<Color>(read.value()));
       expect(std::get<Color>(read.value()) == Color::Red);

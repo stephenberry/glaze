@@ -42,7 +42,7 @@ Plugins and hosts should check version compatibility before use. When the plugin
 // ABI-stable buffer for request/response data
 typedef struct repe_buffer {
     const char* data;
-    uint64_t size;
+    std::uint64_t size;
 } repe_buffer;
 
 // Result codes for plugin operations
@@ -66,13 +66,13 @@ Plugins must export these symbols with C linkage:
 
 ```c
 // Interface version for compatibility checking (standalone for ABI safety)
-uint32_t repe_plugin_interface_version(void);
+std::uint32_t repe_plugin_interface_version(void);
 
 // Plugin metadata (returns pointer to static struct)
 const repe_plugin_data* repe_plugin_info(void);
 
 // Request processing
-repe_buffer repe_plugin_call(const char* request, uint64_t request_size);
+repe_buffer repe_plugin_call(const char* request, std::uint64_t request_size);
 ```
 
 The `repe_plugin_info()` function must return a pointer that remains valid for the plugin's entire lifetime. The recommended pattern is to use a file-scope static:
@@ -124,7 +124,7 @@ namespace glz::repe {
     void plugin_error_response(
         error_code ec,
         std::string_view error_msg,
-        uint64_t id = 0
+        std::uint64_t id = 0
     );
 }
 ```
@@ -146,7 +146,7 @@ namespace glz::repe {
     repe_buffer plugin_call(
         Registry& registry,
         const char* request,
-        uint64_t request_size
+        std::uint64_t request_size
     );
 }
 ```
@@ -217,7 +217,7 @@ static const repe_plugin_data plugin_info = {
 // Plugin exports with C linkage
 extern "C" {
     // Required: Interface version for ABI compatibility
-    uint32_t repe_plugin_interface_version() {
+    std::uint32_t repe_plugin_interface_version() {
         return REPE_PLUGIN_INTERFACE_VERSION;
     }
 
@@ -243,7 +243,7 @@ extern "C" {
     }
 
     // Required: Request processing
-    repe_buffer repe_plugin_call(const char* request, uint64_t request_size) {
+    repe_buffer repe_plugin_call(const char* request, std::uint64_t request_size) {
         ensure_initialized();  // Plugin ensures initialization before dispatch
         return glz::repe::plugin_call(internal_registry, request, request_size);
     }
@@ -267,11 +267,11 @@ struct loaded_plugin {
     void* handle = nullptr;
 
     // Function pointers
-    uint32_t (*interface_version_fn)(void) = nullptr;
+    std::uint32_t (*interface_version_fn)(void) = nullptr;
     const repe_plugin_data* (*info_fn)(void) = nullptr;
     repe_result (*init_fn)(void) = nullptr;
     void (*shutdown_fn)(void) = nullptr;
-    repe_buffer (*call_fn)(const char*, uint64_t) = nullptr;
+    repe_buffer (*call_fn)(const char*, std::uint64_t) = nullptr;
 
     ~loaded_plugin() {
         if (handle) {
@@ -280,7 +280,7 @@ struct loaded_plugin {
         }
     }
 
-    repe_buffer call(const char* req, uint64_t size) const {
+    repe_buffer call(const char* req, std::uint64_t size) const {
         return call_fn(req, size);
     }
 };
@@ -295,11 +295,11 @@ std::optional<loaded_plugin> load_plugin(const std::string& path) {
 
     // Load required symbols
     plugin.interface_version_fn =
-        (uint32_t(*)(void))dlsym(plugin.handle, "repe_plugin_interface_version");
+        (std::uint32_t(*)(void))dlsym(plugin.handle, "repe_plugin_interface_version");
     plugin.info_fn =
         (const repe_plugin_data*(*)(void))dlsym(plugin.handle, "repe_plugin_info");
     plugin.call_fn =
-        (repe_buffer(*)(const char*, uint64_t))dlsym(plugin.handle, "repe_plugin_call");
+        (repe_buffer(*)(const char*, std::uint64_t))dlsym(plugin.handle, "repe_plugin_call");
 
     // Load optional symbols (may be NULL)
     plugin.init_fn =
@@ -437,7 +437,7 @@ See [REPE RPC](repe-rpc.md) for more details on thread-safe classes.
 | Symbol | Required | Description |
 |--------|----------|-------------|
 | `REPE_PLUGIN_INTERFACE_VERSION` | - | Macro defining current interface version (3) |
-| `repe_buffer` | - | POD struct: `{const char* data, uint64_t size}` |
+| `repe_buffer` | - | POD struct: `{const char* data, std::uint64_t size}` |
 | `repe_result` | - | Enum: `REPE_OK`, `REPE_ERROR_*` |
 | `repe_plugin_data` | - | Struct: `{name, version, root_path}` |
 | `repe_plugin_interface_version()` | Yes | Returns interface version (standalone for ABI safety) |

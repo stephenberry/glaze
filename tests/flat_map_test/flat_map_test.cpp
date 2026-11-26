@@ -1,18 +1,11 @@
 // Glaze Library
-// For the license information refer to glaze.hpp
+// For the license information refer to glaze.ixx
 
-#include "glaze/containers/flat_map.hpp"
+import std;
 
-#include <functional>
-#include <memory>
-#include <optional>
-#include <stdexcept>
-#include <string>
-#include <string_view>
-#include <type_traits>
-#include <vector>
+import glaze.containers.flat_map;
 
-#include "ut/ut.hpp"
+import ut;
 
 using namespace ut;
 

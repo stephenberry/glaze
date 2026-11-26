@@ -1,25 +1,23 @@
 // Glaze Library
-// For the license information refer to glaze.hpp
+// For the license information refer to glaze.ixx
 
 // Unit tests for WebSocket close frame and error handling
 
-#include <algorithm>
-#include <array>
-#include <atomic>
-#include <chrono>
-#include <condition_variable>
-#include <cstdint>
-#include <memory>
-#include <mutex>
-#include <optional>
-#include <string>
-#include <string_view>
-#include <thread>
-#include <vector>
+#include "glaze/ext/asio_include.hpp"
 
-#include "glaze/net/http_server.hpp"
-#include "glaze/net/websocket_connection.hpp"
-#include "ut/ut.hpp"
+import std;
+
+import glaze.net.http_router;
+import glaze.net.http_server;
+import glaze.net.websocket_connection;
+
+import ut;
+
+using std::uint64_t;
+using std::uint16_t;
+using std::uint8_t;
+using std::ptrdiff_t;
+using std::size_t;
 
 using namespace ut;
 using namespace glz;
@@ -53,7 +51,7 @@ handshake_result read_handshake_response(asio::ip::tcp::socket& socket)
    asio::error_code ec;
 
    while (true) {
-      std::size_t bytes_read = socket.read_some(asio::buffer(chunk), ec);
+      size_t bytes_read = socket.read_some(asio::buffer(chunk), ec);
 
       if (ec && bytes_read == 0) {
          break;
@@ -63,7 +61,7 @@ handshake_result read_handshake_response(asio::ip::tcp::socket& socket)
 
       auto it = std::search(buffer.begin(), buffer.end(), terminator.begin(), terminator.end());
       if (it != buffer.end()) {
-         std::size_t header_bytes = static_cast<std::size_t>(std::distance(buffer.begin(), it)) + terminator.size();
+         size_t header_bytes = static_cast<size_t>(std::distance(buffer.begin(), it)) + terminator.size();
 
          std::string response(buffer.begin(), buffer.begin() + header_bytes);
          std::vector<uint8_t> leftover(buffer.begin() + header_bytes, buffer.end());
@@ -86,7 +84,7 @@ std::optional<websocket_frame> consume_frame(std::vector<uint8_t>& buffer)
       return std::nullopt;
    }
 
-   std::size_t offset = 0;
+   size_t offset = 0;
    uint8_t first = buffer[offset++];
    uint8_t second = buffer[offset++];
    uint8_t opcode = first & 0x0F;
@@ -124,16 +122,16 @@ std::optional<websocket_frame> consume_frame(std::vector<uint8_t>& buffer)
       return std::nullopt;
    }
 
-   std::vector<uint8_t> payload(static_cast<std::size_t>(payload_length));
+   std::vector<uint8_t> payload(static_cast<size_t>(payload_length));
    for (uint64_t i = 0; i < payload_length; ++i) {
-      uint8_t byte = buffer[offset + static_cast<std::size_t>(i)];
+      uint8_t byte = buffer[offset + static_cast<size_t>(i)];
       if (masked) {
-         byte ^= mask_key[static_cast<std::size_t>(i) % 4];
+         byte ^= mask_key[static_cast<size_t>(i) % 4];
       }
-      payload[static_cast<std::size_t>(i)] = byte;
+      payload[static_cast<size_t>(i)] = byte;
    }
 
-   buffer.erase(buffer.begin(), buffer.begin() + static_cast<std::ptrdiff_t>(offset + payload_length));
+   buffer.erase(buffer.begin(), buffer.begin() + static_cast<ptrdiff_t>(offset + payload_length));
 
    return websocket_frame{opcode, std::move(payload)};
 }
@@ -150,7 +148,7 @@ std::optional<websocket_frame> poll_for_frame(asio::ip::tcp::socket& socket, std
 
    while (std::chrono::steady_clock::now() - start < timeout) {
       asio::error_code ec;
-      std::size_t bytes_read = socket.read_some(asio::buffer(buffer), ec);
+      size_t bytes_read = socket.read_some(asio::buffer(buffer), ec);
 
       if (ec == asio::error::would_block) {
          std::this_thread::sleep_for(std::chrono::milliseconds(10));

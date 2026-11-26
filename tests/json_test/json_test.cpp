@@ -1,52 +1,55 @@
 // Glaze Library
-// For the license information refer to glaze.hpp
+// For the license information refer to glaze.ixx
 
-#include <algorithm>
-#include <any>
-#include <array>
-#include <atomic>
-#include <bitset>
-#include <chrono>
-#include <complex>
-#include <deque>
-#include <expected>
-#include <filesystem>
-#include <forward_list>
-#include <initializer_list>
-#include <iostream>
-#include <list>
-#include <map>
-#include <memory>
-#include <numbers>
-#include <random>
-#include <ranges>
-#include <set>
-#include <span>
-#if defined(__STDCPP_FLOAT128_T__)
-#include <stdfloat>
-#endif
-#include <tuple>
-#include <unordered_map>
-#include <variant>
+import std;
 
-#include "glaze/api/impl.hpp"
-#include "glaze/containers/flat_map.hpp"
+import glaze;
+
+import glaze.api.std.array;
+import glaze.api.std.deque;
+import glaze.api.std.functional;
+import glaze.api.std.list;
+import glaze.api.std.map;
+import glaze.api.std.optional;
+import glaze.api.std.shared_ptr;
+import glaze.api.std.string;
+import glaze.api.std.variant;
+import glaze.api.std.vector;
+import glaze.api.tuple;
+import glaze.api.type_support;
+import glaze.containers.flat_map;
+import glaze.core.array_apply;
+import glaze.core.std_error_code;
+import glaze.file.raw_or_file;
+import glaze.hardware.volatile_array;
+import glaze.record.recorder;
+import glaze.thread.threadpool;
+import glaze.trace;
+import glaze.tuplet;
+import glaze.util.string_literal;
+import glaze.util.type_traits;
+
+import glaze.tests.json.json_test_shared_types;
+import glaze.tests.minimal_buffer;
+import glaze.tests.scratch_directory;
+import glaze.tests.speculation_guard;
+
+import ut;
+
 #include "glaze/core/feature_test.hpp"
-#include "glaze/core/std_error_code.hpp"
-#include "glaze/file/raw_or_file.hpp"
-#include "glaze/hardware/volatile_array.hpp"
-#include "glaze/json.hpp"
-#include "glaze/json/flatten_map.hpp"
-#include "glaze/json/study.hpp"
-#include "glaze/record/recorder.hpp"
-#include "glaze/trace/trace.hpp"
-#include "json_test_shared_types.hpp"
-#include "minimal_buffer.hpp"
-#include "scratch_directory.hpp"
-#include "speculation_guard.hpp"
-#include "ut/ut.hpp"
+
+using std::int8_t;
+using std::uint8_t;
+using std::int16_t;
+using std::uint16_t;
+using std::int32_t;
+using std::uint32_t;
+using std::int64_t;
+using std::uint64_t;
+using std::size_t;
 
 using namespace ut;
+using std::uint_fast32_t;
 
 // Custom opts for prettify without newlines in arrays
 struct opts_no_array_newlines : glz::opts
@@ -492,7 +495,7 @@ struct glz::meta<Shapes>
    static constexpr std::array value{circ, sq, triangle};
 };
 
-// static_assert(glz::reflect<Vehicle>::keys[uint32_t(Vehicle::Truck)] == "Truck");
+// static_assert(glz::reflect<Vehicle>::keys[std::uint32_t(Vehicle::Truck)] == "Truck");
 
 suite glz_enum_test = [] {
    "glz_enum"_test = [] {
@@ -1526,14 +1529,14 @@ suite container_types = [] {
    using namespace ut;
    "vector int roundtrip"_test = [] {
       std::vector<int> vec(100);
-      for (auto& item : vec) item = rand();
+      for (auto& item : vec) item = std::rand();
       std::string buffer{};
       std::vector<int> vec2{};
       expect(not glz::write_json(vec, buffer));
       expect(glz::read_json(vec2, buffer) == glz::error_code::none);
       expect(vec == vec2);
    };
-   "vector uint64_t roundtrip"_test = [] {
+   "vector std::uint64_t roundtrip"_test = [] {
       std::uniform_int_distribution<uint64_t> dist((std::numeric_limits<uint64_t>::min)(),
                                                    (std::numeric_limits<uint64_t>::max)());
       std::mt19937 gen{};
@@ -1547,7 +1550,7 @@ suite container_types = [] {
    };
    "vector double roundtrip"_test = [] {
       std::vector<double> vec(100);
-      for (auto& item : vec) item = rand() / (1.0 + rand());
+      for (auto& item : vec) item = std::rand() / (1.0 + std::rand());
       std::string buffer{};
       std::vector<double> vec2{};
       expect(not glz::write_json(vec, buffer));
@@ -1556,7 +1559,7 @@ suite container_types = [] {
    };
    "vector float roundtrip"_test = [] {
       std::vector<float> vec(100);
-      for (auto& item : vec) item = float(rand() / (1.0 + rand()));
+      for (auto& item : vec) item = float(std::rand() / (1.0 + std::rand()));
       std::string buffer{};
       std::vector<float> vec2{};
       expect(not glz::write_json(vec, buffer));
@@ -1565,7 +1568,7 @@ suite container_types = [] {
    };
    "vector bool roundtrip"_test = [] {
       std::vector<bool> vec(100);
-      for (auto&& item : vec) item = rand() / (1.0 + rand());
+      for (auto&& item : vec) item = std::rand() / (1.0 + std::rand());
       std::string buffer{};
       std::vector<bool> vec2{};
       expect(not glz::write_json(vec, buffer));
@@ -1688,7 +1691,7 @@ suite container_types = [] {
    };
    "deque roundtrip"_test = [] {
       std::vector<int> deq(100);
-      for (auto& item : deq) item = rand();
+      for (auto& item : deq) item = std::rand();
       std::string buffer{};
       std::vector<int> deq2{};
       expect(not glz::write_json(deq, buffer));
@@ -1697,7 +1700,7 @@ suite container_types = [] {
    };
    "list roundtrip"_test = [] {
       std::list<int> lis(100);
-      for (auto& item : lis) item = rand();
+      for (auto& item : lis) item = std::rand();
       std::string buffer{};
       std::list<int> lis2{};
       expect(not glz::write_json(lis, buffer));
@@ -1706,7 +1709,7 @@ suite container_types = [] {
    };
    "forward_list roundtrip"_test = [] {
       std::forward_list<int> lis(100);
-      for (auto& item : lis) item = rand();
+      for (auto& item : lis) item = std::rand();
       std::string buffer{};
       std::forward_list<int> lis2{};
       expect(not glz::write_json(lis, buffer));
@@ -1719,7 +1722,7 @@ suite container_types = [] {
       std::mt19937 g{};
       for (auto i = 0; i < 20; ++i) {
          std::shuffle(str.begin(), str.end(), g);
-         map[str] = rand();
+         map[str] = std::rand();
       }
       std::string buffer{};
       std::map<std::string, int> map2{};
@@ -1734,7 +1737,7 @@ suite container_types = [] {
    "map int keys roundtrip"_test = [] {
       std::map<int, int> map;
       for (auto i = 0; i < 20; ++i) {
-         map[rand()] = rand();
+         map[std::rand()] = std::rand();
       }
       std::string buffer{};
       std::map<int, int> map2{};
@@ -1748,7 +1751,7 @@ suite container_types = [] {
    "unordered_map int keys roundtrip"_test = [] {
       std::unordered_map<int, int> map;
       for (auto i = 0; i < 20; ++i) {
-         map[rand()] = rand();
+         map[std::rand()] = std::rand();
       }
       std::string buffer{};
       std::unordered_map<int, int> map2{};
@@ -1762,7 +1765,7 @@ suite container_types = [] {
    "unordered_map<int, std::string> roundtrip"_test = [] {
       std::unordered_map<int, std::string> map;
       for (auto i = 0; i < 5; ++i) {
-         map[rand()] = std::to_string(rand());
+         map[std::rand()] = std::to_string(std::rand());
       }
       std::string buffer{};
       std::unordered_map<int, std::string> map2{};
@@ -2472,9 +2475,9 @@ suite user_types = [] {
 
    "complex user obect member names"_test = [] {
       expect(glz::name_v<glz::detail::member_tuple_t<Thing>> ==
-             "glz::tuple<sub_thing,std::array<sub_thing2,1>,V3,std::list<int32_t>,std::deque<double>,std::"
-             "vector<V3>,int32_t,double,bool,char,std::variant<var1_t,var2_t>,Color,std::vector<bool>,std::shared_ptr<"
-             "sub_thing>,std::optional<V3>,std::array<std::string,4>,std::map<std::string,int32_t>,std::map<int32_t,"
+             "glz::tuple<sub_thing,std::array<sub_thing2,1>,V3,std::list<std::int32_t>,std::deque<double>,std::"
+             "vector<V3>,std::int32_t,double,bool,char,std::variant<var1_t,var2_t>,Color,std::vector<bool>,std::shared_ptr<"
+             "sub_thing>,std::optional<V3>,std::array<std::string,4>,std::map<std::string,std::int32_t>,std::map<std::int32_t,"
              "double>,sub_thing*>");
    };
 };
@@ -4906,7 +4909,7 @@ suite allocated_write = [] {
 
 suite nan_tests = [] {
    "nan_write_tests"_test = [] {
-      double d = NAN;
+      double d = std::numeric_limits<double>::quiet_NaN();
       std::string s{};
       expect(not glz::write_json(d, s));
       expect(s == "null");
@@ -5972,7 +5975,7 @@ suite json_schema = [] {
       // when you update this string
       expect(
          schema ==
-         R"({"type":"object","properties":{"array":{"type":"array","items":{"type":"string"},"maxItems":4},"b":{"type":"boolean"},"c":{"type":"string"},"color":{"type":"string","oneOf":[{"title":"Red","const":"Red"},{"title":"Green","const":"Green"},{"title":"Blue","const":"Blue"}]},"d":{"$ref":"#/$defs/double"},"deque":{"type":"array","items":{"$ref":"#/$defs/double"}},"i":{"$ref":"#/$defs/int32_t"},"list":{"type":"array","items":{"$ref":"#/$defs/int32_t"}},"map":{"type":"object","additionalProperties":{"$ref":"#/$defs/int32_t"}},"mapi":{"type":"object","additionalProperties":{"$ref":"#/$defs/double"}},"optional":{"anyOf":[{"$ref":"#/$defs/V3"},{"type":"null"}]},"sptr":{"anyOf":[{"$ref":"#/$defs/sub_thing"},{"type":"null"}]},"thing":{"$ref":"#/$defs/sub_thing"},"thing2array":{"type":"array","items":{"type":"object","properties":{"a":{"$ref":"#/$defs/double"},"b":{"type":"string"},"c":{"$ref":"#/$defs/double"},"d":{"$ref":"#/$defs/double"},"e":{"$ref":"#/$defs/double"},"f":{"$ref":"#/$defs/float"},"g":{"$ref":"#/$defs/double"},"h":{"$ref":"#/$defs/double"}},"additionalProperties":false},"maxItems":1},"thing_ptr":{"anyOf":[{"$ref":"#/$defs/sub_thing"},{"type":"null"}]},"v":{"type":"object","oneOf":[{"type":"object","properties":{"x":{"$ref":"#/$defs/double"}},"additionalProperties":false,"title":"var1_t"},{"type":"object","properties":{"y":{"$ref":"#/$defs/double"}},"additionalProperties":false,"title":"var2_t"}]},"vb":{"type":"array","items":{"type":"boolean"}},"vec3":{"$ref":"#/$defs/V3"},"vector":{"type":"array","items":{"$ref":"#/$defs/V3"}}},"additionalProperties":false,"$defs":{"V3":{"type":"array","prefixItems":[{"type":"number"},{"type":"number"},{"type":"number"}],"items":false,"maxItems":3},"double":{"type":"number"},"float":{"type":"number","minimum":-3.4028234663852886E38,"maximum":3.4028234663852886E38},"int32_t":{"type":"integer","minimum":-2147483648,"maximum":2147483647},"sub_thing":{"type":"object","properties":{"a":{"$ref":"#/$defs/double"},"b":{"type":"string"}},"additionalProperties":false}},"examples":[{"thing":{},"i":42}],"required":["thing","i"],"title":"Thing"})")
+         R"({"type":"object","properties":{"array":{"type":"array","items":{"type":"string"},"maxItems":4},"b":{"type":"boolean"},"c":{"type":"string"},"color":{"type":"string","oneOf":[{"title":"Red","const":"Red"},{"title":"Green","const":"Green"},{"title":"Blue","const":"Blue"}]},"d":{"$ref":"#/$defs/double"},"deque":{"type":"array","items":{"$ref":"#/$defs/double"}},"i":{"$ref":"#/$defs/std::int32_t"},"list":{"type":"array","items":{"$ref":"#/$defs/std::int32_t"}},"map":{"type":"object","additionalProperties":{"$ref":"#/$defs/std::int32_t"}},"mapi":{"type":"object","additionalProperties":{"$ref":"#/$defs/double"}},"optional":{"anyOf":[{"$ref":"#/$defs/V3"},{"type":"null"}]},"sptr":{"anyOf":[{"$ref":"#/$defs/sub_thing"},{"type":"null"}]},"thing":{"$ref":"#/$defs/sub_thing"},"thing2array":{"type":"array","items":{"type":"object","properties":{"a":{"$ref":"#/$defs/double"},"b":{"type":"string"},"c":{"$ref":"#/$defs/double"},"d":{"$ref":"#/$defs/double"},"e":{"$ref":"#/$defs/double"},"f":{"$ref":"#/$defs/float"},"g":{"$ref":"#/$defs/double"},"h":{"$ref":"#/$defs/double"}},"additionalProperties":false},"maxItems":1},"thing_ptr":{"anyOf":[{"$ref":"#/$defs/sub_thing"},{"type":"null"}]},"v":{"type":"object","oneOf":[{"type":"object","properties":{"x":{"$ref":"#/$defs/double"}},"additionalProperties":false,"title":"var1_t"},{"type":"object","properties":{"y":{"$ref":"#/$defs/double"}},"additionalProperties":false,"title":"var2_t"}]},"vb":{"type":"array","items":{"type":"boolean"}},"vec3":{"$ref":"#/$defs/V3"},"vector":{"type":"array","items":{"$ref":"#/$defs/V3"}}},"additionalProperties":false,"$defs":{"V3":{"type":"array","prefixItems":[{"type":"number"},{"type":"number"},{"type":"number"}],"items":false,"maxItems":3},"double":{"type":"number"},"float":{"type":"number","minimum":-3.4028234663852886E38,"maximum":3.4028234663852886E38},"std::int32_t":{"type":"integer","minimum":-2147483648,"maximum":2147483647},"sub_thing":{"type":"object","properties":{"a":{"$ref":"#/$defs/double"},"b":{"type":"string"}},"additionalProperties":false}},"examples":[{"thing":{},"i":42}],"required":["thing","i"],"title":"Thing"})")
          << schema;
    };
 };
@@ -6566,9 +6569,6 @@ suite custom_unique_tests = [] {
       expect(*c.x == 5);
    };
 };
-
-#include <set>
-#include <unordered_set>
 
 static_assert(glz::emplaceable<std::set<std::string>>);
 
@@ -7525,7 +7525,7 @@ suite validation_tests = [] {
       // Tests are taken from the https://www.json.org/JSON_checker/ test suite
 
       std::string fail10 = R"({"Extra value after close": true} "misplaced quoted value")";
-      auto ec_fail10 = glz::read<opts_validate_trailing_whitespace{true}>(json, fail10);
+      auto ec_fail10 = glz::read<opts_validate_trailing_whitespace{{}, true}>(json, fail10);
       expect(ec_fail10 != glz::error_code::none);
       expect(glz::validate_json(fail10) != glz::error_code::none);
 
@@ -7667,12 +7667,12 @@ break"])";
       expect(glz::validate_json(fail6) != glz::error_code::none);
 
       std::string fail7 = R"(["Comma after the close"],)";
-      auto ec_fail7 = glz::read<opts_validate_trailing_whitespace{true}>(json, fail7);
+      auto ec_fail7 = glz::read<opts_validate_trailing_whitespace{{}, true}>(json, fail7);
       expect(ec_fail7 != glz::error_code::none);
       expect(glz::validate_json(fail7) != glz::error_code::none);
 
       std::string fail8 = R"(["Extra close"]])";
-      auto ec_fail8 = glz::read<opts_validate_trailing_whitespace{true}>(json, fail8);
+      auto ec_fail8 = glz::read<opts_validate_trailing_whitespace{{}, true}>(json, fail8);
       expect(ec_fail8 != glz::error_code::none);
       expect(glz::validate_json(fail8) != glz::error_code::none);
 
@@ -9186,7 +9186,7 @@ struct glz::meta<cx_values_implicit_static_key>
 
 struct direct_cx_value_conversion
 {
-   static constexpr std::uint64_t const_v{42};
+   static constexpr uint64_t const_v{42};
    struct glaze
    {
       static constexpr auto value{&direct_cx_value_conversion::const_v};
@@ -9196,7 +9196,7 @@ static_assert(glz::glaze_const_value_t<direct_cx_value_conversion>);
 
 struct direct_cx_value_conversion_different_value
 {
-   static constexpr std::uint64_t const_v{1337};
+   static constexpr uint64_t const_v{1337};
    struct glaze
    {
       static constexpr auto value{&direct_cx_value_conversion_different_value::const_v};
@@ -9344,14 +9344,14 @@ suite constexpr_values_test = [] {
 
    "constexpr blend with non constexpr variant"_test = [] {
       std::variant<std::monostate, direct_cx_value_conversion_different_value, direct_cx_value_conversion,
-                   std::uint64_t>
-         var{std::uint64_t{111}};
+                   uint64_t>
+         var{uint64_t{111}};
       std::string s{};
       expect(not glz::write_json(var, s));
       expect(s == R"(111)");
       auto parse_err{glz::read_json(var, s)};
       expect(parse_err == glz::error_code::none) << glz::format_error(parse_err, s);
-      expect(std::holds_alternative<std::uint64_t>(var));
+      expect(std::holds_alternative<uint64_t>(var));
    };
 };
 
@@ -9744,7 +9744,7 @@ suite number_reading = [] {
       expect(glz::read_json(i, buffer) == glz::error_code::parse_number_failure);
    };
 
-   "long float uint64_t"_test = [] {
+   "long float std::uint64_t"_test = [] {
       std::string_view buffer{"0.00666666666666666600"};
       uint64_t i{5};
       expect(glz::read_json(i, buffer));
@@ -9772,7 +9772,7 @@ suite number_reading = [] {
       expect(d == 0.0);
    };
 
-   "minimum int32_t"_test = [] {
+   "minimum std::int32_t"_test = [] {
       std::string buffer{"-2147483648"};
       int32_t i{};
       expect(!glz::read_json(i, buffer));
@@ -9782,7 +9782,7 @@ suite number_reading = [] {
       expect(buffer == "-2147483648");
    };
 
-   "minimum int64_t"_test = [] {
+   "minimum std::int64_t"_test = [] {
       std::string buffer{"-9223372036854775808"};
       int64_t i{};
       expect(!glz::read_json(i, buffer));
@@ -11329,7 +11329,7 @@ struct unicode_keys
 {
    float field1;
    float field2;
-   std::uint8_t field3;
+   uint8_t field3;
    std::string field4;
    std::string field5;
    std::string field6;
@@ -11348,7 +11348,7 @@ struct unicode_keys2
 {
    float field1;
    float field2;
-   std::uint8_t field3;
+   uint8_t field3;
 };
 
 template <>
@@ -11363,7 +11363,7 @@ struct unicode_keys3
    float field0;
    float field1;
    float field2;
-   std::uint8_t field3;
+   uint8_t field3;
    std::string field4;
    std::string field5;
    std::string field6;
@@ -12033,7 +12033,7 @@ suite meta_schema_tests = [] {
       const auto json_schema = glz::write_json_schema<meta_schema_t>().value_or("error");
       expect(
          json_schema ==
-         R"({"type":"object","properties":{"file_name":{"type":"string","description":"provide a file name to load"},"is_valid":{"type":"boolean","description":"for validation"},"x":{"$ref":"#/$defs/int32_t","description":"x is a special integer"}},"additionalProperties":false,"$defs":{"int32_t":{"type":"integer","minimum":-2147483648,"maximum":2147483647}},"title":"meta_schema_t"})")
+         R"({"type":"object","properties":{"file_name":{"type":"string","description":"provide a file name to load"},"is_valid":{"type":"boolean","description":"for validation"},"x":{"$ref":"#/$defs/std::int32_t","description":"x is a special integer"}},"additionalProperties":false,"$defs":{"std::int32_t":{"type":"integer","minimum":-2147483648,"maximum":2147483647}},"title":"meta_schema_t"})")
          << json_schema;
    };
 
@@ -12057,13 +12057,13 @@ suite meta_schema_tests = [] {
          "description": "for validation"
       },
       "x": {
-         "$ref": "#/$defs/int32_t",
+         "$ref": "#/$defs/std::int32_t",
          "description": "x is a special integer"
       }
    },
    "additionalProperties": false,
    "$defs": {
-      "int32_t": {
+      "std::int32_t": {
          "type": "integer",
          "minimum": -2147483648,
          "maximum": 2147483647
@@ -13187,7 +13187,7 @@ struct glz::meta<struct_c_arrays_meta>
 };
 
 suite c_style_arrays = [] {
-   "uint32_t c array"_test = [] {
+   "std::uint32_t c array"_test = [] {
       uint32_t arr[4] = {1, 2, 3, 4};
       std::string s{};
       expect(not glz::write_json(arr, s));
@@ -14843,7 +14843,7 @@ struct naive_static_string_t
    {
       const auto bytes_to_copy = (std::min)(N, sz);
       length = bytes_to_copy;
-      memcpy(buffer, v, bytes_to_copy);
+      std::memcpy(buffer, v, bytes_to_copy);
       return *this;
    }
 
@@ -15895,41 +15895,10 @@ suite member_function_pointer_serialization = [] {
 
       std::string buffer{};
       expect(not glz::write<opts_with_function_pointers{}>(thing, buffer));
-#if GLZ_REFLECTION26
-      // P2996 display_string_of behavior varies by compiler:
-      // - Bloomberg Clang: "(member-function-pointer-type)"
-      // - GCC: full signature like traditional GCC
-      bool pass =
-         (buffer == R"json({"name":"test_item","description":"(member-function-pointer-type)"})json") ||
-         (buffer ==
-          R"({"name":"test_item","description":"std::__cxx11::basic_string<char> (MemberFunctionThing::*)() const"})") ||
-         (buffer == R"({"name":"test_item","description":"std::basic_string<char> (MemberFunctionThing::*)() const"})");
-      expect(pass) << buffer;
-#elif defined(__GNUC__) && !defined(__clang__)
-#if defined(_GLIBCXX_USE_CXX11_ABI) && _GLIBCXX_USE_CXX11_ABI == 0
-      // Old ABI uses std::basic_string<char> without __cxx11 namespace
-      expect(buffer ==
-             R"({"name":"test_item","description":"std::basic_string<char> (MemberFunctionThing::*)() const"})")
-         << buffer;
-#else
-      expect(
-         buffer ==
-         R"({"name":"test_item","description":"std::__cxx11::basic_string<char> (MemberFunctionThing::*)() const"})")
-         << buffer;
-#endif
-#elif defined(_MSC_VER)
-      // MSVC produces fully qualified type names with calling convention
-      expect(buffer.find("MemberFunctionThing") != std::string::npos && buffer.find("test_item") != std::string::npos)
-         << buffer;
-#elif defined(__clang__) && defined(__GLIBCXX__)
-      // Clang printing libstdc++ types strips the __cxx11 inline namespace regardless of ABI.
-      expect(buffer ==
-             R"({"name":"test_item","description":"std::basic_string<char> (MemberFunctionThing::*)() const"})")
-         << buffer;
-#else
-      expect(buffer == R"({"name":"test_item","description":"std::string (MemberFunctionThing::*)() const"})")
-         << buffer;
-#endif
+      using member_pointer = decltype(&MemberFunctionThing::get_description);
+      const auto expected = std::string{R"({"name":"test_item","description":")"} +
+                            std::string{glz::name_v<member_pointer>} + R"("})";
+      expect(buffer == expected) << buffer;
    };
 
    "member function only serialization"_test = [] {
@@ -16897,7 +16866,7 @@ suite json_recursion_depth_limit = [] {
       // The JSON analogue of the BEVE cascade: two array alternatives, so every level tries both,
       // with a malformed leaf at the bottom that every level retries. 339 bytes took 40 seconds
       // before the speculation budget capped the total re-parsed bytes; the cost no longer grows
-      // with depth. See speculation_guard.hpp for what is timed.
+      // with depth. See speculation_guard.ixx for what is timed.
       const auto build = [](size_t levels) {
          std::string b;
          for (size_t i = 0; i < levels; ++i) b += R"([{"child":)";
@@ -16933,7 +16902,7 @@ suite json_recursion_depth_limit = [] {
    };
 };
 
-// Buffers that promise only what glaze's concepts require; see tests/minimal_buffer.hpp.
+// Buffers that promise only what glaze's concepts require; see tests/minimal_buffer.ixx.
 // Regression coverage for GitHub issue #2854.
 using test_buffers::qt_style_buffer;
 using test_buffers::read_only_buffer;

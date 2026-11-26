@@ -1,12 +1,20 @@
 // Glaze REST Demo Server
 
-#include <filesystem>
-#include <fstream>
-#include <iostream>
+#include "glaze/ext/asio_include.hpp"
+#ifdef DELETE
+#undef DELETE
+#endif
 
-#include "glaze/glaze.hpp"
-#include "glaze/net/http_server.hpp"
-#include "glaze/rpc/registry.hpp"
+import std;
+
+import glaze.core.common;
+import glaze.core.meta_fwd;
+import glaze.core.opts;
+
+import glaze.net.cors;
+import glaze.net.http_router;
+import glaze.net.http_server;
+import glaze.rpc.registry;
 
 struct User
 {

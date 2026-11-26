@@ -50,12 +50,13 @@ jobs:
         apt-get update
         apt-get install -y --no-install-recommends \
           ca-certificates \
-          cmake \
           git \
           python3
         update-ca-certificates
 
     - uses: actions/checkout@v7
+
+    - uses: lukka/get-cmake@latest
 
     - name: Configure CMake
       # -fno-ipa-icf-functions works around a gcc bug, not a glaze one. Identical code folding
@@ -71,7 +72,7 @@ jobs:
       # line. Reproduced on gcc 14 and 15, and absent under -O2, clang, and -fno-ipa-icf-functions.
       # Drop this once the gcc fix lands.
       run: |
-        cmake -S "$GITHUB_WORKSPACE" -B "$GITHUB_WORKSPACE/build" \
+        cmake -G Ninja -S "$GITHUB_WORKSPACE" -B "$GITHUB_WORKSPACE/build" \
           -DCMAKE_BUILD_TYPE=${{matrix.build_type}} \
           -DCMAKE_CXX_STANDARD=${{matrix.std}} \
           -DCMAKE_CXX_FLAGS="-fno-ipa-icf-functions" \
@@ -109,11 +110,12 @@ jobs:
 
     - name: Configure CMake
       run: |
-        cmake -B ${{github.workspace}}/build \
+        cmake -G Ninja -B ${{github.workspace}}/build \
           -DCMAKE_BUILD_TYPE=${{matrix.build_type}} \
           -DCMAKE_CXX_STANDARD=${{matrix.std}} \
           -DCMAKE_C_COMPILER=${{env.CC}} \
           -DCMAKE_CXX_COMPILER=${{env.CXX}} \
+          -DCMAKE_CXX_STDLIB_MODULES_JSON=/usr/lib/llvm-19/lib/libc++.modules.json \
           -DCMAKE_CXX_FLAGS="-stdlib=libc++" \
           -DCMAKE_EXE_LINKER_FLAGS="-stdlib=libc++ -lc++abi" \
           -Dglaze_DISABLE_ALWAYS_INLINE=ON \

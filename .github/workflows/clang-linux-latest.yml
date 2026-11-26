@@ -34,7 +34,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        clang: [19, 20, 21, 22, 23]
+        clang: [22, 23]
         build_type: [Debug]
         std: [23]
 
@@ -53,11 +53,12 @@ jobs:
 
     - name: Configure CMake
       run: |
-        cmake -B ${{github.workspace}}/build \
+        cmake -G Ninja -B ${{github.workspace}}/build \
           -DCMAKE_BUILD_TYPE=${{matrix.build_type}} \
           -DCMAKE_CXX_STANDARD=${{matrix.std}} \
           -DCMAKE_C_COMPILER=${{env.CC}} \
           -DCMAKE_CXX_COMPILER=${{env.CXX}} \
+          -DCMAKE_CXX_STDLIB_MODULES_JSON=/usr/lib/llvm-${{matrix.clang}}/lib/libc++.modules.json \
           -DCMAKE_CXX_FLAGS="-stdlib=libc++" \
           -DCMAKE_EXE_LINKER_FLAGS="-stdlib=libc++ -lc++abi"
 

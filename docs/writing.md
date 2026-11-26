@@ -8,7 +8,7 @@ All write functions return `glz::error_ctx`:
 
 ```cpp
 struct error_ctx {
-    size_t count{};                          // Bytes written to output
+    std::size_t count{};                          // Bytes written to output
     error_code ec{};                         // Error code (none on success)
     std::string_view custom_error_message{}; // Optional error details
 
@@ -55,7 +55,7 @@ if (ec) {
         // Use a larger buffer or the string-returning overload:
         auto result = glz::write_json(obj);
         if (result) {
-            size_t required_size = result->size();
+            std::size_t required_size = result->size();
         }
     }
     return;
@@ -116,7 +116,7 @@ if (ec.ec == glz::error_code::buffer_overflow) {
     // To get actual required size, use the string-returning overload:
     auto full = glz::write_json(large_object);
     if (full) {
-        size_t required = full->size();
+        std::size_t required = full->size();
     }
 }
 ```
@@ -188,20 +188,20 @@ Glaze uses a traits system that can be specialized for custom buffer types:
 
 ```cpp
 namespace glz {
-    template <size_t N>
+    template <std::size_t N>
     struct buffer_traits<my_lib::ring_buffer<N>> {
         static constexpr bool is_resizable = false;
         static constexpr bool has_bounded_capacity = true;
 
-        static size_t capacity(const my_lib::ring_buffer<N>& b) noexcept {
+        static std::size_t capacity(const my_lib::ring_buffer<N>& b) noexcept {
             return b.available_write_space();
         }
 
-        static bool ensure_capacity(my_lib::ring_buffer<N>& b, size_t needed) noexcept {
+        static bool ensure_capacity(my_lib::ring_buffer<N>& b, std::size_t needed) noexcept {
             return b.available_write_space() >= needed;
         }
 
-        static void finalize(my_lib::ring_buffer<N>& b, size_t written) noexcept {
+        static void finalize(my_lib::ring_buffer<N>& b, std::size_t written) noexcept {
             b.commit(written);
         }
     };

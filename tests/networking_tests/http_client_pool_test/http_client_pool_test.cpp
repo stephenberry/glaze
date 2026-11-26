@@ -9,20 +9,20 @@
 // the tests can exercise specific keep-alive behaviors on demand: closing
 // immediately after each response, closing on server-side idle, etc.
 
-#include <atomic>
-#include <chrono>
-#include <future>
-#include <memory>
-#include <string>
-#include <thread>
-#include <vector>
+#include "glaze/ext/asio_include.hpp"
 
-#include "glaze/ext/glaze_asio.hpp"
-#include "glaze/net/http_client.hpp"
-#include "ut/ut.hpp"
+import std;
+
+import glaze.ext.glaze_asio;
+import glaze.net.http_client;
+import glaze.net.http_router;
+
+import ut;
 
 using namespace ut;
 using namespace glz;
+
+using std::uint16_t;
 
 namespace
 {

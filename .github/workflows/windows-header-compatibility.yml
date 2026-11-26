@@ -20,7 +20,8 @@ on:
       - main
       - feature/*
     paths:
-      - 'include/**'
+      - 'modules/**'
+      - 'tools/glz_generate_headers.py'
       - 'cmake/**'
       - 'CMakeLists.txt'
       - '.github/workflows/windows-header-compatibility.yml'
@@ -28,7 +29,8 @@ on:
     branches:
       - main
     paths:
-      - 'include/**'
+      - 'modules/**'
+      - 'tools/glz_generate_headers.py'
       - 'cmake/**'
       - 'CMakeLists.txt'
       - '.github/workflows/windows-header-compatibility.yml'
@@ -68,7 +70,7 @@ jobs:
           -B "$env:GITHUB_WORKSPACE/build/windows-header-compatibility/build" `
           -DGLAZE_SOURCE_DIR="$env:GITHUB_WORKSPACE" `
           -DERLANG_OTP_DIR="$env:INSTALL_DIR_FOR_OTP" `
-          -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_INSTALLATION_ROOT/scripts/buildsystems/vcpkg.cmake" `
+          -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_INSTALLATION_ROOT/scripts/buildsystems/vcpkg.cmake"
 
     - name: Build
       run: cmake --build "$env:GITHUB_WORKSPACE/build/windows-header-compatibility/build" --config Debug --target glaze_windows_header_compatibility --parallel

@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.31)
+cmake_minimum_required(VERSION 4.5)
 
 include(cmake/prelude.cmake)
 
@@ -8,6 +8,8 @@ project(
     LANGUAGES CXX
 )
 
+option(GLAZE_GENERATE_HEADERS "Generate headers" OFF)
+
 include(cmake/project-is-top-level.cmake)
 include(cmake/variables.cmake)
 
@@ -15,9 +17,18 @@ if (PROJECT_IS_TOP_LEVEL)
   set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 endif()
 
-add_library(glaze_glaze INTERFACE)
+if(NOT GLAZE_GENERATE_HEADERS)
+  add_library(glaze_glaze STATIC)
+  target_compile_definitions(glaze_glaze PRIVATE GLZ_BUILDING_MODULES)
+  if (PROJECT_IS_TOP_LEVEL)
+    set_target_properties(glaze_glaze PROPERTIES POSITION_INDEPENDENT_CODE ON)
+  endif()
+  set(GLAZE_LIB_TYPE PUBLIC)
+else()
+  add_library(glaze_glaze INTERFACE)
+  set(GLAZE_LIB_TYPE INTERFACE)
+endif()
 add_library(glaze::glaze ALIAS glaze_glaze)
-
 
 if (MSVC)
   # glaze_glaze is an INTERFACE library, so these target_compile_options/target_link_options
@@ -40,6 +51,8 @@ if (MSVC)
     $<$<COMPILE_LANG_AND_ID:CXX,MSVC>:/Zc:preprocessor>
     $<$<COMPILE_LANG_AND_ID:CXX,MSVC>:/permissive->
     $<$<COMPILE_LANG_AND_ID:CXX,MSVC>:/Zc:lambda>)
+
+  target_compile_options(glaze_glaze ${GLAZE_LIB_TYPE} $<$<COMPILE_LANG_AND_ID:CXX,MSVC>:/bigobj>)
 
   # Whole-program optimization changes codegen quality, never correctness, and the
   # top-level build is glaze's own test suite -- correctness checks that gain nothing
@@ -68,18 +81,24 @@ endif()
 
 set_property(TARGET ${PROJECT_NAME}_${PROJECT_NAME} PROPERTY EXPORT_NAME glaze)
 
-target_compile_features(${PROJECT_NAME}_${PROJECT_NAME} INTERFACE cxx_std_23)
-target_include_directories(
-    ${PROJECT_NAME}_${PROJECT_NAME} ${warning_guard}
-    INTERFACE "$<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/include>"
-)
+target_compile_features(glaze_glaze ${GLAZE_LIB_TYPE} cxx_std_23)
+include(cmake/glaze-asio.cmake)
+
+if(GLAZE_GENERATE_HEADERS)
+  include(cmake/generate-headers.cmake)
+else()
+  target_include_directories(glaze_glaze ${warning_guard} PUBLIC "$<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/modules>")
+  glaze_setup_asio()
+  target_link_libraries(glaze_glaze PRIVATE "$<BUILD_INTERFACE:glaze::asio>")
+  include(cmake/modules-files.cmake)
+endif()
 
 option(glaze_INSTALL "Generate installation rules for glaze" "${PROJECT_IS_TOP_LEVEL}")
 if(glaze_INSTALL AND NOT CMAKE_SKIP_INSTALL_RULES)
   include(cmake/install-rules.cmake)
 endif()
 
-if (glaze_DEVELOPER_MODE)
+if (glaze_DEVELOPER_MODE AND NOT GLAZE_GENERATE_HEADERS)
   include(cmake/dev-mode.cmake)
 endif()
 
@@ -101,7 +120,7 @@ if(glaze_BUILD_EXAMPLES)
   add_subdirectory(examples)
 endif()
 
-option(glaze_EETF_FORMAT "Enable Erlang external term format parsing" OFF)
+option(glaze_EETF_FORMAT "Enable Erlang external term format parsing" OFF) # TODO: Convert
 
 if(glaze_EETF_FORMAT)
   list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
@@ -121,11 +140,11 @@ if(glaze_ENABLE_SSL)
   find_package(OpenSSL REQUIRED)
   target_link_libraries(
     glaze_glaze
-    INTERFACE
+    ${GLAZE_LIB_TYPE}
       OpenSSL::SSL
       OpenSSL::Crypto
   )
-  target_compile_definitions(glaze_glaze INTERFACE GLZ_ENABLE_SSL)
+  target_compile_definitions(glaze_glaze ${GLAZE_LIB_TYPE} GLZ_ENABLE_SSL)
 
   # crypt32 is needed to read the Windows ROOT certificate store; see
   # detail::load_os_ca_certificates in include/glaze/net/ssl.hpp for why that is necessary.
@@ -149,7 +168,7 @@ endif(glaze_ENABLE_SSL)
 option(glaze_ENABLE_REFLECTION26 "Enable C++26 P2996 reflection (requires Bloomberg clang-p2996 or compatible compiler)" OFF)
 
 if(glaze_ENABLE_REFLECTION26)
-  target_compile_definitions(glaze_glaze INTERFACE GLZ_REFLECTION26=1)
+  target_compile_definitions(glaze_glaze ${GLAZE_LIB_TYPE} GLZ_REFLECTION26=1)
 endif(glaze_ENABLE_REFLECTION26)
 
 # Make `size` the build-wide default optimization level. Every call site that does not
@@ -160,6 +179,6 @@ option(glaze_DEFAULT_OPTIMIZATION_SIZE
   "Default all (de)serialization to the size-optimized level (drops 40KB int / ~16KB float / per-struct hash tables)" OFF)
 
 if(glaze_DEFAULT_OPTIMIZATION_SIZE)
-  target_compile_definitions(glaze_glaze INTERFACE GLZ_DEFAULT_OPTIMIZATION_SIZE)
+  target_compile_definitions(glaze_glaze ${GLAZE_LIB_TYPE} GLZ_DEFAULT_OPTIMIZATION_SIZE)
 endif(glaze_DEFAULT_OPTIMIZATION_SIZE)
 

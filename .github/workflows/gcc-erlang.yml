@@ -33,7 +33,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        gcc: [13, 14]
+        gcc: [15]
         build_type: [Debug]
         std: [23]
 
@@ -51,7 +51,7 @@ jobs:
 
     - name: Configure CMake
       run: |
-        CXXFLAGS="-g3" cmake -B ${{github.workspace}}/build \
+        CXXFLAGS="-g3" cmake -G Ninja -B ${{github.workspace}}/build \
           -DCMAKE_BUILD_TYPE=${{matrix.build_type}} \
           -DCMAKE_CXX_STANDARD=${{matrix.std}} \
           -Dglaze_EETF_FORMAT=ON

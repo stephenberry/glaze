@@ -1,39 +1,61 @@
 // Glaze Library
-// For the license information refer to glaze.hpp
+// For the license information refer to glaze.ixx
 
-#include <algorithm>
-#include <bit>
-#include <bitset>
-#include <chrono>
-#include <complex>
-#include <deque>
-#include <expected>
-#include <filesystem>
-#include <list>
-#include <map>
-#include <numbers>
-#include <random>
-#include <set>
-#include <span>
-#include <unordered_map>
-#include <unordered_set>
+import std;
 
-#include "glaze/api/impl.hpp"
-#include "glaze/base64/base64.hpp"
-#include "glaze/beve/beve_to_json.hpp"
-#include "glaze/beve/key_traits.hpp"
-#include "glaze/beve/peek_header.hpp"
-#include "glaze/beve/read.hpp"
-#include "glaze/beve/size.hpp"
-#include "glaze/beve/write.hpp"
-#include "glaze/hardware/volatile_array.hpp"
-#include "glaze/json/json_ptr.hpp"
-#include "glaze/json/read.hpp"
-#include "glaze/trace/trace.hpp"
-#include "minimal_buffer.hpp"
-#include "scratch_directory.hpp"
-#include "speculation_guard.hpp"
-#include "ut/ut.hpp"
+import glaze.tests.scratch_directory;
+
+import glaze.api.impl;
+
+import glaze.base64;
+
+import glaze.beve.header;
+import glaze.beve.beve_to_json;
+import glaze.beve.key_traits;
+import glaze.beve.peek_header;
+import glaze.beve.read;
+import glaze.beve.size;
+import glaze.beve.wrappers;
+import glaze.beve.write;
+
+import glaze.core.cast;
+import glaze.core.common;
+import glaze.core.context;
+import glaze.core.custom;
+import glaze.core.meta;
+import glaze.core.opts;
+import glaze.core.read;
+import glaze.core.reflect;
+import glaze.core.seek;
+import glaze.core.to;
+import glaze.core.write;
+
+import glaze.hardware.volatile_array;
+
+import glaze.json.generic;
+import glaze.json.json_ptr;
+import glaze.json.read;
+import glaze.json.write;
+
+import glaze.trace;
+import glaze.tuplet;
+import glaze.util.for_each;
+
+import glaze.tests.minimal_buffer;
+import glaze.tests.speculation_guard;
+
+import ut;
+
+using std::int8_t;
+using std::uint8_t;
+using std::int16_t;
+using std::uint16_t;
+using std::int32_t;
+using std::uint32_t;
+using std::int64_t;
+using std::uint64_t;
+using std::uintptr_t;
+using std::size_t;
 
 using namespace ut;
 
@@ -1247,7 +1269,7 @@ void aligned_typed_array_tests()
          expect(reinterpret_cast<const char*>(span.data()) < beve.data() + beve.size());
 
          // Verify alignment
-         expect(reinterpret_cast<uintptr_t>(span.data()) % alignof(double) == uintptr_t(0));
+         expect(reinterpret_cast<std::uintptr_t>(span.data()) % alignof(double) == std::uintptr_t(0));
       };
 
       "zero-copy span<const float>"_test = [] {
@@ -1262,7 +1284,7 @@ void aligned_typed_array_tests()
          expect(span[1] == 2.5f);
          expect(span[2] == 3.5f);
 
-         expect(reinterpret_cast<uintptr_t>(span.data()) % alignof(float) == uintptr_t(0));
+         expect(reinterpret_cast<std::uintptr_t>(span.data()) % alignof(float) == std::uintptr_t(0));
       };
 
       "zero-copy span<const int32_t>"_test = [] {
@@ -1276,7 +1298,7 @@ void aligned_typed_array_tests()
          expect(span[0] == -10);
          expect(span[4] == 30);
 
-         expect(reinterpret_cast<uintptr_t>(span.data()) % alignof(int32_t) == uintptr_t(0));
+         expect(reinterpret_cast<std::uintptr_t>(span.data()) % alignof(int32_t) == std::uintptr_t(0));
       };
 
       "zero-copy span<const uint64_t>"_test = [] {
@@ -1291,7 +1313,7 @@ void aligned_typed_array_tests()
          expect(span[1] == uint64_t(200));
          expect(span[2] == uint64_t(300));
 
-         expect(reinterpret_cast<uintptr_t>(span.data()) % alignof(uint64_t) == uintptr_t(0));
+         expect(reinterpret_cast<std::uintptr_t>(span.data()) % alignof(uint64_t) == std::uintptr_t(0));
       };
 
       "zero-copy rejects non-aligned buffer"_test = [] {
@@ -1352,7 +1374,7 @@ void aligned_typed_array_tests()
          expect(span_bytes < buf_end);
 
          // Verify alignment
-         expect(reinterpret_cast<uintptr_t>(dst.values.data()) % alignof(double) == uintptr_t(0));
+         expect(reinterpret_cast<std::uintptr_t>(dst.values.data()) % alignof(double) == std::uintptr_t(0));
       };
 
       "zero-copy struct with multiple span members"_test = [] {
@@ -1382,8 +1404,8 @@ void aligned_typed_array_tests()
          expect(reinterpret_cast<const char*>(dst.indices.data()) < buf_end);
 
          // Both are aligned
-         expect(reinterpret_cast<uintptr_t>(dst.positions.data()) % alignof(float) == uintptr_t(0));
-         expect(reinterpret_cast<uintptr_t>(dst.indices.data()) % alignof(int32_t) == uintptr_t(0));
+         expect(reinterpret_cast<std::uintptr_t>(dst.positions.data()) % alignof(float) == std::uintptr_t(0));
+         expect(reinterpret_cast<std::uintptr_t>(dst.indices.data()) % alignof(int32_t) == std::uintptr_t(0));
       };
 
    } // if constexpr little-endian
@@ -1499,7 +1521,7 @@ struct glz::meta<some_struct>
 void test_partial()
 {
    expect(glz::name_v<glz::detail::member_tuple_t<some_struct>> ==
-          R"(glz::tuple<int32_t,double,Color,std::string,std::array<uint64_t,3>,sub,std::map<std::string,int32_t>>)");
+          R"(glz::tuple<std::int32_t,double,Color,std::string,std::array<std::uint64_t,3>,sub,std::map<std::string,std::int32_t>>)");
 
    some_struct s{};
    some_struct s2{};
@@ -1577,14 +1599,14 @@ void container_types()
    using namespace ut;
    "vector int roundtrip"_test = [] {
       std::vector<int> vec(100);
-      for (auto& item : vec) item = rand();
+      for (auto& item : vec) item = std::rand();
       std::string buffer{};
       std::vector<int> vec2{};
       expect(not glz::write_beve(vec, buffer));
       expect(!glz::read_beve(vec2, buffer));
       expect(vec == vec2);
    };
-   "vector uint64_t roundtrip"_test = [] {
+   "vector std::uint64_t roundtrip"_test = [] {
       std::uniform_int_distribution<uint64_t> dist((std::numeric_limits<uint64_t>::min)(),
                                                    (std::numeric_limits<uint64_t>::max)());
       std::mt19937 gen{};
@@ -1598,7 +1620,7 @@ void container_types()
    };
    "vector double roundtrip"_test = [] {
       std::vector<double> vec(100);
-      for (auto& item : vec) item = rand() / (1.0 + rand());
+      for (auto& item : vec) item = std::rand() / (1.0 + std::rand());
       std::string buffer{};
       std::vector<double> vec2{};
       expect(not glz::write_beve(vec, buffer));
@@ -1607,7 +1629,7 @@ void container_types()
    };
    "vector bool roundtrip"_test = [] {
       std::vector<bool> vec(100);
-      for (auto&& item : vec) item = rand() / (1.0 + rand()) > 0.5;
+      for (auto&& item : vec) item = std::rand() / (1.0 + std::rand()) > 0.5;
       std::string buffer{};
       std::vector<bool> vec2{};
       expect(not glz::write_beve(vec, buffer));
@@ -1739,7 +1761,7 @@ void container_types()
    };
    "deque roundtrip"_test = [] {
       std::vector<int> deq(100);
-      for (auto& item : deq) item = rand();
+      for (auto& item : deq) item = std::rand();
       std::string buffer{};
       std::vector<int> deq2{};
       expect(not glz::write_beve(deq, buffer));
@@ -1748,7 +1770,7 @@ void container_types()
    };
    "list roundtrip"_test = [] {
       std::list<int> lis(100);
-      for (auto& item : lis) item = rand();
+      for (auto& item : lis) item = std::rand();
       std::string buffer{};
       std::list<int> lis2{};
       expect(not glz::write_beve(lis, buffer));
@@ -1761,7 +1783,7 @@ void container_types()
       std::mt19937 g{};
       for (auto i = 0; i < 20; ++i) {
          std::shuffle(str.begin(), str.end(), g);
-         map1[str] = rand();
+         map1[str] = std::rand();
       }
       std::string buffer{};
       std::map<std::string, int> map2{};
@@ -1774,7 +1796,7 @@ void container_types()
    "map int keys roundtrip"_test = [] {
       std::map<int, int> map1;
       for (auto i = 0; i < 20; ++i) {
-         map1[rand()] = rand();
+         map1[std::rand()] = std::rand();
       }
       std::string buffer{};
       std::map<int, int> map2{};
@@ -1787,7 +1809,7 @@ void container_types()
    "unordered_map int keys roundtrip"_test = [] {
       std::unordered_map<int, int> map1;
       for (auto i = 0; i < 20; ++i) {
-         map1[rand()] = rand();
+         map1[std::rand()] = std::rand();
       }
       std::string buffer{};
       std::unordered_map<int, int> map2{};
@@ -1896,7 +1918,7 @@ suite byte_buffer = [] {
       expect(msg.val == "hello");
    };
 
-   "uint8_t buffer"_test = [] {
+   "std::uint8_t buffer"_test = [] {
       TestMsg msg{};
       msg.id = 5;
       msg.val = "hello";
@@ -2158,7 +2180,7 @@ suite set_tests = [] {
       expect(set.contains("three"));
    };
 
-   "unordered_set<uint32_t>"_test = [] {
+   "unordered_set<std::uint32_t>"_test = [] {
       std::unordered_set<uint32_t> set{0, 1, 2};
 
       std::string s{};
@@ -2186,7 +2208,7 @@ suite set_tests = [] {
       expect(set.contains("three"));
    };
 
-   "set<uint32_t>"_test = [] {
+   "set<std::uint32_t>"_test = [] {
       std::set<uint32_t> set{0, 1, 2};
 
       std::string s{};
@@ -2364,8 +2386,8 @@ suite signal_tests = [] {
 };
 
 suite vector_tests = [] {
-   "std::vector<uint8_t>"_test = [] {
-      auto scoped = trace.scope("test std::vector<uint8_t>");
+   "std::vector<std::uint8_t>"_test = [] {
+      auto scoped = trace.scope("test std::vector<std::uint8_t>");
       std::string s;
       static constexpr auto n = 10000;
       std::vector<uint8_t> v(n);
@@ -2387,8 +2409,8 @@ suite vector_tests = [] {
       expect(v == copy);
    };
 
-   "std::vector<uint16_t>"_test = [] {
-      auto scoped = trace.scope("test std::vector<uint16_t>");
+   "std::vector<std::uint16_t>"_test = [] {
+      auto scoped = trace.scope("test std::vector<std::uint16_t>");
       std::string s;
       static constexpr auto n = 10000;
       std::vector<uint16_t> v(n);
@@ -2988,7 +3010,7 @@ suite beve_to_json_tests = [] {
 })") << json;
    };
 
-   "beve_to_json std::vector<int32_t>"_test = [] {
+   "beve_to_json std::vector<std::int32_t>"_test = [] {
       std::vector<int32_t> v = {1, 2, 3, 4, 5};
       std::string buffer{};
       expect(not glz::write_beve(v, buffer));
@@ -3245,7 +3267,7 @@ struct glz::meta<struct_c_arrays_meta>
 };
 
 suite c_style_arrays = [] {
-   "uint32_t c array"_test = [] {
+   "std::uint32_t c array"_test = [] {
       uint32_t arr[4] = {1, 2, 3, 4};
       std::string s{};
       expect(not glz::write_beve(arr, s));
@@ -3519,7 +3541,7 @@ suite type_conversions = [] {
       expect(pi64 == std::numbers::pi_v<float>);
    };
 
-   "int8_t -> uint8_t"_test = [] {
+   "std::int8_t -> std::uint8_t"_test = [] {
       auto b = glz::write_beve(int8_t{45}).value_or("error");
       uint8_t i{};
       expect(!glz::read_beve(i, b));
@@ -3530,7 +3552,7 @@ suite type_conversions = [] {
       expect(i == 255);
    };
 
-   "int8_t -> int32_t"_test = [] {
+   "std::int8_t -> std::int32_t"_test = [] {
       auto b = glz::write_beve(int8_t{127}).value_or("error");
       int32_t i{};
       expect(!glz::read_beve(i, b));
@@ -3553,7 +3575,7 @@ suite type_conversions = [] {
       expect(v == std::vector{1.0, 2.0, 3.0});
    };
 
-   "map<int32_t, double> -> map<uint32_t, float>"_test = [] {
+   "map<std::int32_t, double> -> map<std::uint32_t, float>"_test = [] {
       std::map<int32_t, double> input{{1, 1.1}, {2, 2.2}, {3, 3.3}};
       auto b = glz::write_beve(input).value_or("error");
       std::map<uint32_t, float> v{};
@@ -7347,7 +7369,7 @@ suite beve_size_tests = [] {
    };
 
    "beve_size glaze_value_t (ModuleID)"_test = [] {
-      // ModuleID wraps a uint64_t via glaze value wrapper
+      // ModuleID wraps a std::uint64_t via glaze value wrapper
       ModuleID id{42};
       const size_t predicted = glz::beve_size(id);
       auto buffer = glz::write_beve(id).value();
@@ -9495,7 +9517,7 @@ suite beve_recursion_depth_limit = [] {
       // rejected one is rewound and the next tried. Nest that and the re-parses multiply -- measured
       // at ~4.3x per level, so 189 bytes took 55 seconds and 256 levels would never return. The
       // speculation budget caps the total re-parsed bytes, so the cost stops growing with depth;
-      // see speculation_guard.hpp for what is timed.
+      // see speculation_guard.ixx for what is timed.
       glz_test::expect_bounded_by_speculation_budget(
          ambiguous_nest,
          [](const std::string& buffer, glz::context& ctx) {

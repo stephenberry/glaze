@@ -1,3 +1,8 @@
+import std;
+
+using std::uint32_t;
+using std::uint64_t;
+
 // Issue #2786: glz::custom<Read, Write> support for TOML.
 //
 // This lives in its own translation unit that includes only "glaze/toml.hpp". The custom
@@ -5,14 +10,9 @@
 // that only the JSON headers pulled that in - so mixing this into a file that also includes
 // "glaze/json.hpp" would hide the regression.
 
-#include <array>
-#include <functional>
-#include <optional>
-#include <string>
-#include <vector>
 
-#include "glaze/toml.hpp"
-#include "ut/ut.hpp"
+import glaze.toml;
+import ut;
 
 using namespace ut;
 

@@ -1,15 +1,25 @@
 // Glaze Library
-// For the license information refer to glaze.hpp
+// For the license information refer to glaze.ixx
 
-#include <limits>
+import glaze;
+import glaze.tests.scratch_directory;
 
-#include "glaze/containers/ordered_small_map.hpp"
-#include "glaze/glaze_exceptions.hpp"
-#include "glaze/thread/async.hpp"
-#include "glaze/thread/async_string.hpp"
-#include "glaze/thread/threadpool.hpp"
-#include "scratch_directory.hpp"
-#include "ut/ut.hpp"
+import glaze.exceptions;
+
+import glaze.thread.async;
+import glaze.thread.async_string;
+import glaze.thread.threadpool;
+
+import glaze.containers.ordered_small_map;
+
+import ut;
+
+import std;
+
+using std::uint32_t;
+using std::uint64_t;
+using std::int64_t;
+using std::size_t;
 
 using namespace ut;
 
@@ -61,7 +71,7 @@ suite starter = [] {
       const std::string schema = glz::ex::write_json_schema<my_struct>();
       expect(
          schema ==
-         R"({"type":"object","properties":{"arr":{"type":"array","items":{"$ref":"#/$defs/uint64_t"},"maxItems":3},"d":{"$ref":"#/$defs/double"},"hello":{"type":"string"},"i":{"$ref":"#/$defs/int32_t"}},"additionalProperties":false,"$defs":{"double":{"type":"number"},"int32_t":{"type":"integer","minimum":-2147483648,"maximum":2147483647},"uint64_t":{"type":"integer","format":"uint64","minimum":0,"maximum":18446744073709551615}},"title":"my_struct"})")
+         R"({"type":"object","properties":{"arr":{"type":"array","items":{"$ref":"#/$defs/std::uint64_t"},"maxItems":3},"d":{"$ref":"#/$defs/double"},"hello":{"type":"string"},"i":{"$ref":"#/$defs/std::int32_t"}},"additionalProperties":false,"$defs":{"double":{"type":"number"},"std::int32_t":{"type":"integer","minimum":-2147483648,"maximum":2147483647},"std::uint64_t":{"type":"integer","format":"uint64","minimum":0,"maximum":18446744073709551615}},"title":"my_struct"})")
          << schema;
    };
 
@@ -70,7 +80,7 @@ suite starter = [] {
       glz::ex::write_json_schema<my_struct>(schema);
       expect(
          schema ==
-         R"({"type":"object","properties":{"arr":{"type":"array","items":{"$ref":"#/$defs/uint64_t"},"maxItems":3},"d":{"$ref":"#/$defs/double"},"hello":{"type":"string"},"i":{"$ref":"#/$defs/int32_t"}},"additionalProperties":false,"$defs":{"double":{"type":"number"},"int32_t":{"type":"integer","minimum":-2147483648,"maximum":2147483647},"uint64_t":{"type":"integer","format":"uint64","minimum":0,"maximum":18446744073709551615}},"title":"my_struct"})")
+         R"({"type":"object","properties":{"arr":{"type":"array","items":{"$ref":"#/$defs/std::uint64_t"},"maxItems":3},"d":{"$ref":"#/$defs/double"},"hello":{"type":"string"},"i":{"$ref":"#/$defs/std::int32_t"}},"additionalProperties":false,"$defs":{"double":{"type":"number"},"std::int32_t":{"type":"integer","minimum":-2147483648,"maximum":2147483647},"std::uint64_t":{"type":"integer","format":"uint64","minimum":0,"maximum":18446744073709551615}},"title":"my_struct"})")
          << schema;
    };
 };

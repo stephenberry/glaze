@@ -14,11 +14,10 @@
 // argc keeps the written values runtime-unknown so the optimizer cannot constant-fold the
 // conversions away (which would make the absence check vacuous).
 
-#include <string>
-#include <string_view>
-#include <vector>
+import std;
+import glaze;
 
-#include "glaze/glaze.hpp"
+using std::int64_t;
 
 int main(int argc, char**)
 {
