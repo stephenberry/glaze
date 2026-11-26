@@ -23,6 +23,7 @@ import glaze.core.opts;
 import glaze.core.context;
 
 using std::size_t;
+using std::uint8_t;
 
 namespace glz
 {
@@ -38,12 +39,20 @@ namespace glz
          size_t rear_truncation{};
       };
 
-      // We convert to only single spaces for error messages in order to keep the source info
-      // calculation more efficient and avoid needing to allocate more memory.
-      inline void convert_tabs_to_single_spaces(std::string& input) noexcept
+      // A byte that a terminal would act on rather than print (C0 controls and DEL).
+      constexpr bool is_control_char(const char c) noexcept
+      {
+         const auto u = static_cast<uint8_t>(c);
+         return u < 0x20 || u == 0x7F;
+      }
+
+      // Every control character in the context, tabs and carriage returns included, becomes a single
+      // space. Each byte then takes one column, so the caret lines up, and nothing in the context
+      // can move the terminal's cursor.
+      inline void convert_to_printable_spaces(std::string& input) noexcept
       {
          for (auto& c : input) {
-            if (c == '\t') {
+            if (is_control_char(c)) {
                c = ' ';
             }
          }
@@ -60,21 +69,51 @@ namespace glz
          }
          else {
             const std::string_view text{reinterpret_cast<const char*>(buffer.data()), buffer.size()};
-            if (index >= text.size()) {
+            if (index > text.size()) {
                return {.context = "", .index = index};
+            }
+
+            // An error at the end of the input (a truncated document, a missing closing bracket)
+            // has no character of its own. Point just past the last character that is not
+            // trailing whitespace, so the message still shows the line where the input stops.
+            // The reported index is left unchanged.
+            size_t pos = index;
+            if (pos == text.size()) {
+               const size_t last = text.find_last_not_of(" \t\r\n");
+               if (last == text.npos) {
+                  return {.context = "", .index = index};
+               }
+               pos = last + 1;
             }
 
             // The line the error sits on starts just after the newline before it, or at the
             // beginning when there is none. Both the column and the context start from that one
-            // position. Searching from index - 1 leaves index itself out, so a newline *at* the
+            // position. Searching from pos - 1 leaves pos itself out, so a newline *at* the
             // error belongs to the line it ends rather than the one it opens.
-            const size_t prev_newline = index ? text.rfind('\n', index - 1) : text.npos;
+            const size_t prev_newline = pos ? text.rfind('\n', pos - 1) : text.npos;
             const size_t offset = (prev_newline == text.npos) ? 0 : prev_newline + 1;
-            const size_t column = index - offset + 1;
-            const size_t line = size_t(std::count(text.begin(), text.begin() + index, '\n') + 1);
+            const size_t column = pos - offset + 1;
+            const size_t line = size_t(std::count(text.begin(), text.begin() + pos, '\n') + 1);
 
+            // The context runs to the end of the line. Searching from pos itself means that a
+            // newline at the error ends the context, instead of pulling in the line after it. An
+            // error on an empty line therefore has an empty context, but still a line and column.
             size_t context_begin = offset;
-            size_t context_end = (std::min)(text.find('\n', index + 1), text.size());
+            size_t context_end = (std::min)(text.find('\n', pos), text.size());
+
+            // Binary input (BEVE, CBOR, MessagePack, BSON) is often held in a std::string, so it
+            // reaches this text path, where its line and column mean nothing. Without the format
+            // this is a best-effort guess: a line holding control characters other than tab and
+            // carriage return is taken to be binary, and only the index is reported. Binary data
+            // without such bytes is shown as text, with any control characters made spaces. The
+            // byte at the error is exempt, because a text reader that rejects a raw control
+            // character reports the error at that character.
+            for (size_t i = offset; i < context_end; ++i) {
+               const char c = text[i];
+               if (i != pos && c != '\t' && c != '\r' && is_control_char(c)) {
+                  return {.context = "", .index = index};
+               }
+            }
 
             size_t front_truncation = 0;
             size_t rear_truncation = 0;
@@ -96,7 +135,7 @@ namespace glz
             }
 
             std::string context{text.substr(context_begin, context_end - context_begin)};
-            convert_tabs_to_single_spaces(context);
+            convert_to_printable_spaces(context);
             return {line, column, context, index, front_truncation, rear_truncation};
          }
       }
@@ -137,7 +176,8 @@ namespace glz
          // integer conversion: error formatting is never a throughput path, and this keeps
          // glz::format_error from pulling in the 40 KB integer table regardless of the
          // optimization level used elsewhere in the program.
-         if (info.context.empty()) {
+         // Line numbers start at 1, so line 0 means the location is unknown.
+         if (info.line == 0) {
             dump("index ", b, ix);
             write_chars::op<opts_size{}>(info.index, ctx, b, ix);
             dump(": ", b, ix);
