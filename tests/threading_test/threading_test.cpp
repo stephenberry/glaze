@@ -272,6 +272,21 @@ suite async_string_tests = [] {
       expect(s2.empty()); // Moved-from string should be empty
    };
 
+   "async_string self operations"_test = [] {
+      // These used to take the same shared_mutex twice and deadlock.
+      glz::async_string s("abc");
+      s.append(s);
+      expect(s == "abcabc") << "append(self)";
+
+      s.insert(0, s);
+      expect(s == "abcabcabcabc") << "insert(0, self)";
+
+      expect(s.compare(s) == 0) << "compare(self)";
+      expect(!(s < s)) << "operator<(self)";
+      expect(s <= s) << "operator<=(self)";
+      expect(s == s) << "operator==(self)";
+   };
+
    "async_string copy constructor"_test = [] {
       glz::async_string original("Copy me");
       glz::async_string copy(original);
