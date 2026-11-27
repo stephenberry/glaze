@@ -27,14 +27,9 @@ endif()
 # check_diagnostic.cmake requires this marker so that a build failure for any other reason can never
 # be mistaken for the diagnostic under test.
 #
-# `MSVC` is also set for clang-cl, because it simulates the cl command line, but clang-cl prints
-# clang's wording ("static assertion failed"), not cl's C2338 wording ("static_assert failed"). The
-# compiler id separates the two; a plain `if(MSVC)` would make every case fail on the clang-cl job.
-if(CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
-    set(diagnostic_assert_marker "static_assert failed")
-else()
-    set(diagnostic_assert_marker "static assertion failed")
-endif()
+# GCC, Clang (including clang-cl) and MSVC all print "static assertion failed". MSVC's C2338 used to
+# say "static_assert failed"; VS2026 reports the wording below, so one marker covers every compiler.
+set(diagnostic_assert_marker "static assertion failed")
 
 foreach(case_file IN LISTS diagnostic_cases)
     get_filename_component(case_name "${case_file}" NAME_WE)
