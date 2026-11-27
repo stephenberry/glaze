@@ -288,9 +288,10 @@ namespace glz
    // Direct conversion from generic to target types without JSON serialization
    // Takes result by reference to allow memory reuse and avoid extra moves
 
-   // Forward declaration for recursive conversion
+   // Catch-all for types with no direct conversion, deleted so that
+   // calls fail at compile time
    template <class T, num_mode Mode, template <class> class MapType>
-   error_ctx convert_from_generic(T& result, const generic_json<Mode, MapType>& source);
+   error_ctx convert_from_generic(T& result, const generic_json<Mode, MapType>& source) = delete;
 
    // Specialization for bool
    template <num_mode Mode, template <class> class MapType>
@@ -303,7 +304,7 @@ namespace glz
       return {};
    }
 
-   // Specialization for double
+   // Overload for double
    template <num_mode Mode, template <class> class MapType>
    inline error_ctx convert_from_generic(double& result, const generic_json<Mode, MapType>& source)
    {
@@ -335,7 +336,7 @@ namespace glz
       return {};
    }
 
-   // Specialization for uint64_t (only in u64 mode)
+   // Overload for uint64_t (only in u64 mode)
    template <num_mode Mode, template <class> class MapType>
       requires(Mode == num_mode::u64)
    inline error_ctx convert_from_generic(uint64_t& result, const generic_json<Mode, MapType>& source)
@@ -355,7 +356,7 @@ namespace glz
       return {};
    }
 
-   // Specialization for int64_t (in i64 and u64 modes)
+   // Overload for int64_t (in i64 and u64 modes)
    template <num_mode Mode, template <class> class MapType>
       requires(Mode != num_mode::f64)
    inline error_ctx convert_from_generic(int64_t& result, const generic_json<Mode, MapType>& source)
@@ -385,7 +386,7 @@ namespace glz
       return {};
    }
 
-   // Specialization for string
+   // Overload for string
    template <num_mode Mode, template <class> class MapType>
    inline error_ctx convert_from_generic(std::string& result, const generic_json<Mode, MapType>& source)
    {
@@ -396,7 +397,7 @@ namespace glz
       return {};
    }
 
-   // Specialization for integer types (convert from integer types or double)
+   // Overload for integer types (convert from integer types or double)
    template <class T, num_mode Mode, template <class> class MapType>
       requires(std::integral<T> && !std::same_as<T, bool> && !std::same_as<T, int64_t> && !std::same_as<T, uint64_t>)
    error_ctx convert_from_generic(T& result, const generic_json<Mode, MapType>& source)
@@ -429,7 +430,7 @@ namespace glz
       return {};
    }
 
-   // Specialization for array-like containers
+   // Overload for array-like containers
    template <class T, num_mode Mode, template <class> class MapType>
       requires(readable_array_t<T> && !std::same_as<T, std::string>)
    error_ctx convert_from_generic(T& result, const generic_json<Mode, MapType>& source)
@@ -481,7 +482,7 @@ namespace glz
       return {};
    }
 
-   // Specialization for map-like containers
+   // Overload for map-like containers
    template <class T, num_mode Mode, template <class> class MapType>
       requires readable_map_t<T>
    error_ctx convert_from_generic(T& result, const generic_json<Mode, MapType>& source)
