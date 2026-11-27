@@ -6,6 +6,15 @@ names the member.
 ## The Error
 
 ```c++
+class Opaque
+{
+   int value{}; // private: not an aggregate, so traditional reflection cannot see into it
+
+public:
+   static constexpr bool glaze_reflect = false; // C++26 reflection opts out explicitly
+   Opaque() = default;
+};
+
 struct Outer
 {
    int a{};
@@ -13,8 +22,12 @@ struct Outer
    int b{};
 };
 
-std::string buffer;
-glz::write_json(Outer{}, buffer);
+void write_example()
+{
+   std::string buffer;
+   auto ec = glz::write_json(Outer{}, buffer);
+   (void)ec; // the writer is rejected at compile time, so this line is never reached
+}
 ```
 
 The compiler reports a single error that identifies the object, the format, the member's index, its
@@ -23,7 +36,7 @@ key and its type:
 ```
 In instantiation of 'struct glz::detail::unsupported_writer<Outer, 10, 1,
   glz::string_literal<2>{"o"}, glz::string_literal<7>{"Opaque"}>':
-include/glaze/core/reflect.hpp:870:76: error: static assertion failed: glz::to<Format, T>: one of this
+include/glaze/core/reflect.hpp: error: static assertion failed: glz::to<Format, T>: one of this
 object's members has no writer for this format. The glz::detail::unsupported_writer specialization in
 the trace above names it: after the object come the format id and the member's index in
 glz::reflect<T>, then the member's key and the name of its type. Give that type a glz::meta
@@ -60,24 +73,39 @@ ids that appear in a report are:
 | JSON | 10 | EETF (read only) | 20000 |
 
 NDJSON needs nothing of its own: records are written through the JSON writer and reported under the
-JSON id (10). EETF reads members through the same check. Its write side cannot report because its
-least specialized `to<EETF, T>` matches every type; that specialization carries a message of its own
-instead of leaving the dispatcher to report a missing `op`.
+JSON id (10). EETF reads members through the same check. Its write side does not report a member: its
+least specialized `to<EETF, T>` matches every type, so the member check cannot find one without a
+writer, and the writer does not implement `glz::skip` either (its member loop has no skip check). That
+specialization carries a message of its own instead of leaving the dispatcher to report a missing
+`op`; the message points to `glz::meta` and reflectability, not to `glz::skip`.
+
+EETF has no case in `tests/diagnostics_test/cases`: its headers include `<ei.h>` and are only built
+with `GLZ_ENABLE_EETF`, so the suite leaves EETF out.
 
 ## What Is Not Reported
 
-- **A member whose type contains an unsupported type.** `std::vector<Opaque>`, `std::optional<Opaque>`
-  and `std::map<K, Opaque>` answer as supported, because `to<Format, std::vector<T>>` and friends
-  exist as specializations. The failure then comes from inside the container's writer, with the
-  original message this check exists to replace. Catching it would mean instantiating the container's
-  writer, which is the cost the check avoids.
-- **A type with no linkage.** The key comes from the member names, which the pre-C++26 reflection
-  passes through `external<T>`, and that cannot be defined for a type declared inside a function. A
-  report about such a type surfaces the compiler's error about `external<T>` instead. This is the
-  narrow case MSGPACK's tie-based path reaches.
+- **A member whose type contains an unsupported type.** `std::vector<Opaque>`, `std::optional<Opaque>`,
+  `std::variant<int, Opaque>` and `std::map<K, Opaque>` answer as supported, because
+  `to<Format, std::vector<T>>` and friends exist as specializations. The failure then comes from
+  inside the container's writer, with the original message this check exists to replace. For BSON the
+  variant case is explicit: `bson_writes_member_inline` answers true for every `is_variant` without
+  looking at its alternatives, so a variant member is never reported there even when an alternative
+  cannot be written. Catching any of this would mean instantiating the container's writer, which is
+  the cost the check avoids.
+- **A type the compiler cannot name.** The report carries the member's key and type name as template
+  arguments, so it requires the compiler to be able to name the member's type. When the compiler
+  cannot, its own error about the type appears instead of the report. The names are produced through
+  `fake_object_storage` in `glaze/reflection/get_name.hpp`; local types were verified to report
+  normally with GCC 15.2, and behavior on other compilers was not verified.
 - **Members that are skipped by design.** `glz::skip`, `hidden`, includers and `meta::skip` for the
-  operation being compiled are passed over, so a field with no writer for that direction can sit in
-  a struct without breaking it.
+  operation being compiled are passed over by the check, so a field with no writer for that direction
+  can sit in a struct without breaking it. The exemption lives in the check, not in the formats, and
+  the formats are not uniform about what they implement: CSV's writer and reader do not consult
+  `meta::skip` or `always_skipped`, and the readers of TOML and YAML do not consult `always_skipped`.
+  A `glz::hidden` member is therefore not passed over there and fails in the format's own member
+  loop. A member whose type opts out through a `glz::skip` meta value cannot be written by CSV either
+  (`to<Format, skip>` static_asserts), and these readers consume and discard the value through
+  `from<Format, skip>` rather than omit it. This is a known limitation; the format code is unchanged.
 - **Function pointer members.** They are never reported, in any format. What a format would actually
   do with one is not uniform. With `write_function_pointers` off (the default), every object writer
   except CSV's omits both kinds, and MSGPACK's positional `structs_as_arrays` layout omits neither

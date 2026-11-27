@@ -322,9 +322,11 @@ namespace glz
       template <auto Opts>
       GLZ_ALWAYS_INLINE static void op(auto&&, auto&&...) noexcept
       {
+         // The EETF writer does not implement `glz::skip`: the member loop above does not consult
+         // `skipped_on_write`, so skip is not offered as a way out here.
          static_assert(false_v<T>,
                        "glz::write_term: this type has no EETF writer. Give it a glz::meta "
-                       "specialization, make it reflectable, or exclude the field with glz::skip.");
+                       "specialization or make it reflectable.");
       }
    };
 

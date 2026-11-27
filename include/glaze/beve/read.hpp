@@ -28,6 +28,14 @@
 // reader (a reflectable struct read positionally defers to the tuple reader) leaves the level to that
 // reader, so one wire level is counted once.
 
+namespace glz::detail
+{
+   // `parse<BEVE>::op` checks `const_value_v` and skips a const member instead of reading into it,
+   // so a const member needs no `from<BEVE, ...>` and must not be reported as unreadable.
+   template <>
+   inline constexpr bool reader_skips_const<BEVE> = true;
+}
+
 namespace glz
 {
    template <>

@@ -28,6 +28,14 @@
 #include "glaze/util/for_each.hpp"
 #include "glaze/util/parse.hpp"
 
+namespace glz::detail
+{
+   // `parse<JSONB>::op` checks `const_value_v` and skips a const member instead of reading into it,
+   // so a const member needs no `from<JSONB, ...>` and must not be reported as unreadable.
+   template <>
+   inline constexpr bool reader_skips_const<JSONB> = true;
+}
+
 namespace glz
 {
    namespace jsonb_detail

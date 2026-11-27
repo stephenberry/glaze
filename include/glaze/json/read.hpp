@@ -34,6 +34,14 @@
 #pragma warning(disable : 4702)
 #endif
 
+namespace glz::detail
+{
+   // `parse<JSON>::op` checks `const_value_v` and skips a const member instead of reading into it,
+   // so a const member needs no `from<JSON, ...>` and must not be reported as unreadable.
+   template <>
+   inline constexpr bool reader_skips_const<JSON> = true;
+}
+
 namespace glz
 {
    // forward declare from json/wrappers.hpp to avoid circular include

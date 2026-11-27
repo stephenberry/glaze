@@ -712,8 +712,12 @@ namespace glz
       // was rejected while the same code wrote fine on main.
       //
       // The resolved type is accepted when the helper would handle it: another inline case, or a type
-      // with a `to<BSON, ...>` of its own. A wrapper around a type BSON cannot write is still
-      // reported, since no branch would produce an element for it.
+      // with a `to<BSON, ...>` of its own. That holds for a mimic (`glaze_value_t`): it has no
+      // `to<BSON, ...>` of its own, so a mimic around a type BSON cannot write is still reported,
+      // since no branch would produce an element for it. It does not hold for `glz::custom`: the
+      // generic `to<Format, custom_t>` exists for every format, so such a member passes the member
+      // check and the failure surfaces later, in `write_member_element`'s fallback, as the missing
+      // `to<BSON, ResolvedType>` for the getter's result.
       template <class M>
       consteval bool bson_writes_member_inline()
       {

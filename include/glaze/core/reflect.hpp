@@ -740,13 +740,20 @@ namespace glz
       template <uint32_t Format, class M>
       inline constexpr bool writer_emits_member_inline = false;
 
+      // Whether Format's reader passes over a member declared `const` instead of reading into it.
+      // The readers that set this check `const_value_v` before dispatching to `from`, and skip the
+      // value, so such a member needs no reader of its own and must not be reported. A format that
+      // leaves this false reads through `from<Format, M>`, and a `const` member's underlying type
+      // has none, which is exactly the error the read side should still report.
+      template <uint32_t Format>
+      inline constexpr bool reader_skips_const = false;
+
       // How many members T has, and what each one is, without instantiating `reflect<T>` for a
       // reflectable type. `reflect<T>` declares `static constexpr auto keys = member_names<V>`, and
-      // deducing `auto` there evaluates the member names -- which is a hard error in GCC for a type
-      // with no linkage, because the pre-C++26 implementation passes the type through
-      // `external<T>`, a variable template that cannot be defined for a type declared inside a
-      // function. MSGPACK's reflectable path forwards through `to_tie` and never touches the names,
-      // so it writes such a type today and asking about its members must not be what breaks it.
+      // deducing `auto` there evaluates the member names, which is work a format that only needs the
+      // member count and types should not do: MSGPACK's reflectable path forwards through `to_tie`,
+      // and its writer needs the names for its keys but the diagnostic should not be what asks for
+      // them.
       //
       // The tie is that path's own view of the members, so both answers come from it and match what
       // `reflect<T>` reports for a type that has linkage.
@@ -789,16 +796,20 @@ namespace glz
       // field whose type has no `to`/`from` can sit in a struct without breaking it, and writers only
       // emit function pointers when write_function_pointers is on.
       //
-      // Which formats pass function pointers over is not uniform: JSON, BSON, JSONB, BEVE and CBOR
-      // drop both kinds, TOML drops member function pointers, and YAML, MSGPACK and CSV drop neither.
-      // The exemption below is therefore the lenient direction -- such a member is never *reported*
-      // here, which is not the same as being writable everywhere.
+      // Which formats pass function pointers over is not uniform, and it depends on
+      // `write_function_pointers`: with the default options the object writers consult
+      // `skipped_on_write`, which drops both kinds, while CSV's column writer does not, and a format
+      // may handle them itself once the option is on. The exemption below is therefore the lenient
+      // direction -- such a member is never *reported* here, which is not the same as being writable
+      // everywhere.
       //
       // The order of the questions is not free. Each one below the first is only reached when the
       // ones above it are false, so the cheap and common answers come first and the ones that cost a
       // template instantiation -- `skipped_by_meta`, which is only asked of a type that has a meta to
       // ask, and the format's own exemption, which is only asked of a member no format claims to
-      // write -- are not instantiated for members that are simply fine.
+      // write -- are not instantiated for members that are simply fine. The exemption is reached
+      // through `if constexpr` rather than `||` for that reason: `||` would still instantiate its
+      // right operand for a member that is already writable.
       //
       // Whether a member of type M has a writer or reader for Format. This deliberately does not use
       // `write_supported`/`read_supported`: those concepts also require the format to accept M as a
@@ -821,7 +832,11 @@ namespace glz
       template <operation Op, uint32_t Format, class T, size_t I>
       consteval bool member_supported()
       {
-         using M = member_type_t<T, I>;
+         // The declared type is kept, rather than `member_type_t`, because the const qualification is
+         // load bearing on the read side: a `const` member has no `from` for its underlying type, but
+         // a reader that sets `reader_skips_const` passes over it without asking for one.
+         using Declared = typename member_type<T, I>::type;
+         using M = std::remove_cvref_t<Declared>;
          if constexpr (always_skipped<M> || is_any_function_ptr<M>) {
             return true;
          }
@@ -832,7 +847,16 @@ namespace glz
                }
             }
             if constexpr (Op == operation::serialize) {
-               return member_writable<M, Format> || writer_emits_member_inline<Format, M>;
+               if constexpr (member_writable<M, Format>) {
+                  return true;
+               }
+               else {
+                  return writer_emits_member_inline<Format, M>;
+               }
+            }
+            else if constexpr (reader_skips_const<Format> &&
+                               std::is_const_v<std::remove_reference_t<Declared>>) {
+               return true;
             }
             else {
                return member_readable<M, Format>;
@@ -841,19 +865,42 @@ namespace glz
       }
 
       // The key the member is written under and the name of its type, both as template arguments so
-      // that the instantiation trace below can print them. The key comes from the member names, and
-      // those require a type the compiler can name: the pre-C++26 reflection passes the type through
-      // `external<T>`, which GCC will not define for a type declared inside a function, and clang
-      // rejects outright for a type with no linkage ("cannot be defined in any other translation unit
-      // because its type does not have linkage"). A report about such a type therefore surfaces the
-      // compiler's error instead of this message. Every format that writes keys needs those names
-      // anyway, so the case that reaches it is MSGPACK's tie-based path.
+      // that the instantiation trace below can print them. The key comes from the member names, the
+      // same `reflect<T>::keys` every keyed writer asks for, so a report does not require anything
+      // the format does not already need; the type name comes from `type_name`, which the pre-C++26
+      // implementation derives from a function signature.
       template <class T, size_t I>
       inline constexpr auto member_key_of = string_literal_from_view<key_name_v<I, T>.size()>(key_name_v<I, T>);
 
       template <class T, size_t I>
       inline constexpr auto member_type_of =
          string_literal_from_view<type_name<member_type_t<T, I>>.size()>(type_name<member_type_t<T, I>>);
+
+      // Names for the report below that stay well formed when there is no member at I. A discarded
+      // branch may still have its template-id substituted (MSVC does), and the branch that reports
+      // nothing still names index 0, which does not exist for a type with no members. The
+      // placeholders are ordinary `glz::string_literal`s, so the substituted report is harmless.
+      template <class T, size_t I>
+      consteval auto member_key_at()
+      {
+         if constexpr (I < member_count<T>()) {
+            return member_key_of<T, I>;
+         }
+         else {
+            return glz::string_literal<1>{""};
+         }
+      }
+
+      template <class T, size_t I>
+      consteval auto member_type_at()
+      {
+         if constexpr (I < member_count<T>()) {
+            return member_type_of<T, I>;
+         }
+         else {
+            return glz::string_literal<2>{"?"};
+         }
+      }
 
       // Instantiating one of these reports the error, and every template argument is load bearing: the
       // compiler prints them in the instantiation trace, and that trace is what names the member.
@@ -890,8 +937,8 @@ namespace glz
 
       // Index of the first member with no support, or the member count when there is none. Kept
       // separate from the reporting below because a member count is not a member: the branch that
-      // does not report still names the report, and a report named with the member count would ask
-      // for a member that does not exist.
+      // does not report still names the report, and reporting the member at the member count would
+      // name the wrong member even where the fallback names keep the template-id well formed.
       template <operation Op, uint32_t Format, class T>
       inline constexpr size_t first_unsupported_member = [] {
          constexpr size_t N = member_count<T>();
@@ -907,19 +954,19 @@ namespace glz
       template <operation Op, uint32_t Format, class T>
       inline constexpr bool object_members_supported = [] {
          constexpr size_t bad = first_unsupported_member<Op, Format, T>;
-         // `at` names a member for the branch that is not taken, for a compiler that substitutes a
-         // template-id appearing in a branch it discards (MSVC does). With nothing to report it has
-         // to name a member that exists, and index 0 is one for every type that has members; a type
-         // with none never reads the name.
+         // `at` names the member the report is about. When nothing is unsupported this branch is not
+         // taken, but a compiler may still substitute a template-id that appears in it (MSVC does).
+         // Index 0 is used then, and `member_key_at`/`member_type_at` fall back to a placeholder key
+         // and type for a type with no members, so the substituted report is well formed either way.
          constexpr size_t at = bad < member_count<T>() ? bad : 0;
          if constexpr (bad == member_count<T>()) {
             return true;
          }
          else if constexpr (Op == operation::serialize) {
-            return unsupported_writer<T, Format, at, member_key_of<T, at>, member_type_of<T, at>>::value;
+            return unsupported_writer<T, Format, at, member_key_at<T, at>(), member_type_at<T, at>()>::value;
          }
          else {
-            return unsupported_reader<T, Format, at, member_key_of<T, at>, member_type_of<T, at>>::value;
+            return unsupported_reader<T, Format, at, member_key_at<T, at>(), member_type_at<T, at>()>::value;
          }
       }();
 
