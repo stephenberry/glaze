@@ -46,6 +46,14 @@ jobs:
 
          - name: Setup environment
            run: |
+              # The ubuntu-26.04 runner image ships a packages.microsoft.com source that
+              # currently answers 403 for resolute, which makes apt update fail before the
+              # multilib packages are even considered. This job needs only Ubuntu packages,
+              # so drop any source file that points at that repository.
+              sudo find /etc/apt/sources.list.d -maxdepth 1 -type f \
+                 \( -name '*.list' -o -name '*.sources' \) \
+                 -exec grep -l 'packages.microsoft.com' {} + 2>/dev/null \
+                 | xargs -r sudo rm -f
               sudo apt update
               sudo apt-get install -y gcc-${{matrix.gcc}}-multilib g++-${{matrix.gcc}}-multilib libc6-dev-i386
               
