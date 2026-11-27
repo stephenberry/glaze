@@ -2972,6 +2972,7 @@ namespace glz
       template <auto Opts, class It>
       static void op(auto&& value, is_context auto&& ctx, It&& it, auto end)
       {
+         static_assert(detail::readable_members<TOML, T>, "One of this object's members has no reader for TOML.");
          // An inline table settles its own required and repeated keys where it is parsed, so a record
          // built for one is never read -- and an array of inline tables would allocate one per element.
          auto peek = it;

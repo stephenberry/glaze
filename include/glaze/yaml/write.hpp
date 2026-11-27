@@ -1238,6 +1238,11 @@ namespace glz
                                       bool skip_first_indent, bool entry_already_written)
       {
          using V = std::remove_cvref_t<T>;
+         // The check has to live here, not only in `to<YAML, T>::op`: nested objects (a member, a
+         // sequence element, a map value), tagged variants and array-of-table style layouts reach
+         // this helper directly, with the object's writer never instantiated. Asking here covers
+         // every one of those routes and changes nothing for a type that only goes through `op`.
+         static_assert(detail::writable_members<YAML, V>, "One of this object's members has no writer for YAML.");
          constexpr auto N = reflect<V>::size;
          constexpr uint8_t indent_width = check_indent_width<Opts>();
 
@@ -1403,6 +1408,9 @@ namespace glz
       inline void write_flow_mapping_members(T&& value, is_context auto&& ctx, B&& b, auto& ix, bool& first)
       {
          using V = std::remove_cvref_t<T>;
+         // Same reason as write_block_mapping: a tagged variant's object alternative is laid out
+         // here directly (write_tagged_flow_object), so the object's own `op` never runs.
+         static_assert(detail::writable_members<YAML, V>, "One of this object's members has no writer for YAML.");
          constexpr auto N = reflect<V>::size;
 
          for_each<N>([&]<size_t I>() {
@@ -1615,6 +1623,7 @@ namespace glz
       template <auto Opts, class B>
       static void op(auto&& value, is_context auto&& ctx, B&& b, auto& ix)
       {
+         static_assert(detail::writable_members<YAML, T>, "One of this object's members has no writer for YAML.");
          if constexpr (yaml::check_flow_style(Opts) || yaml::check_flow_context(Opts)) {
             yaml::write_flow_mapping<Opts>(value, ctx, b, ix);
          }

@@ -1111,6 +1111,10 @@ namespace glz
       template <auto Opts, class It>
       static void op(auto&& value, is_context auto&& ctx, It&& it, auto end)
       {
+         // Row-wise and column-wise both read each field from this loop into the row type's members
+         // directly; `from<CSV, U>::op` -- and its check -- never runs for that type. Asking here is
+         // what lets the row shape report the member.
+         static_assert(detail::readable_members<CSV, U>, "One of this object's members has no reader for CSV.");
          static constexpr auto N = reflect<U>::size;
          static constexpr auto HashInfo = hash_info<U>;
 
@@ -1337,6 +1341,7 @@ namespace glz
       template <auto Opts, class It>
       static void op(auto&& value, is_context auto&& ctx, It&& it, auto end)
       {
+         static_assert(detail::readable_members<CSV, T>, "One of this object's members has no reader for CSV.");
          static constexpr auto N = reflect<T>::size;
          static constexpr auto HashInfo = hash_info<T>;
 

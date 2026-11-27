@@ -720,6 +720,7 @@ namespace glz
       template <auto Opts, string_literal TagKey = "", class Value, is_context Ctx, class It, class End>
       GLZ_ALWAYS_INLINE static void op(Value&& value, uint8_t tag, Ctx&& ctx, It& it, const End& end) noexcept
       {
+         static_assert(detail::readable_members<MSGPACK, T>, "One of this object's members has no reader for MSGPACK.");
          depth_guard guard{ctx};
          if (!guard) [[unlikely]] {
             return;

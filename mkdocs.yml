@@ -94,6 +94,7 @@ nav:
  - Serialization/Parsing:
    - Automatic Enum Strings: enum-reflection.md
    - Exceptions: exceptions.md
+   - Compile Time Diagnostics: compile-time-diagnostics.md
    - Wrappers: wrappers.md
    - Custom Wrappers: custom-wrappers.md
    - Custom Serialization: custom-serialization.md

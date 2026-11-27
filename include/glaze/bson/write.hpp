@@ -695,6 +695,51 @@ namespace glz
          }
       }
 
+   } // namespace bson_detail
+
+   namespace detail
+   {
+      // Whether the object writer above emits a member of type M itself, so that the member needs no
+      // `to<BSON, M>` -- which is what the member check in core/reflect.hpp asks about. Only the write
+      // side needs this: the reader has real `from<BSON, ...>` specializations for all three of the
+      // direct cases.
+      //
+      // `write_member_element` has one branch for each of these, and it resolves the transparent write
+      // wrappers first: a "mimic" (`glaze_value_t` whose meta value is a single member pointer) and a
+      // `glz::custom` getter/setter have no type byte of their own, so the helper unwraps them and
+      // dispatches the value they yield. `to<BSON, Wrapper>` therefore need not exist for such a
+      // member, and asking for it alone reported wrappers the format writes -- a mimic around `int`
+      // was rejected while the same code wrote fine on main.
+      //
+      // The resolved type is accepted when the helper would handle it: another inline case, or a type
+      // with a `to<BSON, ...>` of its own. That holds for a mimic (`glaze_value_t`): it has no
+      // `to<BSON, ...>` of its own, so a mimic around a type BSON cannot write is still reported,
+      // since no branch would produce an element for it. It does not hold for `glz::custom`: the
+      // generic `to<Format, custom_t>` exists for every format, so such a member passes the member
+      // check and the failure surfaces later, in `write_member_element`'s fallback, as the missing
+      // `to<BSON, ResolvedType>` for the getter's result.
+      template <class M>
+      consteval bool bson_writes_member_inline()
+      {
+         if constexpr (always_null_t<M> || nullable_like<M> || is_variant<M>) {
+            return true;
+         }
+         else if constexpr (resolvable_write_wrapper<M>) {
+            using R = resolve_write_type_t<M>;
+            return always_null_t<R> || nullable_like<R> || is_variant<R> || requires { to<BSON, R>{}; };
+         }
+         else {
+            return false;
+         }
+      }
+
+      template <class M>
+         requires(bson_writes_member_inline<M>())
+      inline constexpr bool writer_emits_member_inline<BSON, M> = true;
+   }
+
+   namespace bson_detail
+   {
       // Returns true iff the struct field at index I should be omitted from
       // output under the given options (skip_null_members on an empty optional,
       // skip_default_members on a default-valued field, etc.).
@@ -755,6 +800,7 @@ namespace glz
       template <auto Opts>
       static void op(auto&& value, is_context auto&& ctx, auto&& b, auto& ix) noexcept
       {
+         static_assert(detail::writable_members<BSON, T>, "One of this object's members has no writer for BSON.");
          size_t start{};
          if (!bson_detail::reserve_document_length(ctx, b, ix, start)) [[unlikely]] {
             return;

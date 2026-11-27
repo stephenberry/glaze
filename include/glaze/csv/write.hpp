@@ -482,6 +482,7 @@ namespace glz
       template <auto Opts, class B>
       static void op(auto&& value, is_context auto&& ctx, B&& b, auto& ix)
       {
+         static_assert(detail::writable_members<CSV, T>, "One of this object's members has no writer for CSV.");
          static constexpr auto N = reflect<T>::size;
 
          [[maybe_unused]] decltype(auto) t = [&] {
@@ -706,6 +707,10 @@ namespace glz
       template <auto Opts, class B>
       static void op(auto&& value, is_context auto&& ctx, B&& b, auto& ix)
       {
+         // A vector of objects is written row by row, each field dispatched straight from this loop,
+         // so `to<CSV, U>::op` -- and its check -- never runs for the row type. The check belongs
+         // where the members are actually written.
+         static_assert(detail::writable_members<CSV, U>, "One of this object's members has no writer for CSV.");
          static constexpr auto N = reflect<U>::size;
 
          // Write headers (field names) if enabled

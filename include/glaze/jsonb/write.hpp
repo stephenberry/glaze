@@ -458,6 +458,7 @@ namespace glz
       template <auto Opts>
       static void op(auto&& value, is_context auto&& ctx, auto&& b, auto& ix)
       {
+         static_assert(detail::writable_members<JSONB, T>, "One of this object's members has no writer for JSONB.");
          size_t header_pos{};
          if (!jsonb_detail::reserve_container_header(ctx, b, ix, header_pos)) [[unlikely]] {
             return;
@@ -666,6 +667,15 @@ namespace glz
                using V = std::decay_t<decltype(v)>;
                constexpr bool is_reflected_object = glaze_object_t<V> || reflectable<V>;
                if constexpr (check_write_type_info(Opts) && not tag_v<T>.empty() && is_reflected_object) {
+                  // This branch writes the alternative's fields through `write_reflected_body` rather
+                  // than `to<JSONB, V>::op`, so the object writer's member check does not run for it.
+                  // Ask here, or a tagged variant hides the one member this diagnostic exists for.
+                  // A custom-serialized alternative is excluded for the same reason the object writer
+                  // excludes it: its own `to<JSONB, V>` decides what it emits, not its members.
+                  if constexpr (not custom_write<V>) {
+                     static_assert(detail::writable_members<JSONB, V>,
+                                   "One of this object's members has no writer for JSONB.");
+                  }
                   // `ids` may declare fewer entries than the variant has alternatives -- the readers
                   // treat the first unlabeled alternative as the default for an unrecognized id -- so
                   // an alternative past the end of `ids` has no id to write. Indexing there reads past

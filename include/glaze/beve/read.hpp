@@ -28,6 +28,14 @@
 // reader (a reflectable struct read positionally defers to the tuple reader) leaves the level to that
 // reader, so one wire level is counted once.
 
+namespace glz::detail
+{
+   // `parse<BEVE>::op` checks `const_value_v` and skips a const member instead of reading into it,
+   // so a const member needs no `from<BEVE, ...>` and must not be reported as unreadable.
+   template <>
+   inline constexpr bool reader_skips_const<BEVE> = true;
+}
+
 namespace glz
 {
    template <>
@@ -3002,6 +3010,7 @@ namespace glz
          requires(check_structs_as_arrays(Opts) == true)
       static void op(auto&& value, is_context auto&& ctx, auto&& it, auto end)
       {
+         static_assert(detail::readable_members<BEVE, T>, "One of this object's members has no reader for BEVE.");
          if constexpr (reflectable<T>) {
             constexpr auto N = detail::count_members<T>;
             if constexpr (N == 0) {
@@ -3079,6 +3088,7 @@ namespace glz
          requires(check_structs_as_arrays(Opts) == false)
       static void op(auto&& value, is_context auto&& ctx, auto&& it, auto end)
       {
+         static_assert(detail::readable_members<BEVE, T>, "One of this object's members has no reader for BEVE.");
          constexpr uint8_t type = 0; // string key
          constexpr uint8_t header = tag::object | type;
 

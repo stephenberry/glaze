@@ -34,6 +34,14 @@
 #pragma warning(disable : 4702)
 #endif
 
+namespace glz::detail
+{
+   // `parse<JSON>::op` checks `const_value_v` and skips a const member instead of reading into it,
+   // so a const member needs no `from<JSON, ...>` and must not be reported as unreadable.
+   template <>
+   inline constexpr bool reader_skips_const<JSON> = true;
+}
+
 namespace glz
 {
    // forward declare from json/wrappers.hpp to avoid circular include
@@ -2792,6 +2800,7 @@ namespace glz
       template <auto Options, string_literal tag = "">
       static void op(auto&& value, is_context auto&& ctx, auto&& it, auto end)
       {
+         static_assert(detail::readable_members<JSON, T>, "One of this object's members has no reader for JSON.");
          static constexpr auto num_members = reflect<T>::size;
 
          static constexpr auto Opts = opening_handled_off<ws_handled_off<Options>()>();

@@ -1,0 +1,652 @@
+// Glaze Library
+// For the license information refer to glaze.hpp
+//
+// Tests for the object member diagnostics: the compile-time report a format produces when a struct
+// has a member it cannot write or read.
+//
+// The diagnostics are compile-time only, so they are tested from both sides. Everything an ordinary
+// translation unit can check is here: the predicate that decides which member is a problem, the key
+// and type the report names, that the concepts stay queryable, and that nothing is reported for the
+// members an operation skips by design. The rejection itself is covered by the cases next to this
+// file, which are compiled by check_diagnostic.cmake.
+
+#include <optional>
+#include <string>
+#include <type_traits>
+#include <variant>
+#include <vector>
+
+#include "cases/shapes.hpp"
+
+#include <glaze/beve.hpp>
+#include <glaze/bson.hpp>
+#include <glaze/cbor.hpp>
+#include <glaze/csv.hpp>
+#include <glaze/json.hpp>
+#include <glaze/jsonb.hpp>
+#include <glaze/msgpack.hpp>
+#include <glaze/toml.hpp>
+#include <glaze/yaml.hpp>
+
+#include "ut/ut.hpp"
+
+using namespace ut;
+
+// A named namespace rather than an anonymous one: a type with no linkage makes clang reject
+// `external<T>`, which is what the member names go through, with "cannot be defined in any other
+// translation unit because its type does not have linkage".
+namespace diagnostics_test_names
+{
+   // Every member has a writer and a reader, so nothing is diagnosed and every format can handle it.
+   struct Supported
+   {
+      int a{100};
+      std::string s{"world"};
+   };
+
+   // A document of primitives only. This is the shape a member-level check can get wrong: BSON's
+   // public `write_supported`/`read_supported` also require `top_level_supported<BSON, T>` -- a BSON
+   // document cannot be a primitive -- but a primitive is a perfectly good *member*, because the
+   // object writer dispatches to `to<BSON, int>`, which exists. Both the compile-time check and a
+   // real round trip are asserted below.
+   struct Point
+   {
+      int x{1};
+      int y{2};
+   };
+
+   // A member declared `const` with a type no format can read or write. The readers of JSON, BEVE,
+   // CBOR and JSONB check `const_value_v` and pass over the member instead of reading into it, so the
+   // read side must not report it; the write side has no writer and still must.
+   struct WithConstMember
+   {
+      int a{};
+      const Opaque o{};
+   };
+
+   // Nothing to report in either direction, and nothing to name: the diagnostic has to answer for a
+   // type whose member count is zero without asking for a member that does not exist.
+   struct Empty
+   {
+   };
+
+   // A transparent single-member wrapper: `glz::meta::value` is a member pointer, so the type writes
+   // as its `int` rather than as an object. BSON reads and writes such a member through the wrapper's
+   // own reader/writer, and the member check must not reject it.
+   struct WrapperInt
+   {
+      int v{};
+   };
+
+   struct WithMimic
+   {
+      int a{};
+      WrapperInt w{};
+   };
+
+   // The member at index 1 has no writer: `glz::meta::skip` says to leave it out of serialization.
+   struct SkippedForSerialize
+   {
+      int a{1};
+      Opaque o{};
+   };
+
+   // The mirror image: skipped on the way in, so only a reader would have a problem with it.
+   struct SkippedForParse
+   {
+      int a{1};
+      Opaque o{};
+   };
+
+   // Skipped in both directions, by the member type rather than by the meta.
+   struct WithSkipMembers
+   {
+      int a{1};
+      glz::skip o{};
+      int b{2};
+   };
+
+   // The shape an RPC registry has: callable members that a format is expected to pass over.
+   struct WithFunctions
+   {
+      int a{1};
+      int (*free_function)(int){};
+      int (WithFunctions::*member_function)(int){};
+   };
+
+   // BSON emits the members below itself, inside its member loop, because a BSON element carries its
+   // type next to its key and `to<BSON, T>::type_code` cannot express them: nullable, null and
+   // variant members are written even though `to<BSON, ...>` has no specialization for them.
+   struct BsonInlineMembers
+   {
+      std::optional<int> engaged{42};
+      std::monostate empty{};
+      std::variant<int, std::string> choice{std::string{"picked"}};
+   };
+
+   // CSV writes a struct of columns rather than a row, so a member has to be a container.
+   struct CsvColumns
+   {
+      std::vector<int> num1{};
+      std::vector<float> num2{};
+   };
+
+   // TOML writes an always-null member itself, as nothing, inside `write_inline_value`, and has no
+   // `to<TOML, std::monostate>` or `to<TOML, std::nullopt_t>`: the same asymmetry as BSON, one format
+   // further along. The reader is not in the same position -- it has no `from<TOML, ...>` for these
+   // either, and reading into this struct fails on main as well -- so only the write side is exempt.
+   struct TomlInlineMembers
+   {
+      std::string name{"n"};
+      std::monostate empty{};
+      std::nullopt_t nothing = std::nullopt;
+   };
+
+   // The member type is not what the writer dispatches on when the field goes through
+   // `glz::custom`: `reflect<T>` holds a `glz::custom_t`, which has `to`/`from` of its own. The
+   // stored type below has no writer or reader, and a reader of an object cannot see it, so it must
+   // not be reported.
+   struct CustomAccessor
+   {
+      Opaque raw{};
+      void set_value(int) {}
+      int get_value() const { return 0; }
+   };
+}
+
+using namespace diagnostics_test_names;
+
+template <>
+struct glz::meta<SkippedForSerialize>
+{
+   using T = SkippedForSerialize;
+   static constexpr auto value = glz::object(&T::a, &T::o);
+
+   static constexpr bool skip(const std::string_view key, const glz::meta_context& ctx)
+   {
+      return key == "o" && ctx.op == glz::operation::serialize;
+   }
+};
+
+template <>
+struct glz::meta<SkippedForParse>
+{
+   using T = SkippedForParse;
+   static constexpr auto value = glz::object(&T::a, &T::o);
+
+   static constexpr bool skip(const std::string_view key, const glz::meta_context& ctx)
+   {
+      return key == "o" && ctx.op == glz::operation::parse;
+   }
+};
+
+template <>
+struct glz::meta<CsvColumns>
+{
+   using T = CsvColumns;
+   static constexpr auto value = glz::object(&T::num1, &T::num2);
+};
+
+template <>
+struct glz::meta<WrapperInt>
+{
+   using T = WrapperInt;
+   static constexpr auto value = &T::v;
+};
+
+template <>
+struct glz::meta<CustomAccessor>
+{
+   using T = CustomAccessor;
+   static constexpr auto value = glz::object("v", glz::custom<&T::set_value, &T::get_value>);
+};
+
+namespace
+{
+   // ---- which member is a problem -------------------------------------------------------------
+   //
+   // `member_supported` is the half of the diagnostic that decides, and it is separable from the half
+   // that reports: asking it here does not instantiate the report. Which member the report picks is
+   // the first one that answers false, and the cases next to this file pin that in the trace.
+
+   // Whether the writer/reader the object writer dispatches to for a member exists. This is not the
+   // same question as `write_supported`/`read_supported` for BSON: those also require
+   // `top_level_supported<BSON, T>`, and BSON only accepts a document at the top level, so they
+   // answer false for a scalar even though `to<BSON, int>` and `from<BSON, int>` exist. A member is
+   // written by the object writer, not by the top-level entry point.
+   template <class M>
+   consteval bool bson_member_writer_exists()
+   {
+      return requires { glz::to<glz::BSON, M>{}; };
+   }
+
+   template <class M>
+   consteval bool bson_member_reader_exists()
+   {
+      return requires { glz::from<glz::BSON, M>{}; };
+   }
+
+   static_assert(!glz::detail::member_supported<glz::operation::serialize, glz::JSON, Outer, 1>());
+   static_assert(!glz::detail::member_supported<glz::operation::parse, glz::JSON, Outer, 1>());
+   static_assert(glz::detail::member_supported<glz::operation::serialize, glz::JSON, Outer, 0>());
+   static_assert(glz::detail::member_supported<glz::operation::serialize, glz::JSON, Outer, 2>());
+
+   static_assert(glz::detail::member_supported<glz::operation::parse, glz::JSON, Outer, 0>());
+   // A struct with nothing to report: every member answers true in both directions.
+   static_assert(glz::detail::member_supported<glz::operation::serialize, glz::JSON, Supported, 0>());
+   static_assert(glz::detail::member_supported<glz::operation::serialize, glz::JSON, Supported, 1>());
+
+   // A `const` member has no `from` for its underlying type, but the readers that check
+   // `const_value_v` pass over it. Only those formats are exempt: BSON's element reader dispatches
+   // to `from<BSON, Member>` directly, so a const member is a real problem there and stays reported.
+   // The write side is not exempt anywhere: a const member still has no writer.
+   //
+   // The exemption depends on `member_type<T, I>::type` keeping the declaration's const: the check
+   // asks whether the declared member is const, which `member_type_t` would have thrown away.
+   static_assert(std::is_const_v<std::remove_reference_t<typename glz::detail::member_type<WithConstMember, 1>::type>>);
+   static_assert(glz::detail::member_supported<glz::operation::parse, glz::JSON, WithConstMember, 1>());
+   static_assert(glz::detail::member_supported<glz::operation::parse, glz::BEVE, WithConstMember, 1>());
+   static_assert(glz::detail::member_supported<glz::operation::parse, glz::CBOR, WithConstMember, 1>());
+   static_assert(glz::detail::member_supported<glz::operation::parse, glz::JSONB, WithConstMember, 1>());
+   static_assert(glz::detail::readable_members<glz::JSON, WithConstMember>);
+   static_assert(glz::detail::readable_members<glz::BEVE, WithConstMember>);
+   static_assert(glz::detail::readable_members<glz::CBOR, WithConstMember>);
+   static_assert(glz::detail::readable_members<glz::JSONB, WithConstMember>);
+   static_assert(!glz::detail::member_supported<glz::operation::serialize, glz::JSON, WithConstMember, 1>());
+   static_assert(!glz::detail::member_supported<glz::operation::parse, glz::BSON, WithConstMember, 1>());
+
+   // An empty struct has no member to name. The report's fallback names keep the discarded branch
+   // well formed; the keys are the empty string and "?".
+   static_assert(glz::detail::member_count<Empty>() == 0);
+   static_assert(glz::detail::member_key_at<Empty, 0>().sv().empty());
+   static_assert(glz::detail::member_type_at<Empty, 0>().sv() == "?");
+   static_assert(glz::detail::writable_members<glz::JSON, Empty>);
+   static_assert(glz::detail::writable_members<glz::BEVE, Empty>);
+   static_assert(glz::detail::writable_members<glz::CBOR, Empty>);
+   static_assert(glz::detail::writable_members<glz::JSONB, Empty>);
+   static_assert(glz::detail::writable_members<glz::BSON, Empty>);
+   static_assert(glz::detail::writable_members<glz::MSGPACK, Empty>);
+   static_assert(glz::detail::writable_members<glz::TOML, Empty>);
+   static_assert(glz::detail::writable_members<glz::YAML, Empty>);
+   // Only the readers that actually read an empty struct on main are pinned: MSGPACK, TOML and YAML
+   // fail to read one there (the hash decode has no entry for zero keys), so an assertion about this
+   // diagnostic would pin behavior the format does not have.
+   static_assert(glz::detail::readable_members<glz::JSON, Empty>);
+   static_assert(glz::detail::readable_members<glz::BEVE, Empty>);
+   static_assert(glz::detail::readable_members<glz::CBOR, Empty>);
+   static_assert(glz::detail::readable_members<glz::JSONB, Empty>);
+   static_assert(glz::detail::readable_members<glz::BSON, Empty>);
+
+   // The same member is the problem in every format, and a struct that is fine in one is fine in all.
+   static_assert(!glz::detail::member_supported<glz::operation::serialize, glz::JSONB, Outer, 1>());
+   static_assert(!glz::detail::member_supported<glz::operation::serialize, glz::BEVE, Outer, 1>());
+   static_assert(!glz::detail::member_supported<glz::operation::serialize, glz::CBOR, Outer, 1>());
+   static_assert(!glz::detail::member_supported<glz::operation::serialize, glz::MSGPACK, Outer, 1>());
+   static_assert(!glz::detail::member_supported<glz::operation::serialize, glz::BSON, Outer, 1>());
+   static_assert(!glz::detail::member_supported<glz::operation::serialize, glz::YAML, Outer, 1>());
+   static_assert(!glz::detail::member_supported<glz::operation::serialize, glz::TOML, Outer, 1>());
+   static_assert(!glz::detail::member_supported<glz::operation::serialize, glz::CSV, Outer, 1>());
+   static_assert(!glz::detail::member_supported<glz::operation::parse, glz::JSONB, Outer, 1>());
+   static_assert(!glz::detail::member_supported<glz::operation::parse, glz::BEVE, Outer, 1>());
+   static_assert(!glz::detail::member_supported<glz::operation::parse, glz::CBOR, Outer, 1>());
+   static_assert(!glz::detail::member_supported<glz::operation::parse, glz::MSGPACK, Outer, 1>());
+   static_assert(!glz::detail::member_supported<glz::operation::parse, glz::BSON, Outer, 1>());
+   static_assert(!glz::detail::member_supported<glz::operation::parse, glz::YAML, Outer, 1>());
+   static_assert(!glz::detail::member_supported<glz::operation::parse, glz::TOML, Outer, 1>());
+   static_assert(!glz::detail::member_supported<glz::operation::parse, glz::CSV, Outer, 1>());
+
+   static_assert(glz::detail::writable_members<glz::JSON, Supported>);
+   static_assert(glz::detail::readable_members<glz::JSON, Supported>);
+   static_assert(glz::detail::writable_members<glz::JSON, WithFunctions>);
+
+   // The member count has to agree with the reflection it stands in for, for a type that has
+   // linkage, in both reflection modes: reflectable aggregates are counted through the tie,
+   // everything else through reflect<T>.
+   static_assert(glz::detail::member_count<Outer>() == glz::reflect<Outer>::size);
+   static_assert(glz::detail::member_count<Inner>() == glz::reflect<Inner>::size);
+   static_assert(glz::detail::member_count<Supported>() == glz::reflect<Supported>::size);
+   static_assert(glz::detail::member_count<Renamed>() == glz::reflect<Renamed>::size);
+   static_assert(glz::detail::member_count<Outer>() == 3);
+
+   // Members a format writes itself are not missing support. BSON is the case that exists today:
+   // there is no `to<BSON, M>` for any of these three, yet the format writes all three.
+   static_assert(!bson_member_writer_exists<std::optional<int>>());
+   static_assert(!bson_member_writer_exists<std::monostate>());
+   static_assert(!bson_member_writer_exists<std::variant<int, std::string>>());
+   static_assert(glz::detail::member_supported<glz::operation::serialize, glz::BSON, BsonInlineMembers, 0>());
+   static_assert(glz::detail::member_supported<glz::operation::serialize, glz::BSON, BsonInlineMembers, 1>());
+   static_assert(glz::detail::member_supported<glz::operation::serialize, glz::BSON, BsonInlineMembers, 2>());
+   static_assert(glz::detail::writable_members<glz::BSON, BsonInlineMembers>);
+   // The exemption is the writer's, not the reader's: the reader has real from<BSON, ...>
+   // specializations for these, so nothing is exempted there.
+   static_assert(bson_member_reader_exists<std::optional<int>>());
+   static_assert(bson_member_reader_exists<std::monostate>());
+   static_assert(bson_member_reader_exists<std::variant<int, std::string>>());
+   static_assert(glz::detail::readable_members<glz::BSON, BsonInlineMembers>);
+
+   // The distinction that the merged `top_level_supported` makes load bearing: the public concepts
+   // answer false for a scalar with BSON, while the member writer and reader exist. The member check
+   // has to ask the second question; asking the first rejects every BSON struct with a scalar member.
+   static_assert(!glz::write_supported<int, glz::BSON>);
+   static_assert(!glz::read_supported<int, glz::BSON>);
+   static_assert(bson_member_writer_exists<int>());
+   static_assert(bson_member_reader_exists<int>());
+   static_assert(glz::detail::member_supported<glz::operation::serialize, glz::BSON, Point, 0>());
+   static_assert(glz::detail::member_supported<glz::operation::parse, glz::BSON, Point, 0>());
+   static_assert(glz::detail::writable_members<glz::BSON, Point>);
+   static_assert(glz::detail::readable_members<glz::BSON, Point>);
+   static_assert(glz::detail::writable_members<glz::BSON, Supported>);
+   static_assert(glz::detail::readable_members<glz::BSON, Supported>);
+
+   // A transparent wrapper (a `glz::meta` whose `value` is a single member pointer) is written and
+   // read through its own `to<BSON, ...>`, which writes the wrapped value. The member check must ask
+   // about the wrapper type and accept it, as it does for every other format.
+   static_assert(glz::detail::member_supported<glz::operation::serialize, glz::BSON, WithMimic, 1>());
+   static_assert(glz::detail::member_supported<glz::operation::parse, glz::BSON, WithMimic, 1>());
+   static_assert(glz::detail::writable_members<glz::BSON, WithMimic>);
+   static_assert(glz::detail::readable_members<glz::BSON, WithMimic>);
+
+   // A `glz::custom` field is a `glz::custom_t` in `reflect<T>`, with `to`/`from` of its own; the
+   // type behind the accessor is never written, so it must not be reported.
+   static_assert(glz::detail::member_count<CustomAccessor>() == 1);
+   static_assert(glz::detail::member_supported<glz::operation::serialize, glz::JSON, CustomAccessor, 0>());
+   static_assert(glz::detail::member_supported<glz::operation::parse, glz::JSON, CustomAccessor, 0>());
+   static_assert(glz::detail::writable_members<glz::JSON, CustomAccessor>);
+   static_assert(glz::detail::readable_members<glz::JSON, CustomAccessor>);
+
+   // The same holds for BSON: `glz::custom_t` has its own `to<BSON, ...>`, so the stored type with
+   // no writer is never dispatched to.
+   static_assert(glz::detail::member_supported<glz::operation::serialize, glz::BSON, CustomAccessor, 0>());
+
+   // The same asymmetry for TOML, and again only on the write side: `write_supported` is false for
+   // both of these while the TOML writer emits the struct, and its reader genuinely cannot read them
+   // (the read of this struct fails on main too).
+   static_assert(!glz::write_supported<std::monostate, glz::TOML>);
+   static_assert(!glz::write_supported<std::nullopt_t, glz::TOML>);
+   static_assert(glz::detail::member_supported<glz::operation::serialize, glz::TOML, TomlInlineMembers, 1>());
+   static_assert(glz::detail::member_supported<glz::operation::serialize, glz::TOML, TomlInlineMembers, 2>());
+   static_assert(glz::detail::writable_members<glz::TOML, TomlInlineMembers>);
+
+   // ---- what the report says the member is ----------------------------------------------------
+
+   static_assert(glz::detail::member_key_of<Outer, 1>.sv() == "o");
+   static_assert(glz::detail::member_type_of<Outer, 1>.sv() == "Opaque");
+   static_assert(glz::detail::member_key_of<Outer, 0>.sv() == "a");
+   // A renamed member is reported under the key the output uses, which is what a reader of the
+   // document can search for.
+   static_assert(glz::detail::member_key_of<Renamed, 1>.sv() == "omicron");
+
+   // ---- members an operation skips by design are not problems ---------------------------------
+   //
+   // `glz::meta::skip` exists so that a field whose type has no writer or reader can sit in a struct
+   // without breaking it, so a skip that covers the operation must silence the diagnostic for it --
+   // and only for that operation.
+
+   static_assert(glz::detail::member_supported<glz::operation::serialize, glz::JSON, SkippedForSerialize, 1>());
+   static_assert(!glz::detail::member_supported<glz::operation::parse, glz::JSON, SkippedForSerialize, 1>());
+   static_assert(glz::detail::member_supported<glz::operation::parse, glz::JSON, SkippedForParse, 1>());
+   static_assert(!glz::detail::member_supported<glz::operation::serialize, glz::JSON, SkippedForParse, 1>());
+
+
+   static_assert(glz::detail::member_supported<glz::operation::serialize, glz::JSON, WithSkipMembers, 1>());
+   static_assert(glz::detail::member_supported<glz::operation::parse, glz::JSON, WithSkipMembers, 1>());
+
+   static_assert(glz::detail::member_supported<glz::operation::serialize, glz::JSON, WithFunctions, 1>());
+   static_assert(glz::detail::member_supported<glz::operation::serialize, glz::JSON, WithFunctions, 2>());
+
+   // Which formats a function-pointer member is passed over by is not uniform: JSON and BSON drop
+   // both kinds, JSONB, BEVE and CBOR drop both, TOML drops member function pointers, and YAML,
+   // MSGPACK and CSV drop neither -- writing this struct as MSGPACK or YAML fails today. The check
+   // therefore exempts function pointers everywhere rather than tracking that table, which is the
+   // lenient direction: it means such a member is never *reported* by this diagnostic, not that every
+   // format writes it. The assertions below are the exemption, stated where it is doing work -- a
+   // format with no writer for either kind.
+   static_assert(glz::write_supported<int (WithFunctions::*)(int), glz::JSON>);
+   static_assert(!glz::write_supported<int (*)(int), glz::MSGPACK>);
+   static_assert(!glz::write_supported<int (WithFunctions::*)(int), glz::MSGPACK>);
+   static_assert(glz::detail::member_supported<glz::operation::serialize, glz::MSGPACK, WithFunctions, 1>());
+   static_assert(glz::detail::member_supported<glz::operation::serialize, glz::MSGPACK, WithFunctions, 2>());
+   static_assert(!glz::write_supported<int (*)(int), glz::YAML>);
+   static_assert(glz::detail::member_supported<glz::operation::serialize, glz::YAML, WithFunctions, 1>());
+   static_assert(!glz::write_supported<int (*)(int), glz::JSONB>);
+   static_assert(glz::detail::member_supported<glz::operation::serialize, glz::JSONB, WithFunctions, 1>());
+
+   // ---- asking must remain possible -----------------------------------------------------------
+   //
+   // This is the reason the diagnostic lives inside `op()` instead of at class scope on
+   // `to<Format, T>`: `write_supported` is `requires { to<Format, T>{}; }`, so an assert in the
+   // class body fires while the concept is being evaluated, turning a query that generic code
+   // depends on into a hard error. What is asserted here is that the query is evaluable at all, not
+   // what it answers -- `write_supported` tests for the presence of `to<JSON, T>`, which exists for
+   // a reflectable struct whatever its members are typed, so it answers true for `Outer` today.
+
+   template <class T>
+   consteval bool json_writer_is_queryable()
+   {
+      if constexpr (glz::write_supported<T, glz::JSON>) {
+         return true;
+      }
+      else {
+         return false;
+      }
+   }
+
+   template <class T>
+   consteval bool json_reader_is_queryable()
+   {
+      if constexpr (glz::read_supported<T, glz::JSON>) {
+         return true;
+      }
+      else {
+         return false;
+      }
+   }
+
+   static_assert(json_writer_is_queryable<Outer>() || !json_writer_is_queryable<Outer>());
+   static_assert(json_reader_is_queryable<Outer>() || !json_reader_is_queryable<Outer>());
+   static_assert(json_writer_is_queryable<Supported>() || !json_writer_is_queryable<Supported>());
+
+   // The concepts still answer true for `Outer`, whose member at index 1 has no writer. That answer is
+   // part of the contract (docs/compile-time-diagnostics.md, "write_supported and read_supported are
+   // unchanged") and is exactly the property a class-scope assert would have destroyed. Pinned as an
+   // answer, not only as the evaluability probe above.
+   static_assert(glz::write_supported<Outer, glz::JSON>);
+   static_assert(glz::read_supported<Outer, glz::JSON>);
+}
+
+suite diagnostics_tests = [] {
+   "every format round trips a struct with only supported members"_test = [] {
+      Supported v{};
+      std::string text;
+      std::vector<std::byte> binary;
+
+      expect(!glz::write_json(v, text));
+      expect(!glz::read_json(v, text));
+      expect(v.a == 100);
+      expect(v.s == "world");
+
+      expect(!glz::write_jsonb(v, binary));
+      expect(!glz::read_jsonb(v, binary));
+      expect(v.a == 100);
+      expect(v.s == "world");
+
+      expect(!glz::write_beve(v, binary));
+      expect(!glz::read_beve(v, binary));
+      expect(v.a == 100);
+      expect(v.s == "world");
+
+      expect(!glz::write_cbor(v, binary));
+      expect(!glz::read_cbor(v, binary));
+      expect(v.a == 100);
+      expect(v.s == "world");
+
+      expect(!glz::write_msgpack(v, binary));
+      expect(!glz::read_msgpack(v, binary));
+      expect(v.a == 100);
+      expect(v.s == "world");
+
+      expect(!glz::write_bson(v, binary));
+      expect(!glz::read_bson(v, binary));
+      expect(v.a == 100);
+      expect(v.s == "world");
+
+      expect(!glz::write_yaml(v, text));
+      expect(!glz::read_yaml(v, text));
+      expect(v.a == 100);
+      expect(v.s == "world");
+
+      expect(!glz::write_toml(v, text));
+      expect(!glz::read_toml(v, text));
+      expect(v.a == 100);
+      expect(v.s == "world");
+   };
+
+   "a member skipped for serialization is written without"_test = [] {
+      SkippedForSerialize v{};
+      std::string text;
+      expect(!glz::write_json(v, text));
+      expect(text == R"({"a":1})") << text;
+   };
+
+   "a member skipped for parsing does not reject the read"_test = [] {
+      SkippedForParse v{};
+      expect(!glz::read_json(v, R"({"a":42})"));
+      expect(v.a == 42);
+   };
+
+   "glz::skip members and function pointers are passed over"_test = [] {
+      WithSkipMembers skipped{};
+      std::string text;
+      expect(!glz::write_json(skipped, text));
+      expect(text == R"({"a":1,"b":2})") << text;
+
+      WithFunctions functions{};
+      std::string callables;
+      expect(!glz::write_json(functions, callables));
+      expect(callables == R"({"a":1})") << callables;
+
+
+      // MSGPACK is one of the formats that does not pass function pointers over, so it is not
+      // written here: the point of the assertions above is that this diagnostic stays out of its way,
+      // not that every format accepts the struct.
+   };
+
+   "BSON writes the members it emits itself"_test = [] {
+      BsonInlineMembers v{};
+      std::string bytes;
+      expect(!glz::write_bson(v, bytes)) << "write_bson failed";
+
+      BsonInlineMembers back{};
+      expect(!glz::read_bson(back, bytes));
+      expect(back.engaged == 42);
+      expect(std::holds_alternative<std::string>(back.choice));
+      expect(std::get<std::string>(back.choice) == "picked");
+   };
+
+   // The regression the merge with `top_level_supported` introduced: a document of primitives has
+   // writers and readers for every member, but BSON's top-level concept rejects a primitive, and a
+   // member check built on that concept rejected the whole struct. This is the runtime half; the
+   // static assertions above are the compile-time half.
+   "BSON round trips a struct whose members are primitives"_test = [] {
+      Point v{};
+      std::string bytes;
+      expect(!glz::write_bson(v, bytes)) << "write_bson failed";
+
+      Point back{};
+      expect(!glz::read_bson(back, bytes));
+      expect(back.x == 1);
+      expect(back.y == 2);
+   };
+
+   "a custom accessor hides the member type behind it"_test = [] {
+      CustomAccessor v{};
+      std::string text;
+      expect(!glz::write_json(v, text)) << "write_json failed";
+      expect(text == R"({"v":0})") << text;
+      expect(!glz::read_json(v, R"({"v":7})"));
+   };
+
+   // MSGPACK's reflectable path goes through `to_tie`, not through `reflect<T>` and its member
+   // names. A type declared inside a function has no linkage, and the pre-C++26 name lookup cannot
+   // be defined for it, so this is the shape that can only work if the member count and the member
+   // types come from the tie. The diagnostic must stay out of the way here.
+   "a local struct is written and read by MSGPACK"_test = [] {
+      struct Local
+      {
+         int x{};
+         std::string s{};
+      };
+
+      Local v{7, "local"};
+      std::vector<std::byte> bytes;
+      expect(!glz::write_msgpack(v, bytes)) << "write_msgpack failed";
+
+      Local back{};
+      expect(!glz::read_msgpack(back, bytes));
+      expect(back.x == 7);
+      expect(back.s == "local");
+   };
+
+   "TOML writes the always-null members it emits as nothing"_test = [] {
+      TomlInlineMembers v{};
+      std::string text;
+      expect(!glz::write_toml(v, text)) << "write_toml failed";
+      expect(text == R"(name = "n")") << text;
+      // Only the write side is exercised here: TOML's reader has no `from<TOML, std::monostate>` or
+      // `from<TOML, std::nullopt_t>` either, so reading this struct fails on main as well and the
+      // diagnostic is right to report it for the read direction.
+   };
+
+   "the CSV writer still round trips a struct of columns"_test = [] {
+      CsvColumns v{};
+      v.num1 = {1, 2};
+      v.num2 = {3.5f, 4.5f};
+
+      auto written = glz::write_csv(v);
+      expect(bool(written)) << "write_csv failed";
+
+      if (written) {
+         CsvColumns back{};
+         expect(!glz::read_csv<glz::rowwise>(back, *written));
+         expect(back.num1 == v.num1);
+         expect(back.num2 == v.num2);
+      }
+   };
+
+   // The readers compile for a struct with a const member that has no reader, and the member is
+   // passed over. JSON is round tripped; the binary readers only need to compile here, because the
+   // struct has no writer to produce their input -- the member is skipped before `from` is asked
+   // for, which is the property under test.
+   "a const member without a reader is skipped by the readers"_test = [] {
+      WithConstMember v{};
+      expect(!glz::read_json(v, R"({"a":42})")) << "read_json failed";
+      expect(v.a == 42);
+
+      std::vector<std::byte> empty{};
+      [[maybe_unused]] const auto beve = glz::read_beve(v, empty);
+      [[maybe_unused]] const auto cbor = glz::read_cbor(v, empty);
+      [[maybe_unused]] const auto jsonb = glz::read_jsonb(v, empty);
+   };
+
+   "an empty struct writes and reads"_test = [] {
+      Empty v{};
+      std::string text;
+      expect(!glz::write_json(v, text)) << "write_json failed";
+      expect(text == "{}") << text;
+      expect(!glz::read_json(v, text)) << "read_json failed";
+   };
+
+   "BSON round trips a transparent wrapper member"_test = [] {
+      WithMimic v{};
+      v.w.v = 7;
+      std::string bytes;
+      expect(!glz::write_bson(v, bytes)) << "write_bson failed";
+
+      WithMimic back{};
+      expect(!glz::read_bson(back, bytes));
+      expect(back.a == 0);
+      expect(back.w.v == 7);
+   };
+};
+
+int main() { return 0; }

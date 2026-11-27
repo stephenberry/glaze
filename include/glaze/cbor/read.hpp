@@ -22,6 +22,14 @@
 // which bounds the descent at max_recursive_depth_limit and reports exceeded_max_recursive_depth
 // instead of crashing.
 
+namespace glz::detail
+{
+   // `parse<CBOR>::op` checks `const_value_v` and skips a const member instead of reading into it,
+   // so a const member needs no `from<CBOR, ...>` and must not be reported as unreadable.
+   template <>
+   inline constexpr bool reader_skips_const<CBOR> = true;
+}
+
 namespace glz
 {
    namespace cbor_detail
@@ -1859,6 +1867,7 @@ namespace glz
       template <auto Opts, string_literal TagKey = "">
       static void op(auto& value, is_context auto& ctx, auto& it, auto end)
       {
+         static_assert(detail::readable_members<CBOR, T>, "One of this object's members has no reader for CBOR.");
          using namespace cbor;
 
          if (it >= end) [[unlikely]] {

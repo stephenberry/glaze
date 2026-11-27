@@ -583,6 +583,11 @@ namespace glz
       template <auto Opts, size_t Extra = 0>
       static void write_members(auto&& value, is_context auto&& ctx, auto&& b, auto& ix, auto&& prefix)
       {
+         // The check lives here rather than only in `op()`: an internally tagged variant merges its
+         // discriminator into the alternative's map and calls `write_members` directly, so an assert
+         // in `op()` alone would leave that path with the old error from inside the member loop. `op`
+         // delegates here, so this covers an ordinary object write too.
+         static_assert(detail::writable_members<CBOR, T>, "One of this object's members has no writer for CBOR.");
          [[maybe_unused]] decltype(auto) t = [&]() -> decltype(auto) {
             if constexpr (reflectable<T>) {
                return to_tie(value);
