@@ -800,6 +800,18 @@ namespace glz
       // ask, and the format's own exemption, which is only asked of a member no format claims to
       // write -- are not instantiated for members that are simply fine.
       //
+      // Whether a member of type M has a writer or reader for Format. This deliberately does not use
+      // `write_supported`/`read_supported`: those concepts also require the format to accept M as a
+      // whole top-level value (`top_level_supported`), and BSON restricts that to documents. A member
+      // is written by the object writer, not by the top-level entry point, so a scalar member is fine
+      // even though `write_bson(3)` is not. Asking the top-level concept here rejected every BSON
+      // member of a type that is not itself a document.
+      template <class M, uint32_t Format>
+      concept member_writable = requires { to<Format, std::remove_cvref_t<M>>{}; };
+
+      template <class M, uint32_t Format>
+      concept member_readable = requires { from<Format, std::remove_cvref_t<M>>{}; };
+
       // The question is about the member's own type. A member whose type *contains* a type with no
       // writer -- `std::vector<Opaque>`, `std::optional<Opaque>` -- answers true here, because
       // `to<Format, ...>` for the container exists, and the failure then comes from inside that
@@ -820,10 +832,10 @@ namespace glz
                }
             }
             if constexpr (Op == operation::serialize) {
-               return write_supported<M, Format> || writer_emits_member_inline<Format, M>;
+               return member_writable<M, Format> || writer_emits_member_inline<Format, M>;
             }
             else {
-               return read_supported<M, Format>;
+               return member_readable<M, Format>;
             }
          }
       }
