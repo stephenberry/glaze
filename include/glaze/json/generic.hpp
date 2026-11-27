@@ -3,6 +3,10 @@
 
 #pragma once
 
+#include <cmath>
+#include <limits>
+#include <utility>
+
 #include "glaze/core/common.hpp"
 #include "glaze/json/generic_fwd.hpp"
 #include "glaze/json/write.hpp"
@@ -285,6 +289,25 @@ namespace glz
       return navigate_to_impl(root, json_ptr);
    }
 
+   // Whether a floating point value fits an integer type: a conversion outside the
+   // type's range is undefined behaviour (and reads back as a wrapped value), so it is
+   // reported as a failure instead. A fractional value still truncates as the cast does.
+   template <std::integral T>
+   inline constexpr bool generic_number_fits(double value) noexcept
+   {
+      if (!std::isfinite(value)) {
+         return false;
+      }
+      const long double x = static_cast<long double>(value);
+      if constexpr (std::is_unsigned_v<T>) {
+         return x >= 0.0L && x <= static_cast<long double>(std::numeric_limits<T>::max());
+      }
+      else {
+         return x >= static_cast<long double>(std::numeric_limits<T>::min()) &&
+                x <= static_cast<long double>(std::numeric_limits<T>::max());
+      }
+   }
+
    // Direct conversion from generic to target types without JSON serialization
    // Takes result by reference to allow memory reuse and avoid extra moves
 
@@ -335,29 +358,39 @@ namespace glz
       return {};
    }
 
-   // Specialization for uint64_t (only in u64 mode)
+   // Specialization for uint64_t: from a uint64_t, an int64_t or a double that fits
    template <num_mode Mode, template <class> class MapType>
-      requires(Mode == num_mode::u64)
    inline error_ctx convert_from_generic(uint64_t& result, const generic_json<Mode, MapType>& source)
    {
       if (!source.is_number()) {
          return error_ctx{0, error_code::syntax_error};
       }
-      if (source.template holds<uint64_t>()) {
-         result = source.template get<uint64_t>();
+      if constexpr (Mode == num_mode::u64) {
+         if (source.template holds<uint64_t>()) {
+            result = source.template get<uint64_t>();
+            return {};
+         }
       }
-      else if (source.template holds<int64_t>()) {
-         result = static_cast<uint64_t>(source.template get<int64_t>());
+      if constexpr (Mode == num_mode::u64 || Mode == num_mode::i64) {
+         if (source.template holds<int64_t>()) {
+            const int64_t value = source.template get<int64_t>();
+            if (!std::in_range<uint64_t>(value)) {
+               return error_ctx{0, error_code::parse_number_failure};
+            }
+            result = static_cast<uint64_t>(value);
+            return {};
+         }
       }
-      else {
-         result = static_cast<uint64_t>(source.template get<double>());
+      const double value = source.template get<double>();
+      if (!generic_number_fits<uint64_t>(value)) {
+         return error_ctx{0, error_code::parse_number_failure};
       }
+      result = static_cast<uint64_t>(value);
       return {};
    }
 
-   // Specialization for int64_t (in i64 and u64 modes)
+   // Specialization for int64_t: from an int64_t, a uint64_t or a double that fits
    template <num_mode Mode, template <class> class MapType>
-      requires(Mode != num_mode::f64)
    inline error_ctx convert_from_generic(int64_t& result, const generic_json<Mode, MapType>& source)
    {
       if (!source.is_number()) {
@@ -365,23 +398,25 @@ namespace glz
       }
       if constexpr (Mode == num_mode::u64) {
          if (source.template holds<uint64_t>()) {
-            result = static_cast<int64_t>(source.template get<uint64_t>());
-         }
-         else if (source.template holds<int64_t>()) {
-            result = source.template get<int64_t>();
-         }
-         else {
-            result = static_cast<int64_t>(source.template get<double>());
+            const uint64_t value = source.template get<uint64_t>();
+            if (!std::in_range<int64_t>(value)) {
+               return error_ctx{0, error_code::parse_number_failure};
+            }
+            result = static_cast<int64_t>(value);
+            return {};
          }
       }
-      else {
+      if constexpr (Mode == num_mode::u64 || Mode == num_mode::i64) {
          if (source.template holds<int64_t>()) {
             result = source.template get<int64_t>();
-         }
-         else {
-            result = static_cast<int64_t>(source.template get<double>());
+            return {};
          }
       }
+      const double value = source.template get<double>();
+      if (!generic_number_fits<int64_t>(value)) {
+         return error_ctx{0, error_code::parse_number_failure};
+      }
+      result = static_cast<int64_t>(value);
       return {};
    }
 
@@ -406,26 +441,29 @@ namespace glz
       }
       if constexpr (Mode == num_mode::u64) {
          if (source.template holds<uint64_t>()) {
-            result = static_cast<T>(source.template get<uint64_t>());
-         }
-         else if (source.template holds<int64_t>()) {
-            result = static_cast<T>(source.template get<int64_t>());
-         }
-         else {
-            result = static_cast<T>(source.template get<double>());
+            const uint64_t value = source.template get<uint64_t>();
+            if (!std::in_range<T>(value)) {
+               return error_ctx{0, error_code::parse_number_failure};
+            }
+            result = static_cast<T>(value);
+            return {};
          }
       }
-      else if constexpr (Mode == num_mode::i64) {
+      if constexpr (Mode == num_mode::u64 || Mode == num_mode::i64) {
          if (source.template holds<int64_t>()) {
-            result = static_cast<T>(source.template get<int64_t>());
-         }
-         else {
-            result = static_cast<T>(source.template get<double>());
+            const int64_t value = source.template get<int64_t>();
+            if (!std::in_range<T>(value)) {
+               return error_ctx{0, error_code::parse_number_failure};
+            }
+            result = static_cast<T>(value);
+            return {};
          }
       }
-      else {
-         result = static_cast<T>(source.template get<double>());
+      const double value = source.template get<double>();
+      if (!generic_number_fits<T>(value)) {
+         return error_ctx{0, error_code::parse_number_failure};
       }
+      result = static_cast<T>(value);
       return {};
    }
 

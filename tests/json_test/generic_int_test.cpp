@@ -416,4 +416,67 @@ suite generic_u64_tests = [] {
    };
 };
 
+suite generic_range_checks = [] {
+   "generic_double_that_does_not_fit_reports_parse_number_failure"_test = [] {
+      glz::generic json{};
+      int8_t i8{};
+      expect(glz::read_json(json, "300") == glz::error_code::none);
+      expect(glz::convert_from_generic(i8, json) == glz::error_code::parse_number_failure);
+
+      std::string three_hundred = "300";
+      int8_t direct{};
+      expect(glz::read_json(direct, three_hundred) == glz::error_code::parse_number_failure);
+
+      int64_t i64{};
+      expect(glz::read_json(json, "1e300") == glz::error_code::none);
+      expect(glz::convert_from_generic(i64, json) == glz::error_code::parse_number_failure);
+
+      uint64_t u64{};
+      expect(glz::read_json(json, "-1.5") == glz::error_code::none);
+      expect(glz::convert_from_generic(u64, json) == glz::error_code::parse_number_failure);
+
+      // A value in range still truncates as the cast does
+      expect(glz::convert_from_generic(i64, json) == glz::error_code::none);
+      expect(i64 == -1);
+   };
+
+   "generic_number_that_fits_still_converts"_test = [] {
+      glz::generic json{};
+      int8_t i8{};
+      expect(glz::read_json(json, "42") == glz::error_code::none);
+      expect(!glz::convert_from_generic(i8, json));
+      expect(i8 == 42);
+
+      int64_t i64{};
+      expect(glz::read_json(json, "-3.9") == glz::error_code::none);
+      expect(!glz::convert_from_generic(i64, json));
+      expect(i64 == -3);
+   };
+
+   "generic_f64_mode_int64_and_uint64_convert"_test = [] {
+      glz::generic json{}; // num_mode::f64: the conversions used to be declared but undefined
+      expect(glz::read_json(json, "9007199254740992") == glz::error_code::none);
+
+      int64_t i64{};
+      expect(!glz::convert_from_generic(i64, json));
+      expect(i64 == 9007199254740992LL);
+
+      uint64_t u64{};
+      expect(!glz::convert_from_generic(u64, json));
+      expect(u64 == 9007199254740992ULL);
+   };
+
+   "generic_i64_mode_int_casts_are_range_checked"_test = [] {
+      glz::generic_i64 json{};
+      int8_t i8{};
+      expect(glz::read_json(json, "300") == glz::error_code::none);
+      expect(json.is_int64());
+      expect(glz::convert_from_generic(i8, json) == glz::error_code::parse_number_failure);
+
+      uint64_t u64{};
+      expect(glz::read_json(json, "-1") == glz::error_code::none);
+      expect(glz::convert_from_generic(u64, json) == glz::error_code::parse_number_failure);
+   };
+};
+
 int main() { return 0; }
