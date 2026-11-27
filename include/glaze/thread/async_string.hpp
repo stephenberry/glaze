@@ -4,6 +4,7 @@
 #pragma once
 
 #include <algorithm>
+#include <memory>
 #include <mutex>
 #include <shared_mutex>
 #include <string>
@@ -542,6 +543,12 @@ namespace glz
          requires(std::same_as<std::remove_cvref_t<RHS>, async_string>)
       async_string& append(RHS&& other)
       {
+         if (this == std::addressof(other)) {
+            // Appending itself only needs its own lock; locking it twice deadlocks.
+            std::unique_lock lock(mutex);
+            str.append(str);
+            return *this;
+         }
          std::unique_lock lock(mutex, std::defer_lock);
          std::shared_lock lock2(other.mutex, std::defer_lock);
          std::lock(lock, lock2);
@@ -569,6 +576,12 @@ namespace glz
          requires(std::same_as<std::remove_cvref_t<RHS>, async_string>)
       async_string& insert(size_t pos, RHS&& other)
       {
+         if (this == std::addressof(other)) {
+            // Inserting itself only needs its own lock; locking it twice deadlocks.
+            std::unique_lock lock(mutex);
+            str.insert(pos, str);
+            return *this;
+         }
          std::unique_lock lock(mutex, std::defer_lock);
          std::shared_lock lock2(other.mutex, std::defer_lock);
          std::lock(lock, lock2);
@@ -637,6 +650,7 @@ namespace glz
 
       int compare(const async_string& other) const
       {
+         if (this == &other) return 0; // lock once: a self compare is equal
          std::scoped_lock lock{mutex, other.mutex};
          return str.compare(other.str);
       }
@@ -733,6 +747,7 @@ namespace glz
 
       friend bool operator<(const async_string& lhs, const async_string& rhs)
       {
+         if (&lhs == &rhs) return false; // lock once: a value is not less than itself
          std::scoped_lock lock{lhs.mutex, rhs.mutex};
          return lhs.str < rhs.str;
       }
