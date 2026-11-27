@@ -631,6 +631,10 @@ namespace glz
       template <auto Opts, size_t Extra = 0, class Value, is_context Ctx, class B, class IX>
       GLZ_ALWAYS_INLINE static void write_members(Value&& value, Ctx&& ctx, B&& b, IX&& ix, auto&& prefix)
       {
+         // Repeated from `op()` because an internally tagged variant merges its discriminator into the
+         // alternative's map and calls `write_members` directly. `op()` cannot be the only place: it
+         // also covers the positional `structs_as_arrays` layout, which does not come through here.
+         static_assert(detail::writable_members<MSGPACK, T>, "One of this object's members has no writer for MSGPACK.");
          [[maybe_unused]] decltype(auto) t = [&]() -> decltype(auto) {
             if constexpr (reflectable<T>) {
                return to_tie(value);

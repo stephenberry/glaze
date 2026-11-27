@@ -1348,6 +1348,15 @@ namespace glz
                   [&](auto& v) {
                      using V_alt = std::decay_t<decltype(v)>;
                      if constexpr (glaze_object_t<V_alt> || reflectable<V_alt>) {
+                        // The body is read through `read_object_body`, not `from<JSONB, V_alt>::op`,
+                        // so the object reader's member check does not run on this path. Ask here, or
+                        // a tagged variant hides the one member this diagnostic exists for. A
+                        // custom-serialized alternative is excluded: its own reader decides what it
+                        // accepts, not its members.
+                        if constexpr (not custom_read<V_alt>) {
+                           static_assert(detail::readable_members<JSONB, V_alt>,
+                                         "One of this object's members has no reader for JSONB.");
+                        }
                         jsonb_detail::read_object_body<Opts>(v, ctx, it, stop, tag_v<V>);
                      }
                      else {

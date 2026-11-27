@@ -811,6 +811,10 @@ namespace glz
    template <auto Options, class T, class V, class B>
    void write_inline_object(V&& value, is_context auto&& ctx, B&& b, auto& ix)
    {
+      // Inline tables (a map value, an `optional` holding an object, an element of an inline array,
+      // an `inline_table_t` wrapper) call this writer directly instead of `to<TOML, T>::op`, so the
+      // check has to be here for those shapes to be diagnosed.
+      static_assert(detail::writable_members<TOML, T>, "One of this object's members has no writer for TOML.");
       static constexpr auto N = reflect<T>::size;
       using Type = T;
 
@@ -1081,6 +1085,10 @@ namespace glz
    template <auto Options, class T, class V, class B>
    void write_toml_object_with_path(V&& value, is_context auto&& ctx, B&& b, auto& ix, std::string_view path_prefix)
    {
+      // Nested tables [table] and arrays of tables [[array]] call this helper directly, so
+      // `to<TOML, T>::op` is not on their path and its check never runs. The check belongs to the
+      // writer that emits the members, not only to the entry point.
+      static_assert(detail::writable_members<TOML, T>, "One of this object's members has no writer for TOML.");
       static constexpr auto N = reflect<T>::size;
       decltype(auto) t = [&]() -> decltype(auto) {
          if constexpr (reflectable<T>) {

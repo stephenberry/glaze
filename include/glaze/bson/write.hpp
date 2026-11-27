@@ -699,12 +699,38 @@ namespace glz
 
    namespace detail
    {
-      // The object writer above emits these members itself, so they are written even though
-      // `to<BSON, T>` has no specialization for them -- which is what the member check in
-      // core/reflect.hpp asks about. Only the write side needs this: the reader has real
-      // `from<BSON, ...>` specializations for all three.
+      // Whether the object writer above emits a member of type M itself, so that the member needs no
+      // `to<BSON, M>` -- which is what the member check in core/reflect.hpp asks about. Only the write
+      // side needs this: the reader has real `from<BSON, ...>` specializations for all three of the
+      // direct cases.
+      //
+      // `write_member_element` has one branch for each of these, and it resolves the transparent write
+      // wrappers first: a "mimic" (`glaze_value_t` whose meta value is a single member pointer) and a
+      // `glz::custom` getter/setter have no type byte of their own, so the helper unwraps them and
+      // dispatches the value they yield. `to<BSON, Wrapper>` therefore need not exist for such a
+      // member, and asking for it alone reported wrappers the format writes -- a mimic around `int`
+      // was rejected while the same code wrote fine on main.
+      //
+      // The resolved type is accepted when the helper would handle it: another inline case, or a type
+      // with a `to<BSON, ...>` of its own. A wrapper around a type BSON cannot write is still
+      // reported, since no branch would produce an element for it.
       template <class M>
-         requires(always_null_t<M> || nullable_like<M> || is_variant<M>)
+      consteval bool bson_writes_member_inline()
+      {
+         if constexpr (always_null_t<M> || nullable_like<M> || is_variant<M>) {
+            return true;
+         }
+         else if constexpr (resolvable_write_wrapper<M>) {
+            using R = resolve_write_type_t<M>;
+            return always_null_t<R> || nullable_like<R> || is_variant<R> || requires { to<BSON, R>{}; };
+         }
+         else {
+            return false;
+         }
+      }
+
+      template <class M>
+         requires(bson_writes_member_inline<M>())
       inline constexpr bool writer_emits_member_inline<BSON, M> = true;
    }
 
