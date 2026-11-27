@@ -23,6 +23,19 @@ else()
     set(diagnostic_gnu_trace 0)
 endif()
 
+# The compiler's wording for a failed static_assert. The cases are rejected by a static_assert, and
+# check_diagnostic.cmake requires this marker so that a build failure for any other reason can never
+# be mistaken for the diagnostic under test.
+#
+# `MSVC` is also set for clang-cl, because it simulates the cl command line, but clang-cl prints
+# clang's wording ("static assertion failed"), not cl's C2338 wording ("static_assert failed"). The
+# compiler id separates the two; a plain `if(MSVC)` would make every case fail on the clang-cl job.
+if(CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
+    set(diagnostic_assert_marker "static_assert failed")
+else()
+    set(diagnostic_assert_marker "static assertion failed")
+endif()
+
 foreach(case_file IN LISTS diagnostic_cases)
     get_filename_component(case_name "${case_file}" NAME_WE)
     set(case_target diagnostic_case_${case_name})
@@ -37,6 +50,7 @@ foreach(case_file IN LISTS diagnostic_cases)
                      -DCONFIG=$<CONFIG>
                      -DSOURCE=${case_file}
                      -DGNU_TRACE=${diagnostic_gnu_trace}
+                     -DASSERT_MARKER=${diagnostic_assert_marker}
                      -P ${CMAKE_CURRENT_SOURCE_DIR}/check_diagnostic.cmake)
 
     # Each of these drives the build system for its own target, so keep them from doing it at once.

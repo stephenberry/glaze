@@ -12,5 +12,5 @@ int main()
 {
    Outer v{};
    std::vector<std::byte> b;
-   glz::write_cbor(v, b);
+   (void)glz::write_cbor(v, b);
 }

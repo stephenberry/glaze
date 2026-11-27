@@ -65,3 +65,19 @@ struct glz::meta<Renamed>
    using T = Renamed;
    static constexpr auto value = glz::object("alpha", &T::a, "omicron", &T::o);
 };
+
+// Reversed key order: the unsupported member is declared second and listed first, so the index and
+// the key the report prints have to follow the order glz::meta gives, which is the order the output
+// uses. A report built from declaration order would name the wrong member.
+struct Reversed
+{
+   int alpha{};
+   Opaque o{};
+};
+
+template <>
+struct glz::meta<Reversed>
+{
+   using T = Reversed;
+   static constexpr auto value = glz::object("omicron", &T::o, "alpha", &T::alpha);
+};

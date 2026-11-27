@@ -12,5 +12,5 @@ int main()
 {
    Outer v{};
    std::vector<std::byte> b;
-   glz::write_jsonb(v, b);
+   (void)glz::write_jsonb(v, b);
 }

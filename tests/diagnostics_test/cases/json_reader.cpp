@@ -12,5 +12,5 @@ int main()
 {
    Outer v{};
    std::string s = R"({"a":1})";
-   glz::read_json(v, s);
+   (void)glz::read_json(v, s);
 }

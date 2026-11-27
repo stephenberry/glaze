@@ -12,5 +12,5 @@ int main()
 {
    Outer v{};
    std::vector<std::byte> b;
-   glz::read_beve(v, b);
+   (void)glz::read_beve(v, b);
 }

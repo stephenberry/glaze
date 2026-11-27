@@ -12,5 +12,5 @@ int main()
 {
    Outer v{};
    std::string b;
-   glz::write_yaml(v, b);
+   (void)glz::write_yaml(v, b);
 }
