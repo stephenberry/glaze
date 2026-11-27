@@ -290,7 +290,7 @@ namespace glz
 
    // Forward declaration for recursive conversion
    template <class T, num_mode Mode, template <class> class MapType>
-   error_ctx convert_from_generic(T& result, const generic_json<Mode, MapType>& source);
+   error_ctx convert_from_generic(T& result, const generic_json<Mode, MapType>& source) = delete;
 
    // Specialization for bool
    template <num_mode Mode, template <class> class MapType>
