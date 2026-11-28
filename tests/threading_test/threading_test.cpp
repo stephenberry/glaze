@@ -15,6 +15,7 @@
 #include "glaze/thread/async_string.hpp"
 #include "glaze/thread/async_vector.hpp"
 #include "glaze/thread/guard.hpp"
+#include "glaze/thread/threadpool.hpp"
 #include "ut/ut.hpp"
 
 using namespace ut;
@@ -2360,6 +2361,39 @@ suite async_vector_beve_tests = [] {
       expect((*result_reader)[0] == Point{1, 2});
       expect((*result_reader)[1] == Point{3, 4});
       expect((*result_reader)[2] == Point{5, 6});
+   };
+};
+
+suite pool_wait_tests = [] {
+   // With notify_one only one of several threads blocked in wait() was woken.
+   "pool wait from several threads"_test = [] {
+      glz::pool pool(2);
+      std::atomic<bool> release = false;
+      pool.emplace_back([&](size_t) {
+         while (not release) std::this_thread::yield();
+      });
+      std::atomic<int> waiting = 0;
+      std::atomic<int> returned = 0;
+      std::vector<std::thread> waiters;
+      for (int i = 0; i < 3; ++i) {
+         waiters.emplace_back([&] {
+            ++waiting;
+            pool.wait();
+            ++returned;
+         });
+      }
+      while (waiting < 3) std::this_thread::yield();
+      std::this_thread::sleep_for(std::chrono::milliseconds(50)); // let the waiters block in wait()
+      release = true;
+      const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
+      while (returned < 3 && std::chrono::steady_clock::now() < deadline) std::this_thread::yield();
+      expect(returned == 3) << "a thread blocked in pool::wait() was not woken";
+      // If some waiters were not woken, finish more work so the test fails instead of hanging.
+      while (returned < 3) {
+         pool.emplace_back([](size_t) {});
+         std::this_thread::sleep_for(std::chrono::milliseconds(10));
+      }
+      for (auto& t : waiters) t.join();
    };
 };
 
