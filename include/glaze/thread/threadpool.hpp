@@ -53,7 +53,7 @@ namespace glz
                      --working;
                      lock.lock();
                      if (queue.empty() && (working == 0)) {
-                        done_cv.notify_one();
+                        done_cv.notify_all(); // every thread blocked in wait() must wake
                      }
                   }
                }
